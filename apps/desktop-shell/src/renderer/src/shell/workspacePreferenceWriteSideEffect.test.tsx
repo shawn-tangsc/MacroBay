@@ -26,7 +26,6 @@ import { AppShell } from './AppShell'
  *  ③ 跟随语义仍由 Main 的显式通知承担（见上面引用的两份取证），渲染侧不再自建第二个触发点。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const en = platformText['en-US']
 
 let root: Root | undefined
@@ -142,13 +141,18 @@ async function openPreferences(): Promise<void> {
   await settle()
 }
 
-/** 语言 Segmented 的 radio：只点真实 DOM 控件（antd Segmented 的输入面），不调用内部函数。 */
-function languageOption(host: HTMLElement, label: string): HTMLInputElement {
-  const labels = [...host.querySelectorAll<HTMLElement>('.ant-segmented-item-label')]
-  const item = labels.find((candidate) => candidate.textContent?.trim() === label)
-  const input = item?.closest('label')?.querySelector<HTMLInputElement>('input[type="radio"]')
-  if (!input) throw new Error(`Expected language option: ${label}`)
-  return input
+/**
+ * 语言 Segmented 的选项：只点真实 DOM 控件，不调用内部函数。
+ *
+ * 语言切换已经换成平台 `Segmented`（`role="group"` + `<button aria-pressed>`），antd 那套
+ * `.ant-segmented-item-label` + 隐藏 radio 不复存在——这条 helper 曾经因此红，而红的原因不是行为变了，
+ * 是选择器过期。判据仍是「点真实控件、走生产路径」，只是换了控件形状。
+ */
+function languageOption(host: HTMLElement, label: string): HTMLButtonElement {
+  const buttons = [...host.querySelectorAll<HTMLButtonElement>('.segmented__item')]
+  const item = buttons.find((candidate) => candidate.textContent?.trim() === label)
+  if (!item) throw new Error(`Expected language option: ${label}`)
+  return item
 }
 
 describe('PLAT-36：偏好写入后不再有额外的 getHostContext 调用', () => {

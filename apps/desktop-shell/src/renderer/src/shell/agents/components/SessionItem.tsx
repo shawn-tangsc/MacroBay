@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Dropdown, Input, Tooltip } from 'antd'
+import { Button, Dropdown, Input, Tooltip as AntTooltip } from 'antd'
 import type { MenuProps } from 'antd'
 import { Edit3, MoreHorizontal, Pin, PinOff, Trash2, X } from 'lucide-react'
 
@@ -13,7 +13,11 @@ import { deleteSessionsViaApi, switchSessionPinStateViaApi, updateSessionViaApi 
 import { getSessionDeleteClickIntent } from '../agentSessionDeleteInteraction'
 import type { AgentSessionRuntimeStatus } from '../agentSessionViewModel'
 import { getAgentChannelTypeIconUrl } from '../agentChannelVisuals'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from '../agentTextProvider'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 
 type SessionItemProps = {
   session: AgentSessionEntity
@@ -55,6 +59,11 @@ export default function SessionItem({
   onStateChange
 }: SessionItemProps): React.ReactElement {
   const t = useAgentText()
+  const tooltipKeys = {
+    deleteShortcut: 'sessionItem.deleteShortcut',
+    more: 'sessionItem.more'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(session.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -129,7 +138,9 @@ export default function SessionItem({
     })
   }
 
-  function requestInlineDelete(event: React.MouseEvent<HTMLButtonElement>): void {
+  // 参数放宽到 HTMLElement：`IconButton.onSelect` 按 `MouseEvent<HTMLElement>` 收（浮层要能注入处理器），
+  // 写窄的处理器不能当宽的用。这里只用 stopPropagation 与修饰键，不需要更窄的类型。
+  function requestInlineDelete(event: React.MouseEvent<HTMLElement>): void {
     event.stopPropagation()
     const intent = getSessionDeleteClickIntent({
       confirming: confirmingDelete,
@@ -215,18 +226,17 @@ export default function SessionItem({
                 <strong>{session.name}</strong>
               </span>
               <span className="agent-session-actions">
-                <Tooltip title={t.sessionItem.deleteShortcut}>
-                  <Button
-                    className={confirmingDelete ? 'agent-session-delete confirming' : 'agent-session-delete'}
-                    type="text"
-                    size="small"
-                    icon={confirmingDelete ? <Trash2 size={14} /> : <X size={14} />}
-                    onClick={requestInlineDelete}
-                    aria-label={t.sessionItem.delete}
-                  />
-                </Tooltip>
+                <IconButton
+                  ariaLabelKey="sessionItem.delete"
+                  className={confirmingDelete ? 'agent-session-delete confirming' : 'agent-session-delete'}
+                  icon={confirmingDelete ? Trash2 : X}
+                  onSelect={requestInlineDelete}
+                  resolveText={(key) => resolveAgentTextKey(t, key)}
+                  size="sm"
+                  tooltipKey={tooltipKeys.deleteShortcut}
+                />
                 <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-                  <Tooltip title={t.sessionItem.more}>
+                  <Tooltip labelKey={tooltipKeys.more} resolveText={resolveText}>
                     <Button
                       className="agent-session-more"
                       type="text"
@@ -257,9 +267,9 @@ function SessionStatusIndicator({
   if (status === 'idle' || active) return null
 
   return (
-    <Tooltip title={t.sessionItem.status[status]}>
+    <AntTooltip title={t.sessionItem.status[status]}>
       <span className={`agent-session-status ${status}`} aria-label={t.sessionItem.status[status]} />
-    </Tooltip>
+    </AntTooltip>
   )
 }
 
@@ -284,9 +294,9 @@ function SessionChannelIcon({
   }
 
   return (
-    <Tooltip title={<ChannelRuntimeTooltip badge={channelRuntime} />}>
+    <AntTooltip title={<ChannelRuntimeTooltip badge={channelRuntime} />}>
       {icon}
-    </Tooltip>
+    </AntTooltip>
   )
 }
 

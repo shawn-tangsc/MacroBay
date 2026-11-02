@@ -1,8 +1,17 @@
-import { Button, Drawer, Input, InputNumber, Select, Switch } from 'antd'
+import { Button, Input, InputNumber, Select, Switch } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 import { useEffect, useState } from 'react'
 
 import type { AssistantEntity, AssistantMcpMode } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { PlatformText } from '../../i18n/platformText'
+
+/**
+ * 两个元素各用各的键：主抽屉与「还没加载出来」那一档今天写着同一句话，但它们是两个元素，
+ * 将来其中一个改了标题，共用一条键就会让另一个跟着变（这正是「传键」改造里最容易犯的错）。
+ */
+export const ASSISTANT_SETTINGS_TITLE_KEY = 'assistant.settings.title'
+export const ASSISTANT_SETTINGS_PLACEHOLDER_TITLE_KEY = 'assistant.settings.placeholderTitle'
 
 type AssistantSettingsDrawerProps = {
   open: boolean
@@ -46,16 +55,30 @@ export function AssistantSettingsDrawer({
   }, [assistant])
 
   if (!assistant || !settings) {
-    return <Drawer open={open} onClose={onClose} title={labels.assistantSettings} />
+    return (
+      <Drawer
+        mode="modal"
+        size="narrow"
+        titleKey={ASSISTANT_SETTINGS_PLACEHOLDER_TITLE_KEY}
+        resolveText={(key) =>
+          key === ASSISTANT_SETTINGS_PLACEHOLDER_TITLE_KEY ? labels.assistantSettings : ''
+        }
+        open={open}
+        onClose={onClose}>
+        {null}
+      </Drawer>
+    )
   }
 
   return (
     <Drawer
       className="assistant-settings-drawer"
+      mode="modal"
+      size="narrow"
+      titleKey={ASSISTANT_SETTINGS_TITLE_KEY}
+      resolveText={(key) => (key === ASSISTANT_SETTINGS_TITLE_KEY ? labels.assistantSettings : '')}
       open={open}
       onClose={onClose}
-      title={labels.assistantSettings}
-      width={420}
       footer={
         <Button
           className="ant-primary-button"

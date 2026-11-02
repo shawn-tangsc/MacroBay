@@ -5,7 +5,6 @@ import { expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { AgentFloatingControl } from './AgentFloatingControl'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const text = { open: '打开市场解读 Agent', close: '关闭', title: '市场解读 Agent', clear: '清空' }
 
 async function render(onOpenChange = vi.fn()) {

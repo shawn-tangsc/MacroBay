@@ -22,7 +22,15 @@ describe('AgentAskUserQuestionCard', () => {
     const markup = renderToStaticMarkup(
       <AgentAskUserQuestionCard
         inputText={input}
-        labels={{ title: '确认交互', freeform: '输入你的答案', skip: '跳过', submit: '提交', recommended: '推荐' }}
+        labels={{
+          title: '确认交互',
+          freeform: '输入你的答案',
+          skip: '跳过',
+          submit: '提交',
+          recommended: '推荐',
+          questionPrevious: '上一个问题',
+          questionNext: '下一个问题'
+        }}
         onResolve={() => undefined}
       />
     )
@@ -34,5 +42,28 @@ describe('AgentAskUserQuestionCard', () => {
     expect(markup).toContain('输入你的答案')
     expect(markup).toContain('跳过')
     expect(markup).toContain('提交')
+  })
+
+  it('names the paging arrows in the reader language instead of hard-coded English', () => {
+    const markup = renderToStaticMarkup(
+      <AgentAskUserQuestionCard
+        inputText={input}
+        labels={{
+          title: '确认交互',
+          freeform: '输入你的答案',
+          skip: '跳过',
+          submit: '提交',
+          recommended: '推荐',
+          questionPrevious: '上一个问题',
+          questionNext: '下一个问题'
+        }}
+        onResolve={() => undefined}
+      />
+    )
+
+    expect(markup).toContain('aria-label="上一个问题"')
+    expect(markup).toContain('aria-label="下一个问题"')
+    expect(markup).not.toContain('Previous question')
+    expect(markup).not.toContain('Next question')
   })
 })

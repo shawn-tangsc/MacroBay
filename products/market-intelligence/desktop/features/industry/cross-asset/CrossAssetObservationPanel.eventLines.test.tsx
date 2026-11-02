@@ -15,7 +15,6 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
  * 点击把「哪条线 + 它是从哪个月读到的」交给页面。第三条是本文件与页面接线的契约，
  * 所以断言月份来自**取回它的那个月份页**，而不是从发布时间反推。
  */
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const crossAssetText = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
@@ -35,7 +34,7 @@ const snapshot = {
   curves: { index: curves, btc: curves, eth: curves },
   closedReturns: { index: {}, btc: {}, eth: {} },
   correlations: { indexBtc: { sampleCount: 3 }, indexEth: { sampleCount: 3 } },
-  relativeReturns: {}, observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' },
+  relativeReturns: {},
   indexSource: 'proxy'
 }
 /** A calendar page for one month, shaped the way the panel's own mapping reads it. */
@@ -196,8 +195,9 @@ describe('cross-asset event lines', () => {
       expect(line?.textContent).toContain('消费者物价指数（CPI）')
       expect(line?.textContent).toContain('9月零售销售(月率)')
       expect(line?.dataset.identity).toBe('unconfirmed')
-      // 痕迹要能被读到，不是内部标志：悬停/朗读里说明为什么同一次发布有两个名字。
-      expect(line?.getAttribute('title')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
+      // 痕迹要能被读到，不是内部标志：它写在按钮的可访问名里，鼠标悬停与键盘聚焦读到的是同一句。
+      expect(line?.getAttribute('title')).toBeNull()
+      expect(line?.getAttribute('aria-label')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
       expect(line?.getAttribute('aria-label')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
     } finally { await rendered.unmount() }
   })

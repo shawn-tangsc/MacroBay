@@ -15,7 +15,6 @@ const fixture = ({ live = false } = {}): MacroMarketSnapshotView => Object.freez
   })]
 })
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren(); vi.useRealTimers() })
 
@@ -62,12 +61,13 @@ describe('the macro-market snapshot hook', () => {
     expect(api.query).toHaveBeenCalledTimes(3)
   })
 
-  it('falls back to the settled cadence after a failed read and never re-polls a poll that threw', async () => {
+  it('keeps waiting through a failed first poll instead of calling the read failed, then recovers on the settled cadence', async () => {
     vi.useFakeTimers()
     const api = client()
     api.query.mockRejectedValueOnce(new Error('ipc down')).mockResolvedValue(fixture({ live: true }) as never)
     const page = await render(api)
-    expect(page.state()).toMatchObject({ state: 'unavailable', snapshot: undefined })
+    // A poll that threw is not a failed read: the table keeps waiting, and the next poll fills it.
+    expect(page.state()).toMatchObject({ state: 'loading', snapshot: undefined })
     await act(async () => vi.advanceTimersByTimeAsync(macroMarketViewPolicy.settledQueryMs))
     expect(api.query).toHaveBeenCalledTimes(2)
     expect(page.state().state).toBe('ready')

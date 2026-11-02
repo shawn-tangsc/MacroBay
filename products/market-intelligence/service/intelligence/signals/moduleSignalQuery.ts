@@ -1,5 +1,8 @@
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import type { MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
+import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
+import { calendarSurpriseSignals, calendarUnavailableSignals } from './calendarSurpriseSignals'
 import { openInterestSignalsFromHistory } from './openInterestSignals'
 
 /**
@@ -38,4 +41,40 @@ export function createOpenInterestSignalQuery(deps: Readonly<{
       }
     }
   }
+}
+
+/**
+ * The calendar leg, read at one instant.
+ *
+ * Two things are deliberately not decided here. Which releases count as a surprise stays with
+ * `providerReleaseSurprisePolicy`, and which of them is "this time's" stays with the same 24-hour
+ * bound the analysis uses to call a release new — a first sync of a month must not replay three
+ * weeks of surprises onto today's chip, and a second number for that bound is how the two would
+ * drift apart.
+ *
+ * The baseline is `null` on purpose: this read has no previous snapshot to compare against, and
+ * `providerReleaseSurprises` treats a missing baseline as "not judged yet" rather than as "changed".
+ */
+export function createCalendarSignalQuery(deps: Readonly<{
+  readObservations: (input: Readonly<{ asOf: string }>) => Promise<readonly MacroCalendarProviderObservation[]>
+}>): ModuleSignalQuery {
+  return {
+    async query(input) {
+      try {
+        const observations = await deps.readObservations({ asOf: input.asOf })
+        const recent = observations.filter(observation => isRecentRelease(observation, input.asOf))
+        return calendarSurpriseSignals({ observations: recent, previous: null, previousAsOf: null, asOf: input.asOf })
+      } catch {
+        // A failed read is reported as failed; an empty list would claim the market was quiet.
+        return calendarUnavailableSignals(input.asOf)
+      }
+    }
+  }
+}
+
+/** The same window the analysis uses to decide a release is new, not a second number. */
+function isRecentRelease(observation: MacroCalendarProviderObservation, asOf: string): boolean {
+  const scheduledAt = Date.parse(observation.scheduledAt ?? '')
+  if (!Number.isFinite(scheduledAt)) return false
+  return Math.abs(Date.parse(asOf) - scheduledAt) <= firstSeenReleaseWindowMs
 }

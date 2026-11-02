@@ -7,9 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
+import { ToastHost } from '@platform/ui/components/toast'
+
 import { AssistantPage } from './AssistantPage'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const providers: SafeModelProvider[] = [
   {
@@ -97,14 +98,15 @@ async function renderPage(defaultAssistantModelId?: string): Promise<HTMLElement
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
+    // 输入栏的「为什么不能用」走 `useToast`（fail-closed）：没有宿主，整页渲染直接抛。
     root?.render(
-      createElement(AssistantPage, {
+      createElement(ToastHost, null, createElement(AssistantPage, {
         language: 'en-US',
         providers,
         chatSettings: createDefaultAppSettings().chat,
         pinnedModelIds: [],
         defaultAssistantModelId
-      })
+      }))
     )
     await Promise.resolve()
   })

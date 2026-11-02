@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -20,7 +21,6 @@ const reading: PolicyPathReading = {
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -29,17 +29,39 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (candidate: PolicyPathReading, cardText: typeof text = text) => {
+// The card resolves its state word through the shell language now, so the test has to supply the
+// same context the app does — a card whose copy is English but whose pill says 实时 is exactly the
+// bug that missing context hides.
+const render = async (candidate: PolicyPathReading, cardText: typeof text = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' })))
+  await act(async () => root!.render(createElement(ShellLanguageProvider, { language },
+    createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' }))))
   return host
 }
 
+it('explains the odds in the drawer instead of a hand-drawn bubble on the card', async () => {
+  const rendered = await render(reading)
+  // The card keeps the number; the explanation lives where the numbers' basis lives.
+  expect(rendered.querySelector('[role="tooltip"]')).toBeNull()
+  expect(rendered.querySelector('[role="note"]')).toBeNull()
+})
+
+it('keeps the freshness word and the venue in one group, so the footer cannot spread them apart', async () => {
+  const rendered = await render(reading)
+  const foot = rendered.querySelector('.mi-policy-card__foot')!
+  // One child on the left: when the pill and the venue were siblings, `space-between` pushed the
+  // venue into the middle of the row, and the provenance read as a second, centred cell.
+  expect(foot.children).toHaveLength(1)
+  const provenance = foot.querySelector('.mi-policy-card__provenance')!
+  expect(provenance.querySelector('.status-pill')).not.toBeNull()
+  expect(provenance.textContent).toContain('polymarket')
+})
+
 describe('policy path card', () => {
   it('names the month and the bucket through one localized template, with no Chinese left in English', async () => {
-    const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath)
+    const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath, 'en-US')
     expect(rendered.textContent).not.toMatch(/[\u4e00-\u9fa5]/)
     expect(rendered.textContent).toContain(reading.probability!.outcome === 'hike-25' ? 'hike 25bp' : '')
   })
@@ -56,21 +78,27 @@ describe('policy path card', () => {
     expect(rendered.textContent).toContain(text.live)
   })
 
+  it('carries the vote hint in the accessible name, without adding a focus stop', async () => {
+    const rendered = await render(reading)
+    // A `dd` is not a control: `title` hides the hint from keyboard users, and `tabIndex` puts a
+    // stop in the Tab order where nothing happens. The hint belongs to the accessible name.
+    expect(rendered.querySelector('dd[title]')).toBeNull()
+    expect(rendered.querySelector('dd[tabindex]')).toBeNull()
+    const hinted = rendered.querySelector('dd[aria-label]')
+    expect(hinted).not.toBeNull()
+    expect(hinted?.getAttribute('aria-label')).toContain('10')
+    expect(hinted?.getAttribute('aria-label')).not.toContain('{')
+    // Only the readable transcription of "10–2" belongs here; guidance a sighted reader cannot see
+    // must stay out of the accessible name and live in the drawer instead.
+    expect(hinted?.getAttribute('aria-label')).not.toContain(text.dissentNote)
+  })
+
   it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
     const rendered = await render({ ...reading, probability: undefined, targetRange: undefined, lastDecision: undefined, staleness: 'unavailable' })
     const rows = rendered.querySelectorAll('.mi-policy-card__facts > div')
     expect(rows).toHaveLength(4)
     expect(rendered.textContent?.match(/—/g)?.length).toBeGreaterThanOrEqual(3)
     expect(rendered.textContent).toContain(text.unavailable)
-  })
-
-  it('explains where the odds come from, since no official page shows that number', async () => {
-    const rendered = await render(reading)
-    const help = rendered.querySelector('.mi-policy-card__help')
-    expect(help).not.toBeNull()
-    expect(help?.getAttribute('aria-label')).toBe(text.helpLabel)
-    // Every line the popover shows comes from the copy, so the wording is reviewable in one place.
-    for (const line of text.helpLines) expect(help?.textContent).toContain(line)
   })
 
   it('marks a stale quote with its own colour state', async () => {

@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
 import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act } from 'react-dom/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -10,7 +13,7 @@ import { DivergencePanel } from './DivergencePanel'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.divergence
 const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: 'zh-CN' | 'en-US' = 'zh-CN') =>
   renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
-    state, text: productText[locale].pages.intelligence.portal.dashboard.divergence
+    state, onRetry: () => undefined, text: productText[locale].pages.intelligence.portal.dashboard.divergence
   })))
 
 const row = {
@@ -34,7 +37,7 @@ describe('divergence panel', () => {
     expect(markup).not.toContain('mi-divergence__judge')
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
-    expect(markup).not.toContain(text.helpLines[0])
+    expect(markup).not.toContain(text.helpBullets[0])
   })
 
   it('shows a row with both readings, the mechanism and the invalidation', () => {
@@ -44,7 +47,9 @@ describe('divergence panel', () => {
     expect(markup).toContain('+3.40%')
     expect(markup).toContain(row.mechanism)
     // The invalidation is one hover away, not another paragraph.
-    expect(markup).toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
+    // The invalidation is one hover or one Tab away, not a `title` the keyboard cannot reach.
+    expect(markup).not.toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
+    expect(markup).toContain('tabindex="0"')
     expect(markup).not.toContain('mi-divergence__judge')
   })
 
@@ -133,6 +138,17 @@ describe('withheld grouping', () => {
 })
 
 describe('states that must not be confused', () => {
+  it('waits without drawing a failure or a verdict before the first read returns', () => {
+    // First paint: the read has not returned. Neither "could not read" nor "nothing diverged"
+    // is true yet, and both are claims the card would have to take back a moment later.
+    const markup = render({ state: 'loading' })
+    expect(markup).toContain(text.loading)
+    expect(markup).not.toContain('class="state-view')
+    expect(markup).not.toContain('data-state="error"')
+    expect(markup).not.toContain(text.empty)
+    expect(markup).not.toContain(text.nothingCompared)
+  })
+
   it('says nothing was compared, in the error tone, when every pair was withheld', () => {
     const markup = render({
       state: 'empty',
@@ -142,14 +158,88 @@ describe('states that must not be confused', () => {
         { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'stablecoin' }
       ]
     })
+    // The state surface is the shared one now: it owns the title, the icon and the announcement,
+    // and the product still supplies the sentence naming which pairs were withheld.
+    expect(markup).toContain('data-state="error"')
     expect(markup).toContain(text.nothingCompared)
-    expect(markup).toContain('data-tone="error"')
     expect(markup).not.toContain(text.empty)
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
     const markup = render({ state: 'empty', withheld: [] })
     expect(markup).toContain(text.empty)
-    expect(markup).not.toContain('data-tone="error"')
+    expect(markup).not.toContain('data-state="error"')
+  })
+})
+
+describe('invalidation on focus', () => {
+  it('opens the same sentence for a keyboard reader as for a pointer', async () => {
+    // A `title` was invisible to both the keyboard and the screen reader; the sentence now comes
+    // from the shared tooltip, and focusing the row must be enough to get it.
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] },
+        onRetry: () => undefined, text
+      })))
+    })
+    const line = container.querySelector('[data-pair="liquidity-leverage"]') as HTMLElement
+    expect(line.tabIndex).toBe(0)
+    await act(async () => { line.focus() })
+    const described = line.getAttribute('aria-describedby')
+    expect(described).toBeTruthy()
+    expect(document.getElementById(described!)?.textContent).toContain(row.invalidation)
+    await act(async () => { root.unmount() })
+  })
+})
+
+describe('help on the shared popover', () => {
+  it('pins on a click and closes on the second one', async () => {
+    // The reason the shared button pair exists: the popover's handlers reach the trigger, so a
+    // click pins the layer and the next click lets it go. A hand-built button used to swallow them.
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
+      })))
+    })
+    const trigger = container.querySelector(`[aria-label="${text.helpLabel}"]`) as HTMLElement
+    // A closing layer keeps its node while it animates out, so "open" is read from its classes.
+    const layerState = (): 'none' | 'open' | 'closing' => {
+      const layer = document.querySelector('.ant-popover')
+      if (layer === null) return 'none'
+      return /leave|hidden/.test(layer.className) ? 'closing' : 'open'
+    }
+    await act(async () => { trigger.click() })
+    expect(layerState()).toBe('open')
+    // Pinned stays open with the pointer nowhere near it.
+    await act(async () => { trigger.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: true })) })
+    expect(layerState()).toBe('open')
+    await act(async () => { trigger.click() })
+    expect(layerState()).toBe('closing')
+    await act(async () => { root.unmount() })
+  })
+
+  it('opens the four one-look bullets a keyboard reader can reach', async () => {
+    // The bubble used to carry five lines; the longest moved behind the entry below the card. Four
+    // is also the popover's cap, so this asserts the count as well as every key resolving in order.
+    expect(text.helpBullets).toHaveLength(4)
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
+      })))
+    })
+    const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`) as HTMLElement
+    await act(async () => { trigger.focus() })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+    for (const line of text.helpBullets) expect(document.body.textContent).toContain(line)
+    await act(async () => { root.unmount() })
   })
 })

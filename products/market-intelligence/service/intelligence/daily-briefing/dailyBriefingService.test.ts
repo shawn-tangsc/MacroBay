@@ -214,6 +214,35 @@ describe('daily briefing service', () => {
     expect(source.lastInput).toEqual({ asOf: '2026-10-30T00:00:00.000Z', windowHours: 24 })
   })
 
+  it('reports only the attempt that is running, and forgets it once the run settles', async () => {
+    const store = memoryStore()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const source: DailyBriefingSource = {
+      async buildPacket(input) {
+        await gate
+        return emptyPacket({ asOf: input.asOf, windowHours: input.windowHours })
+      }
+    }
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+
+    expect(await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).toEqual({ state: 'idle' })
+
+    const running = service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const progress = await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(progress.state).toBe('running')
+    if (progress.state === 'running') {
+      expect(progress.progress.attemptId).toBe('2026-10-30:zh-CN:2026-10-30T00:00:00.000Z')
+      expect(progress.progress.stages.every((stage) => stage.state !== 'skipped')).toBe(true)
+    }
+
+    release()
+    await running
+    // A settled attempt is not reported twice: its trace travels with the result or the edition.
+    expect(await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).toEqual({ state: 'idle' })
+  })
+
   it('generates today once, stores it and prunes the retention window', async () => {
     const store = memoryStore()
     const source = fakeSource()

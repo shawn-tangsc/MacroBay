@@ -1,0 +1,8 @@
+/* 空态下面那句「等的是谁」：与空态同宽居中，弱化成说明而不是第二条标题。 */
+.notification-center-empty-hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}

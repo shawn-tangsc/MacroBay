@@ -1,0 +1,92 @@
+/*
+ * 提示区固定在右下角，层级必须高于弹窗（`over-drawer` 是 1500）：读者刚在弹窗里点完保存，
+ * 提示被弹窗盖住就等于没有提示。所以层级写死在宿主里，不给 `layer` prop。
+ *
+ * **宿主必须是 `pointer-events: none`**：右下角那一块是隐形矩形，设成 auto 会把页面底部的按钮
+ * 整片罩住——看得见、点不动，是这一件最容易犯又最难查的错。只有单条提示自身 `auto`。
+ */
+.toast-region {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1600;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(340px, calc(100% - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+  color: var(--text);
+  pointer-events: auto;
+  /*
+   * 进场只动 opacity 与 translateY：这两个属性不触发布局重排，右下角这堆浮在内容之上，
+   * 一动尺寸就会带着整页抖。时长走 token，`reduced-motion` 在 tokens.css 一处归零。
+   */
+  animation: toast-in var(--motion-toast-in) ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast--success {
+  border-left-color: var(--success);
+}
+
+.toast--danger {
+  border-left-color: var(--danger);
+}
+
+.toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__title {
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.toast__desc {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.toast__action {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.toast__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

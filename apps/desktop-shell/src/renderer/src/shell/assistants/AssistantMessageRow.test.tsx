@@ -15,10 +15,10 @@ vi.mock('antd', () => ({
   Input: {
     TextArea: ({ value = '' }: { value?: string }) => createElement('textarea', { value })
   },
+  Tooltip: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
   Popconfirm: ({ children }: { children?: ReactNode }) => createElement('span', null, children)
 }))
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

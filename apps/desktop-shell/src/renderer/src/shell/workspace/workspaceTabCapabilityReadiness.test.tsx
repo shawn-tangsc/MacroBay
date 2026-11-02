@@ -24,7 +24,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const MAIN_WINDOW_ID = 'main'
 const HOST_EPOCH = 1
@@ -39,7 +38,10 @@ const FLUSH_TURNS = 16
  * ⇒ 给**这一个用例**具名、局部、有界的预算（≈ 最坏实测的 2.7 倍）；真的挂起仍然失败。
  * 不用「缩小渲染面」换绿：⑤ 的验证强度正是「真实生产接线（真实 AppShell）」，缩小即降低强度。
  */
-const APP_SHELL_CASE_TIMEOUT_MS = 15_000
+// 唯一一条真挂载 AppShell 的用例：动态 import 整棵应用树再渲染，是这套里最重的一次。
+// 全局默认 15s 在千文件并行时会先到期（失败形态是「测试超时」，不是某条断言），所以这里单独给 30s；
+// 判据不变——等待仍是条件驱动，超时上界只是允许更慢的机器把事做完。
+const APP_SHELL_CASE_TIMEOUT_MS = 30_000
 
 /** 条件驱动等待的显式有界上界：`vi.waitFor` 默认 1s 在竞争下会先于条件到达而抛错（判据不变，只是上界明确且有界）。 */
 const CONDITION_TIMEOUT_MS = 5_000

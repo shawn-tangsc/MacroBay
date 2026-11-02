@@ -1,0 +1,20 @@
+/*
+ * 锚点只做一件事：给浮层一个**真实的、有盒子的**节点去量。
+ *
+ * 不能省成 `display: contents`——没有盒子就没有矩形，浮层又会退回 (0,0)；
+ * 也不能换成 `position: absolute`——那会把触发器的位置从文档流里摘走，标题行会塌。
+ * `inline-flex` 让按钮在自己的行里照原位排，宽度由触发器决定。
+ */
+.platform-popover__anchor {
+  display: inline-flex;
+  align-items: center;
+}
+
+/*
+ * 上限写在组件里（宽 360 / 高 320），这里补的是「超了怎么办」：框内滚动。
+ * 让气泡自己长到整屏，就是让一段说明盖住它本来要解释的内容。
+ */
+.platform-popover__content {
+  overflow: auto;
+  overscroll-behavior: contain;
+}

@@ -1,10 +1,14 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import {
+  CACHE_INSPECTION_TONES,
+  INSPECTION_STATUS_KEY_PREFIX,
   formatAbsoluteTime,
   formatBytes,
   formatCategory,
   formatInspectionStatus,
+  resolveInspectionStatusLabel,
   formatOwner,
   formatRelativeTime,
   formatSensitivity,

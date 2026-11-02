@@ -111,9 +111,11 @@ export type AppSettings = {
   themeMode: ThemeMode
   /**
    * 强调色：**保留、暂无机读方，也没有设置界面入口**（2026-11-01 用户裁决「先隐藏入口、存储保留不迁移」）。
-   * 现状：主窗把它写进根属性 `data-accent`，但样式表没有任何 `[data-accent]` 选择器、组件库主题也硬编码
-   * `lime`——也就是说改它的值，界面不会有任何变化。**在消费方接上之前，不许给它加回设置入口**：一个
-   * 改了没反应的开关比没有更糟。真正接通（令牌派生 accent 系列 + 组件库主色跟随）作为独立需求立项。
+   * 现状：主窗把它写进根属性 `data-accent`，但**没有任何样式按它取值**——样式表没有 `[data-accent]`
+   * 选择器，`--accent` 按主题（浅/深）写死，组件库主题也硬编码 `lime`——也就是说改它的值，界面不会有
+   * 任何变化。**在消费方接上之前，不许给它加回设置入口**：一个改了没反应的开关比没有更糟；设置页的
+   * 守卫用例会因此变红（`AppShellPreferencesAccentGuard.test.ts`）。真正接通（令牌派生 accent 系列 +
+   * 组件库主色跟随）作为独立需求立项，不从「顺手加个入口」开始。
    */
   accentColor: AccentColor
   /** 显示时区；存储与 IPC 上的时间始终是 UTC 瞬时。 */
@@ -140,7 +142,14 @@ const legacyImplicitProxyDefault: NetworkSettings = {
 
 function createDefaultNetworkSettings(): NetworkSettings {
   return {
-    proxyMode: 'none',
+    /**
+     * 默认跟随操作系统代理（2026-11-02 用户决定，取代此前「默认直连」）：
+     * 系统里配了代理的用户开箱即用；系统里没配代理时，Chromium 的 `system` 模式等价于直连。
+     *
+     * 代价写在这里，别让下一个人以为是随手改的：系统里若留着一条连不通的旧代理，
+     * 新装用户的所有出站请求都会先走它再失败——「测试代理」按钮要能一眼看出归因。
+     */
+    proxyMode: 'system',
     proxyUrl: '',
     proxyBypassRules: defaultProxyBypassRules
   }
@@ -149,7 +158,8 @@ function createDefaultNetworkSettings(): NetworkSettings {
 export function createDefaultAppSettings(): AppSettings {
   return {
     language: 'zh-CN',
-    themeMode: 'system',
+    /** 默认深色（2026-11-02 用户决定）：与 `styles.css` 的 `:root` 深色 token 一致，首帧不会先亮一下。 */
+    themeMode: 'dark',
     accentColor: 'lime',
     timeZone: systemTimeZoneSetting,
     network: createDefaultNetworkSettings(),
@@ -309,7 +319,6 @@ export function normalizeNotificationSettings(
   if (!value || typeof value !== 'object') return defaults
   const candidate = value as Partial<NotificationSettings>
   return {
-    centerEnabled: typeof candidate.centerEnabled === 'boolean' ? candidate.centerEnabled : defaults.centerEnabled,
     desktopEnabled: typeof candidate.desktopEnabled === 'boolean' ? candidate.desktopEnabled : defaults.desktopEnabled,
     toastEnabled: typeof candidate.toastEnabled === 'boolean' ? candidate.toastEnabled : defaults.toastEnabled,
     popupEnabled: typeof candidate.popupEnabled === 'boolean' ? candidate.popupEnabled : defaults.popupEnabled,

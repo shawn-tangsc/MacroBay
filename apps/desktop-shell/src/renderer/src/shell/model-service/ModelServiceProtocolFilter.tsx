@@ -1,6 +1,4 @@
-import { ArrowLeftRight, MessageSquare, Sparkles, Waypoints } from 'lucide-react'
-
-import { getProviderIconUrl } from '../visualIconAssets'
+import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -11,26 +9,16 @@ import {
   type ModelProtocolTab
 } from './modelProtocolFilter'
 
-/** 12px lucide 图标、与文字同色、无背景容器（与类型 pill 同一套胶囊样式）。 */
-/** 协议 pill 用**品牌 glyph**（simple-icons 单色标记），responses 用带角标的独立文件。 */
-const PROTOCOL_ICON_KEYS: Record<ModelProtocolTab, string> = {
-  'chat-completions': 'openai-mark',
-  responses: 'openai-responses-mark',
-  messages: 'anthropic-mark',
-  gemini: 'google-mark'
+/** 协议筛选胶囊的键：字面量只写这一处（`FilterChip` 只收键）。 */
+const PROTOCOL_FILTER_KEYS: Record<ModelProtocolTab, string> = {
+  'chat-completions': 'models.protocolFilterChat',
+  responses: 'models.protocolFilterResponses',
+  messages: 'models.protocolFilterMessages',
+  gemini: 'models.protocolFilterGemini'
 }
 
-function protocolIconUrl(tab: ModelProtocolTab): string | undefined {
-  return getProviderIconUrl(PROTOCOL_ICON_KEYS[tab])
-}
-
-/** 协议语义符号（与品牌 glyph 并列）：Chat=气泡、Responses=分支、Messages=双向、Gemini=闪光。 */
-const PROTOCOL_SEMANTIC_ICONS = {
-  'chat-completions': MessageSquare,
-  responses: Waypoints,
-  messages: ArrowLeftRight,
-  gemini: Sparkles
-} as const
+/** 这一组筛选的名字（`role="group"` 的 `aria-label`），复用「协议」这个名字。 */
+const PROTOCOL_FILTER_GROUP_KEY = 'models.pickerFilterProtocols'
 
 /**
  * PLAT-77 / PLAT-81：协议筛选 pill 行（第二行）。
@@ -49,28 +37,28 @@ export function ModelServiceProtocolFilter({
   counts: ModelProtocolCounts
   onToggle: (tab: ModelProtocolTab) => void
 }): React.ReactElement {
+  const resolveText = (key: string): string => {
+    const tab = MODEL_PROTOCOL_TABS.find(({ key: tabKey }) => PROTOCOL_FILTER_KEYS[tabKey] === key)
+    if (tab !== undefined) return labels[tab.labelKey]
+    return key === PROTOCOL_FILTER_GROUP_KEY ? labels.pickerFilterProtocols : ''
+  }
+
+  // 图标不再进胶囊（界面设计 2026-11-02：协议名文字里已经写清，图标是第二套语言）。
   return (
-    <div className="model-service-type-pills model-service-protocol-pills" data-model-protocol-filter>
-      {MODEL_PROTOCOL_TABS.map(({ key, labelKey }) => {
-        const iconUrl = protocolIconUrl(key)
-        const Semantic = PROTOCOL_SEMANTIC_ICONS[key]
-        return (
-          <button
+    // `data-model-protocol-filter` 是调用点自己的定位钩子（既有测试与样式用它找这一行），不是组件 API。
+    <div data-model-protocol-filter>
+      <FilterChipGroup ariaLabelKey={PROTOCOL_FILTER_GROUP_KEY} resolveText={resolveText}>
+        {MODEL_PROTOCOL_TABS.map(({ key }) => (
+          <FilterChip
             key={key}
-            type="button"
-            className="model-service-type-pill"
-            data-model-protocol-tab={key}
-            data-active={active[key]}
-            aria-pressed={active[key]}
-            aria-label={labels[labelKey]}
-            onClick={() => onToggle(key)}>
-            {iconUrl ? <img className="model-service-protocol-icon" src={iconUrl} alt="" aria-hidden="true" /> : null}
-            <Semantic className="model-service-protocol-semantic" size={10} aria-hidden="true" />
-            <span>{labels[labelKey]}</span>
-            <small>{counts[key]}</small>
-          </button>
-        )
-      })}
+            labelKey={PROTOCOL_FILTER_KEYS[key]}
+            count={String(counts[key])}
+            pressed={active[key]}
+            onPressedChange={() => onToggle(key)}
+            resolveText={resolveText}
+          />
+        ))}
+      </FilterChipGroup>
     </div>
   )
 }

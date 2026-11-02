@@ -16,6 +16,7 @@ import type {
 } from '@platform/workspace/contracts'
 import { WorkspaceOwnershipPolicy } from '@platform/workspace/policies'
 import type { WorkspaceContentAdapter, WorkspacePanelHostPort } from './workspaceHostAdapter'
+import { classifySnapshotRead, type WorkspaceSnapshotRead } from './workspaceSnapshotRead'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace 宿主桥（P1-06b）。
@@ -98,9 +99,9 @@ export class WorkspaceClientError extends Error {
 
 export type WorkspaceClient = {
   readHostContext: () => Promise<WorkspaceHostContextOutcome>
-  /** 取权威快照；响应畸形或传输失败返回 null（调用方据此走安全 error-shell）。 */
-  loadSnapshot: () => Promise<WorkspaceSnapshot | null>
-  /** 立即重取权威快照并通知订阅者（提交后同步/准备期兜底用）；畸形响应返回 null。 */
+  /** 取权威快照；区别「宿主拒绝」与「读取失败」，调用方据此给出不同结论。 */
+  loadSnapshot: () => Promise<WorkspaceSnapshotRead>
+  /** 立即重取权威快照并通知订阅者（提交后同步/准备期兜底用）；未取到时为 null。 */
   reload: () => Promise<WorkspaceSnapshot | null>
   /** 订阅权威快照更新；返回的退订函数幂等，卸载时必须调用。 */
   observe: (listener: (snapshot: WorkspaceSnapshot) => void) => () => void
@@ -411,15 +412,12 @@ export function createWorkspaceClient(bridge: WorkspaceBridge): WorkspaceClient 
     if (revision === null || value >= revision) revision = value
   }
 
-  const loadSnapshot = async (): Promise<WorkspaceSnapshot | null> => {
+  const loadSnapshot = async (): Promise<WorkspaceSnapshotRead> => {
     let raw: unknown
-    try { raw = await bridge.getSnapshot() } catch { return null }
-    const record = asRecord(raw)
-    if (record === null || record.status !== 'ok') return null
-    const snapshot = readWorkspaceSnapshot(record.snapshot)
-    if (snapshot === null) return null
-    adoptRevision(snapshot.layoutRevision)
-    return snapshot
+    try { raw = await bridge.getSnapshot() } catch { return { status: 'unavailable', reason: 'transport-error' } }
+    const read = classifySnapshotRead(raw, readWorkspaceSnapshot)
+    if (read.status === 'ok') adoptRevision(read.snapshot.layoutRevision)
+    return read
   }
 
   /** 事件合并重取：同一时刻至多一条在飞请求，期间到达的事件只置一次排队标记。 */
@@ -433,9 +431,9 @@ export function createWorkspaceClient(bridge: WorkspaceBridge): WorkspaceClient 
     try {
       do {
         refreshQueued = false
-        const snapshot = await loadSnapshot()
+        const read = await loadSnapshot()
         if (disposed) return
-        if (snapshot !== null) for (const listener of [...listeners]) listener(snapshot)
+        if (read.status === 'ok') for (const listener of [...listeners]) listener(read.snapshot)
       } while (refreshQueued && !disposed)
     } finally { refreshing = false }
   }
@@ -452,9 +450,10 @@ export function createWorkspaceClient(bridge: WorkspaceBridge): WorkspaceClient 
 
   /** 立即重取 + 通知订阅者：准备期/提交后同步用（不做「单飞合并」，调用方自己保证节奏有界）。 */
   const reload = async (): Promise<WorkspaceSnapshot | null> => {
-    const snapshot = await loadSnapshot()
-    if (!disposed && snapshot !== null) for (const listener of [...listeners]) listener(snapshot)
-    return snapshot
+    const read = await loadSnapshot()
+    if (read.status !== 'ok') return null
+    if (!disposed) for (const listener of [...listeners]) listener(read.snapshot)
+    return read.snapshot
   }
 
   /** 宿主生命周期 ACK：身份取自受控上下文（renderer 不可自选），响应畸形一律 accepted:false。 */

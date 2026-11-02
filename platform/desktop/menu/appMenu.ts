@@ -82,7 +82,7 @@ export function buildAppMenu(getMainWindow: () => BrowserWindow | null): void {
    *  - macOS：这份模板就是屏幕顶部的系统菜单（Electron 直接绘制）；
    *  - Windows：主窗是 `frame: false`，系统不再绘制菜单栏，渲染层的 `AppMenuBar` 只从
    *    `Menu.getApplicationMenu()` 读**顶层标签**、点开时让 Main 用同一个子菜单 `popup()`
-   *    （见 `platform/desktop/main/app.ts` 的 `windowMenuList` / `windowMenuPopup`）。
+   *    （见 `platform/desktop/main/ipc/windowIpc.ts` 的 `windowMenuList` / `windowMenuPopup`）。
    *
    * 因此新增/删除菜单、改菜单功能，**只改这里的 template**：两个平台同步生效，渲染层不需要
    * 第二份菜单表（渲染层里出现菜单文案/命令就是重复实现，由

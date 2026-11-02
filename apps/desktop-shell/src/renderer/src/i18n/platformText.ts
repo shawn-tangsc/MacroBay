@@ -24,6 +24,10 @@ export type PlatformText = {
     failed: string
   }
   /**
+   * 六态统一组件（`StateView`）的句子。键固定为 `ui.state.<state>` 与
+   * `ui.state.<state>.reason.<code>`：产品只选码，不拼键、不写字面量。
+   */
+  /**
    * 自绘标题栏的窗口按钮（Windows 走 `WindowControls`；macOS 用系统红绿灯，不读这组文案）。
    * 文案标签只作 `aria-label`/原生 tooltip，按钮图形由 SVG 画，不依赖系统图标字体。
    */
@@ -53,6 +57,8 @@ export type PlatformText = {
     agents: string
     contributionLoadFailed: string
     panelActions: string
+    /** 同一区域内多个面板时，标签条这组的可访问名（面板标题由注册表给，不走键）。 */
+    panelTabs: string
     panelClose: string
     panelReopen: string
     panelEmbedded: string
@@ -81,6 +87,8 @@ export type PlatformText = {
     windowHostUnavailableTitle: string
     windowHostUnavailableContext: string
     windowHostUnavailablePanel: string
+    /** 读失败（通道没通/响应不可读）：面板可能仍在，与「确实没有面板」是两条结论。 */
+    windowHostUnavailableUnreadable: string
     /** P1-06h（N2）：error-shell 的下一步提示（与标题/原因同样是成对 EN/ZH 键）。 */
     windowHostUnavailableHint: string
     /** P1-06h（N2）：独立窗准备期壳的专用正文（此前复用通用 loading，无法说明正在接管面板）。 */
@@ -106,6 +114,8 @@ export type PlatformText = {
     tabEmptyHint: string
     tabCommandRejected: string
     tabCommandFailed: string
+    /** 超时不是「被拒」：那次可能已经生效，所以句子不能直接让人再点一次。 */
+    tabCommandTimeout: string
     /** P2-15：Tab 右键上下文菜单的「分离到新窗口」及其可见原因（禁用项绝不静默灰掉）。 */
     tabDetach: string
     tabDetachUnavailable: string
@@ -147,6 +157,10 @@ export type PlatformText = {
     channelCredentialUnavailable: string
     channelSaveCredential: string
     channelNoInstances: string
+    /** 刷新失败但列表还在时那一句：说的是「这是旧的」，不是「读不到」。 */
+    channelStaleNotice: string
+    /** 右栏详情刷新失败时的两句话之一：数据是旧的，不是没有。 */
+    channelDetailsStaleNotice: string
     channelName: string
     channelAgentId: string
     channelCredential: string
@@ -176,7 +190,16 @@ export type PlatformText = {
     channelCancel: string
     channelRuntimeGeneration: string
     channelRuntimeLifecycle: string
+    /**
+     * 「标签: 值」里的值，小写，例如 `Runtime: not running`。
+     * 与 `channelNotRunning` 的区别是排版位置，不是含义——两个键说的同一个状态，不要合并。
+     */
     channelRuntimeMissing: string
+    /**
+     * 独立成句的状态词（药丸用），句首大写 `Not running`。
+     * 与 `channelRuntimeMissing` 的区别是排版位置，不是含义——两个键说的同一个状态，不要合并。
+     */
+    channelNotRunning: string
     channelOperationFailed: string
     channelCatalogStatus: Record<'planned' | 'blocked' | 'supported', string>
     /** What each adapter is missing, so a blocked row says why instead of only saying blocked. */
@@ -216,10 +239,11 @@ export type PlatformText = {
     loadMore: string
     filterEmpty: string
     clearFilters: string
-    emptyTasksTitle: string
     emptyTasksBody: string
     status: Record<'active' | 'paused' | 'completed', string>
     outcome: Record<'success' | 'failed' | 'skipped' | 'never', string>
+    /** Store this state instead of "never": a failed read must not look like a task that never ran. */
+    runUnreadable: string
     details: string
     collapse: string
     taskDeliveryHealth: string
@@ -241,7 +265,6 @@ export type PlatformText = {
     resourceLoadFailed: string
     resourceBridgeMissing: string
     resourceLoadTimeout: string
-    resourceEmptyTitle: string
     resourceEmptyBody: string
     resourceNote: string
     allSources: string
@@ -288,6 +311,8 @@ export type PlatformText = {
     newTopic: string
     noAssistant: string
     noTopics: string
+    /** 清除话题但还没选话题时的一句引导。 */
+    topicRequiredHint: string
     defaultAssistant: string
     selectTopic: string
     emptyChat: string
@@ -299,6 +324,8 @@ export type PlatformText = {
     /** PLAT-63 第二阶段 B：composer 的图像生成入口与小面板。 */
     imageGenerate: string
     imageGenerateTooltipDisabled: string
+    /** 未配置图像端点时的回执：带下一步（去模型服务配置），不是悬停提示。 */
+    imageEndpointMissingHint: string
     imagePromptPlaceholder: string
     imageSize: string
     imageCount: string
@@ -371,6 +398,8 @@ export type PlatformText = {
     webSearchHint: string
     comingSoon: string
     mentionedModels: string
+    /** 提及选择器不可用时的回执：带下一步（先选模型）。 */
+    mentionedModelsMissingHint: string
     webSearchCardTitle: string
     webFetchCardTitle: string
     webSearchSources: string
@@ -418,6 +447,8 @@ export type PlatformText = {
       prompt: string
       promptPlaceholder: string
       promptGenerate: string
+      /** 提示词生成还没上线时点了按钮的回执。 */
+      promptGenerateComingSoon: string
       tokenCount: (count: number) => string
       knowledgeBase: string
       knowledgeBaseDisabled: string
@@ -483,6 +514,8 @@ export type PlatformText = {
     customProvider: string
     systemProviderHint: string
     noProviders: string
+    /** 刷新失败、上一次的列表还在（台账 §25 的第 ③ 种处境）。 */
+    providersStaleNotice: string
     apiKey: string
     apiKeyPlaceholder: string
     savedApiKeyPlaceholder: string
@@ -541,6 +574,12 @@ export type PlatformText = {
     clearModelsConfirmBody: (count: number) => string
     /** PLAT-75：顶部「在用模型已下线」提示与「更换模型」入口。 */
     inUseModelRetired: (model: string) => string
+    /** 模型名之间的分隔符：中英不同，不许在组件里写死顿号。 */
+    modelNameListSeparator: string
+    /** 「今天确认 / N 天前确认」：结论是旧的时候，用户要知道它有多旧。 */
+    inUseModelRetiredCheckedAt: (days: number) => string
+    /** 超过 3 天没有再确认：措辞从「已下线」降级成「上次检查时不可用」。 */
+    inUseModelRetiredStale: (model: string, days: number) => string
     changeModel: string
     modelSearch: string
     /** PLAT-62 追加：模型区「智能体（Anthropic messages）」徽标与筛选。 */
@@ -706,6 +745,12 @@ export type PlatformText = {
     probeSkipProviderDisabled: string
     probeSkipNotChatModel: string
     probeSkipProtocolNotConfigured: string
+    /** 模型行内「失败」的短原因：≤12 字、一行放得下（行内不许省略，因为行里没有详情入口）。 */
+    detectionReasonShortNotActivated: string
+    detectionReasonShortModelNotFound: string
+    detectionReasonShortRetired: string
+    detectionReasonShortNoChannel: string
+    detectionReasonShortMissingKey: string
     typeAll: string
     /** 价格筛选：免费 + 折扣模型（不是模型类型，但和类型 pill 同一行）。 */
     typeDeal: string
@@ -754,6 +799,10 @@ export type PlatformText = {
     pickerSelectModel: string
     pickerClearSelection: string
     pickerFilters: string
+    /** 分类筛选组的可访问名（`FilterChipGroup` 的 aria-label）。 */
+    pickerFilterCategories: string
+    /** 协议筛选组的可访问名。 */
+    pickerFilterProtocols: string
     pickerClearFilters: string
     pickerFilteredCount: (count: number) => string
     pickerCategoryVision: string
@@ -981,16 +1030,45 @@ export type PlatformText = {
   notifications: {
     channelsDescription: string
     scopeNote: string
-    unavailableNotice: string
-    unavailableBadge: string
-    centerEnabled: string
-    centerDescription: string
     desktopEnabled: string
     desktopDescription: string
     toastEnabled: string
     toastDescription: string
     popupEnabled: string
     popupDescription: string
+    bell: string
+    bellUnread: (count: string) => string
+    centerTitle: string
+    centerUnreadGroup: string
+    centerEarlierGroup: string
+    centerMarkAllRead: string
+    centerMarkRead: string
+    centerReadDone: string
+    centerDeleteRead: string
+    centerDeleteReadConfirm: string
+    centerDeleteReadDone: (count: string) => string
+    centerDeleteReadEmpty: string
+    centerCancel: string
+    sendTest: string
+    desktopSystemGateHint: string
+    desktopPermissionGranted: string
+    desktopPermissionDenied: string
+    desktopPermissionUnknown: string
+    desktopPreferenceKept: string
+    sendTestHint: string
+    sendTestSent: string
+    sendTestToastOff: string
+    sendTestFailed: string
+    sendTestDesktopQueued: string
+    sendTestDesktopFailed: (reason: string) => string
+    toastClose: string
+    centerRecordedGroup: string
+    centerExpand: string
+    centerCollapse: string
+    centerMergedCount: (count: string) => string
+    centerEmptyHint: string
+    centerStaleNotice: string
+    centerRetry: string
     channelsHeading: string
   }
   webSearch: {
@@ -1172,7 +1250,6 @@ export type PlatformText = {
     recheckFailed: string
     flagSensitive: string
     filterEmpty: string
-    noCaches: string
     emptyValue: string
     ownerPlatform: string
     ownerProduct: (productId: string) => string
@@ -1187,7 +1264,6 @@ export type PlatformText = {
     categoryDerivedData: string
     statusReady: string
     statusEmpty: string
-    statusActive: string
     statusInspectionFailed: string
     statusSucceeded: string
     statusFailed: string
@@ -1201,8 +1277,24 @@ export type PlatformText = {
     fieldSize: string
     fieldWarnings: string
     fieldBackupPolicy: string
-    operationSuccess: string
     operationFailed: string
+    /**
+     * 失败原因：九条与 `CACHE_ERROR_CODES` 一一对应，按原因码取句子，不在代码里拼原因。
+     * 运行时原文（`ENOENT: ...`）只进审计与日志，不上屏。
+     */
+    errorReasonNotFound: string
+    errorReasonNotClearable: string
+    errorReasonNotCompactable: string
+    errorReasonInProgress: string
+    errorReasonDenied: string
+    errorReasonProviderFailed: string
+    errorReasonInspectionFailed: string
+    errorReasonRequiresProduct: string
+    errorReasonRuntimeActive: string
+    /** 「拿不到」不是「没有」：没有原因码时明说没拿到，不编一个原因。 */
+    errorReasonUnavailable: string
+    /** 刷新失败但旧数据仍在：必须说清是旧数据，否则用户以为缓存没了。 */
+    staleDataNotice: string
     confirmClear: (name: string) => string
     confirmCompact: (name: string) => string
     confirmSensitiveClear: string
@@ -1287,7 +1379,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       skills: '技能',
       agents: '智能体',
       contributionLoadFailed: '页面加载失败',
-      panelActions: '面板操作', panelClose: '关闭面板', panelReopen: '重新打开面板', panelEmbedded: '嵌入页面',
+      panelActions: '面板操作', panelTabs: '面板标签', panelClose: '关闭面板', panelReopen: '重新打开面板', panelEmbedded: '嵌入页面',
       panelDockRight: '停靠右侧', panelDockBottom: '停靠底部', panelDetach: '分离窗口', panelResetSize: '恢复默认尺寸',
       panelUnsupported: '当前空间不足', panelFallback: '面板', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
       inspectorDraft: '检查器草稿', inspectorSelection: '检查器选择', inspectorSelect: '选择检查项', inspectorSelected: '已选择',
@@ -1296,13 +1388,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       panelHandoffUnsaved: '面板还有未保存内容，已取消关闭', panelHandoffSensitive: '面板包含敏感草稿，已取消关闭',
       panelHandoffUnsupported: '当前版本不支持内容交接，已取消关闭',
       windowHostUnavailableTitle: '工作区窗口不可用', windowHostUnavailableContext: '未取得宿主上下文，已停止加载窗口内容',
-      windowHostUnavailablePanel: '当前窗口没有可承载的面板', windowHostUnavailableHint: '请回到主窗口重试，或重启应用',
+      windowHostUnavailablePanel: '当前窗口没有可承载的面板', windowHostUnavailableUnreadable: '读取本窗口的面板状态失败，面板可能仍在', windowHostUnavailableHint: '请回到主窗口重试，或重启应用',
       windowPreparingDetail: '正在把面板移入本窗口，请稍候', windowPanelPlaceholder: '此面板内容尚未接线',
       tabStrip: '工作区标签', tabClose: '关闭标签', tabOpenPage: '打开页面', tabActions: '标签操作', tabCloseOthers: '关闭其他标签',
       tabCloseRight: '关闭右侧标签', tabReopen: '重开最近关闭的标签', tabReopenUnavailable: '没有最近关闭的标签',
       tabCloseUnavailable: '当前没有活动标签', tabCloseOthersUnavailable: '没有其他标签可关闭', tabCloseRightUnavailable: '右侧没有标签可关闭',
       tabPageMissing: '页面不可用', tabEmptyTitle: '当前没有打开的页面', tabEmptyHint: '从顶部标签栏打开一个页面开始工作',
       tabCommandRejected: '操作被拒绝，工作区布局未改变', tabCommandFailed: '操作失败，请重试',
+      tabCommandTimeout: '没有收到回应，先看一眼窗口停靠回去没有，再决定要不要重试',
       tabDetach: '分离到新窗口', tabDetachUnavailable: '当前没有可分离的标签',
       tabDetachUnsupported: '该页面不支持分离到新窗口', tabDetachAlreadyDetached: '该标签已在独立窗口中',
       tabDetachLimitReached: '独立窗口数量已达上限，请先把其中一个窗口回停靠',
@@ -1321,12 +1414,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
+      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelStaleNotice: '没能更新，下面是上次读到的通道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
       deliveryHealth: '投递健康', healthUpdated: (time) => `最近更新 ${time}`,
-      healthEmpty: '暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。',
+      healthEmpty: '任务开始运行后，这里会显示成功、失败与跳过计数。',
       scheduledTaskDelivery: '我的定时任务投递',
       resourceJobRuns: '资源任务最近一次运行',
       resourceJobRunsEmpty: '当前没有已注册的资源任务。',
@@ -1335,10 +1428,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       columns: { name: '名称', status: '状态', schedule: '调度', nextRun: '下次运行', lastResult: '最近结果', actions: '操作', source: '来源', registration: '注册状态', lastRun: '最近运行' },
       all: '全部', searchTasks: '搜索任务名称', tasksLoading: '正在加载定时任务…', tasksLoadFailed: '定时任务加载失败。', loadMore: '加载更多',
       filterEmpty: '当前筛选下没有任务。', clearFilters: '清除筛选',
-      emptyTasksTitle: '还没有定时任务',
       emptyTasksBody: '在对话里对助手说「每天早上 9 点总结行情」，就会在这里出现一条定时任务；你也可以随时暂停或查看它的投递健康。',
       status: { active: '运行中', paused: '已暂停', completed: '已完成' },
       outcome: { success: '成功', failed: '失败', skipped: '已跳过', never: '从未运行' },
+      runUnreadable: '暂时读不到',
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
       deliverySkipReason: {
@@ -1350,11 +1443,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'delivery-owner-invalid': '投递由另一次运行持有，本次跳过'
       },
       deliverySkipReasonUnrecorded: (count) => `${count} 次跳过没有记录原因（属于缺陷，已按异常记录）`,
-      auditAccepted: '已接受', auditRejected: '已拒绝',
+      // 说的是「这次改动有没有生效」，不是「谁接受了谁」：与左侧动作词连起来读成一句事实
+      // （「创建 · 已生效」「暂停 · 未生效」）。两种取值都只是平台没让改动落地，不是失败，档位 muted。
+      auditAccepted: '已生效', auditRejected: '未生效',
       auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
       resourceBridgeMissing: '缺少接口，应用可能未重启；请重启应用后重试。', resourceLoadTimeout: '读取资源任务超时，请重试。',
-      resourceEmptyTitle: '当前没有产品注册自动任务',
       resourceEmptyBody: '启用某个产品的自动采集能力后，这里会显示它的调度、注册状态、下次运行与最近一次结果。未注册 ≠ 出错，通常代表该能力未启用。',
       resourceNote: '「未注册」表示该产品当前没有把它的调度注册进平台；通常意味着该能力未启用。本页只读，启用/停用在对应产品里操作。',
       allSources: '全部来源', allStatuses: '全部状态', platform: '平台', product: '产品', registered: '已注册', notRegistered: '未注册',
@@ -1387,6 +1481,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       newTopic: '新话题',
       noAssistant: '未选择助手',
       noTopics: '暂无话题',
+      topicRequiredHint: '先在上面选一个话题',
       defaultAssistant: '平台默认助手',
       selectTopic: '选择一个话题开始聊天',
       emptyChat: '发送第一条消息开始对话',
@@ -1397,6 +1492,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       streaming: '生成中',
       imageGenerate: '生成图片',
       imageGenerateTooltipDisabled: '未配置图像生成端点',
+      imageEndpointMissingHint: '先在模型服务里配置图像端点',
       imagePromptPlaceholder: '描述要生成的图片…',
       imageSize: '尺寸',
       imageCount: '数量',
@@ -1465,6 +1561,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
+      mentionedModelsMissingHint: '先选择一个模型',
       webSearchCardTitle: '网页搜索',
       webFetchCardTitle: '网页读取',
       webSearchSources: '来源',
@@ -1516,6 +1613,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         prompt: '提示词',
         promptPlaceholder: '输入系统提示词',
         promptGenerate: '提示词生成稍后接入',
+        promptGenerateComingSoon: '提示词生成还没上线',
         tokenCount: (count) => `约 ${count} token`,
         knowledgeBase: '知识库',
         knowledgeBaseDisabled: '知识库将在后续平台能力中接入。',
@@ -1551,6 +1649,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: '供应商',
+      providersStaleNotice: '没能更新，下面是上一次读到的供应商列表',
       providerDetail: '供应商配置',
       addProvider: '新增供应商',
       searchProvider: '搜索供应商',
@@ -1633,6 +1732,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clearModelsConfirmBody: (count) =>
         `将删除 ${count} 个模型（含预设模型）。删除后不会被预设自动加回；可用「获取模型列表」重新同步。`,
       inUseModelRetired: (model) => `你正在使用的 ${model} 已下线，请更换模型。`,
+      modelNameListSeparator: '、',
+      inUseModelRetiredCheckedAt: (days) => (days <= 0 ? '今天确认' : `${days} 天前确认`),
+      inUseModelRetiredStale: (model, days) =>
+        `上次检查（${days} 天前）时不可用：${model}。请重新检查后再决定是否更换。`,
       changeModel: '更换模型',
       modelSearch: '搜索模型',
       modelFilterAll: '全部',
@@ -1784,6 +1887,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       probeSkipProviderDisabled: '供应商未启用',
       probeSkipNotChatModel: '非聊天模型',
       probeSkipProtocolNotConfigured: '未配置协议端点',
+      detectionReasonShortNotActivated: '未开通',
+      detectionReasonShortModelNotFound: '模型不存在',
+      detectionReasonShortRetired: '已下线',
+      detectionReasonShortNoChannel: '无可用渠道',
+      detectionReasonShortMissingKey: '缺少密钥',
       typeAll: '全部',
       typeDeal: '免费&折扣',
       typeText: '文本',
@@ -1824,6 +1932,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       pickerSelectModel: '请选择模型',
       pickerClearSelection: '清除选择',
       pickerFilters: '筛选',
+      pickerFilterCategories: '分类',
+      pickerFilterProtocols: '协议',
       pickerClearFilters: '清除筛选',
       pickerFilteredCount: (count) => `已筛选 · ${count} 个结果`,
       pickerCategoryVision: '视觉',
@@ -2038,16 +2148,47 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
-      unavailableNotice: '通知暂未启用：平台目前还没有产生通知的来源，这些开关不会有任何效果。接到第一个真实来源后重新启用。',
-      unavailableBadge: '未启用',
-      centerEnabled: '通知中心',
-      centerDescription: '保留所有通知记录，便于回看系统消息与任务结果。',
       desktopEnabled: '桌面通知',
       desktopDescription: '通过系统桌面通知提醒你，不要求应用当前保持在前台。',
       toastEnabled: '应用内提示',
       toastDescription: '在应用内显示轻量横幅，适合日常运行状态与普通提醒。',
       popupEnabled: '高优先级弹窗',
-      popupDescription: '为高优先级事件提供更明显的应用内弹窗提示。'
+      popupDescription: '为高优先级事件提供更明显的应用内弹窗提示。',
+      bell: '通知',
+      bellUnread: (count) => `${count} 条未读通知，打开通知中心`,
+      centerTitle: '通知',
+      centerUnreadGroup: '未读',
+      centerEarlierGroup: '已读',
+      centerMarkAllRead: '全部标为已读',
+      centerMarkRead: '标为已读',
+      centerReadDone: '已全部标为已读',
+      centerDeleteRead: '删除已读',
+      centerDeleteReadConfirm: '删除所有已读通知？此操作不可撤销；未读通知不会被删除。',
+      centerDeleteReadDone: (count) => `已删除 ${count} 条已读通知`,
+      centerDeleteReadEmpty: '没有已读通知可删。',
+      centerCancel: '取消',
+      sendTest: '发送测试通知',
+      sendTestSent: '已发送：右上角会出现一条横幅，六秒后自己消失；点它打开通知中心。',
+      sendTestToastOff: '已发送：应用内提示关着，所以右上角不会出现横幅。这条已经进了通知中心，点铃铛可以看到。',
+      sendTestFailed: '没发出去：这条通知没有写进记录，请稍后再试一次。',
+      sendTestDesktopQueued: '桌面通知已交给系统；没有弹出横幅，多半是系统静音或没放行。',
+      sendTestDesktopFailed: (reason) => `桌面通知没发出去：${reason}`, 
+      toastClose: '关闭这条通知',
+      desktopSystemGateHint:
+        '横幅由系统弹出，我们读不到系统里的通知开关；没看到横幅，就去「系统设置 › 通知 › 观潮」打开允许通知，再点一次「发送测试通知」。',
+      desktopPermissionGranted: '系统已放行桌面通知',
+      desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
+      desktopPermissionUnknown: '暂时无法确认系统是否放行',
+      desktopPreferenceKept: '这里的选择会被保留，系统放行后生效。',
+      sendTestHint:
+        '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
+      centerRecordedGroup: '仅记录',
+      centerExpand: '展开',
+      centerCollapse: '收起',
+      centerMergedCount: (count) => `×${count}`,
+      centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。',
+      centerStaleNotice: '没能刷新，下面是上一次读到的列表。',
+      centerRetry: '重试'
     },
     webSearch: {
       title: '网页搜索',
@@ -2164,10 +2305,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       editApiKey: '编辑 API Key',
       clickToReplace: '点击可替换 Key',
       revealApiKeyFailed: '读取已保存 Key 失败，已保持掩码。',
-      revealApiKeyUnavailable: '应用进程缺少该接口，请重启应用后重试。',
+      revealApiKeyUnavailable: '当前版本缺少读取已保存 Key 的接口，关掉应用再打开即可恢复。',
       copyApiKey: '复制密钥',
       apiKeyCopied: '已复制',
-      revealApiKeyBridgeFailed: '与主进程通信失败，请重启应用后重试。',
+      revealApiKeyBridgeFailed: '没能连上主进程，可以重试。',
       revealApiKeyMissing: '没有找到已保存的 Key（可能已被移除）。',
       retry: '重试',
       apiKeyRevealedHint: '完整 Key 已显示，30 秒后自动隐藏（失焦也会隐藏）。',
@@ -2229,7 +2370,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       recheckFailed: '重新检查失败',
       flagSensitive: '含用户内容',
       filterEmpty: '此分类下没有缓存',
-      noCaches: '当前没有已注册缓存',
       emptyValue: '暂无',
       ownerPlatform: '平台',
       ownerProduct: (productId) => `产品：${productId}`,
@@ -2244,7 +2384,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       categoryDerivedData: '派生数据',
       statusReady: '可用',
       statusEmpty: '为空',
-      statusActive: '活跃',
       statusInspectionFailed: '检查失败',
       statusSucceeded: '成功',
       statusFailed: '失败',
@@ -2258,8 +2397,18 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: '体积',
       fieldWarnings: '影响提示',
       fieldBackupPolicy: '备份策略',
-      operationSuccess: '缓存操作已完成',
       operationFailed: '缓存操作失败',
+      errorReasonNotFound: '这个缓存已经不在了',
+      errorReasonNotClearable: '这类缓存不允许清理',
+      errorReasonNotCompactable: '这类缓存不支持压缩',
+      errorReasonInProgress: '上一次操作还没结束',
+      errorReasonDenied: '没有权限执行这个操作',
+      errorReasonProviderFailed: '清理或压缩时缓存自己报错了',
+      errorReasonInspectionFailed: '这次检查没有完成',
+      errorReasonRequiresProduct: '需要先安装对应的模块',
+      errorReasonRuntimeActive: '应用正在使用这块缓存，先停掉再操作',
+      errorReasonUnavailable: '这次没拿到具体原因',
+      staleDataNotice: '没能更新，下面是上次读到的数据。',
       confirmClear: (name) => `确认清理缓存“${name}”？`,
       confirmCompact: (name) => `确认压缩缓存“${name}”？`,
       confirmSensitiveClear: '该缓存包含用户内容或敏感引用，清理后需要重新生成这些派生结果。',
@@ -2342,7 +2491,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       skills: 'Skills',
       agents: 'Agents',
       contributionLoadFailed: 'Failed to load page',
-      panelActions: 'Panel actions', panelClose: 'Close panel', panelReopen: 'Reopen panel', panelEmbedded: 'Embed',
+      panelActions: 'Panel actions', panelTabs: 'Panel tabs', panelClose: 'Close panel', panelReopen: 'Reopen panel', panelEmbedded: 'Embed',
       panelDockRight: 'Dock right', panelDockBottom: 'Dock bottom', panelDetach: 'Detach window', panelResetSize: 'Reset size',
       panelUnsupported: 'Not available at this size', panelFallback: 'Panel', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',
       inspectorDraft: 'Inspector draft', inspectorSelection: 'Inspector selection', inspectorSelect: 'Select item', inspectorSelected: 'Selected',
@@ -2351,13 +2500,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       panelHandoffUnsaved: 'The panel has unsaved content, so it was not closed', panelHandoffSensitive: 'The panel holds a sensitive draft, so it was not closed',
       panelHandoffUnsupported: 'Content handoff is not supported in this version, so the panel was not closed',
       windowHostUnavailableTitle: 'Workspace window unavailable', windowHostUnavailableContext: 'The host context could not be read, so window content was not loaded',
-      windowHostUnavailablePanel: 'This window has no panel to host', windowHostUnavailableHint: 'Return to the main window and try again, or restart the app',
+      windowHostUnavailablePanel: 'This window has no panel to host', windowHostUnavailableUnreadable: 'Could not read this window\'s panel state; the panel may still be there', windowHostUnavailableHint: 'Return to the main window and try again, or restart the app',
       windowPreparingDetail: 'Moving this panel into this window, please wait', windowPanelPlaceholder: 'Panel content is not wired up yet',
       tabStrip: 'Workspace tabs', tabClose: 'Close tab', tabOpenPage: 'Open page', tabActions: 'Tab actions', tabCloseOthers: 'Close other tabs',
       tabCloseRight: 'Close tabs to the right', tabReopen: 'Reopen last closed tab', tabReopenUnavailable: 'No recently closed tab',
       tabCloseUnavailable: 'No active tab', tabCloseOthersUnavailable: 'No other tab to close', tabCloseRightUnavailable: 'No tab to the right',
       tabPageMissing: 'Page unavailable', tabEmptyTitle: 'No page is open', tabEmptyHint: 'Open a page from the tab bar to start working',
       tabCommandRejected: 'The action was refused; the workspace layout is unchanged', tabCommandFailed: 'The action failed. Try again',
+      tabCommandTimeout: 'No response came back — check whether the window docked before trying again',
       tabDetach: 'Detach to new window', tabDetachUnavailable: 'No tab can be detached right now',
       tabDetachUnsupported: 'This page cannot be detached into a new window', tabDetachAlreadyDetached: 'This tab already has its own window',
       tabDetachLimitReached: 'Too many separate windows; dock one of them back first',
@@ -2376,12 +2526,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
-      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
+      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
       deliveryHealth: 'Delivery health', healthUpdated: (time) => `Updated ${time}`,
-      healthEmpty: 'No deliveries yet. Success, failure and skipped counts appear here once a task runs.',
+      healthEmpty: 'Success, failure and skipped counts appear here once a task runs.',
       scheduledTaskDelivery: 'Scheduled task delivery',
       resourceJobRuns: 'Latest product job runs',
       resourceJobRunsEmpty: 'No registered product jobs.',
@@ -2390,10 +2540,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       columns: { name: 'Name', status: 'Status', schedule: 'Schedule', nextRun: 'Next run', lastResult: 'Last result', actions: 'Actions', source: 'Source', registration: 'Registration', lastRun: 'Last run' },
       all: 'All', searchTasks: 'Search job name', tasksLoading: 'Loading scheduled tasks…', tasksLoadFailed: 'Failed to load scheduled tasks.', loadMore: 'Load more',
       filterEmpty: 'No jobs match these filters.', clearFilters: 'Clear filters',
-      emptyTasksTitle: 'No scheduled tasks yet',
       emptyTasksBody: 'Ask the assistant something like “summarize the market every day at 9am” and it will appear here. You can pause it or check its delivery health at any time.',
       status: { active: 'Active', paused: 'Paused', completed: 'Completed' },
       outcome: { success: 'Succeeded', failed: 'Failed', skipped: 'Skipped', never: 'Never' },
+      runUnreadable: 'Temporarily unreadable',
       details: 'Details', collapse: 'Collapse', taskDeliveryHealth: 'Delivery health for this task', recentChanges: 'Recent changes', noChanges: 'No changes yet.',
       delivered: 'Delivered', failed: 'Failed', pending: 'Pending', skipped: 'Skipped', unknown: 'Unknown',
       deliverySkipReason: {
@@ -2405,11 +2555,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'delivery-owner-invalid': 'Another run owns this delivery, so it was skipped'
       },
       deliverySkipReasonUnrecorded: (count) => `${count} skipped ${count === 1 ? 'delivery has' : 'deliveries have'} no recorded reason (a defect, logged as an anomaly)`,
-      auditAccepted: 'Accepted', auditRejected: 'Rejected',
+      auditAccepted: 'Applied', auditRejected: 'Not applied',
       auditAction: { create: 'Created', update: 'Updated', pause: 'Paused', resume: 'Resumed', delete: 'Deleted', 'run-now': 'Run now', 'cancel-run': 'Cancelled run', 'runtime-transition': 'Runtime transition', 'channel-delete-cleanup': 'Channel cleanup' },
       resourceJobs: 'Platform & product jobs', resourceLoading: 'Loading platform jobs…', resourceLoadFailed: 'Failed to load platform jobs.',
       resourceBridgeMissing: 'The app process is missing this interface; restart the app and retry.', resourceLoadTimeout: 'Timed out reading platform jobs. Please retry.',
-      resourceEmptyTitle: 'No product jobs registered',
       resourceEmptyBody: 'Once a product enables its automatic collection capability, its schedule, registration state, next run, and last result appear here. Not registered does not mean broken; it usually means the capability is disabled.',
       resourceNote: '“Not registered” means the product has not registered its schedule with the platform; it usually means the capability is disabled. This page is read-only — enable or disable it in the owning product.',
       allSources: 'All sources', allStatuses: 'All statuses', platform: 'Platform', product: 'Product', registered: 'Registered', notRegistered: 'Not registered',
@@ -2442,6 +2591,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       newTopic: 'New topic',
       noAssistant: 'No assistant selected',
       noTopics: 'No topics yet',
+      topicRequiredHint: 'Pick a topic above first',
       defaultAssistant: 'Platform default assistant',
       selectTopic: 'Select a topic to start chatting',
       emptyChat: 'Send the first message to begin',
@@ -2452,6 +2602,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       streaming: 'Generating',
       imageGenerate: 'Generate image',
       imageGenerateTooltipDisabled: 'No image generation endpoint configured',
+      imageEndpointMissingHint: 'Configure an image endpoint in Model service first',
       imagePromptPlaceholder: 'Describe the image to generate…',
       imageSize: 'Size',
       imageCount: 'Count',
@@ -2521,6 +2672,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
+      mentionedModelsMissingHint: 'Select a model first',
       webSearchCardTitle: 'Web Search',
       webFetchCardTitle: 'Page fetch',
       webSearchSources: 'Sources',
@@ -2572,6 +2724,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         prompt: 'Prompt',
         promptPlaceholder: 'Enter system prompt',
         promptGenerate: 'Prompt generation will be added later',
+        promptGenerateComingSoon: 'Prompt generation is not available yet',
         tokenCount: (count) => `~${count} tokens`,
         knowledgeBase: 'Knowledge base',
         knowledgeBaseDisabled: 'Knowledge base support will connect through a later platform capability.',
@@ -2607,6 +2760,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: 'Providers',
+      providersStaleNotice: 'Could not refresh — these providers are from the last read',
       providerDetail: 'Provider Settings',
       addProvider: 'Add Provider',
       searchProvider: 'Search providers',
@@ -2689,6 +2843,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clearModelsConfirmBody: (count) =>
         `This deletes ${count} model(s), including preset models. Presets will not add them back; use "Fetch model list" to sync again.`,
       inUseModelRetired: (model) => `The model you are using (${model}) has been retired. Switch to another model.`,
+      modelNameListSeparator: ', ',
+      inUseModelRetiredCheckedAt: (days) =>
+        days <= 0 ? 'confirmed today' : `confirmed ${days} day${days === 1 ? '' : 's'} ago`,
+      inUseModelRetiredStale: (model, days) =>
+        `Last checked ${days} days ago: ${model} was unavailable. Re-check before switching.`,
       changeModel: 'Change model',
       modelSearch: 'Search models',
       modelFilterAll: 'All',
@@ -2841,6 +3000,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       probeSkipProviderDisabled: 'provider disabled',
       probeSkipNotChatModel: 'not a chat model',
       probeSkipProtocolNotConfigured: 'no protocol endpoint configured',
+      detectionReasonShortNotActivated: 'Not activated',
+      detectionReasonShortModelNotFound: 'Model not found',
+      detectionReasonShortRetired: 'Retired',
+      detectionReasonShortNoChannel: 'No channel',
+      detectionReasonShortMissingKey: 'Missing key',
       typeAll: 'All',
       typeDeal: 'Free & deals',
       typeText: 'Text',
@@ -2881,6 +3045,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       pickerSelectModel: 'Select a model',
       pickerClearSelection: 'Clear selection',
       pickerFilters: 'Filters',
+      pickerFilterCategories: 'Categories',
+      pickerFilterProtocols: 'Protocols',
       pickerClearFilters: 'Clear filters',
       pickerFilteredCount: (count) => `Filtered · ${count} result${count === 1 ? '' : 's'}`,
       pickerCategoryVision: 'Vision',
@@ -3111,17 +3277,47 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
       scopeNote:
         'Keep at least one lightweight channel enabled. Desktop delivery is useful away from the app, while popups are better for events that need immediate attention.',
-      unavailableNotice:
-        'Notifications are not available yet: nothing in the platform produces one right now, so these switches have no effect. They turn on with the first real source.',
-      unavailableBadge: 'Not available',
-      centerEnabled: 'Notification center',
-      centerDescription: 'Keep an in-app record of notifications so results and system messages can be reviewed later.',
       desktopEnabled: 'Desktop notifications',
       desktopDescription: 'Use system notifications even when the app is not the active window.',
       toastEnabled: 'In-app toasts',
       toastDescription: 'Show lightweight banners inside the app for routine status changes and reminders.',
       popupEnabled: 'High-priority popups',
-      popupDescription: 'Show stronger in-app popups for events that need immediate attention.'
+      popupDescription: 'Show stronger in-app popups for events that need immediate attention.',
+      bell: 'Notifications',
+      bellUnread: (count) => `${count} unread notifications, open the notification center`,
+      centerTitle: 'Notifications',
+      centerUnreadGroup: 'Unread',
+      centerEarlierGroup: 'Earlier',
+      centerMarkAllRead: 'Mark all as read',
+      centerMarkRead: 'Mark as read',
+      centerReadDone: 'All marked as read',
+      centerDeleteRead: 'Delete read',
+      centerDeleteReadConfirm: 'Delete every read notification? This cannot be undone; unread notifications are not deleted.',
+      centerDeleteReadDone: (count) => `Deleted ${count} read notifications`,
+      centerDeleteReadEmpty: 'There are no read notifications to delete.',
+      centerCancel: 'Cancel',
+      sendTest: 'Send a test notification',
+      sendTestSent: 'Sent — a banner appears in the top right and goes away after six seconds. Click it to open the notification centre.',
+      sendTestToastOff: 'Sent — in-app banners are off, so nothing appears in the top right. It is in the notification centre; open the bell.',
+      sendTestFailed: 'Not sent — this notification was not recorded. Try again in a moment.',
+      sendTestDesktopQueued: 'The desktop alert was handed to the system; no banner usually means the system muted or blocked it.',
+      sendTestDesktopFailed: (reason) => `The desktop alert did not go out: ${reason}`,
+      toastClose: 'Dismiss this notification',
+      desktopSystemGateHint:
+        'The system draws the banner and we cannot read its notification switch. If no banner appears, open System Settings › Notifications › MacroBay, allow notifications, then press "Send a test notification" again.',
+      desktopPermissionGranted: 'The system allows desktop notifications',
+      desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
+      desktopPermissionUnknown: 'Could not check whether the system allows notifications',
+      desktopPreferenceKept: 'Your choice here is saved and takes effect once the system allows notifications.',
+      sendTestHint:
+        'This only proves the pipeline works; it describes no real event. Whether the desktop banner appears is up to the system — if you do not see it, allow notifications in System Settings as described above and press the button again.',
+      centerRecordedGroup: 'Recorded only',
+      centerExpand: 'Show more',
+      centerCollapse: 'Show less',
+      centerMergedCount: (count) => `×${count}`,
+      centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.',
+      centerStaleNotice: 'Could not refresh — this is the list from last time.',
+      centerRetry: 'Try again'
     },
     webSearch: {
       title: 'Web Search',
@@ -3238,10 +3434,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       editApiKey: 'Edit API key',
       clickToReplace: 'Click to replace the key',
       revealApiKeyFailed: 'Could not read the saved key; keeping the mask.',
-      revealApiKeyUnavailable: 'The app process is missing this interface; restart the app and retry.',
+      revealApiKeyUnavailable: 'This build cannot reveal a saved key; close the app and open it again to restore it.',
       copyApiKey: 'Copy key',
       apiKeyCopied: 'Copied',
-      revealApiKeyBridgeFailed: 'Failed to reach the main process; restart the app and retry.',
+      revealApiKeyBridgeFailed: 'Could not reach the main process — you can try again.',
       revealApiKeyMissing: 'No saved key was found (it may have been removed).',
       retry: 'Retry',
       apiKeyRevealedHint: 'Full key visible; hides automatically after 30s (or on blur).',
@@ -3303,7 +3499,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       recheckFailed: 'Recheck failed',
       flagSensitive: 'User content',
       filterEmpty: 'No caches in this category',
-      noCaches: 'No registered caches yet',
       emptyValue: 'None',
       ownerPlatform: 'Platform',
       ownerProduct: (productId) => `Product: ${productId}`,
@@ -3318,7 +3513,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       categoryDerivedData: 'Derived data',
       statusReady: 'Ready',
       statusEmpty: 'Empty',
-      statusActive: 'Active',
       statusInspectionFailed: 'Inspection failed',
       statusSucceeded: 'Succeeded',
       statusFailed: 'Failed',
@@ -3332,8 +3526,18 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: 'Size',
       fieldWarnings: 'Effects',
       fieldBackupPolicy: 'Backup',
-      operationSuccess: 'Cache operation completed',
       operationFailed: 'Cache operation failed',
+      errorReasonNotFound: 'This cache no longer exists',
+      errorReasonNotClearable: 'This kind of cache cannot be cleared',
+      errorReasonNotCompactable: 'This kind of cache cannot be compacted',
+      errorReasonInProgress: 'The previous operation has not finished yet',
+      errorReasonDenied: 'This operation is not permitted',
+      errorReasonProviderFailed: 'The cache itself failed while clearing or compacting',
+      errorReasonInspectionFailed: 'The check did not finish',
+      errorReasonRequiresProduct: 'Install the owning module first',
+      errorReasonRuntimeActive: 'The app is using this cache; stop it before changing the cache',
+      errorReasonUnavailable: 'The specific reason was not available this time',
+      staleDataNotice: 'Could not refresh; the rows below are from the last successful read.',
       confirmClear: (name) => `Clear cache "${name}"?`,
       confirmCompact: (name) => `Compact cache "${name}"?`,
       confirmSensitiveClear: 'This cache contains user content or secret references. Derived results will be rebuilt after clearing.',

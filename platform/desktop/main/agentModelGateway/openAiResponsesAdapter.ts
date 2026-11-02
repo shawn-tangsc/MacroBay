@@ -26,6 +26,7 @@ import {
   toSafeGatewayErrorBody
 } from './gatewayErrorClassifier'
 import { createGatewayAbortTimeout } from './gatewayAbortAndTimeout'
+import { createSseDataFrameReader } from './sseDataFrameReader'
 
 export type OpenAiResponsesAdapterInput = {
   upstreamBaseUrl: string
@@ -224,7 +225,7 @@ async function convertOpenAiResponsesStreamToAnthropicSse(response: Response, mo
   }
 
   const decoder = new TextDecoder()
-  let buffer = ''
+  const frameReader = createSseDataFrameReader()
   let messageId = `msg_${Date.now().toString(36)}`
   let started = false
   let textStarted = false
@@ -253,19 +254,13 @@ async function convertOpenAiResponsesStreamToAnthropicSse(response: Response, mo
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const parts = buffer.split('\n')
-      buffer = parts.pop() ?? ''
-
-      for (const line of parts) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const data = trimmed.slice(5).trim()
-        if (!data || data === '[DONE]') continue
+      for (const frame of frameReader.push(decoder.decode(value, { stream: true }))) {
+        // 这个协议里 `[DONE]` 只是终止标记，没有额外收尾帧要发。
+        if (frame.kind === 'done') continue
 
         let event: OpenAiResponsesStreamEvent
         try {
-          event = JSON.parse(data) as OpenAiResponsesStreamEvent
+          event = JSON.parse(frame.payload) as OpenAiResponsesStreamEvent
         } catch {
           continue
         }

@@ -40,7 +40,6 @@ const SHELL_RENDER_TIMEOUT_MS = 15_000
 /** 条件驱动等待的显式有界上界：`vi.waitFor` 默认 1s 在高负载下会先于条件到达而抛错（判据逐字不变）。 */
 const CONDITION_TIMEOUT_MS = 5_000
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

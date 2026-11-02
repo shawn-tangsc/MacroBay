@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -336,7 +335,13 @@ describe('market analysis embedded workspace', () => {
     const container = await renderPanel()
     expect(container.textContent).toContain('旧内容')
 
-    await act(async () => { container.querySelector<HTMLButtonElement>('[data-agent-new-conversation]')!.click() })
+    // The trigger is the shared icon button now; its name is what the reader and the test share,
+    // not a test-only data hook (the migration to the icon button dropped the hook, and the test
+    // kept passing on nothing).
+    const newChat = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.getAttribute('aria-label') === text.analysisWorkspace.newChatAction)
+    expect(newChat).toBeDefined()
+    await act(async () => { newChat!.click() })
     expect(createSession).toHaveBeenCalledWith(expect.objectContaining({
       agentId: 'crypto-market-analyst', name: expect.any(String), description: 'market-analysis-conversation', workspace: { type: 'system' }
     }))

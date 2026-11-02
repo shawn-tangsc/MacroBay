@@ -7,11 +7,25 @@ import { useDashboardFearGreed } from './useDashboardFearGreed'
 
 const asOf = '2026-08-06T12:00:00.000Z'
 let root: Root | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren() })
 
 describe('useDashboardFearGreed', () => {
+  it('re-asks the snapshot when the reader retries, instead of reloading the page', async () => {
+    const querySnapshot = vi.fn()
+      .mockRejectedValueOnce(new Error('request failed'))
+      .mockResolvedValueOnce({ state: 'available', asOf, score: 30, bucket: 'fear', observedAt: '2026-08-06T10:00:00.000Z' })
+    let reload: (() => void) | undefined
+    const page = await renderHook({ querySnapshot }, () => new Date(asOf), value => { reload = value })
+    await flush()
+    expect(page.state()).toEqual({ state: 'unavailable' })
+
+    await act(async () => { reload!() })
+    await flush()
+    expect(querySnapshot).toHaveBeenCalledTimes(2)
+    expect(page.state()).toEqual({ state: 'available', score: '30' })
+  })
+
   it('captures one mount as-of and makes one snapshot query', async () => {
     const querySnapshot = vi.fn(async () => ({ state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt: '2026-08-06T10:00:00.000Z' }))
     const page = await renderHook({ querySnapshot }, () => new Date(asOf))
@@ -71,18 +85,19 @@ describe('useDashboardFearGreed', () => {
   })
 })
 
-async function renderHook(client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }, now: () => Date) {
+async function renderHook(client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }, now: () => Date, onReady?: (reload: () => void) => void) {
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
-  await act(async () => localRoot.render(createElement(Harness, { client, now })))
+  await act(async () => localRoot.render(createElement(Harness, { client, now, onReady })))
   return { root: localRoot, container, state: () => {
     const output = container.querySelector('output')!
     return { state: output.dataset.state!, ...(output.dataset.score ? { score: output.dataset.score } : {}) }
   } }
 }
 
-function Harness({ client, now }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date }) {
-  const state = useDashboardFearGreed({ client: client as never, now })
+function Harness({ client, now, onReady }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; onReady?: (reload: () => void) => void }) {
+  const { state, reload } = useDashboardFearGreed({ client: client as never, now })
+  onReady?.(reload)
   return createElement('output', { 'data-state': state.state, 'data-score': state.state === 'available' ? state.score : undefined })
 }
 

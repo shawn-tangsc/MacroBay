@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Dropdown, Tooltip } from 'antd'
+import { Button, Dropdown } from 'antd'
 import type { MenuProps } from 'antd'
 import { ChevronDown, Code2 } from 'lucide-react'
 
 import type { ExternalAppView } from '@platform/desktop/main/externalApps/externalAppRegistry'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../../agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
 
 type OpenExternalAppButtonProps = {
   workspacePath: string | null | undefined
@@ -15,6 +18,12 @@ export default function OpenExternalAppButton({
   workspacePath
 }: OpenExternalAppButtonProps): React.ReactElement | null {
   const t = useAgentText()
+  // 两颗都是键：带应用名的那颗用 `{name}` 模板 + `labelParams`，句子在文案表里，值在这里填。
+  const tooltipKeys = {
+    openInExternalApp: 'chatNavbar.openInExternalApp',
+    openInExternalAppMenu: 'chatNavbar.openInExternalAppMenu'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [apps, setApps] = useState<ExternalAppView[]>([])
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
 
@@ -60,18 +69,21 @@ export default function OpenExternalAppButton({
 
   return (
     <span className="agent-external-app-actions">
-      <Tooltip title={t.chatNavbar.openInExternalApp(selectedApp.name)}>
+      <Tooltip
+        labelKey={tooltipKeys.openInExternalApp}
+        labelParams={{ name: selectedApp.name }}
+        resolveText={resolveText}>
         <Button
           className="ant-shell-icon-button"
           type="text"
           size="small"
           icon={<Code2 size={15} />}
-          aria-label={t.chatNavbar.openInExternalApp(selectedApp.name)}
+          aria-label={fillLabelParams(t.chatNavbar.openInExternalApp, { name: selectedApp.name })}
           onClick={() => void launch(selectedApp.id)}
         />
       </Tooltip>
       {apps.length > 1 ? (
-        <Tooltip title={t.chatNavbar.openInExternalAppMenu}>
+        <Tooltip labelKey={tooltipKeys.openInExternalAppMenu} resolveText={resolveText}>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
               className="ant-shell-icon-button"

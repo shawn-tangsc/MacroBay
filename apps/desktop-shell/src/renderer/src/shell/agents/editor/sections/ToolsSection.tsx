@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Input, Tabs, message } from 'antd'
-import { Search, Sparkles, Wrench, Package } from 'lucide-react'
+import { Input } from 'antd'
+import { Search, Wrench } from 'lucide-react'
 
 import type { AgentFormState } from '@platform/ai/agent-platform/agents/agentConfigDescriptor'
 import { buildAgentMcpCatalog } from '@platform/ai/agent-platform/mcp/agentMcpViewModel'
@@ -12,9 +12,14 @@ import type { Tool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 import { buildAgentSkillCatalog } from '@platform/ai/agent-platform/skills/agentSkillViewModel'
 import type { AgentSkillBinding, AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 
+import { Tabs } from '@platform/ui/components/tabs'
+
 import { useAgentText } from '../../agentTextProvider'
 import { BuiltinToolCatalog } from './tools/BuiltinToolCatalog'
-import { EmptyCatalog } from './tools/EmptyCatalog'
+import { resolveAgentTextKey } from '../../agentTooltipText'
+import { StateView } from '@platform/ui/components/state'
+import { useToast } from '@platform/ui/components/toast'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { McpCatalog } from './tools/McpCatalog'
 import { SkillCatalog } from './tools/SkillCatalog'
 import { ProductToolPackagesCatalog } from './tools/ProductToolPackagesCatalog'
@@ -29,7 +34,14 @@ type ToolsSectionProps = {
   skillBindings: AgentSkillBinding[]
   onChange: (patch: Partial<AgentFormState>) => void
   onSkillToggle: (skillId: string, checked: boolean) => void | Promise<void>
+  /** 新智能体还没保存时，工具页的两个空态要能把人送到「保存」这一步。 */
+  onSave: () => void
 }
+
+/** 手动绑定回执的键：句子仍在 `AgentText.editor.tools`。 */
+const MANUAL_EMPTY_KEY = 'agent.tools.mcpManualEmpty'
+const MANUAL_DUPLICATE_KEY = 'agent.tools.mcpManualDuplicate'
+const MANUAL_ADDED_KEY = 'agent.tools.mcpManualAdded'
 
 type ToolTab = 'tools' | 'mcp' | 'skills' | 'product-packages'
 
@@ -40,10 +52,13 @@ export default function ToolsSection({
   form,
   skillBindings,
   onChange,
-  onSkillToggle
+  onSkillToggle,
+  onSave
 }: ToolsSectionProps): React.ReactElement {
   const t = useAgentText()
   const [activeTab, setActiveTab] = useState<ToolTab>('tools')
+  // 平台 Toast：宿主挂在渲染根上，回执不再走 antd 的 message。
+  const toast = useToast()
   const [search, setSearch] = useState('')
   const [mcpDraft, setMcpDraft] = useState('')
   const [skillRuntime, setSkillRuntime] = useState<AgentSkillsRuntimeCatalog | null>(null)
@@ -91,16 +106,25 @@ export default function ToolsSection({
   function addMcp(): void {
     const result = addManualMcpBinding(form.mcps, mcpDraft)
     if (result.status === 'empty') {
-      message.warning(t.editor.tools.mcpManualEmpty)
+      toast.info({
+        titleKey: MANUAL_EMPTY_KEY,
+        resolveText: (key) => (key === MANUAL_EMPTY_KEY ? t.editor.tools.mcpManualEmpty : '')
+      })
       return
     }
     if (result.status === 'duplicate') {
-      message.info(t.editor.tools.mcpManualDuplicate(result.id))
+      toast.info({
+        titleKey: MANUAL_DUPLICATE_KEY,
+        resolveText: (key) => (key === MANUAL_DUPLICATE_KEY ? t.editor.tools.mcpManualDuplicate(result.id) : '')
+      })
       return
     }
     onChange({ mcps: result.mcps })
     setMcpDraft('')
-    message.success(t.editor.tools.mcpManualAdded(result.id))
+    toast.success({
+      titleKey: MANUAL_ADDED_KEY,
+      resolveText: (key) => (key === MANUAL_ADDED_KEY ? t.editor.tools.mcpManualAdded(result.id) : '')
+    })
   }
 
   async function installSkillFromDirectory(): Promise<void> {
@@ -116,25 +140,16 @@ export default function ToolsSection({
     await window.platform.agents.skills.installFromZip({ zipFilePath })
   }
 
-  return (
-    <div className="agent-form-section">
-      <header>
-        <h3>{t.editor.tools.title}</h3>
-        <p>{t.editor.tools.description}</p>
-      </header>
-
-      <div className="agent-tool-search">
-        <Search size={13} />
-        <Input value={search} placeholder={t.editor.tools.searchPlaceholder} onChange={(event) => setSearch(event.target.value)} />
-      </div>
-
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as ToolTab)}
-        items={[
+  const tabItems: Array<{
+    value: string
+    labelKey: string
+    labelParams?: Record<string, string>
+    children: React.ReactNode
+  }> = [
           {
-            key: 'tools',
-            label: t.editor.tools.builtinTab(enabledBuiltinToolCount, builtinTools.length),
+            value: 'tools',
+            labelKey: 'editor.tools.builtinTab',
+            labelParams: { enabled: String(enabledBuiltinToolCount), total: String(builtinTools.length) },
             children: (
               <BuiltinToolCatalog
                 text={t}
@@ -152,8 +167,9 @@ export default function ToolsSection({
             )
           },
           {
-            key: 'mcp',
-            label: t.editor.tools.mcpTab(form.mcps.length),
+            value: 'mcp',
+            labelKey: 'editor.tools.mcpTab',
+            labelParams: { count: String(form.mcps.length) },
             children: (
               <McpCatalog
                 text={t}
@@ -172,21 +188,23 @@ export default function ToolsSection({
             )
           },
           {
-            key: 'product-packages',
-            label: t.editor.tools.productPackagesTab,
+            value: 'product-packages',
+            labelKey: 'editor.tools.productPackagesTab',
             children: agentId ? (
-              <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} />
+              <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} onClearSearch={() => setSearch('')} />
             ) : (
-              <EmptyCatalog
-                icon={<Package size={17} />}
-                title={t.editor.tools.saveAgentBeforeProductToolsTitle}
-                description={t.editor.tools.saveAgentBeforeProductToolsDescription}
+              <StateView
+                state="disabled"
+                reasonCode="precondition-unsaved"
+                size="md"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.save, onSelect: onSave }}
               />
             )
           },
           {
-            key: 'skills',
-            label: t.editor.tools.skillsTab(skillCatalog.filter((skill) => skill.enabledForAgent).length),
+            value: 'skills',
+            labelKey: 'editor.tools.skillsTab',
+            labelParams: { count: String(skillCatalog.filter((skill) => skill.enabledForAgent).length) },
             children: agentId ? (
               <SkillCatalog
                 text={t}
@@ -197,16 +215,39 @@ export default function ToolsSection({
                 onInstallFromZip={installSkillFromZip}
                 onRefresh={() => void window.platform.agents.skills.list(agentId ? { agentId } : undefined)}
                 onUninstall={(skillId) => void window.platform.agents.skills.uninstall(skillId)}
+                searchActive={search.trim().length > 0}
+                onClearSearch={() => setSearch('')}
               />
             ) : (
-              <EmptyCatalog
-                icon={<Sparkles size={17} />}
-                title={t.editor.tools.saveAgentBeforeSkillTitle}
-                description={t.editor.tools.saveAgentBeforeSkillDescription}
+              <StateView
+                state="disabled"
+                reasonCode="precondition-unsaved"
+                size="md"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.save, onSelect: onSave }}
               />
             )
           }
-        ]}
+        ]
+
+  return (
+    <div className="agent-form-section">
+      <header>
+        <h3>{t.editor.tools.title}</h3>
+        <p>{t.editor.tools.description}</p>
+      </header>
+
+      <div className="agent-tool-search">
+        <Search size={13} />
+        <Input value={search} placeholder={t.editor.tools.searchPlaceholder} onChange={(event) => setSearch(event.target.value)} />
+      </div>
+
+      <Tabs
+        ariaLabelKey="editor.tools.tabsLabel"
+        items={tabItems.map(({ children: _panel, ...item }) => item)}
+        onChange={(value) => setActiveTab(value as ToolTab)}
+        panels={Object.fromEntries(tabItems.map((item) => [item.value, item.children]))}
+        resolveText={(key) => resolveAgentTextKey(t, key)}
+        value={activeTab}
       />
     </div>
   )

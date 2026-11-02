@@ -7,7 +7,6 @@ import { productText } from '../../shared/i18n/productText'
 import { CredentialsSection, resolveCredentialActionLabel } from './CredentialsSection'
 
 let root: Root | null = null
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

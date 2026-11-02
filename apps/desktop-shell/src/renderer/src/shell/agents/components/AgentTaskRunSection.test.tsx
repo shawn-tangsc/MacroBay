@@ -22,6 +22,40 @@ const queuedItem: AgentTaskCenterItem = {
 }
 
 describe('AgentTaskRunSection', () => {
+  /**
+   * 读失败不是「没有投递记录」。空态说「还没有发生过」会把一次读取失败画成事实；
+   * 所以失败走 `error/unreadable` + 真重试，列表为空也不再是空态。
+   */
+  it('says the delivery read failed instead of claiming there are no attempts', () => {
+    const markup = renderToStaticMarkup(
+      <AgentTaskRunSection
+        item={queuedItem}
+        logs={[]}
+        jobsByRunLogId={{}}
+        labels={agentTextZhWorkbench.taskCenter}
+        saving={false}
+        selectedRunLogId={null}
+        attempts={[]}
+        attemptsTotal={0}
+        attemptsLoadFailed
+        onRetryLoadAttempts={vi.fn()}
+        onLoadMoreAttempts={vi.fn()}
+        onSelectRun={vi.fn()}
+        onRetryDelivery={vi.fn()}
+        onOpenSession={vi.fn()}
+        onRun={vi.fn()}
+        onCancel={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    // 只认「投递尝试」这一块：页面别处（运行列表）有自己的空态，整页否定断言会误伤。
+    const attemptsBlock = markup.slice(markup.indexOf('agent-task-delivery-attempts'))
+    expect(attemptsBlock).toContain('data-state="error"')
+    expect(attemptsBlock).toContain('data-reason-source="platform"')
+    expect(attemptsBlock).not.toContain('data-state="empty"')
+  })
+
   it('treats queued work as active and renders preview-only and skipped run states without error styling', () => {
     const markup = renderToStaticMarkup(
       <AgentTaskRunSection
@@ -41,6 +75,8 @@ describe('AgentTaskRunSection', () => {
           }
         ]}
         attemptsTotal={2}
+        attemptsLoadFailed={false}
+        onRetryLoadAttempts={vi.fn()}
         onLoadMoreAttempts={vi.fn()}
         onSelectRun={vi.fn()}
         onRetryDelivery={vi.fn()}
@@ -82,6 +118,8 @@ describe('AgentTaskRunSection', () => {
         selectedRunLogId="run-completed"
         attempts={[]}
         attemptsTotal={0}
+        attemptsLoadFailed={false}
+        onRetryLoadAttempts={vi.fn()}
         onLoadMoreAttempts={vi.fn()}
         onSelectRun={vi.fn()}
         onRetryDelivery={vi.fn()}
@@ -117,6 +155,8 @@ describe('AgentTaskRunSection', () => {
           channelId: 'channel-1', targetHash: 'target', status: 'failed', attemptNumber: 1, startedAt: '2026-01-01T00:00:00.000Z'
         }]}
         attemptsTotal={1}
+        attemptsLoadFailed={false}
+        onRetryLoadAttempts={vi.fn()}
         onLoadMoreAttempts={vi.fn()}
         onSelectRun={selectRun}
         onRetryDelivery={retryDelivery}

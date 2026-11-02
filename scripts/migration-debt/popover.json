@@ -1,0 +1,32 @@
+{
+  "$comment": "antd Popover call sites still to migrate. One entry per file — the debt is a whole-file import, not a single code path. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: a caller migrating a site must be able to strike its line without touching the component directory, and the guard reads this file as the only copy.",
+  "entries": {},
+  "$decidedComment": "Reviewed and deliberately kept, not debt. A line here says \"we looked and decided\", so nobody re-opens the discussion; a line in `entries` says \"still to do\". If the file stops importing antd Popover, delete its line here too — a decided entry that no longer matches the code is the same lie as a stale debt entry.",
+  "decided": {
+    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A list-shaped floating layer, not an explanation: it holds a clickable session list with per-row actions. The shared Popover renders text lines only, so migrating would drop the list and change what the control is. This needs a menu surface; revisit when one exists."
+    },
+    "apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A picker, not an explanation panel: controlled open state, search, category and protocol filters, a result list. The component takes one sentence and a focusable trigger; putting a choose-something panel where the sentence goes either drops half its function or opens an arbitrary-content API for a single site. Revisit only when a second site needs custom content in a floating layer; then both move together."
+    },
+    "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A picker, not an explanation: `trigger=\"click\"` opens a model mention list with per-row toggles. The shared Popover renders text lines on hover/focus; putting a choose-something panel there drops the list and changes when it closes. This needs the button base or a menu surface."
+    },
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A picker, not an explanation: `trigger=\"click\"` opens the built-in tool list with per-tool switches. Same reason as the mention picker — a list of controls is not a sentence. Belongs to the button base or a menu surface."
+    },
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A menu, not an explanation: `trigger=\"click\"` opens the model chooser. The shared Popover takes one sentence and a focusable trigger; this holds a selectable list. Belongs to the menu/button base."
+    }
+  }
+}

@@ -14,13 +14,19 @@ const TRANSLATION_QUEUE_LIMIT = 50
 
 export function useIntelligenceTranslationSettings(labels: {
   saveFailed: string
+  /** Reading the saved settings is not saving them: a failed read must not say "save failed". */
+  loadFailed: string
   queueFailed: string
   queueQueued: string
 }) {
   const [settings, setSettings] = useState<SafeIntelligenceTranslationSettings>()
+  /** True until the first read settles: before that, the card must not draw switches as "off". */
+  const [loading, setLoading] = useState(true)
   const [moduleStatus, setModuleStatus] = useState<SafeTranslationModuleStatus>()
   const [modelProviders, setModelProviders] = useState<SafeModelProvider[]>([])
   const [saving, setSaving] = useState(false)
+  /** True only after a save succeeded in this session; loading a saved file is not a save. */
+  const [savedThisSession, setSavedThisSession] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   // A sentence from the product text, never a code: the card renders it as-is.
@@ -38,8 +44,10 @@ export function useIntelligenceTranslationSettings(labels: {
   }, [])
 
   useEffect(() => {
-    void load().catch(() => setErrorMessage(labels.saveFailed))
-  }, [labels.saveFailed, load])
+    void load()
+      .catch(() => setErrorMessage(labels.loadFailed))
+      .finally(() => setLoading(false))
+  }, [labels.loadFailed, load])
 
   const updateSettings = useCallback(
     async (patch: Partial<IntelligenceTranslationSettings>) => {
@@ -48,8 +56,10 @@ export function useIntelligenceTranslationSettings(labels: {
       try {
         const next = await intelligenceTranslationClient.saveSettings(patch)
         setSettings(next)
+        setSavedThisSession(true)
         setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
       } catch {
+        setSavedThisSession(false)
         setErrorMessage(labels.saveFailed)
       } finally {
         setSaving(false)
@@ -88,9 +98,11 @@ export function useIntelligenceTranslationSettings(labels: {
 
   return {
     settings,
+    loading,
     moduleStatus,
     modelProviders,
     saving,
+    savedThisSession,
     queuing,
     notice,
     errorMessage,

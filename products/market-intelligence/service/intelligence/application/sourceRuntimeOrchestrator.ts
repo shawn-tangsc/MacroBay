@@ -130,6 +130,7 @@ function buildCollectJobDefinition(
     productId: 'market-intelligence',
     handlerId: INTELLIGENCE_COLLECT_SOURCE_JOB,
     title: `Collect ${config.sourceName}`,
+    audience: 'user' as const,
     trigger,
     payload: { sourceId: config.sourceId },
     concurrencyKey: `market-intelligence:${config.sourceId}`,

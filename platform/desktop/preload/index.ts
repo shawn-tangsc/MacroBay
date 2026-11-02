@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 import { IpcChannels } from '../ipc/channels'
+import { createNotificationsNamespace } from './namespaces/notifications'
 import { unwrapTaskIpc } from '../ipc/taskIpcEnvelope'
 import type { ModelDetectionMode, ModelDetectionResult } from '../../ai/providers/modelDetection/types'
 
@@ -56,6 +57,8 @@ const api = {
     selectDirectory: () => ipcRenderer.invoke(IpcChannels.dialogSelectDirectory),
     selectFiles: () => ipcRenderer.invoke(IpcChannels.dialogSelectFiles),
     readTextFile: (path: string) => ipcRenderer.invoke(IpcChannels.appReadTextFile, path),
+    /** 重启应用：`needs-restart` 那类状态唯一能做的事。 */
+    relaunch: () => ipcRenderer.invoke(IpcChannels.appRelaunch),
     saveClipboardImage: (data: Uint8Array, mimeType: string) =>
       ipcRenderer.invoke(IpcChannels.appSaveClipboardImage, { data, mimeType }),
     onQuotedToMain: (callback: (text: string) => void) => {
@@ -404,15 +407,7 @@ const api = {
       }
     }
   },
-  notifications: {
-    list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.notificationsList, query),
-    getUnreadCount: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadCount, input),
-    markRead: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }),
-    acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),
-    dismiss: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }),
-    snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
-    requestDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsRequestDesktopPermission)
-  },
+  notifications: createNotificationsNamespace(ipcRenderer),
   jobs: {
     getRun: (runId: string) => ipcRenderer.invoke(IpcChannels.jobsGetRun, runId),
     listRunPage: (query?: unknown) => ipcRenderer.invoke(IpcChannels.jobsListRunPage, query),

@@ -1,0 +1,79 @@
+/*
+ * 分段选择的外观（规格 ③）：整组高 28、项高 24、内边距 2。
+ * 选中靠底色 + 字重，不靠色相——灰度下仍要分得出。
+ *
+ * **选中态不用层级 token**（`--surface` / `--surface-soft` / `--surface-strong`）：
+ * 它们在两套主题里的明暗关系正好相反——
+ *
+ *   浅色  --surface #ffffff > --surface-soft #eef1f4     选中是白块浮在灰底上  ✓
+ *   深色  --surface #14171c < --surface-soft #222832     选中是暗块陷进亮容器  ✗
+ *
+ * 深色下更糟：`--surface` 恰好又是页面背景色，选中块和页面同色，像容器被凿穿一个洞。
+ * 所以选中态改成**叠在当前底色上的一层对比**：它相对的是「容器现在的颜色」，主题怎么变都成立。
+ *
+ * 实测对比度（选中 vs 容器）：深色 1.21 → 1.37，浅色 1.13 → 1.22。
+ * **浅色那半是可见变化**：原来是「白块浮起」，现在是「灰块加深」——体感方向变了，已报给界面设计。
+ */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 2px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  scrollbar-width: none;
+}
+
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.segmented__item {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.segmented__item--selected {
+  /*
+   * `--surface-raised` = 「从当前容器浮起一层」，两套主题各自取值（深色 #333b48 / 浅色 #ffffff），
+   * 所以两套都是**浮起来**，方向一致。
+   *
+   * 不要换回 `--surface` / `--surface-soft` / `--surface-strong`：它们在两套主题里的明暗关系
+   * 正好相反（浅色 --surface 更亮、深色 --surface 更暗），一行 CSS 在两套里必有一半是错的。
+   * 深色那次的实际后果是「选中块和页面同色、像容器被凿穿一个洞」，读起来正是一颗开关。
+   *
+   * 阴影保留：浅色下 `--surface-raised` 的亮度已到顶（对容器 1.13），浮起的信号由阴影补足；
+   * 深色下这层 `rgb(0 0 0 / 12%)` 几乎不可见，也就无害。
+   */
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.segmented__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.segmented__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

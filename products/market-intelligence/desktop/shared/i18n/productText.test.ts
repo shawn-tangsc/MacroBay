@@ -50,3 +50,37 @@ function collectChinesePaths(value: unknown, path: readonly string[] = []): stri
   }
   return []
 }
+
+describe('reader-facing copy avoids coined terms', () => {
+  /** Every leaf sentence, both languages; comments are not values and are not checked. */
+  function leaves(language: 'zh-CN' | 'en-US'): Array<[string, string]> {
+    const out: Array<[string, string]> = []
+    const walk = (node: unknown, path: string): void => {
+      if (typeof node === 'string') {
+        out.push([path, node])
+        return
+      }
+      if (node === null || typeof node !== 'object') return
+      for (const [key, value] of Object.entries(node)) walk(value, path === '' ? key : `${path}.${key}`)
+    }
+    walk(productText[language], '')
+    return out
+  }
+
+  it('does not call a reading a "回退值" or a "Fallback"', () => {
+    // The reader has never seen this word, and it flattened five different time bases into one.
+    // What they need is which instant the number is from, so the words themselves have to say it.
+    for (const [path, sentence] of [...leaves('zh-CN'), ...leaves('en-US')]) {
+      expect(sentence, path).not.toContain('回退值')
+      expect(sentence, path).not.toMatch(/\bFallback\b/)
+    }
+  })
+
+  it('still says which instant each stale basis comes from', () => {
+    const basis = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing.staleBasis
+    // Every basis names a time basis; none of them may collapse into the same sentence.
+    const sentences = Object.values(basis)
+    expect(new Set(sentences).size).toBe(sentences.length)
+    expect(sentences.every((sentence) => sentence.trim() !== '')).toBe(true)
+  })
+})

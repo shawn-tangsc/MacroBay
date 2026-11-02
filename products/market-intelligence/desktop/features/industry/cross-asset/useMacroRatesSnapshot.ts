@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import type { MacroRatesSnapshotClient } from '../../../shared/ipc/macroRatesSnapshotClient'
@@ -22,6 +22,8 @@ export function useMacroRatesSnapshot({ client }: { client?: MacroRatesSnapshotC
   state: MacroRatesViewState
 } {
   const [snapshot, setSnapshot] = useState<MacroRatesSnapshotView>()
+  /** Read synchronously inside the poll's catch: a failed poll may not blank what is on screen. */
+  const snapshotRef = useRef<MacroRatesSnapshotView>(undefined)
   const [state, setState] = useState<MacroRatesViewState>('loading')
   useEffect(() => {
     if (!client) {
@@ -35,12 +37,12 @@ export function useMacroRatesSnapshot({ client }: { client?: MacroRatesSnapshotC
       try {
         const result = await client.query()
         if (!active) return
+        snapshotRef.current = result
         setSnapshot(result)
         setState(result.state === 'unavailable' ? 'unavailable' : 'ready')
       } catch {
         if (!active) return
-        setSnapshot(undefined)
-        setState('unavailable')
+        setState(snapshotRef.current === undefined ? 'loading' : 'ready')
       }
       // Always the daily cadence: nothing in this snapshot can change between two closes.
       if (active) timer = setTimeout(() => { void poll() }, macroRatesViewPolicy.settledQueryMs)

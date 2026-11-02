@@ -1,13 +1,18 @@
-import { Button, Drawer, Tag } from 'antd'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Button } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { JobRunRecord } from '@platform/jobs'
+import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
+import {
+  emptyAgentTaskCenterLoadState,
+  readAgentTaskCenterLoadState,
+  type AgentTaskCenterLoadState
+} from './agentTaskCenterLoad'
 import {
   buildAgentTaskCenterState,
   buildAgentTaskDraftFromTask,
@@ -32,6 +37,10 @@ import {
   updateTaskViaApi
 } from '../agentTaskDataApi'
 import { selectSessionViaApi } from '../agentSessionDataApi'
+import { resolveAgentTextKey } from '../agentTooltipText'
+import AgentTaskCenterActions from './AgentTaskCenterActions'
+import AgentTaskCenterList from './AgentTaskCenterList'
+import AgentTaskCenterLoadStatus from './AgentTaskCenterLoadStatus'
 import AgentTaskDraftForm from './AgentTaskDraftForm'
 import AgentTaskRunSection from './AgentTaskRunSection'
 import { useAgentTaskDeliveryAttempts } from './useAgentTaskDeliveryAttempts'
@@ -44,18 +53,9 @@ type AgentTaskCenterDrawerProps = {
   onClose: () => void
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
 }
-type LoadState = {
-  tasks: ScheduledTaskEntity[]
-  logsByTaskId: Record<string, TaskRunLogEntity[]>
-  logsTotalByTaskId: Record<string, number>
-  jobsByRunLogId: Record<string, JobRunRecord | null>
-}
-const emptyLoadState: LoadState = {
-  tasks: [],
-  logsByTaskId: {},
-  logsTotalByTaskId: {},
-  jobsByRunLogId: {}
-}
+/** 标题键：句子由 `AgentText` 给，键只回答「这是哪一句」。 */
+const TASK_CENTER_TITLE_KEY = 'agent.taskCenter.title'
+
 export default function AgentTaskCenterDrawer({
   open,
   state,
@@ -65,12 +65,15 @@ export default function AgentTaskCenterDrawer({
   onStateChange
 }: AgentTaskCenterDrawerProps): React.ReactElement {
   const t = useAgentText()
-  const [loadState, setLoadState] = useState<LoadState>(emptyLoadState)
+  const [loadState, setLoadState] = useState<AgentTaskCenterLoadState>(emptyAgentTaskCenterLoadState)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<AgentTaskDraft>(() => buildDefaultAgentTaskDraft(workspace))
-  const [loading, setLoading] = useState(false)
+  /** 初值 `true`：`useEffect` 在首帧之后才跑，初值 `false` 会先画一帧「从来没有创建过」。 */
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** 读失败单独一格：它要的是「重试读取」，而 `error` 里那些要的是「补一个动作」。 */
+  const [loadError, setLoadError] = useState(false)
   const [selectedRunLogId, setSelectedRunLogId] = useState<string | null>(null)
   const centerState = useMemo(
     () => buildAgentTaskCenterState({ ...loadState, labels: t.taskCenter, selectedTaskId }),
@@ -84,6 +87,9 @@ export default function AgentTaskCenterDrawer({
   useEffect(() => {
     if (!open) return
     setDraft(buildDefaultAgentTaskDraft(workspace))
+    setLoading(true)
+    setError(null)
+    setLoadError(false)
     void refresh(undefined)
   }, [open, agent.id, workspace])
   useEffect(() => {
@@ -95,29 +101,14 @@ export default function AgentTaskCenterDrawer({
   }, [selectedTask?.id])
   async function refresh(nextSelectedTaskId: string | null | undefined = selectedTaskId): Promise<void> {
     setLoading(true)
+    setLoadError(false)
     setError(null)
     try {
-      const taskPage = await listTasksViaApi(window.platform, agent.id, { limit: 50 })
-      const logsByTaskId: Record<string, TaskRunLogEntity[]> = {}
-      const logsTotalByTaskId: Record<string, number> = {}
-      const jobsByRunLogId: Record<string, JobRunRecord | null> = {}
-      await Promise.all(
-        taskPage.tasks.map(async (task) => {
-          const logsPage = await getTaskLogsViaApi(window.platform, agent.id, task.id, { limit: 10 })
-          logsByTaskId[task.id] = logsPage.logs
-          logsTotalByTaskId[task.id] = logsPage.total
-          await Promise.all(
-            logsPage.logs.map(async (log) => {
-              const page = await listTaskJobPageViaApi(window.platform, buildTaskJobQuery(log.id))
-              jobsByRunLogId[log.id] = page.runs[0] ?? null
-            })
-          )
-        })
-      )
-      setLoadState({ tasks: taskPage.tasks, logsByTaskId, logsTotalByTaskId, jobsByRunLogId })
-      setSelectedTaskId(nextSelectedTaskId === undefined ? taskPage.tasks[0]?.id ?? null : nextSelectedTaskId)
+      const loaded = await readAgentTaskCenterLoadState(window.platform, agent.id)
+      setLoadState(loaded)
+      setSelectedTaskId(nextSelectedTaskId === undefined ? loaded.tasks[0]?.id ?? null : nextSelectedTaskId)
     } catch {
-      setError(t.taskCenter.loadFailed)
+      setLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -258,53 +249,42 @@ export default function AgentTaskCenterDrawer({
 
   return (
     <Drawer
+      mode="modal"
+      // 原宽 980：选 860 而不是 1040——后者在 1440 屏上几乎整屏，会盖住用户正在看的东西。
+      size="wide"
       open={open}
-      width={980}
-      title={t.taskCenter.title}
+      titleKey={TASK_CENTER_TITLE_KEY}
+      resolveText={(key) => (key === TASK_CENTER_TITLE_KEY ? t.taskCenter.title : '')}
       onClose={onClose}
       className="agent-task-center-drawer"
-      extra={
-        <div className="agent-task-center-actions">
-          <Button className="ant-secondary-button" size="small" icon={<RefreshCw size={14} />} onClick={() => void refresh()}>
-            {t.taskCenter.refresh}
-          </Button>
-          <Button className="ant-primary-button" size="small" icon={<Plus size={14} />} onClick={startCreate}>
-            {t.taskCenter.newTask}
-          </Button>
-        </div>
+      titleExtra={
+        <AgentTaskCenterActions
+          refreshLabel={t.taskCenter.refresh}
+          newTaskLabel={t.taskCenter.newTask}
+          onRefresh={() => void refresh()}
+          onCreate={startCreate}
+        />
       }>
       <div className="agent-task-center">
-        <aside className="agent-task-list-pane">
-          <header>
-            <strong>{t.taskCenter.taskList}</strong>
-            <small>{t.taskCenter.taskCount(centerState.items.length)}</small>
-          </header>
-          {loading && centerState.items.length === 0 ? <LoadingState label={t.taskCenter.loading} minHeight={120} /> : null}
-          {!loading && centerState.items.length === 0 ? <div className="agent-task-empty">{t.taskCenter.empty}</div> : null}
-          <div className="agent-task-list">
-            {centerState.items.map((item) => (
-              <button
-                key={item.task.id}
-                type="button"
-                className={item.task.id === centerState.selectedTaskId ? 'agent-task-list-item active' : 'agent-task-list-item'}
-                onClick={() => {
-                  setSelectedTaskId(item.task.id)
-                }}>
-                <span className={`agent-task-status-dot ${item.runtimeStatus}`} />
-                <span>
-                  <strong>{item.task.name}</strong>
-                  <small>{item.triggerLabel}</small>
-                </span>
-                {item.task.status === 'paused' ? <Tag className="agent-task-tag">{t.taskCenter.paused}</Tag> : null}
-                {item.task.status === 'completed' ? <Tag className="agent-task-tag">{t.taskCenter.status.completed}</Tag> : null}
-                {item.isOverdue ? <Tag className="agent-task-tag">{t.taskCenter.overdue}</Tag> : null}
-              </button>
-            ))}
-          </div>
-        </aside>
+        <AgentTaskCenterList
+          items={centerState.items}
+          selectedTaskId={centerState.selectedTaskId}
+          loading={loading}
+          loadFailed={loadError}
+          labels={t.taskCenter}
+          resolveText={(key) => resolveAgentTextKey(t, key)}
+          onSelect={setSelectedTaskId}
+          onCreate={startCreate}
+        />
 
         <main className="agent-task-detail-pane">
-          {error ? <div className="agent-task-error">{error}</div> : null}
+          <AgentTaskCenterLoadStatus
+            loadFailed={loadError}
+            hasItems={centerState.items.length > 0}
+            staleDataNotice={t.taskCenter.staleDataNotice}
+            onRetry={() => void refresh()}
+          />
+          {error === null ? null : <div className="agent-task-error">{error}</div>}
           <AgentTaskDraftForm
             draft={draft}
             workspaces={state.workspaces}
@@ -328,6 +308,8 @@ export default function AgentTaskCenterDrawer({
               selectedRunLogId={deliveryAttemptRequest?.runLogId ?? null}
               attempts={deliveryAttempts.attempts}
               attemptsTotal={deliveryAttempts.total}
+              attemptsLoadFailed={deliveryAttempts.loadFailed}
+              onRetryLoadAttempts={() => void deliveryAttempts.reload()}
               onLoadMoreAttempts={() => void deliveryAttempts.loadMore()}
               onSelectRun={setSelectedRunLogId}
               onRetryDelivery={(attemptId) => void retryDelivery(attemptId)}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveBriefingTimeZone } from './intelligenceModule'
+import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 
 describe('resolveBriefingTimeZone', () => {
   it('uses the shell time zone the host injects', () => {
@@ -14,3 +14,4 @@ describe('resolveBriefingTimeZone', () => {
     expect(resolveBriefingTimeZone({ getTimeZone: () => 'America/New_York' })).toBe('America/New_York')
   })
 })
+

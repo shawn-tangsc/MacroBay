@@ -1,6 +1,11 @@
 import { ChevronDown } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { AgentMessageAnchorItem } from '../agentMessageNavigation'
+
+/** 底部「回到底部」的读屏名：句子由调用方给，键只回答「这是哪个按钮」。 */
+const BOTTOM_KEY = 'agent.messages.navigateBottom'
 
 type AgentMessageAnchorRailProps = {
   items: readonly AgentMessageAnchorItem[]
@@ -9,6 +14,8 @@ type AgentMessageAnchorRailProps = {
   onBottom: () => void
   bottomActive: boolean
   ariaLabel: string
+  /** 「回到底部」的句子。原来这个按钮**没有读屏名**，键盘和读屏都拿不到它是什么。 */
+  bottomLabel: string
 }
 
 export default function AgentMessageAnchorRail({
@@ -17,7 +24,8 @@ export default function AgentMessageAnchorRail({
   onSelectMessage,
   onBottom,
   bottomActive,
-  ariaLabel
+  ariaLabel,
+  bottomLabel
 }: AgentMessageAnchorRailProps): React.ReactElement | null {
   if (items.length === 0) return null
 
@@ -40,12 +48,13 @@ export default function AgentMessageAnchorRail({
             </button>
           )
         })}
-        <button
-          type="button"
-          className={bottomActive ? 'agent-message-anchor-bottom active' : 'agent-message-anchor-bottom'}
-          onClick={onBottom}>
-          <ChevronDown size={14} />
-        </button>
+        <IconButton
+          ariaLabelKey={BOTTOM_KEY}
+          icon={ChevronDown}
+          size="sm"
+          onSelect={onBottom}
+          resolveText={(key) => (key === BOTTOM_KEY ? bottomLabel : '')}
+        />
       </div>
     </aside>
   )

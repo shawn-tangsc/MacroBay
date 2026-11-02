@@ -1,6 +1,9 @@
-import { Button, Input, Tooltip } from 'antd'
+import { Button, Input } from 'antd'
 import { Download, Search, Settings2, UserRoundPlus } from 'lucide-react'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import type { PlatformText } from '../../../i18n/platformText'
+
+const IMPORT_TOOLTIP_KEY = 'assistants.library.importExternal'
 
 type AssistantLibraryToolbarProps = {
   labels: PlatformText['assistants']['library']
@@ -38,7 +41,9 @@ export function AssistantLibraryToolbar({
         allowClear
       />
       <div className="assistant-library-actions">
-        <Tooltip title={labels.importExternal}>
+        <Tooltip
+          labelKey={IMPORT_TOOLTIP_KEY}
+          resolveText={(key) => (key === IMPORT_TOOLTIP_KEY ? labels.importExternal : '')}>
           <Button
             type="text"
             className="ant-shell-icon-button"

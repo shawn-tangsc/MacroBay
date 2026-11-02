@@ -57,8 +57,10 @@ describe('应用菜单只有一处定义（mac / Windows 不重复实现）', ()
   })
 
   it('Windows 菜单条点开走的是同一份原生子菜单（按索引 popup，不是渲染层重画菜单）', async () => {
-    // 与主进程实现的契约：list 给标签、popup 给索引；两条通道都只服务现成的应用菜单
-    const main = read('platform/desktop/main/app.ts')
+    // 与主进程实现的契约：list 给标签、popup 给索引；两条通道都只服务现成的应用菜单。
+    // 这两个 handler 已从 `app.ts` 抽到 `main/ipc/windowIpc.ts`（受保护接缝不许继续长），
+    // 所以守卫读它现在的归属文件——**断言的意思不变**：只有一条原生子菜单，渲染层不重画。
+    const main = read('platform/desktop/main/ipc/windowIpc.ts')
     expect(main).toContain('IpcChannels.windowMenuList')
     expect(main).toContain('IpcChannels.windowMenuPopup')
     expect(main).toContain('Menu.getApplicationMenu()')

@@ -37,9 +37,26 @@ export type TaskRunSnapshot = {
   unexplainedSkips: number
 }
 
+/**
+ * A task whose latest run could not be read.
+ *
+ * It is a value, not an absence: the row has to stay in the table and say "unreadable". Dropping the
+ * entry leaves the row rendering "never ran", which is a different fact and tells the user the task
+ * did nothing when in reality the read failed.
+ */
+export type TaskRunUnreadable = { unreadable: true }
+
+export type TaskRunState = TaskRunSnapshot | TaskRunUnreadable
+
+export function isReadableTaskRun(state: TaskRunState | undefined): state is TaskRunSnapshot {
+  return state !== undefined && !(state as TaskRunUnreadable).unreadable
+}
+
 export type TaskAutomationRow = {
   task: ScheduledTaskEntity
   lastRun: TaskRunSnapshot | null
+  /** True when the latest run exists but could not be read; the row stays and says so. */
+  runUnreadable: boolean
 }
 
 export type TaskAutomationEmptyState = 'none' | 'never-created' | 'filter-empty'
@@ -98,15 +115,20 @@ export function collectDeliverySkipReasons(
   return { skipReasons: [...reasons].sort(), unexplainedSkips }
 }
 
+/**
+ * 空态只看两个数：源里有几条（`loadedCount`）、当前可见几条（`visibleCount`）。
+ *
+ * 不用「筛选是否开启」判断：零任务时计数必然是零，带不带筛选都该说「还没有任务」——让人去清除
+ * 一个清除后依然为空的筛选，是把真相藏起来。反过来，`filter-empty` 也不等于「筛选开着」：筛选
+ * 开着但仍有匹配行时它是 `none`，否则表格会被一句「没有任务」整块盖掉。
+ */
 export function resolveTaskEmptyState(input: {
   loadedCount: number
-  status: TaskAutomationStatusFilter
-  nameQuery: string
+  visibleCount: number
 }): TaskAutomationEmptyState {
-  const hasFilters = input.status !== 'all' || input.nameQuery.trim() !== ''
-  if (input.loadedCount > 0 && !hasFilters) return 'none'
-  if (!hasFilters) return 'never-created'
-  return 'filter-empty'
+  if (input.loadedCount === 0) return 'never-created'
+  if (input.visibleCount === 0) return 'filter-empty'
+  return 'none'
 }
 
 export function buildTaskAutomationSettingsState(input: {
@@ -115,20 +137,29 @@ export function buildTaskAutomationSettingsState(input: {
   status: TaskAutomationStatusFilter
   nameQuery: string
   audits: readonly Pick<TaskMutationAuditEntity, 'id' | 'taskId' | 'action' | 'outcome' | 'errorCode'>[]
-  taskRuns: Readonly<Record<string, TaskRunSnapshot | undefined>>
+  taskRuns: Readonly<Record<string, TaskRunState | undefined>>
 }): TaskAutomationSettingsState {
   const query = input.nameQuery.trim().toLowerCase()
   const filteredTasks = input.tasks
     .filter((task) => input.status === 'all' || task.status === input.status)
     .filter((task) => query === '' || task.name.toLowerCase().includes(query))
   const selectedTask = filteredTasks.find((task) => task.id === input.selectedTaskId) ?? null
-  const rows = filteredTasks.map((task) => ({ task, lastRun: input.taskRuns[task.id] ?? null }))
+  const rows = filteredTasks.map((task) => {
+    const run = input.taskRuns[task.id]
+    return {
+      task,
+      lastRun: isReadableTaskRun(run) ? run : null,
+      runUnreadable: run !== undefined && !isReadableTaskRun(run)
+    }
+  })
   const aggregateHealth = emptyHealth()
   let latestRunAt: string | null = null
 
   for (const task of input.tasks) {
     const snapshot = input.taskRuns[task.id]
-    if (!snapshot) continue
+    // An unreadable run contributes nothing to the counts: guessing zero would report a healthy
+    // silence for a task whose run history simply could not be read.
+    if (!isReadableTaskRun(snapshot)) continue
     aggregateHealth.delivered += snapshot.health.delivered
     aggregateHealth.failed += snapshot.health.failed
     aggregateHealth.pending += snapshot.health.pending
@@ -139,6 +170,8 @@ export function buildTaskAutomationSettingsState(input: {
     }
   }
 
+  const selectedRun = selectedTask ? input.taskRuns[selectedTask.id] : undefined
+
   return {
     filteredTasks,
     rows,
@@ -147,13 +180,12 @@ export function buildTaskAutomationSettingsState(input: {
     auditCount: selectedTask
       ? input.audits.filter((audit) => audit.taskId === selectedTask.id).length
       : 0,
-    deliveryHealth: selectedTask ? { ...(input.taskRuns[selectedTask.id]?.health ?? emptyHealth()) } : emptyHealth(),
+    deliveryHealth: isReadableTaskRun(selectedRun) ? { ...selectedRun.health } : emptyHealth(),
     aggregateHealth,
     latestRunAt,
     emptyState: resolveTaskEmptyState({
       loadedCount: input.tasks.length,
-      status: input.status,
-      nameQuery: input.nameQuery
+      visibleCount: filteredTasks.length
     }),
     hasFilters: input.status !== 'all' || input.nameQuery.trim() !== ''
   }

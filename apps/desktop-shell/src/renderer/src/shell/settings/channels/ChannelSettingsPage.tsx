@@ -1,8 +1,10 @@
-import { Button, Input, Popconfirm, Select, Switch, Tag } from 'antd'
+import { Button, Input, Popconfirm, Select, Switch, type InputRef } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
@@ -21,6 +23,29 @@ type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabe
 type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 type Agent = { id: string; name: string }
 type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
+
+/** 目录状态 → 档位：按数据值查表，穷举闭集；多一个取值就编译不过，没有兜底档。 */
+const catalogTone: Record<Catalog['status'], StatusPillTone> = {
+  supported: 'ok',
+  planned: 'muted',
+  blocked: 'bad'
+}
+
+/**
+ * 目录状态 → 文案键：**字面量键只写这一处**。
+ *
+ * 原来这里用 `` `channelCatalogStatus.${entry.status}` `` 拼键，`StatusPill` 的调用点守卫立刻报红——
+ * 它只认看得见的字符串，拼出来的键既校验不到形状，也校验不到存在。拼键换成「数据值 → 字面量键」
+ * 的表，和 `catalogTone` 同一形状：闭集里多一个取值就编译不过，没有兜底。
+ */
+const catalogStatusKey: Record<Catalog['status'], string> = {
+  planned: 'channelCatalogStatus.planned',
+  blocked: 'channelCatalogStatus.blocked',
+  supported: 'channelCatalogStatus.supported'
+}
+
+/** 通道运行态 → 档位：`runtime-ready` 才是在跑，其余都是「还没起来」。 */
+const runtimeTone = (state: Channel['state']): StatusPillTone => (state === 'runtime-ready' ? 'ok' : 'muted')
 
 /** A blocked adapter must say what it is missing, not only that it is blocked. */
 function catalogReason(
@@ -54,8 +79,32 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * 列表读取失败，与写操作失败分成两个状态。
+   *
+   * 合成一个的话，「一次都没读成」和「创建没成功」在侧栏里长得一样，可前者该说「读不到」、
+   * 后者该说「还没有通道」。两个处境的原因不同，就不能共用一个标记。
+   */
+  const [readError, setReadError] = useState(false)
   /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
   const [initialLoading, setInitialLoading] = useState(true)
+  // 右栏详情独立三态：首帧只加载中；读失败给原因与重试；有数据后再失败保留详情并标 stale。
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsLoadedId, setDetailsLoadedId] = useState<string | null>(null)
+  const [detailsReadError, setDetailsReadError] = useState(false)
+  const [detailsStale, setDetailsStale] = useState(false)
+  /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
+  const nameInputRef = useRef<InputRef | null>(null)
+  const focusCreateForm = (): void => {
+    nameInputRef.current?.input?.scrollIntoView({ block: 'nearest' })
+    nameInputRef.current?.focus()
+  }
+
+  /** 药丸只收键；键就是状态值本身，取值仍来自同一张文案表（不另造一套键名）。 */
+  const resolveChannelLabel = (key: string): string => {
+    const value = (labels as unknown as Record<string, unknown>)[key]
+    return typeof value === 'string' ? value : ''
+  }
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -73,16 +122,18 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setChannels(nextChannels as Channel[])
       setAgents((agentState as { agents?: Agent[] }).agents ?? [])
       setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
+      setReadError(false)
     } catch {
-      // A failed first read used to leave an empty panel and an unhandled rejection: the page then
-      // looked like "no channels" instead of "could not read".
-      setError(labels.channelOperationFailed)
+      // 读失败不写进 `error`：那个位置属于写操作。这里只记「没读成」，渲染时再分
+      // 「一次都没读到」与「有旧数据、这次没刷上」两种处境——它们是两句话，不是一个。
+      setReadError(true)
     } finally {
       setInitialLoading(false)
     }
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
+    setDetailsLoading(true)
     try {
       const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
         window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
@@ -94,8 +145,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setConversations(nextConversations as Conversation[])
       setCandidates(nextCandidates as Candidate[])
       setRuntimeStatus(nextRuntime as RuntimeStatus)
+      setDetailsLoadedId(channelId)
+      setDetailsReadError(false)
+      setDetailsStale(false)
     } catch {
-      setError(labels.channelOperationFailed)
+      // 读失败不是写失败：不写 `error`（那个位置属于操作），否则用户会以为刚才那一步操作坏了，
+      // 而且那条句子不带重试。一次都没读到给错误态；手上有同一通道的旧详情就只标 stale。
+      setDetailsReadError((previous) => (detailsLoadedId === channelId ? previous : true))
+      setDetailsStale(detailsLoadedId === channelId)
+    } finally {
+      setDetailsLoading(false)
     }
   }
 
@@ -104,13 +163,15 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }, [])
 
   useEffect(() => {
+    // 换通道先清空上一份详情：首帧只画加载中，不把「还没读到」画成「没有待授权会话」。
+    setDetailsLoadedId(null)
+    setDetailsReadError(false)
+    setDetailsStale(false)
+    setPolicies([])
+    setConversations([])
+    setCandidates([])
+    setRuntimeStatus(null)
     if (current) void reloadDetails(current.id)
-    else {
-      setPolicies([])
-      setConversations([])
-      setCandidates([])
-      setRuntimeStatus(null)
-    }
   }, [current?.id])
 
   useEffect(() => {
@@ -193,10 +254,36 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           </Button>
         </header>
         {initialLoading ? (
-          <LoadingState label={platformText[language].status.loading} minHeight={120} />
+          // 首次读完成之前只画加载中：这时既不「没有」，也不「读不到」。
+          <StateView state="loading" size="md" />
+        ) : readError && channels.length === 0 ? (
+          // 一次都没读成 —— 这是「读不到」，不是「还没有通道」。两个处的动作都是去创建/重试，
+          // 但原因不同，画成同一个空态就等于告诉用户「你没有通道」。
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="sm"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
+          />
         ) : (
           <>
-            {channels.length === 0 ? <p>{labels.channelNoInstances}</p> : null}
+            {readError ? (
+              // 手上还有上一次的列表：不清空它，只标一句这是旧的，并把重试放在同一行。
+              <p className="channel-settings-stale" role="status">
+                <span>{labels.channelStaleNotice}</span>
+                <button type="button" onClick={() => void reload()}>
+                  {labels.channelRefresh}
+                </button>
+              </p>
+            ) : null}
+            {channels.length === 0 ? (
+              <StateView
+                state="empty"
+                reasonCode="never-created"
+                size="sm"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: focusCreateForm }}
+              />
+            ) : null}
             {channels.map((channel) => (
               <button
                 key={channel.id}
@@ -217,7 +304,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             options={catalog.filter((entry) => entry.type === 'telegram' || entry.type === 'slack' || entry.type === 'feishu' || entry.type === 'qq' || entry.type === 'discord' || entry.type === 'wechat').map((entry) => ({ value: entry.type, label: entry.type }))}
             onChange={setCreateType}
           />
-          <Input value={name} aria-label={labels.channelName} placeholder={labels.channelName} onChange={(event) => setName(event.target.value)} />
+          <Input ref={nameInputRef} value={name} aria-label={labels.channelName} placeholder={labels.channelName} onChange={(event) => setName(event.target.value)} />
           <Select
             aria-label={labels.channelAgentId}
             placeholder={labels.channelAgentId}
@@ -231,7 +318,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         </section>
         {catalog.map((entry) => (
           <p key={entry.type}>
-            <Tag>{labels.channelCatalogStatus[entry.status]}</Tag>
+            <StatusPill
+              tone={catalogTone[entry.status]}
+              labelKey={catalogStatusKey[entry.status]}
+              resolveText={(key) => {
+                const status = (Object.keys(catalogStatusKey) as Array<Catalog['status']>).find(
+                  (candidate) => catalogStatusKey[candidate] === key
+                )
+                return status === undefined ? '' : labels.channelCatalogStatus[status]
+              }}
+            />
             {entry.type}
             <small>{catalogReason(entry, labels)}</small>
           </p>
@@ -239,11 +335,36 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       </aside>
       <main className="channel-settings-detail">
         {error ? <p role="alert">{error}</p> : null}
-        {initialLoading ? <LoadingState label={platformText[language].status.loading} fill /> : current ? (
+        {initialLoading ? <StateView state="loading" size="lg" /> : current ? (
+          detailsReadError && detailsLoadedId !== current.id ? (
+            // 一次都没读成：这是「读不到」，不是「还没有待授权会话」，也不是刚才那步操作失败。
+            <StateView
+              state="error"
+              reasonCode="unreadable"
+              size="lg"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reloadDetails(current.id) }}
+            />
+          ) : detailsLoading && detailsLoadedId !== current.id ? (
+            // 详情回来之前只画加载中，空态文案一个字都不许先出现。
+            <StateView state="loading" size="lg" />
+          ) : (
           <>
+            {detailsStale ? (
+              // 手上有同一通道的旧详情：不清空，只标一句这是旧数据，并把重试放在同一行。
+              <p className="channel-settings-stale" role="status">
+                <span>{labels.channelDetailsStaleNotice}</span>
+                <button type="button" onClick={() => void reloadDetails(current.id)}>
+                  {labels.channelRefresh}
+                </button>
+              </p>
+            ) : null}
             <header>
               <strong>{current.name}</strong>
-              <Tag>{current.state === 'runtime-ready' ? labels.channelRunning : labels.channelPlanned}</Tag>
+              <StatusPill
+                tone={runtimeTone(current.state)}
+                labelKey={current.state === 'runtime-ready' ? 'channelRunning' : 'channelNotRunning'}
+                resolveText={resolveChannelLabel}
+              />
             </header>
             <p>{credentialStatusLabel(current.credential.status, labels)}</p>
             <Input value={editName} aria-label={labels.channelName} onChange={(event) => setEditName(event.target.value)} />
@@ -268,7 +389,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? labels.channelRuntimeMissing}</p>
             <section>
               <strong>{labels.channelCandidates}</strong>
-              {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
+              {candidates.length === 0 ? <StateView state="empty" reasonCode="not-yet" size="sm" /> : candidates.map((candidate) => (
                 <div key={candidate.id} className="channel-target-row">
                   <span>{candidate.displayLabel ?? labels.channelCandidateUnknown} · {labels.channelConversationKind[candidate.kind]}</span>
                   <Switch
@@ -352,6 +473,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <Button danger icon={<Trash2 size={14} />}>{labels.channelDelete}</Button>
             </Popconfirm>
           </>
+          )
         ) : null}
       </main>
     </section>

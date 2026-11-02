@@ -3,6 +3,8 @@
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { platformText } from '../../i18n/platformText'
+
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 
 import { renderModelServiceSettings } from './modelServicePageHarness'
@@ -10,7 +12,6 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
 /**
  * PLAT-62：编辑模型抽屉保存走既有 addOrUpdateModel，载荷包含所选能力。
  */
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -29,7 +30,8 @@ describe('PLAT-62 模型编辑抽屉保存', () => {
       await Promise.resolve()
     })
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-model-capability="tools"]')?.click()
+      ;[...document.querySelectorAll<HTMLElement>('.filter-chip')]
+        .find((chip) => (chip.textContent ?? '') === platformText['en-US'].models.tools)?.click()
       await Promise.resolve()
     })
 

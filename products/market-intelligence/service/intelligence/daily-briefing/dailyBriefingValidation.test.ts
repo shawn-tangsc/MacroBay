@@ -185,6 +185,16 @@ describe('daily briefing editorial validation and application', () => {
     expect(applied.provenance.editorialMeta).toEqual({ promptVersion: 'v1', model: 'm1', source: 'default' })
   })
 
+  // MI-2-R16: the refusal must carry the one thing the model needs to fix — which citation is wrong.
+  it('names the citation it refused and the number it could not find', () => {
+    const unknownFact = validateDailyBriefingEditorial({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }, document(), 'zh-CN')
+    expect(unknownFact).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
+    expect(unknownFact.ok ? '' : unknownFact.detail ?? '').toContain('news:nope')
+
+    // A well-formed edition is not refused: the reason must not turn into a blanket rejection.
+    expect(validateDailyBriefingEditorial(validOutput, document(), 'zh-CN').ok).toBe(true)
+  })
+
   it('rejects an unknown fact, a news id in importance, an unknown number, a URL and an oversized lede', () => {
     expect(validateDailyBriefingEditorial({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }, document(), 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'unknown-fact' })

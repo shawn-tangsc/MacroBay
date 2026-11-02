@@ -6,12 +6,4 @@ export class TelegramRuntimeMaintenance {
 
   runOnce(): void { try { this.repository.cleanupAudits() } catch {} }
 
-  start(intervalMs = 15 * 60_000, timers: {
-    setInterval?: (callback: () => void, interval: number) => ReturnType<typeof setInterval>
-    clearInterval?: (timer: ReturnType<typeof setInterval>) => void
-  } = {}): () => void {
-    this.runOnce()
-    const timer = (timers.setInterval ?? setInterval)(() => this.runOnce(), intervalMs)
-    return () => (timers.clearInterval ?? clearInterval)(timer)
-  }
 }

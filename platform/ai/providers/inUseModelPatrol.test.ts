@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   collectInUseModelTargets,
-  mergeInUseModelRetiredItems,
+  advanceInUseModelPatrol,
+  createInUseModelPatrolState,
   splitUniqueModelId,
+  inUseModelRetiredStaleness,
   toInUseModelRetiredReason,
   type InUseModelTarget
 } from './inUseModelPatrol'
@@ -87,18 +89,69 @@ describe('PLAT-75 in-use model patrol targets', () => {
     }
   })
 
-  it('merges reports without duplicates and clears entries that recovered', () => {
+  it('does not call a model retired after a single observation', () => {
     const target: InUseModelTarget = { providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', source: 'default' }
-    const other: InUseModelTarget = { providerId: 'deepseek', modelId: 'chat-b', modelName: 'Chat B', source: 'agent' }
 
-    const first = mergeInUseModelRetiredItems([], [{ target, reason: 'retired' }])
-    const repeated = mergeInUseModelRetiredItems(first, [{ target, reason: 'retired' }])
-    expect(repeated).toEqual([{ providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', reason: 'retired' }])
+    const once = advanceInUseModelPatrol(createInUseModelPatrolState(), [{ target, reason: 'retired' }], new Date('2026-11-01T08:00:00Z'))
 
-    const both = mergeInUseModelRetiredItems(repeated, [{ target: other, reason: 'not_found' }])
-    expect(both).toHaveLength(2)
+    expect(once.retired).toEqual([])
+    expect(once.pending).toHaveLength(1)
+  })
 
-    const healed = mergeInUseModelRetiredItems(both, [{ target, reason: null }])
-    expect(healed).toEqual([{ providerId: 'deepseek', modelId: 'chat-b', modelName: 'Chat B', reason: 'not_found' }])
+  it('still refuses after two observations on the same day', () => {
+    const target: InUseModelTarget = { providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', source: 'default' }
+    const first = advanceInUseModelPatrol(createInUseModelPatrolState(), [{ target, reason: 'retired' }], new Date('2026-11-01T08:00:00Z'))
+    const second = advanceInUseModelPatrol(first, [{ target, reason: 'retired' }], new Date('2026-11-01T20:00:00Z'))
+
+    expect(second.retired).toEqual([])
+    expect(second.pending[0]?.observedDays).toEqual(['2026-11-01'])
+  })
+
+  it('confirms retirement on the second day with the same code, and keeps both timestamps', () => {
+    const target: InUseModelTarget = { providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', source: 'default' }
+    const first = advanceInUseModelPatrol(createInUseModelPatrolState(), [{ target, reason: 'retired' }], new Date('2026-11-01T08:00:00Z'))
+    const second = advanceInUseModelPatrol(first, [{ target, reason: 'retired' }], new Date('2026-11-02T08:00:00Z'))
+
+    expect(second.retired).toEqual([{
+      providerId: 'silicon',
+      modelId: 'chat-a',
+      modelName: 'Chat A',
+      reason: 'retired',
+      firstObservedAt: '2026-11-01T08:00:00.000Z',
+      lastObservedAt: '2026-11-02T08:00:00.000Z'
+    }])
+  })
+
+  it('resets the count when the code changes, instead of borrowing the old day', () => {
+    const target: InUseModelTarget = { providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', source: 'default' }
+    const first = advanceInUseModelPatrol(createInUseModelPatrolState(), [{ target, reason: 'retired' }], new Date('2026-11-01T08:00:00Z'))
+    const changed = advanceInUseModelPatrol(first, [{ target, reason: 'not_found' }], new Date('2026-11-02T08:00:00Z'))
+
+    expect(changed.retired).toEqual([])
+    expect(changed.pending[0]?.observedDays).toEqual(['2026-11-02'])
+  })
+
+  it('clears a retired model as soon as a pass finds it usable', () => {
+    const target: InUseModelTarget = { providerId: 'silicon', modelId: 'chat-a', modelName: 'Chat A', source: 'default' }
+    const first = advanceInUseModelPatrol(createInUseModelPatrolState(), [{ target, reason: 'retired' }], new Date('2026-11-01T08:00:00Z'))
+    const retired = advanceInUseModelPatrol(first, [{ target, reason: 'retired' }], new Date('2026-11-02T08:00:00Z'))
+    const healed = advanceInUseModelPatrol(retired, [{ target, reason: null }], new Date('2026-11-03T08:00:00Z'))
+
+    expect(healed.retired).toEqual([])
+    expect(healed.pending).toEqual([])
+  })
+
+  it('reports staleness from the last confirmed observation', () => {
+    const item = {
+      providerId: 'silicon',
+      modelId: 'chat-a',
+      modelName: 'Chat A',
+      reason: 'retired' as const,
+      firstObservedAt: '2026-10-28T08:00:00.000Z',
+      lastObservedAt: '2026-10-29T08:00:00.000Z'
+    }
+
+    expect(inUseModelRetiredStaleness(item, new Date('2026-10-30T08:00:00Z'))).toEqual({ days: 1, stale: false })
+    expect(inUseModelRetiredStaleness(item, new Date('2026-11-01T08:00:00Z'))).toEqual({ days: 3, stale: true })
   })
 })

@@ -26,6 +26,23 @@ it('keeps an event whose time has passed while its value is still missing, for t
   expect(result.upcoming.map(row => row.eventKey)).toEqual(['overdue'])
 })
 
+// Both directions of the same judgement: the released section must reach back across a month
+// boundary and, within one month, behave exactly as before. Testing one direction only covers
+// half of the bug.
+it('keeps a release from the previous month while it is inside the released window', () => {
+  const releases = event({ eventKey: 'last-month', scheduledDate: '2026-10-31', scheduledAt: '2026-10-31T12:00:00.000Z',
+    lifecycleState: 'released', actual: { displayValue: '1.2%' }, previous: { displayValue: '1.0%' } })
+  const result = projectUpcomingCalendarCard([releases], '2026-11-02T09:00:00.000Z')
+  expect(result.today.map(row => row.eventKey)).toEqual(['last-month'])
+})
+
+it('keeps a release from yesterday inside the same month', () => {
+  const releases = event({ eventKey: 'yesterday', scheduledDate: '2026-10-14', scheduledAt: '2026-10-14T12:00:00.000Z',
+    lifecycleState: 'released', actual: { displayValue: '1.2%' }, previous: { displayValue: '1.0%' } })
+  const result = projectUpcomingCalendarCard([releases], '2026-10-15T09:00:00.000Z')
+  expect(result.today.map(row => row.eventKey)).toEqual(['yesterday'])
+})
+
 it('moves a late event out of upcoming as soon as it publishes', () => {
   // Overdue but published: it is released news now, not something to wait for, and it must not
   // appear in both sections.

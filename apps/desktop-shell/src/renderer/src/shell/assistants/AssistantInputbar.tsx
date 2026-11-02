@@ -1,4 +1,4 @@
-import { Button, Input, Tooltip } from 'antd'
+import { Button, Input } from 'antd'
 import {
   Database,
   Eraser,
@@ -13,7 +13,11 @@ import {
   Wrench
 } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
+import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../i18n/platformText'
+import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
 import {
   createAssistantInputbarTools,
   listVisibleAssistantInputbarTools,
@@ -35,6 +39,10 @@ type AssistantInputbarProps = {
   assistantSelected?: boolean
   composerEnabled?: boolean
   topicSelected: boolean
+  /** 话题还没选时，把读者送到话题选择器去（页面层给回调；输入条不自己找 DOM）。 */
+  onRequireTopic: () => void
+  /** 提及选择器不可用时，把读者送到顶部模型选择器（同样由页面层做焦点交接）。 */
+  onRequireModel: () => void
   statusMessage?: string | null
   mentionedModels: readonly AssistantMentionedModel[]
   /** T1–T3：图像生成 / 编辑入口（未配置端点时按钮禁用）。 */
@@ -50,6 +58,20 @@ type AssistantInputbarProps = {
   onToggleMentionedModel: (value: string) => void
   onClearMentionedModels: () => void
 }
+
+const SETTINGS_TOOLTIP_KEY = 'assistants.assistantSettings'
+const INPUTBAR_TOOL_KEYS = {
+  attachment: 'assistants.inputbarTools.attachment',
+  'new-topic': 'assistants.inputbarTools.new-topic',
+  'clear-topic': 'assistants.inputbarTools.clear-topic',
+  'quick-panel': 'assistants.inputbarTools.quick-panel',
+  'mcp-tools': 'assistants.inputbarTools.mcp-tools',
+  'web-search': 'assistants.inputbarTools.web-search',
+  'context-source': 'assistants.inputbarTools.context-source'
+} as const satisfies Record<AssistantInputbarToolId, string>
+const TOPIC_REQUIRED_KEY = 'assistants.topicRequiredHint'
+/** 设置 → 模型服务；id 来自 `builtInNavEntries.ts:79`（`label: t.settings.modelService`）。 */
+const MODEL_SERVICE_PANEL_ID = 'models'
 
 const TOOL_ICONS: Record<AssistantInputbarToolId, LucideIcon> = {
   attachment: Paperclip,
@@ -70,6 +92,8 @@ export function AssistantInputbar({
   assistantSelected = true,
   composerEnabled,
   topicSelected,
+  onRequireTopic,
+  onRequireModel,
   statusMessage,
   mentionedModels,
   imageGeneration,
@@ -83,6 +107,15 @@ export function AssistantInputbar({
   onToggleMentionedModel,
   onClearMentionedModels
 }: AssistantInputbarProps): React.ReactElement {
+  const resolveAssistantText = (key: string): string => {
+    const path = key.startsWith('assistants.') ? key.slice('assistants.'.length) : key
+    return resolveAssistantsText(labels, path as AssistantsTextPath)
+  }
+  const toast = useToast()
+  const handleImageUnavailable = (): void => {
+    toast.info({ titleKey: 'imageEndpointMissingHint', resolveText: resolveAssistantText })
+    navigateTo({ page: 'settings', panel: MODEL_SERVICE_PANEL_ID })
+  }
   const tools = listVisibleAssistantInputbarTools(createAssistantInputbarTools())
   const canCompose = composerEnabled ?? (assistantSelected && modelReady)
 
@@ -105,47 +138,52 @@ export function AssistantInputbar({
       />
       <div className="assistant-composer-footer">
         <div className="assistant-inputbar-tools">
-          <AssistantImageGenerateControl labels={labels} view={imageGeneration} />
-          <AssistantImageEditControl labels={labels} view={imageGeneration} availableImages={sessionImages} />
+          <AssistantImageGenerateControl labels={labels} onUnavailable={handleImageUnavailable} view={imageGeneration} />
+          <AssistantImageEditControl availableImages={sessionImages} labels={labels} onUnavailable={handleImageUnavailable} view={imageGeneration} />
           {tools.map((tool) => {
             const Icon = TOOL_ICONS[tool.id]
-            const label = labels.inputbarTools[tool.labelKey]
             return (
-              <Tooltip key={tool.id} title={tool.placeholder ? labels.comingSoon : label}>
-                <Button
-                  type="text"
-                  size="small"
-                  className="assistant-inputbar-tool"
-                  disabled={!tool.enabled || (tool.id === 'clear-topic' && !topicSelected)}
-                  icon={<Icon size={14} />}
-                  aria-label={label}
-                  onClick={() => onToolAction(tool.id)}
-                />
-              </Tooltip>
+              <IconButton
+                key={tool.id}
+                ariaLabelKey={INPUTBAR_TOOL_KEYS[tool.id]}
+                className="assistant-inputbar-tool"
+                icon={Icon}
+                onSelect={() => {
+                    // 临时不可用不等于禁用：按钮保持可点，点了把读者送到话题选择器，并说一句为什么。
+                    if (tool.id === 'clear-topic' && !topicSelected) {
+                      onRequireTopic()
+                      toast.info({
+                        titleKey: TOPIC_REQUIRED_KEY,
+                        resolveText: (key) => (key === TOPIC_REQUIRED_KEY ? labels.topicRequiredHint : '')
+                      })
+                      return
+                    }
+                    onToolAction(tool.id)
+                  }}
+                resolveText={resolveAssistantText}
+                size="md"
+                tooltipKey={INPUTBAR_TOOL_KEYS[tool.id]}
+              />
             )
           })}
-          <Tooltip title={labels.mentionedModels}>
-            <span>
-              <AssistantMentionedModelsPicker
-                labels={labels}
-                modelOptions={modelOptions}
-                mentionedModels={mentionedModels}
-                disabled={!canCompose}
-                onToggleMentionedModel={onToggleMentionedModel}
-                onClearMentionedModels={onClearMentionedModels}
-              />
-            </span>
-          </Tooltip>
-          <Tooltip title={labels.assistantSettings}>
-            <Button
-              type="text"
-              size="small"
-              className="assistant-inputbar-tool"
-              icon={<Settings2 size={14} />}
-              aria-label={labels.assistantSettings}
-              onClick={onOpenSettings}
-            />
-          </Tooltip>
+          <AssistantMentionedModelsPicker
+            onRequireModel={onRequireModel}
+            labels={labels}
+            modelOptions={modelOptions}
+            mentionedModels={mentionedModels}
+            disabled={!canCompose}
+            onToggleMentionedModel={onToggleMentionedModel}
+            onClearMentionedModels={onClearMentionedModels}
+          />
+          <IconButton
+            ariaLabelKey={SETTINGS_TOOLTIP_KEY}
+            className="assistant-inputbar-tool"
+            icon={Settings2}
+            onSelect={onOpenSettings}
+            resolveText={resolveAssistantText}
+            size="md"
+            tooltipKey={SETTINGS_TOOLTIP_KEY}
+          />
         </div>
         <div className="assistant-composer-actions">
           {isStreaming || isSending ? (

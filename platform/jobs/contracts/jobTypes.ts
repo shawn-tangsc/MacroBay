@@ -18,6 +18,14 @@ export type RetryPolicy = {
 
 export type JobOwner = 'platform' | 'product'
 
+/**
+ * 这条定义进不进用户看得见的那张表。
+ *
+ * `resource` = 用户能理解、能启用/停用的资源任务；`internal` = 平台自己维护的活（保留期清理、
+ * 投递重试、状态巡检），用户既配置不了也停不了，出现在表里只会是一行需要解释的技术条目。
+ */
+export type JobAudience = 'user' | 'internal'
+
 export type JobDefinition<TPayload = unknown> = {
   id: string
   owner: JobOwner
@@ -30,6 +38,16 @@ export type JobDefinition<TPayload = unknown> = {
   timeoutMs?: number
   retryPolicy?: RetryPolicy
   redact?: (value: unknown) => unknown
+}
+
+/**
+ * 注册进调度表的定义：`audience` 必填、无默认值。
+ *
+ * 不放在 `JobDefinition` 上，是因为一次性运行（`enqueueDefinition`）从不进表，给它们加一个
+ * 必填字段只会逼出几十个没有意义的值；而 `setSchedule` 这一侧少写一个就编译不过。
+ */
+export type ScheduledJobDefinition<TPayload = unknown> = JobDefinition<TPayload> & {
+  audience: JobAudience
 }
 
 export type JobLogLevel = 'debug' | 'info' | 'warn' | 'error'

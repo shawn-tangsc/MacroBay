@@ -68,7 +68,6 @@ export const crossAssetContractPolicy = Object.freeze({
   sourceStates: Object.freeze(['disabled', 'connecting', 'live', 'stale', 'limited', 'unavailable']),
   expectedPairs: 288, minimumPairs: 231, maxPriceLength: 64, pricePattern: /^(?:0|[1-9]\d*)(?:\.\d+)?$/,
   intervalMs: 300_000, hourMs: 3_600_000,
-  observationKeys: Object.freeze({ indexBtc: ['up', 'down', 'diverging', 'mixed', 'unavailable'], ethBtc: ['stronger', 'weaker', 'flat', 'unavailable'] }),
   /**
    * Which leg answers the Nasdaq 100 row: the licensed index, the tokenised Binance proxy that fills
    * it when the real source cannot answer, or nothing at all. The renderer reads this to decide
@@ -81,8 +80,7 @@ export const crossAssetContractPolicy = Object.freeze({
    * The cross-market reading's wire vocabulary (design 142).
    *
    * The *conditions* that make a scenario true live with the computation; only the words that may travel —
-   * and the bounds the renderer can rely on — are named here, exactly as `observationKeys` does for the
-   * older symbol comparison. `maximumRefuted` is here rather than in the service because it also bounds the
+   * and the bounds the renderer can rely on — are named here. `maximumRefuted` is here rather than in the service because it also bounds the
    * payload: the computation reads it from this policy so the two cannot disagree.
    */
   readingLegs: Object.freeze(['dxy', 'gold', 'index', 'btc'] as const),
@@ -137,7 +135,6 @@ export type CrossAssetSnapshot = {
   /** Stated only in `current` mode: the session of each row, and the last bar that actually closed. */
   marketState?: Record<CrossAssetId, CrossAssetMarketStateId>
   lastClosed?: Record<CrossAssetId, { at: string; close: string } | null>
-  observationKey: { indexBtc: 'up' | 'down' | 'diverging' | 'mixed' | 'unavailable'; ethBtc: 'stronger' | 'weaker' | 'flat' | 'unavailable' }
   /**
    * The cross-market reading (design 142), optional for the same reason `macroCurves` is: a main process
    * from before it existed must still produce a snapshot this renderer accepts, and the panel then simply
@@ -285,11 +282,25 @@ export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
     ((crossAssetContractPolicy.coveragePoints[range] - 1) / (crossAssetContractPolicy.points[range] - 1))
 }
 
+/**
+ * The renderer's one door for a snapshot, and it is **strict on purpose**: only the listed fields are
+ * accepted, so a snapshot carrying a retired key (or missing a new one) is refused as a whole.
+ *
+ * Why not tolerate unknown keys: the local app is normally version-consistent. A payload that no
+ * longer matches this contract means the main process is running a different build — silently
+ * accepting it would let a half-understood snapshot drive the panel. Refusing it makes the mismatch
+ * sayable: the client marks the rejection `contract` (not `query`) and the panel tells the reader
+ * to restart, instead of offering a retry that can only fail the same way.
+ *
+ * The cost is real and known: during development, whoever edits this contract sees the panel fail
+ * until the main process is restarted with the same code. That is a restart, not data loss, and it is
+ * the same reason the error text names the version rather than the source.
+ */
 export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | undefined {
   const policy = crossAssetContractPolicy
   try {
     if (!record(value)) return
-    const fields = ['schemaVersion', 'mode', 'servedAt', 'asOf', 'range', 'analysisEnd', 'windowStart', 'historyCoverage', 'curves', 'closedReturns', 'correlations', 'relativeReturns', 'observationKey', 'indexSource']
+    const fields = ['schemaVersion', 'mode', 'servedAt', 'asOf', 'range', 'analysisEnd', 'windowStart', 'historyCoverage', 'curves', 'closedReturns', 'correlations', 'relativeReturns', 'indexSource']
     // The macro lines are optional, and `exact` counts fields: a snapshot that carries them must list
     // them, and one from a main process that does not must not be asked for them.
     if (value.macroCurves !== undefined) fields.push('macroCurves')
@@ -307,9 +318,6 @@ export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | un
     const stride = crossAssetCurveStrideMs(range)
     if (asOf > Date.parse(value.servedAt as string) || end !== Math.floor(asOf / policy.intervalMs) * policy.intervalMs ||
       start !== end - (policy.coveragePoints[range] - 1) * policy.intervalMs) return
-    if (!exact(value.observationKey, ['indexBtc', 'ethBtc']) || !Object.entries(value.observationKey).every(([key, item]) =>
-      typeof item === 'string' && policy.observationKeys[key as 'indexBtc' | 'ethBtc'].includes(item) &&
-      (value.mode !== 'historical' || item === 'unavailable'))) return
     if (typeof value.indexSource !== 'string' || !(policy.indexSources as readonly string[]).includes(value.indexSource)) return
     if (!exact(value.historyCoverage, policy.assets) || !exact(value.curves, policy.assets) || !exact(value.closedReturns, policy.assets) ||
       !exact(value.correlations, ['indexBtc', 'indexEth']) || !exact(value.relativeReturns, ['btcMinusIndex', 'ethMinusBtc'])) return

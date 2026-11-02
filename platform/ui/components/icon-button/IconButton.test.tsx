@@ -1,0 +1,530 @@
+// @vitest-environment happy-dom
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { HelpCircle, MoreHorizontal, RefreshCw, SlidersHorizontal } from 'lucide-react'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { ICON_BUTTON_SIZES, IconButton, type IconButtonProps } from './IconButton'
+
+const source = readFileSync(join(__dirname, 'IconButton.tsx'), 'utf8')
+const css = readFileSync(join(__dirname, 'iconButton.css'), 'utf8')
+/** 断言只看规则，不看注释：注释里写「不许 outline:none」不该让守卫自己变红。 */
+const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+/** 测试只证明「键被解析」，不替调用方造句。 */
+const shirts = (value: string): string => value
+
+let root: Root | undefined
+
+afterEach(async () => {
+  await act(async () => root?.unmount())
+  root = undefined
+  document.body.replaceChildren()
+})
+
+function props(overrides: Partial<IconButtonProps> = {}): IconButtonProps {
+  return {
+    ariaLabelKey: 'ui.test.more-actions',
+    icon: HelpCircle,
+    size: 'md',
+    onSelect: () => undefined,
+    resolveText: shirts,
+    ...overrides
+  }
+}
+
+function markup(overrides: Partial<IconButtonProps> = {}): string {
+  return renderToStaticMarkup(<IconButton {...props(overrides)} />)
+}
+
+function mountElement(
+  overrides: Partial<IconButtonProps> = {},
+  parent: HTMLElement = document.body
+): HTMLButtonElement {
+  const host = document.createElement('div')
+  parent.append(host)
+  root = createRoot(host)
+  renderButton(root, overrides)
+  const button = host.querySelector('button')
+  if (!button) throw new Error('IconButton rendered no button')
+  return button
+}
+
+function renderButton(target: Root, overrides: Partial<IconButtonProps> = {}): void {
+  act(() => {
+    target.render(<IconButton {...props(overrides)} />)
+  })
+}
+
+describe('IconButton', () => {
+  it('takes the screen-reader name from the resolver, never from the raw key', () => {
+    const seen: string[] = []
+    const resolved = (value: string): string => {
+      seen.push(value)
+      return 'More actions'
+    }
+
+    const html = markup({ ariaLabelKey: 'ui.test.more-actions', resolveText: resolved })
+
+    expect(html).toContain('aria-label="More actions"')
+    expect(html).not.toContain('ui.test.more-actions')
+    expect(seen).toEqual(['ui.test.more-actions'])
+  })
+
+  it('fills the entity name into the label template instead of taking a whole sentence', () => {
+    const html = markup({
+      ariaLabelKey: 'macro.icon.open-in-calendar',
+      ariaLabelParams: { name: 'CPI' },
+      resolveText: (value) => (value === 'macro.icon.open-in-calendar' ? 'Open {name} in the calendar' : value)
+    })
+
+    expect(html).toContain('aria-label="Open CPI in the calendar"')
+    expect(html).not.toContain('{name}')
+  })
+
+  it('leaves a missing parameter visible instead of dropping the phrase', () => {
+    // 静默删掉整段会得到「Open in the calendar」——读得通，但指错了对象。
+    const html = markup({
+      ariaLabelKey: 'macro.icon.open-in-calendar',
+      ariaLabelParams: { other: 'CPI' },
+      resolveText: (value) => (value === 'macro.icon.open-in-calendar' ? 'Open {name} in the calendar' : value)
+    })
+
+    expect(html).toContain('aria-label="Open {name} in the calendar"')
+  })
+
+  it('leaves a template without placeholders untouched when no parameters are passed', () => {
+    const html = markup({ resolveText: (value) => (value === 'ui.test.more-actions' ? 'More actions' : value) })
+
+    expect(html).toContain('aria-label="More actions"')
+  })
+
+  it('shows the platform spinner and stops firing while loading', () => {
+    const onSelect = vi.fn()
+    const button = mountElement({ loading: true, onSelect })
+
+    expect(button.disabled).toBe(true)
+    expect(button.querySelector('.loading-spinner')).not.toBeNull()
+    act(() => button.click())
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('keeps its name and its measured size while loading', () => {
+    const button = mountElement({
+      loading: true,
+      ariaLabelKey: 'ui.test.save',
+      resolveText: (value) => (value === 'ui.test.save' ? 'Save' : value)
+    })
+
+    // 读屏仍要知道「哪个按钮在忙」；尺寸不变，说明 loading 不是第三个档位。
+    expect(button.getAttribute('aria-label')).toBe('Save')
+    expect(button.style.width).toBe('24px')
+    expect(button.style.height).toBe('24px')
+  })
+
+  it('lets a call site position itself, but not resize the button', () => {
+    // 尺寸写在行内、且放在最后：调用方拿得到 position/top，拿不到覆盖 22/24 的机会。
+    // 这条不需要布局引擎——读行内声明就够了。
+    const button = mountElement({
+      style: { width: 999, height: 999, position: 'absolute', top: 6, right: 6 } as never
+    })
+
+    expect(button.style.width).toBe('24px')
+    expect(button.style.height).toBe('24px')
+    expect(button.style.position).toBe('absolute')
+    expect(button.style.top).toBe('6px')
+  })
+
+  it('passes its own class name and data hooks through, without dropping the component ones', () => {
+    const button = mountElement({
+      className: 'workspace-redock',
+      dataAttributes: { 'data-redock-tab': 'page' } as never
+    })
+
+    expect(button.className).toContain('icon-button')
+    expect(button.className).toContain('workspace-redock')
+    expect(button.getAttribute('data-redock-tab')).toBe('page')
+  })
+
+  it('fails loudly when a cast slips a non-data key in, instead of dropping it', () => {
+    // 类型能被 cast 绕开，这一层绕不开；而且违约当场说话，不静默过滤。
+    expect(() => markup({ dataAttributes: { width: 999 } as never })).toThrow(/width/)
+    // 合规的钩子照常透传。
+    expect(markup({ dataAttributes: { 'data-redock-tab': 'page' } as never })).toContain('data-redock-tab="page"')
+  })
+
+  it('offers a third look for buttons that float over arbitrary content', () => {
+    // `overlay`：绝对定位挂在内容之上的图标按钮（分离页窗的回停靠）。
+    // 判据在 CSS 里：有边框、圆角 5、**半透明底**（浮层要透出一点下面的内容），hover 转不透明。
+    const html = markup({ variant: 'overlay' })
+    expect(html).toContain('icon-button--overlay')
+
+    const css = readFileSync(join(__dirname, 'iconButton.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const block = css.slice(css.indexOf('.icon-button--overlay.ant-btn {'), css.indexOf('}', css.indexOf('.icon-button--overlay.ant-btn {')))
+    expect(block).toContain('color-mix(in srgb, var(--surface-strong) 82%, transparent)')
+    expect(block).toContain('border-radius: 5px')
+    expect(css).toContain('.icon-button--overlay.ant-btn:not(:disabled):hover')
+  })
+
+  it('is a plain button, so it can never submit a surrounding form', () => {
+    expect(markup()).toContain('type="button"')
+  })
+
+  it('sits on antd Button, so keyboard and disabled behaviour are not ours to re-implement', () => {
+    const html = markup()
+    expect(html).toContain('ant-btn')
+    // 外观仍由我们覆盖：圆角 5、无内边距、焦点环 2px offset 2 都写在本组件的 CSS 里。
+    expect(rules).toContain('border-radius: 5px')
+    expect(rules).toContain('.icon-button.ant-btn')
+  })
+
+  it('measures exactly the requested size, in pixels, on the element itself', () => {
+    expect(markup({ size: 'sm' })).toContain('style="width:22px;height:22px"')
+    expect(markup({ size: 'md' })).toContain('style="width:24px;height:24px"')
+  })
+
+  it('offers only the two sizes the spec allows, in the shared size vocabulary', () => {
+    expect(ICON_BUTTON_SIZES).toEqual(['sm', 'md'])
+    expect(source).not.toMatch(/size:\s*(18|20|26)\b/)
+    expect(rules).not.toMatch(/(18|20|26)px/)
+  })
+
+  it('rejects a pixel size at compile time', () => {
+    // @ts-expect-error 尺寸只有 sm / md 两档；收数字等于让 18 / 20 / 26 重新长回来。
+    const numeric: IconButtonProps = { ...props(), size: 22, icon: HelpCircle }
+
+    expect(numeric).toBeDefined()
+  })
+
+  it('keeps the glyph decorative, so the name is spoken once', () => {
+    const html = markup()
+    expect(html).toContain('aria-hidden="true"')
+    expect(html).toContain('<svg')
+  })
+
+  it('out-ranks antd\'s own focus ring instead of merely declaring one', () => {
+    // antd 自带 `:where(.css-x).ant-btn:not(:disabled):focus-visible`（三个类）。只写
+    // `.icon-button:focus-visible` 会被它压掉——规范这么写，不等于浏览器这么算。
+    expect(rules).toContain('.icon-button.ant-btn:not(:disabled):focus-visible')
+    expect(rules).not.toMatch(/^\.icon-button:focus-visible/m)
+  })
+
+  it('wears the one focus ring: 2px accent, offset 2, never removed without a replacement', () => {
+    expect(rules).toContain('outline: 2px solid var(--accent)')
+    expect(rules).toContain('outline-offset: 2px')
+    expect(rules).not.toMatch(/outline:\s*none/)
+  })
+
+  it('is plain by default and gains a border only in the toolbar variant', () => {
+    expect(markup()).not.toContain('icon-button--solid')
+    expect(markup({ variant: 'solid' })).toContain('icon-button--solid')
+    expect(rules).toContain('.icon-button--solid')
+  })
+
+  it('leaves the tab order and stops firing when disabled', () => {
+    const onSelect = vi.fn()
+    const button = mountElement({ disabled: true, onSelect })
+
+    expect(button.disabled).toBe(true)
+    act(() => button.click())
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('fires on click when enabled', () => {
+    const onSelect = vi.fn()
+    const button = mountElement({ onSelect })
+
+    expect(button.disabled).toBe(false)
+    act(() => button.click())
+    expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('hands the click event to the handler, so a row underneath does not also fire', () => {
+    const onSelect = vi.fn((event: MouseEvent) => event.stopPropagation())
+    const onRowClick = vi.fn()
+    const row = document.createElement('div')
+    document.body.append(row)
+    const button = mountElement({ onSelect }, row)
+    row.addEventListener('click', onRowClick)
+
+    act(() => button.click())
+
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    const [event] = onSelect.mock.calls[0] ?? []
+    // 底子是 antd 的 Button，事件是它包装过的合成事件；`currentTarget` 在分发结束后会被置空，
+    // 所以判据落在「拿到了一个真事件」上，而不是它的字段。
+    expect(event).toBeDefined()
+    expect((event as MouseEvent).type).toBe('click')
+    expect(typeof (event as MouseEvent).stopPropagation).toBe('function')
+    // 事件被按钮拿走之后，外层的行不该再收到一次——这正是「点图标连带选中整行」的判据。
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  it('still accepts a zero-argument handler, and still calls it', () => {
+    let calls = 0
+    const button = mountElement({ onSelect: () => { calls += 1 } })
+
+    act(() => button.click())
+
+    expect(calls).toBe(1)
+  })
+
+  it('says whether the region it controls is open, for the reader who cannot see it', () => {
+    const open = document.createElement('div')
+    const closed = document.createElement('div')
+
+    const openButton = mountElement({ expanded: true, controls: 'notification-drawer' }, open)
+    const closedButton = mountElement({ expanded: false, controls: 'notification-drawer' }, closed)
+
+    expect(openButton.getAttribute('aria-expanded')).toBe('true')
+    expect(closedButton.getAttribute('aria-expanded')).toBe('false')
+    expect(openButton.getAttribute('aria-controls')).toBe('notification-drawer')
+    // 名称不会因为多了这两个属性就消失。
+    expect(openButton.getAttribute('aria-label')).toBe('ui.test.more-actions')
+  })
+
+  it('writes neither attribute when neither prop is given — never "undefined"', () => {
+    const html = markup()
+    const button = mountElement()
+
+    expect(html).not.toContain('aria-expanded')
+    expect(html).not.toContain('aria-controls')
+    expect(button.hasAttribute('aria-expanded')).toBe(false)
+    expect(button.hasAttribute('aria-controls')).toBe(false)
+  })
+
+  it('maps pressed to aria-pressed and keeps the name constant across both states', () => {
+    const on = mountElement({ ariaLabelKey: 'ui.test.show-key', pressed: true }, document.createElement('div'))
+    const off = mountElement({ ariaLabelKey: 'ui.test.show-key', pressed: false }, document.createElement('div'))
+
+    expect(on.getAttribute('aria-pressed')).toBe('true')
+    expect(off.getAttribute('aria-pressed')).toBe('false')
+    // 名字不随状态改：否则读屏会念「隐藏密钥，已按下」，同一件事说两遍。
+    expect(on.getAttribute('aria-label')).toBe(off.getAttribute('aria-label'))
+  })
+
+  it('writes no aria-pressed when the button is not a toggle', () => {
+    const html = markup()
+    const button = mountElement()
+
+    expect(html).not.toContain('aria-pressed')
+    expect(button.hasAttribute('aria-pressed')).toBe(false)
+  })
+
+  it('adds no pressed look: the state rides on aria-pressed, not on a third style', () => {
+    // 契约「零外观变化」：开关态由图标本身或它控制的面板表达；这里不新增按下样式。
+    expect(rules).not.toMatch(/aria-pressed|icon-button--pressed|\[data-pressed/)
+  })
+
+  it('forwards the handlers a floating layer injects, and still runs its own onSelect', () => {
+    // 这是 R156 那条链的判据：`Popover` 用克隆子元素的方式注入 onClick/onFocus，
+    // 组件若只绑自己的 onSelect，注进来的处理器会被静默丢掉，图标按钮就当不成触发器。
+    const order: string[] = []
+    const injectedClick = vi.fn(() => order.push('injected'))
+    const onSelect = vi.fn(() => order.push('select'))
+    const injectedFocus = vi.fn()
+
+    const button = mountElement({ onClick: injectedClick, onFocus: injectedFocus, onSelect })
+
+    act(() => button.click())
+    expect(injectedClick).toHaveBeenCalledTimes(1)
+    // 外部注入的先跑，按钮自己的动作后跑；两条都跑，谁也不吃掉谁。
+    expect(order).toEqual(['injected', 'select'])
+    expect(onSelect).toHaveBeenCalledTimes(1)
+
+    act(() => button.focus())
+    expect(injectedFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves the tooltip copy through the same resolver and never uses a native title', () => {
+    const seen: string[] = []
+    const resolved = (value: string): string => {
+      seen.push(value)
+      return value
+    }
+
+    const html = markup({ tooltipKey: 'ui.test.hint', resolveText: resolved })
+
+    expect(seen).toContain('ui.test.hint')
+    expect(html).not.toMatch(/<button[^>]*\stitle=/)
+  })
+
+  it('ties the described text to the trigger once the button takes focus', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<IconButton {...props({ tooltipKey: 'ui.test.hint' })} />)
+    })
+
+    const button = host.querySelector('button')!
+    await act(async () => {
+      button.focus()
+    })
+
+    // antd 把弹层挂在传送门里，一帧后才进 DOM；这里轮询而不是靠固定 sleep。
+    let described: string | null = null
+    for (let attempt = 0; attempt < 40 && described === null; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      const id = button.getAttribute('aria-describedby')
+      if (id === null) continue
+      const target = document.getElementById(id)
+      if (target === null) continue
+      if (target.textContent === 'ui.test.hint') described = target.textContent
+    }
+
+    // 键盘用户 Tab 到它时，提示文字必须已经挂在可访问描述上；这是「禁用 + Tooltip」被禁掉的前提。
+    expect(described).toBe('ui.test.hint')
+  })
+
+  it('refuses a tooltip on a disabled button — keyboard users could never reach it', () => {
+    // 配对约束落在运行时，不在类型上：存量站点传 `disabled={someBoolean}`，`boolean` 收敛不到
+    // 任何字面量分支，做成联合会把无关站点一起弄红。throw 保住规则，又不误伤调用点。
+    expect(() =>
+      renderToStaticMarkup(<IconButton {...props({ disabled: true, tooltipKey: 'ui.test.hint' })} />)
+    ).toThrow(/tooltipKey while disabled/)
+  })
+
+  it('gives the loading state its own marker and its own colour, never the disabled one', () => {
+    const html = markup({ loading: true } as Partial<IconButtonProps>)
+
+    // 加载中必须不可点，但状态标记与 disabled 分开：绑在一起就没法只给 loading 换色。
+    expect(html).toContain('data-state="loading"')
+    expect(html).toMatch(/<button[^>]*disabled/)
+
+    // 负判据：loading 的颜色不许来自禁用样式，也不许写死色值——读者得看出哪个按钮在忙。
+    expect(rules).toContain(".icon-button[data-state='loading']")
+    expect(rules).toMatch(/\.icon-button\[data-state='loading'\][^}]*--muted-strong/)
+    expect(rules).not.toMatch(/\.icon-button:disabled[^{]*\{[^}]*color:/)
+  })
+
+  it('carries no copy of its own: no literal Chinese outside comments, no spinner, no motion', () => {
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+    expect(code).not.toMatch(/[\u4e00-\u9fff]/)
+    // 不许自己造转圈（旋转关键帧、`.spin`、lucide loader）；用平台那一个是可以的，而且应该用。
+    expect(code).not.toMatch(/@keyframes|animation:|\bspin\b|Loader/i)
+    expect(code).toMatch(/from '\.\.\/loading'/)
+    expect(rules).not.toMatch(/@keyframes|animation/)
+  })
+
+  it('puts aria-haspopup on the DOM together with aria-expanded, and tracks the open state', () => {
+    // 类型能写对、DOM 上不一定出现——这是 `dataAttributes` 那次留下的教训，所以这里断言属性本体。
+    const closed = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.moreActions"
+        expanded={false}
+        hasPopup="menu"
+        icon={MoreHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(closed).toContain('aria-haspopup="menu"')
+    expect(closed).toContain('aria-expanded="false"')
+
+    const open = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.moreActions"
+        expanded
+        hasPopup="menu"
+        icon={MoreHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(open).toContain('aria-expanded="true"')
+  })
+
+  it('keeps aria-expanded alone legal, because a control can open an inline panel', () => {
+    // 单向依赖，不是二选一：`expanded` 的语义是「被控制的东西开没开」，不要求那是弹出层。
+    // 写成互相排斥，筛选面板与行展开都会编译不过——而为了过类型去删 `expanded`，
+    // 等于把「开着还是关着」从读屏里拿掉。
+    const html = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.filters"
+        expanded
+        icon={SlidersHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).not.toContain('aria-haspopup')
+  })
+
+  it('emits no aria-haspopup at all when the button is not a popup trigger', () => {
+    // 不能出现 `aria-haspopup="undefined"`——那会让读屏读到一颗“说不清开没开”的弹出按钮。
+    const html = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.refresh"
+        icon={RefreshCw}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(html).not.toContain('aria-haspopup')
+  })
+
+  it('refuses a popup trigger that does not say whether it is open', () => {
+    // 配对约束落在运行时，不在类型上——类型上做会误伤传 `disabled={boolean}` 的存量站点
+    // （`boolean` 收敛不到 `disabled?: false` / `disabled: true`），实测过。
+    expect(() =>
+      renderToStaticMarkup(
+        <IconButton
+          ariaLabelKey="ui.test.moreActions"
+          hasPopup="menu"
+          icon={MoreHorizontal}
+          onSelect={() => undefined}
+          resolveText={(value) => value}
+          size="sm"
+        />
+      )
+    ).toThrow(/hasPopup requires expanded/)
+  })
+
+  it('refuses to be a switch and a popup trigger at the same time', () => {
+    // 读屏会听到两句互相矛盾的话，而界面上完全看不出来。
+    expect(() =>
+      renderToStaticMarkup(
+        <IconButton
+          ariaLabelKey="ui.test.moreActions"
+          expanded
+          hasPopup="menu"
+          icon={MoreHorizontal}
+          onSelect={() => undefined}
+          pressed
+          resolveText={(value) => value}
+          size="sm"
+        />
+      )
+    ).toThrow(/either pressed or hasPopup/)
+  })
+
+  it('hands the overlay a real button node, so a tooltip can measure where it belongs', async () => {
+    // 2026-11-02 的 bug：气泡要么不出现、要么跑到窗口左上角。根因是浮层拿不到锚点——
+    // 这个组件当时没有把 `ref` 转到真实 `<button>`，浮层只能按 (0,0) 算位置。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    let node: HTMLElement | HTMLAnchorElement | null = null
+    await act(async () => {
+      root!.render(<IconButton {...props({ ref: (value) => { node = value } })} />)
+    })
+    expect(node).not.toBeNull()
+    // 成为 ref 的必须是真实节点，而且是那颗按钮本身——不是包裹层、不是组件。
+    expect(node).toBe(host.querySelector('button'))
+    expect((node as unknown as HTMLElement).classList.contains('icon-button')).toBe(true)
+  })
+})

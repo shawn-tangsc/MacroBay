@@ -54,14 +54,16 @@ describe('daily briefing job', () => {
       service: { getToday: vi.fn() },
       getLocale: async () => 'zh-CN',
       timeZone: () => 'Asia/Shanghai',
-      getGenerationTime: async () => '07:30'
+      getSchedule: async () => ({ generationTime: '07:30', generationTimeZone: 'America/New_York' })
     })
     await Promise.resolve()
     await Promise.resolve()
 
     expect(schedules).toEqual([expect.objectContaining({
       id: INTELLIGENCE_DAILY_BRIEFING_JOB,
-      trigger: { kind: 'cron', expression: '30 7 * * *', timezone: 'Asia/Shanghai' }
+      // The stored zone wins over the reader zone: the cron and the edition cutoff have to be the
+      // same clock, and only the saved setting can say which clock that is.
+      trigger: { kind: 'cron', expression: '30 7 * * *', timezone: 'America/New_York' }
     })])
 
     scheduleDailyBriefingJob(jobRuntime, { timeZone: 'Asia/Shanghai', generationTime: '09:30' })
@@ -70,6 +72,22 @@ describe('daily briefing job', () => {
       id: INTELLIGENCE_DAILY_BRIEFING_JOB,
       trigger: { kind: 'cron', expression: '30 9 * * *', timezone: 'Asia/Shanghai' }
     })
+  })
+
+  it('registers no automatic run while the saved zone cannot be read', async () => {
+    // A mistyped zone pauses the automatic run instead of guessing a clock: the panel already says
+    // which value is wrong, and a guessed clock would move the edition without saying so.
+    const { runtime: jobRuntime, schedules } = runtime()
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: vi.fn() },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'Asia/Shanghai',
+      getSchedule: async () => ({ generationTime: '08:00', generationTimeZoneInvalid: 'Asia/Shangai' })
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(schedules).toHaveLength(0)
   })
 
   it('surfaces a generation failure and survives a runtime without a scheduler', async () => {

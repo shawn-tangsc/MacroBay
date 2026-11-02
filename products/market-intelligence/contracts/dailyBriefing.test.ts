@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  briefingGenerationDisplayRows,
+  briefingGenerationStageIds,
   dailyBriefingPolicy,
   isBriefingGenerationTrace,
   isDailyBriefingDocumentWithinBudget,
@@ -148,5 +150,22 @@ describe('daily briefing editorial layer', () => {
     expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'source', state: 'success' }, { id: 'source', state: 'failed' }] })).toBe(false)
     expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'nope', state: 'success' }] })).toBe(false)
     expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'source', state: 'running' }] })).toBe(false)
+  })
+})
+
+describe('generation display rows', () => {
+  it('covers every stage exactly once, in pipeline order', () => {
+    const flattened = briefingGenerationDisplayRows.flatMap((row) => row.stages)
+    // No stage may fall out of the picture, and none may be counted under two rows.
+    expect([...flattened].sort()).toEqual([...briefingGenerationStageIds].sort())
+    expect(new Set(flattened).size).toBe(flattened.length)
+  })
+
+  it('folds both repair rounds into one row', () => {
+    const repair = briefingGenerationDisplayRows.filter((row) => (row.stages as readonly string[]).includes('repair-1'))
+    expect(repair).toHaveLength(1)
+    expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2'])
+    // Eight rows for the reader, nine stages in the pipeline.
+    expect(briefingGenerationDisplayRows).toHaveLength(8)
   })
 })

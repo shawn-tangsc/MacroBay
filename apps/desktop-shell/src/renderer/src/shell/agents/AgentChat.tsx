@@ -9,6 +9,7 @@ import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/ru
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { Bot, Link2Off } from 'lucide-react'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { Button } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -28,6 +29,7 @@ import { listSessionMessagesViaApi } from './agentSessionDataApi'
 import { buildSessionRuntimeStatusById } from './agentSessionViewModel'
 import { useAgentText } from './agentTextProvider'
 import { resolveAgentPageStatus } from './agentPageStatus'
+import { startDefaultSession } from './startDefaultSession'
 import { sortAgentSessionMessages } from '@platform/ui/agent-chat'
 
 const AGENT_MESSAGE_PAGE_SIZE = 50
@@ -41,6 +43,8 @@ type AgentChatProps = {
   chatSettings: ChatSettings
   gatewaySnapshot?: AgentModelGatewayUiSnapshot | null
   compatibilityByModelKey?: ReadonlyMap<string, AgentRuntimeCompatibilityResult>
+  /** 兼容性结论读回来了没有：空 map 与「确实没有证据」取值相同，只有它能把两者分开。 */
+  compatibilityLoaded?: boolean
   /** 模型服务页「默认智能体模型」：会话没有显式模型时用于状态判断。 */
   defaultAgentModelId?: string
   loadingModelService?: boolean
@@ -49,6 +53,10 @@ type AgentChatProps = {
   onRuntimeSnapshotChange: (snapshot: AgentSessionRuntimeSnapshot) => void
   onChannelRuntimeSnapshotChange: (snapshot: AgentChannelRuntimeSnapshot) => void
   onEditAgent: (agentId: string) => void
+  /** 从「还没有智能体」的空态直接去新建——空态不给死路。 */
+  onCreateAgent: () => void
+  /** 会话指向的智能体已不存在时，把读者送回智能体列表。 */
+  onReturnToAgentList: () => void
 }
 
 export default function AgentChat({
@@ -60,13 +68,16 @@ export default function AgentChat({
   chatSettings: initialChatSettings,
   gatewaySnapshot = null,
   compatibilityByModelKey,
+  compatibilityLoaded = true,
   defaultAgentModelId,
   loadingModelService = false,
   gatewayStatusCard,
   onStateChange,
   onRuntimeSnapshotChange,
   onChannelRuntimeSnapshotChange,
-  onEditAgent
+  onEditAgent,
+  onCreateAgent,
+  onReturnToAgentList
 }: AgentChatProps): React.ReactElement {
   const t = useAgentText()
   const activeAgent = getActiveAgent(state)
@@ -90,6 +101,8 @@ export default function AgentChat({
     activeAgent?.model && compatibilityByModelKey
       ? (compatibilityByModelKey.get(activeAgent.model) ?? null)
       : undefined
+  /** 判据不是「忙不忙」，是「有没有证据」：没有证据时不许给终态。 */
+  const compatibilityPending = compatibilityLoaded === false && activeAgent?.model != null
   const pageStatus = resolveAgentPageStatus({
     agents: state.agents,
     activeAgent,
@@ -132,7 +145,7 @@ export default function AgentChat({
     })
   }, [activeSession?.id])
 
-  if (loadingModelService) {
+  if (loadingModelService || compatibilityPending) {
     return (
       <main className={blockedPaneClass}>
         {navbar}
@@ -226,10 +239,11 @@ export default function AgentChat({
   if (pageStatus.type === 'no-agents') {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noAgentTitle}
-          description={t.chat.noAgentDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onCreateAgent }}
         />
       </main>
     )
@@ -238,38 +252,50 @@ export default function AgentChat({
   if (pageStatus.type === 'no-session') {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noSessionTitle}
-          description={t.chat.noSessionDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{
+            labelKey: STATE_VIEW_ACTION_KEYS.create,
+            // 侧栏「新建会话」与这里同一份实现：取当前智能体、补默认模型、建会话、失败回退。
+            onSelect: () =>
+              startDefaultSession({
+                state,
+                activeAgentId: activeAgent?.id ?? null,
+                defaultAgentModelId,
+                sessionName: t.sidePanel.defaultSessionName,
+                onStateChange
+              })
+          }}
         />
       </main>
     )
   }
 
   if (pageStatus.type === 'orphan-session') {
-    const orphanAgentId = activeAgent?.id
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Link2Off}
-          title={t.chat.orphanTitle}
-          description={t.chat.orphanDescription}
-          actions={
-            orphanAgentId ? <Button onClick={() => onEditAgent(orphanAgentId)}>{t.chat.openAgentConfig}</Button> : null
-          }
+        {/* 这是「拿不到」不是「没有」：会话指向的智能体已经不存在了，唯一出路是回列表挑一个。 */}
+        <StateView
+          state="empty"
+          reasonCode="target-missing"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.back_to_list, onSelect: onReturnToAgentList }}
         />
       </main>
     )
   }
 
+  // 兜底与 no-agents 是同一个处境（没有任何智能体可选），共用同一个空态。
   if (!activeAgent || !activeSession) {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noAgentTitle}
-          description={t.chat.noAgentDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onCreateAgent }}
         />
       </main>
     )

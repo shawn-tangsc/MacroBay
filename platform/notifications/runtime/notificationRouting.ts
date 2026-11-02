@@ -6,7 +6,11 @@ import type { NotificationRequest } from '../contracts/notificationContracts'
 export type DeliveryAttempt = {
   channel: NotificationChannel
   attemptedAt: string
-  result: 'sent' | 'skipped' | 'failed'
+  /**
+   * `handed-to-system` = 调用成功交给系统，**不等于用户看到了**：桌面通知可能被系统或用户静音。
+   * `sent` 只用于应用内通道——那里的钩子真的跑了，用户界面确实渲染了。
+   */
+  result: 'sent' | 'handed-to-system' | 'skipped' | 'failed'
   reason?: string
 }
 
@@ -16,19 +20,24 @@ export type DeliveryHooks = {
   desktop?: (record: NotificationRecord) => Promise<{ ok: boolean; reason?: string }>
 }
 
-/** 读者的一天的「现在」：设置时区 + 当前时刻。缺省 UTC，绝不读机器时区。 */
+/**
+ * 读者的一天的「现在」：设置时区 + 当前时刻。**必传，没有缺省值**。
+ * 以前这里缺省成 UTC：调用方忘传时钟时，免打扰会把「我不知道」伪装成「你在格林尼治」，
+ * 而忘传与「时区算不出来」是两件事，混在一起连证据链都少一层（`MI-11-R68`）。
+ */
 export type NotificationClock = { now: () => Date; timeZone: () => string }
-
-const defaultClock: NotificationClock = { now: () => new Date(), timeZone: () => 'UTC' }
 
 export function routeTransientDelivery(
   record: NotificationRecord,
   settings: NotificationRuntimeSettings,
   hooks: DeliveryHooks,
-  clock: NotificationClock = defaultClock
+  clock: NotificationClock
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
-  const now = new Date().toISOString()
+  // 编译期已经要求必传；这里再挡一次 `as never` 之类的绕过，并给出可读原因，
+  // 免得「没传时钟」表现成一句 `Cannot read properties of undefined`。
+  if (!clock || typeof clock.now !== 'function') throw new Error('notification-clock-required')
+  const now = clock.now().toISOString()
   const transientChannels = record.channels.filter((channel) => channel !== 'center')
 
   for (const channel of transientChannels) {
@@ -78,7 +87,8 @@ export function routeTransientDelivery(
     attempts.push({
       channel: 'desktop',
       attemptedAt: now,
-      result: result.ok ? 'sent' : 'failed',
+      // `show()` 不抛错只证明交出去了，证明不了被看到——所以不是 `sent`。
+      result: result.ok ? 'handed-to-system' : 'failed',
       reason: result.reason
     })
     return attempts
@@ -88,14 +98,16 @@ export function routeTransientDelivery(
 export function normalizeRequestedChannels(
   request: NotificationRequest,
   settings: NotificationRuntimeSettings,
-  clock: NotificationClock = defaultClock
+  clock: NotificationClock
 ): NotificationChannel[] {
   const requested = request.requestedChannels.includes('center')
     ? request.requestedChannels
     : ['center', ...request.requestedChannels]
 
   const filtered = requested.filter((channel): channel is NotificationChannel => {
-    if (channel === 'center') return settings.centerEnabled
+    // 通知中心常开：它不是用户能关的开关。能关就等于「发不出去也不留一条」（4a 的唯一用途）。
+    // 用户不想看，用标已读/清空处理——那是「现在没空看」，不是「别给我存」。
+    if (channel === 'center') return true
     if (!isProductNotificationAllowed(request, settings)) return channel === 'center'
     if (channel === 'toast') return settings.toastEnabled && hasProductChannelPermission(request, settings, 'toast')
     if (channel === 'popup') return settings.popupEnabled && hasProductChannelPermission(request, settings, 'popup')
@@ -142,24 +154,34 @@ function applyQuietHoursAndPriority(
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (settings.quietHours?.enabled && isWithinQuietHours(settings.quietHours, clock)) {
+    if (settings.quietHours?.enabled && quietHoursVerdict(settings.quietHours, clock) === 'inside') {
       return priority === 'urgent'
     }
     return true
   })
 }
 
-function isWithinQuietHours(
+/**
+ * 免打扰窗口的判定结果。`unknown` 与 `outside` 是两件事：前者是「拿不到现在几点」，
+ * 后者是「拿得到，且不在窗口内」。混成一个布尔值，就等于把「不知道」当成「不在」。
+ */
+type QuietHoursVerdict = 'inside' | 'outside' | 'unknown'
+
+function quietHoursVerdict(
   quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
   clock: NotificationClock
-): boolean {
+): QuietHoursVerdict {
   // 免打扰窗口按设置的读者时区判断，不按运行这台机器的本地时间。
   const currentMinutes = minutesOfDayInTimeZone(clock.now(), clock.timeZone())
+  // 时区用不了时不做判定：宁可多响一次，也不在错的钟点把提醒静音掉。
+  if (currentMinutes === null) return 'unknown'
   const start = parseLocalMinutes(quietHours.startLocalTime)
   const end = parseLocalMinutes(quietHours.endLocalTime)
-  if (start === end) return false
-  if (start < end) return currentMinutes >= start && currentMinutes < end
-  return currentMinutes >= start || currentMinutes < end
+  if (start === end) return 'outside'
+  const inside = start < end
+    ? currentMinutes >= start && currentMinutes < end
+    : currentMinutes >= start || currentMinutes < end
+  return inside ? 'inside' : 'outside'
 }
 
 function parseLocalMinutes(value: string): number {

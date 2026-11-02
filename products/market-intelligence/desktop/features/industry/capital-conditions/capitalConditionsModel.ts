@@ -41,6 +41,13 @@ export type DashboardCapitalConditionsState =
   | { state: 'loading' }
   | {
       state: 'available'
+      /**
+       * These are the readings from before a failed re-read, not a fresh copy.
+       *
+       * A transient failure must not take the numbers off the screen: the reader keeps what they
+       * had and is told it is old, which is a different fact from "the data is gone".
+       */
+      stale?: true
       conclusion: 'partial' | 'unavailable'
       etf: DashboardEtfFlow | 'unavailable'
       flowHistory?: DashboardFlowHistory

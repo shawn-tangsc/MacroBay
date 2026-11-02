@@ -39,7 +39,8 @@ export function useAssistantLibrary(language: AppLanguage): {
   const [selectedGroup, setSelectedGroupState] = useState<AssistantTemplateGroupId>(defaultAssistantLibraryGroup)
   const [selectedProductId, setSelectedProductIdState] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
+  // 初值 `true`：首次读取在挂载后的 effect 里发起，初值 `false` 会让第一帧先画「被筛选挡住了」。
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const query = useMemo(

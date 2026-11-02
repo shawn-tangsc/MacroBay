@@ -36,7 +36,9 @@ export const agentTextZh: AgentText = {
     sessionCount: (count) => `${count} 个会话`,
     emptyAgents: '还没有智能体，先创建一个。',
     agentSessionCount: (count) => `${count} 个会话`,
-    emptySessions: '还没有会话，先创建一个。'
+    emptySessions: '还没有会话，先创建一个。',
+    newSessionNeedsAgent: '先选一个智能体，才能新建会话',
+    deleteFilteredNeedsSessions: '没有可删除的会话'
   },
   sessionItem: {
     rename: '重命名',
@@ -169,7 +171,7 @@ export const agentTextZh: AgentText = {
     selectLocalDirectory: '选择本地目录...',
     selectModel: '选择模型',
     openWorkspace: '打开工作区',
-    openInExternalApp: (name) => `在 ${name} 中打开`,
+    openInExternalApp: '在 {name} 中打开',
     openInExternalAppMenu: '选择外部编辑器',
     clearMessages: '清空消息',
     taskCenter: '任务中心',

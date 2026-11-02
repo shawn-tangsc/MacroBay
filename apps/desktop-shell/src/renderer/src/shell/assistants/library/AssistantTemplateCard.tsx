@@ -1,6 +1,13 @@
 import { Button, Tag } from 'antd'
 import type { AssistantTemplateCatalogItem } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import type { PlatformText } from '../../../i18n/platformText'
+
+/** 「有更新」是状态词，不是描述标签：药丸只收键，句子由 `labels` 给。 */
+const UPDATE_AVAILABLE_KEY = 'assistants.library.updateAvailable'
+/** 分类词：模板来源与自带标签。 */
+const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
+const TEMPLATE_TAG_KEY = 'assistants.template.tag'
 
 type AssistantTemplateCardProps = {
   labels: PlatformText['assistants']['library']
@@ -34,7 +41,13 @@ export function AssistantTemplateCard({
         </span>
         <span className="assistant-template-card-tags">
           <Tag>{source}</Tag>
-          {item.hasUpdate ? <Tag color="processing">{labels.updateAvailable}</Tag> : null}
+          {item.hasUpdate ? (
+            <StatusPill
+              tone="info"
+              labelKey={UPDATE_AVAILABLE_KEY}
+              resolveText={(key) => (key === UPDATE_AVAILABLE_KEY ? labels.updateAvailable : '')}
+            />
+          ) : null}
           {item.tags.slice(0, 2).map((tag) => (
             <Tag key={tag}>{tag}</Tag>
           ))}

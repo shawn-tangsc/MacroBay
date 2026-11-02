@@ -16,7 +16,7 @@ import {
 import {
   buildTaskAutomationSettingsState,
   type TaskAutomationStatusFilter,
-  type TaskRunSnapshot
+  type TaskRunState
 } from './taskAutomationSettingsViewModel'
 import { loadTaskRunSnapshots } from './taskAutomationTaskRuns'
 
@@ -31,6 +31,8 @@ const taskAuditLimit = 5
 export type TaskAutomationSettingsController = {
   loading: boolean
   error: boolean
+  /** 源数据（未过滤）：依赖「有没有任务」的区块只能看它，不能看渲染用的数组。 */
+  tasks: ScheduledTaskEntity[]
   status: TaskAutomationStatusFilter
   setStatus: (status: TaskAutomationStatusFilter) => void
   nameQuery: string
@@ -56,7 +58,7 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
   const [status, setStatusState] = useState<TaskAutomationStatusFilter>('all')
   const [nameQuery, setNameQuery] = useState('')
   const [tasks, setTasks] = useState<ScheduledTaskEntity[]>([])
-  const [taskRuns, setTaskRuns] = useState<Record<string, TaskRunSnapshot>>({})
+  const [taskRuns, setTaskRuns] = useState<Record<string, TaskRunState>>({})
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [detailRefreshVersion, setDetailRefreshVersion] = useState(0)
@@ -206,6 +208,8 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
   return {
     loading,
     error,
+    /** Source rows (unfiltered): the existence signal for the blocks that depend on there being tasks. */
+    tasks,
     status,
     setStatus,
     nameQuery,

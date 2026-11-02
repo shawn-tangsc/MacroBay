@@ -5,13 +5,14 @@ import { Button } from 'antd'
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
   title: string
   loading: string
+  /** The card's own empty sentence, rendered through the platform reason slot (contract §17). */
   empty: string
-  unavailable: string
   stablecoin: string
   asset: string
   totalSupply: string
@@ -24,17 +25,17 @@ type Text = {
   streakColumn: string
   streak: string
   streakSingle: string
-  etfTableUnavailable: string
   observedAt: string
   etfFlow: string
   recent7TradingDays: string
-  etfUnavailable: string
   funds: string
   btc: string
   eth: string
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
   refresh: string
   refreshFailed: string
+  /** The last readings that did read, kept after a failed re-read. */
+  staleRead: string
 }
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
@@ -42,8 +43,8 @@ type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'availab
 export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false }: Readonly<{
   state: DashboardCapitalConditionsState
   text: Text
-  /** Absent when the host has no collection layer to ask, so the panel stays read-only. */
-  onRefresh?: () => void
+  /** Re-collect when the host can, otherwise re-read the stored snapshot. Always a real action. */
+  onRefresh: () => void
   refreshing?: boolean
   refreshFailed?: boolean
 }>): React.ReactElement {
@@ -53,7 +54,10 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
       <h2>{text.title}</h2>
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
-        : <p>{text[state.state]}</p>}
+        : state.state === 'empty'
+          ? <StateView state="empty" reasonCode="not-yet"
+              productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
+          : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
@@ -69,10 +73,13 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           <h2>{text.title}</h2>
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
+        {/* These are the last numbers that read successfully. Saying so is the difference between
+            "old" and "gone", and only one of those is true after a failed re-read. */}
+        {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
         <StablecoinTable state={state} text={text} />
-        <EtfTable etf={state.etf} text={text} />
+        <EtfTable etf={state.etf} text={text} onRetry={onRefresh} />
       </div>
-      <EtfFlow state={state.etf} flowHistory={state.flowHistory} text={text} />
+      <EtfFlow state={state.etf} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
     </div>
   </section>
 }
@@ -104,7 +111,7 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
 
 
 /** One row per asset, one column per horizon: no label repeats inside the body. */
-function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): React.ReactElement {
+function EtfTable({ etf, text, onRetry }: { etf: AvailableState['etf']; text: Text; onRetry: () => void }): React.ReactElement {
   const coverage = etf === 'unavailable' ? undefined : etf.coverage
   return <table className="mi-capital-conditions__etf-table">
     <colgroup>
@@ -128,7 +135,7 @@ function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): Re
     </tr></thead>
     <tbody>
       {etf === 'unavailable'
-        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}>{text.etfTableUnavailable}</td></tr>
+        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></td></tr>
         : <><EtfRow asset={etf.btc} label={text.btc} text={text} /><EtfRow asset={etf.eth} label={text.eth} text={text} /></>}
     </tbody>
   </table>
@@ -154,10 +161,10 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
   return days
 }
 
-function EtfFlow({ state, flowHistory, text }: { state: Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf']; flowHistory?: Extract<DashboardCapitalConditionsState, { state: 'available' }>['flowHistory']; text: Text }): React.ReactElement {
+function EtfFlow({ state, flowHistory, text, onRetry }: { state: Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf']; flowHistory?: Extract<DashboardCapitalConditionsState, { state: 'available' }>['flowHistory']; text: Text; onRetry: () => void }): React.ReactElement {
   const chartRef = useRef<HTMLDivElement>(null)
   const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null)
-  if (state === 'unavailable' || !flowHistory) return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3><p>{text.etfUnavailable}</p></section>
+  if (state === 'unavailable' || !flowHistory) return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></section>
   const visibleRows = flowHistory.rows.slice(-dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows)
   const maximumMagnitude = Math.max(...visibleRows.flatMap((row) => [Math.abs(row.funds), Math.abs(row.btc), Math.abs(row.eth)]))
   const axisMagnitude = maximumMagnitude === 0 ? undefined : formatFlowValue(maximumMagnitude)

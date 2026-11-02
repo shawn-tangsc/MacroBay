@@ -15,7 +15,36 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+const webIpcSource = readSource('ipc/webIpc.ts')
+const storageIpcSource = readSource('ipc/storageIpc.ts')
+const channelIpcSource = readSource('ipc/channelIpc.ts')
+const modelIpcSource = readSource('ipc/modelIpc.ts')
+const platformCoreSource = readSource('composition/platformCore.ts')
+const repositoriesSource = readSource('composition/repositories.ts')
+const agentRuntimeSource = readSource('composition/agentRuntime.ts')
+// 通道与任务作业的构造已搬到 composition/channelsAndJobs.ts（退出链仍留在 app.ts）。
+const channelsAndJobsSource = readSource('composition/channelsAndJobs.ts')
+const assistantIpcSource = readSource('ipc/assistantIpc.ts')
+const agentIpcSource = readSource('ipc/agentIpc.ts')
+const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
+// 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
+const windowIpcSource = readSource('ipc/windowIpc.ts')
+
+/**
+ * 顺序断言用的比较：先把两端空白折叠成单空格再比。
+ *
+ * 这些锚点已经长到一行放不下，任何一次 prettier 换行都会让 `toContain` 失败——那是一次
+ * 与语义无关的红，会教会下一个人「重跑一下就好」。折叠空白只影响比较，不改任何断言结构。
+ */
+const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, ' ')
+const looseIndexOf = (source: string, needle: string): number =>
+  collapseWhitespace(source).indexOf(collapseWhitespace(needle))
 const preloadSource = readSource('../preload/index.ts')
+/**
+ * 删除已读是**破坏性**通道，必须能一眼看出它落在哪一层：
+ * 渲染层只经 preload → 主进程 handler → 运行时，不许绕过去直接写文件。
+ */
+const notificationIpcSource = readSource('../../notifications/ipc/notificationIpcHandlers.ts')
 const taskIpcHelperSource = readSource('registerAgentTaskIpcHandlers.ts')
 const generatedProductManifestsSource = readSource('../../../products/generated/productManifests.ts')
 const generatedProductServicesSource = readSource('../../../products/generated/productServices.ts')
@@ -58,55 +87,71 @@ describe('desktop main IPC surface', () => {
   })
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
-    expect(appSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
-    expect(appSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
-    expect(appSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
-    expect(appSource).toContain('IpcChannels.agentsProbeRuntimeCompatibility')
-    expect(appSource).toContain('IpcChannels.agentsGetModelGatewayStatus')
-    expect(appSource).toContain('IpcChannels.agentsStartModelGateway')
-    expect(appSource).toContain('IpcChannels.agentsStopModelGateway')
-    expect(appSource).toContain('IpcChannels.agentsSetModelGatewayEnabled')
-    expect(appSource).toContain('IpcChannels.agentsExecuteRuntimeCommand')
-    expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
-    expect(appSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
-    expect(appSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
+    expect(agentIpcSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
+    expect(agentIpcSource).toContain('IpcChannels.agentsProbeRuntimeCompatibility')
+    expect(agentIpcSource).toContain('IpcChannels.agentsGetModelGatewayStatus')
+    expect(agentIpcSource).toContain('IpcChannels.agentsStartModelGateway')
+    expect(agentIpcSource).toContain('IpcChannels.agentsStopModelGateway')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSetModelGatewayEnabled')
+    expect(agentIpcSource).toContain('IpcChannels.agentsExecuteRuntimeCommand')
+    expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
+    expect(repositoriesSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
+    expect(agentRuntimeSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
     expect(appSource).toContain('taskManagementToolBridge: {')
-    expect(appSource).toContain('getTaskRunController: () => agentTaskRunController')
-    expect(appSource).toContain('await agentTaskExecutionCoordinator?.recoverAfterRestart()')
+    expect(appSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
+    expect(appSource).toContain('await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()')
     expect(appSource).toContain('taskAutomationMaintenance.recoverAfterRestart()')
     expect(appSource).toContain('scheduleTaskAutomationMaintenance(taskAutomationMaintenance)')
-    expect(appSource).toContain('channelDeliveryMaintenance.start()')
-    expect(appSource).toContain('channelInboundExecutionRunner.startRecovery()')
-    expect(appSource).toContain('disposeChannelDeliveryMaintenance?.()')
-    expect(appSource).toContain('disposeChannelInboundRecovery?.()')
-    expect(appSource).toContain('ChannelManagementService')
-    expect(appSource).toContain('IpcChannels.channelsCatalog')
-    expect(appSource).toContain('IpcChannels.channelsCredentialSubmit')
-    expect(appSource).toContain('IpcChannels.channelsPolicyCreate')
-    expect(appSource).toContain('IpcChannels.channelsRuntimeStatus')
-    expect(appSource).toContain('asChannelHandoff')
-    expect(appSource).toContain('isP256PublicJwk')
+    // Channel maintenance no longer owns timers: it is registered as platform jobs and removed by
+    // the disposer those registrations return. The guard follows the registration, not the old
+    // method name — deleting the whole block must still turn it red.
+    expect(appSource).toContain('deliveryCleanup: () => channelDeliveryMaintenance.runSlice()')
+    expect(appSource).toContain('deliveryRetry: () => channelDeliveryMaintenance.runRetrySlice()')
+    expect(appSource).toContain('inboundRecovery: () => channelInboundExecutionRunner.recoverOnce()')
+    expect(appSource).toContain('telegram: () => telegramRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('slack: () => slackRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('lark: () => larkRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('qq: () => qqRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('discord: () => discordRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('wechat: () => wechatRuntimeMaintenance.runOnce()')
+    expect(appSource).toContain('registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)')
+    expect(appSource).toContain('setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(')
+    expect(appSource).toContain('getDisposeChannelMaintenanceJobs()?.()')
+    // 服务本身在 repositories 片里构造；app.ts 只剩实例名（channelManagementService）。
+    expect(repositoriesSource).toContain('ChannelManagementService')
+    // 25 个渠道 handler 已搬到 ipc/channelIpc.ts：断言看模块，退出链接线仍看 app.ts。
+    expect(appSource).toContain('registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })')
+    expect(channelIpcSource).toContain('IpcChannels.channelsCatalog')
+    expect(channelIpcSource).toContain('IpcChannels.channelsCredentialSubmit')
+    expect(channelIpcSource).toContain('IpcChannels.channelsPolicyCreate')
+    expect(channelIpcSource).toContain('IpcChannels.channelsRuntimeStatus')
+    expect(channelIpcSource).toContain('asChannelHandoff')
+    expect(channelIpcSource).toContain('isP256PublicJwk')
     expect(appSource).toContain('channelManagementService.recover()')
-    expect(appSource).toContain('SlackRuntimeManager')
-    expect(appSource).toContain('SlackRuntimeRepository')
-    expect(appSource).toContain('LarkRuntimeManager')
-    expect(appSource).toContain('LarkRuntimeRepository')
-    expect(appSource).toContain('QqRuntimeRepository')
-    expect(appSource).toContain('QqRuntimeManager')
-    expect(appSource).toContain('DiscordRuntimeRepository')
-    expect(appSource).toContain('DiscordRuntimeManager')
-    expect(appSource).toContain("if (type === 'discord') return discordRuntimeManager.start(channelId, generation, token)")
-    expect(appSource).toContain('WechatRuntimeRepository')
-    expect(appSource).toContain('WechatRuntimeManager')
-    expect(appSource).toContain("if (type === 'wechat') return wechatRuntimeManager.start(channelId, generation, token)")
-    expect(appSource).toContain('createPlatformWebSocketFactory')
-    expect(appSource).toContain('ChannelDeliveryTransportRouter')
-    expect(appSource).toContain("if (type === 'slack') return slackRuntimeManager.start(channelId, generation, token)")
+    // adapter、投递、维护与 `setRuntime` 的分派表在 channelsAndJobs 片；
+    // 各家的运行时仓库在 repositories 片构造——读的是拥有它的那个文件。
+    expect(channelsAndJobsSource).toContain('SlackRuntimeManager')
+    expect(repositoriesSource).toContain('SlackRuntimeRepository')
+    expect(channelsAndJobsSource).toContain('LarkRuntimeManager')
+    expect(repositoriesSource).toContain('LarkRuntimeRepository')
+    expect(repositoriesSource).toContain('QqRuntimeRepository')
+    expect(channelsAndJobsSource).toContain('QqRuntimeManager')
+    expect(repositoriesSource).toContain('DiscordRuntimeRepository')
+    expect(channelsAndJobsSource).toContain('DiscordRuntimeManager')
+    expect(channelsAndJobsSource).toContain("if (type === 'discord') return discordRuntimeManager.start(channelId, generation, token)")
+    expect(repositoriesSource).toContain('WechatRuntimeRepository')
+    expect(channelsAndJobsSource).toContain('WechatRuntimeManager')
+    expect(channelsAndJobsSource).toContain("if (type === 'wechat') return wechatRuntimeManager.start(channelId, generation, token)")
+    expect(channelsAndJobsSource).toContain('createPlatformWebSocketFactory')
+    expect(channelsAndJobsSource).toContain('ChannelDeliveryTransportRouter')
+    expect(channelsAndJobsSource).toContain("if (type === 'slack') return slackRuntimeManager.start(channelId, generation, token)")
     expect(appSource).toContain("else if (type === 'telegram') telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-evidence-missing')")
     expect(appSource).toContain("// Lark's audit gate is intentionally active-generation-only")
     expect(appSource).not.toContain('agentServices.channels.create')
-    expect(appSource).toContain('disposeTaskAutomationMaintenance?.()')
-    expect(appSource).toContain('agent: {\n          taskAutomation: { policyPreset }')
+    expect(appSource).toContain('getDisposeTaskAutomationMaintenance()?.()')
+    expect(repositoriesSource).toContain('agent: {\n          taskAutomation: { policyPreset }')
     expect(appSource).not.toContain('...settings.agent,\n          taskAutomation: { policyPreset }')
     expect(appSource).toContain("import { registerAgentTaskIpcHandlers } from './registerAgentTaskIpcHandlers'")
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
@@ -122,20 +167,26 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain(smokeSetup)
     expect(appSource).toContain('const productAcceptanceRequested = resolveProductAcceptanceProfileOptIn({')
     expect(appSource).toContain('environment: productAcceptanceRequested ? {} : process.env')
-    expect(appSource.indexOf(smokeSetup)).toBeLessThan(appSource.indexOf('const settingsStore = createSettingsStore('))
-    expect(appSource).toContain('createTaskAutomationSmokeSeed(')
+    expect(appSource.indexOf(smokeSetup)).toBeGreaterThan(-1)
+    // 设置存储随构造根搬到 platformCore：时机由「接缝先执行、再调用 createPlatformCore」保证。
+    expect(appSource.indexOf('app.setPath(\'userData\''))
+      .toBeLessThan(appSource.indexOf('createPlatformCore({'))
+    expect(repositoriesSource).toContain('createTaskAutomationSmokeSeed(')
     expect(appSource).toContain('createTaskAutomationSmokeDriver(')
     expect(appSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
-    expect(appSource).toContain('new ChannelRuntimeSupervisor({')
+    // 构造点搬进 channelsAndJobs 片：adapter 与 supervisor 都在那里，退出链仍在 app.ts。
+    expect(channelsAndJobsSource).toContain('new ChannelRuntimeSupervisor({')
     expect(appSource).toContain('getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot()')
     expect(appSource).not.toContain('channelRuntimeService')
     expect(appSource).toContain('if (taskAutomationSmokeProfile.enabled)')
     expect(appSource).toContain('resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled)')
-    expect(appSource).toContain('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
-    expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.storageListCaches')
+    expect(collapseWhitespace(appSource)).toContain(
+      collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
+    )
+    expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
     expect(appSource).toContain('registerJobIpcHandlers(')
   })
 
@@ -151,52 +202,63 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('const productAcceptanceRequested = resolveProductAcceptanceProfileOptIn({')).toBeLessThan(
       appSource.indexOf(acceptanceSetup)
     )
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const settingsStore = createSettingsStore('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const providerStore = createProviderStore('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const channelCredentialVault = createElectronChannelCredentialVault('))
+    // 设置/供应商存储随构造根搬到 platformCore：时机由「接缝 → 唯一调用点」保证。
+    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('createPlatformCore({'))
+    expect(platformCoreSource).toContain('const settingsStore = createSettingsStore(')
+    expect(platformCoreSource).toContain('const providerStore = createProviderStore(')
+    // 仓储与数据库随构造根搬到 repositories：时机由「接缝 → 唯一调用点」保证。
+    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('createRepositories({'))
+    expect(repositoriesSource).toContain('const agentDatabase = createAgentPlatformDatabase(')
+    expect(repositoriesSource).toContain('const assistantDatabase = createAssistantPlatformDatabase(')
+    expect(repositoriesSource).toContain('const jobRunStore = createJobRunSqliteStore(')
+    expect(repositoriesSource).toContain('const channelCredentialVault = createElectronChannelCredentialVault(')
   })
 
   it('creates the platform data directory before opening platform databases', () => {
-    const platformDirectory = "const platformDataDirectory = join(app.getPath('userData'), 'platform')"
+    const platformDirectory = "const platformDataDirectory = join(userDataPath, 'platform')"
     const ensureDirectory = 'mkdirSync(platformDataDirectory, { recursive: true })'
 
-    expect(appSource).toContain(platformDirectory)
-    expect(appSource).toContain(ensureDirectory)
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
+    expect(platformCoreSource).toContain(platformDirectory)
+    expect(platformCoreSource).toContain(ensureDirectory)
+    // 数据库仍在 app.ts 构造（这一片还没搬）：目录创建必须在唯一调用点之前，且早于两个数据库的构造调用。
+    expect(platformCoreSource.indexOf(ensureDirectory)).toBeGreaterThan(-1)
+    const ensureIndex = platformCoreSource.indexOf(ensureDirectory)
+    expect(ensureIndex).toBeGreaterThan(-1)
+    expect(ensureIndex).toBeLessThan(platformCoreSource.indexOf('const settingsStore = createSettingsStore('))
+    expect(repositoriesSource.indexOf('const agentDatabase = createAgentPlatformDatabase(')).toBeGreaterThan(-1)
   })
 
   it('constructs the generic provider secret vault before the provider store without changing IPC registration', () => {
     expect(appSource).toContain("import { createElectronSecretVault } from '../../secrets'")
-    expect(appSource).toContain('const providerSecretVault = createElectronSecretVault({')
-    expect(appSource).toContain("directory: join(app.getPath('userData'), 'platform', 'secrets')")
-    expect(appSource).toContain('const providerStore = createProviderStore(')
+    expect(platformCoreSource).toContain('const providerSecretVault = createElectronSecretVault({')
+    expect(platformCoreSource).toContain("directory: join(userDataPath, 'platform', 'secrets')")
+    expect(platformCoreSource).toContain('const providerStore = createProviderStore(')
     expect(appSource).toContain('providerSecretVault')
-    expect(appSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
-      appSource.indexOf('const providerStore = createProviderStore(')
+    expect(platformCoreSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
+      platformCoreSource.indexOf('const providerStore = createProviderStore(')
     )
-    expect(appSource).toContain('IpcChannels.modelProvidersList')
-    expect(appSource).toContain('IpcChannels.modelProvidersUpsert')
-    expect(appSource).toContain('IpcChannels.modelProvidersTestConnection')
-    expect(appSource).toContain('IpcChannels.modelProvidersPreviewModelSync')
-    const modelSyncHandler = appSource.slice(appSource.indexOf('IpcChannels.modelProvidersPreviewModelSync'))
+    // 模型服务 19 个 handler 已搬到 ipc/modelIpc.ts；装配点又搬进 composition/model.ts。
+    // 读者与被读对象必须同笔迁移：这条断言跟着调用点走，否则它会在搬家那一刻变成假红。
+    expect(readSource('composition/model.ts')).toContain('registerModelIpc(ipcMain, {')
+    expect(appSource).toContain('composeModelIpc(ipcMain, {')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersList')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersUpsert')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersTestConnection')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersPreviewModelSync')
+    const modelSyncHandler = modelIpcSource.slice(modelIpcSource.indexOf('IpcChannels.modelProvidersPreviewModelSync'))
     expect(modelSyncHandler).toContain('const provider = await providerStore.resolveRuntimeProvider(providerId)')
     expect(modelSyncHandler).not.toContain("(await providerStore.getState()).providers.find((item) => item.id === providerId)")
     expect(appSource).not.toContain('testModelProviderConnection(provider, options)')
     expect(appSource).not.toContain('apiKey: options?.apiKey')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
 
   it('passes the existing generic provider vault through the product service seam', () => {
     expect(appSource).toContain('secretVault: providerSecretVault')
     expect(appSource.indexOf('secretVault: providerSecretVault')).toBeGreaterThan(
-      appSource.indexOf('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
+      appSource.indexOf('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
   })
 
@@ -204,7 +266,7 @@ describe('desktop main IPC surface', () => {
     // 默认翻译模型等默认值只读透出：产品不得自己读写 app settings。
     expect(appSource).toContain('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')
     expect(appSource.indexOf('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')).toBeGreaterThan(
-      appSource.indexOf('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
+      appSource.indexOf('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
     expect(generatedProductServicesSource).toContain('getModelDefaults: () => Promise<ModelDefaultsSettings>')
   })
@@ -222,7 +284,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
     expect(appSource).toContain(registerIpcHandlersCall)
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
-    expect(appSource).toContain('IpcChannels.productSummaries')
+    expect(storageIpcSource).toContain('IpcChannels.productSummaries')
   })
 
   it('registers the read-only job schedule projection and keeps agent, assistant, and product seams intact', () => {
@@ -237,54 +299,55 @@ describe('desktop main IPC surface', () => {
       expect(appSource).not.toContain(writeChannel)
     }
     // 既有受保护面逐字未变
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
     expect(appSource).toContain('registerJobIpcHandlers(')
   })
 
   it('creates a visible boot window before product registration and loads the renderer only after sealing product IPC', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
-    const bootWindow = 'mainWindow = await createMainWindow()'
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
+    // 建窗/接线搬到 window/mainWindow.ts 后，启动顺序仍由这一行位置证明。
+    const bootWindow = 'await mainWindowHost.createAndWire()'
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(bootstrapSource).toContain(bootWindow)
     expect(bootstrapSource).toContain(proxyApply)
     expect(bootstrapSource).toContain(productSeal)
     expect(bootstrapSource).toContain(rendererLoad)
-    expect(bootstrapSource.indexOf(bootWindow)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
-    expect(bootstrapSource.indexOf(proxyApply)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
-    expect(bootstrapSource.indexOf(productRegistration)).toBeLessThan(bootstrapSource.indexOf(productSeal))
-    expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(looseIndexOf(bootstrapSource, bootWindow)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
+    expect(looseIndexOf(bootstrapSource, proxyApply)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
+    expect(looseIndexOf(bootstrapSource, productRegistration)).toBeLessThan(looseIndexOf(bootstrapSource, productSeal))
+    expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     expect(bootstrapSource).toContain('platformFetch: getPlatformFetch()')
-    expect(bootstrapSource.indexOf(proxyApply)).toBeLessThan(bootstrapSource.indexOf('platformFetch: getPlatformFetch()'))
+    expect(looseIndexOf(bootstrapSource, proxyApply)).toBeLessThan(looseIndexOf(bootstrapSource, 'platformFetch: getPlatformFetch()'))
   })
 
   it('recovers stale persistent job runs before product startup can enqueue current-process work', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const staleRecovery = 'jobRuntime.recover()'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
 
     expect(bootstrapSource).toContain(staleRecovery)
-    expect(bootstrapSource.indexOf(staleRecovery)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
+    expect(looseIndexOf(bootstrapSource, staleRecovery)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
   })
 
   it('treats proxy application failure as a startup boundary before products and the normal renderer', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
-    const proxyApplyIndex = bootstrapSource.indexOf(proxyApply)
-    const productRegistrationIndex = bootstrapSource.indexOf(productRegistration)
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
+    const proxyApplyIndex = looseIndexOf(bootstrapSource, proxyApply)
+    const productRegistrationIndex = looseIndexOf(bootstrapSource, productRegistration)
 
     expect(proxyApplyIndex).toBeLessThan(productRegistrationIndex)
-    expect(proxyApplyIndex).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(proxyApplyIndex).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     expect(bootstrapSource.slice(proxyApplyIndex, productRegistrationIndex)).not.toContain('catch')
   })
 
@@ -302,11 +365,11 @@ describe('desktop main IPC surface', () => {
   })
 
   it('keeps assistant IPC handlers registered alongside agent handlers', () => {
-    expect(appSource).toContain('IpcChannels.assistantsList')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
-    expect(appSource).toContain('IpcChannels.assistantsLibraryListTemplates')
-    expect(appSource).toContain('IpcChannels.assistantsLibraryInstallTemplate')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsList')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsLibraryListTemplates')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsLibraryInstallTemplate')
   })
 
   it('adds exactly one web search reveal channel and drops no existing channels', () => {
@@ -330,36 +393,43 @@ describe('desktop main IPC surface', () => {
   })
 
   it('keeps web search IPC handlers registered without removing assistant and agent seams', () => {
+    // handler 已搬到 ipc/webIpc.ts；app.ts 只剩构造与一行接线，断言跟着实现走。
     expect(appSource).toContain('createWebSearchIpcHandlers')
-    expect(appSource).toContain('IpcChannels.webSearchListProviders')
-    expect(appSource).toContain('IpcChannels.webSearchRevealProviderApiKey')
-    expect(appSource).toContain('IpcChannels.webSearchCheckProvider')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.agentsListProductToolPackages')
+    expect(appSource).toContain('registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })')
+    expect(webIpcSource).toContain('IpcChannels.webSearchListProviders')
+    expect(webIpcSource).toContain('IpcChannels.webSearchRevealProviderApiKey')
+    expect(webIpcSource).toContain('IpcChannels.webSearchCheckProvider')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentToolsIpcSource).toContain('IpcChannels.agentsListProductToolPackages')
   })
 
   it('keeps storage and cache IPC handlers registered without dropping existing seams', () => {
     expect(appSource).toContain('createCacheGovernanceIpcHandlers')
     expect(appSource).toContain("cache-governance.sqlite")
-    expect(appSource).toContain('IpcChannels.storageListCaches')
-    expect(appSource).toContain('IpcChannels.storageInspectCache')
-    expect(appSource).toContain('IpcChannels.storageClearCache')
-    expect(appSource).toContain('IpcChannels.storageCompactCache')
-    expect(appSource).toContain('IpcChannels.storageListCacheOperations')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    // 装配点已搬进 composition/settingsAndStorage.ts —— 读者跟着被读对象走。
+    expect(readSource('composition/settingsAndStorage.ts')).toContain('registerStorageIpc(ipcMain, {')
+    expect(appSource).toContain('composeStorageIpc(ipcMain, {')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
+    expect(storageIpcSource).toContain('IpcChannels.storageInspectCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageClearCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageCompactCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCacheOperations')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
   })
 
   it('wires renderer lifecycle diagnostics to every main window', () => {
-    expect(appSource).toContain("import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'")
-    expect(appSource).toContain("import { createRendererProcessLog } from '../window/rendererProcessLog'")
-    expect(appSource).toContain('wireRendererProcessDiagnostics(window')
+    // 接线随建窗搬到 window/mainWindow.ts；日志写入器仍在 app.ts 构造。
+    const windowHostSource = readSource('window/mainWindow.ts')
+    expect(windowHostSource).toContain("from '../../window/rendererProcessDiagnostics'")
+    expect(platformCoreSource).toContain("import { createRendererProcessLog } from '../../window/rendererProcessLog'")
+    expect(windowHostSource).toContain('wireRendererProcessDiagnostics(window')
     // 渲染层诊断不再有自己的 ndjson 管道：改走唯一的应用日志写入器，来源由 category 区分。
-    expect(appSource).toContain('createRendererProcessLog(appLog)')
+    expect(platformCoreSource).toContain('createRendererProcessLog(appLog)')
     expect(appSource).not.toContain('renderer-lifecycle.ndjson')
   })
 
@@ -370,10 +440,10 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('isRuntimeClosed: () => platformRuntimesDisposed')
     expect(appSource).toContain('invokeProductIpc(productId, method, payload)')
     // 关闭登记与 renderer 入口共用同一 registry 实例。
-    expect(appSource).toContain('productIpcRegistryForDisposal = productIpcRegistry')
-    expect(appSource).toContain('productIpcRegistryForDisposal?.markClosed()')
+    expect(appSource).toContain('setProductIpcRegistryForDisposal(productIpcRegistry)')
+    expect(appSource).toContain('getProductIpcRegistryForDisposal()?.markClosed()')
     // 登记关闭必须早于产品服务/DB 拆除。
-    expect(appSource.indexOf('productIpcRegistryForDisposal?.markClosed()')).toBeLessThan(
+    expect(appSource.indexOf('getProductIpcRegistryForDisposal()?.markClosed()')).toBeLessThan(
       appSource.indexOf('productServiceDisposerRegistry.disposeAll()')
     )
   })
@@ -385,13 +455,14 @@ describe('desktop main IPC surface', () => {
   })
 
   it('registers the panel workspace channels before the boot window and restores after product sealing', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const compose = 'const panelWorkspace = composePanelWorkspace({'
     const registerChannels = 'panelWorkspace.registerChannels()'
-    const bootWindow = 'mainWindow = await createMainWindow()'
+    // 建窗/接线搬到 window/mainWindow.ts 后，启动顺序仍由这一行位置证明。
+    const bootWindow = 'await mainWindowHost.createAndWire()'
     const restore = 'await panelWorkspace.start()'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(appSource).toContain("import { composePanelWorkspace } from './workspace/composePanelWorkspace'")
     expect(bootstrapSource).toContain(compose)
@@ -406,10 +477,11 @@ describe('desktop main IPC surface', () => {
     expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(restore))
     expect(bootstrapSource.indexOf(compose)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
     expect(bootstrapSource.indexOf(restore)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
-    expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     // 退出走 workspace 有界 flush
-    expect(appSource).toContain('await panelWorkspaceForDisposal?.dispose()')
-    expect(appSource).toContain('let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null')
+    // 退出链搬到 lifecycle/quit.ts 后，dispose 决策由编排器驱动；app.ts 只提供端口。
+    expect(appSource).toContain('disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose()')
+    expect(appSource).toContain('getPanelWorkspaceForDisposal()')
 
     // 5 条通道常量与 preload 命名空间一一对应，且不引入任意 channel/URL 入口
     for (const channel of [
@@ -430,10 +502,11 @@ describe('desktop main IPC surface', () => {
       expect(preloadSource).toContain(`${method}:`)
     }
     // 既有受保护 seam 不得因 workspace 接线丢失
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
+    // web search handler 已搬到 ipc/webIpc.ts：受保护 seam 看模块而不是只看 app.ts。
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
   })
 
@@ -499,14 +572,14 @@ describe('desktop main IPC surface', () => {
       'platform:model-providers-upsert'
     ])
     // 既有受保护面逐字未变（agent / assistant / product）
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
 
   it('wires exactly one image generation/edit channel behind strict validation and message persistence', () => {
     expect(IpcChannels.modelProvidersGenerateImage).toBe('platform:model-providers-generate-image')
-    const block = mainRegistrationBlock(appSource, 'modelProvidersGenerateImage')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersGenerateImage')
 
     // 先校验参数（provider/model/prompt/count/size 白名单 + 编辑原图 ≤4MB/mime 白名单），再解析 provider 并出站。
     expect(block).toContain("typeof providerId !== 'string'")
@@ -521,7 +594,7 @@ describe('desktop main IPC surface', () => {
     expect(block).toContain('getPlatformFetch()')
     // 编辑复用同一通道：operation 是 additive 参数，不存在第二条图像通道。
     expect(block).toContain("request.operation === 'edit'")
-    expect(appSource).not.toContain('modelProvidersEditImage')
+    expect(modelIpcSource).not.toContain('modelProvidersEditImage')
     expect(appSource).not.toContain('ipcMain.handle(IpcChannels.modelProvidersGenerateImageV2')
     expect(block.indexOf('validateImageGenerationInput(')).toBeLessThan(
       block.indexOf('resolveRuntimeProvider(providerId)')
@@ -547,7 +620,7 @@ describe('desktop main IPC surface', () => {
     // T1：图片用自定义协议读盘（不在渲染层拼路径、不新增 IPC 通道）。
     expect(appSource).toContain('registerGeneratedImageScheme()')
     expect(appSource).toContain('registerGeneratedImageProtocol(generatedImagesDirectory)')
-    expect(appSource).toContain('createGeneratedImageStorage({ directory: generatedImagesDirectory })')
+    expect(repositoriesSource).toContain('createGeneratedImageStorage({ directory: generatedImagesDirectory })')
     // scheme 必须在 app ready 之前注册，handle 必须在 ready 之后。
     expect(appSource.indexOf('registerGeneratedImageScheme()')).toBeLessThan(
       appSource.indexOf('await app.whenReady()')
@@ -561,29 +634,31 @@ describe('desktop main IPC surface', () => {
       'modelProvidersGenerateImage'
     ])
     // Clipboard pixels are an attachment write path, not a generated-image read path.
-    expect(appSource).toContain('IpcChannels.appSaveClipboardImage')
-    expect(appSource).toContain("app.getPath('temp')")
+    expect(windowIpcSource).toContain('IpcChannels.appSaveClipboardImage')
+    expect(windowIpcSource).toContain("app.getPath('temp')")
   })
 
   it('runs the comparison probe only inside the on-demand self-test', () => {
-    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里。
-    expect(appSource.split('probeDirectEgress(').length - 1).toBe(1)
+    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里（现已随模型服务搬家）。
+    expect(modelIpcSource.split('probeDirectEgress(').length - 1).toBe(1)
   })
 
   it('rejects an invalid proxy address before the settings file is written', () => {
-    expect(appSource).toContain("import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'")
-    const guardIndex = appSource.indexOf('assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)')
+    // handler 已搬到 ipc/settingsIpc.ts：断言跟着实现走，不再读 app.ts 的文本。
+    const settingsSource = readSource('ipc/settingsIpc.ts')
+    expect(settingsSource).toContain("import { assertProxySettingsPatchAccepted } from '../../../network/proxySettingsGuard'")
+    const guardIndex = settingsSource.indexOf('assertProxySettingsPatchAccepted(patch, (await ports.settings.get()).network)')
     expect(guardIndex).toBeGreaterThan(-1)
-    // 校验必须先于落盘：抛错时 settingsStore.update 根本没被调用，settings.json 不会留下坏地址。
-    expect(guardIndex).toBeLessThan(appSource.indexOf('const next = await settingsStore.update(patch)'))
+    // 校验必须先于落盘：抛错时 settings.update 根本没被调用，settings.json 不会留下坏地址。
+    expect(guardIndex).toBeLessThan(settingsSource.indexOf('const next = await ports.settings.update(patch)'))
   })
 
   it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {
     // 附件读取归位后只剩这一条接缝：通道不变，preload 不变，实现改由 platform/files/attachments 提供。
-    expect(appSource).toContain(
-      "import { readTextFilePreview } from '../../files/attachments/textFilePreview'"
+    expect(windowIpcSource).toContain(
+      "import { readTextFilePreview } from '../../../files/attachments/textFilePreview'"
     )
-    expect(appSource).toContain(
+    expect(windowIpcSource).toContain(
       'ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))'
     )
     expect(preloadSource).toContain(
@@ -592,6 +667,8 @@ describe('desktop main IPC surface', () => {
     // 实现只留一份：启动文件里不允许再长出第二个读取实现或第二个 128 KiB 上限。
     expect(appSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
     expect(appSource).not.toContain('function isLikelyBinary')
+    expect(windowIpcSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
+    expect(windowIpcSource).not.toContain('function isLikelyBinary')
   })
 
   it('wires the PLAT-82 detection channels end to end (memory-only, no writes)', () => {
@@ -607,16 +684,16 @@ describe('desktop main IPC surface', () => {
     expect(preloadSource).not.toContain('probeModelMessages')
     expect(Object.keys(IpcChannels)).not.toContain('modelProvidersProbeModelMessages')
 
-    const block = mainRegistrationBlock(appSource, 'modelProvidersDetectModels')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersDetectModels')
     // 运行器在主进程：供应商解析 + 平台 fetch（Key 只在主进程解析）。
-    expect(appSource).toContain('resolveProvider: (providerId: string) => providerStore.resolveRuntimeProvider(providerId)')
-    expect(appSource).toContain('fetch: () => getPlatformFetch()')
+    expect(modelIpcSource).toContain('resolveProvider: (providerId: string) => providerStore.resolveRuntimeProvider(providerId)')
+    expect(modelIpcSource).toContain('fetch: () => getPlatformFetch()')
     // 检测**绝不写库**：旧 handler 里的落盘调用不得回来。
     expect(block).not.toContain('addOrUpdateModel')
     // progress = 完整 result（含 protocols / protocolSkipReason / declaredProtocolFailures）；
     // done = (runId, { stopped })。
-    expect(appSource).toContain('IpcChannels.modelProvidersDetectionProgress, result')
-    expect(appSource).toContain('IpcChannels.modelProvidersDetectionDone, runId, payload')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersDetectionProgress, result')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersDetectionDone, runId, payload')
 
     const preloadBlock = preloadMethodBlock(preloadSource, 'detectModels')
     expect(preloadBlock).toContain('IpcChannels.modelProvidersDetectModels')
@@ -632,7 +709,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('reuses the existing test-connection channel for per-endpoint probes with strict validation', () => {
-    const block = mainRegistrationBlock(appSource, 'modelProvidersTestConnection')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersTestConnection')
 
     // 不新增通道：端点探测走既有 testConnection 的 additive 参数。
     expect(block).toContain('endpointTest')
@@ -652,7 +729,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('registers the reveal handler behind strict provider validation and never logs the key', () => {
-    const block = mainRegistrationBlock(appSource, 'modelProvidersRevealApiKey')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersRevealApiKey')
 
     expect(block).toContain("typeof providerId !== 'string'")
     expect(block).toContain('providerStore.list()')
@@ -660,8 +737,8 @@ describe('desktop main IPC surface', () => {
     expect(block).toContain('{ apiKey:')
     expect(block).not.toMatch(/console\./)
     expect(block).not.toContain('JSON.stringify')
-    // 整个 main handler 文件不得把凭据打印到任何 console（含既有日志语句）。
-    expect(appSource).not.toMatch(/console\.[a-z]+\([^)]*apiKey/i)
+    // 整个 handler 模块不得把凭据打印到任何 console（含既有日志语句）。
+    expect(modelIpcSource).not.toMatch(/console\.[a-z]+\([^)]*apiKey/i)
     expect(preloadMethodBlock(preloadSource, 'revealApiKey')).toContain(
       'IpcChannels.modelProvidersRevealApiKey'
     )
@@ -685,3 +762,18 @@ function preloadMethodBlock(source: string, method: string): string {
   const next = rest.search(/\n    [a-zA-Z]\w+: /)
   return source.slice(start, next < 0 ? undefined : start + method.length + 1 + next)
 }
+
+describe('notification delete-read surface', () => {
+  it('reaches the renderer only through the runtime, on its own channel', () => {
+    // 通道名独立，不与「清空 = 标已读」或「单条收起」复用。
+    expect(IpcChannels.notificationsDeleteRead).toBe('platform:notifications-delete-read')
+    // 主进程 handler 走运行时方法，不自己摸存储。
+    expect(notificationIpcSource).toContain('IpcChannels.notificationsDeleteRead')
+    expect(notificationIpcSource).toContain('getNotificationRuntime().deleteRead()')
+    // 渲染层入口：preload 暴露方法，但命名空间里只有这一个删除方法。
+    // 通知那半已拆进 namespaces/notifications.ts —— 读者跟着被读对象走，否则这条断言永远看不见它。
+    expect(readSource('../preload/namespaces/notifications.ts')).toContain(
+      'deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)'
+    )
+  })
+})

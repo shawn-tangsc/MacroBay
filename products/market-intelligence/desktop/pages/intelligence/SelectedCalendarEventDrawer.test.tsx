@@ -24,7 +24,6 @@ const text = portal.calendar
 const selection = { eventKey: 'US.CORE_CPI.RELEASE.2026-M09', month: '2026-10', label: portal.analysisWorkspace.readableNames.eventName['core-cpi'] }
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -68,15 +67,16 @@ async function render(client: MacroEconomicCalendarClient, onClose = vi.fn(), re
 }
 
 describe('the selected calendar event, as a drawer over the dashboard', () => {
-  it('opens the calendar\'s own unmasked left drawer with the event\'s full detail', async () => {
+  it('opens the calendar\'s own panel with the event\'s full detail', async () => {
     const detail = officialEvent({ actual: { displayValue: '0.3%' }, previous: { displayValue: '0.2%' }, lifecycleState: 'released' as const })
     const host = await render(clientWith({ state: 'available', asOf, event: detail }))
 
     expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-    // The calendar's drawer component, not a lookalike: left, unmasked, one way out in the corner.
-    expect(host.querySelector('.ant-drawer-left')).not.toBeNull()
+    // The calendar's own panel, not a lookalike: left, unmasked, and the one way out is the shared
+    // close control (a platform `IconButton`), not a hand-drawn corner button.
+    expect(host.querySelector('.side-panel')).not.toBeNull()
     expect(host.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(host.querySelector('.ant-drawer-close')).not.toBeNull()
+    expect(host.querySelector('.side-panel button[aria-label]')).not.toBeNull()
     const body = host.querySelector('[data-calendar-detail-container]')!
     // 同一个发布，竖线与抽屉同名：抽屉读的是分析侧那份词表（设计 145 §8 D）。
     expect(body.textContent).toContain(portal.analysisWorkspace.readableNames.eventName['core-cpi'])
@@ -97,7 +97,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
   it('carries the drawer\'s one visible way out', async () => {
     const onClose = vi.fn()
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), onClose)
-    await act(async () => host.querySelector<HTMLButtonElement>('.ant-drawer-close')!.click())
+    await act(async () => host.querySelector<HTMLButtonElement>('.side-panel button[aria-label]')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -108,7 +108,12 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     expect(host.querySelector('.mi-economic-calendar__values')).toBeNull()
 
     const rejected = await render(clientWith(undefined, { getEventDetail: vi.fn(async () => { throw new Error('ipc down') }) } as never))
-    expect(rejected.querySelector('[data-calendar-detail-container]')?.textContent).toContain(text.failures['calendar-query-unavailable'])
+    // A read failure is the shared state now: the sentence and the retry both come from the platform,
+    // because the product's own line promised nothing the reader could act on.
+    const failed = rejected.querySelector('[data-calendar-detail-container]')
+    expect(failed?.querySelector('.state-view')).not.toBeNull()
+    expect(failed?.querySelector('.state-view__action')).not.toBeNull()
+    expect(failed?.textContent).not.toContain(text.failures['calendar-query-unavailable'])
   })
 
   it('opens a provider release the official route does not hold, in the provider\'s own body', async () => {

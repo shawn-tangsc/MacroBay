@@ -1,0 +1,68 @@
+[English](./side-panel.md) | [中文](./side-panel.zh-CN.md) | [← Docs](../README.md)
+
+# Side panels
+
+A panel that appears **beside** the content and makes it narrower uses `SidePanel` from
+`@platform/ui/components/side-panel`. If it covers the content with a mask, it is a `Drawer`.
+
+The test in one line: **can the reader still see and click the main content while it is open?**
+Yes → `SidePanel`. No → `Drawer`.
+
+| Export | Use it for |
+| --- | --- |
+| `SidePanel` | One standing panel, two sizes, one collapse control. |
+| `SIDE_PANEL_SIZES` | `['rail', 'flex']`. |
+| `PANEL_COLLAPSE_KEY` | `ui.panel.close`, the collapse control's name. |
+
+### Props
+
+| Prop | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `open` | `boolean` | yes | Closed renders nothing at all. |
+| `onClose` | `() => void` | yes | The collapse control. Returning focus to the trigger is the caller's job. |
+| `size` | `'rail' \| 'flex'` | yes | `rail` 282 fixed; `flex` `min(480px, 46vw)` — the ratio lives in the component. |
+| `titleKey` | `string` | yes | The panel's heading, as a key. |
+| `footer` | `ReactNode` | no | Bottom actions. Not passing it renders no row. |
+| `children` | `ReactNode` | yes | Body; the only scrolling region. |
+| `resolveText` | `(key: string) => string` | yes | The caller's resolver, for `titleKey`. |
+| `focusPolicy` | `'move-in' \| 'stay'` | no, default `move-in` | `move-in` for a panel the reader opened with a button; `stay` when the panel only follows a selection in a list. |
+| `contentId` | `string` | with `focusPolicy="stay"` | The stable id of what the panel currently shows. **Required on that branch**: without it the component cannot tell a re-render from a real change. |
+| `when` | `string` | with `focusPolicy="stay"` | What tells two same-named items apart in the announcement (a formatted time). **Required**: `stay` exists for lists where the same title can appear twice. |
+
+## Parent container requirement (a condition of use, not a suggestion)
+
+`SidePanel` is a flow element with `height: 100%`, so **its parent must be a flex row with a
+determinate height**: main content and panel side by side, and the parent itself sized (for example
+the page shell at `display:flex; height:100%`, with no ordinary content-sized block in between).
+Without a determinate parent height, `height:100%` collapses to 0 — the panel looks like it never
+rendered while the DOM is perfectly fine and the tests stay green.
+
+Width never overflows: the component carries `max-width:100%`, so even if the `flex` tier computes
+`min(480px, 46vw)` it is capped at the container's width and **cannot push the parent wider**. In a
+520-wide container it takes 480, leaving 40.
+
+One line: **the parent provides the height, the component provides the width.**
+
+## Rules the component enforces
+
+- **No mask, no focus trap, no global Esc — deliberately, not by omission.** The reader is expected
+  to move between the panel and the page; taking Esc would fight the page's own Esc (closing a
+  dialog, leaving an edit). Pressing Escape and not closing the panel is the definition of this
+  component, not a bug: a panel that must close on Escape is a `Drawer`, not this.
+- **Two sizes only, and no pixels from call sites.** `flex` keeps its `46vw` cap internally.
+- **The collapse control belongs to the component**, named from its own copy table — a resolver may
+  return an empty string for an unknown key, and an empty name is a nameless button.
+- **Width never animates**, and the arrival fade reads `--motion-enter` — the component holds no
+  duration literal. `tokens.css` zeroes every `--motion-*` under `prefers-reduced-motion`, in one
+  place, so there is no second media query here.
+- **Focus follows the reader's intent, not a boolean.** `move-in` moves focus into the body and
+  returns it on close; `stay` moves nothing, because the reader is walking a list and being pulled
+  into the panel on every selection would make three events impossible to compare.
+- **`stay` announces, because a still focus says nothing.** With focus parked, a screen-reader user
+  who selects the next item would hear nothing; the panel announces the new title once, politely,
+  debounced 400 ms and deduplicated **by `contentId`, never by title** — two sessions both named
+  "FOMC meeting" in one slot would otherwise stay silent on the second, so a burst of changes lands
+  as one sentence rather than three.
+  `move-in` has no live region at all - its focus move already speaks.
+- **Focus goes back where it came from.** The component remembers what had focus when it opened and
+  restores it on close; a caller does not have to (three call sites would each forget differently).

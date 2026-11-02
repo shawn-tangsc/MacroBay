@@ -1,4 +1,5 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { StateView } from '@platform/ui/components/state'
 import type { CacheOperationAuditRecord, SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
 import {
   formatAbsoluteTime,
@@ -14,7 +15,6 @@ type StorageCacheOperationListProps = {
   records: CacheOperationAuditRecord[]
   caches: SafeCacheView[]
   showCacheName?: boolean
-  emptyLabel: string
 }
 
 export function StorageCacheOperationList({
@@ -22,11 +22,11 @@ export function StorageCacheOperationList({
   labels,
   records,
   caches,
-  showCacheName = false,
-  emptyLabel
+  showCacheName = false
 }: StorageCacheOperationListProps): React.ReactElement {
   if (records.length === 0) {
-    return <p className="storage-cache-muted">{emptyLabel}</p>
+    // 「还没有操作」是事实、没有下一步：不解释、不给按钮，也不再用一句本地灰字。
+    return <StateView state="empty" reasonCode="not-yet" size="sm" />
   }
 
   const cacheNames = new Map(

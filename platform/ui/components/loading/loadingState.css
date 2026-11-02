@@ -51,7 +51,7 @@
   /* Track is the same hue at low opacity, so one token styles both light and dark themes. */
   border-color: color-mix(in srgb, currentColor 18%, transparent);
   border-top-color: currentColor;
-  animation: loading-state-turn 720ms linear infinite;
+  animation: loading-state-turn var(--motion-spin) linear infinite;
 }
 
 .loading-spinner--sm {

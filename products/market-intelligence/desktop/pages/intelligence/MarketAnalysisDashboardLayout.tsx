@@ -1,6 +1,6 @@
 import { cloneElement, useCallback, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Segmented } from 'antd'
+import { Segmented } from '@platform/ui/components/segmented'
 import type { MarketAnalysisReadableLocale } from '../../../contracts/marketAnalysisReadableText'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
@@ -9,6 +9,7 @@ import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 import { MarketCalendarCard } from './MarketCalendarCard'
 import { useCalendarCardData, type CalendarCardReactionReader } from './useCalendarCardData'
 import { AnalysisDetailDrawer } from './AnalysisDetailDrawer'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { AnalysisTimelineDrawer } from './AnalysisTimelineDrawer'
 import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 import { LatestAnalysisConclusionCard } from './LatestAnalysisConclusionCard'
@@ -57,9 +58,14 @@ export type MarketAnalysisDashboardInjection = Readonly<{
  * define keys such as `empty`, `loading` and `title`, and merging them would let
  * one surface silently display the other surface's text.
  */
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, onOpenSources, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
-  /** Opens the product's source settings from the rail's news card; the page entry owns that drawer. */
-  onOpenSources?: () => void
+/** 视图切换的三个键（整组名 + 两个选项）；点分路径指向本页自己的 `analysisWorkspace` 块。 */
+const workspaceSwitchKeys = Object.freeze({
+  label: 'pages.intelligence.portal.analysisWorkspace.view',
+  dashboard: 'pages.intelligence.portal.analysisWorkspace.dashboard',
+  agent: 'pages.intelligence.portal.analysisWorkspace.title'
+})
+
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
   /**
    * The calendar's own title vocabulary, read from the product registry by the page entry.
    *
@@ -88,6 +94,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
    */
   readCalendarReaction?: CalendarCardReactionReader }): React.ReactElement {
   const [view, setView] = useState('dashboard')
+  // 视图切换的键：与界面原来的「市场看板 / 数字货币解读 Agent」逐字一致，只是不再从已解析的句子回填。
+  const resolveWorkspaceText = useProductTextKey()
   const [binding, setBinding] = useState<AnalysisWorkspaceBinding>()
   const [selectionState, setSelectionState] = useState<AnalysisSelectionState>('none')
   const [openEntryId, setOpenEntryId] = useState<string>()
@@ -149,7 +157,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   }
 
   return <div className="mi-analysis-dashboard-layout" data-compact-view={view}>
-    <div className="mi-analysis-dashboard-layout__switch"><Segmented aria-label={workspaceText.view} value={view} onChange={setView} options={[{ value: 'dashboard', label: workspaceText.dashboard }, { value: 'agent', label: workspaceText.title }]} /></div>
+    <div className="mi-analysis-dashboard-layout__switch"><Segmented value={view} onChange={value => setView(value as 'dashboard' | 'agent')}
+      ariaLabelKey={workspaceSwitchKeys.label} resolveText={resolveWorkspaceText}
+      items={[{ value: 'dashboard', labelKey: workspaceSwitchKeys.dashboard }, { value: 'agent', labelKey: workspaceSwitchKeys.agent }]} /></div>
     <div className="mi-analysis-dashboard-layout__panes">
       <div className="mi-analysis-dashboard-layout__dashboard">
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
@@ -186,8 +196,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           openEntry={openEntry}
           text={text.analysisTimeline}
           timeline={timeline}
-          title={text.analysisDrawer.title}
-          closeLabel={text.analysisDrawer.close}
         />
         <AnalysisDetailDrawer
           text={detailText}
@@ -206,6 +214,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         card={<MarketCalendarCard
           projection={cardData.projection}
+          state={cardData.state}
+          stale={cardData.stale}
           text={{
             ...text.calendarCard,
             // The card carries its own short category labels: the calendar page's longer ones do
@@ -254,7 +264,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         }}
         openEntry={openEntry}
         onOpenChange={setOpenEntry}
-        onOpenSources={onOpenSources}
         timelineText={timelineText}
       />
     </div>

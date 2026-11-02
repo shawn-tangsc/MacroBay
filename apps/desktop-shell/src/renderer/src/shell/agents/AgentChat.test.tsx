@@ -54,6 +54,44 @@ describe('AgentChat', () => {
     expect(markup).not.toContain('with-navbar')
   })
 
+  it('shows only the waiting surface while the compatibility read has not returned', () => {
+    // 首帧判据：结论没回来时，屏幕上不许出现「运行时未验证 / 没配模型服务」这类终态。
+    // 空 map 与「读完了、确实没有证据」取值相同，所以只有那个显式标志能分开这两件事。
+    const markup = render({
+      state: createAgentStoreState({
+        agents: [agent()],
+        sessions: [session()],
+        workspaces: [workspace()],
+        activeAgentId: 'agent-1',
+        activeSessionId: 'session-1'
+      }),
+      compatibilityLoaded: false
+    })
+
+    expect(markup).toContain('aria-busy="true"')
+    expect(markup).toContain('agent-status-screen')
+    expect(markup).not.toContain('agent-status-actions')
+    expect(markup).not.toContain('agent-session-inputbar')
+  })
+
+  it('keeps reporting the settled unavailable state once the read is in', () => {
+    // 配对的另一半：读回来以后照旧给终态与动作——这条防止「等待」被写成永久状态。
+    const markup = render({
+      state: createAgentStoreState({
+        agents: [agent()],
+        sessions: [session()],
+        workspaces: [workspace()],
+        activeAgentId: 'agent-1',
+        activeSessionId: 'session-1'
+      }),
+      compatibilityLoaded: true,
+      compatibilityByModelKey: new Map()
+    })
+
+    expect(markup).not.toContain('aria-busy="true"')
+    expect(markup).toContain('agent-status-screen')
+  })
+
   it('reserves a fixed header row for blocked Task Center access', () => {
     const styles = readFileSync(resolve(import.meta.dirname, '../../styles.css'), 'utf8')
 
@@ -64,6 +102,7 @@ describe('AgentChat', () => {
 
 function render(input: {
   state: ReturnType<typeof createAgentStoreState>
+  compatibilityLoaded?: boolean
   compatibilityByModelKey?: ReadonlyMap<string, {
     providerId: string
     modelId: string
@@ -84,10 +123,13 @@ function render(input: {
         pinnedModelIds={[]}
         chatSettings={createDefaultAppSettings().chat}
         compatibilityByModelKey={input.compatibilityByModelKey}
+        {...(input.compatibilityLoaded === undefined ? {} : { compatibilityLoaded: input.compatibilityLoaded })}
         onStateChange={() => undefined}
         onRuntimeSnapshotChange={() => undefined}
         onChannelRuntimeSnapshotChange={() => undefined}
         onEditAgent={() => undefined}
+        onCreateAgent={() => undefined}
+        onReturnToAgentList={() => undefined}
       />
     </AgentTextProvider>
   )

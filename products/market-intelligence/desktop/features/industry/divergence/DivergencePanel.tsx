@@ -1,10 +1,16 @@
-import { Tooltip } from 'antd'
+import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
+
+import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useId, useState } from 'react'
 
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DivergencePanelText } from './divergenceText'
 
 import './DivergencePanel.css'
@@ -16,11 +22,26 @@ import './DivergencePanel.css'
  * before the title, because a reader who came for the readings should not have to step over four
  * lines of explanation to reach them.
  */
+/**
+ * The bubble's four one-look bullets, one literal key per line.
+ *
+ * Literal on purpose: a guard checks that each key is a dotted path, and a template string would
+ * hide the spelling from it. Four is also the popover's cap — the notes that would not fit moved
+ * behind their own entry below the card.
+ */
+export const divergenceHelpBulletKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.0',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.1',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.2',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.3'
+])
+
 export function DivergencePanel({ state, text, onRetry }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
   /** Only offered on a quiet day: asking the model for a second opinion costs a request. */
-  onRetry?: () => void
+  /** Always required: a failed read has one honest next step, and it must not appear and vanish. */
+  onRetry: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
@@ -28,57 +49,92 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   // point of the withheld list, and it must not read as a quiet day.
   const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
   const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
+  const resolveProductKey = useProductTextKey()
+  // 长笔记留在读者主动打开的地方：默认收起，打开后是卡片下方一块限高的区域，不盖住要解释的图。
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpDetailsId = useId()
+  /**
+   * The product's own sentence for the reason line, and only that line.
+   *
+   * `StateView` owns the title, the icon and the announcement; the one thing it cannot know is
+   * which reading failed and what the reader can do about it. That sentence stays ours, resolved
+   * from the text table by key, never passed as a literal.
+   */
+  const productReason = (spec: Readonly<{ key: string; params?: Record<string, string> }>) => ({
+    ...spec,
+    resolve: (key: string, params?: Record<string, string>) => {
+      const sentence = resolveProductKey(key)
+      if (!sentence || !params) return sentence
+      return Object.entries(params).reduce((line, [name, value]) => line.split(`{${name}}`).join(value), sentence)
+    }
+  })
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <div className="mi-divergence__lead">
-        <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
-          trigger={['hover', 'focus', 'click']}>
-          <button type="button" className="mi-divergence__help" aria-label={text.helpLabel}>
-            <Info size={11} aria-hidden="true" />
-          </button>
-        </Tooltip>
+        {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
+            joined sentence with newlines would be lost the first time the copy is translated. */}
+        <Popover
+          lines={divergenceHelpBulletKeys.map(labelKey => ({ labelKey }))}
+          resolveText={resolveProductKey}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
+              icon={Info} size="sm" resolveText={resolveProductKey} variant="plain" />
+          )} />
+        {/* The notes that would not fit the bubble: their own entry, closed by default, so a
+            footnote stays a footnote instead of covering the card it explains. */}
+        <button aria-controls={helpDetailsId} aria-expanded={helpOpen}
+          className="mi-divergence__help-toggle" onClick={() => setHelpOpen(open => !open)}
+          type="button">{text.helpDetailsLabel}</button>
       </div>
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
         {state.state === 'unavailable' ? (
-          <div className="mi-divergence__status" data-tone="error">
-            <b>{text.unavailable}</b>
-            {state.missing.length > 0 ? (
-              <span className="mi-divergence__status-sub">
-                {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join(text.withheldListSep))}
-              </span>
-            ) : (
-              <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
-            )}
-            {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
-          </div>
+          <StateView state="error" size="md"
+            // A failed read is retryable; "six sources said nothing" is the same read failing one
+            // layer earlier, so both keep the same next step instead of sending the reader to
+            // settings that may be perfectly configured.
+            reasonCode={unavailableReasonCode(state.reason)}
+            // The action is not conditional: the same state must give the reader the same next
+            // step wherever it appears. A button that sometimes disappears teaches nothing.
+            action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
+            productReason={productReason(state.missing.length > 0
+              ? { key: 'pages.intelligence.portal.dashboard.divergence.missingLegs',
+                  params: { legs: state.missing.map(leg => text.legs[leg]).join(text.withheldListSep) } }
+              : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
         ) : null}
         {state.state === 'empty' && !nothingCompared ? (
-          // One line, badge at its end: a quiet day is a single sentence, not a block with a
-          // floating label on a row of its own.
-          <div className="mi-divergence__quiet">
-            <p className="mi-divergence__note">{text.empty}</p>
-          </div>
+          // One line, no block: a card with nothing to report must not take half a screen to say so,
+          // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
+          <p className="mi-divergence__quiet">{text.empty}</p>
         ) : null}
         {nothingCompared ? (
-          <div className="mi-divergence__status" data-tone="error">
-            <b>{text.nothingCompared}</b>
-            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</span>
-          </div>
+          <>
+            <StateView state="error" reasonCode="unavailable" size="md"
+              action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
+              productReason={productReason({ key: 'pages.intelligence.portal.dashboard.divergence.nothingCompared' })} />
+            {/* Which pairs were withheld is data, not a state: it stays one line under the state. */}
+            <p className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</p>
+          </>
         ) : null}
         {state.state === 'available' ? (
           <div className="mi-divergence__conclusion" data-tone="conclusion">
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
-                <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
-                  title={`${text.invalidationLabel}${text.labelSep}${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
+                // Focusable, not titled: a `title` is invisible to the keyboard and the reader, so the
+                // invalidation sentence opens on focus as well as on hover (single line, so Tooltip).
+                <Tooltip key={row.pairId} resolveText={resolveProductKey}
+                  dataText={invalidationLine(row.pairId, text)}>
+                <li className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction} tabIndex={0}>
                   <div className="mi-divergence__line">
                     <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
                     {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
                   </div>
                   <p className="mi-divergence__mechanism">{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism}</p>
                 </li>
+                </Tooltip>
               ))}
             </ul>
           </div>
@@ -95,6 +151,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           </p>
         ) : null}
       </div>
+      {helpOpen ? (
+        // Bounded on purpose: the notes scroll inside 320px instead of stretching the card, and the
+        // readings above stay visible while the reader checks a threshold.
+        <div className="mi-divergence__help" data-divergence-help id={helpDetailsId}>
+          {text.helpDetails.map(line => <p key={line}>{line}</p>)}
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -136,4 +199,19 @@ export function groupWithheld(entries: readonly DivergenceWithheldView[]): reado
     }
   }
   return [...groups.values()]
+}
+
+/**
+ * Which platform error code this failure belongs to.
+ *
+ * "Nothing arrived from any source" and "the answer was too large" are the read failing from the
+ * outside; a rejected payload or an unreadable clock is the read failing inside. Both are retried
+ * the same way, so the split is about the sentence the reader gets, not about the next step.
+ */
+/** The one line a reader gets on the row: what invalidates this reading. */
+const invalidationLine = (pairId: string, text: DivergencePanelText): string =>
+  `${text.invalidationLabel}${text.labelSep}${text.pairs[pairId as keyof DivergencePanelText['pairs']].invalidation}`
+
+function unavailableReasonCode(reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'): 'unreadable' | 'unavailable' {
+  return reason === 'all-legs-missing' || reason === 'too-large' ? 'unavailable' : 'unreadable'
 }

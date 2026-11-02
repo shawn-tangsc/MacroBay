@@ -9,7 +9,10 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
-import { EmptyCatalog } from './EmptyCatalog'
+import { resolveAgentTextKey } from '../../../agentTooltipText'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 type SkillCatalogProps = {
   text: AgentText
@@ -20,7 +23,13 @@ type SkillCatalogProps = {
   onInstallFromZip: () => void
   onRefresh: () => void
   onUninstall: (skillId: string) => void
+  /** 列表为空时区分「搜不到」与「一个都没装」：前者给人清筛选的动作，后者给人安装入口。 */
+  searchActive: boolean
+  onClearSearch: () => void
 }
+
+/** 技能来源是分类名词。 */
+const SKILL_SOURCE_KEY = 'agent.skills.source'
 
 export function SkillCatalog({
   text,
@@ -30,7 +39,9 @@ export function SkillCatalog({
   onInstallFromDirectory,
   onInstallFromZip,
   onRefresh,
-  onUninstall
+  onUninstall,
+  searchActive,
+  onClearSearch
 }: SkillCatalogProps): React.ReactElement {
   const [marketplaceOpen, setMarketplaceOpen] = useState(false)
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null)
@@ -50,13 +61,13 @@ export function SkillCatalog({
         onClick={() => void onInstallFromDirectory()}>
         {text.editor.tools.installSkillFromDirectory}
       </Button>
-      <Button
-        className="ant-icon-button"
-        size="small"
-        icon={<RefreshCw size={13} />}
-        title={text.editor.tools.refreshSkills}
-        aria-label={text.editor.tools.refreshSkills}
-        onClick={() => void onRefresh()}
+      <IconButton
+        ariaLabelKey="editor.tools.refreshSkills"
+        icon={RefreshCw}
+        onSelect={() => void onRefresh()}
+        resolveText={(key) => resolveAgentTextKey(text, key)}
+        size="md"
+        tooltipKey="editor.tools.refreshSkills"
       />
     </div>
   )
@@ -78,11 +89,21 @@ export function SkillCatalog({
         onClose={() => setDetailSkillId(null)}
       />
       {skills.length === 0 ? (
-        <EmptyCatalog
-          icon={<Sparkles size={17} />}
-          title={text.editor.tools.noSkillTitle}
-          description={text.editor.tools.noSkillDescription}
-        />
+        searchActive ? (
+          <StateView
+            state="empty"
+            reasonCode="filtered-out"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: onClearSearch }}
+          />
+        ) : (
+          <StateView
+            state="empty"
+            reasonCode="none-installed"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.install, onSelect: () => setMarketplaceOpen(true) }}
+          />
+        )
       ) : (
         skills.map((skill) => (
           <SkillCatalogRow
@@ -146,22 +167,22 @@ function SkillCatalogRow({
         ) : null}
       </span>
       <Switch size="small" checked={skill.enabledForAgent} onChange={(checked) => void onToggle(skill.id, checked)} />
-      <Button
-        className="ant-icon-button"
-        size="small"
-        icon={<Eye size={13} />}
-        title={text.editor.tools.viewSkillDetail}
-        aria-label={text.editor.tools.viewSkillDetail}
-        onClick={onOpenDetail}
+      <IconButton
+        ariaLabelKey="editor.tools.viewSkillDetail"
+        icon={Eye}
+        onSelect={onOpenDetail}
+        resolveText={(key) => resolveAgentTextKey(text, key)}
+        size="md"
+        tooltipKey="editor.tools.viewSkillDetail"
       />
       {skill.source !== 'builtin' ? (
-        <Button
-          className="ant-icon-button"
-          size="small"
-          icon={<Trash2 size={13} />}
-          title={text.editor.tools.uninstallSkill}
-          aria-label={text.editor.tools.uninstallSkill}
-          onClick={() => void onUninstall(skill.id)}
+        <IconButton
+          ariaLabelKey="editor.tools.uninstallSkill"
+          icon={Trash2}
+          resolveText={(key) => resolveAgentTextKey(text, key)}
+          size="md"
+          tooltipKey="editor.tools.uninstallSkill"
+          onSelect={() => void onUninstall(skill.id)}
         />
       ) : null}
     </div>

@@ -1,19 +1,43 @@
+import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingText } from './dailyBriefingText'
+import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
-export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, formatTime, onSelect }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, formatTime, generatingStage, onSelect }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
+  /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
+  loading?: boolean
+  /** True when the read itself failed: an empty rail then means "could not read", not "none". */
+  failed?: boolean
+  /** Reads the list again; only used by the failure state. */
+  onRetry?: () => void
   selectedDate?: string
   todayDate: string
   locale: DailyBriefingLocale
   text: DailyBriefingText
   formatTime?: (value: string, precision?: 'minute' | 'second') => string
+  /** Set while today's edition is being generated, so the rail never says "not generated" then. */
+  generatingStage?: string
   onSelect: (date: string) => void
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
-    {editions.length === 0 ? <p className="mi-daily-briefing__rail-empty">{text.history.empty}</p> : null}
+    {loading && editions.length === 0 ? <LoadingState label={text.history.loading} /> : failed && editions.length === 0 && onRetry ? <StateView
+      action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
+      reasonCode="unreadable"
+      size="md"
+      state="error"
+    /> : editions.length === 0 ? <StateView
+      state="empty"
+      reasonCode="not-yet"
+      size="md"
+      className="mi-daily-briefing__rail-state"
+      productReason={{
+        key: 'mi.dailyBriefing.noEditions',
+        resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+      }}
+    /> : null}
     <div role="list" className="mi-daily-briefing__rail-list">
       {editions.map((edition) => {
         const missing = edition.state === 'missing'
@@ -28,7 +52,11 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
               {edition.date === todayDate ? <em>{text.history.today}</em> : null}
               {!missing && edition.availableLocales.length > 1 ? <small>{text.history.otherLocale}</small> : null}
             </span>
-            {missing ? <small className="mi-daily-briefing__rail-missing">{text.history.missingRun}</small> : <>
+            {missing ? <small className="mi-daily-briefing__rail-missing">{
+              edition.date === todayDate && generatingStage
+                ? text.generationProgress.railRunning + ' · ' + generatingStage
+                : text.history.missingRun
+            }</small> : <>
               <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction ?? 'none'}>
                 {edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion}
               </span>

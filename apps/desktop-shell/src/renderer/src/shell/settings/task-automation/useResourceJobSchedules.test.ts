@@ -19,7 +19,6 @@ const labels = platformText['zh-CN'].taskAutomation
 type Captured = { current: ReturnType<typeof useResourceJobSchedules> | null }
 
 describe('useResourceJobSchedules', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     platform.listSchedules.mockReset()
@@ -78,6 +77,29 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.items.map((item) => item.id)).toEqual(['job-2'])
   })
 
+  /**
+   * 有数据之后刷新失败：数据不许消失。清空 items 会让读者以为任务被删了，
+   * 而真相只是这一次没读回来 —— 错误条压在旧数据上方，重试仍走同一个 reload。
+   */
+  it('keeps the rows it already read when a refresh fails', async () => {
+    platform.listSchedules.mockResolvedValueOnce([job({ id: 'job-1' })])
+    platform.getProductSummaries.mockResolvedValue([])
+    installPlatform()
+
+    const capture = await mountHook()
+    await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
+    expect(capture.current?.items.map((item) => item.id)).toEqual(['job-1'])
+
+    platform.listSchedules.mockRejectedValueOnce(new Error('ipc-failed'))
+    await act(async () => {
+      await capture.current!.reload()
+    })
+
+    expect(capture.current?.error).toBe(true)
+    expect(capture.current?.errorReason).toBe('read-failed')
+    expect(capture.current?.items.map((item) => item.id)).toEqual(['job-1'])
+  })
+
   it('renders a visible, retryable error when the preload has no jobs bridge', async () => {
     platform.getProductSummaries.mockResolvedValue([])
     ;(window as unknown as { platform: unknown }).platform = {
@@ -121,7 +143,8 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.error).toBe(true)
     expect(capture.current?.errorReason).toBe('read-failed')
     expect(capture.current?.items).toEqual([])
-    expect(container.textContent).toContain(labels.resourceLoadFailed)
+    // 读失败由 `StateView` 的 `error/unreadable` 承担：标题「读取失败」+ 原因句 + 真重试。
+    expect(container.textContent).toContain('读取失败')
     expect(container.textContent).not.toContain(labels.resourceBridgeMissing)
     expect(container.textContent).not.toContain('正在加载资源任务')
     expect(container.textContent).not.toContain('/private/secret')
@@ -139,7 +162,8 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.error).toBe(true)
     expect(capture.current?.errorReason).toBe('timeout')
     expect(capture.current?.items).toEqual([])
-    expect(container.textContent).toContain(labels.resourceLoadTimeout)
+    // 超时同样走 `error/unreadable`（读失败），不是一句自绘的超时文案。
+    expect(container.textContent).toContain('读取失败')
     expect(container.textContent).not.toContain('正在加载资源任务')
     expect(retryButton(container)).toBeDefined()
   })

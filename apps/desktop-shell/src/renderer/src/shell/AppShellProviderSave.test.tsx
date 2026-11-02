@@ -9,7 +9,6 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
 import { AppShell } from './AppShell'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const apiKeyFixture = 'fixture-provider-key-1234567890'
 
@@ -72,7 +71,9 @@ describe('AppShell provider save (PLAT-61: 改动即存 / 失焦保存)', () => 
     expect(page.container.innerHTML).not.toContain(apiKeyFixture)
     expect(api.reveal).not.toHaveBeenCalled()
 
-    const eye = page.container.querySelector<HTMLButtonElement>('.provider-api-key-eye')
+    // 眼睛迁到 `IconButton` 后不再有私有类名：用迁移时保留的 data 属性定位（读屏名随开合变化，
+    // 不适合当稳定选择器）。
+    const eye = page.container.querySelector<HTMLButtonElement>('[data-provider-api-key-eye]')
     if (!eye) throw new Error('Expected API Key eye button.')
     await act(async () => {
       eye.click()

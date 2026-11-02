@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 
+import { Button } from 'antd'
+
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
@@ -81,6 +84,9 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
   const [page, setPage] = useState(0)
   const [notice, setNotice] = useState<string>()
   const [aggregates, setAggregates] = useState<SyncRunAggregateResult>()
+  /** Bumped by every retry so both reads re-run without duplicating their effects. */
+  const [reloadToken, setReloadToken] = useState(0)
+  const retry = (): void => setReloadToken((current) => current + 1)
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
   const query: SyncRunQuery = { window, limit: 500 }
@@ -90,7 +96,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
     let cancelled = false
     void syncRunClient.aggregates().then((result) => { if (!cancelled) setAggregates(result) })
     return () => { cancelled = true }
-  }, [window])
+  }, [window, reloadToken])
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +106,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       if (result.state === 'available') { setRows(result.rows); setState('available') } else setState('unavailable')
     })
     return () => { cancelled = true }
-  }, [window, outcome])
+  }, [window, outcome, reloadToken])
 
   // A run's task and source arrive as data. Product-side rows use their action as the handler id,
   // so the audit actions are the fallback before the raw label — otherwise an English reader gets
@@ -170,14 +176,40 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
             {(['succeeded', 'failed', 'running'] as const).map((value) => <option key={value} value={value}>{text.outcome[value]}</option>)}
           </select>
         </label>
-        <button onClick={() => void exportCsv()} type="button">{text.exportCsv}</button>
+        <Button onClick={() => void exportCsv()} size="small">{text.exportCsv}</Button>
         {notice ? <span className="mi-sync-run__notice" role="status">{notice}</span> : null}
       </div>
     </header>
     {state === 'loading' ? <LoadingState label={text.loading} minHeight={160} /> : null}
-    {state === 'unavailable' ? <p className="mi-sync-run__empty">{text.unavailable}</p> : null}
-    {state === 'available' && rows.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
-    {state === 'available' && rows.length > 0 && visible.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
+    {state === 'unavailable'
+      ? <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+        reasonCode="unreadable"
+        size="md"
+        state="error"
+      />
+      : null}
+    {/* Nothing ran in this window: the reader can widen it, so this is not "not yet". */}
+    {state === 'available' && rows.length === 0
+      ? <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.widen_time_window, onSelect: () => { setWindow('all'); setPage(0) } }}
+        reasonCode="filtered-out"
+        size="md"
+        state="empty"
+      />
+      : null}
+    {/* Records exist but the filters hide them: clearing the filters is the way out. */}
+    {state === 'available' && rows.length > 0 && visible.length === 0
+      ? <StateView
+        action={{
+          labelKey: STATE_VIEW_ACTION_KEYS.clear_filter,
+          onSelect: () => { setTaskFilter(''); setSourceFilter(''); setOutcome(undefined); setPage(0) }
+        }}
+        reasonCode="filtered-out"
+        size="md"
+        state="empty"
+      />
+      : null}
     {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll" role="table" aria-label={text.title}>
       {/* A grid, not a table: the header and every row share one column template, so a sticky header
           cannot lay itself out on a different grid from the body. */}
@@ -190,24 +222,34 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         <span role="columnheader">{text.columns.duration}</span>
         <span role="columnheader">{text.columns.detail}</span>
       </div>
+      <p className="mi-sync-run__legend">{text.noSourceHint}</p>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
-        <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
-        <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(text.joiner)}>
-          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
-          {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
+        <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
+        {/* Nothing here is hidden behind a hover: the count is visible text, and the full list is
+            the cell's accessible name, so a keyboard or a screen reader gets the same facts. */}
+        <span
+          aria-label={row.sources.length === 0 ? text.noSourceHint : row.sources.map(sourceLabelOf).join(text.joiner)}
+          className="mi-sync-run__source"
+          role="cell"
+        >
+          {row.sources.length === 0
+            ? text.allSourcesNote
+            : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
+          {row.sources.length > 2 ? <span className="mi-sync-run__more">{` +${row.sources.length - 2}`}</span> : null}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
         <span className="mi-sync-run__detail" role="cell">
+          {/* The code and the raw error are a sentence built from data, so they live in the cell's
+              accessible name instead of a bubble: a keyboard reader gets the same facts, and nothing
+              here is reachable only by hovering an unfocusable span. */}
           {row.failureCode ? <span
-            className="mi-sync-run__failure"
-            title={[
-              text.failureCodeHint.replace('{code}', row.failureCode),
+            aria-label={[text.failureCodeHint.replace('{code}', row.failureCode),
               // The raw error text is implementation wording; it belongs with the code, not on the row.
-              ...(row.detail ? [row.detail] : [])
-            ].join(' · ')}
+              ...(row.detail ? [row.detail] : [])].join(' · ')}
+            className="mi-sync-run__failure"
           >{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span> : null}
           {!row.failureCode && row.detail ? <span>{row.detail}</span> : null}
         </span>
@@ -217,9 +259,9 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       ? <footer className="mi-sync-run__foot">
         <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
         {pageCount > 1 ? <span className="mi-sync-run__pager">
-          <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} type="button">{text.previous}</button>
+          <Button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} size="small">{text.previous}</Button>
           <span>{text.page.replace('{page}', String(currentPage + 1)).replace('{pages}', String(pageCount))}</span>
-          <button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)} type="button">{text.next}</button>
+          <Button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)} size="small">{text.next}</Button>
         </span> : null}
       </footer>
       : null}
@@ -228,10 +270,19 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       <p className="mi-sync-run__aggregate-note">{text.aggregates.note}</p>
       {!aggregates ? <LoadingState label={text.loading} minHeight={80} /> : null}
       {aggregates?.state === 'unavailable'
-        ? <p className="mi-sync-run__empty">{text.aggregates.unavailable[aggregates.reason]}</p>
+        ? (aggregates.reason === 'memory-store-has-no-aggregates'
+          ? <StateView reasonCode="capability-not-wired" size="md" state="disabled" />
+          : <StateView
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+            reasonCode="unreadable"
+            size="md"
+            state="error"
+          />)
         : null}
+      {/* Detail is kept 30 days; a younger install has nothing folded yet, and there is nothing to
+          do about that, so no action. */}
       {aggregates?.state === 'available' && aggregates.rows.length === 0
-        ? <p className="mi-sync-run__empty">{text.aggregates.empty}</p>
+        ? <StateView reasonCode="not-yet" size="md" state="empty" />
         : null}
       {aggregates?.state === 'available' && aggregates.rows.length > 0
         ? <div className="mi-sync-run__aggregate-table" role="table" aria-label={text.aggregates.title}>

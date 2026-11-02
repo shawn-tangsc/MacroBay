@@ -1,8 +1,8 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockError } from './TaskAutomationBlockParts'
 import type { DeliveryHealthCounts } from './taskAutomationSettingsViewModel'
 import type { ResourceJobRunSummary } from './resourceJobRunSummary'
 
@@ -16,6 +16,8 @@ export function TaskAutomationHealthSection(props: {
   /** 资源任务（`@platform/jobs`）最近一次运行，另一套口径，单独统计、不合并。 */
   resourceRuns: ResourceJobRunSummary
   resourceLoading: boolean
+  /** Source rows, not the filtered ones: with no tasks at all, the task section already says so. */
+  hasTasks: boolean
   onRetry: () => void
 }): React.ReactElement {
   const { health, labels, language } = props
@@ -35,7 +37,13 @@ export function TaskAutomationHealthSection(props: {
             <span className="task-automation-mono task-automation-muted">{labels.healthUpdated(updatedAt)}</span>
           </div>
           {props.error ? (
-            <BlockError label={labels.tasksLoadFailed} retryLabel={labels.retry} onRetry={props.onRetry} />
+            // 读不到 ≠ 订阅失败：这句只说“这次没读到、可以重试”，原因码归 `error/unreadable`。
+            <StateView
+              state="error"
+              reasonCode="unreadable"
+              size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: props.onRetry }}
+            />
           ) : (
             <>
               <dl className="task-automation-health">
@@ -46,7 +54,16 @@ export function TaskAutomationHealthSection(props: {
                 <HealthItem label={labels.unknown} value={health.unknown} />
               </dl>
               {props.loading ? <LoadingState layout="inline" size="sm" label={labels.tasksLoading} /> : null}
-              {!props.loading && isEmpty ? <p className="task-automation-note">{labels.healthEmpty}</p> : null}
+              {/* Dependents stay silent while the thing they depend on is empty: with zero tasks the
+                  counters are zero by construction, and 「还没有定时任务」 already said it once. */}
+              {!props.loading && isEmpty && props.hasTasks ? (
+                <>
+                  {/* 还没投递过 = `empty/not-yet`：不带动作（读者此刻没事可做），
+                      它在等的是「任务开始运行」这个外部事件，所以通用句下面必须补一句场景说明。 */}
+                  <StateView state="empty" reasonCode="not-yet" size="md" />
+                  <p className="task-automation-note">{labels.healthEmpty}</p>
+                </>
+              ) : null}
             </>
           )}
         </div>

@@ -33,7 +33,7 @@ const textFixture = {
   },
   chatNavbar: {
     clearMessages: 'Clear messages',
-    openInExternalApp: (name) => `Open in ${name}`,
+    openInExternalApp: 'Open in {name}',
     openInExternalAppMenu: 'Choose external editor'
   }
 } as AgentText

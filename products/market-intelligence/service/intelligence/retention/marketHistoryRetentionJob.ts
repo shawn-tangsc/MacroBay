@@ -99,6 +99,7 @@ export function registerMarketHistoryRetentionJob(
   const definition = {
     id: MARKET_HISTORY_RETENTION_JOB_ID, owner: 'product' as const, productId: PRODUCT_ID,
     handlerId: MARKET_HISTORY_RETENTION_JOB_ID, title: 'Retain market history',
+    audience: 'internal' as const,
     trigger: { kind: 'interval' as const, intervalMs: marketHistoryRetentionPolicy.intervalMs, anchor: 'lastComplete' as const },
     payload: {}
   }

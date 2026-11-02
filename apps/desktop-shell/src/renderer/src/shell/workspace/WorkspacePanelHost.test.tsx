@@ -13,7 +13,6 @@ import { WorkspacePanelHost } from './WorkspacePanelHost'
 import { createWorkspaceContentAdapter, type WorkspacePanelHostPort } from './workspaceHostAdapter'
 import { WorkspaceUiPolicy } from './workspacePresentation'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].workspace
 
 /**
@@ -378,6 +377,45 @@ describe('controlled workspace composition', { timeout: SHELL_RENDER_TIMEOUT_MS 
     await click(tabs.find((tab) => tab.textContent === 'Alpha') ?? null)
     expect(f.frame(f.a).hidden).toBe(false); expect(f.frame(f.b).hidden).toBe(true)
     expect(f.frame(f.a).dataset.presentation).toBe('exclusive')
+  })
+  it('names the panel tab strip and keeps one tab stop on the authoritative active panel', async () => {
+    const f = await fixture()
+    const frame = f.frame(f.a)
+    const list = frame.querySelector<HTMLElement>('[role="tablist"]')!
+    expect(list.getAttribute('aria-label')).toBe(labels.panelTabs)
+    // 标识是面板实例 key，不是下标：项内的 value 必须来自清单本身（见 selectedTabTitle 的用法）。
+    const tabs = Array.from(frame.querySelectorAll<HTMLElement>('[role="tab"]'))
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Alpha', 'Beta'])
+    // 高亮/选中只有权威 active 一个来源（fixture 里最后打开的面板接管本区域）。
+    const activeKey = f.store.getSnapshot().pageLayouts[0]?.activePanels['embedded']
+    const activeTitle = activeKey === f.a ? 'Alpha' : 'Beta'
+    const selected = tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')
+    expect(selected.map((tab) => tab.textContent)).toEqual([activeTitle])
+    // 漫游 tabindex：Tab 键只落在选中项，方向键在组内移动——一次 Tab 不是两次。
+    expect(tabs.filter((tab) => tab.tabIndex === 0).map((tab) => tab.textContent)).toEqual([activeTitle])
+    // 方向键即时切换（这道交互本来就是「切过去就看」），并把焦点带到新选中项。
+    await act(async () => {
+      selected[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+    expect(f.store.getSnapshot().pageLayouts[0]?.activePanels['embedded']).toBe(activeKey === f.a ? f.b : f.a)
+    for (const tab of tabs) {
+      const controlled = frame.ownerDocument.getElementById(tab.getAttribute('aria-controls') ?? '')
+      expect(controlled?.getAttribute('role')).toBe('tabpanel')
+      expect(controlled?.getAttribute('aria-labelledby')).toBe(tab.id)
+    }
+    // 正文留在标签条外、位置固定：单/多面板切换不会重建它（同一条用例下方接着验证）。
+    expect(frame.querySelector('.workspace-panel-content input')).not.toBeNull()
+  })
+  it('does not render a tab strip for a single panel and keeps its draft across the 2 → 1 change', async () => {
+    const f = await fixture()
+    const input = f.frame(f.a).querySelector<HTMLInputElement>('.workspace-panel-content input')!
+    await type(input, 'alpha draft')
+    expect(f.frame(f.a).querySelector('[role="tablist"]')).not.toBeNull()
+    // 把 Beta 挪到另一个区域：本区域回到单面板，标签条消失，但正文子树必须原地不动。
+    await f.move(f.b, 'docked-right')
+    expect(f.frame(f.a).querySelector('[role="tablist"]')).toBeNull()
+    expect(f.frame(f.a).querySelector('.workspace-panel-content input')).toBe(input)
+    expect(input.value).toBe('alpha draft')
   })
   it('never squeezes the page below the injected page minimum for an embedded panel', async () => {
     const f = await fixture()

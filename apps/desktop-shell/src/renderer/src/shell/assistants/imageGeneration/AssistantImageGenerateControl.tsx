@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Button, Input, InputNumber, Select } from 'antd'
 import { Image as ImageIcon } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { PlatformText } from '../../../i18n/platformText'
+import { resolveAssistantsKey } from '../../../i18n/assistantsTextKey'
 import {
   defaultImageGenerationSize,
   imageGenerationSizeOptions,
@@ -15,18 +18,21 @@ import {
 type Props = {
   labels: PlatformText['assistants']
   view: AssistantImageGenerationView
+  /** 端点未配置时把读者送到模型服务；输入条负责回执与导航，组件不自己找页面。 */
+  onUnavailable: () => void
 }
 
 /**
  * PLAT-63 第二阶段 B：composer 里的「生成图片」入口。
  * 未配置图像端点 ⇒ 禁用 + title 说明；点击展开小面板（prompt 最多 3 行高 / 尺寸 / 数量 1–4）。
  */
-export function AssistantImageGenerateControl({ labels, view }: Props): React.ReactElement {
+export function AssistantImageGenerateControl({ labels, view, onUnavailable }: Props): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageGenerationSize>(defaultImageGenerationSize)
   const [count, setCount] = useState(1)
-  const disabled = view.target === null
+  const unavailable = view.target === null
+  const resolveText = (key: string): string => resolveAssistantsKey(labels, key)
 
   async function submit(): Promise<void> {
     const accepted = await view.onGenerate({ prompt, size, count })
@@ -38,19 +44,22 @@ export function AssistantImageGenerateControl({ labels, view }: Props): React.Re
 
   return (
     <div className="assistant-image-generation">
-      <Button
-        type="text"
-        size="small"
-        className="assistant-inputbar-tool"
-        data-image-generate
-        icon={<ImageIcon size={14} />}
-        aria-label={labels.imageGenerate}
-        title={disabled ? labels.imageGenerateTooltipDisabled : labels.imageGenerate}
-        disabled={disabled}
+      <IconButton
+        ariaLabelKey="assistants.imageGenerate"
+        dataAttributes={{ 'data-image-generate': true }}
+        icon={ImageIcon}
         loading={view.isGenerating}
-        onClick={() => setOpen((current) => !current)}
+        onSelect={() => {
+          if (unavailable) {
+            onUnavailable()
+            return
+          }
+          setOpen((current) => !current)
+        }}
+        resolveText={resolveText}
+        size="md"
       />
-      {open && !disabled ? (
+      {open && !unavailable ? (
         <div className="assistant-image-generation-panel" data-image-panel role="dialog" aria-label={labels.imageGenerate}>
           <Input.TextArea
             value={prompt}

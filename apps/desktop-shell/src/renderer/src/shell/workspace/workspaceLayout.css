@@ -34,8 +34,8 @@
 .workspace-panel-frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--workspace-title-height) auto minmax(0, 1fr);
-  grid-template-areas: 'toolbar' 'tabs' 'body';
+  grid-template-rows: var(--workspace-title-height) minmax(0, 1fr);
+  grid-template-areas: 'toolbar' 'body';
   min-width: 0;
   min-height: 0;
   background: var(--surface);
@@ -50,14 +50,14 @@
 
 .workspace-panel-frame[data-splitter='true'][data-region='right'] {
   grid-template-columns: var(--workspace-splitter-hit-size) minmax(0, 1fr);
-  grid-template-rows: var(--workspace-title-height) auto minmax(0, 1fr);
-  grid-template-areas: 'splitter toolbar' 'splitter tabs' 'splitter body';
+  grid-template-rows: var(--workspace-title-height) minmax(0, 1fr);
+  grid-template-areas: 'splitter toolbar' 'splitter body';
 }
 
 .workspace-panel-frame[data-splitter='true'][data-region='bottom'] {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--workspace-splitter-hit-size) var(--workspace-title-height) auto minmax(0, 1fr);
-  grid-template-areas: 'splitter' 'toolbar' 'tabs' 'body';
+  grid-template-rows: var(--workspace-splitter-hit-size) var(--workspace-title-height) minmax(0, 1fr);
+  grid-template-areas: 'splitter' 'toolbar' 'body';
 }
 
 .workspace-panel-toolbar {
@@ -92,13 +92,39 @@
   padding: 0;
 }
 
-.workspace-panel-tabs {
+.workspace-panel-body {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  border-bottom: 1px solid var(--border);
+  padding: 0;
 }
 
-.workspace-panel-body {
+/*
+ * 标签条固定在顶部、**只有正文滚动**：条一旦跟着内容滚走，切走再切回就得先滚回顶部，
+ * 等于把切换成本转给读者。
+ */
+.workspace-panel-body > .tabs {
+  flex: none;
+  min-width: 0;
+}
+
+.workspace-panel-body .tabs__list {
+  padding: 0 10px;
+}
+
+/*
+ * 同区域其余面板的正文在**它们自己的帧**里（换 Tab 不卸载，所以草稿不会丢）。
+ * 平台 `Tabs` 按项渲染的空 panel 块不承载正文：既不占高，也不重复挂载一份内容。
+ */
+.workspace-panel-body .tabs__panel {
+  display: none;
+}
+
+/* 正文块的位置与结构不随「有没有标签条」变化——否则单/多面板切换会重建子树，草稿被清空。 */
+.workspace-panel-content {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -492,30 +518,6 @@
  * P2-15：页面窗右上角的「回停靠」悬浮控件。`position:absolute` 由组件内联声明（不依赖样式表已加载，
  * 也保证「不占布局高度」这条 P2-14 判据不会被级联顺序破坏）；这里只管观感，且只用主题变量。
  */
-.workspace-page-redock-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
-  color: var(--muted-strong);
-  cursor: pointer;
-}
-
-.workspace-page-redock-button:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-.workspace-page-redock-button:focus-visible {
-  outline: 2px solid var(--border-strong);
-  outline-offset: 1px;
-}
-
 .workspace-page-redock-notice {
   padding: 2px 6px;
   border: 1px solid var(--border);
@@ -707,7 +709,7 @@
 
 /* 顶栏里的回停靠入口：仍是既有 `PageWindowRedockControl`（内联绝对定位不变，P2-15 判据逐字保留），
    这里只把它钉在顶栏右侧并把整块设为 no-drag（否则拖拽区吞掉点击）。 */
-.workspace-window-topbar .workspace-page-redock-button,
+.workspace-window-topbar .workspace-redock-control,
 .workspace-window-topbar .workspace-page-redock-notice {
   -webkit-app-region: no-drag;
 }

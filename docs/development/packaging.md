@@ -4,6 +4,10 @@
 
 This page describes how to produce a distributable desktop build from this checkout.
 
+It is the contributor-facing guide: the commands, what the package contains, and how to verify a build.
+The packaging contract itself, the installer failure modes and the release gates are maintainer material
+and live outside this repository's public docs, so nothing here restates them a second time.
+
 ## Current support
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
@@ -100,11 +104,21 @@ for the SDK packages plus an explicit `pathToClaudeCodeExecutable` that points a
 ### Signing and notarization
 
 `mac.identity: null` in `electron-builder.yml` keeps local builds unsigned. An unsigned build that is
-downloaded from the internet is blocked by Gatekeeper until the user right-clicks → **Open**, or runs:
+downloaded from the internet is blocked by Gatekeeper until the user right-clicks → **Open** (a plain
+double-click is refused), or runs:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/MacroBay.app
 ```
+
+On Windows the installer is unsigned as well: SmartScreen shows *Windows protected your PC*, and the
+user picks **More info → Run anyway**. Both prompts come back for **every downloaded update**, not just
+the first install — an update replaces the file, so the quarantine and the SmartScreen decision are new
+each time.
+
+Whatever we publish about a build has to match that state: the build is **unsigned and not notarized**.
+Release notes, the README and the settings/help copy must not say "signed", "notarized" or "safe to
+install"; the only honest formulation is the two steps above.
 
 To sign, set `CSC_LINK`/`CSC_KEY_PASSWORD` (or install the identity in the keychain), replace
 `identity: null` with that identity, and enable `hardenedRuntime`. Notarization additionally needs
@@ -211,11 +225,11 @@ and lives outside this guide.
 ## Verification before a release
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm docs:check
+pnpm verify
 ```
+
+`pnpm verify` is the single definition of the checks (`docs:check`, `check:file-size`, typecheck, test,
+build); CI runs the same command, so this page never keeps its own copy of the list.
 
 Then install the produced package on a clean machine and verify:
 

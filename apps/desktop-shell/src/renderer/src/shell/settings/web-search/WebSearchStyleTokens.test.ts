@@ -180,7 +180,9 @@ describe('PLAT-60 style tokens', () => {
     expect(endpoint).toContain('font-family: ui-monospace')
     expect(endpoint).not.toContain('border: 1px')
     expect(error).toContain('color: var(--danger)')
-    expect(rule('.web-search-provider-drawer-root .ant-drawer-mask')).toContain('background:')
+    // 遮罩底色不再由这个抽屉自己定：`color-mix(--bg 82%, transparent)` 在浅色主题下是「提亮」，
+    // 与其余抽屉的暗遮罩方向相反。迁移到平台抽屉后统一用组件默认遮罩，这里断言**没有**自定义规则。
+    expect(css).not.toContain('.web-search-provider-drawer-root .ant-drawer-mask')
   })
 
   it('keeps primary-button text on-accent across base/hover/active/disabled', () => {

@@ -12,12 +12,20 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, omitFallbackReadings = false, formatTime }: Readonly<{
   document: DailyBriefingDocument
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   eventTitles?: Record<string, string>
   readOnly?: boolean
+  /**
+   * The exported image leaves out rows whose only value is a fallback reading.
+   *
+   * The card gets forwarded, so a number that is not that day's exact reading must not travel as if
+   * it were; the page keeps those rows, labelled, because a reader judging the day needs them.
+   * "The card is for forwarding, the page is for reading" is the rule behind this switch.
+   */
+  omitFallbackReadings?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
@@ -25,6 +33,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   // poster even when its value is present, and a hidden row's reason lives only in the audit.
   const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])].filter(hasChangeToShow)
     .filter((row) => row.visibility !== 'hidden')
+    // A stale row carries a fallback number, never the exact reading; the exported image drops it.
+    .filter((row) => !omitFallbackReadings || row.state !== 'stale')
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')
@@ -104,7 +114,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           // keeps the level in the caption, so a screenshot and an export cannot disagree.
           const copy = changeLedRowCopy(row, text, locale)
           return <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
+            <span>{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
             <strong>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</strong>
             <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
           </div>
@@ -120,7 +130,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {metricRows.map((row) => {
           const copy = changeLedRowCopy(row, text, locale)
           return <div key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
+            <span>{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
             <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
             {copy ? <small>{copy.secondary}</small> : null}
           </div>
@@ -132,7 +142,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
-        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{regimeMarker ? <span className="mi-brief-poster__regime" data-regime-change="true" title={regimeMarker.title} aria-label={`${text.conclusion.regimeChanged}${text.labelSeparator}${regimeMarker.title}`}>{text.conclusion.regimeChanged}</span> : null}{conclusion.summary}</p>
+        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{regimeMarker ? <><span className="mi-brief-poster__regime" data-regime-change="true">{text.conclusion.regimeChanged}</span><span>{text.labelSeparator}{regimeMarker.title}</span></> : null}{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
         {synthesis ? <div className="mi-brief-poster__forward">
           <p className="mi-brief-poster__outlook"><span className="mi-brief-poster__forward-label">{text.conclusion.outlook}</span>{synthesis.outlook}</p>
@@ -323,20 +333,29 @@ function rowLabel(text: DailyBriefingText, labelKey: string): string {
   return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
 }
 
+type StaleBasis = NonNullable<BriefingMarketRow['valueBasis']>
+
 /**
- * The marker a fallback reading wears on the poster.
+ * The label a fallback reading wears on the page: which source it came from and over what window.
  *
- * A 24h reading that could not be read falls back to the last point of the curve, and the row then
- * carries a number the reader has no way to tell apart from a live one: same colour, same precision.
- * The chip says which rows those are; the poster is what gets shared, so it has to say it itself.
+ * Only the page shows it — the exported image omits these rows entirely — so this exists to tell the
+ * reader judging the day where the number came from, never to travel with the image.
  */
-function staleMarker(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
+function fallbackLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
   if (row.state !== 'stale') return null
-  // A fallback says where it came from: the curve's last point is about 24 hours, not the exact
-  // pair, and a last close is not today's reading. A plain aged reading gets the short chip.
-  const basis = 'valueBasis' in row ? row.valueBasis : undefined
-  const label = basis === 'curve' ? text.staleBasis.curve : basis === 'last-close' ? text.staleBasis.lastClose : text.staleMarker
-  return <em className="mi-brief-poster__stale" data-state="stale" data-basis={basis ?? 'none'}>{label}</em>
+  const basis: StaleBasis | undefined = 'valueBasis' in row ? row.valueBasis : undefined
+  // Only say something when the number is not the thing its name promises. A 24-hour move computed
+  // from a curve or from the daily series is still a 24-hour move, and the timestamp under the row
+  // already says which instant it is — repeating "about 24 hours ago (from the curve)" tells the
+  // reader how we computed it, which is ours to know, not theirs to read.
+  const spoken: Partial<Record<StaleBasis, string>> = {
+    'last-close': text.staleBasis.lastClose,
+    'series-level': text.staleBasis.seriesLevel,
+    published: text.staleBasis.published
+  }
+  const label = basis === undefined ? undefined : spoken[basis]
+  if (!label) return null
+  return <em className="mi-brief-poster__stale" data-basis={basis}>{label}</em>
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

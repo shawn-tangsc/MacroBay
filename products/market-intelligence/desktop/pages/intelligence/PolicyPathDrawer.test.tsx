@@ -37,7 +37,6 @@ const reading: PolicyPathReading = {
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -102,6 +101,11 @@ describe('policy drawer distribution', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
+    // The odds' basis is a visible sentence here, not a hover.
+    expect(rendered.textContent).toContain(text.basisNote)
+    // The pointer to the dissenters is guidance, not a transcription: it is visible here and no
+    // longer only in the card's accessible name.
+    expect(rendered.textContent).toContain(text.dissentNote)
     const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution tbody tr')
     expect(rows).toHaveLength(5)
     expect(rendered.textContent).toContain('维持')
@@ -109,5 +113,40 @@ describe('policy drawer distribution', () => {
     expect(rendered.textContent).toContain('69.0%')
     // No observation a day or a week back yet: dashes, not zeros.
     expect(rows[3]?.textContent).toContain('—')
+  })
+})
+
+describe('policy path drawer uncollected sections', () => {
+  it('renders the shared empty state for each official section it has not collected yet', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'normal' },
+      settlement: undefined,
+      lastDecision: undefined,
+      sep: undefined
+    })
+    // SEP and the previous decision are two sections that fill in independently; each one says "not yet"
+    // through the shared surface instead of a paragraph the drawer wrote itself.
+    expect(rendered.querySelectorAll('[data-state="empty"]')).toHaveLength(2)
+    // No hand-written empty paragraph survives beside the shared component.
+    expect(rendered.querySelector('.mi-policy-drawer__empty')).toBeNull()
+  })
+})
+
+describe('policy drawer pending 24h change', () => {
+  it('writes the reason for the dash on the line itself, with no hover and no extra tab stop', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'normal' },
+      settlement: undefined,
+      probability: { venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40 }
+    })
+    // The reason used to live in a hint (first a `title`, then a tooltip): the pointer got it, and
+    // everyone else got a dash. It is now the value's own line.
+    expect(rendered.querySelector('dd[title]')).toBeNull()
+    expect(rendered.querySelector('dd[tabindex="0"]')).toBeNull()
+    const dash = [...rendered.querySelectorAll('dd')].find((cell) => cell.textContent?.includes('—'))
+    expect(dash).toBeDefined()
+    expect(dash?.textContent).toContain(text.change24hPending)
   })
 })

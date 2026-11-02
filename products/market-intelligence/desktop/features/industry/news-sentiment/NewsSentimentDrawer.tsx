@@ -1,26 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Drawer, Select } from 'antd'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button, Select } from 'antd'
+import { MoreVertical } from 'lucide-react'
 
+import { Drawer } from '@platform/ui/components/drawer'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Segmented } from '@platform/ui/components/segmented'
+import { ContextMenu, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
+import type { StateViewTextKey } from '@platform/ui/components/state/StateView'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
+import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 import { filterNewsSentimentRows } from './newsSentimentFilters'
 import { useNewsSentimentTranslationQueue } from './useNewsSentimentTranslationQueue'
-
-function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-  ])
-}
-
+import { withTimeout } from './newsSentimentTimeout'
 
 export function NewsSentimentDrawer(props: {
   open: boolean
@@ -39,6 +41,8 @@ export function NewsSentimentDrawer(props: {
   client: Pick<NewsSentimentClient, 'getItem' | 'rescore' | 'rebuild' | 'translateBody'>
   translationEnabled?: boolean
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
+  /** Resolves the platform `ui.state.*` keys StateView prints; supplied by the feature. */
+  resolveStateText: (key: StateViewTextKey) => string
 }): React.ReactElement {
   const { text, view } = props
   const translationEnabled = props.translationEnabled !== false
@@ -46,11 +50,43 @@ export function NewsSentimentDrawer(props: {
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
   const [detailFailed, setDetailFailed] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
-  const contextMenuRef = useRef<HTMLDivElement>(null)
+  // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
+  const resolveIconText = createIconTextResolver(text)
+  const openContextMenu = (itemId: string, x: number, y: number): void => {
+    setContextMenu({ itemId, x, y })
+  }
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
+  const resolveProductText = useProductTextKey()
+  // The platform drawer keeps its content mounted, so the reset has to happen on close. Without it a
+  // reopened drawer shows the article the reader read last time, under a new row's selection.
+  const resetTransientState = useCallback(() => {
+    setDetail(undefined)
+    setDetailFailed(false)
+    setDetailLoading(false)
+    setSelectedId(undefined)
+    setBodyView('translated')
+    setContextMenu(undefined)
+  }, [])
+  const handleClose = useCallback(() => {
+    resetTransientState()
+    props.onClose()
+  }, [props.onClose, resetTransientState])
+  useEffect(() => {
+    if (!props.open) resetTransientState()
+  }, [props.open, resetTransientState])
+
+  // "No rows" is two different facts: the reader's own filters cut everything, or the window is
+  // simply quiet. The first one has an action, the second one does not.
+  // All four filter dimensions count: dropping neutral rows is still the reader's own filter, and
+  // calling that "nothing here yet" both misreads the day and hides the way back.
+  const filtered = props.filters.direction !== 'all'
+    || props.filters.sourceId !== 'all'
+    || props.filters.scope !== 'market'
+    || props.filters.includeNeutral === false
 
   const rows = useMemo(() => filterNewsSentimentRows(view, props.filters), [view, props.filters])
   const activeId = selectedId && rows.some((row) => row.itemId === selectedId) ? selectedId : rows[0]?.itemId
@@ -79,36 +115,36 @@ export function NewsSentimentDrawer(props: {
   }, [activeId])
 
   useEffect(() => {
-    if (!contextMenu) return
-    const dismiss = (event: PointerEvent) => {
-      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(undefined)
-    }
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setContextMenu(undefined) }
-    document.addEventListener('pointerdown', dismiss, true)
-    document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('pointerdown', dismiss, true)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [contextMenu])
-
-  useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
     let cancelled = false
     // Drop the previous article before the next read: a stale body under a new heading reads as
     // "this row says that", and a failed read must not leave it in place either.
     setDetail(undefined)
     setDetailFailed(false)
+    setDetailLoading(true)
     void props.client
       .getItem({ itemId: activeId, asOf: view.asOf })
       .then((next) => {
-        if (!cancelled && next?.itemId === activeId) setDetail(next)
+        if (cancelled) return
+        setDetailLoading(false)
+        if (next?.itemId === activeId) setDetail(next)
       })
       .catch(() => {
-        if (!cancelled) setDetailFailed(true)
+        if (cancelled) return
+        setDetailLoading(false)
+        setDetailFailed(true)
       })
     return () => { cancelled = true }
   }, [props.open, activeId, view?.asOf, props.client])
+
+  // One item, named by whether this row already has a translation. Platform `MenuItem` takes a key,
+  // so the sentence still comes from this feature's text resolver.
+  const menuItems: MenuItem[] = useMemo(() => [{
+    key: 'translate',
+    labelKey: contextMenu && (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
+      ? 'news.sentiment.retranslate'
+      : 'news.sentiment.translate'
+  }], [contextMenu, rows, translationStates])
 
   const sourceOptions = useMemo(() => {
     const seen = new Map<string, string>()
@@ -119,14 +155,18 @@ export function NewsSentimentDrawer(props: {
 
   return (
     <Drawer
-      destroyOnHidden
-      onClose={props.onClose}
+      header="titled"
+      mode="modal"
+      onClose={handleClose}
       open={props.open}
-      rootClassName="mi-news-drawer-root"
-      title={text.drawer.title}
-      width={1040}
+      resolveText={resolveProductText}
+      size="full"
+      titleKey="pages.intelligence.portal.newsSentiment.drawer.title"
     >
       <div className="mi-news-drawer">
+        {translationEnabled ? (
+          <p className="mi-news-drawer__hint">{text.drawer.translationStatus?.waitingHint}</p>
+        ) : null}
         <header className="mi-news-drawer__toolbar">
           <Select
             aria-label={text.drawer.filters.direction}
@@ -142,9 +182,9 @@ export function NewsSentimentDrawer(props: {
             size="small"
             value={props.window}
           />
-          <button className="mi-news-drawer__action" onClick={props.onRefresh} type="button">{text.refresh}</button>
-          <button className="mi-news-drawer__action" onClick={props.onOpenSettings} type="button">{text.drawer.settings}</button>
-          <button
+          <Button className="mi-news-drawer__action" onClick={props.onRefresh} size="small">{text.refresh}</Button>
+          <Button className="mi-news-drawer__action" onClick={props.onOpenSettings} size="small">{text.drawer.settings}</Button>
+          <Button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}
             onClick={() => {
@@ -155,22 +195,22 @@ export function NewsSentimentDrawer(props: {
                 .catch(() => setActionNotice(text.settingsModal.rescoreFailed))
                 .finally(() => setActionBusy(undefined))
             }}
-            type="button"
+            size="small"
           >
             {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
-          </button>
+          </Button>
           {translationEnabled ? (
-            <button
+            <Button
               className="mi-news-drawer__action"
               onClick={() => { if (translatingAll) cancelTranslation(); else void translateAll(rows) }}
-              type="button"
+              size="small"
             >
               {translatingAll
                 ? text.settingsModal.cancelTranslate
                 : text.settingsModal.translateAll}
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}
             onClick={() => {
@@ -186,10 +226,10 @@ export function NewsSentimentDrawer(props: {
                 .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
                 .finally(() => setActionBusy(undefined))
             }}
-            type="button"
+            size="small"
           >
             {actionBusy === 'rebuild' ? text.settingsModal.rebuilding : text.settingsModal.rebuild}
-          </button>
+          </Button>
         </header>
         {actionNotice ? <p className="mi-news-drawer__notice" role="status">{actionNotice}</p> : null}
 
@@ -250,28 +290,70 @@ export function NewsSentimentDrawer(props: {
             />
           </label>
           {props.filters.direction !== 'all' || props.filters.sourceId !== 'all' || props.filters.scope !== 'market' ? (
-            <button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })} type="button">
+            <Button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })} size="small">
               {text.drawer.clearFilters}
-            </button>
+            </Button>
           ) : null}
         </div>
 
         <div className="mi-news-drawer__body">
           <div className="mi-news-drawer__list" role="list">
-            {props.failed ? <p className="mi-news-drawer__empty">{text.unavailable}</p> : null}
-            {!props.failed && rows.length === 0 ? <p className="mi-news-drawer__empty">{text.drawer.emptyFiltered}</p> : null}
+            {props.failed && rows.length === 0 ? (
+              // Nothing was ever read here: error plus the way out.
+              <StateView
+                action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
+                reasonCode="unreadable"
+                resolveText={props.resolveStateText}
+                size="md"
+                state="error"
+              />
+            ) : null}
+            {props.failed && rows.length > 0 ? (
+              // A failed refresh keeps the rows this drawer already had; the note says so instead
+              // of replacing a still-true reading with an error panel.
+              <p className="mi-news-drawer__stale-read" data-news-sentiment-stale-read role="status">
+                <span>{text.staleRead}</span>
+                <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+              </p>
+            ) : null}
+            {!props.failed && props.loading && !props.view ? (
+              // First read in flight: "not yet" would claim the window is empty before we know.
+              <StateView resolveText={props.resolveStateText} size="md" state="loading" />
+            ) : null}
+            {!props.failed && !props.loading && rows.length === 0 ? (
+              filtered
+                ? <StateView
+                    action={{ labelKey: 'ui.state.action.clear-filter', onSelect: () => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }) }}
+                    reasonCode="filtered-out"
+                    resolveText={props.resolveStateText}
+                    size="md"
+                    state="empty"
+                  />
+                // 成因不可知（抽屉拿不到「从没跑过 / 采集失败」），故不断言窗口内确实为空：
+                // `not-yet` 不承担结论，`nothing-in-window` 会替这个窗口下「确实没有」的判断。
+                : <StateView reasonCode="not-yet" resolveText={props.resolveStateText} size="md" state="empty" />
+            ) : null}
             {rows.map((row) => {
               const rowState = translationStates[row.itemId] ?? row.bodyTranslationState ?? 'missing'
               return (
-              <button
-                aria-current={row.itemId === activeId}
+              <div
                 className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
                 key={row.itemId}
-                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
-                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) } : undefined}
                 role="listitem"
+              >
+              <button
+                aria-current={row.itemId === activeId}
+                className="mi-news-drawer__row-open"
+                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
+                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); openContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}
+                onKeyDown={translationEnabled ? (event) => {
+                  // A context menu reachable only by right-click is unreachable from the keyboard.
+                  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+                  event.preventDefault()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  openContextMenu(row.itemId, rect.left + 8, rect.top + 8)
+                } : undefined}
                 type="button"
-                title={translationEnabled ? text.drawer.translationStatus?.contextMenu : undefined}
               >
                 <span className="mi-news-drawer__row-top">
                   <time>{formatTime(row.publishedAt, 'minute')}</time>
@@ -279,7 +361,7 @@ export function NewsSentimentDrawer(props: {
                     {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
                   </span>
                   {translationEnabled && rowState === 'waiting' ? (
-                    <span className="mi-news-drawer__row-waiting" title={text.drawer.translationStatus?.waitingHint}>
+                    <span className="mi-news-drawer__row-waiting">
                       {text.drawer.translationStatus?.waiting}
                     </span>
                   ) : null}
@@ -296,6 +378,20 @@ export function NewsSentimentDrawer(props: {
                 </span>
                 <span className="mi-news-drawer__title">{translatedTitles[row.itemId] ?? row.displayTitle ?? row.title}</span>
               </button>
+              {translationEnabled && hasIconText(text, 'news.sentiment.more') ? (
+                <IconButton
+                  ariaLabelKey="news.sentiment.more"
+                  icon={MoreVertical}
+                  onSelect={() => {
+                    const rect = (document.activeElement as HTMLElement | null)?.getBoundingClientRect()
+                    openContextMenu(row.itemId, rect?.left ?? 0, (rect?.bottom ?? 0) + 4)
+                  }}
+                  resolveText={resolveIconText}
+                  size="sm"
+                  tooltipKey="news.sentiment.more"
+                />
+              ) : null}
+              </div>
               )
             })}
 
@@ -330,14 +426,22 @@ export function NewsSentimentDrawer(props: {
                   </blockquote>
                 ) : null}
                 {translationEnabled && activeTranslationState !== 'translated' && activeTranslationState !== 'translating' && detail?.bodyExcerpt ? (
-                  <button className="mi-news-drawer__translate-body" onClick={() => void translateItem(activeId!)} type="button">
+                  <Button className="mi-news-drawer__translate-body" onClick={() => void translateItem(activeId!)} size="small">
                     {text.drawer.detail.translateBody}
-                  </button>
+                  </Button>
                 ) : null}
                 {translationEnabled && hasTranslatedBody && activeTranslationState !== 'translating' ? (
-                  <div className="mi-news-drawer__body-toggle" role="group">
-                    <button aria-pressed={bodyView === 'original'} onClick={() => setBodyView('original')} type="button">{text.drawer.detail.original}</button>
-                    <button aria-pressed={bodyView === 'translated'} onClick={() => setBodyView('translated')} type="button">{text.drawer.detail.translated}</button>
+                  <div className="mi-news-drawer__body-toggle">
+                  <Segmented
+                    ariaLabelKey="pages.intelligence.portal.newsSentiment.drawer.detail.body"
+                    items={[
+                      { labelKey: 'pages.intelligence.portal.newsSentiment.drawer.detail.original', value: 'original' },
+                      { labelKey: 'pages.intelligence.portal.newsSentiment.drawer.detail.translated', value: 'translated' }
+                    ]}
+                    onChange={(value) => setBodyView(value === 'original' ? 'original' : 'translated')}
+                    resolveText={resolveProductText}
+                    value={bodyView}
+                  />
                   </div>
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
@@ -351,6 +455,8 @@ export function NewsSentimentDrawer(props: {
                     </>
                   ) : displayedBody ? (
                     displayedBody
+                  ) : detailLoading ? (
+                    <LoadingState label={text.loading} minHeight={80} />
                   ) : activeTranslationState === 'failed' ? (
                     <>{text.drawer.detail.translationFailed}<br />{detail?.bodyExcerpt ?? text.drawer.detail.noBody}</>
                   ) : detailFailed ? (
@@ -366,31 +472,25 @@ export function NewsSentimentDrawer(props: {
               </>
             ) : props.loading ? (
               <LoadingState label={text.loading} minHeight={160} />
-            ) : (
-              <p className="mi-news-drawer__empty">{text.drawer.emptyFiltered}</p>
-            )}
+            ) : null}
           </aside>
         </div>
-        {translationEnabled && contextMenu ? (
-          <>
-            <div className="mi-news-drawer__context" ref={contextMenuRef} style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
-              {(() => {
-                const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
-                return (
-                  <button
-                    onClick={() => { const itemId = contextMenu.itemId; setContextMenu(undefined); void translateItem(itemId, translated) }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    {translated
-                      ? text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody
-                      : text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody}
-                  </button>
-                )
-              })()}
-            </div>
-          </>
-        ) : null}
+        {/* The row menu is the platform ContextMenu: point anchoring, viewport clamping, Esc and
+            outside-click, and the arrow/Home/End keyboard model all come from it. This file only
+            says which row and which item. */}
+        <ContextMenu
+          anchor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+          ariaLabelKey="news.sentiment.more"
+          items={translationEnabled && contextMenu ? menuItems : []}
+          onClose={() => setContextMenu(undefined)}
+          onSelect={(key) => {
+            if (key !== 'translate' || !contextMenu) return
+            const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
+            void translateItem(contextMenu.itemId, translated)
+          }}
+          open={translationEnabled && contextMenu !== undefined}
+          resolveText={resolveIconText}
+        />
       </div>
     </Drawer>
   )

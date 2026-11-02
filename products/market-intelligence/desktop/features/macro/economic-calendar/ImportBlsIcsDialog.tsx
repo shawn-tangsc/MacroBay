@@ -1,15 +1,26 @@
-import { Button, Modal } from 'antd'
+import { Button } from 'antd'
 import { Check, X } from 'lucide-react'
 import type { ReactElement } from 'react'
 
+import { Modal } from '@platform/ui/components/modal'
+
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { BlsIcsImportDialogState } from './useBlsIcsImport'
 
+/**
+ * 宽度、标题与关闭键归平台 `Modal`；页脚仍由调用点给——它随状态在两套按钮之间换
+ * （导入中 / 已就绪 / 失败 / 结果），不是弹窗骨架的事。
+ *
+ * 平台 `Modal` 不接容器，弹窗挂在 body 上，所以 `.mi-bls-ics-dialog` 必须自己带
+ * `--mi-economic-*` 那一套 token：变量只声明在 `.mi-economic-calendar` 上时，body 上
+ * 一个都取不到，声明在计算期整体失效且不报错（见
+ * `docs-private/10-development/pitfalls/2026-10-15-a-reused-surface-must-carry-its-token-scope.md`）。
+ */
 export const importBlsIcsDialogPolicy = {
-  keyboardClosable: true,
-  maximumWidth: 520,
-  preserveContentAfterClose: false,
-  renderInCalendar: true
+  titleKey: 'pages.intelligence.portal.calendar.manualImport.title',
+  width: 'standard',
+  preserveContentAfterClose: false
 } as const
 
 type Props = {
@@ -20,6 +31,7 @@ type Props = {
 }
 
 export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, text }: Props): ReactElement | null {
+  const resolveText = useProductTextKey()
   if (dialogState.state === 'closed') return null
   const preview = dialogState.state === 'ready' || dialogState.state === 'importing'
     ? dialogState.preview
@@ -46,12 +58,11 @@ export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, text }: Pr
           <Button icon={<X aria-hidden="true" size={14} />} onClick={onClose}>{text.manualImport.actions.close}</Button>
         </div>
       )}
-      getContainer={importBlsIcsDialogPolicy.renderInCalendar ? false : undefined}
-      keyboard={importBlsIcsDialogPolicy.keyboardClosable}
-      onCancel={onClose}
+      onClose={onClose}
       open
-      title={text.manualImport.title}
-      width={importBlsIcsDialogPolicy.maximumWidth}
+      resolveText={resolveText}
+      titleKey={importBlsIcsDialogPolicy.titleKey}
+      width={importBlsIcsDialogPolicy.width}
     >
       <section className="mi-bls-ics-dialog__content" aria-live="polite">
         {filename ? <p className="mi-bls-ics-dialog__filename"><span>{text.manualImport.filename}</span><strong>{filename}</strong></p> : null}

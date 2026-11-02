@@ -24,7 +24,6 @@ const pageStyles = readFileSync(resolve(process.cwd(), 'products/market-intellig
 const asOf = '2026-08-05T00:00:00.000Z'
 let root: Root | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -119,6 +118,38 @@ describe('crypto intelligence dashboard', () => {
     expect(markup).toContain(text.dashboard.positioning.title)
   })
 
+  it('keeps both reading-note cards inside the scope that owns their type tokens', () => {
+    // The reading-note type and cap are custom properties on `.mi-crypto-dashboard`, so they only
+    // resolve inside that subtree. Move a card into a drawer or a dialog and `var()` resolves to
+    // nothing: the size falls back to inherited type and the 320px cap disappears — a silent
+    // layout break no other test would catch. No `var(--x, 11.5px)` fallback, on purpose: that
+    // would put the number back in two places, which is what these tokens removed.
+    const markup = renderToStaticMarkup(
+      createElement(CryptoIntelligenceDashboard, {
+        onConfigureSources: () => undefined,
+        onManageSource: () => undefined,
+        onOpenCalendar: () => undefined,
+        client: dashboardClient(),
+        fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+        now: () => new Date(asOf),
+        text: text.dashboard,
+        onBack: () => undefined
+      })
+    )
+    const host = document.createElement('div')
+    host.innerHTML = markup
+    for (const selector of ['.mi-positioning-panel', '.mi-divergence']) {
+      const panel = host.querySelector(selector)
+      expect(panel, `${selector} must render in the dashboard`).not.toBeNull()
+      expect(panel!.closest('.mi-crypto-dashboard'), `${selector} must sit inside .mi-crypto-dashboard`).not.toBeNull()
+    }
+    // And the numbers exist once, in that scope — a second declaration is a second drift point.
+    for (const token of ['--mi-reading-note-size', '--mi-reading-note-line-height', '--mi-reading-note-max-height']) {
+      expect(styles.match(new RegExp(`${token}:`, 'gu')), `${token} is declared once`).toHaveLength(1)
+    }
+    expect(cssBlock(styles, '.mi-crypto-dashboard {')).toContain('--mi-reading-note-size: 11.5px')
+  })
+
   
   
   
@@ -126,6 +157,30 @@ describe('crypto intelligence dashboard', () => {
 
   
   
+
+  it.each([
+    ['empty', { state: 'empty' as const, asOf }, 'empty'],
+    ['unavailable', { state: 'unavailable' as const }, 'error']
+  ] as const)('renders the %s sentiment read as its own state, not as the other one', async (_name, result, expected) => {
+    // The gauge is the one place the reader sees risk appetite. "We could not read it" and "there
+    // is no index yet" are different facts, and only one of them is the reader's fault to fix.
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(result), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      text: text.dashboard
+    })))
+    await flush()
+
+    const gauge = container.querySelector('[data-sentiment-gauge]')!
+    expect(gauge.querySelector(`[data-state="${expected}"]`)).not.toBeNull()
+    expect(gauge.querySelector('[data-state="available"]')).toBeNull()
+    // Neither state may fall back to a sentence the panel writes itself.
+    expect(gauge.textContent).not.toContain(text.dashboard.fearGreed.empty)
+  })
 
   it('renders a textual half-gauge and independent BTC/ETH funding-history values', async () => {
     const container = document.createElement('div')

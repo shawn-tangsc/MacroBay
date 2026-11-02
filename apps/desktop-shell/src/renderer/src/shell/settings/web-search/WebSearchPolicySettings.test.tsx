@@ -2,12 +2,14 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ConfigProvider } from 'antd'
 
 import type {
   SafeWebSearchProviderView,
   WebSearchSettings
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import { createDefaultWebSearchSettings } from '@platform/ai/web-search/contracts/webSearchSettings'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { platformText } from '../../../i18n/platformText'
 import { WebSearchPolicyPage } from './WebSearchPolicyPage'
@@ -16,7 +18,6 @@ import { resolveWebSearchProviderOption } from './webSearchAvailability'
 
 const labels = platformText['zh-CN'].webSearch
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -59,13 +60,15 @@ async function mountPolicy(
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
+    // 与真机一致：页面在 AppShell 的 ConfigProvider 之下，按钮不做汉字间插空格。
     root?.render(
+      createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
       createElement(WebSearchPolicyPage, {
         labels,
         settings: target,
         providers: [provider('tavily'), provider('jina'), provider('searxng', { enabled: false }), provider('fetch', { enabled: false })],
         onChange
-      })
+      }))
     )
   })
   return container
@@ -167,7 +170,9 @@ describe('PLAT-60 policy page', () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    await act(async () => root?.render(createElement(WebSearchSettingsPage, { language: 'zh-CN' })))
+    // 与真机一致：页面在 AppShell 的 ConfigProvider 之下（按钮不加汉字间空格）。
+    await act(async () => root?.render(createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+      createElement(WebSearchSettingsPage, { language: 'zh-CN' }))))
     await settle()
 
     const switchEl = container.querySelector('[data-web-search-policy] [role="switch"]') as HTMLElement

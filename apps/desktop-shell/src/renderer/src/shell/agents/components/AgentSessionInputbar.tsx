@@ -263,9 +263,8 @@ export default function AgentSessionInputbar({
         onRemoveFile={(path) => setFiles((current) => current.filter((item) => item.path !== path))}
         onRemoveMentionedModel={mentionModels.removeByValue}
       />
-      <textarea
-        ref={textareaRef}
-        value={draft}
+      {/* 导航落点（契约 §14）：焦点落到这里，读者到了就能说一句。 */}
+      <textarea ref={textareaRef} data-nav-focus value={draft}
         placeholder={placeholder}
         rows={1}
         disabled={disabled}

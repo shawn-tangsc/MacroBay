@@ -1,8 +1,13 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import type { AssistantMessageEntity } from '@platform/ai/assistant-platform/schemas/messageSchemas'
+import { IconButton } from '@platform/ui/components/icon-button'
 import type { PlatformText } from '../../i18n/platformText'
 import { selectAssistantSiblingIndex } from './assistantMessageRendering'
+
+/** 两个翻页箭头的读屏名：句子来自 `labels`，键只回答「哪一边」。 */
+const PREVIOUS_SIBLING_KEY = 'assistants.sibling.previous'
+const NEXT_SIBLING_KEY = 'assistants.sibling.next'
 
 type AssistantSiblingNavigatorProps = {
   labels: PlatformText['assistants']
@@ -24,25 +29,25 @@ export function AssistantSiblingNavigator({
 
   return (
     <div className="assistant-sibling-nav">
-      <button
-        type="button"
-        className="assistant-sibling-nav-button"
+      <IconButton
+        ariaLabelKey={PREVIOUS_SIBLING_KEY}
+        icon={ChevronLeft}
+        size="sm"
         disabled={!previous}
-        aria-label={labels.previousSibling}
-        onClick={() => previous && onSelect(previous.id)}>
-        <ChevronLeft size={14} />
-      </button>
+        onSelect={() => previous && onSelect(previous.id)}
+        resolveText={(key) => (key === PREVIOUS_SIBLING_KEY ? labels.previousSibling : labels.nextSibling)}
+      />
       <span>
         {labels.siblingIndex.replace('{current}', String(index + 1)).replace('{total}', String(siblings.length))}
       </span>
-      <button
-        type="button"
-        className="assistant-sibling-nav-button"
+      <IconButton
+        ariaLabelKey={NEXT_SIBLING_KEY}
+        icon={ChevronRight}
+        size="sm"
         disabled={!next}
-        aria-label={labels.nextSibling}
-        onClick={() => next && onSelect(next.id)}>
-        <ChevronRight size={14} />
-      </button>
+        onSelect={() => next && onSelect(next.id)}
+        resolveText={(key) => (key === NEXT_SIBLING_KEY ? labels.nextSibling : labels.previousSibling)}
+      />
     </div>
   )
 }

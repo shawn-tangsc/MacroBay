@@ -1,9 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
 
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
 import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/AgentSessionRuntimeService'
@@ -18,47 +17,8 @@ import {
   TaskManagementToolRuntimeService
 } from '../../ai/agent-platform/runtime/tasks'
 import {
-  ChannelInboundExecutionCoordinator,
-  ChannelDispatchRunRepository,
-  ChannelInboundExecutionRunner,
-  ChannelInboundRepository,
-  ChannelInboundService,
-  createChannelInboundContentGuard,
-  ChannelDeliveryMaintenance,
-  ChannelDeliveryRepository,
-  ChannelDeliveryService,
-  ChannelAdapterAcceptanceRegistry,
-  ChannelAcceptanceService,
-  ChannelManagementRepository,
-  ChannelManagementService,
-  ChannelSecureHandoff,
-  TelegramOffsetRepository,
-  TelegramDeliveryTransport,
-  TelegramRuntimeManager,
-  TelegramRuntimeMaintenance,
-  SlackRuntimeRepository,
-  SlackDeliveryTransport,
-  SlackRuntimeManager,
-  SlackRuntimeMaintenance,
-  LarkRuntimeRepository,
-  LarkDeliveryTransport,
-  LarkRuntimeManager,
-  LarkRuntimeMaintenance,
-  QqRuntimeRepository,
-  QqDeliveryTransport,
-  QqRuntimeManager,
-  QqRuntimeMaintenance,
-  DiscordRuntimeRepository,
-  DiscordDeliveryTransport,
-  DiscordRuntimeManager,
-  DiscordRuntimeMaintenance,
-  WechatEnrollmentRepository,
-  WechatRuntimeRepository,
-  WechatDeliveryTransport,
-  WechatRuntimeManager,
-  WechatRuntimeMaintenance,
-  ChannelDeliveryTransportRouter,
-  ChannelRuntimeSupervisor
+  registerChannelMaintenanceJobHandlers,
+  scheduleChannelMaintenanceJobs
 } from '../../ai/agent-platform/channels'
 import { createElectronChannelCredentialVault } from '../../secrets/channels'
 import { createAssistantImageMessageService } from '../../ai/assistant-platform/images/assistantImageMessageService'
@@ -73,8 +33,6 @@ import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
-import { registerAssistantSessionRetentionJob } from '../../ai/assistant-platform/retention/registerAssistantSessionRetentionJob'
-import { createRetentionRepository } from '../../ai/assistant-platform/repositories/retentionRepository'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createAssistantChatRuntimeService } from '../../ai/assistant-platform/runtime/AssistantChatRuntimeService'
 import { createWebSearchCredentialStore } from '../../ai/web-search/runtime/WebSearchCredentialStore'
@@ -89,7 +47,6 @@ import {
   createDefaultAssistantSeed
 } from '../../ai/assistant-platform/seeds/defaultAssistantSeed'
 import { getPlatformFetch } from '../../network/platformFetch'
-import { createPlatformWebSocketFactory } from '../../network/platformWebSocket'
 import { createAgentPlatformRepositories } from '../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../ai/agent-platform/store/agentSqliteStore'
 import { createDefaultAgentPersistentState, mergeAgentStoreSeeds } from '../../ai/agent-platform/store/agentPersistentStore'
@@ -131,7 +88,6 @@ import {
 import { createProviderStore } from '../../ai/providers/providerStore'
 import { createProviderSqliteStorage } from '../../ai/providers/storage/providerSqliteStorage'
 import { createElectronSecretVault } from '../../secrets'
-import { readTextFilePreview } from '../../files/attachments/textFilePreview'
 import { summarizeProductManifests, type ProductManifest } from '../../product-manifest'
 import {
   createPlatformAgentSeed,
@@ -156,7 +112,7 @@ import type {
 import { createSqliteProductAgentToolTraceRepository } from '../../ai/agent-platform/productTools/createSqliteProductAgentToolTraceRepository'
 import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSettings } from '../../settings/schema/appSettings'
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
-import { createSettingsStore } from '../../settings/store/settingsStore'
+import { createSettingsStore, type SettingsCommittedListener } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
 import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy, probeDirectEgress } from '../../network/proxySelfTest'
@@ -167,10 +123,27 @@ import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
+import { registerWindowIpc } from './ipc/windowIpc'
+import { registerWebIpc } from './ipc/webIpc'
+import { registerChannelIpc } from './ipc/channelIpc'
+import { registerAssistantIpc } from './ipc/assistantIpc'
+import { createMainWindowHost } from './window/mainWindow'
+import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
+import { registerPlatformRetentionJobs } from './platformRetentionJobs'
+import { composeNotificationRuntime } from './composition/notifications'
+import { composeModelIpc } from './composition/model'
+import { composeAgentToolsIpc } from './composition/agentTools'
+import { composeAgentIpc } from './composition/agent'
+import { composeSettingsIpc, composeStorageIpc } from './composition/settingsAndStorage'
+import { createAssistantStreamSink } from './assistantStreamBroadcast'
+import { createAgentBroadcasts } from './composition/agentBroadcast'
+import { runProductBootstrap } from './productBootstrap'
+import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
-import { configureNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
+import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
+import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -206,13 +179,10 @@ import { createAgentStateCoordinator, type ReplaceAgentStateOptions } from './ag
 import { createAgentTaskJobBridge } from './agentTaskJobBridge'
 import { createAgentTaskRunController } from './agentTaskRunController'
 import { registerJobIpcHandlers } from './jobIpcHandlers'
-import { refreshAgentMcpTools } from './agentMcpRefresh'
 import { createMcpRuntimeServerHostFactory } from './mcpRuntimeServerHostFactory'
 import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver } from './skillRuntimeCapabilities'
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
 import { persistSkillRowChanges } from './skillRowPersistence'
-import { createTaskChannelDelivery } from './taskChannelDelivery'
-import { createTaskAutomationMaintenance } from './taskAutomationMaintenance'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
@@ -243,16 +213,19 @@ import { CacheRegistry } from '../../storage/cache-governance/CacheRegistry'
 import { registerPlatformCacheProviders } from '../../storage/cache-governance/platformCacheProviders'
 import { createProductCacheRegistrar } from '../../storage/cache-governance/productCacheRegistrar'
 import { createProductServiceDisposerRegistry } from '../../product-registry/productServiceDisposerRegistry'
-import {
-  clampWindowSizeToMinimum,
-  DEFAULT_MIN_WINDOW_HEIGHT,
-  DEFAULT_MIN_WINDOW_WIDTH
-} from '../../ui/window/windowSizing'
+import { getAgentTaskExecutionCoordinator, getAgentTaskExecutionCoordinatorOrNull, getAgentTaskRunController, getDisposeChannelMaintenanceJobs, getDisposeJobRunRetention, getDisposeTaskAutomationMaintenance, getInstalledProductManifestIds, getJobRuntimeForDisposal, getPanelWorkspaceForDisposal, getProductIpcRegistryForDisposal, setAgentTaskExecutionCoordinator, setAgentTaskRunController, setDisposeChannelMaintenanceJobs, setDisposeJobRunRetention, setDisposeTaskAutomationMaintenance, setInstalledProductManifestIds, setJobRuntimeForDisposal, setPanelWorkspaceForDisposal, setProductIpcRegistryForDisposal } from './composition/slots'
+import { bindReplaceAgentState } from './composition/agentStateBridge'
+import { createPlatformCore } from './composition/platformCore'
+import { createRepositories } from './composition/repositories'
+import { createAgentRuntime, platformRuntimesDisposed } from './composition/agentRuntime'
+import { createChannelsAndJobs } from './composition/channelsAndJobs'
 
-let mainWindow: BrowserWindow | null = null
+// 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
+bindReplaceAgentState(replaceAgentState)
+
+
 let tray: Tray | null = null
 let agentTaskJobBridge: ReturnType<typeof createAgentTaskJobBridge> | null = null
-let agentTaskExecutionCoordinator: AgentTaskExecutionCoordinator | null = null
 let agentStateCoordinator: ReturnType<typeof createAgentStateCoordinator> | null = null
 // `app.getPath('userData')` below is derived from the application name. Set the stable name
 // before the first path read so development runs do not fall back to a shared Chromium profile.
@@ -291,609 +264,201 @@ const productAcceptanceProfile = configureProductAcceptanceProfile({
  * 开发/测试态（`isPackaged === false`）行为与 PLAT-33 逐字相同。
  */
 const workspaceTestFixtures = resolveWorkspaceTestFixtures(process.env, { isPackaged: app.isPackaged })
-const platformDataDirectory = join(app.getPath('userData'), 'platform')
-mkdirSync(platformDataDirectory, { recursive: true })
-const settingsStore = createSettingsStore(
-  createJsonFileStorage(join(app.getPath('userData'), 'platform', 'settings.json'), createDefaultAppSettings())
-)
-/** 主进程唯一的「读者时区」来源；任务排期、免打扰、日报调度、分析展示都从这里取。 */
-const shellTimeZone = createShellTimeZoneProvider({ settings: settingsStore })
-const providerSecretVault = createElectronSecretVault({
-  directory: join(app.getPath('userData'), 'platform', 'secrets'),
-  safeStorage
+const platformCore = createPlatformCore({
+  userDataPath: app.getPath('userData'),
+  appVersion: app.getVersion(),
+  platform: process.platform,
+  workspaceTestFixtures
 })
-// PLAT-72：供应商/模型改为 SQLite 行级存储；旧的 `platform/model-providers.json` 已废弃，
-// 代码不再读取、不删除、不改名 —— 原样留在磁盘上作为用户的备份（用户按需自行清理）。
-const providerStore = createProviderStore(
-  createProviderSqliteStorage({ path: join(app.getPath('userData'), 'platform', 'model-providers.sqlite') }),
-  providerSecretVault
-)
-/** 唯一的日志落盘口：主进程与渲染层诊断共用 `userData/logs/app.log`，写入前统一脱敏。 */
-const appLog = createAppLog({
-  directory: join(app.getPath('userData'), 'logs'),
-  redact: (text) => redactText(text).text
-})
-appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
-const rendererProcessLog = createRendererProcessLog(appLog)
-
-const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
-  timeZone: () => shellTimeZone.get()
-})
-
-// Channel management re-validates every field at its own contract boundary, so the
-// IPC layer only proves that the payload is a plain object before handing it over.
-function asChannelInput(input: unknown): any {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.getPrototypeOf(input) !== Object.prototype) {
-    throw new Error('channel-input-invalid')
-  }
-  return input
-}
-
-function asChannelHandoff(value: unknown): { sessionId: string; rendererPublicJwk: JsonWebKey; iv: Uint8Array; ciphertext: Uint8Array } {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('channel-handoff-invalid')
-  const handoff = value as Record<string, unknown>
-  if (
-    typeof handoff.sessionId !== 'string' ||
-    !handoff.sessionId.trim() ||
-    handoff.sessionId.length > 128 ||
-    !isP256PublicJwk(handoff.rendererPublicJwk) ||
-    !(handoff.iv instanceof Uint8Array) ||
-    !(handoff.ciphertext instanceof Uint8Array)
-  ) throw new Error('channel-handoff-invalid')
-  return { sessionId: handoff.sessionId, rendererPublicJwk: handoff.rendererPublicJwk as JsonWebKey, iv: handoff.iv, ciphertext: handoff.ciphertext }
-}
-
-/**
- * T1–T3：图像通道的 additive 参数（`operation` / `topicId` / `sourceImage`）。
- * 只做形状归一，不做业务校验（校验在 providerImageGeneration / providerImageEdit 里）。
- */
-function readProviderImageChannelRequest(input: unknown): {
-  operation: 'generate' | 'edit'
-  topicId: string
-} {
-  const record = (input ?? {}) as Record<string, unknown>
-  return {
-    operation: record.operation === 'edit' ? 'edit' : 'generate',
-    topicId: typeof record.topicId === 'string' ? record.topicId.trim() : ''
-  }
-}
-
-function isP256PublicJwk(value: unknown): value is JsonWebKey {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
-  const jwk = value as Record<string, unknown>
-  return jwk.kty === 'EC' && jwk.crv === 'P-256' && typeof jwk.x === 'string' && jwk.x.length <= 128 && typeof jwk.y === 'string' && jwk.y.length <= 128
-}
-
+const {
+  platformDataDirectory,
+  settingsStore,
+  shellTimeZone,
+  providerSecretVault,
+  providerStore,
+  appLog,
+  rendererProcessLog,
+  mainWindowHost,
+  taskIpcScheduleValidationOptions
+} = platformCore
 async function refreshTaskStateAfterCommit(): Promise<void> {
   const state = await agentServices.state.getState()
   agentTaskSchedulerRuntimeService.syncFromState(state)
-  getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
+  agentBroadcasts.stateChanged(state)
 }
 const webSearchCredentialStore = createWebSearchCredentialStore(
   createJsonFileStorage(join(app.getPath('userData'), 'platform', 'web-search-credentials.json'), { providers: {} })
 )
-const legacyAgentStorage = createJsonFileStorage<AgentStoreState>(
-  join(app.getPath('userData'), 'platform', 'agents.json'),
-  createDefaultAgentPersistentState()
-)
-const agentDatabase = createAgentPlatformDatabase(join(app.getPath('userData'), 'platform', 'agents.sqlite'))
-const assistantDatabase = createAssistantPlatformDatabase(join(app.getPath('userData'), 'platform', 'assistants.sqlite'))
-const agentRepositories = createAgentPlatformRepositories(agentDatabase)
-const assistantRepositories = createAssistantPlatformRepositories(assistantDatabase)
-/**
- * T1/T2：生成图片落 `userData/generated-images/`（文件名 = 内容 hash），消息只存引用；
- * 渲染层通过 `app-image://generated-images/<hash>.<ext>` 读图（协议见 generatedImageProtocol.ts）。
- */
-const generatedImagesDirectory = join(app.getPath('userData'), 'generated-images')
-const generatedImageStorage = createGeneratedImageStorage({ directory: generatedImagesDirectory })
-const assistantImageMessages = createAssistantImageMessageService({
-  repositories: assistantRepositories,
-  storage: generatedImageStorage
-})
-// 特权 scheme 必须在 app ready 之前注册（window 创建后只做 protocol.handle）。
-registerGeneratedImageScheme()
-const channelInboundRepository = new ChannelInboundRepository(agentDatabase)
-const channelDeliveryRepository = new ChannelDeliveryRepository(agentDatabase)
-const channelManagementRepository = new ChannelManagementRepository(agentDatabase)
-const channelAdapterRegistry = new ChannelAdapterAcceptanceRegistry()
-const channelAcceptance = new ChannelAcceptanceService(agentDatabase)
-channelAcceptance.load(channelAdapterRegistry)
-const telegramOffsetRepository = new TelegramOffsetRepository(agentDatabase)
-const slackRuntimeRepository = new SlackRuntimeRepository(agentDatabase)
-const larkRuntimeRepository = new LarkRuntimeRepository(agentDatabase)
-const qqRuntimeRepository = new QqRuntimeRepository(agentDatabase)
-const discordRuntimeRepository = new DiscordRuntimeRepository(agentDatabase)
-const wechatEnrollmentRepository = new WechatEnrollmentRepository(agentDatabase)
-const wechatRuntimeRepository = new WechatRuntimeRepository(agentDatabase)
-const jobRunStore = createJobRunSqliteStore(join(app.getPath('userData'), 'platform', 'jobs.sqlite'))
-const channelCredentialVault = createElectronChannelCredentialVault({
-  directory: join(app.getPath('userData'), 'platform', 'channel-secrets'),
-  safeStorage
-})
-const channelManagementService = new ChannelManagementService({
-  repository: channelManagementRepository,
-  vault: channelCredentialVault,
-  cipher: channelCredentialVault.payloadCipher,
-  registry: channelAdapterRegistry,
-  acceptance: channelAcceptance,
-  handoff: new ChannelSecureHandoff()
-})
-const agentStore = createAgentSqliteStoreWithOptions(
-  agentDatabase,
-  taskAutomationSmokeProfile.enabled
-    ? createTaskAutomationSmokeSeed('2026-07-17T00:00:00.000Z')
-    : workspaceTestFixtures.enabled
-      /* PLAT-33：只在 seam 命中时换上受控 agent/session 种子（受控流源桩需要归属）。 */
-      ? createWorkspaceTestFixtureAgentSeed('2026-10-06T00:00:00.000Z')
-      : createDefaultAgentPersistentState(),
-  {
-    legacyStateLoader: () => legacyAgentStorage.read()
-  }
-)
-
-const inUseModelPatrol = createInUseModelPatrolRuntime({
-    listProviders: async () => (await providerStore.getState()).providers,
-    loadAgentModelIds: async () => {
-      const state = await agentStore.getState()
-      return state.agents.flatMap((agent) =>
-        [agent.model, agent.planModel, agent.smallModel].filter(
-          (id): id is string => typeof id === 'string' && id.length > 0
-        )
-      )
-    },
-    configuredDefaultModelIds: async () =>
-      Object.values((await settingsStore.get()).modelDefaults).filter(
-        (value) => typeof value === 'string' && value.trim().length > 0
-      ),
-    testConnection: async (providerId, modelId) => {
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) return null
-      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
-    }
-})
-const agentServices = createAgentPlatformServices(agentStore, {
-  taskAutomation: {
-    getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset,
-    setPolicyPreset: async (policyPreset) => {
-      await settingsStore.update({
-        agent: {
-          taskAutomation: { policyPreset }
-        }
-      })
-    },
-    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId),
-    // 任务排期与「下次运行」都跟设置时区走；改时区当场生效，不等重启。
-    timeZone: () => shellTimeZone.get()
-  },
-  queries: {
-    agents: {
-      get: agentRepositories.agents.get,
-      list: agentRepositories.agents.list
-    },
-    workspaces: {
-      list: agentRepositories.workspaces.list,
-      getById: agentRepositories.workspaces.getById,
-      findByPath: agentRepositories.workspaces.findByPath
-    },
-    sessions: agentRepositories.sessions,
-    messages: {
-      listByCursor: agentRepositories.messages.listByCursor
-    },
-    tasks: {
-      get: agentRepositories.tasks.get,
-      list: agentRepositories.tasks.list,
-      listPage: agentRepositories.tasks.listPage,
-      listLogs: agentRepositories.taskRunLogs.list,
-      upsertLog: agentRepositories.taskRunLogs.upsert
-    },
-    taskRunLogs: {
-      get: agentRepositories.taskRunLogs.get,
-      getOwnerForTask: agentRepositories.taskRunLogs.getOwnerForTask
-    },
-    channelDeliveryAttempts: {
-      listTaskAttempts: channelDeliveryRepository.listTaskAttempts.bind(channelDeliveryRepository)
-    },
-    channelDeliveryTargets: {
-      hasEnabledTarget: channelDeliveryRepository.hasEnabledTarget.bind(channelDeliveryRepository)
-    },
-    taskMutationAudits: {
-      listByTask: agentRepositories.taskMutationAudits.listByTask,
-      listByAgent: agentRepositories.taskMutationAudits.listByAgent
-    },
-    channels: {
-      list: agentRepositories.channels.list,
-      findBySessionId: agentRepositories.channels.findBySessionId,
-      listByTaskId: (taskId: string) => {
-        const channelIds = new Set(
-          agentRepositories.channelTaskSubscriptions.listByTaskId(taskId).map((item) => item.channelId)
-        )
-        return agentRepositories.channels.listAll().filter((channel) => channelIds.has(channel.id))
-      },
-      listTaskIdsByChannelId: (channelId: string) =>
-        agentRepositories.channelTaskSubscriptions.listByChannelId(channelId).map((item) => item.taskId),
-      upsert: agentRepositories.channels.upsert,
-      delete: agentRepositories.channels.delete,
-      replaceSubscriptionsForTask: agentRepositories.channelTaskSubscriptions.replaceForTask
-    }
-  }
-})
-const skillsRoot = join(app.getPath('userData'), 'platform', 'agents', 'Skills')
-const skillRuntimeCapabilityResolver = createSkillRuntimeCapabilityResolver({
-  skillsRoot
-})
-const skillRuntimeToolsResolver = createSkillRuntimeToolsResolver({
-  skillsRoot
-})
-const skillService = createSkillService({
-  paths: {
-    skillsRoot,
-    installTempRoot: join(app.getPath('temp'), 'ai-desktop-platform', 'skill-install')
-  },
-  queries: {
-    list: agentRepositories.skills.list
-  }
-})
-const skillSearchService = createSkillSearchService()
-const agentSystemWorkspacesRoot = join(app.getPath('userData'), 'platform', 'agents', 'workspaces')
-const runtimeDriverRegistry = new RuntimeDriverRegistry()
-const toolApprovalRegistry = new ToolApprovalRegistry()
-const toolRegistry = new ToolRegistry()
-let installedProductManifestIds: string[] = []
-const productAgentToolRegistry = new ProductAgentToolRegistry()
-const productAgentToolRuntimeService = new ProductAgentToolRuntimeService({
-  registry: productAgentToolRegistry,
-  toolRegistry,
-  traceRepository: createSqliteProductAgentToolTraceRepository(agentDatabase),
-  installedProductIds: () => installedProductManifestIds
-})
-function registerProductAgentToolHandler(registration: ProductAgentToolHandlerRegistration): void {
-  productAgentToolRegistry.registerHandler(registration)
-}
-const mcpRuntimeService = new McpRuntimeService({
-  toolRegistry,
-  createServerHost: createMcpRuntimeServerHostFactory({}),
-  onServerToolsChanged: async (serverId) => {
-    try {
-      await refreshAgentMcpTools(
-        {
-          getState: () => agentStore.getState(),
-          refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
-          replaceAgentState
-        },
-        serverId
-      )
-    } catch {
-      // Keep the last written runtime status/tool catalog; renderer refresh affordances can retry explicitly.
-    }
-  }
-})
-const skillsRuntimeService = new SkillsRuntimeService({
-  toolRegistry,
-  getSkillTools: skillRuntimeToolsResolver,
-  getSkillCapabilities: skillRuntimeCapabilityResolver,
-  invokeSkillTool: createSkillRuntimeToolHost({
-    skillsRoot,
-    resolveCapabilities: skillRuntimeCapabilityResolver
+  registerGeneratedImageScheme()
+  const repositories = createRepositories({
+    userDataPath: app.getPath('userData'),
+    core: platformCore,
+    taskAutomationSmokeProfile
   })
-})
-const taskManagementToolRuntimeService = new TaskManagementToolRuntimeService({
-  store: agentStore,
-  commands: agentServices.taskCommands,
-  runTask: (input) => agentTaskExecutionCoordinator!.enqueueManualRun(input)
-    .then((runLog) => ({ taskId: input.taskId, runLogId: runLog.id }))
-})
-const agentRuntimeCompositionService = new AgentRuntimeCompositionService({
-  toolRegistry,
-  mcpRuntime: mcpRuntimeService,
-  skillsRuntime: skillsRuntimeService,
-  productToolsRuntime: productAgentToolRuntimeService,
-  taskManagementRuntime: taskManagementToolRuntimeService,
-  resolveEffectiveModel: (agent) =>
-    resolveEffectiveAgentModel({
-      agent,
-      getProviderState: providerStore.getState,
-      getConfiguredDefaultModelId: async () => (await settingsStore.get()).modelDefaults.agentModelId
-    })
-})
-const agentRuntimeService = new AgentSessionRuntimeService({
-  getAgentState: () => agentStore.getState(),
-  driverRegistry: runtimeDriverRegistry,
-  compositionService: agentRuntimeCompositionService,
-  toolApprovalRegistry,
-  traceRecorder: createAgentRuntimeConsoleTraceRecorder()
-})
-let platformRuntimesDisposed = false
-/**
- * P1-06m 退出期编排状态（真机 P1-07R runG/runI：已提交独立窗存在时优雅退出无法完成，窗口全销毁但主进程残留）：
- * - `appQuitting`：app 级退出期标记，`before-quit` 置位。派生窗工厂据此在退出期**不再** preventDefault
- *   （否则 Electron 的退出关窗相位被取消 ⇒ 进程残留）；退出期的派生窗销毁由宿主 `appExit` 统一执行。
- * - `quitDisposeStarted`：本轮退出的有界清理是否已启动（重复 `before-quit` 绝不并发第二条清理链）。
- * - `quitDisposeSettled`：清理已结束，退出可以真正放行（第二次 `app.quit()` 不再挂起）。
- */
-let appQuitting = false
-let quitDisposeStarted = false
-let quitDisposeSettled = false
-/** 退出清理挂起本轮退出的上界：清理再慢也绝不让进程永远退不出去（有界逃逸）。 */
-const QUIT_DISPOSE_BUDGET_MS = 15_000
-let jobRuntimeForDisposal: JobRuntime | null = null
+  const {
+    legacyAgentStorage,
+    agentDatabase,
+    assistantDatabase,
+    agentRepositories,
+    assistantRepositories,
+    generatedImagesDirectory,
+    generatedImageStorage,
+    assistantImageMessages,
+    channelInboundRepository,
+    channelDeliveryRepository,
+    channelManagementRepository,
+    channelAdapterRegistry,
+    channelAcceptance,
+    telegramOffsetRepository,
+    slackRuntimeRepository,
+    larkRuntimeRepository,
+    qqRuntimeRepository,
+    discordRuntimeRepository,
+    wechatEnrollmentRepository,
+    wechatRuntimeRepository,
+    jobRunStore,
+    channelCredentialVault,
+    channelManagementService,
+    agentStore,
+    inUseModelPatrol,
+    agentServices,
+  } = repositories
 
-/** 供应商的启用/凭据/增删都会改变「有没有可探目标」，调度要跟着走。 */
-function syncInUseModelPatrolScheduleFromState(): void {
-  if (!jobRuntimeForDisposal) return
-  const runtime = jobRuntimeForDisposal
-  void syncInUseModelPatrolSchedule(runtime, {
-    isReady: async () => {
-      const providers = (await providerStore.getState()).providers
-      return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
+  const agentRuntime = createAgentRuntime({
+    userDataPath: app.getPath('userData'),
+    tempPath: app.getPath('temp'),
+    core: platformCore,
+    repositories,
+    hooks: {
+      getAgentTaskExecutionCoordinator, getAgentTaskExecutionCoordinatorOrNull, setAgentTaskExecutionCoordinator,
+      getAgentTaskRunController, setAgentTaskRunController,
+      getJobRuntimeForDisposal, setJobRuntimeForDisposal,
+      getPanelWorkspaceForDisposal, setPanelWorkspaceForDisposal,
+      getProductIpcRegistryForDisposal, setProductIpcRegistryForDisposal,
+      getDisposeTaskAutomationMaintenance, setDisposeTaskAutomationMaintenance,
+      getDisposeJobRunRetention, setDisposeJobRunRetention,
+      getDisposeChannelMaintenanceJobs, setDisposeChannelMaintenanceJobs,
+      getInstalledProductManifestIds, setInstalledProductManifestIds
     }
   })
-}
-/**
- * 退出清理开始后 product IPC 只回答结构化 unavailable（见 `productIpcInvoker`）。
- * 这里持有同一实例，保证「清理已开始」先于任何产品 DB 关闭被登记。
- */
-let productIpcRegistryForDisposal: ReturnType<typeof createProductIpcRegistry> | null = null
-/** workspace 组合体：只在产品注册 seal 之后建立，用于退出时的有界布局 flush。 */
-let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null
-let disposeTaskAutomationMaintenance: (() => void) | null = null
-let disposeJobRunRetention: (() => void) | null = null
-let disposeChannelDeliveryMaintenance: (() => void) | null = null
-let disposeChannelInboundRecovery: (() => void) | null = null
-let disposeTelegramRuntimeMaintenance: (() => void) | null = null
-let disposeSlackRuntimeMaintenance: (() => void) | null = null
-let disposeLarkRuntimeMaintenance: (() => void) | null = null
-let disposeQqRuntimeMaintenance: (() => void) | null = null
-let disposeDiscordRuntimeMaintenance: (() => void) | null = null
-let disposeWechatRuntimeMaintenance: (() => void) | null = null
-/**
- * P1-06m：退出第一件事 —— 把 debounce（250ms）窗口内的待写布局**有界落盘**并记录结果。
- * 放在所有其它清理之前：后续清理可能很慢甚至挂住，绝不让它吃掉退出前最后一次布局变更。
- * 组合体尚未建立（禁用态/启动早期）时直接跳过：没有工作区就没有待写可谈。
- */
-async function flushPanelWorkspaceLayoutForExit(): Promise<void> {
-  if (panelWorkspaceForDisposal === null) return
-  // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
-  reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })
-}
-async function disposePlatformRuntimes(): Promise<void> {
-  if (platformRuntimesDisposed) return
-  platformRuntimesDisposed = true
-  // 先关产品 IPC 入口，再拆产品服务/DB：退出期迟到的 renderer 调用不应再触碰已关闭的连接。
-  productIpcRegistryForDisposal?.markClosed()
-  await flushPanelWorkspaceLayoutForExit()
-  disposeTaskAutomationMaintenance?.()
-  disposeTaskAutomationMaintenance = null
-  disposeJobRunRetention?.()
-  disposeJobRunRetention = null
-  disposeChannelDeliveryMaintenance?.()
-  disposeChannelDeliveryMaintenance = null
-  disposeChannelInboundRecovery?.()
-  disposeChannelInboundRecovery = null
-  disposeTelegramRuntimeMaintenance?.()
-  disposeTelegramRuntimeMaintenance = null
-  disposeSlackRuntimeMaintenance?.()
-  disposeSlackRuntimeMaintenance = null
-  disposeLarkRuntimeMaintenance?.()
-  disposeLarkRuntimeMaintenance = null
-  disposeQqRuntimeMaintenance?.()
-  disposeQqRuntimeMaintenance = null
-  disposeDiscordRuntimeMaintenance?.()
-  disposeDiscordRuntimeMaintenance = null
-  disposeWechatRuntimeMaintenance?.()
-  disposeWechatRuntimeMaintenance = null
+  const {
+    skillsRoot,
+    skillRuntimeCapabilityResolver,
+    skillRuntimeToolsResolver,
+    skillService,
+    skillSearchService,
+    agentSystemWorkspacesRoot,
+    runtimeDriverRegistry,
+    toolApprovalRegistry,
+    toolRegistry,
+    productAgentToolRegistry,
+    productAgentToolRuntimeService,
+    mcpRuntimeService,
+    skillsRuntimeService,
+    taskManagementToolRuntimeService,
+    agentRuntimeCompositionService,
+    agentRuntimeService,
+  registerProductAgentToolHandler,
+  syncInUseModelPatrolScheduleFromState
+  } = agentRuntime
+
+/** 退出清理的唯一实现（顺序由 lifecycle/quit.ts 决定）；这里只提供端口。 */
+const runtimeDisposer = createRuntimeDisposer({
+  markProductIpcClosed: () => getProductIpcRegistryForDisposal()?.markClosed(),
+  flushPanelWorkspaceLayout: async () => {
+    // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
+    const workspace = getPanelWorkspaceForDisposal()
+    if (workspace === null) return
+    reportPanelWorkspaceFlush({ report: await workspace.flushLayout() })
+  },
+  disposeMaintenanceTimers: [
+    () => {
+      getDisposeTaskAutomationMaintenance()?.()
+      setDisposeTaskAutomationMaintenance(null)
+    },
+    () => {
+      getDisposeJobRunRetention()?.()
+      setDisposeJobRunRetention(null)
+    },
+    () => {
+      getDisposeChannelMaintenanceJobs()?.()
+      setDisposeChannelMaintenanceJobs(null)
+    }
+  ],
   // Abort every adapter lifetime before the shared SQLite fence closes all owners.
-  await telegramRuntimeManager.dispose()
-  await slackRuntimeManager.dispose()
-  await larkRuntimeManager.dispose()
-  await qqRuntimeManager.dispose()
-  await discordRuntimeManager.dispose()
-  await wechatRuntimeManager.dispose()
-  channelManagementRepository.fenceAllForQuit(new Date().toISOString())
-  agentTaskSchedulerRuntimeService.stop()
-  jobRuntimeForDisposal?.stopAll()
-  await productServiceDisposerRegistry.disposeAll()
-  await Promise.allSettled([
-    agentRuntimeService.dispose(),
-    mcpRuntimeService.dispose()
-  ])
-  // workspace：有界 flush 后释放路由目标；flush 超时/失败只如实上报，不阻断其余清理。
-  // P1-06m：dispose 报告必须落日志（含「退出瞬间是否仍有待写」与销毁窗数/撤销 owner 数），绝不静默丢弃。
-  const workspaceDisposeReport = await panelWorkspaceForDisposal?.dispose()
-  if (workspaceDisposeReport !== undefined) reportPanelWorkspaceDispose({ report: workspaceDisposeReport })
-  panelWorkspaceForDisposal = null
-  jobRunStore.close()
+  disposeAdapters: [
+    () => telegramRuntimeManager.dispose(),
+    () => slackRuntimeManager.dispose(),
+    () => larkRuntimeManager.dispose(),
+    () => qqRuntimeManager.dispose(),
+    () => discordRuntimeManager.dispose(),
+    () => wechatRuntimeManager.dispose()
+  ],
+  fenceChannels: () => channelManagementRepository.fenceAllForQuit(new Date().toISOString()),
+  stopTaskScheduler: () => agentTaskSchedulerRuntimeService.stop(),
+  stopJobs: () => getJobRuntimeForDisposal()?.stopAll(),
+  disposeProductServices: () => productServiceDisposerRegistry.disposeAll(),
+  disposeAgentRuntimes: [() => agentRuntimeService.dispose(), () => mcpRuntimeService.dispose()],
+  disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose(),
+  reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report }),
+  closeJobRunStore: () => jobRunStore.close()
+})
+async function disposePlatformRuntimes(): Promise<void> {
+  await runtimeDisposer.dispose()
 }
-function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
-  getMainWindow()?.webContents.send(IpcChannels.agentsChannelRuntimeStateChanged, snapshot)
-}
-const channelRuntimeSupervisor = new ChannelRuntimeSupervisor({
-  query: channelManagementRepository.query,
-  restart: async (channelId) => {
-    await channelManagementService.restart({ id: channelId, actorId: 'agent-runtime-ui' })
-    broadcastChannelRuntimeSnapshot(channelRuntimeSupervisor.snapshot())
+// 两条纯闭包（唯一依赖是接缝之后就绪的 `mainWindowHost`）提到通道构造之前：行为不变——发送那一刻
+// 仍然现取主窗。通道运行时快照的广播就是这个出口，而通道构造仍在它原本的位置。
+const getMainWindow = (): BrowserWindow | null => mainWindowHost.getMainWindow()
+const agentBroadcasts = createAgentBroadcasts({ getMainWindow: () => getMainWindow() })
+
+/**
+ * 通道与任务作业的构造。**退出链没有搬**：`markClosed → flush 布局 → 8 个维护定时器 → 6 个
+ * adapter dispose → fenceAllForQuit → jobs stopAll` 仍在下面的 `createRuntimeDisposer` 里，
+ * 那条链错位在退出瞬间静默出错，全量测试看不见。
+ */
+const channelsAndJobs = createChannelsAndJobs({
+  settingsStore,
+  agentBroadcasts,
+  agentRuntimeService,
+  repositories: {
+    agentDatabase,
+    agentRepositories,
+    agentServices,
+    agentStore,
+    channelInboundRepository,
+    channelDeliveryRepository,
+    channelManagementRepository,
+    channelCredentialVault,
+    channelManagementService,
+    telegramOffsetRepository,
+    slackRuntimeRepository,
+    larkRuntimeRepository,
+    qqRuntimeRepository,
+    discordRuntimeRepository,
+    wechatEnrollmentRepository,
+    wechatRuntimeRepository
   }
 })
-const telegramDeliveryTransport = new TelegramDeliveryTransport()
-const slackDeliveryTransport = new SlackDeliveryTransport()
-const larkDeliveryTransport = new LarkDeliveryTransport()
-const qqDeliveryTransport = new QqDeliveryTransport()
-const discordDeliveryTransport = new DiscordDeliveryTransport()
-const wechatDeliveryTransport = new WechatDeliveryTransport()
-const channelDeliveryService = new ChannelDeliveryService({
-  repository: channelDeliveryRepository,
-  cipher: channelCredentialVault.payloadCipher,
-  transport: new ChannelDeliveryTransportRouter({
-    typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
-    telegram: telegramDeliveryTransport,
-    slack: slackDeliveryTransport,
-    lark: larkDeliveryTransport,
-    qq: qqDeliveryTransport,
-    discord: discordDeliveryTransport,
-    wechat: wechatDeliveryTransport
-  })
-})
-const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
-const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
-  inbound: channelInboundRepository,
-  delivery: channelDeliveryService,
-  cipher: channelCredentialVault.payloadCipher,
-  runtime: agentRuntimeService,
-  runs: channelDispatchRuns,
-  failureText: async (kind) => {
-    const language = (await settingsStore.get()).language
-    if (language === 'zh-CN') {
-      return kind === 'run-interrupted' ? '上一条消息处理被中断，请重新发送。' : '处理失败，请稍后重试。'
-    }
-    return kind === 'run-interrupted'
-      ? 'The previous request was interrupted. Please send it again.'
-      : 'The request failed. Please try again later.'
-  }
-})
-const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
-  inbound: channelInboundRepository,
-  coordinator: channelInboundExecutionCoordinator
-})
-let channelInboundService!: ChannelInboundService
-channelInboundService = new ChannelInboundService({
-  repository: channelInboundRepository,
-  encryption: { cipher: channelCredentialVault.payloadCipher },
-  sessions: {
-    createForConversation: async ({ agentId }) => (await agentServices.sessions.create({
-      agentId,
-      name: 'Channel conversation',
-      workspace: { type: 'system' }
-    })).id,
-    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
-    exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
-  },
-  // Untrusted external text is wrapped and narrowly screened before it is encrypted and stored.
-  contentGuard: createChannelInboundContentGuard({
-    channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
-  }),
-  onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
-})
-const telegramRuntimeManager = new TelegramRuntimeManager({
-  inbound: channelInboundRepository,
-  inboundService: channelInboundService,
-  offsets: telegramOffsetRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  delivery: telegramDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const slackRuntimeManager = new SlackRuntimeManager({
-  inbound: channelInboundService,
-  runtime: slackRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: slackDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const larkRuntimeManager = new LarkRuntimeManager({
-  inbound: channelInboundService,
-  runtime: larkRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: larkDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const qqRuntimeManager = new QqRuntimeManager({
-  inbound: channelInboundService,
-  runtime: qqRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: qqDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const discordRuntimeManager = new DiscordRuntimeManager({
-  inbound: channelInboundService,
-  runtime: discordRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: discordDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const wechatRuntimeManager = new WechatRuntimeManager({
-  inbound: channelInboundService,
-  runtime: wechatRuntimeRepository,
-  enrollments: wechatEnrollmentRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: wechatDeliveryTransport
-})
-channelManagementService.setRuntime({
-  start: (channelId, generation, token) => {
-    const type = channelManagementRepository.channelType(channelId)
-    if (type === 'telegram') return telegramRuntimeManager.start(channelId, generation, token)
-    if (type === 'slack') return slackRuntimeManager.start(channelId, generation, token)
-    if (type === 'feishu') return larkRuntimeManager.start(channelId, generation, token)
-    if (type === 'qq') return qqRuntimeManager.start(channelId, generation, token)
-    if (type === 'discord') return discordRuntimeManager.start(channelId, generation, token)
-    if (type === 'wechat') return wechatRuntimeManager.start(channelId, generation, token)
-    return Promise.resolve(false)
-  },
-  stop: (channelId, token) => {
-    telegramRuntimeManager.stop(channelId, token)
-    slackRuntimeManager.stop(channelId, token)
-    larkRuntimeManager.stop(channelId, token)
-    qqRuntimeManager.stop(channelId, token)
-    discordRuntimeManager.stop(channelId, token)
-    wechatRuntimeManager.stop(channelId, token)
-  }
-})
-const telegramRuntimeMaintenance = new TelegramRuntimeMaintenance(telegramOffsetRepository)
-const slackRuntimeMaintenance = new SlackRuntimeMaintenance(slackRuntimeRepository)
-const larkRuntimeMaintenance = new LarkRuntimeMaintenance(larkRuntimeRepository)
-const qqRuntimeMaintenance = new QqRuntimeMaintenance(qqRuntimeRepository)
-const discordRuntimeMaintenance = new DiscordRuntimeMaintenance(discordRuntimeRepository)
-const wechatRuntimeMaintenance = new WechatRuntimeMaintenance(wechatEnrollmentRepository, wechatRuntimeRepository)
-const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({
-  repository: channelDeliveryRepository,
-  retryDue: () => channelDeliveryService.retryDue()
-})
-const deliverTaskResultToChannels = createTaskChannelDelivery({
-  delivery: channelDeliveryService,
-  repository: channelDeliveryRepository,
-  patchDeliverySummary: async (runLogId, deliverySummary) => {
-    await agentServices.tasks.patchRunLog(runLogId, { deliverySummary })
-  },
-  runs: agentRepositories.taskRunLogs,
-  readSessionMessages: async (sessionId: string) => {
-    const state = await agentStore.getState()
-    return (state.messagesBySessionId[sessionId] ?? []).map((message) => ({ role: message.role, status: message.status, text: message.searchableText }))
-  },
-  getLanguage: async () => (await settingsStore.get()).language
-})
-const taskAutomationMaintenance = createTaskAutomationMaintenance({
-  attempts: {
-    markPendingUnknown: () => 0,
-    deleteOlderThan: () => 0
-  },
-  runs: agentRepositories.taskRunLogs,
-  audits: agentRepositories.taskMutationAudits,
-  checkpoints: agentRepositories.taskAutomationMaintenance
-})
+const {
+  channelRuntimeSupervisor,
+  channelInboundService,
+  channelInboundExecutionRunner,
+  channelDeliveryMaintenance,
+  deliverTaskResultToChannels,
+  taskAutomationMaintenance,
+  telegramRuntimeManager,
+  slackRuntimeManager,
+  larkRuntimeManager,
+  qqRuntimeManager,
+  discordRuntimeManager,
+  wechatRuntimeManager,
+  telegramRuntimeMaintenance,
+  slackRuntimeMaintenance,
+  larkRuntimeMaintenance,
+  qqRuntimeMaintenance,
+  discordRuntimeMaintenance,
+  wechatRuntimeMaintenance
+} = channelsAndJobs
 const agentTaskDispatchService = new AgentTaskDispatchService({
   services: agentServices,
   runtime: agentRuntimeService,
@@ -904,20 +469,20 @@ const agentTaskDispatchService = new AgentTaskDispatchService({
   onStateChanged: async () => {
     const nextState = await agentStore.getState()
     agentTaskSchedulerRuntimeService.syncFromState(nextState)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+    agentBroadcasts.stateChanged(nextState)
   }
 })
 const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
   startupAt: new Date().toISOString(),
   getAgentState: () => agentStore.getState(),
   enqueueDueTask: async (task) => {
-    await agentTaskExecutionCoordinator?.enqueueDueTask(task.taskId)
+    await getAgentTaskExecutionCoordinatorOrNull()?.enqueueDueTask(task.taskId)
   }
 })
-agentTaskExecutionCoordinator = new AgentTaskExecutionCoordinator({
+setAgentTaskExecutionCoordinator(new AgentTaskExecutionCoordinator({
   services: agentServices,
   dispatchQueuedRun: (input) => agentTaskDispatchService.dispatchQueuedRun(input)
-})
+}))
 agentStateCoordinator = createAgentStateCoordinator({
   getState: () => agentStore.getState(),
   replaceState: (state) => agentStore.replace(state),
@@ -929,7 +494,7 @@ agentStateCoordinator = createAgentStateCoordinator({
   syncChannelsFromState: () => undefined,
   syncTaskSchedulerFromState: (state) => agentTaskSchedulerRuntimeService.syncFromState(state),
   emitStateChanged: (state) => {
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
+    agentBroadcasts.stateChanged(state)
   }
 })
 const agentModelGatewayService = createAgentModelGatewayService({
@@ -996,7 +561,6 @@ const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies(
   snapshotStore: agentRuntimeProbeSnapshotStore,
   systemWorkspaceRoot: agentSystemWorkspacesRoot
 })
-let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
 const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
   const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
   const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
@@ -1038,7 +602,7 @@ const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     runtime: taskManagementToolRuntimeService,
     commands: agentServices.taskCommands,
     getAgentState: () => agentStore.getState(),
-    getTaskRunController: () => agentTaskRunController
+    getTaskRunController: () => getAgentTaskRunController()
   }
 })
 const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
@@ -1098,7 +662,7 @@ const agentIpcHandlers = createAgentIpcHandlers(
   agentRuntimeService,
   {
     runTask: (agentId: string, taskId: string, expectedRevision: number) =>
-      agentTaskExecutionCoordinator!.enqueueManualRun({
+      getAgentTaskExecutionCoordinator().enqueueManualRun({
         agentId,
         taskId,
         expectedRevision,
@@ -1108,10 +672,11 @@ const agentIpcHandlers = createAgentIpcHandlers(
   },
   {
     cancelTaskRun: (runLogId: string) => {
-      if (!agentTaskRunController) {
+      const controller = getAgentTaskRunController()
+      if (!controller) {
         throw new Error('Agent task run controller is not available.')
       }
-      return agentTaskRunController.cancelTaskRun(runLogId)
+      return controller.cancelTaskRun(runLogId)
     }
   },
   {
@@ -1121,13 +686,13 @@ const agentIpcHandlers = createAgentIpcHandlers(
   {
     listProductToolPackages: async (agentId: string) => {
       const state = await agentStore.getState()
-      return productAgentToolRegistry.listPackages(installedProductManifestIds).map((pkg) =>
+      return productAgentToolRegistry.listPackages(getInstalledProductManifestIds()).map((pkg) =>
         buildProductAgentToolPackageEditorView({
           package: pkg,
           binding: (state.agentProductToolPackages ?? []).find(
             (item) => item.agentId === agentId && item.productId === pkg.productId
           ),
-          installedProductIds: installedProductManifestIds
+          installedProductIds: getInstalledProductManifestIds()
         })
       )
     },
@@ -1146,7 +711,7 @@ const agentIpcHandlers = createAgentIpcHandlers(
         })
       }))
       syncProductToolsRuntimeFromState(nextState)
-      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+      agentBroadcasts.stateChanged(nextState)
       return nextState
     },
     listProductToolCallTracePage: async (query: {
@@ -1181,10 +746,6 @@ function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   void agentRuntimeProbeSnapshotStore.clear()
 }
 
-function broadcastAssistantStreamEvent(channel: string, payload: unknown): void {
-  getMainWindow()?.webContents.send(channel, payload)
-}
-
 const assistantTopicNamingService = new AssistantTopicNamingService({
   isEnabled: async () => (await settingsStore.get()).assistant.topicNamingEnabled,
   getLanguage: async () => (await settingsStore.get()).language,
@@ -1205,12 +766,13 @@ const assistantChatRuntime = createAssistantChatRuntimeService({
   topicNaming: assistantTopicNamingService,
   getTopicNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
   getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId,
-  events: {
-    onChunk: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamChunk, payload),
-    onDone: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamDone, payload),
-    onError: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamError, payload),
-    onStatus: (snapshot) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamStatusChanged, snapshot)
-  }
+  logContextPlan: (summary) =>
+    appLog.log('info', 'assistant.context-plan', { ...summary }),
+  // 流式广播的装配只有这一行：通道名与窗口都在 assistantStreamBroadcast 里，
+  // 组合根不再出现任何一个 assistantsStream* 的名字。
+  // 传 thunk 而不是引用：`getMainWindow` 在本文件更靠后声明，直接取值会撞 TDZ（tsc 2448）。
+  // 而它本来就应该在**发送那一刻**取窗口——所以延迟取值正是我们想要的行为。
+  events: createAssistantStreamSink({ getMainWindow: () => getMainWindow() })
 })
 const assistantTemplateRegistry = new AssistantTemplateRegistry()
 assistantTemplateRegistry.registerMany(platformAssistantTemplates)
@@ -1239,22 +801,9 @@ async function ensureDefaultAssistantSeed(): Promise<void> {
   }
 }
 
-function getMainWindow(): BrowserWindow | null {
-  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
-}
 
-/**
- * **自绘标题栏**（`frame: false`，见 `window/windowChrome.ts`）下，窗口按钮的**唯一**目标：
- * 发起调用的那个窗口。
- *
- * 之前的实现一律 `getMainWindow()`：主窗只有一层时等价，但独立页面窗/面板窗自己画出最小化/最大化/关闭后，
- * 点「关闭」会去关主窗（用户可见的严重错乱）。身份不从渲染层参数来——`BrowserWindow.fromWebContents`
- * 由 Main 用 `event.sender` 推导，参数里没有任何 webContentsId/窗口句柄。
- */
-function resolveInvokingWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
-  const window = BrowserWindow.fromWebContents(event.sender)
-  return window && !window.isDestroyed() ? window : null
-}
+const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
+  mainWindowHost.resolveInvokingWindow(event)
 
 async function replaceAgentState(state: AgentStoreState, options?: ReplaceAgentStateOptions): Promise<AgentStoreState> {
   if (!agentStateCoordinator) {
@@ -1289,7 +838,7 @@ async function mergeAndReplaceAgentSessionState(
   syncProductToolsRuntimeFromState(nextState)
   mcpRuntimeService.syncFromState(nextState)
   agentTaskSchedulerRuntimeService.syncFromState(nextState)
-  getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+  agentBroadcasts.stateChanged(nextState)
   return nextState
 }
 
@@ -1330,6 +879,7 @@ export type DesktopAppBootstrapOptions = {
     getNetworkSettings: () => Promise<NetworkSettings>
     /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
     getTimeZone?: () => string
+    onSettingsCommitted?: (listener: SettingsCommittedListener) => () => void
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
@@ -1399,945 +949,85 @@ function registerIpcHandlers(
     openExternal: async (url) => { await shell.openExternal(url) }
   })
 
-  ipcMain.handle(IpcChannels.appInfo, () => ({
-    name: app.getName(),
-    version: app.getVersion(),
-    electron: process.versions.electron,
-    chrome: process.versions.chrome,
-    node: process.versions.node,
-    platform: process.platform,
-    osRelease: release(),
-    theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-  }))
+  // 窗口/应用/外壳/对话框类 16 个 handler 搬到 ipc/windowIpc.ts：运行期状态只经两个端口进来。
+  registerWindowIpc(ipcMain, { getMainWindow, resolveInvokingWindow })
 
-  ipcMain.handle(IpcChannels.productSummaries, () => summarizeProductManifests(productManifests))
-
-  // 自绘标题栏的窗口按钮：目标窗口一律由 `event.sender` 推导（主窗/独立窗同一套按钮，见 resolveInvokingWindow）
-  ipcMain.handle(IpcChannels.windowMinimize, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.minimize())
-  ipcMain.handle(IpcChannels.windowMaximize, (event: IpcMainInvokeEvent) => {
-    const window = resolveInvokingWindow(event)
-    if (!window) return false
-    if (window.isMaximized()) window.unmaximize()
-    else window.maximize()
-    return window.isMaximized()
-  })
-  ipcMain.handle(IpcChannels.windowClose, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.close())
-  ipcMain.handle(IpcChannels.windowIsMaximized, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.isMaximized() ?? false)
-  ipcMain.handle(IpcChannels.windowSetMinimumSize, (event: IpcMainInvokeEvent, width: number, height: number) => {
-    const window = resolveInvokingWindow(event)
-    if (!window) return
-    const minimumWidth = Number.isFinite(width) ? Math.max(0, Math.floor(width)) : DEFAULT_MIN_WINDOW_WIDTH
-    const minimumHeight = Number.isFinite(height) ? Math.max(0, Math.floor(height)) : DEFAULT_MIN_WINDOW_HEIGHT
-    window.setMinimumSize(minimumWidth, minimumHeight)
-    const [nextWidth, nextHeight] = clampWindowSizeToMinimum(window.getSize() as [number, number], {
-      width: minimumWidth,
-      height: minimumHeight
-    })
-    if (nextWidth !== window.getSize()[0] || nextHeight !== window.getSize()[1]) {
-      window.setSize(nextWidth, nextHeight)
-    }
-  })
-  ipcMain.handle(IpcChannels.windowResetMinimumSize, (event: IpcMainInvokeEvent) => {
-    const window = resolveInvokingWindow(event)
-    if (!window) return
-    window.setMinimumSize(DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT)
-    const [nextWidth, nextHeight] = clampWindowSizeToMinimum(window.getSize() as [number, number], {
-      width: DEFAULT_MIN_WINDOW_WIDTH,
-      height: DEFAULT_MIN_WINDOW_HEIGHT
-    })
-    if (nextWidth !== window.getSize()[0] || nextHeight !== window.getSize()[1]) {
-      window.setSize(nextWidth, nextHeight)
-    }
-  })
-  /**
-   * 自绘标题栏的**菜单条**（Windows 上 `frame: false` 之后，OS 不再绘制菜单栏，Alt 也唤不出）。
-   *
-   * 只暴露两件事：应用菜单的**顶层标签**（供渲染层排版），以及「按索引弹出既有子菜单」。
-   * 没有任意 channel/命令/role 字符串入口——菜单内容仍是 `buildAppMenu` 里那一份
-   * `Menu.setApplicationMenu`，点击行为与原生菜单逐字一致（不新增第二套命令表）。
-   */
-  ipcMain.handle(IpcChannels.windowMenuList, () => {
-    const menu = Menu.getApplicationMenu()
-    if (!menu) return []
-    return menu.items
-      .map((item, index) => ({ index, label: item.label, visible: item.visible }))
-      .filter((item) => item.visible && item.label.length > 0)
-  })
-  ipcMain.handle(IpcChannels.windowMenuPopup, (event: IpcMainInvokeEvent, index: number, x: number, y: number) => {
-    const window = resolveInvokingWindow(event)
-    const items = Menu.getApplicationMenu()?.items ?? []
-    const submenu = Number.isInteger(index) ? items[index]?.submenu : undefined
-    if (!window || !submenu) return false
-    // 坐标是渲染层给的「菜单按钮左下角」（窗口内容 CSS px = DIP）；非有限值一律夹到 0
-    const popupX = Math.max(0, Math.round(Number.isFinite(x) ? x : 0))
-    const popupY = Math.max(0, Math.round(Number.isFinite(y) ? y : 0))
-    return new Promise<boolean>((resolve) => {
-      try {
-        submenu.popup({
-          window,
-          x: popupX,
-          y: popupY,
-          // 关闭回调：渲染层据此撤掉按钮的「打开中」高亮（渲染层不自己猜关闭时机）
-          callback: () => resolve(true)
-        })
-      } catch {
-        resolve(false)
-      }
-    })
-  })
-  ipcMain.handle(IpcChannels.shellOpenExternal, (_event: IpcMainInvokeEvent, url: string) => {
-    if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      throw new Error('Only http(s) URLs can be opened externally.')
-    }
-    return shell.openExternal(url)
-  })
-  ipcMain.handle(IpcChannels.shellOpenPath, (_event: IpcMainInvokeEvent, path: string) => {
-    if (!path.trim()) return ''
-    return shell.openPath(path)
-  })
-  ipcMain.handle(IpcChannels.appQuoteToMain, (_event: IpcMainInvokeEvent, text: string) => {
-    const window = getMainWindow()
-    if (!window || !text.trim()) return false
-    if (window.isMinimized()) window.restore()
-    if (!window.isVisible()) window.show()
-    window.focus()
-    setTimeout(() => {
-      if (!window.isDestroyed()) {
-        window.webContents.send(IpcChannels.appQuoteToMain, text)
-      }
-    }, 100)
-    return true
-  })
-  ipcMain.handle(IpcChannels.dialogSelectDirectory, async () => {
-    const options: OpenDialogOptions = {
-      properties: ['openDirectory', 'createDirectory'],
-      title: '选择工作区'
-    }
-    const window = getMainWindow()
-    const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
-    return result.canceled ? null : result.filePaths[0] ?? null
-  })
-  ipcMain.handle(IpcChannels.dialogSelectFiles, async () => {
-    const options: OpenDialogOptions = {
-      properties: ['openFile', 'multiSelections'],
-      title: '选择附件'
-    }
-    const window = getMainWindow()
-    const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
-    return result.canceled ? [] : result.filePaths
-  })
-  ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))
-  ipcMain.handle(IpcChannels.appSaveClipboardImage, async (_event: IpcMainInvokeEvent, payload: unknown) => {
-    // Renderer paste path: clipboard pixels are not a filesystem path, so write one temp file and
-    // hand the existing attachment reader a normal path.
-    if (!payload || typeof payload !== 'object') throw new Error('Invalid clipboard image payload.')
-    const { data, mimeType } = payload as { data?: unknown; mimeType?: unknown }
-    const bytes =
-      data instanceof Uint8Array
-        ? data
-        : data instanceof ArrayBuffer
-          ? new Uint8Array(data)
-          : null
-    if (!bytes || bytes.byteLength === 0 || bytes.byteLength > 20 * 1024 * 1024) {
-      throw new Error('Clipboard image is empty or too large.')
-    }
-    const extension =
-      mimeType === 'image/jpeg'
-        ? 'jpg'
-        : mimeType === 'image/webp'
-          ? 'webp'
-          : mimeType === 'image/gif'
-            ? 'gif'
-            : 'png'
-    const directory = join(app.getPath('temp'), 'macrobay-clipboard')
-    await mkdirSync(directory, { recursive: true })
-    const filePath = join(directory, `paste-${Date.now()}-${randomUUID()}.${extension}`)
-    await writeFile(filePath, bytes)
-    return filePath
-  })
-  // PLAT-27：`platform:external-apps-*` 此前只有声明、没有 handler（死通道 ⇒ Agent 聊天栏「外部应用」列表
-  // 永不出现）。主进程侧本就存在可平凡接线的枚举实现（`ExternalAppsService`）⇒ 注册 handler（情形 ①），
-  // 不新增通道、不改按钮的 fail-closed 行为；枚举来源是 OS 的协议处理器查询，路径入参经既有 allow-list 校验。
-  ipcMain.handle(IpcChannels.externalAppsListInstalled, () => externalAppsService.listInstalledAppViews())
-  ipcMain.handle(IpcChannels.externalAppsLaunchWorkspace, (_event: IpcMainInvokeEvent, input: unknown) =>
-    externalAppsService.launchWorkspace(validateLaunchExternalAppRequest(input)))
-
-  ipcMain.handle(IpcChannels.settingsGet, () => settingsStore.get())
-  ipcMain.handle(IpcChannels.settingsUpdate, async (_event: IpcMainInvokeEvent, patch: AppSettingsPatch) => {
-    // 非法代理地址必须在这里就被拒：校验先于落盘，settings.json 一个字都不写。
-    assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)
-    const next = await settingsStore.update(patch)
-    if (patch.language) {
-      await ensureDefaultAssistantSeed()
-      // 内置 Agent/会话文案按 id 重新解析到新语言；用户改过的字段不动，也不写任何迁移标记。
-      await refreshBuiltinSeedCopy(next.language)
-    }
-    // 时区改动必须立刻影响后续排期/日界，不必等重启。
-    await shellTimeZone.refresh()
-    await applySessionProxySettings(next.network)
-    // PLAT-32/S1：偏好的**唯一对账点** = 这条显式通知（受控读取不再带副作用；通知自身绝不 reject）
-    void panelWorkspaceForDisposal?.notifyPreferencesChanged()
-    return next
-  })
-  ipcMain.handle(IpcChannels.channelsCatalog, () => channelManagementService.catalog())
-  ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.list())
-  ipcMain.handle(IpcChannels.channelsGet, (_event: IpcMainInvokeEvent, id: unknown) => channelManagementService.get(id))
-  ipcMain.handle(IpcChannels.channelsCreate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.create(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsUpdate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.update(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsDisable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.disable(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsRequestEnable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.requestEnable(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsRestart, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.restart(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsDelete, async (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.delete(asChannelInput(input)))
-  ipcMain.handle(IpcChannels.channelsCredentialBegin, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.beginCredential({ id: value.id, senderId: _event.sender.id })
-  })
-  ipcMain.handle(IpcChannels.channelsCredentialSubmit, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.provision({ id: value.id, actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
-  })
-  ipcMain.handle(IpcChannels.channelsCredentialRotate, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.rotate({ id: value.id, actorId: value.actorId, senderId: _event.sender.id, handoff: asChannelHandoff(value.handoff) })
-  })
-  ipcMain.handle(IpcChannels.channelsPolicyBegin, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.beginPolicy({ id: asChannelInput(input).id, senderId: _event.sender.id }))
-  ipcMain.handle(IpcChannels.channelsPolicyCreate, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.createPolicy({
-      id: value.id,
-      actorId: value.actorId,
-      senderId: _event.sender.id,
-      handoff: asChannelHandoff(value.handoff)
-    })
-  })
-  ipcMain.handle(IpcChannels.channelsListAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.listAudits({ id: value.id, limit: value.limit, offset: value.offset })
-  })
-  ipcMain.handle(IpcChannels.channelsRuntimeStatus, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.runtimeStatus({ id: asChannelInput(input).id }))
-  ipcMain.handle(IpcChannels.channelsListDeliveryAttempts, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.listDeliveryAttempts({ id: value.id, limit: value.limit, offset: value.offset })
-  })
-  ipcMain.handle(IpcChannels.channelsListDeliveryAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.listDeliveryAudits({ id: value.id, limit: value.limit, offset: value.offset })
-  })
-  ipcMain.handle(IpcChannels.channelsListPolicies, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.listPolicies({ id: value.id, limit: value.limit })
-  })
-  ipcMain.handle(IpcChannels.channelsDeletePolicy, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.deletePolicy({ channelId: value.channelId, policyId: value.policyId, actorId: value.actorId })
-  })
-  ipcMain.handle(IpcChannels.channelsListConversations, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.listConversations({ id: value.id, limit: value.limit })
-  })
-  ipcMain.handle(IpcChannels.channelsSetTarget, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelManagementService.setTarget({
-      channelId: value.channelId,
-      conversationId: value.conversationId,
-      enabled: assertBoolean(value.enabled),
-      actorId: value.actorId
-    })
+  // 存储/缓存 + 外部应用 + 产品清单摘要 8 个 handler 搬到 ipc/storageIpc.ts。
+  composeStorageIpc(ipcMain, {
+    cacheGovernance: cacheGovernanceIpcHandlers,
+    externalApps: externalAppsService,
+    summarizeProducts: () => summarizeProductManifests(productManifests)
   })
 
-  ipcMain.handle(IpcChannels.channelsListCandidates, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelInboundService.listCandidates(String(value.id), typeof value.limit === 'number' ? value.limit : 100)
+  // 设置读写两个 handler 搬到 ipc/settingsIpc.ts：端口按「设置存储 / 助手种子 / 时区 / 工作区通知」四个域给。
+  // 设置与存储两片：端口与状态读法在 composition/settingsAndStorage.ts。
+  composeSettingsIpc(ipcMain, {
+    settings: settingsStore,
+    ensureDefaultAssistantSeed,
+    refreshBuiltinSeedCopy,
+    refreshTimeZone: () => shellTimeZone.refresh(),
+    getWorkspaceForNotify: () => getPanelWorkspaceForDisposal()
   })
-  ipcMain.handle(IpcChannels.channelsAllowCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelInboundService.allowCandidate({
-      channelId: String(value.channelId ?? value.id),
-      candidateId: String(value.candidateId),
-      enableTarget: assertBoolean(value.enableTarget)
-    })
-  })
-  ipcMain.handle(IpcChannels.channelsIgnoreCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
-    const value = asChannelInput(input)
-    return channelInboundService.ignoreCandidate(String(value.channelId ?? value.id), String(value.candidateId))
+  // 渠道管理 / 入站两个服务共 25 个 handler 搬到 ipc/channelIpc.ts；
+  // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。
+  registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })
+
+  // 模型服务 19 个 handler（含检测事件推送）在 ipc/modelIpc.ts；端口与其状态读法在 composition/model.ts。
+  composeModelIpc(ipcMain, {
+    providerStore,
+    getPlatformFetch,
+    getMainWindow,
+    invalidateAgentModelCompatibilityCache,
+    agentRuntimeProbeSnapshotStore,
+    syncInUseModelPatrolScheduleFromState,
+    inUseModelPatrol,
+    providerRuntimeCheckService,
+    assistantImageMessages,
+    generatedImageStorage
   })
 
-  ipcMain.handle(IpcChannels.modelProvidersList, () => providerStore.list())
-  ipcMain.handle(IpcChannels.modelProvidersUpsert, async (_event: IpcMainInvokeEvent, provider: ModelProviderInput) => {
-    const result = await providerStore.upsert(provider)
-    invalidateAgentModelCompatibilityCache(provider.id)
-    // 保存 Key / 改地址后，旧的逐模型运行证据必须作废，否则会出现
-    // "同一供应商有的模型说缺少 API Key、有的正常"（旧快照没失效）。
-    await agentRuntimeProbeSnapshotStore.invalidateProvider(provider.id).catch(() => undefined)
-    syncInUseModelPatrolScheduleFromState()
-    return result
-  })
-  ipcMain.handle(IpcChannels.modelProvidersRemove, async (_event: IpcMainInvokeEvent, providerId: string) => {
-    const result = await providerStore.remove(providerId)
-    invalidateAgentModelCompatibilityCache(providerId)
-    syncInUseModelPatrolScheduleFromState()
-    return result
-  })
-  ipcMain.handle(IpcChannels.modelProvidersSetEnabled, (_event: IpcMainInvokeEvent, providerId: string, enabled: boolean) =>
-    providerStore.setEnabled(providerId, enabled).then((result) => {
-      invalidateAgentModelCompatibilityCache(providerId)
-      syncInUseModelPatrolScheduleFromState()
-      return result
-    })
-  )
-  ipcMain.handle(IpcChannels.modelProvidersAddOrUpdateModel, (_event: IpcMainInvokeEvent, providerId: string, model: ModelDefinition) =>
-    providerStore.addOrUpdateModel(providerId, model).then((result) => {
-      invalidateAgentModelCompatibilityCache(providerId)
-      return result
-    })
-  )
-  ipcMain.handle(IpcChannels.modelProvidersRemoveModel, (_event: IpcMainInvokeEvent, providerId: string, modelId: string) =>
-    providerStore.removeModel(providerId, modelId).then((result) => {
-      invalidateAgentModelCompatibilityCache(providerId)
-      return result
-    })
-  )
-  ipcMain.handle(IpcChannels.modelProvidersSetDefaultChatModel, (_event: IpcMainInvokeEvent, providerId: string, modelId: string) =>
-    providerStore.setDefaultChatModel(providerId, modelId).then((result) => {
-      invalidateAgentModelCompatibilityCache(providerId)
-      return result
-    })
-  )
-  ipcMain.handle(
-    IpcChannels.modelProvidersTestConnection,
-    async (
-      _event: IpcMainInvokeEvent,
-      providerId: string,
-      options?: {
-        modelId?: string
-        proxyProbeUrl?: string
-        /** PLAT-63：单个已保存端点的测试（同一通道、additive 参数；不新增通道）。 */
-        endpointTest?: { kind?: unknown; baseUrl?: unknown }
-      }
-    ) => {
-      // PLAT-61 代理自检（同一通道、additive 参数）：无鉴权 GET，用 Electron net.fetch 走当前 session 代理。
-      if (typeof options?.proxyProbeUrl === 'string' && options.proxyProbeUrl.trim()) {
-        const targetUrl = options.proxyProbeUrl.trim()
-        // 证据链三项：网络栈的真实解析结果、代理端点可达性、经代理请求的状态码与耗时。
-        // 不看用户输入：用户填了代理不代表这次真的走了代理。
-        const resolvedProxy = await session.defaultSession.resolveProxy(targetUrl)
-        const route = parseResolvedProxy(resolvedProxy)
-        // 对照探针与其它两项并行：它只回答「本机能不能出一个 TCP 连接」，不跟随代理。
-        const [endpointReachable, directProbeReachable] = await Promise.all([
-          route.endpoint ? isProxyEndpointReachable(route.endpoint) : Promise.resolve(null),
-          probeDirectEgress()
-        ])
-        const probe = await probeProviderProxyTarget(targetUrl, getPlatformFetch())
-        return {
-          ...probe,
-          resolvedProxy,
-          proxied: !route.direct,
-          endpointReachable,
-          proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null,
-          proxyEndpointLoopback: route.endpoint ? isLoopbackProxyEndpoint(`${route.endpoint.host}:${route.endpoint.port}`) : null,
-          directProbeReachable,
-          directProbeEndpoint: DIRECT_PROBE_ENDPOINTS.map((endpoint) => `${endpoint.host}:${endpoint.port}`).join(',')
-        }
-      }
-      // PLAT-63：端点测试只接受已知端点类型 + http(s) 地址；校验先于任何网络请求。
-      if (options?.endpointTest !== undefined) {
-        const kind = options.endpointTest.kind
-        const baseUrl = typeof options.endpointTest.baseUrl === 'string' ? options.endpointTest.baseUrl.trim() : ''
-        if (!isEndpointProbeKind(kind)) throw new Error('Unknown endpoint kind for probe.')
-        if (!/^https?:\/\//i.test(baseUrl)) throw new Error('Endpoint probe requires an http(s) base URL.')
-        const provider = await providerStore.resolveRuntimeProvider(providerId)
-        if (!provider) throw new Error(`Provider "${providerId}" was not found.`)
-        return probeProviderEndpoint(provider, { kind, baseUrl, fetch: getPlatformFetch() })
-      }
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) throw new Error(`Provider "${providerId}" was not found.`)
-      // 所有 provider 出站都必须走平台 fetch（Electron net.fetch + session 代理），禁止全局 fetch。
-      return testModelProviderConnection(provider, { modelId: options?.modelId, fetch: getPlatformFetch() })
-    }
-  )
-  /**
-   * T1–T3：图像生成 / 图像编辑共用**同一条**通道（`operation: 'edit'` 是 additive 参数，不新增通道）。
-   * 全部返回结构化 `{ok:...}`，不再抛裸 IPC 错误；顺序固定为
-   * 「校验参数 → 解析 provider → 检查端点 → 原图落盘 → 先落 pending 消息 → 出站 → 用同一 id settle」。
-   */
-  ipcMain.handle(
-    IpcChannels.modelProvidersGenerateImage,
-    async (_event: IpcMainInvokeEvent, providerId: string, input: unknown) => {
-      if (typeof providerId !== 'string' || !providerId.trim()) {
-        return { ok: false, reasonCode: 'invalid_request', message: 'providerId is required.' }
-      }
-      const request = readProviderImageChannelRequest(input)
-      if (!request.topicId) {
-        return { ok: false, reasonCode: 'missing_topic', message: 'Select a topic before generating an image.' }
-      }
-      // 先校验（model / prompt 长度 / count 1–4 / size 白名单），再解析 provider 并出站。
-      const validated = validateImageGenerationInput(input)
-      if (!validated.ok) return validated
-      // 编辑额外校验原图（≤4MB、mime 白名单、file 名必须是 hash 形状）。
-      const editInput = request.operation === 'edit' ? validateImageEditInput(input) : null
-      if (editInput && !editInput.ok) return editInput
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) {
-        return { ok: false, reasonCode: 'provider_not_found', message: `Provider "${providerId}" was not found.` }
-      }
-      const endpoint = request.operation === 'edit'
-        ? provider.imageEndpoints?.edit
-        : provider.imageEndpoints?.generation
-      if (!endpoint?.trim()) {
-        return { ok: false, reasonCode: 'missing_endpoint', message: 'The provider has no image endpoint configured.' }
-      }
-      // 原图：会话图片按 hash 文件名读盘，上传字节先落盘；两条路径都只把引用写进消息。
-      let editSource: { mime: ImageEditSourceMime; bytes: Uint8Array } | null = null
-      let storedSource: StoredGeneratedImage | null = null
-      if (request.operation === 'edit') {
-        if (!editInput?.ok) {
-          return { ok: false, reasonCode: 'invalid_request', message: 'A source image is required.' }
-        }
-        const resolved = await resolveImageEditSource(generatedImageStorage, editInput.value.sourceImage)
-        if (!resolved.ok) return resolved
-        editSource = resolved.source
-        storedSource = resolved.stored
-      }
-      const model = provider.models.find((entry) => entry.id === validated.value.modelId)
-      // 生成中：先落 pending 占位（完成时用同一个 id 替换，不会多出一条消息）。
-      const prepared = await assistantImageMessages.prepare({
-        topicId: request.topicId,
-        operation: request.operation,
-        modelId: validated.value.modelId,
-        modelSnapshot: { id: validated.value.modelId, name: model?.name ?? validated.value.modelId, provider: provider.name },
-        prompt: validated.value.prompt,
-        ...(storedSource ? { sourceImage: storedSource } : {})
-      })
-      if (!prepared.ok) return prepared
-      // 所有 provider 出站都必须走平台 fetch（Electron net.fetch + session 代理），禁止全局 fetch。
-      const outcome = request.operation === 'edit'
-        ? await editProviderImages(provider, { ...validated.value, source: editSource!, fetch: getPlatformFetch() })
-        : await generateProviderImages(provider, { ...validated.value, fetch: getPlatformFetch() })
-      return assistantImageMessages.settle({ assistantMessageId: prepared.assistantMessageId, outcome })
-    }
-  )
-  // PLAT-82：「检测模型」= 联通性 + 协议支持探测。主进程执行（Key 只在主进程、并发 5、
-  // abort 记账在 main），结果只存内存、绝不写库；一模型一条 progress 事件，run 结束发 done。
-  const modelProviderDetection = createModelProviderDetectionService({
-    resolveProvider: (providerId: string) => providerStore.resolveRuntimeProvider(providerId),
-    fetch: () => getPlatformFetch(),
-    onProgress: (result) => {
-      getMainWindow()?.webContents.send(IpcChannels.modelProvidersDetectionProgress, result)
-    },
-    onDone: (runId, payload) => {
-      getMainWindow()?.webContents.send(IpcChannels.modelProvidersDetectionDone, runId, payload)
-    },
-    // PLAT-82：run 结束后把「实测通过」的协议写回模型（一次写入；状态文案不落库）。
-    recordProbedProtocols: (providerId, updates) => providerStore.recordProbedProtocols(providerId, updates),
-    // 可用性结论：只写 ok / failed；渲染层用同一指纹函数判过期。
-    recordModelAvailability: (providerId, updates, checkedAt) =>
-      providerStore.recordModelAvailability(providerId, updates, checkedAt)
-  })
-  ipcMain.handle(
-    IpcChannels.modelProvidersDetectModels,
-    async (
-      _event: IpcMainInvokeEvent,
-      providerId: string,
-      options?: { modes?: unknown; runId?: unknown; modelIds?: unknown }
-    ) => {
-      if (typeof providerId !== 'string' || !providerId.trim()) {
-        throw new Error('providerId is required.')
-      }
-      return modelProviderDetection.detectModels(providerId, {
-        modes: (options?.modes ?? []) as ModelDetectionMode[],
-        runId: typeof options?.runId === 'string' ? options.runId : '',
-        ...(Array.isArray(options?.modelIds) ? { modelIds: options.modelIds as string[] } : {})
-      })
-    }
-  )
-  ipcMain.handle(
-    IpcChannels.modelProvidersCancelModelDetection,
-    (_event: IpcMainInvokeEvent, runId: string) => {
-      if (typeof runId === 'string' && runId.trim()) modelProviderDetection.cancelModelDetection(runId)
-    }
-  )
-  ipcMain.handle(
-    IpcChannels.modelProvidersRunRuntimeChecks,
-    async (
-      _event: IpcMainInvokeEvent,
-      providerId: string,
-      options?: { modelId?: string; runtimeId?: 'claude-code' | 'openai-agents'; checkGateway?: boolean }
-    ) => {
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) throw new Error(`Provider "${providerId}" was not found.`)
-      const modelId =
-        options?.modelId?.trim() ||
-        provider.defaultChatModelId ||
-        provider.models.find((model) => model.capabilities.chat)?.id
-      if (!modelId) throw new Error('Add at least one chat-capable model first.')
-      return providerRuntimeCheckService.runChecks({
-        providerId,
-        modelId,
-        runtimeId: options?.runtimeId ?? 'claude-code',
-        checkGateway: options?.checkGateway
-      })
-    }
-  )
-  ipcMain.handle(
-    IpcChannels.modelProvidersGetRuntimeCheckReport,
-    async (
-      _event: IpcMainInvokeEvent,
-      providerId: string,
-      modelId: string,
-      runtimeId: 'claude-code' | 'openai-agents' = 'claude-code'
-    ) => providerRuntimeCheckService.getReport(providerId, modelId, runtimeId)
-  )
-  ipcMain.handle(IpcChannels.modelProvidersGetInUseRetired, () => inUseModelPatrol.getRetired())
-  /**
-   * PLAT-61 诊断可用性：模型同步失败**不再 throw**（原始 IPC Error 会带着
-   * `Error invoking remote method '<channel>'` 泄漏到 UI）。改为结构化结果：
-   * `{ ok:false, reasonCode, message }`；`ok:true` 仍保留既有 `added`/`missing`/provider 字段。
-   * 通道名与载荷形状保持向后兼容。
-   */
-  ipcMain.handle(IpcChannels.modelProvidersPreviewModelSync, async (_event: IpcMainInvokeEvent, providerId: string) => {
-    const provider = await providerStore.resolveRuntimeProvider(providerId)
-    if (!provider) {
-      return { ok: false, reasonCode: 'provider_not_found', message: 'The provider was not found.' }
-    }
-    // 模型同步同样必须走平台 fetch（否则会绕过代理，需代理的域名必然超时）。
-    return previewProviderModelSync(provider, { fetch: getPlatformFetch() })
-  })
-  ipcMain.handle(IpcChannels.modelProvidersApplyModelSync, async (
-    _event: IpcMainInvokeEvent,
-    providerId: string,
-    plan: unknown
-  ): Promise<ModelSyncApplyOutcome> => {
-    try {
-      const result = await providerStore.applyModelSync(providerId, normalizeModelSyncPlan(plan))
-      invalidateAgentModelCompatibilityCache(providerId)
-      return { ok: true, provider: result }
-    } catch (error) {
-      return toModelSyncFailure(error)
-    }
-  })
-  /**
-   * PLAT-58：产品 owner 决定允许 UI 显式查看已保存的完整 Key。
-   * 只读、绝不打印该值；只允许已知 provider，校验失败不触碰 vault。
-   */
-  ipcMain.handle(IpcChannels.modelProvidersSetCustomHeaders, async (_event: IpcMainInvokeEvent, providerId: string, headers: unknown) => {
-    if (typeof providerId !== 'string' || !providerId.trim()) return { ok: false, error: 'invalid_provider' }
-    if (!Array.isArray(headers)) return { ok: false, error: 'invalid_headers' }
-    const provider = await providerStore.setCustomHeaders(providerId, headers)
-    return { ok: true, provider }
-  })
+  // Web Search 8 个 handler 搬到 ipc/webIpc.ts；缓存 5 个已在 storageIpc 那一处接线。
+  registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })
 
-  ipcMain.handle(IpcChannels.modelProvidersRevealCustomHeaders, async (_event: IpcMainInvokeEvent, providerId: string) => {
-    if (typeof providerId !== 'string' || !providerId.trim()) return { headers: [] }
-    const headers = await providerStore.revealCustomHeaders(providerId)
-    return { headers }
+  // 智能体会话/运行时 36 个 handler 搬到 ipc/agentIpc.ts。
+  // 智能体会话/运行时 36 个 handler；广播通道与目标窗口都在 composition/agent.ts 里定。
+  composeAgentIpc(ipcMain, {
+    agentIpcHandlers,
+    getState: () => agentStore.getState(),
+    syncAfterMutation: (previousState) => syncAgentStateAfterMutation(previousState),
+    replaceState: (state) => replaceAgentState(state),
+    cancelMessage: (runId) => agentRuntimeService.cancelMessage(runId),
+    getMainWindow
   })
-
-  ipcMain.handle(IpcChannels.modelProvidersRevealApiKey, async (_event: IpcMainInvokeEvent, providerId: string) => {
-    if (typeof providerId !== 'string' || !providerId.trim()) throw new Error('Provider id is required.')
-    const knownProviders = await providerStore.list()
-    if (!knownProviders.some((provider) => provider.id === providerId)) {
-      throw new Error(`Provider "${providerId}" was not found.`)
-    }
-    return { apiKey: await providerStore.revealApiKey(providerId) }
-  })
-
-  ipcMain.handle(IpcChannels.webSearchListProviders, () => webSearchIpcHandlers.listProviders())
-  ipcMain.handle(IpcChannels.webSearchGetSettings, () => webSearchIpcHandlers.getSettings())
-  ipcMain.handle(IpcChannels.webSearchUpdateSettings, (_event: IpcMainInvokeEvent, patch: unknown) =>
-    webSearchIpcHandlers.updateSettings(patch)
-  )
-  ipcMain.handle(IpcChannels.webSearchUpdateProvider, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.updateProvider(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchRevealProviderApiKey, (_event: IpcMainInvokeEvent, providerId: unknown) =>
-    webSearchIpcHandlers.revealProviderApiKey(providerId)
-  )
-  ipcMain.handle(IpcChannels.webSearchCheckProvider, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.checkProvider(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchSearchKeywords, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.searchKeywords(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchFetchUrls, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.fetchUrls(input)
-  )
-  ipcMain.handle(IpcChannels.storageListCaches, () => cacheGovernanceIpcHandlers.listCaches())
-  ipcMain.handle(IpcChannels.storageInspectCache, (_event: IpcMainInvokeEvent, cacheId: unknown) =>
-    cacheGovernanceIpcHandlers.inspectCache(cacheId)
-  )
-  ipcMain.handle(IpcChannels.storageClearCache, (_event: IpcMainInvokeEvent, input: unknown) =>
-    cacheGovernanceIpcHandlers.clearCache(input)
-  )
-  ipcMain.handle(IpcChannels.storageCompactCache, (_event: IpcMainInvokeEvent, input: unknown) =>
-    cacheGovernanceIpcHandlers.compactCache(input)
-  )
-  ipcMain.handle(IpcChannels.storageListCacheOperations, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    cacheGovernanceIpcHandlers.listOperations(query)
-  )
-
-  ipcMain.handle(IpcChannels.agentsGetState, () => agentIpcHandlers.getState())
-  ipcMain.handle(
-    IpcChannels.agentsGetRuntimeCompatibility,
-    (_event: IpcMainInvokeEvent, providerId: string, modelId: string, runtimeId: string) =>
-      agentIpcHandlers.getRuntimeCompatibility(providerId, modelId, runtimeId as 'claude-code' | 'openai-agents')
-  )
-  ipcMain.handle(
-    IpcChannels.agentsProbeRuntimeCompatibility,
-    (_event: IpcMainInvokeEvent, providerId: string, modelId: string, runtimeId: string) =>
-      agentIpcHandlers.probeRuntimeCompatibility(providerId, modelId, runtimeId as 'claude-code' | 'openai-agents')
-  )
-  ipcMain.handle(IpcChannels.agentsGetModelGatewayStatus, () => agentIpcHandlers.getModelGatewayStatus())
-  ipcMain.handle(
-    IpcChannels.agentsStartModelGateway,
-    (_event: IpcMainInvokeEvent, providerId?: string, modelId?: string) =>
-      agentIpcHandlers.startModelGateway(providerId, modelId)
-  )
-  ipcMain.handle(IpcChannels.agentsStopModelGateway, () => agentIpcHandlers.stopModelGateway())
-  ipcMain.handle(IpcChannels.agentsSetModelGatewayEnabled, (_event: IpcMainInvokeEvent, enabled: boolean) =>
-    agentIpcHandlers.setModelGatewayEnabled(enabled)
-  )
-  ipcMain.handle(IpcChannels.agentsExecuteRuntimeCommand, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const result = await agentIpcHandlers.executeRuntimeCommand(
-      input as Parameters<typeof agentIpcHandlers.executeRuntimeCommand>[0]
-    )
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, result.state)
-    return result
-  })
-  ipcMain.handle(IpcChannels.agentsGetRuntimeSnapshot, () => agentIpcHandlers.getRuntimeSnapshot())
-  ipcMain.handle(IpcChannels.agentsGetChannelRuntimeSnapshot, (_event: IpcMainInvokeEvent, options?: unknown) =>
-    agentIpcHandlers.getChannelRuntimeSnapshot(
-      (options as Parameters<typeof agentIpcHandlers.getChannelRuntimeSnapshot>[0]) ?? undefined
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsRestartChannelRuntime, (_event: IpcMainInvokeEvent, channelId: string) =>
-    agentIpcHandlers.restartChannelRuntime(channelId)
-  )
-  ipcMain.handle(IpcChannels.agentsListToolApprovals, () => agentIpcHandlers.listToolApprovals())
-  ipcMain.handle(IpcChannels.agentsResolveToolApproval, (_event: IpcMainInvokeEvent, approvalId: string, decision: unknown) =>
-    agentIpcHandlers.resolveToolApproval(
-      approvalId,
-      decision as Parameters<typeof agentIpcHandlers.resolveToolApproval>[1]
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsListAgents, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listAgents((query as Parameters<typeof agentIpcHandlers.listAgents>[0]) ?? {})
-  )
-  ipcMain.handle(IpcChannels.agentsCreateAgent, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const previousState = await agentStore.getState()
-    const created = await agentIpcHandlers.createAgent(input as Parameters<typeof agentIpcHandlers.createAgent>[0])
-    await syncAgentStateAfterMutation(previousState)
-    return created
-  })
+  // 任务排程的 15 个 handler 仍由它自己的注册函数负责。
   registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {
     getScheduleValidationOptions: taskIpcScheduleValidationOptions,
     afterCommit: refreshTaskStateAfterCommit
   })
-  ipcMain.handle(IpcChannels.agentsListSessions, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listSessions((query as Parameters<typeof agentIpcHandlers.listSessions>[0]) ?? {})
-  )
-  ipcMain.handle(
-    IpcChannels.agentsListSessionMessages,
-    (_event: IpcMainInvokeEvent, sessionId: string, query?: unknown) =>
-      agentIpcHandlers.listSessionMessages(
-        sessionId,
-        (query as Parameters<typeof agentIpcHandlers.listSessionMessages>[1]) ?? {}
-      )
-  )
-  ipcMain.handle(IpcChannels.agentsCreateSession, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const previousState = await agentStore.getState()
-    const created = await agentIpcHandlers.createSession(input as Parameters<typeof agentIpcHandlers.createSession>[0])
-    await syncAgentStateAfterMutation(previousState)
-    return created
-  })
-  ipcMain.handle(IpcChannels.agentsUpdateAgent, async (_event: IpcMainInvokeEvent, agentId: string, patch: unknown) => {
-    const updated = await agentIpcHandlers.updateAgent(
-      agentId,
-      patch as Parameters<typeof agentIpcHandlers.updateAgent>[1]
-    )
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
-    return updated
-  })
-  ipcMain.handle(IpcChannels.agentsDeleteAgent, async (_event: IpcMainInvokeEvent, agentId: string) => {
-    const previousState = await agentStore.getState()
-    await agentIpcHandlers.deleteAgent(agentId)
-    return syncAgentStateAfterMutation(previousState)
-  })
-  ipcMain.handle(IpcChannels.agentsReorderAgents, async (_event: IpcMainInvokeEvent, orderedAgentIds: string[]) => {
-    const state = await agentIpcHandlers.reorderAgents(orderedAgentIds)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSelectAgent, async (_event: IpcMainInvokeEvent, agentId: string) => {
-    const state = await agentIpcHandlers.selectAgent(agentId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(
-    IpcChannels.agentsUpdateSession,
-    async (_event: IpcMainInvokeEvent, sessionId: string, patch: unknown) => {
-      const typedPatch = patch as Parameters<typeof agentIpcHandlers.updateSession>[1]
-      const previousState = typedPatch.agentId === undefined ? null : await agentStore.getState()
-      const updated = await agentIpcHandlers.updateSession(sessionId, typedPatch)
-      if (previousState) {
-        await syncAgentStateAfterMutation(previousState)
-      } else {
-        getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
-      }
-      return updated
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsDeleteSessions, async (_event: IpcMainInvokeEvent, sessionIds: string[]) => {
-    const previousState = await agentStore.getState()
-    const result = await agentIpcHandlers.deleteSessions(sessionIds)
-    await syncAgentStateAfterMutation(previousState)
-    return result
-  })
-  ipcMain.handle(IpcChannels.agentsReorderSessions, async (_event: IpcMainInvokeEvent, orderedSessionIds: string[]) => {
-    const state = await agentIpcHandlers.reorderSessions(orderedSessionIds)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionAgent, async (_event: IpcMainInvokeEvent, sessionId: string, agentId: string | null) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionAgent(sessionId, agentId)
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionWorkspace, async (_event: IpcMainInvokeEvent, sessionId: string, source: unknown) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionWorkspace(
-      sessionId,
-      source as Parameters<typeof agentIpcHandlers.setSessionWorkspace>[1]
-    )
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionWorkspaceByPath, async (_event: IpcMainInvokeEvent, sessionId: string, path: string) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionWorkspaceByPath(sessionId, path)
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSwitchSessionPinState, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.toggleSessionPin(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSelectSession, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.selectSession(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsClearSessionMessages, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.clearSessionMessages(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(
-    IpcChannels.agentsDeleteSessionMessage,
-    async (_event: IpcMainInvokeEvent, sessionId: string, messageId: string) => {
-      const state = await agentIpcHandlers.deleteSessionMessage(sessionId, messageId)
-      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-      return state
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsReplaceState, (_event: IpcMainInvokeEvent, state: AgentStoreState) => replaceAgentState(state))
-  ipcMain.handle(IpcChannels.agentsSendMessage, async (_event: IpcMainInvokeEvent, request: AgentChatRuntimeRequest) => {
-    const result = await agentIpcHandlers.sendMessage(request)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, result.state)
-    return result
-  })
-  ipcMain.handle(IpcChannels.agentsCancelMessage, (_event: IpcMainInvokeEvent, runId: string) => agentRuntimeService.cancelMessage(runId))
-  ipcMain.handle(IpcChannels.agentsCancelSession, (_event: IpcMainInvokeEvent, sessionId: string) =>
-    agentIpcHandlers.cancelSession(sessionId)
-  )
-  ipcMain.handle(IpcChannels.agentsRefreshMcpTools, async (_event: IpcMainInvokeEvent, serverId: string) =>
-    refreshAgentMcpTools(
-      {
-        getState: () => agentStore.getState(),
-        refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
-        replaceAgentState
-      },
-      serverId
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsList, async (_event: IpcMainInvokeEvent, query?: { agentId?: string; search?: string }) =>
-    skillService.list(await agentStore.getState(), query)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsGetRuntime, (_event: IpcMainInvokeEvent, agentId: string) =>
-    agentIpcHandlers.getSkillRuntime(agentId)
-  )
-  ipcMain.handle(IpcChannels.agentsListProductToolPackages, (_event: IpcMainInvokeEvent, agentId: string) =>
-    agentIpcHandlers.listProductToolPackages(agentId)
-  )
-  ipcMain.handle(
-    IpcChannels.agentsUpdateProductToolPackageBinding,
-    (_event: IpcMainInvokeEvent, agentId: string, productId: string, permissionMode: 'allow-read-only' | 'prompt' | 'disabled') =>
-      agentIpcHandlers.updateProductToolPackageBinding(agentId, productId, permissionMode)
-  )
-  ipcMain.handle(IpcChannels.agentsListProductToolCallTracePage, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listProductToolCallTracePage(
-      (query as Parameters<typeof agentIpcHandlers.listProductToolCallTracePage>[0]) ?? {}
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsGetProductToolCallTrace, (_event: IpcMainInvokeEvent, toolCallId: string) =>
-    agentIpcHandlers.getProductToolCallTrace(toolCallId)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsSearch, (_event: IpcMainInvokeEvent, query: string) => skillSearchService.search(query))
-  ipcMain.handle(IpcChannels.agentsSkillsInstall, async (_event: IpcMainInvokeEvent, options: SkillInstallOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.install(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
-  })
-  ipcMain.handle(IpcChannels.agentsSkillsInstallFromZip, async (_event: IpcMainInvokeEvent, options: SkillInstallFromZipOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.installFromZip(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
-  })
-  ipcMain.handle(
-    IpcChannels.agentsSkillsInstallFromDirectory,
-    async (_event: IpcMainInvokeEvent, options: SkillInstallFromDirectoryOptions) => {
-      const previousState = await agentStore.getState()
-      const result = await skillService.installFromDirectory(previousState, options)
-      await replaceAgentStateAfterSkillMutation(previousState, result.state)
-      return result.skill
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsUninstall, async (_event: IpcMainInvokeEvent, skillId: string) => {
-    const previousState = await agentStore.getState()
-    const nextState = await skillService.uninstall(previousState, skillId)
-    await replaceAgentStateAfterSkillMutation(previousState, nextState)
-    return true
-  })
-  ipcMain.handle(IpcChannels.agentsSkillsToggle, async (_event: IpcMainInvokeEvent, options: SkillToggleOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.toggle(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
-  })
-  ipcMain.handle(IpcChannels.agentsSkillsReadFile, async (_event: IpcMainInvokeEvent, skillId: string, filename: string) =>
-    skillService.readFile(await agentStore.getState(), skillId, filename)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsListFiles, async (_event: IpcMainInvokeEvent, skillId: string) =>
-    skillService.listFiles(await agentStore.getState(), skillId)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsListLocal, (_event: IpcMainInvokeEvent, workdir: string) => skillService.listLocal(workdir))
 
-  ipcMain.handle(IpcChannels.assistantsList, () => assistantIpcHandlers.listAssistants())
-  ipcMain.handle(IpcChannels.assistantsGet, (_event: IpcMainInvokeEvent, assistantId: string) =>
-    assistantIpcHandlers.getAssistant(assistantId)
-  )
-  ipcMain.handle(IpcChannels.assistantsCreate, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createAssistant(input as Parameters<typeof assistantIpcHandlers.createAssistant>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsUpdate, (_event: IpcMainInvokeEvent, assistantId: string, patch: unknown) =>
-    assistantIpcHandlers.updateAssistant(assistantId, patch as Parameters<typeof assistantIpcHandlers.updateAssistant>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsDelete, (_event: IpcMainInvokeEvent, assistantId: string) =>
-    assistantIpcHandlers.deleteAssistant(assistantId)
-  )
-  ipcMain.handle(IpcChannels.assistantsReorder, (_event: IpcMainInvokeEvent, orderedIds: string[]) =>
-    assistantIpcHandlers.reorderAssistants(orderedIds)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryListTemplates,
-    async (_event: IpcMainInvokeEvent, query?: unknown, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.listAssistantTemplates(
-        (query as Parameters<typeof assistantIpcHandlers.listAssistantTemplates>[0]) ?? {},
-        language ?? (await settingsStore.get()).language
-      )
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryGetTemplate,
-    async (_event: IpcMainInvokeEvent, templateId: string, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.getAssistantTemplate(templateId, language ?? (await settingsStore.get()).language)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryInstallTemplate,
-    async (_event: IpcMainInvokeEvent, input: unknown, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.installAssistantTemplate(
-        input as Parameters<typeof assistantIpcHandlers.installAssistantTemplate>[0],
-        language ?? (await settingsStore.get()).language
-      )
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryListGroups,
-    async (_event: IpcMainInvokeEvent, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.listAssistantTemplateGroups(language ?? (await settingsStore.get()).language)
-  )
-  ipcMain.handle(IpcChannels.assistantsLibraryCreateAssistant, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createAssistantFromLibrary(
-      input as Parameters<typeof assistantIpcHandlers.createAssistantFromLibrary>[0]
-    )
-  )
-  ipcMain.handle(IpcChannels.assistantsListTopics, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    assistantIpcHandlers.listTopics((query as Parameters<typeof assistantIpcHandlers.listTopics>[0]) ?? {})
-  )
-  ipcMain.handle(IpcChannels.assistantsCreateTopic, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createTopic(input as Parameters<typeof assistantIpcHandlers.createTopic>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsUpdateTopic, (_event: IpcMainInvokeEvent, topicId: string, patch: unknown) =>
-    assistantIpcHandlers.updateTopic(topicId, patch as Parameters<typeof assistantIpcHandlers.updateTopic>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsDeleteTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.deleteTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsPinTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.pinTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsUnpinTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.unpinTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsListTopicMessages, (_event: IpcMainInvokeEvent, topicId: string, nodeId?: string | null) =>
-    assistantIpcHandlers.listTopicMessages(topicId, nodeId)
-  )
-  ipcMain.handle(IpcChannels.assistantsSetActiveNode, (_event: IpcMainInvokeEvent, topicId: string, nodeId: string | null) =>
-    assistantIpcHandlers.setActiveNode(topicId, nodeId)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsRenameTopic,
-    (_event: IpcMainInvokeEvent, topicId: string, name: string, isNameManuallyEdited?: boolean) =>
-      assistantIpcHandlers.renameTopic(topicId, name, isNameManuallyEdited)
-  )
-  ipcMain.handle(IpcChannels.assistantsCreateMessageSibling, (_event: IpcMainInvokeEvent, messageId: string, dto: unknown) =>
-    assistantIpcHandlers.createMessageSibling(messageId, dto as Parameters<typeof assistantIpcHandlers.createMessageSibling>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsEditAndResendUserMessage, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.editAndResendUserMessage(
-      input as Parameters<typeof assistantIpcHandlers.editAndResendUserMessage>[0]
-    )
-  )
-  ipcMain.handle(IpcChannels.assistantsClearTopicMessages, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.clearTopicMessages(topicId)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsSearchTopicMessages,
-    (_event: IpcMainInvokeEvent, topicId: string, query: string, limit?: number) =>
-      assistantIpcHandlers.searchTopicMessages(topicId, query, limit)
-  )
-  ipcMain.handle(IpcChannels.assistantsDeleteMessage, (_event: IpcMainInvokeEvent, messageId: string, options?: unknown) =>
-    assistantIpcHandlers.deleteMessage(messageId, options as Parameters<typeof assistantIpcHandlers.deleteMessage>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamOpen, (_event: IpcMainInvokeEvent, request: unknown) =>
-    assistantIpcHandlers.streamOpen(request as Parameters<typeof assistantIpcHandlers.streamOpen>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamAttach, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamAttach(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamAbort, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamAbort(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamGetStatus, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamGetStatus(topicId)
-  )
-
-  configureNotificationRuntime({
-    getSettings: async () => (await settingsStore.get()).notifications,
-    // 免打扰窗口按设置的读者时区判断，不按运行机器；同一提供者随设置保存刷新。
-    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() }
+  // 智能体工具那一半 16 个 handler 搬到 ipc/agentToolsIpc.ts。
+  // 智能体工具那一半 16 个 handler；MCP 刷新的「读→刷→写回」链在 composition/agentTools.ts 里拼。
+  composeAgentToolsIpc(ipcMain, {
+    agentIpcHandlers,
+    getState: () => agentStore.getState(),
+    skillService,
+    skillSearchService,
+    mcpRefreshDependencies: {
+      getState: () => agentStore.getState(),
+      refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
+      replaceAgentState
+    },
+    replaceAgentStateAfterSkillMutation
   })
+
+  // 助手域 29 个 handler 搬到 ipc/assistantIpc.ts；流事件广播仍在上面那个构造里。
+  registerAssistantIpc(ipcMain, {
+    assistantIpcHandlers,
+    getLanguage: async () => (await settingsStore.get()).language
+  })
+
+  // 通知运行时的端口在 composition 里定义；这里只提供它需要的两份状态。
+  composeNotificationRuntime({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get() })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
@@ -2375,25 +1065,8 @@ async function readHeartbeatFileFromWorkspace(workspacePath: string): Promise<st
   }
 }
 
-function wireWindowEvents(window: BrowserWindow): void {
-  wireRendererSendGuard(window)
-  wireRendererProcessDiagnostics(window, { logEvent: rendererProcessLog.write })
-  // 自绘标题栏：最大化/还原事实（主窗与独立窗共用同一条广播，见 `window/windowChrome.ts`）
-  wireWindowChromeState(window)
-  window.on('closed', () => {
-    mainWindow = null
-  })
-}
-
 async function createAndLoadMainWindow(): Promise<void> {
-  mainWindow = await createMainWindow()
-  wireWindowEvents(mainWindow)
-  await loadMainWindowRenderer(mainWindow)
-  // workspace：重建的主窗同样要登记并在加载后挂载，否则它的 workspace IPC 会被 not-owner 拒绝
-  if (mainWindow) {
-    panelWorkspaceForDisposal?.registerMainWindow({ webContentsId: mainWindow.webContents.id })
-    panelWorkspaceForDisposal?.attachMainWindow({ webContentsId: mainWindow.webContents.id })
-  }
+  await mainWindowHost.createAndLoad()
 }
 
 async function syncBuiltinSkills(): Promise<void> {
@@ -2423,7 +1096,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled),
     workspaceTestFixtures.productManifests
   )
-  installedProductManifestIds = productManifests.map((manifest) => manifest.id)
+  setInstalledProductManifestIds(productManifests.map((manifest) => manifest.id))
   assistantTemplateRegistry.clear()
   assistantTemplateRegistry.registerMany(platformAssistantTemplates)
   assistantTemplateRegistry.registerMany(createAssistantTemplateRegistrationsFromManifests(productManifests))
@@ -2439,18 +1112,23 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     safeSendToMainWindow(getMainWindow, IpcChannels.productIpcEvent, { productId, event, data })
   })
   const productIpcRegistry = createProductIpcRegistry()
-  productIpcRegistryForDisposal = productIpcRegistry
-  const jobRuntime = createJobRuntime({ store: jobRunStore })
-  jobRuntimeForDisposal = jobRuntime
+  setProductIpcRegistryForDisposal(productIpcRegistry)
+  // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
+  const onRunTerminal = wireTaskFailureNotifier({
+    submit: (request) => getNotificationRuntime().submit(request),
+    listDefinitions: () => jobRuntime.listSchedules(),
+    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant))
+  })
+  const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
+  setJobRuntimeForDisposal(jobRuntime)
   jobRuntime.recover()
-  registerAssistantSessionRetentionJob(jobRuntime, { repo: createRetentionRepository(assistantDatabase) })
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })
-  agentTaskRunController = createAgentTaskRunController({
+  setAgentTaskRunController(createAgentTaskRunController({
     jobs: jobRunQueryService,
     jobRuntime
-  })
+  }))
   /**
    * 内置 Agent / 会话文案的语言解析入口。
    *
@@ -2487,6 +1165,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     jobScheduleQueryService,
     refreshBuiltinSeedCopy
   )
+  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
 
   if (!productAcceptanceProfile.enabled) app.on('second-instance', () => {
     const window = getMainWindow()
@@ -2529,7 +1208,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onNativeClose: (input) => { void panelWorkspaceMainHostBridge?.nativeClose(input).catch(() => undefined) },
     onWindowDestroyed: (input) => { void panelWorkspaceMainHostBridge?.windowDestroyed(input).catch(() => undefined) },
     // P1-06m：退出期标记注入 —— 退出期间 close 绝不 preventDefault（否则 app.quit() 被取消、主进程残留）
-    isAppQuitting: () => appQuitting
+    isAppQuitting: () => quitOrchestrator.isQuitting()
   })
   const panelDetachedWindowHost = createPanelDetachedWindowHost({
     entryUrl: workspaceDetachedEntryUrl,
@@ -2578,69 +1257,69 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   // PLAT-26：只注册（幂等，不恢复）——7 条受控通道此刻已在 ipcMain 上，随后创建的窗口一被驱动就有 handler
   panelWorkspace.registerChannels()
 
-  mainWindow = await createMainWindow()
-  wireWindowEvents(mainWindow)
+  await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
   await applySessionProxySettings((await settingsStore.get()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  try {
-    if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({
-      register: productIpcRegistry.register,
-      jobRuntime,
-      eventBusRuntime: getEventBusRuntime(),
-      getProviderState: providerStore.getState,
-      getAppLanguage: async () => {
-        const settings = await settingsStore.get()
-        return settings.language
-      },
-      getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
-      getNetworkSettings: async () => {
-        const settings = await settingsStore.get()
-        return settings.network
-      },
-      // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
-      getTimeZone: () => shellTimeZone.get(),
-      platformFetch: getPlatformFetch(),
-      secretVault: providerSecretVault,
-      registerProductAgentToolHandler,
-      registerProductCache,
-      registerProductDisposer: productServiceDisposerRegistry.register,
-      getAgentState: () => agentStore.getState(),
-      createAgentSession: (input) => agentServices.sessions.create(input),
-      sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
-      cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
-      appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
-      updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
-      deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
-      updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
-      isWebSearchProviderReady: isAgentWebSearchProviderReady,
-      invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
-      invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
-    })
-    const productIpcMethods = productIpcRegistry.seal(expectedProductIpcMethods(productManifests))
-    if (productAcceptanceProfile.enabled) {
-      reportProductAcceptanceRegistration({
-        productIds: productManifests.map((manifest) => manifest.id),
-        productIpcMethodCount: productIpcMethods.length
-      })
-    }
-  } catch {
-    productIpcRegistry.markUnavailable()
+  const productBootstrap = await runProductBootstrap({
+      registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({
+              register: productIpcRegistry.register,
+              jobRuntime,
+              eventBusRuntime: getEventBusRuntime(),
+              getProviderState: providerStore.getState,
+              getAppLanguage: async () => {
+                const settings = await settingsStore.get()
+                return settings.language
+              },
+              getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
+              getNetworkSettings: async () => {
+                const settings = await settingsStore.get()
+                return settings.network
+              },
+              // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
+              getTimeZone: () => shellTimeZone.get(),
+              onSettingsCommitted: settingsStore.onCommitted,
+              platformFetch: getPlatformFetch(),
+              secretVault: providerSecretVault,
+              registerProductAgentToolHandler,
+              registerProductCache,
+              registerProductDisposer: productServiceDisposerRegistry.register,
+              getAgentState: () => agentStore.getState(),
+              createAgentSession: (input) => agentServices.sessions.create(input),
+              sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
+              cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
+              appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
+              updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
+              deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
+              updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
+              isWebSearchProviderReady: isAgentWebSearchProviderReady,
+              invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
+              invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
+            }),
+      sealIpcSurface: () => productIpcRegistry.seal(expectedProductIpcMethods(productManifests)),
+      reportAcceptance: productAcceptanceProfile.enabled
+        ? (methods) => reportProductAcceptanceRegistration({ productIds: productManifests.map((manifest) => manifest.id), productIpcMethodCount: methods.length })
+        : undefined
+    },
+    { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() })
+  if (productBootstrap.ok === false) {
+    const window = getMainWindow()
+    if (window) showBootFailurePage(window, productBootstrap.failure)
     return
   }
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
-  panelWorkspaceForDisposal = panelWorkspace
+  setPanelWorkspaceForDisposal(panelWorkspace)
   /**
    * PLAT-32/S1（PM 裁决②）：OS 外观变化与「设置写入」走**同一条显式通知**。`themeMode==='system'` 时
    * `context.theme` 由 `nativeTheme.shouldUseDarkColors` 解析，用户在系统里切深浅色必须让已分离的页窗/面板窗
    * 跟随（旧实现只是在下一次任意窗口成功读取时顺带转发 ⇒ 读带副作用的副产物）；这里显式通知一次，
    * 通知本身不承载值、绝不 reject，且与设置写入共用同一对账入口（有界、主窗 0 条、无自持环）。
    */
-  nativeTheme.on('updated', () => { void panelWorkspaceForDisposal?.notifyPreferencesChanged() })
+  nativeTheme.on('updated', () => { void getPanelWorkspaceForDisposal()?.notifyPreferencesChanged() })
   // 主窗登记要早于 renderer 加载：首个 getHostContext 不能因为未登记而被拒
   const workspaceMainWindow = getMainWindow()
   if (workspaceMainWindow) {
@@ -2661,7 +1340,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers))
     )
   )
-  await agentTaskExecutionCoordinator?.recoverAfterRestart()
+  await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   for (const { channelId, generation, token } of channelManagementRepository.activeRuntimeChannels(new Date().toISOString())) {
     const type = channelManagementRepository.channelType(channelId)
@@ -2695,8 +1374,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   }
   await channelManagementService.resumeRequested()
   taskAutomationMaintenance.recoverAfterRestart()
-  disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
-  disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
+  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
+  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
   await syncInUseModelPatrolSchedule(jobRuntime, {
     isReady: async () => {
@@ -2704,23 +1383,30 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
     }
   })
-  disposeChannelDeliveryMaintenance = channelDeliveryMaintenance.start()
-  disposeChannelInboundRecovery = channelInboundExecutionRunner.startRecovery()
-  disposeTelegramRuntimeMaintenance = telegramRuntimeMaintenance.start()
-  disposeSlackRuntimeMaintenance = slackRuntimeMaintenance.start()
-  disposeLarkRuntimeMaintenance = larkRuntimeMaintenance.start()
-  disposeQqRuntimeMaintenance = qqRuntimeMaintenance.start()
-  disposeDiscordRuntimeMaintenance = discordRuntimeMaintenance.start()
-  disposeWechatRuntimeMaintenance = wechatRuntimeMaintenance.start()
+  const channelMaintenanceJobDeps = {
+    deliveryCleanup: () => channelDeliveryMaintenance.runSlice(),
+    deliveryRetry: () => channelDeliveryMaintenance.runRetrySlice(),
+    inboundRecovery: () => channelInboundExecutionRunner.recoverOnce(),
+    adapterMaintenance: {
+      telegram: () => telegramRuntimeMaintenance.runOnce(),
+      slack: () => slackRuntimeMaintenance.runOnce(),
+      lark: () => larkRuntimeMaintenance.runOnce(),
+      qq: () => qqRuntimeMaintenance.runOnce(),
+      discord: () => discordRuntimeMaintenance.runOnce(),
+      wechat: () => wechatRuntimeMaintenance.runOnce()
+    }
+  }
+  registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)
+  setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps))
   syncProductToolsRuntimeFromState(await agentStore.getState())
   mcpRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {
-    getMainWindow()?.webContents.send(IpcChannels.agentsRuntimeStateChanged, snapshot)
+    agentBroadcasts.runtimeStateChanged(snapshot)
   })
   buildAppMenu(getMainWindow)
-  await loadMainWindowRenderer(mainWindow)
+  await mainWindowHost.loadAndMount()
   // 挂载：退订旧 listener → 直发 current snapshot → 续增量（Main 侧顺序由 router 保证）
   if (workspaceMainWindow) {
     panelWorkspace.attachMainWindow({ webContentsId: workspaceMainWindow.webContents.id })
@@ -2744,25 +1430,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
  * `window-all-closed` 不再自己发起清理（那会让两条链并发、退出可能早于 flush），只负责非 darwin 的托盘收尾。
  * 有界逃逸：清理再慢也最多挂起 `QUIT_DISPOSE_BUDGET_MS`，绝不因为某个消费者挂住就永远退不出去。
  */
-app.on('before-quit', (event) => {
-  appQuitting = true
-  if (platformRuntimesDisposed || quitDisposeSettled) return
-  event.preventDefault()
-  if (quitDisposeStarted) return
-  quitDisposeStarted = true
-  let released = false
-  const releaseQuit = (): void => {
-    if (released) return
-    released = true
-    quitDisposeSettled = true
-    app.quit()
-  }
-  const escape = setTimeout(releaseQuit, QUIT_DISPOSE_BUDGET_MS)
-  ;(escape as unknown as { unref?: () => void }).unref?.()
-  void disposePlatformRuntimes()
-    .catch(() => undefined)
-    .finally(() => { clearTimeout(escape); releaseQuit() })
-})
+const quitOrchestrator = createQuitOrchestrator({ dispose: disposePlatformRuntimes, quit: () => app.quit() })
+app.on('before-quit', (event) => quitOrchestrator.handleBeforeQuit(event))
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

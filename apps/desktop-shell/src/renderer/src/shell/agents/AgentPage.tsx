@@ -57,6 +57,8 @@ export function AgentPage({
   // 平台种子按当前界面语言生成：新库第一次落库就是正确语言，主进程再按 id 对齐旧行。
   const seed = useMemo(() => createPlatformAgentSeed(providers, { locale: language }), [providers, language])
   const [state, setState] = useState(() => createAgentStoreState(seed))
+  /** 会话指向的智能体被删掉时，把读者送回智能体列表（侧栏据此把焦点交给第一个智能体）。 */
+  const [focusAgentListTick, setFocusAgentListTick] = useState(0)
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<AgentSessionRuntimeSnapshot>({
     sessions: {},
     toolApprovals: [],
@@ -79,11 +81,7 @@ export function AgentPage({
     return model.includes(':') ? model : null
   }, [state.activeAgentId, state.agents])
 
-  const compatibilityByModelKey = useAgentModelCompatibilityMap(
-    providers,
-    gateway.snapshot,
-    activeAgentModelKey
-  )
+  const compatibility = useAgentModelCompatibilityMap(providers, gateway.snapshot, activeAgentModelKey)
 
   const activeAgentModelRef = useMemo(() => {
     if (!activeAgentModelKey) return null
@@ -199,9 +197,12 @@ export function AgentPage({
               onEditAgent={(agentId) => setEditorMode({ type: 'edit', agentId })}
               defaultAgentModelId={defaultAgentModelId}
               onStateChange={updateState}
+              focusAgentListTick={focusAgentListTick}
             />
           ) : null}
         <AgentChat
+          onCreateAgent={() => setEditorMode({ type: 'create' })}
+          onReturnToAgentList={() => setFocusAgentListTick((tick) => tick + 1)}
           state={state}
           runtimeSnapshot={runtimeSnapshot}
           channelRuntimeSnapshot={channelRuntimeSnapshot}
@@ -209,7 +210,8 @@ export function AgentPage({
           pinnedModelIds={pinnedModelIds}
           chatSettings={chatSettings}
           gatewaySnapshot={gateway.snapshot}
-          compatibilityByModelKey={compatibilityByModelKey}
+          compatibilityByModelKey={compatibility.map}
+          compatibilityLoaded={compatibility.loaded}
           defaultAgentModelId={defaultAgentModelId}
           loadingModelService={loadingModelService}
           gatewayStatusCard={
@@ -291,7 +293,7 @@ export function AgentPage({
             state={state}
             providers={providers}
             defaultModelId={defaultAgentModelId}
-            compatibilityByModelKey={compatibilityByModelKey}
+            compatibilityByModelKey={compatibility.map}
             onStateChange={updateState}
             onClose={() => setEditorMode({ type: 'closed' })}
           />

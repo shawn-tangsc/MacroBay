@@ -1,11 +1,22 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Modal, Tag } from 'antd'
+import { Button, Input, Tag } from 'antd'
 import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
+import { Modal } from '@platform/ui/components/modal'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import type { useAgentText } from '../agentTextProvider'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { resolveAgentTextKey } from '../agentTooltipText'
 import { buildSkillMarketplaceRows } from './skillMarketplaceViewModel'
+
+const MARKETPLACE_TITLE_KEY = 'editor.tools.marketplaceTitle'
+
+/** 来源注册表名是分类名词。 */
+const REGISTRY_KEY = 'agent.skills.registry'
 
 type SkillMarketplaceModalProps = {
   open: boolean
@@ -60,11 +71,11 @@ export default function SkillMarketplaceModal({
   return (
     <Modal
       open={open}
-      width={720}
-      footer={null}
-      title={text.editor.tools.marketplaceTitle}
+      width="expanded"
+      titleKey={MARKETPLACE_TITLE_KEY}
+      resolveText={(key) => resolveAgentTextKey(text, key)}
       className="agent-skill-marketplace-modal"
-      onCancel={onClose}>
+      onClose={onClose}>
       <div className="agent-skill-marketplace">
         <div className="agent-skill-marketplace-search">
           <Search size={14} />
@@ -84,11 +95,22 @@ export default function SkillMarketplaceModal({
 
         <div className="agent-skill-marketplace-list">
           {rows.length === 0 ? (
-            <div className="agent-empty-catalog compact">
-              <Sparkles size={17} />
-              <strong>{text.editor.tools.marketplaceEmptyTitle}</strong>
-              <span>{text.editor.tools.marketplaceEmptyDescription}</span>
-            </div>
+            query.trim() ? (
+              <StateView
+                state="empty"
+                reasonCode="filtered-out"
+                size="md"
+                action={{
+                  labelKey: STATE_VIEW_ACTION_KEYS.clear_filter,
+                  onSelect: () => {
+                    setQuery('')
+                    setResults([])
+                  }
+                }}
+              />
+            ) : (
+              <StateView state="empty" reasonCode="not-yet" size="md" />
+            )
           ) : (
             rows.map((row) => (
               <div key={`${row.sourceRegistry}:${row.slug}`} className="agent-marketplace-skill-row">
@@ -105,20 +127,21 @@ export default function SkillMarketplaceModal({
                   </span>
                 </span>
                 {row.sourceUrl ? (
-                  <Button
-                    className="ant-icon-button"
-                    size="small"
-                    icon={<ExternalLink size={13} />}
-                    title={text.editor.tools.openSkillSource}
-                    aria-label={text.editor.tools.openSkillSource}
-                    onClick={() => void window.platform.app.openExternal(row.sourceUrl!)}
+                  <IconButton
+                    ariaLabelKey="editor.tools.openSkillSource"
+                    icon={ExternalLink}
+                    onSelect={() => void window.platform.app.openExternal(row.sourceUrl!)}
+                    resolveText={(key) => resolveAgentTextKey(text, key)}
+                    size="md"
+                    tooltipKey="editor.tools.openSkillSource"
                   />
                 ) : null}
                 {row.isInstalled ? (
-                  <Tag className="agent-tool-approval auto">
-                    <Check size={12} />
-                    {text.editor.tools.skillInstalled}
-                  </Tag>
+                  <StatusPill
+                    tone="ok"
+                    labelKey="editor.tools.skillInstalled"
+                    resolveText={(key) => resolveAgentTextKey(text, key)}
+                  />
                 ) : (
                   <Button
                     className="ant-secondary-button"

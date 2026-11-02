@@ -1,13 +1,30 @@
-import { Button, Tag } from 'antd'
+import { Button } from 'antd'
 import { Check, Play, SkipForward, Square, Trash2, X } from 'lucide-react'
 
 import type { TaskDeliveryAttemptEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { JobRunRecord } from '@platform/jobs'
 import { LoadingSpinner } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import type { AgentText } from '../agentText'
 import type { AgentTaskCenterItem } from '../agentTaskCenterViewModel'
 import { formatDateTime } from '../agentTaskCenterViewModel'
+
+/**
+ * 运行结果 → 档位：查表，不写默认值。只有「成功」和「失败」需要颜色，
+ * 排队、运行中、已取消都不需要读者停下来处理，所以走 `muted`。
+ */
+const JOB_TAG_TONE = {
+  queued: 'muted',
+  running: 'muted',
+  completed: 'ok',
+  failed: 'bad',
+  cancelled: 'muted'
+} as const satisfies Record<string, StatusPillTone>
+
+/** 一条状态词键：句子由 `labels.jobStatus` 按当前状态取，键只回答「这是哪一类」。 */
+const JOB_STATUS_KEY = 'taskCenter.jobStatus'
 
 type AgentTaskRunSectionProps = {
   item: AgentTaskCenterItem | null
@@ -18,6 +35,9 @@ type AgentTaskRunSectionProps = {
   selectedRunLogId: string | null
   attempts: TaskDeliveryAttemptEntity[]
   attemptsTotal: number
+  /** 这一次读取失败了：它是值不是缺席，不能画成「没有投递记录」。 */
+  attemptsLoadFailed: boolean
+  onRetryLoadAttempts: () => void
   onLoadMoreAttempts: () => void
   onSelectRun: (runLogId: string) => void
   onRetryDelivery: (attemptId: string) => void
@@ -36,6 +56,8 @@ export default function AgentTaskRunSection({
   selectedRunLogId,
   attempts,
   attemptsTotal,
+  attemptsLoadFailed,
+  onRetryLoadAttempts,
   onLoadMoreAttempts,
   onSelectRun,
   onRetryDelivery,
@@ -67,7 +89,14 @@ export default function AgentTaskRunSection({
           </Button>
         </div>
       </header>
-      {logs.length === 0 ? <div className="agent-task-empty">{labels.noLogs}</div> : null}
+      {logs.length === 0 ? (
+        <StateView
+          state="empty"
+          reasonCode="never-ran"
+          size="sm"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.run_now, onSelect: onRun }}
+        />
+      ) : null}
       <div className="agent-task-run-list">
         {logs.map((log) => {
           const job = jobsByRunLogId[log.id] ?? null
@@ -79,7 +108,13 @@ export default function AgentTaskRunSection({
                   <strong>{labels.status[log.status]}</strong>
                   <small>{formatDateTime(log.startedAt)}</small>
                 </span>
-                {job ? <Tag className="agent-task-tag">{labels.jobStatus[job.status]}</Tag> : null}
+                {job ? (
+                  <StatusPill
+                    tone={JOB_TAG_TONE[job.status]}
+                    labelKey={JOB_STATUS_KEY}
+                    resolveText={(key) => (key === JOB_STATUS_KEY ? labels.jobStatus[job.status] : '')}
+                  />
+                ) : null}
               </header>
               <p>{job?.progress?.message || log.resultPreview || log.result || log.error || labels.noRunOutput}</p>
               {log.deliverySummary ? (
@@ -127,7 +162,16 @@ export default function AgentTaskRunSection({
             </Button>
           ) : null}
         </header>
-        {attempts.length === 0 ? <div className="agent-task-empty">{labels.noDeliveryAttempts}</div> : null}
+        {attemptsLoadFailed ? (
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="sm"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetryLoadAttempts }}
+          />
+        ) : attempts.length === 0 ? (
+          <StateView state="empty" reasonCode="not-yet" size="sm" />
+        ) : null}
         <div className="agent-task-attempt-list">
           {attempts.map((attempt) => (
             <article key={attempt.id} className="agent-task-attempt-row">

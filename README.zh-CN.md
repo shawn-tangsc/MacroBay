@@ -39,12 +39,15 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 追不到来源记录和时间戳的结论，就应该被报告成缺口。这就是整个产品：**不是一个只能凭信任接受的一段话。**
 
+每日简报把同一批证据收成一页：市场在定价什么、夜里发生了什么变化、今天该盯什么。它既可以按设定时间
+生成，也可以按需重新生成，每一条都保留来源和截止时间。
+
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：数字货币市场检查表、市场状态、同起点收益率、资金面、情绪与资金费率，以及右侧关注清单" width="100%">
+  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：AI 结论、市场状态、同起点收益率、市场情绪与资金面、永续持仓与资金费率、来源状态，以及右侧的利率路径与重点舆情" width="100%">
 </p>
 
 <p align="center">
-  <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
+  <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率，右栏是利率路径、日程与舆情。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
 </p>
 
 ## 下载
@@ -53,9 +56,15 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 **[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
 
-安装包未签名。macOS 上右键 App → **打开**，或执行
-`xattr -dr com.apple.quarantine /Applications/MacroBay.app`；Windows 上在 SmartScreen 里点
-**更多信息 → 仍要运行**。
+安装包**未做代码签名，也未做公证**，所以第一次打开需要两步：
+
+1. **macOS**：把 App 拖进「应用程序」，然后**右键（或按住 Control 点按）App → 打开**，在弹窗里
+   确认「打开」。直接双击会被 Gatekeeper 拦下。如果仍然打不开，在终端执行
+   `xattr -dr com.apple.quarantine /Applications/MacroBay.app`，再打开一次。
+2. **Windows**：运行安装程序。SmartScreen 会提示「Windows 已保护你的电脑」，点
+   **更多信息 → 仍要运行**。
+
+每次下载新版本都要重走这两步，直到发布签名版本。
 
 **还没有 API Key？** 打开应用，选择 **示例模式 → 打开示例看板**。它会回放真实录制的一周数据——
 看板、资金费率、稳定币、ETF 流向、两个月的日历和三条已发布分析——界面上标注「示例数据」，并且不会写入
@@ -64,10 +73,6 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 <div align="center">
 
 ### ⭐ 如果它对你有用，一个 star 能让它继续做下去
-
-<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
-  <img alt="给 MacroBay 点 star" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
-</a>
 
 </div>
 
@@ -181,7 +186,7 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.3.0`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
+MacroBay 目前是 **alpha**（`0.3.1`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
 打开完整看板并读到三条已发布结论，数据来自真实录制的一周。实时面板仍需你自己的供应商凭据。
 macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见

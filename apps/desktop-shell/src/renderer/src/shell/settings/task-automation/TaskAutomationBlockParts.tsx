@@ -18,22 +18,3 @@ export function BlockError(props: {
 export function BlockLoading(props: { label: string }): React.ReactElement {
   return <LoadingState label={props.label} minHeight={120} />
 }
-
-export function BlockEmpty(props: {
-  title?: string
-  body?: string
-  actionLabel?: string
-  onAction?: () => void
-}): React.ReactElement {
-  return (
-    <div className="task-automation-empty">
-      {props.title ? <strong>{props.title}</strong> : null}
-      {props.body ? <p>{props.body}</p> : null}
-      {props.actionLabel && props.onAction ? (
-        <button type="button" className="task-automation-link-button" onClick={props.onAction}>
-          {props.actionLabel}
-        </button>
-      ) : null}
-    </div>
-  )
-}

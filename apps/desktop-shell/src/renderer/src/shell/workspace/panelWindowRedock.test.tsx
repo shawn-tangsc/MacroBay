@@ -26,7 +26,6 @@ const PANEL_KEY = 'panel-1'
 const PANEL_ID = 'dsh-fixture.board'
 const FLUSH_TURNS = 12
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const labels = platformText['en-US'].workspace
 
@@ -134,7 +133,8 @@ describe('PLAT-40 分离面板窗顶栏回停靠', () => {
     const button = redockButton(view)
     expect(button).not.toBeNull()
     expect(button?.getAttribute('aria-label')).toBe(labels.panelWindowRedock)
-    expect(button?.getAttribute('title')).toBe(labels.panelWindowRedock)
+    // 同页窗那处：原生 `title` 随迁移消失，提示改由组件承担。
+    expect(button?.getAttribute('title')).toBeNull()
   })
 
   it('点击只发一条既有受控命令（workspace.command 的 redockPanel），不新增 preload 方法', async () => {

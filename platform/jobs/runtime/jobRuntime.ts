@@ -1,12 +1,14 @@
 import type {
   JobCancelReason,
   JobDefinition,
+  JobAudience,
   JobHandler,
   JobRunAggregateQuery,
   JobRunAggregateResult,
   JobRunPage,
   JobRunQuery,
-  JobRunRecord
+  JobRunRecord,
+  ScheduledJobDefinition
 } from '../contracts/jobTypes'
 import { DEFAULT_RETRY_POLICY } from '../contracts/jobTypes'
 import { createConcurrencyLock } from './concurrencyLock'
@@ -18,10 +20,10 @@ import { createJobScheduler } from './jobScheduler'
 
 export type JobRuntime = {
   registerHandler: (handlerId: string, handler: JobHandler) => void
-  setSchedule: (definition: JobDefinition) => void
+  setSchedule: (definition: ScheduledJobDefinition) => void
   removeSchedule: (definitionId: string) => void
-  /** Definitions currently registered with the runtime scheduler. */
-  listSchedules: () => readonly JobDefinition[]
+  /** Definitions currently registered with the runtime scheduler, with their audience. */
+  listSchedules: () => readonly ScheduledJobDefinition[]
   enqueueManual: (definitionId: string) => Promise<JobRunRecord>
   enqueueStartup: (definitionId: string) => Promise<JobRunRecord>
   enqueueDefinition: (definition: JobDefinition) => Promise<JobRunRecord>
@@ -53,8 +55,39 @@ export type JobRunTerminalObservation =
   | { state: 'timeout' }
   | { state: 'interrupted' }
 
+/**
+ * 运行到达终态时的一次事实通报，交给装配点（`app.ts`）决定要不要变成通知。
+ *
+ * 平台只描述「这一跑结束了、它是怎么结束的」，不认识通知、不写文案、不去重：
+ * 通知语义属于产品与装配点，进到这里就变成了平台对业务的判断。
+ *
+ * `cause` 是给消费者过滤用的，不是给用户看的：
+ * - `executed`：handler 真跑过（完成 / 失败 / 运行中被取消）——只有这一类值得报「任务失败」；
+ * - `rejected`：没跑起来（排队被取消、排队超时、退出时被拒），通常是用户或关机，不是任务出错；
+ * - `recovered`：上次进程遗留的运行在启动时被结清，属于历史，不是本次结果。
+ */
+export type JobRunTerminalCause = 'executed' | 'rejected' | 'recovered'
+
+export type JobRunTerminalHookInput = Readonly<{
+  run: JobRunRecord
+  cause: JobRunTerminalCause
+}>
+
 export type JobRuntimeOptions = {
   store?: JobRunStore
+  /**
+   * 每次运行到达终态时调用一次（同一 run 不会重复通报）。回调抛错不会影响调度：
+   * 一次通知失败不该让一个定时任务停摆。
+   */
+  onRunTerminal?: (input: JobRunTerminalHookInput) => void
+}
+
+/** 运行时校验：类型能被 `as never` 之类绕开，注册这一步挡得住才是真的挡得住。 */
+function assertAudience(definition: JobDefinition & { audience?: JobAudience }): void {
+  if (definition.audience === 'user' || definition.audience === 'internal') return
+  throw new Error(
+    `Job definition "${definition.id}" must declare audience ('user' or 'internal').`
+  )
 }
 
 export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
@@ -62,9 +95,10 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
   const store = options.store ?? createJobRunStore()
   const lock = createConcurrencyLock()
   const executor = createJobExecutor({ registry, store })
-  const definitions = new Map<string, JobDefinition>()
+  const definitions = new Map<string, ScheduledJobDefinition>()
   const queuedRunWaits = new Map<string, QueuedRunWait>()
   const terminalRunWaits = new Map<string, Set<TerminalRunWait>>()
+  const reportedTerminalRuns = new Set<string>()
   let stopped = false
 
   const scheduler = createJobScheduler({
@@ -75,11 +109,24 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
     isLocked: (key) => lock.isLocked(key)
   })
 
+  function reportRunTerminal(run: JobRunRecord | undefined, cause: JobRunTerminalCause): void {
+    if (!run || !isTerminalRun(run) || reportedTerminalRuns.has(run.id)) return
+    reportedTerminalRuns.add(run.id)
+    if (!options.onRunTerminal) return
+    try {
+      options.onRunTerminal({ run, cause })
+    } catch {
+      // A listener that throws must not stop the scheduler: the run already reached its terminal
+      // state, and the next tick still has to fire.
+    }
+  }
+
   return {
     registerHandler(handlerId, handler) {
       registry.register(handlerId, handler)
     },
     setSchedule(definition) {
+      assertAudience(definition)
       definitions.set(definition.id, definition)
       scheduler.setSchedule(definition)
     },
@@ -128,7 +175,9 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
       }
       if (run.status === 'queued') {
         store.markCancelled(runId, reason)
-        finalizeTerminalRunWaits(runId, terminalRunWaits, store.getRun(runId))
+        const cancelled = store.getRun(runId)
+        finalizeTerminalRunWaits(runId, terminalRunWaits, cancelled)
+        reportRunTerminal(cancelled, 'rejected')
         return
       }
       executor.cancelRun(runId, reason)
@@ -157,6 +206,7 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
       const recoveredRuns = [...store.recoverStaleRunningRuns(), ...store.recoverStaleQueuedRuns()]
       for (const run of recoveredRuns) {
         finalizeTerminalRunWaits(run.id, terminalRunWaits, run)
+        reportRunTerminal(run, 'recovered')
       }
       return recoveredRuns
     },
@@ -200,7 +250,9 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
     } catch {
       clearQueuedRunWait(run.id, queuedRunWaits)
       finalizeQueuedRunWait(store, run.id, queuedRunWait?.controller.signal)
-      finalizeTerminalRunWaits(run.id, terminalRunWaits, store.getRun(run.id))
+      const settled = store.getRun(run.id)
+      finalizeTerminalRunWaits(run.id, terminalRunWaits, settled)
+      reportRunTerminal(settled, 'rejected')
       return run
     }
 
@@ -208,12 +260,15 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
     if (queuedRunWait?.controller.signal.aborted) {
       release?.()
       finalizeQueuedRunWait(store, run.id, queuedRunWait.controller.signal)
+      reportRunTerminal(store.getRun(run.id), 'rejected')
       return run
     }
     if (stopped) {
       release?.()
       store.markCancelled(run.id, createShutdownReason())
-      finalizeTerminalRunWaits(run.id, terminalRunWaits, store.getRun(run.id))
+      const settled = store.getRun(run.id)
+      finalizeTerminalRunWaits(run.id, terminalRunWaits, settled)
+      reportRunTerminal(settled, 'rejected')
       return run
     }
 
@@ -221,7 +276,9 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
     if (typeof remainingTimeoutMs === 'number' && remainingTimeoutMs <= 0) {
       release?.()
       store.markFailed(run.id, createTimeoutReason(definition.timeoutMs ?? 0).message)
-      finalizeTerminalRunWaits(run.id, terminalRunWaits, store.getRun(run.id))
+      const settled = store.getRun(run.id)
+      finalizeTerminalRunWaits(run.id, terminalRunWaits, settled)
+      reportRunTerminal(settled, 'rejected')
       return run
     }
 
@@ -240,7 +297,9 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
       .finally(() => {
         release?.()
         scheduler.notifyRunCompleted(definition.id)
-        finalizeTerminalRunWaits(run.id, terminalRunWaits, store.getRun(run.id))
+        const finished = store.getRun(run.id)
+        finalizeTerminalRunWaits(run.id, terminalRunWaits, finished)
+        reportRunTerminal(finished, 'executed')
       })
 
     return run

@@ -12,6 +12,7 @@ import {
 } from '../components/ModelPicker/modelPickerOptions'
 import { platformText } from '../../i18n/platformText'
 import { buildAgentModelOptions, flattenAgentModelOptions } from './agentModelOptions'
+import { useAgentProviderNames } from './useAgentProviderNames'
 import {
   buildAgentMentionModelQuickPanelItems,
   toAgentMentionedModel
@@ -50,15 +51,16 @@ type UseAgentMentionModelsInput = {
 
 export function useAgentMentionModels(input: UseAgentMentionModelsInput) {
   const [mentionedModels, setMentionedModels] = useState<AgentMentionedModel[]>([])
+  const providerNames = useAgentProviderNames()
   // PLAT-70：@ 提及只列**可选**的模型（明确不可用 ⇒ 不提供提及，避免选完就跑失败）。
   const candidates = useMemo<ModelPickerCandidate[]>(
     () =>
       flattenAgentModelOptions(
-        buildAgentModelOptions(input.providers, input.agentType, input.compatibilityByModelKey)
+        buildAgentModelOptions(input.providers, input.agentType, input.compatibilityByModelKey, providerNames)
       )
         .filter((option) => option.selectable)
         .map((option) => ({ providerId: option.providerId, model: option.model })),
-    [input.agentType, input.compatibilityByModelKey, input.providers]
+    [input.agentType, input.compatibilityByModelKey, input.providers, providerNames]
   )
   const groups = useMemo(
     () =>

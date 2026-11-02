@@ -9,6 +9,7 @@ import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionD
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
+import { firstReboundSingletonHook } from './intelligenceModuleHooks'
 import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 import { app } from 'electron'
 
@@ -66,7 +67,8 @@ import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsur
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
-import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { briefingScheduleFrom, briefingScheduleInput, registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
@@ -193,6 +195,8 @@ export type IntelligenceModulePlatformHooks = {
   platformFetch: CapitalConditionsPlatformFetch
   /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
   getTimeZone?: () => string
+  /** The reader changed their display zone: the brief schedule follows it without a settings save. */
+  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
   /**
    * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
    * constructor because the desktop shell can only build it once network settings are readable —
@@ -216,6 +220,8 @@ export type IntelligenceModulePlatformHooks = {
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
 
 export type IntelligenceModule = {
+  /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
+  rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
   translationService: ReturnType<typeof createIntelligenceTranslationService>
@@ -281,17 +287,6 @@ export type IntelligenceModule = {
 let intelligenceModule: IntelligenceModule | null = null
 let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
 
-/**
- * The reader time zone the brief schedule, its cutoff and the "today" it reads all use.
- * Comes from the platform hook (the shell's single time zone reader); fixed UTC when a host
- * has not injected one, never the machine's zone.
- */
-export function resolveBriefingTimeZone(
-  hooks: Pick<IntelligenceModulePlatformHooks, 'getTimeZone'> | undefined
-): string {
-  return hooks?.getTimeZone?.() ?? 'UTC'
-}
-
 function shellTimeZone(): string {
   return resolveBriefingTimeZone(modulePlatformHooks)
 }
@@ -351,11 +346,11 @@ export function getIntelligenceModule(
   // therefore has no effect on what was already wired — for months that looked like a
   // reconfiguration and silently did nothing. Repeat calls may omit hooks or repeat the same
   // platform fetch; anything else is a wiring bug and fails here instead of turning into an
-  // occasional crash at startup.
+  // occasional crash at startup. The message names the field; without it the reader must diff
+  // eighteen hooks by hand.
   if (intelligenceModule) {
-    if (platformHooks && platformHooks.platformFetch !== modulePlatformHooks?.platformFetch) {
-      throw new Error('intelligence-module-hooks-already-bound')
-    }
+    const rebound = firstReboundSingletonHook(platformHooks, modulePlatformHooks)
+    if (rebound) throw new Error(`intelligence-module-hooks-already-bound: ${rebound}`)
     return intelligenceModule
   }
   if (!platformHooks) throw new Error('intelligence-module-hooks-required')
@@ -803,8 +798,8 @@ export function getIntelligenceModule(
     // the same job id so the next run uses the new time; the service reads the stored value at
     // generation time, so a change never rewrites an edition that already exists.
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
-      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')),
-      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: shellTimeZone(), generationTime: settings.generationTime })
+      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
+      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(settings, shellTimeZone()))
     })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
@@ -952,7 +947,7 @@ export function getIntelligenceModule(
       service: dailyBriefingService,
       getLocale: getAppLanguage,
       timeZone: shellTimeZone,
-      getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
+      getSchedule: async () => briefingScheduleInput(await dailyBriefingGenerationSettings.getView())
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
@@ -978,7 +973,12 @@ export function getIntelligenceModule(
         timeZone: shellTimeZone
       })
     }
+    const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
+      scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(await dailyBriefingGenerationSettings.reanchor(timeZone), timeZone))
+    }
+    modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
+      rescheduleBriefingForDisplayTimeZone,
       pipeline,
       workerRuntime,
       archiveService,

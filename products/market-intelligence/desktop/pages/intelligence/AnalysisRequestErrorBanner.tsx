@@ -2,6 +2,8 @@ import { Button } from 'antd'
 import { TriangleAlert, X } from 'lucide-react'
 import { useState } from 'react'
 
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
+
 /**
  * A failed analysis request, rendered as the error it is.
  *
@@ -10,16 +12,18 @@ import { useState } from 'react'
  * module: the reader had to parse a sentence to notice that nothing was going to happen. An
  * error is red, announced (`role="alert"`), and can be put away.
  */
-export function AnalysisRequestErrorBanner({ message, detail, meta = [], dismissLabel, onDismiss }: Readonly<{
+export function AnalysisRequestErrorBanner({ message, detail, meta = [], dismissLabelKey, onDismiss }: Readonly<{
   /** What failed, in the reader's language. */
   message: string
   /** The service's recorded reason, when it named one. */
   detail?: string
   /** Identity of the failed run, kept under the reason so the headline stays readable. */
   meta?: readonly string[]
-  dismissLabel: string
+  /** 关闭键的读屏名：收产品文案键，组件内解析。 */
+  dismissLabelKey: string
   onDismiss: () => void
 }>): React.ReactElement {
+  const resolveProductText = useProductTextKey()
   return <div className="mi-analysis-error" role="alert" data-analysis-error>
     <TriangleAlert className="mi-analysis-error__icon" size={14} aria-hidden="true" />
     <div className="mi-analysis-error__body">
@@ -32,8 +36,7 @@ export function AnalysisRequestErrorBanner({ message, detail, meta = [], dismiss
       type="text"
       size="small"
       icon={<X size={14} aria-hidden="true" />}
-      aria-label={dismissLabel}
-      title={dismissLabel}
+      aria-label={resolveProductText(dismissLabelKey)}
       onClick={onDismiss}
       data-analysis-error-dismiss
     />

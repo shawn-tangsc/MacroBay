@@ -27,7 +27,6 @@ const text = productText['zh-CN'].pages.intelligence.portal
 const dashboardView = panelView('dashboard')!
 let root: Root | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 beforeEach(() => {
   mockGetPanelView.mockReset()
@@ -46,8 +45,10 @@ describe('DashboardPanelDrawer read failure', () => {
     mockGetPanelView.mockRejectedValue(new Error('request failed'))
     await openDrawer(false)
 
-    expect(document.body.textContent).toContain(text.data.drawerUnavailable)
-    expect(document.body.textContent).toContain(text.data.retry)
+    // 句子归平台：这里只断言统一状态面出现且带一个可点的动作，不再断言产品自己那句话。
+    const failure = document.body.querySelector('.state-view--error')
+    expect(failure, 'a failed read renders the shared state surface').not.toBeNull()
+    expect(failure?.querySelector('.state-view__action'), 'error always offers an action').not.toBeNull()
     expect(document.body.querySelector('[data-drawer-state="unavailable"]')).not.toBeNull()
     // Guard: the static list is not on screen on an ordinary failure. The same rejection with
     // sample mode on does render it (next case), so the branch is gated by the flag, not dead.
@@ -63,7 +64,7 @@ describe('DashboardPanelDrawer read failure', () => {
     expect(document.body.querySelector('[data-sample-marker]')).not.toBeNull()
     expect(document.body.textContent).toContain(text.sampleMode.watermark)
     expect(document.body.querySelector('.intelligence-provider-row')).not.toBeNull()
-    expect(document.body.textContent).not.toContain(text.data.drawerUnavailable)
+    expect(document.body.querySelector('.state-view--error')).toBeNull()
   })
 
   it('retries by asking again: the second answer replaces the error', async () => {
@@ -72,9 +73,7 @@ describe('DashboardPanelDrawer read failure', () => {
     expect(document.body.querySelector('[data-drawer-state="unavailable"]')).not.toBeNull()
 
     await act(async () => {
-      Array.from(document.querySelectorAll('button'))
-        .find((button) => button.textContent === text.data.retry)!
-        .click()
+      (document.querySelector('.state-view__action') as HTMLButtonElement).click()
     })
     await flush()
 

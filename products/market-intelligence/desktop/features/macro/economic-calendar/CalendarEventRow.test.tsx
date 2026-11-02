@@ -5,7 +5,21 @@ import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { productText } from '../../../shared/i18n/productText'
 import type { CalendarDayItem } from './economicCalendarDayModel'
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+// These cases mount the real row component (and read the stylesheet) instead of asserting data
+// shapes, so each one costs real React work. Six of them pass in under three seconds on an idle
+// machine, but a whole-suite parallel run has twice pushed them past the shared five-second
+// limit — a red that disappears when the file runs alone. The fix belongs here, not in the global
+// limit: that five-second signal is what would catch a real slowdown.
+const MOUNT_TIMEOUT_MS = 20_000
+
+
+// These cases mount the real row component (and read the stylesheet) instead of asserting data
+// shapes, so they cost tens of milliseconds of React work each. Six of them in one file pass in
+// under three seconds on an idle machine, but a parallel run across the whole suite has twice
+// pushed them past the shared five-second limit and produced a red that disappears when the file
+// runs alone. The fix belongs here, not in the global limit: that five-second signal is what
+// catches a real slowdown. Raise it per file, with the reason written down.
 it('declares uniform six-row day geometry through feature-local layout tokens', () => {
   const css = readFileSync('products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css', 'utf8')
   for (const rule of ['--mi-calendar-day-height: 200px', '--mi-calendar-row-height: 22px', '--mi-calendar-title-size: 12px',
@@ -38,7 +52,7 @@ it('uses only localized time and full accessible topic for both event sources', 
     expect(host.querySelector('button')?.getAttribute('data-event-status')).toBe('time-pending')
     expect(host.textContent).not.toMatch(/0xRouter|456/)
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)
 
 it('shows the provider country before the title, and never a country for an official event', async () => {
   const { CalendarEventRow } = await import('./CalendarEventRow')
@@ -69,7 +83,7 @@ it('shows the provider country before the title, and never a country for an offi
     // The official route is US-only and says so in its own copy; a chip there would be noise.
     expect(host.querySelector('[data-event-country]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)
 
 it('exposes the same status color state and localized tooltip label to assistive technology', async () => {
   const { CalendarEventRow } = await import('./CalendarEventRow')
@@ -83,7 +97,7 @@ it('exposes the same status color state and localized tooltip label to assistive
     expect(row.dataset.eventStatus).toBe('data-received')
     expect(row.getAttribute('aria-label')).toContain('Published value · 数据已获取')
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)
 
 it('never lets an overdue cell read as "no data": storage-limited and not-yet-published are different rows', async () => {
   const { CalendarEventRow } = await import('./CalendarEventRow')
@@ -126,7 +140,7 @@ it('never lets an overdue cell read as "no data": storage-limited and not-yet-pu
     expect(css).toMatch(/\[data-event-status='storage-limited'\]\s*\{[^}]*var\(--mi-calendar-status-limited\)/)
     expect(css).toMatch(/--mi-calendar-status-limited:/)
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)
 it('marks a high-importance row before its name, on the calendar cell and the day list alike', async () => {
   const { CalendarEventRow } = await import('./CalendarEventRow')
   const text = productText['zh-CN'].pages.intelligence.portal.calendar
@@ -168,7 +182,7 @@ it('marks a high-importance row before its name, on the calendar cell and the da
     expect(css).toMatch(/\.mi-economic-calendar__event-marker\s*\{[^}]*var\(--/)
     expect(css).not.toMatch(/\.mi-economic-calendar__event-marker\s*\{[^}]*#[0-9a-f]{3,8}/i)
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)
 it('leads every row with a glyph for its kind, on the calendar cell and the day list alike', async () => {
   // The cell has no room for 经济指标/央行活动/财经事件 and the day list's headings scroll away, so a
   // row that mixes kinds has to say its own kind. Both surfaces draw this same row.
@@ -207,4 +221,4 @@ it('leads every row with a glyph for its kind, on the calendar cell and the day 
     expect(css).toMatch(/\.mi-economic-calendar__event-kind\s*\{[^}]*var\(--/)
     expect(css).not.toMatch(/\.mi-economic-calendar__event-kind\s*\{[^}]*#[0-9a-f]{3,8}/i)
   } finally { await act(async () => root.unmount()) }
-})
+}, MOUNT_TIMEOUT_MS)

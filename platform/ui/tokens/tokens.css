@@ -17,18 +17,90 @@
   --border-subtle: #1c1f26;
   /* Status colours. Used for text and icons, never as the only carrier of meaning. */
   --success: #3fbf6f;
-  --warning: #c48a2a;
+  /*
+   * `--caution`: stale data, degraded behaviour, something to look at. It is not
+   * an error, so it is not `--danger`. One value for the whole app — the three
+   * older fallbacks (`#c48a1a` / `#c48a2a` / `#c28b2a`) collapse here, and the
+   * `#c48a2a` spelling was a typo.
+   */
+  --caution: #c48a1a;
+
+  /*
+   * Metric type scale: readings only (a single number or a very short label),
+   * never a sentence. One size more and every dashboard invents its own 26/28/30.
+   */
+  --font-metric-sm: 24px;
+  --font-metric-md: 30px;
+  --font-metric-lg: 42px;
+
+  /*
+   * Motion: durations and easing live here and nowhere else. A component that writes `180ms` or
+   * its own `@keyframes` is not allowed to; it reads these. The media query at the bottom zeroes
+   * every one of them in one place when the reader asked the system for less motion.
+   */
+  --motion-feedback: 120ms; /* hover, press, colour changes */
+  --motion-enter: 180ms; /* a surface arriving: drawer, modal */
+  --motion-exit: 120ms; /* leaving is faster: the reader already decided */
+  --motion-overlay: 150ms; /* the scrim fading in or out */
+  --motion-toast-in: 160ms;
+  --motion-toast-out: 120ms;
+  --motion-spin: 720ms; /* the one repeating motion in the app: the loading ring */
+  --ease-feedback: ease-out;
+  --ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.2, 0, 0, 1);
+
+  /*
+   * `--surface-raised`: a surface that has come forward from the container it sits on —
+   * the selected segment, a raised chip, a table header, a quote or conclusion block.
+   *
+   * It is not an alias of `--surface-strong`: that token is *darker* than the container in the
+   * dark theme (#191d23 against #222832), so anything using it read as pressed in, not raised.
+   * The direction has to be the same in both themes — raised means lighter — so each theme
+   * states its own value here instead of inheriting one from the other.
+   */
+  --surface-raised: #333b48; /* container --surface-soft #222832 → 1.31 */
 
   /* Legacy aliases kept so existing rules resolve; they add no new colour. */
   --text-primary: var(--text-strong);
   --panel: var(--surface);
   --surface-2: var(--surface-soft);
-  --surface-raised: var(--surface-strong);
+  /* `--warning` is the pre-2026-11 name of `--caution`; kept as an alias, not a second yellow. */
+  --warning: var(--caution);
 }
 
 :root[data-theme="light"] {
   --text-secondary: #555f6d;
   --border-subtle: #eef0f3;
   --success: #2f7d4f;
-  --warning: #a2691a;
+  --caution: #a2691a;
+
+  /*
+   * Light has no room above white: #ffffff against the container #eef1f4 is 1.13, the physical
+   * ceiling. So light keeps the same *direction* (raised = lighter) and leans on the component's
+   * shadow for the rest of the signal. Do not darken it to gain contrast — darkening reads as
+   * pressed in, which is the direction this token exists to avoid.
+   */
+  --surface-raised: #ffffff; /* container --surface-soft #eef1f4 → 1.13, shadow carries the rest */
+
+  --font-metric-sm: 24px;
+  --font-metric-md: 30px;
+  --font-metric-lg: 42px;
+
+  --warning: var(--caution);
+}
+
+/*
+ * One switch for the whole app: the reader asked the system for less motion, so every duration
+ * collapses to zero. Zero, not "shorter" — a shorter movement still moves, and the point is that
+ * the interface stops moving. Easing stays defined so rules keep resolving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-feedback: 0ms;
+    --motion-enter: 0ms;
+    --motion-exit: 0ms;
+    --motion-overlay: 0ms;
+    --motion-toast-in: 0ms;
+    --motion-toast-out: 0ms;
+  }
 }

@@ -6,9 +6,13 @@
  * to another rule, it unset the property — so there the body lost its padding (0 instead of 20px) and
  * the inspector's labels lost their muted colour, quietly, without anything failing. The drawer class
  * carries the tokens with it so one detail surface looks the same wherever it is opened.
+ *
+ * The BLS import dialog is the same story one step further out: the platform `Modal` mounts it on
+ * `body`, so its own class has to carry the tokens too.
  */
 .mi-economic-calendar,
-.mi-calendar-drawer {
+.mi-calendar-detail,
+.mi-bls-ics-dialog {
   /* EconomicCalendarMonthLayoutPolicy — design 122 §2.1. */
   --mi-calendar-day-height: 200px;
   --mi-calendar-row-height: 22px;
@@ -49,20 +53,39 @@
 }
 .mi-economic-calendar {
   height: 100%;
-  /* The event detail's drawer is inline (`getContainer={false}`), which antd makes `position:
-     absolute` — so where it lands is decided by the nearest positioned ancestor. With none in this
-     chain it resolved against the initial containing block and slid over the app's icon rail and tab
-     strip, while the same drawer opened from the market dashboard stops at the content area's edge.
-     The page's own box is that anchor: one drawer, one place, whichever surface opened it. */
+  /* One row: the detail panel and the calendar column. `row-reverse` because the panel is the DOM's
+     second child — it is opened from a row, so "calendar, then detail" is the reading order — while
+     it sits on the left, where the drawer it replaced was. DOM order is not permuted for looks. */
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: hidden;
-  padding: var(--mi-economic-page-block) var(--mi-economic-page-inline);
+  overflow: hidden;
   background: var(--bg);
   color: var(--mi-economic-text);
+}
+/* The calendar side of the row: toolbar, status, legend and the month/day workspace. It carries the
+   page padding now that the page itself is the row, so the panel can sit flush against its edge. */
+.mi-economic-calendar__column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--mi-economic-page-block) var(--mi-economic-page-inline);
+  overflow: hidden;
+}
+/*
+ * Below 1300 the panel covers the row, exactly as the drawer did.
+ *
+ * The number, because the drawing's "1000" does not fit this page: a squeezed row holds the panel
+ * (480) + workspace gap (22) + day list (320) + page padding (40), so the month grid keeps
+ * `width − 862`. At a 1000px window that is ~140px — seven columns of 20px. 1300 leaves it 438,
+ * which is the narrowest month the grid already renders on its own (see the 1023px rule below);
+ * under 1300 the page keeps today's full-width overlay instead of inventing a sliver of a month.
+ */
+@media (max-width: 1299px) {
+  .mi-economic-calendar .mi-calendar-detail { position: absolute; inset: 0; width: 100%; z-index: 2; }
 }
 
 :root[data-theme='light'] .mi-economic-calendar {
@@ -89,10 +112,10 @@
 .mi-market-calendar__inspector h2 { overflow-wrap: anywhere; }
 .mi-market-calendar__inspector strong { overflow-wrap: anywhere; min-width: 0; }
 .mi-economic-calendar h1, .mi-economic-calendar h2, .mi-economic-calendar p, .mi-economic-calendar dl, .mi-economic-calendar dd,
-.mi-calendar-drawer h1, .mi-calendar-drawer h2, .mi-calendar-drawer p, .mi-calendar-drawer dl, .mi-calendar-drawer dd { margin: 0; }
+.mi-calendar-detail h1, .mi-calendar-detail h2, .mi-calendar-detail p, .mi-calendar-detail dl, .mi-calendar-detail dd { margin: 0; }
 .mi-economic-calendar__header, .mi-economic-calendar__heading, .mi-economic-calendar__tools, .mi-economic-calendar__workspace, .mi-economic-calendar__month, .mi-economic-calendar__inspector { min-width: 0; }
 .mi-economic-calendar__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--mi-market-status-gap); margin-bottom: var(--mi-market-status-gap); }
-.mi-economic-calendar h1, .mi-calendar-drawer h1 { font-size: var(--mi-calendar-date-size); font-weight: 650; line-height: 1.2; }
+.mi-economic-calendar h1, .mi-calendar-detail h1 { font-size: var(--mi-calendar-date-size); font-weight: 650; line-height: 1.2; }
 .mi-economic-calendar__import.ant-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-top: 12px; border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; }
 .mi-economic-calendar__import.ant-btn:hover { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 17%, var(--mi-economic-surface)); color: var(--mi-economic-text); }
 .mi-economic-calendar__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -129,34 +152,22 @@
 .mi-economic-calendar__tools > button:focus-visible, .mi-economic-calendar__event:focus-visible, .mi-economic-calendar__more-button:focus-visible, .mi-day-events-dialog__event:focus-visible { outline: 2px solid var(--mi-economic-lime); outline-offset: 2px; }
 .mi-economic-calendar__workspace { display: grid; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) var(--mi-economic-inspector-width); gap: var(--mi-economic-gap); }
 .mi-calendar-month-scroll { min-width: 0; min-height: 0; overflow-y: auto; }
-/* The right column stands on its own: the detail opens as a drawer over the board instead of
-   replacing it, so this surface is never swapped out from under the reader. */
-.mi-calendar-day-list, .mi-calendar-detail-container { min-width: 0; min-height: 0; overflow-y: auto; overflow-wrap: anywhere; }
+/* The right column stands on its own: the detail opens beside the board instead of replacing it,
+   so this surface is never swapped out from under the reader. */
+.mi-calendar-day-list { min-width: 0; min-height: 0; overflow-y: auto; overflow-wrap: anywhere; }
+/* 10px, not 20: `SidePanel`'s body already pads 10px, and the detail keeps the 20px it had in the
+   drawer. Both numbers are visible here on purpose — this rule and the panel's padding are a pair. */
+.mi-calendar-detail-container { min-width: 0; overflow-wrap: anywhere; padding: 10px; }
 .mi-calendar-day-list { display: grid; align-content: start; gap: var(--mi-calendar-group-gap); padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
 .mi-calendar-day-list [data-calendar-group], .mi-calendar-detail-container [data-calendar-group] { border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-calendar-group-gap); margin-top: var(--mi-calendar-group-gap); }
 .mi-calendar-day-list [data-calendar-group] > h3, .mi-calendar-detail-container [data-calendar-group] > h3 { color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); margin: 0 0 var(--mi-calendar-group-title-gap); }
 .mi-calendar-day-list [data-day-summary], .mi-calendar-detail-container [data-day-summary] { color: var(--mi-economic-muted); font-size: var(--mi-calendar-time-size); }
-.mi-calendar-drawer .ant-drawer-body { padding: var(--mi-economic-page-inline); }
 /*
- * The detail is a **floating** panel, not a wall on the window edge: 12px off every side of the
- * content area, rounded, so it reads as a card lying over the board it came from. The reader asked
- * for it after seeing the drawer glued to the icon rail and the tab strip.
- *
- * antd positions a left drawer's content wrapper itself (`.ant-drawer-left > .ant-drawer-content-wrapper
- * { top: 0; bottom: 0; left: 0 }`), and its styles are injected at runtime — a plain two-class
- * selector would tie on specificity and lose on source order. The placement class is therefore part
- * of the selector, which wins outright. The tokens live on the drawer class because the same drawer
- * is opened from the calendar page and from the market dashboard, and only one of those has the
- * calendar's own custom properties in scope.
+ * The detail is a **side panel** now: it owns a column and squeezes the calendar instead of covering
+ * it. The panel carries its own width, close control and focus policy; nothing about the old
+ * floating 12px card survives here — the inset, radius and `getContainer` placement were the
+ * drawer's, and the panel has no mask to click away or shadow to cast.
  */
-.mi-calendar-drawer { --mi-calendar-drawer-inset: 12px; --mi-calendar-drawer-radius: 11px; }
-.mi-calendar-drawer.ant-drawer-left > .ant-drawer-content-wrapper {
-  top: var(--mi-calendar-drawer-inset);
-  bottom: var(--mi-calendar-drawer-inset);
-  left: var(--mi-calendar-drawer-inset);
-  max-width: calc(100% - 2 * var(--mi-calendar-drawer-inset));
-}
-.mi-calendar-drawer .ant-drawer-content { border-radius: var(--mi-calendar-drawer-radius); overflow: hidden; }
 /* The current day is a fixed square badge while its number is one line of the cell's type, so the
    number is centered in that square on both axes; left to itself the line box sits at the top. */
 .mi-economic-calendar__date[aria-current='date'] { display: grid; place-items: center; justify-self: start; width: var(--mi-calendar-row-height); height: var(--mi-calendar-row-height); border-radius: 50%; background: var(--mi-economic-lime); color: var(--mi-economic-surface); }
@@ -196,14 +207,14 @@
 .mi-economic-calendar__more-button { height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); text-align: left; }
 .mi-economic-calendar__more-button:hover { color: var(--mi-economic-text); text-decoration: underline; }
 .mi-economic-calendar__inspector { display: grid; align-content: start; gap: 15px; padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
-.mi-economic-calendar h2, .mi-calendar-drawer h2 { font-size: 20px; font-weight: 650; line-height: 1.3; }
+.mi-economic-calendar h2, .mi-calendar-detail h2 { font-size: 20px; font-weight: 650; line-height: 1.3; }
 .mi-economic-calendar__surprise { width: fit-content; border: 1px solid var(--mi-economic-line); border-radius: 999px; color: var(--mi-economic-muted); font-size: 11px; padding: 5px 9px; }
 .mi-economic-calendar__surprise[data-surprise='above-consensus'] { border-color: var(--mi-economic-amber); color: var(--mi-economic-amber); }
 .mi-economic-calendar__surprise[data-surprise='below-consensus'], .mi-economic-calendar__surprise[data-surprise='in-line'] { border-color: var(--mi-economic-lime); color: var(--mi-economic-lime); }
 .mi-economic-calendar__metadata, .mi-economic-calendar__provenance { display: grid; gap: 8px; }
 .mi-economic-calendar__metadata div, .mi-economic-calendar__provenance div { display: grid; grid-template-columns: minmax(92px, .9fr) minmax(0, 1fr); gap: 10px; }
-.mi-economic-calendar dt, .mi-calendar-drawer dt { color: var(--mi-economic-muted); font-size: 11px; }
-.mi-economic-calendar dd, .mi-calendar-drawer dd { color: var(--mi-economic-text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.mi-economic-calendar dt, .mi-calendar-detail dt { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-economic-calendar dd, .mi-calendar-detail dd { color: var(--mi-economic-text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .mi-economic-calendar__values { display: grid; border-top: 1px solid var(--mi-economic-line); border-bottom: 1px solid var(--mi-economic-line); }
 .mi-economic-calendar__values div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--mi-economic-line); }
 .mi-economic-calendar__values div:last-child { border-bottom: 0; }

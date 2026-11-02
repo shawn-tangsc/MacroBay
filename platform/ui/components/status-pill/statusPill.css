@@ -1,0 +1,117 @@
+/*
+ * 状态药丸的外观。五档只换颜色，不换字号、不换形状——同一行里出现两个档位时，
+ * 读者该读到的是「两个状态」，不是「两种大小」。
+ *
+ * 字号只有 11px 一档：9px 属于徽标与脚注，药丸再小就读不清档位。
+ *
+ * 颜色分两层：**档位色只出现在圆点与描边上，字永远用正文色**。原因是硬门禁——
+ * `color: var(--danger)` 这类「状态色当正文前景」在深色下只有 3.25–3.94，正文门槛 4.5，
+ * 而 11px 的状态字就是正文（`scripts/danger-color-baseline.json` 只减不增）。规格写
+ * 「颜色取 token」，圆点与描边正是那份颜色的落点，字因此始终读得清。
+ */
+.status-pill {
+  /*
+   * 点尺寸只在这里定义一次（产品经理 2026-11-02 提醒，Chief 采纳）。
+   *
+   * 形状是第二通道这件事有个隐藏前提：尺寸得够大。5px 上 1.5px 描边的空心环内孔只剩 2px，
+   * 灰度里读起来就是实心圆——那时形状编码是装饰冒充编码。所以尺寸收成变量，形状规则只引用它；
+   * 页面样式表里出现自己写死的点尺寸即红（`statusPillDotSizeGuard.test.ts`）。
+   */
+  --pill-dot-size: 6px;
+  --pill-dot-small: 3px;
+  --pill-dot-bar-width: 6px;
+  --pill-dot-bar-height: 2px;
+  --pill-dot-stroke: 1.5px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-strong);
+  background: transparent;
+  white-space: nowrap;
+}
+
+/*
+ * 圆点只是辅助：颜色关掉之后，读的是旁边的字。
+ *
+ * **形状是第二通道**（界面设计 2026-11-02 定，Chief 批准）。五档的点两两不同：
+ * `ok` 实心圆 6×6、`warn` 空心环 6×6（描边 1.5）、`bad` 实心方块 6×6（圆角 1）、
+ * `info` 短横条 6×2、`muted` 小实心圆 3×3。
+ *
+ * 为什么不是 5px：5px 上 1.5px 描边的空心环内孔只剩 2px，灰度截图里和实心圆几乎一样——
+ * 形状编码在 5px 上是假的，所以点整体抬到 6px。改这几条之前先想清楚：
+ * 它们存在的唯一理由，是灰度与红绿色盲下五个点仍能两两分开。
+ */
+.status-pill__dot {
+  flex: none;
+  background: var(--pill-tone);
+}
+
+/* ok：满圆。 */
+.status-pill__dot[data-dot-shape='circle'] {
+  width: var(--pill-dot-size);
+  height: var(--pill-dot-size);
+  border-radius: 50%;
+}
+
+/* warn：空心环——灰度和实心圆不是「深浅差」，是「有没有心」。 */
+.status-pill__dot[data-dot-shape='ring'] {
+  box-sizing: border-box;
+  width: var(--pill-dot-size);
+  height: var(--pill-dot-size);
+  background: transparent;
+  border: var(--pill-dot-stroke) solid var(--pill-tone);
+  border-radius: 50%;
+}
+
+/* bad：实心方块——有直角，与两档圆一眼分开。 */
+.status-pill__dot[data-dot-shape='square'] {
+  width: var(--pill-dot-size);
+  height: var(--pill-dot-size);
+  border-radius: 1px;
+}
+
+/* info：短横条——横的，不是点；与「进行中」同为动态语义的读者最先认这一条。 */
+.status-pill__dot[data-dot-shape='bar'] {
+  width: var(--pill-dot-bar-width);
+  height: var(--pill-dot-bar-height);
+  border-radius: 1px;
+}
+
+/* muted：小实心圆——用大小做第三通道，避免再出现一个空心形与 warn 混淆。 */
+.status-pill__dot[data-dot-shape='small'] {
+  width: var(--pill-dot-small);
+  height: var(--pill-dot-small);
+  border-radius: 50%;
+}
+
+/* 五档各给一个档位色，描边由它混中性边框求出，深浅两个主题下都不会跳成另一种颜色。 */
+.status-pill--ok {
+  --pill-tone: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+.status-pill--warn {
+  --pill-tone: var(--caution);
+  border-color: color-mix(in srgb, var(--caution) 45%, var(--border));
+}
+
+.status-pill--bad {
+  --pill-tone: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.status-pill--info {
+  --pill-tone: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.status-pill--muted {
+  --pill-tone: var(--muted);
+}

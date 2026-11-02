@@ -74,4 +74,30 @@ describe('BEA official-release refresh service', () => {
     expect(reads).toBeGreaterThanOrEqual(2)
     expect(appendManyIfNew).not.toHaveBeenCalled()
   })
+  // Both directions of one judgement: the read follows the 48-hour observation window, so it
+  // crosses into the previous month only while that window actually reaches it. A day-of-month
+  // test («today is the 1st or 2nd») cannot express this: it keeps reading the previous month on
+  // the 2nd even when the window does not reach it, and stops on the 3rd regardless of the window.
+  const monthsRead = async (when: string): Promise<string[]> => {
+    const seen: string[] = []
+    const service = createBeaOfficialReleaseRefreshService({
+      repository: {
+        listEffectiveMonthAsOf: ({ monthStart }: { monthStart: string }) => { seen.push(monthStart); return [] },
+        appendManyIfNew: vi.fn(() => ({ insertedCount: 0, dedupedCount: 0 })), recordBeaObservationAttemptIfDue: () => false,
+        clearBeaObservation: vi.fn(), clearExpiredBeaObservations: vi.fn()
+      },
+      http: { requestRss: vi.fn(), requestPage: vi.fn() }, evidence: { append: vi.fn() }
+    })
+    await service.refresh({ detectedAt: when, runId: 'bea-run' })
+    return seen
+  }
+
+  it('reads the previous month while the observation window still reaches into it', async () => {
+    expect(await monthsRead('2026-11-02T09:00:00.000Z')).toEqual(['2026-10-01', '2026-11-01'])
+  })
+
+  it('stays in the current month once the observation window no longer reaches back', async () => {
+    expect(await monthsRead('2026-11-05T09:00:00.000Z')).toEqual(['2026-11-01'])
+  })
+
 })

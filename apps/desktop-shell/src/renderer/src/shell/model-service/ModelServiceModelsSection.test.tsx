@@ -65,7 +65,6 @@ const groups: ModelGroup[] = [
 ]
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -405,5 +404,40 @@ describe('PLAT-79 retired models are labelled', () => {
 
     expect(entry?.getAttribute('data-model-retired')).toBe('true')
     expect(entry?.querySelector('[data-model-retired-tag]')?.textContent).toBe(labels.modelRetiredTag)
+  })
+})
+
+describe('模型区的空态只出现一次', () => {
+  it('没有任何模型时，空态节点恰好一个', async () => {
+    const container = await mountGroups([])
+
+    // 旧写法是两个独立的 if（`modelCount === 0` 与 `visibleGroups.length === 0`），
+    // 在「没有模型」时同时成立，同一块地方会渲染两遍同一句话——而两层空态看起来像强调，不像 bug。
+    expect(container.querySelectorAll('[data-state="empty"]')).toHaveLength(1)
+  })
+
+  it('有模型但被搜索挡住时，说的是「被筛选挡住」，也是恰好一个', async () => {
+    const container = await mountGroups()
+
+    const toggle = container.querySelector<HTMLButtonElement>('[data-models-search-toggle]')
+    expect(toggle).not.toBeNull()
+    await act(async () => {
+      toggle!.click()
+      await Promise.resolve()
+    })
+
+    const input = container.querySelector<HTMLInputElement>('[data-models-search]')
+    expect(input).not.toBeNull()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, 'zzzz-no-such-model')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    const emptyStates = container.querySelectorAll('[data-state="empty"]')
+    expect(emptyStates).toHaveLength(1)
+    // 处境不同，句子也必须不同：一个说「还没有」，一个说「被筛选挡住」。
+    expect(emptyStates[0]?.textContent).not.toContain(labels.noModels)
   })
 })

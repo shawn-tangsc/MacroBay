@@ -3,6 +3,7 @@ import { Button, Select, Switch } from 'antd'
 
 import { resolveConfiguredModel, parseConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
@@ -28,10 +29,16 @@ export function TranslationPreferencesSection(props: {
   /** The provider's own sources; omitted keeps the global module counts. */
   sourceIds?: readonly string[]
   modelProviders: SafeModelProvider[]
+  /** The first read is still in flight: the card draws a loading line, never switches in the "off" position. */
+  loading?: boolean
   saving: boolean
+  /** Set only when this card saved during this session; a loaded file never sets it. */
+  savedThisSession?: boolean
   queuing: boolean
   labels: {
     title: string
+    loading: string
+    loadFailed: string
     autoTranslateEnabled: string
     targetLocale: string
     translationModel: string
@@ -41,6 +48,7 @@ export function TranslationPreferencesSection(props: {
     queueMissing: string
     saving: string
     saved: string
+    savedThisSession: string
     moduleStatus: string
     pendingCount: string
     failedCount: string
@@ -113,8 +121,12 @@ export function TranslationPreferencesSection(props: {
 
   return (
     <section className="intelligence-section intelligence-translation-preferences">
-      <div className="intelligence-section-title">{props.labels.title}</div>
-      {settings ? (
+      <div className="intelligence-section-title">
+        <span>{props.labels.title}</span>
+        {props.savedThisSession ? <small className="intelligence-section-saved">{props.labels.savedThisSession}</small> : null}
+      </div>
+      {props.loading ? <LoadingState label={props.labels.loading} minHeight={60} /> : null}
+      {!props.loading && settings ? (
         <div className="intelligence-setting-grid">
           <SettingRow label={props.labels.autoTranslateEnabled}>
             <Switch
@@ -185,10 +197,10 @@ export function TranslationPreferencesSection(props: {
         <div className="intelligence-translation-status">
           {props.moduleStatus ? (
             <>
-              <StatusPill label={props.labels.pendingCount} value={String(counts.pendingCount)} />
-              <StatusPill label={props.labels.failedCount} value={String(counts.failedCount)} />
-              <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
-              <StatusPill
+              <CountBadge label={props.labels.pendingCount} value={String(counts.pendingCount)} />
+              <CountBadge label={props.labels.failedCount} value={String(counts.failedCount)} />
+              <CountBadge label={props.labels.translatedCount} value={String(counts.translatedCount)} />
+              <CountBadge
                 label={props.labels.lastJobAt}
                 // No job has run yet is not "saved": the pill used to claim a job that never happened.
                 value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : '—'}
@@ -209,16 +221,9 @@ export function TranslationPreferencesSection(props: {
         </div>
       </div>
       <div className="intelligence-translation-meta">
-        {props.moduleStatus ? (
-          <small>
-            {props.labels.moduleStatus}{props.labels.labelSep}{props.labels.pendingCount} {counts.pendingCount}{props.labels.joiner}
-            {props.labels.failedCount} {counts.failedCount}
-          </small>
-        ) : null}
         {props.errorMessage ? <small data-tone="error">{props.errorMessage}</small> : null}
         {!props.errorMessage && props.saving ? <small>{props.labels.saving}</small> : null}
         {!props.errorMessage && !props.saving && props.notice ? <small>{props.notice}</small> : null}
-        {!props.errorMessage && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
       </div>
     </section>
   )
@@ -233,7 +238,7 @@ function SettingRow(props: { label: string; children: React.ReactNode; wide?: bo
   )
 }
 
-function StatusPill(props: { label: string; value: string; wide?: boolean }): React.ReactElement {
+function CountBadge(props: { label: string; value: string; wide?: boolean }): React.ReactElement {
   return (
     <div className={`intelligence-translation-pill${props.wide ? ' intelligence-translation-pill-wide' : ''}`}>
       <span className="intelligence-translation-pill-label">{props.label}</span>

@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
+import { Button } from 'antd'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
-import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Segmented } from '@platform/ui/components/segmented'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { NEWS_SENTIMENT_WINDOW_MS } from '../../../../service/intelligence/schema/newsSentiment'
 import { labelText } from './newsSentimentPresentation'
 import { passesNeutralFilter } from './newsSentimentFilters'
 import { resolveNewsSentimentEmptyState } from './newsSentimentEmptyState'
+import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { isNewsSentimentOutOfDate } from './newsSentimentFreshness'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
@@ -24,12 +30,15 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
-  /** Opens the product's source settings; the "sources are off" state has no other way forward. */
-  onOpenSources?: () => void
+  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
+  onEnableSources: () => void
   /** Collects the named sources now: "run once" after a first enable, "try again" after a failure. */
-  onRunSources?: (sourceIds: readonly string[]) => void
+  onRunSources: (sourceIds: readonly string[]) => void
+  /** Moves to the next wider window: the actions `older-than-window` and `nothing-in-window` advertise. */
+  onWidenWindow: () => void
   includeNeutral?: boolean
-  onIncludeNeutralChange?: (includeNeutral: boolean) => void
+  /** Clears the neutral filter: the action `filtered-out` advertises. Always provided. */
+  onIncludeNeutralChange: (includeNeutral: boolean) => void
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
@@ -44,6 +53,8 @@ export function NewsSentimentCard(props: {
     : []
   useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
+  // "Nothing read yet" is not "nothing there": only a read that came back may end in empty or error.
+  const hasRows = Boolean(view && (view.items?.length ?? 0) > 0)
   // A view that did not come from the query (a fixture, a partial DTO) must not throw here: without
   // a usable instant there is no window edge, and the card then says only what it can support.
   const windowStart = view?.asOf && NEWS_SENTIMENT_WINDOW_MS[view.window] !== undefined
@@ -68,8 +79,20 @@ export function NewsSentimentCard(props: {
         ...(view.readiness ? { readiness: view.readiness } : {})
       })
     : false
-  const emptyAction = emptyState && !causeUnknown ? emptyStateAction(emptyState.kind, props, text) : undefined
-  const emptySentence = emptyState && !causeUnknown ? emptyStateText(emptyState, text, formatTime) : undefined
+  // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
+  const resolveIconText = createIconTextResolver(text)
+  // StateView owns the skeleton and takes only a key for the reason sentence; the five product
+  // sentences carry `{time}`, so the resolver interpolates already-formatted strings.
+  const resolveProductText = useProductTextKey()
+  // StateView's own copy (status word, title) stays platform-owned; the reason sentence is ours.
+  const resolveStateText = useStateViewText()
+  const resolveStateReason = (key: string, params?: Record<string, string>): string => {
+    const sentence = resolveProductText(key)
+    if (!sentence) return ''
+    return params
+      ? Object.entries(params).reduce((copy, [name, value]) => copy.split(`{${name}}`).join(value), sentence)
+      : sentence
+  }
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -77,34 +100,67 @@ export function NewsSentimentCard(props: {
         <Newspaper aria-hidden="true" size={14} />
         <h2>{text.title}</h2>
         <div className="mi-news-sentiment__header-actions">
-          <span className="mi-news-sentiment__neutral-filter" role="group" aria-label={text.neutralFilter.label}>
-            <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(true)} type="button">{text.neutralFilter.all}</button>
-            <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(false)} type="button">{text.neutralFilter.exclude}</button>
-          </span>
-          <button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
-          <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
-            <Settings aria-hidden="true" size={13} />
-          </button>
-          <button aria-label={text.refresh} className="mi-news-sentiment__icon" onClick={props.onRefresh} type="button">
-            <RefreshCw aria-hidden="true" size={13} />
-          </button>
+          <Segmented
+            ariaLabelKey="pages.intelligence.portal.newsSentiment.neutralFilter.label"
+            items={[
+              { labelKey: 'pages.intelligence.portal.newsSentiment.neutralFilter.all', value: 'all' },
+              { labelKey: 'pages.intelligence.portal.newsSentiment.neutralFilter.exclude', value: 'exclude' }
+            ]}
+            onChange={(value) => props.onIncludeNeutralChange(value === 'all')}
+            resolveText={resolveProductText}
+            value={includeNeutral ? 'all' : 'exclude'}
+          />
+          <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
+          {hasIconText(text, 'news.sentiment.settings') ? (
+            <IconButton
+              ariaLabelKey="news.sentiment.settings"
+              icon={Settings}
+              onSelect={props.onOpenSettings}
+              resolveText={resolveIconText}
+              size="md"
+              tooltipKey="news.sentiment.settings"
+            />
+          ) : null}
+          {hasIconText(text, 'news.sentiment.refresh') ? (
+            <IconButton
+              ariaLabelKey="news.sentiment.refresh"
+              icon={RefreshCw}
+              onSelect={props.onRefresh}
+              resolveText={resolveIconText}
+              size="md"
+              tooltipKey="news.sentiment.refresh"
+            />
+          ) : null}
         </div>
       </header>
 
-      {failed || causeUnknown ? (
+      {(failed || causeUnknown) && !hasRows ? (
+        // Nothing was ever read, so the card has nothing to keep: error plus the way out.
         <div className="mi-news-sentiment__state" data-news-sentiment-state="unavailable">
-          <p>{text.unavailable}</p>
-          <button onClick={props.onRefresh} type="button">{text.retry}</button>
+          <StateView
+            action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
+            productReason={{ key: 'mi.newsSentiment.unavailable', resolve: (key, params) => resolveStateReason(key, params) }}
+            reasonCode="unreadable"
+            resolveText={resolveStateText}
+            size="md"
+            state="error"
+          />
         </div>
       ) : loading && !view ? (
-        <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><LoadingState label={text.loading} minHeight={140} /></div>
-      ) : emptyState && emptySentence ? (
-        // Five different "no rows" situations, five different sentences, each carrying the next step
-        // except the one that is a fact rather than a fault. Nothing here relies on colour.
-        <div className="mi-news-sentiment__state" data-news-sentiment-state={emptyState.kind}>
-          <p>{emptySentence}</p>
-          {emptyAction ? <button onClick={emptyAction.run} type="button">{emptyAction.label}</button> : null}
+        <div className="mi-news-sentiment__state" data-news-sentiment-state="loading">
+          <StateView resolveText={resolveStateText} size="md" state="loading" />
         </div>
+      ) : emptyState && !causeUnknown ? (
+        <EmptyCause
+          neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
+          onEnableSources={props.onEnableSources}
+          onRefresh={props.onRefresh}
+          onRunSources={props.onRunSources}
+          onWidenWindow={props.onWidenWindow}
+          resolve={resolveStateReason}
+          state={emptyState}
+          timeText={emptyState.lastKnownItemAt ? formatTime(emptyState.lastKnownItemAt, 'minute') : ''}
+        />
       ) : !available ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
           <p>{text.drawer.emptyFiltered}</p>
@@ -113,10 +169,24 @@ export function NewsSentimentCard(props: {
         // A read that succeeded but whose rows were filtered out is not an empty window: say which
         // of the two it is, or the reader cannot tell a quiet day from a broken card.
         <div className="mi-news-sentiment__state" data-news-sentiment-state="filtered-empty">
-          <p>{text.drawer.emptyFiltered}</p>
+          <StateView
+            action={{ labelKey: 'ui.state.action.clear-filter', onSelect: () => props.onIncludeNeutralChange(true) }}
+            reasonCode="filtered-out"
+            resolveText={resolveStateText}
+            size="md"
+            state="empty"
+          />
         </div>
       ) : (
         <>
+          {failed && hasRows ? (
+            // A refresh that failed keeps what the reader already had; replacing it with an error
+            // panel would throw away a reading that is still true, only older.
+            <p className="mi-news-sentiment__stale-read" data-news-sentiment-stale-read role="status">
+              <span>{text.staleRead}</span>
+              <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+            </p>
+          ) : null}
           <div
             className="mi-news-sentiment__drivers"
             onScroll={(event) => {
@@ -155,44 +225,95 @@ export function NewsSentimentCard(props: {
   )
 }
 
-function emptyStateText(
-  state: import('./newsSentimentEmptyState').NewsSentimentEmptyState,
-  text: NewsSentimentText,
-  formatTime: (instant: string, precision?: 'minute') => string
-): string {
-  switch (state.kind) {
-    case 'sources-disabled': return text.emptyStates.sourcesDisabled
-    case 'collection-failed': return text.emptyStates.collectionFailed
-    case 'never-ran': return text.emptyStates.neverRan
-    case 'stale': return text.emptyStates.stale.replace('{time}', formatTime(state.lastKnownItemAt ?? '', 'minute'))
-    case 'quiet': return text.emptyStates.quiet
-  }
-}
-
 /**
- * The next step, once per cause. The quiet case has none on purpose: a quiet period is the answer,
- * not a fault to retry.
+ * The five ways a window can have no rows, each rendered by the platform StateView.
+ *
+ * Why these five codes: a source that never ran is `never-ran` (its next step is to run it); all
+ * sources switched off is `target-disabled` (the reader must re-enable them); a failing collection is
+ * `error · unreadable` (retry reads again); only-out-of-window data is `older-than-window` (the
+ * advertised action widens the window); a genuinely quiet period is `nothing-in-window`, which is a
+ * fact and carries no action. The reason sentence stays the product's own (it carries the time in the
+ * stale case); the title, status word, icon and action all stay the platform's.
  */
-function emptyStateAction(
-  kind: import('./newsSentimentEmptyState').NewsSentimentEmptyKind,
-  props: { onOpenSources?: () => void; onRunSources?: (sourceIds: readonly string[]) => void; onRefresh: () => void; view?: NewsSentimentView },
-  text: NewsSentimentText
-): Readonly<{ label: string; run: () => void }> | undefined {
-  const readiness = props.view?.readiness
-  switch (kind) {
+function EmptyCause(props: {
+  state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
+  resolve: (key: string, params?: Record<string, string>) => string
+  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
+  onEnableSources: () => void
+  onRunSources: (sourceIds: readonly string[]) => void
+  onRefresh: () => void
+  onWidenWindow: () => void
+  neverRanSourceIds: readonly string[]
+  timeText: string
+}): React.ReactElement {
+  const { state } = props
+  // StateView's platform copy; the reason sentence comes from `props.resolve` above.
+  const resolveStateText = useStateViewText()
+  const wrap = (node: React.ReactElement) => (
+    <div className="mi-news-sentiment__state" data-news-sentiment-state={state.kind}>{node}</div>
+  )
+  switch (state.kind) {
     case 'sources-disabled':
-      return props.onOpenSources ? { label: text.emptyStates.actions.openSettings, run: props.onOpenSources } : undefined
+      return wrap(
+        <StateView
+          action={{ labelKey: 'ui.state.action.enable', onSelect: props.onEnableSources }}
+          productReason={{ key: 'mi.newsSentiment.sources-disabled', resolve: (key, params) => props.resolve(key, params) }}
+          reasonCode="target-disabled"
+          resolveText={resolveStateText}
+          size="md"
+          state="disabled"
+        />
+      )
     case 'collection-failed':
-      return props.onRunSources && readiness
-        ? { label: text.emptyStates.actions.retry, run: () => props.onRunSources?.(readiness.failedSourceIds) }
-        : undefined
+      return wrap(
+        <StateView
+          action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
+          productReason={{ key: 'mi.newsSentiment.collection-failed', resolve: (key, params) => props.resolve(key, params) }}
+          reasonCode="unreadable"
+          resolveText={resolveStateText}
+          size="md"
+          state="error"
+        />
+      )
     case 'never-ran':
-      return props.onRunSources && readiness
-        ? { label: text.emptyStates.actions.runNow, run: () => props.onRunSources?.(readiness.neverRanSourceIds) }
-        : undefined
+      return wrap(
+        <StateView
+          action={{ labelKey: 'ui.state.action.run-now', onSelect: () => props.onRunSources(props.neverRanSourceIds) }}
+          productReason={{ key: 'mi.newsSentiment.never-ran', resolve: (key, params) => props.resolve(key, params) }}
+          reasonCode="never-ran"
+          resolveText={resolveStateText}
+          size="md"
+          state="empty"
+        />
+      )
     case 'stale':
-      return { label: text.emptyStates.actions.refresh, run: props.onRefresh }
+      return wrap(
+        <StateView
+          action={{ labelKey: 'ui.state.action.widen-time-window', onSelect: props.onWidenWindow }}
+          productReason={{
+            key: 'mi.newsSentiment.stale',
+            // Already formatted by the shell formatter; the entry takes strings, never a Date.
+            params: { time: props.timeText },
+            resolve: (key, params) => props.resolve(key, params)
+          }}
+          reasonCode="older-than-window"
+          resolveText={resolveStateText}
+          size="md"
+          state="empty"
+        />
+      )
     case 'quiet':
-      return undefined
+      // A quiet window is a fact, not a fault — but the reader can still look further back, so this
+      // code carries the widen action (the contract makes every `nothing-in-window` actionable).
+      return wrap(
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.widen_time_window, onSelect: props.onWidenWindow }}
+          productReason={{ key: 'mi.newsSentiment.quiet', resolve: (key, params) => props.resolve(key, params) }}
+          reasonCode="nothing-in-window"
+          resolveText={resolveStateText}
+          size="md"
+          state="empty"
+        />
+      )
   }
 }

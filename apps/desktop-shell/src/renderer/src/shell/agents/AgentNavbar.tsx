@@ -1,8 +1,11 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { Maximize2, Menu, Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Search } from 'lucide-react'
 
 import type { AgentSessionPanelPosition, ChatSettings } from '@platform/settings/schema/appSettings'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from './agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from './agentTooltipText'
 
 type AgentNavbarProps = {
   showSidebar: boolean
@@ -25,6 +28,16 @@ export default function AgentNavbar({
 }: AgentNavbarProps): React.ReactElement {
   const t = useAgentText()
   const sidebarLabel = showSidebar ? t.navbar.hideSidebar : t.navbar.showSidebar
+  // 键取自闭合联合 `AgentTooltipKey`：写错一处编译就红。
+  const tooltipKeys = {
+    hideSidebar: 'navbar.hideSidebar',
+    showSidebar: 'navbar.showSidebar',
+    openSessions: 'navbar.openSessions',
+    search: 'navbar.search',
+    narrowNone: 'messageNavigation.none',
+    narrowToggle: 'settingsDrawer.narrowMode'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const sidebarIcon =
     sessionPanelPosition === 'right'
       ? showSidebar
@@ -37,7 +50,7 @@ export default function AgentNavbar({
   return (
     <header className="agent-navbar">
       <div className="agent-navbar-left">
-        <Tooltip title={sidebarLabel}>
+        <Tooltip labelKey={showSidebar ? tooltipKeys.hideSidebar : tooltipKeys.showSidebar} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"
@@ -48,7 +61,7 @@ export default function AgentNavbar({
           />
         </Tooltip>
         {!showSidebar ? (
-          <Tooltip title={t.navbar.openSessions}>
+          <Tooltip labelKey={tooltipKeys.openSessions} resolveText={resolveText}>
             <Button className="ant-shell-icon-button" type="text" size="small" icon={<Menu size={17} />} onClick={onOpenSidePanelDrawer} />
           </Tooltip>
         ) : null}
@@ -57,10 +70,10 @@ export default function AgentNavbar({
       <div className="agent-navbar-center" />
 
       <div className="agent-navbar-right">
-        <Tooltip title={t.navbar.search}>
+        <Tooltip labelKey={tooltipKeys.search} resolveText={resolveText}>
           <Button className="ant-shell-icon-button" type="text" size="small" icon={<Search size={17} />} onClick={onSearch} aria-label={t.navbar.search} />
         </Tooltip>
-        <Tooltip title={chatSettings?.narrowMode ? t.messageNavigation.none : t.settingsDrawer.narrowMode}>
+        <Tooltip labelKey={chatSettings?.narrowMode ? tooltipKeys.narrowNone : tooltipKeys.narrowToggle} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"

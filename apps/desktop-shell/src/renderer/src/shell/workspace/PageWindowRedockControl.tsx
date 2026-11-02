@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Minimize2 } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { WorkspaceTabCommandResult } from '@platform/workspace/contracts'
 import { platformText } from '../../i18n/platformText'
@@ -18,6 +20,19 @@ import { platformText } from '../../i18n/platformText'
  * 判据文案、内联样式、相位语义逐字不变），只为把页面窗根压回 500 行以内；行为契约由
  * `workspacePageWindowRedock.test.tsx`（P2-15）与 `workspacePageWindowLayout.test.tsx`（P2-14）取证。
  */
+
+/** 读屏名/提示的键本身；句子仍由 `platformText` 提供，组件只认键。 */
+export const PAGE_WINDOW_REDOCK_KEY = 'workspace.pageWindowRedock'
+
+/**
+ * `pending` 的上界。主进程不响应时 `await` 会永远挂着，而**中间态的所有表现都是「看起来正常」**：
+ * 按钮在、界面不报错，用户只能以为是自己点错了。任何「点一下变灰」都必须有终止条件——成功、
+ * 失败、超时三者都要有，少一个就会永久停在中间态。
+ */
+const REDOCK_TIMEOUT_MS = 5_000
+
+/** 超时不是「被拒」：那次可能已经生效，句子不能直接让人再点一次。所以两者必须能分辨。 */
+class RedockTimeout extends Error {}
 
 export type PageWindowRedockControlProps = {
   language: AppLanguage
@@ -44,8 +59,15 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
     setNotice(null)
     setRedockPhase('pending')
     void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const result = await props.redockTab({ workspaceInstanceKey: props.workspaceInstanceKey })
+        const result = await Promise.race([
+          props.redockTab({ workspaceInstanceKey: props.workspaceInstanceKey }),
+          // 超时单独一句：它可能**已经生效**，让人直接再点一次会重复操作。
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new RedockTimeout('redock-timeout')), REDOCK_TIMEOUT_MS)
+          })
+        ])
         // 拒绝必须可见：绝不静默什么都不发生（原生关闭路径仍在，用户不会被困住）
         if (result.status === 'rejected') {
           setNotice(labels.tabCommandRejected)
@@ -53,9 +75,12 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
           return
         }
         setRedockPhase('accepted')
-      } catch {
-        setNotice(labels.tabCommandFailed)
+      } catch (error) {
+        // 没等到回应 ≠ 被拒绝：前者可能已经生效，让用户直接再点一次会重复操作。
+        setNotice(error instanceof RedockTimeout ? labels.tabCommandTimeout : labels.tabCommandFailed)
         setRedockPhase('idle')
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
       }
     })()
   }
@@ -65,17 +90,19 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
 
   return (
     <>
-      <button
-        type="button"
-        className="workspace-page-redock-button"
-        data-redock-tab={props.workspaceInstanceKey}
-        aria-label={labels.pageWindowRedock}
-        title={labels.pageWindowRedock}
+      <IconButton
+        ariaLabelKey={PAGE_WINDOW_REDOCK_KEY}
+        // 外观归组件（`overlay` 档：浮在内容之上的图标按钮），定位与行为钩子归调用方。
+        className="workspace-redock-control"
+        dataAttributes={{ 'data-redock-tab': props.workspaceInstanceKey }}
         disabled={redockPhase === 'pending'}
+        icon={Minimize2}
+        onSelect={redock}
+        resolveText={(key) => (key === PAGE_WINDOW_REDOCK_KEY ? labels.pageWindowRedock : '')}
+        size="sm"
         style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}
-        onClick={redock}>
-        <Minimize2 size={13} strokeWidth={1.8} />
-      </button>
+        variant="overlay"
+      />
       {notice === null ? null : (
         <span
           role="status"

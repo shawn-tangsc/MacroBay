@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 
-import { Button } from 'antd'
 import { X } from 'lucide-react'
+
+import { DRAWER_CLOSE_KEY, useDrawerText } from '@platform/ui/components/drawer'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 /**
  * The product's one side drawer.
@@ -15,7 +17,11 @@ export function MiSideDrawer({ title, meta, closeLabel, onClose, children }: Rea
   title: string
   /** A second line under the title: the time, the state, the meeting. */
   meta?: React.ReactNode
-  closeLabel: string
+  /**
+   * @deprecated 关闭键的读屏名归组件（平台 `ui.drawer.close`）。本属性仅为两个调用点的迁移保留：
+   * 删掉它要同时改 `PolicyPathDrawer` 与 `AnalysisDetailDrawer`，那两处不在本批范围。
+   */
+  closeLabel?: string
   onClose: () => void
   children: React.ReactNode
 }>): React.ReactElement {
@@ -25,13 +31,20 @@ export function MiSideDrawer({ title, meta, closeLabel, onClose, children }: Rea
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  const closeName = useDrawerText()
+  // `IconButton` asks its resolver with `(key: string)`, while the drawer's own table owns exactly one
+  // key. Every key therefore resolves to that sentence: an unknown key must never blank the button's
+  // only name — the same rule the drawer text table states for its own callers.
+  const resolveText = useCallback((_key: string) => closeName(), [closeName])
   return <aside className="mi-analysis-drawer" role="complementary" aria-label={title}>
     <header className="mi-analysis-drawer__header">
       <div>
         <h2>{title}</h2>
         {meta ? <div className="mi-analysis-drawer__meta">{meta}</div> : null}
       </div>
-      <Button type="text" size="small" icon={<X aria-hidden="true" size={15} />} aria-label={closeLabel} onClick={onClose} />
+      {/* The close control is the shared one: 22px, platform key, focus ring — the shell keeps its own
+          Escape listener and layout, because this is a non-modal overlay, not a platform drawer. */}
+      <IconButton ariaLabelKey={DRAWER_CLOSE_KEY} icon={X} onSelect={onClose} resolveText={resolveText} size="sm" />
     </header>
     <div className="mi-analysis-drawer__body">{children}</div>
   </aside>

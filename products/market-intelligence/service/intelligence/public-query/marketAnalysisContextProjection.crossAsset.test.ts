@@ -27,7 +27,6 @@ function snapshot(range: CrossAssetRange, overrides: Partial<CrossAssetSnapshot>
     closedReturns: perAsset({ '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }),
     correlations: { indexBtc: { state: 'unavailable', reason: 'missing', sampleCount: 0, expectedCount: 288 }, indexEth: { state: 'unavailable', reason: 'missing', sampleCount: 0, expectedCount: 288 } },
     relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric },
-    observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' },
     // The licensed index answers the row in these fixtures; the proxy leg has its own case below.
     indexSource: 'real' as const,
     ...overrides

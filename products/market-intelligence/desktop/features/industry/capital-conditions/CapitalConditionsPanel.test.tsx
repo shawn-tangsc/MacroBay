@@ -11,8 +11,12 @@ import { CapitalConditionsPanel } from './CapitalConditionsPanel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
-const ScopedCapitalConditionsPanel = (props: Parameters<typeof CapitalConditionsPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, props))
+/** Every host can retry; tests that do not care about the action still need a reachable one. */
+const ScopedCapitalConditionsPanel = (props: Omit<Parameters<typeof CapitalConditionsPanel>[0], 'onRefresh'> & { onRefresh?: () => void }): React.ReactElement =>
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props }))
+
+/** The platform state icon is inline SVG; its namespace is the one URL a clean panel may carry. */
+const withoutSvgNamespace = (markup: string): string => markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
 
 const dashboardStyles = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'),
@@ -21,7 +25,6 @@ const dashboardStyles = readFileSync(
 
 let root: Root | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -107,12 +110,15 @@ describe('CapitalConditionsPanel', () => {
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
     const body = etfTableBody(markup)
 
+    // Both halves answer through the platform error state: a part of the panel that could not be
+    // read is still "could not read", and neither half may fall back to a sentence of its own.
+    expect(body).toContain('data-state="error"')
     const bodyText = body.replace(/<[^>]*>/g, '')
-    expect(bodyText).toContain(text.etfTableUnavailable)
     expect(bodyText).not.toMatch(/\d/)
-    expect(markup).toContain(text.etfUnavailable)
     expect(markup).toContain('$1B')
     expect(markup).toContain('data-etf-flow="unavailable"')
+    const flow = /data-etf-flow="unavailable"([\s\S]*?)<\/section>/.exec(markup)![1]!
+    expect(flow).toContain('data-state="error"')
   })
 
   it('renders one shared zero-axis chart with exactly three series per day', () => {
@@ -285,20 +291,66 @@ describe('CapitalConditionsPanel', () => {
     }
   })
 
-  it('keeps empty and unavailable as short safe states', () => {
+  it('renders the empty state through the platform StateView, with the card sentence in its reason slot', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    for (const [state, expected] of [[{ state: 'empty' as const }, text.empty], [{ state: 'unavailable' as const }, text.unavailable]]) {
-      const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
-      expect(markup).toContain(expected)
-      expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
-    }
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'empty' } }))
+    expect(markup).toContain('data-state="empty"')
+    expect(markup).toContain('data-size="md"')
+    // The card says what is missing in its own words; the slot is the platform's reason slot, so
+    // the title, icon and announcement still belong to the platform.
+    expect(markup).toContain(text.empty)
+    // No word from the internal vocabulary can come back through that sentence.
+    expect(markup.toLowerCase()).not.toContain('snapshot')
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
+  })
+
+  it('tells a failed read apart from an empty one, through the platform error state', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' } }))
+
+    // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
+    // query failed tells the reader the opposite of what happened.
+    expect(markup).toContain('data-state="error"')
+    expect(markup).toContain('data-size="md"')
+    expect(markup).not.toContain('data-state="empty"')
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' } }))
     expect(markup).toContain(text.loading)
-    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
+  })
+
+  it('gives the failed card a reachable retry instead of a dead end', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const onRefresh = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
+    expect(action).not.toBeNull()
+    await act(async () => action.click())
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives both unavailable ETF surfaces the same retry as the card', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const onRefresh = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    const state = { ...fullState(), etf: 'unavailable' as const }
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
+    const actions = [...container.querySelectorAll<HTMLButtonElement>('.state-view__action')]
+    expect(actions).toHaveLength(2)
+    await act(async () => actions[0]!.click())
+    await act(async () => actions[1]!.click())
+    expect(onRefresh).toHaveBeenCalledTimes(2)
   })
 
   it.each(['zh-CN', 'en-US'] as const)('offers %s readers a re-collection action instead of another read while unavailable', async (locale) => {
@@ -314,6 +366,22 @@ describe('CapitalConditionsPanel', () => {
     await act(async () => button.click())
     expect(onRefresh).toHaveBeenCalledOnce()
     expect(container.textContent).not.toContain(text.refreshFailed)
+  })
+
+  it('marks the kept readings as previous ones instead of presenting them as fresh', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const state = { ...fullState(), stale: true as const }
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh: () => undefined }))
+
+    expect(markup).toContain(text.staleRead)
+    // The readings themselves are still on the page: "old" is not "gone".
+    expect(markup).toContain('$1B')
+  })
+
+  it('does not claim staleness on a fresh read', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState(), onRefresh: () => undefined }))
+    expect(markup).not.toContain(text.staleRead)
   })
 
   it('reports a failed re-collection and blocks a second request while it runs', async () => {

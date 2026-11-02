@@ -1,12 +1,15 @@
-import { Alert, Button, Drawer, Input, Switch } from 'antd'
+import { Alert, Button, Input, Switch } from 'antd'
 import { ChevronRight, Play } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
+import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openIntelligenceSourcesSettings } from '../../shared/navigation/productShellNavigation'
 import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDetail'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
@@ -31,16 +34,18 @@ type DrawerRead =
   | Readonly<{ status: 'ready'; view: PanelView; sampleFallback: boolean }>
   | Readonly<{ status: 'unavailable' }>
 
-export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', open, onClose, title, sampleActive = false }: {
+export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', open, onClose, titleKey, sampleActive = false }: {
   initialSourceId?: string
   panelId?: PanelId
   open: boolean
   onClose: () => void
-  title?: string
+  /** The header's i18n key; the drawer resolves it. */
+  titleKey?: string
   /** Only an explicit sample session may stand in the registry projection for a failed read. */
   sampleActive?: boolean
 }): React.ReactElement {
   const language = useShellLanguage()
+  const resolveKey = useProductTextKey()
   const portalText = productText[language].pages.intelligence.portal
   const text = portalText.dashboard.sourceConfiguration
   const dataText = portalText.data
@@ -110,17 +115,15 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
     try { await intelligenceSourcesClient.testConnection(sourceId) } finally { setBusy(undefined) }
   }
 
-  return <Drawer className="mi-dashboard-source-drawer" open={open} onClose={onClose} title={title ?? text.title} width={860} footer={
-    <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
-  }>
+  return <Drawer className="mi-dashboard-source-drawer" mode="modal" open={open} onClose={onClose} resolveText={resolveKey} size="wide"
+    titleKey={titleKey ?? 'pages.intelligence.portal.dashboard.sourceConfiguration.title'} footer={
+      <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
+    }>
     {read.status === 'loading' ? <LoadingState label={text.loading} fill />
       : read.status === 'unavailable' ? <div data-drawer-state="unavailable">
-        <Alert
-          action={<Button size="small" onClick={() => void retry()}>{dataText.retry}</Button>}
-          message={dataText.drawerUnavailable}
-          showIcon
-          type="warning"
-        />
+        {/* 读不到不是「没有配置」：走统一状态面，句子由平台给，动作是真重试。 */}
+        <StateView state="error" reasonCode="unreadable"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void retry() }} />
       </div>
       : <>
         {read.sampleFallback ? <div data-sample-marker><Alert message={sampleMarker} showIcon type="info" /></div> : null}
@@ -147,11 +150,11 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
           </aside>
           <section className="settings-detail-pane intelligence-detail-pane">
             {selectedProvider ? <ProviderDetail
-              labels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, panelNames: settingsText.panelNames as Readonly<Record<string, string>>, badges: { pending: settingsText.sourceBadges.pending, advanced: settingsText.sourceBadges.advanced, calendar: settingsText.sourceBadges.calendar, proxy: settingsText.sourceBadges.proxy }, status: settingsText.status, capabilities: settingsText.providerSummary, credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup, inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered, jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, connectionUnsupported: settingsText.connectionUnsupported, apiKey: settingsText.apiKey }}
+              labels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, panelNames: settingsText.panelNames as Readonly<Record<string, string>>, badges: { pending: settingsText.sourceBadges.pending, advanced: settingsText.sourceBadges.advanced, calendar: settingsText.sourceBadges.calendar, proxy: settingsText.sourceBadges.proxy }, status: settingsText.status, capabilities: settingsText.providerSummary, toggleSource: settingsText.toggleSource, credentials: settingsText.credentialsRequired, website: settingsText.website, signup: settingsText.signup, inviteNote: settingsText.inviteNote, testConnection: settingsText.testConnection, jobRegistered: settingsText.jobRegistered, jobNotRegistered: settingsText.jobNotRegistered, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, connectionUnsupported: settingsText.connectionUnsupported, apiKey: settingsText.apiKey }}
               provider={selectedProvider}
               showSourceDetails
               sourceDetailLabels={{ sourceNames: settingsText.sourceNames as Readonly<Record<string, string>>, providerNames: settingsText.providerNames as Readonly<Record<string, string>>, enabled: settingsText.status.enabled, disabled: settingsText.status.disabled, pending: settingsText.sourceBadges.pending, runNow: settingsText.header.runNow, testConnection: settingsText.testConnection, connectionSucceeded: settingsText.connectionSucceeded, connectionFailed: settingsText.connectionFailed, health: settingsText.health, sourceSpecific: settingsText.sourceSpecific }}
-              translation={{ settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, queuing: translation.queuing, labels: settingsText.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) }}
+              translation={{ settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: settingsText.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) }}
               onChanged={() => { void readPanel().then(applyRead) }}
               onSelectSource={() => undefined}
             /> : <p>{text.unavailable}</p>}

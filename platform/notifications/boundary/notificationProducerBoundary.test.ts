@@ -45,25 +45,34 @@ describe('notification producer boundary', () => {
   })
 
   it('keeps notification production out of the preload surface', () => {
+    // 命名空间已从 `preload/index.ts` 抽成模块（接缝文件要薄、体积门禁也在卡）。
+    // 守卫因此读**模块**，同时核对预加载确实只挂载它、没有把 `submit` 之类漏出来。
     const preload = readFileSync(join(repoRoot, 'platform', 'desktop', 'preload', 'index.ts'), 'utf8')
-    const start = preload.indexOf('  notifications: {')
-    expect(start).toBeGreaterThan(-1)
-    const rest = preload.slice(start + 1)
-    const nextGroup = rest.search(/\n {2}[a-zA-Z]+: \{/)
-    const block = nextGroup === -1 ? rest : rest.slice(0, nextGroup)
-    expect(block).not.toBe('')
+    expect(preload).toContain('createNotificationsNamespace(ipcRenderer)')
 
-    const exposed = [...block.matchAll(/^\s{4}([a-zA-Z]+):/gm)].map((match) => match[1]).sort()
+    const namespace = readFileSync(
+      join(repoRoot, 'platform', 'desktop', 'preload', 'namespaces', 'notifications.ts'),
+      'utf8'
+    )
+    const exposed = [...namespace.matchAll(/^\s{4}([a-zA-Z]+):/gm)].map((match) => match[1]).sort()
+    expect(exposed.length).toBeGreaterThan(0)
 
     // Read and state-change only. A submit/emit/create method here would let the renderer invent a
     // notification, bypassing dedupe, quiet hours and product permissions.
     expect(exposed).toEqual([
       'acknowledge',
+      // 删除已读是**数据操作**，不是生产者：它只能删掉已存在的记录，不能凭空造一条。
+      'deleteRead',
       'dismiss',
-      'getUnreadCount',
+      'getUnreadState',
       'list',
+      'markAllRead',
       'markRead',
-      'requestDesktopPermission',
+      // 两条订阅都是只读：事件由 Main 推，渲染层不能借此写入任何东西。
+      'onChanged',
+      'onDelivered',
+      'readDesktopPermission',
+      'sendTest',
       'snooze'
     ])
   })

@@ -1,8 +1,16 @@
-import { Button, Input, Modal, Tooltip } from 'antd'
+import { Button, Input } from 'antd'
 import { Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Modal } from '@platform/ui/components/modal'
+import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../../i18n/platformText'
+import { resolveTextPath, type Path } from '../../../i18n/assistantsTextKey'
+
+const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
+const COMING_SOON_KEY = 'assistants.library.promptGenerateComingSoon'
+const LIBRARY_KEY_PREFIX = 'assistants.library.'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -17,6 +25,13 @@ export function CreateAssistantDialog({
   onClose,
   onCreate
 }: CreateAssistantDialogProps): React.ReactElement {
+  // 键是点分全路径（`assistants.library.*`），这棵表的根是 `library`，解析前剥掉前缀。
+  const resolveAssistantText = (key: string): string =>
+    resolveTextPath(
+      labels,
+      (key.startsWith(LIBRARY_KEY_PREFIX) ? key.slice(LIBRARY_KEY_PREFIX.length) : key) as Path<typeof labels>
+    )
+  const toast = useToast()
   const [icon, setIcon] = useState('💬')
   const [name, setName] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -45,17 +60,21 @@ export function CreateAssistantDialog({
 
   return (
     <Modal
-      title={labels.createTitle}
+      width="standard"
+      titleKey={CREATE_ASSISTANT_TITLE_KEY}
+      resolveText={(key) => (key === CREATE_ASSISTANT_TITLE_KEY ? labels.createTitle : '')}
       open={open}
-      onCancel={onClose}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          {labels.cancel}
-        </Button>,
-        <Button key="create" type="primary" loading={submitting} disabled={!canCreate} onClick={() => void submit()}>
-          {labels.create}
-        </Button>
-      ]}>
+      onClose={onClose}
+      footer={
+        <>
+          <Button key="cancel" onClick={onClose}>
+            {labels.cancel}
+          </Button>
+          <Button key="create" type="primary" loading={submitting} disabled={!canCreate} onClick={() => void submit()}>
+            {labels.create}
+          </Button>
+        </>
+      }>
       <div className="assistant-create-dialog">
         <label>
           <span>{labels.icon}</span>
@@ -75,9 +94,19 @@ export function CreateAssistantDialog({
           />
         </label>
         <div className="assistant-create-dialog-meta">
-          <Tooltip title={labels.promptGenerate}>
-            <Button type="text" size="small" disabled icon={<Sparkles size={14} />} aria-label={labels.promptGenerate} />
-          </Tooltip>
+          <IconButton
+            ariaLabelKey="assistants.library.promptGenerate"
+            icon={Sparkles}
+            onSelect={() =>
+              toast.info({
+                titleKey: COMING_SOON_KEY,
+                resolveText: (key) => (key === COMING_SOON_KEY ? labels.promptGenerateComingSoon : '')
+              })
+            }
+            resolveText={resolveAssistantText}
+            size="md"
+            tooltipKey="assistants.library.promptGenerate"
+          />
           <span>{labels.tokenCount(tokenCount)}</span>
         </div>
         <label>

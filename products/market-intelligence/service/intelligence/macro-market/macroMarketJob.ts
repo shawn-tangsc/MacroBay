@@ -10,6 +10,7 @@ export function macroMarketJobDefinitions(): readonly Readonly<Record<string, un
   const definition = {
     id: MACRO_MARKET_COLLECT_JOB_ID, owner: 'product' as const, productId: MACRO_MARKET_PRODUCT_ID,
     handlerId: MACRO_MARKET_COLLECT_JOB_ID, title: 'Collect the macro market series',
+    audience: 'user' as const,
     trigger: { kind: 'interval' as const, intervalMs: macroMarketPolicy.creditBudget.jobIntervalMinutes * 60_000, anchor: 'lastComplete' as const },
     payload: {}
   }

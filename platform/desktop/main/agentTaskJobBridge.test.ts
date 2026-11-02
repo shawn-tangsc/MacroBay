@@ -38,7 +38,7 @@ describe('agentTaskJobBridge', () => {
     expect(run).toMatchObject({
       owner: 'platform',
       handlerId: 'platform.agent.task.run',
-      title: 'Agent task: Scheduled Review',
+      title: 'Scheduled Review',
       progress: {
         current: 1,
         total: 1,

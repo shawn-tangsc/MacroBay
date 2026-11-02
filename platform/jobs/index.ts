@@ -18,7 +18,13 @@ export { createJobRunSqliteStore, type JobRunSqliteStore } from './runtime/jobRu
 export { jobRunRetentionPolicy, runJobRunRetention, scheduleJobRunRetention, type JobRunRetentionResult } from './runtime/jobRunRetention'
 export type { JobRunDailyAggregate, JobRunRetentionSweep } from './runtime/jobRunSqliteRepository'
 export { computeNextCronRunAt } from './runtime/jobCronSchedule'
-export { createJobRuntime, type JobRuntime, type JobRuntimeOptions } from './runtime/jobRuntime'
+export {
+  createJobRuntime,
+  type JobRunTerminalCause,
+  type JobRunTerminalHookInput,
+  type JobRuntime,
+  type JobRuntimeOptions
+} from './runtime/jobRuntime'
 export { createManagedWorkerRuntime, type ManagedWorkerRuntime } from './runtime/workerRuntime'
 export { createRuntimeStateStore } from './runtime/runtimeStateStore'
 export { createWorkerRunStore, type WorkerRunStore } from './runtime/workerRunStore'

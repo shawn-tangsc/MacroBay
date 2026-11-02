@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { platformText } from '../../i18n/platformText'
 import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
@@ -13,7 +13,6 @@ import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceW
  * 悬浮按钮，点击走已验证的 `.tabs.*` `redockTab`（`tabsCommand` 恰一次），且原生关闭路径不被本包改动。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const language = 'en-US' as const
 const labels = platformText[language].workspace
@@ -141,7 +140,9 @@ describe('P2-15：独立页面窗的回停靠悬浮入口', () => {
     // 「不占布局高度」是判据：绝对定位的悬浮控件（P2-14 的填充链因此不受影响）
     expect(button?.style.position).toBe('absolute')
     expect(button?.getAttribute('aria-label')).toBe(labels.pageWindowRedock)
-    expect(button?.getAttribute('title')).toBe(labels.pageWindowRedock)
+    // 原生 `title` 随迁移消失：读屏名走 `aria-label`，鼠标提示走组件的 `tooltipKey`。
+    // 这里断言「不再是原生 title」，因为留着它等于同一个提示有两套实现。
+    expect(button?.getAttribute('title')).toBeNull()
     // 控件挂在页面窗根内部（不是另起一层壳），正文宿主仍是页面窗根的直接子节点（P2-14 判据）
     expect(shell?.contains(button ?? null)).toBe(true)
     expect(view.querySelector('.workspace-window-page > .workspace-page-host')).not.toBeNull()
@@ -161,5 +162,37 @@ describe('P2-15：独立页面窗的回停靠悬浮入口', () => {
     const view = await renderPageWindow()
     expect(view.querySelector('[data-window-shell="page"]')).not.toBeNull()
     expect(tabs.commands).toEqual([])
+  })
+
+  it('⑥ 主进程不响应时按钮不会永久灰着：超时后回到可点并给出失败提示', async () => {
+    const tabs = fakeTabs()
+    tabs.install('detached')
+    // 主进程不响应：命令永不返回。这是唯一无法用「成功 / 被拒 / 抛错」收场的路径。
+    const platform = (window as unknown as { platform: { workspace: Record<string, unknown> } }).platform
+    platform.workspace.tabsCommand = () => new Promise(() => undefined)
+    const view = await renderPageWindow()
+
+    const pick = (): HTMLButtonElement | null =>
+      view.querySelector<HTMLButtonElement>(`[data-redock-tab="${TAB_KEY}"]`)
+    expect(pick()?.disabled).toBe(false)
+
+    vi.useFakeTimers()
+    try {
+      await act(async () => { pick()?.click() })
+      // 点击后进入 pending：变灰，且此刻没有任何说明
+      expect(pick()?.disabled).toBe(true)
+      expect(view.querySelector('.workspace-page-redock-notice')).toBeNull()
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+
+      // 超时收场：控件回到可点，并给出与「被拒 / 抛错」相同的那句说明，用户能再试一次。
+      expect(pick()).not.toBeNull()
+      expect(pick()?.disabled).toBe(false)
+      // 超时是单独的句子：它可能已经生效，所以句子不能直接让人再点一次。
+      expect(view.querySelector('.workspace-page-redock-notice')?.textContent).toBe(labels.tabCommandTimeout)
+      expect(labels.tabCommandTimeout).not.toBe(labels.tabCommandFailed)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

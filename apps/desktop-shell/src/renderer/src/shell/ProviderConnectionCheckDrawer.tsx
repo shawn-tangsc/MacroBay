@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Activity } from 'lucide-react'
-import { Alert, Button, Drawer, Select } from 'antd'
+import { Alert, Button, Select } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 import type { ProviderRuntimeCheckReport } from '@platform/ai/agent-platform/runtime/compatibility/providerRuntimeCheckTypes'
@@ -53,6 +55,9 @@ type ProviderConnectionCheckLabels = {
   retry: string
   runtimeLanes: ProviderRuntimeCheckDisplayLabels
 }
+
+/** 标题的键：句子由调用页解析进来，组件自己不认识这句话。 */
+export const PROVIDER_CONNECTION_CHECK_TITLE_KEY = 'models.connectionCheckTitle'
 
 type ProviderConnectionCheckDrawerProps = {
   open: boolean
@@ -116,9 +121,11 @@ export function ProviderConnectionCheckDrawer({
   return (
     <Drawer
       className="model-drawer connection-check-drawer"
-      title={labels.title}
-      placement="right"
-      width={420}
+      mode="modal"
+      size="narrow"
+      titleKey={PROVIDER_CONNECTION_CHECK_TITLE_KEY}
+      // 未知键返回空串、不回退键名：宁可标题空着，也不能把键名念给读者。
+      resolveText={(key) => (key === PROVIDER_CONNECTION_CHECK_TITLE_KEY ? labels.title : '')}
       open={open}
       onClose={onClose}
       footer={

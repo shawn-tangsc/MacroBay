@@ -8,6 +8,7 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 
 import { buildAgentModelOptions, flattenAgentModelOptions } from '../../agentModelOptions'
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
+import { useAgentProviderNames } from '../../useAgentProviderNames'
 import { ModelPicker } from '../../../components/ModelPicker/ModelPicker'
 import type { ModelPickerCandidate } from '../../../components/ModelPicker/modelPickerOptions'
 import { platformText } from '../../../../i18n/platformText'
@@ -38,13 +39,14 @@ export default function BasicSection({
 }: BasicSectionProps): React.ReactElement {
   const t = useAgentText()
   const language = useAgentLanguage()
+  const providerNames = useAgentProviderNames()
   // PLAT-70：候选判据仍是 `buildAgentModelOptions`；messages 硬约束由选择器数据层执行。
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
     () =>
-      flattenAgentModelOptions(buildAgentModelOptions(providers, 'claude-code', compatibilityByModelKey))
+      flattenAgentModelOptions(buildAgentModelOptions(providers, 'claude-code', compatibilityByModelKey, providerNames))
         .filter((option) => option.selectable)
         .map((option) => ({ providerId: option.providerId, model: option.model })),
-    [compatibilityByModelKey, providers]
+    [compatibilityByModelKey, providers, providerNames]
   )
   const modelLabels = platformText[language].models
 

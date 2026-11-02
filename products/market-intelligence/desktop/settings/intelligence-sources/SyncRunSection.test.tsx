@@ -11,7 +11,6 @@ import { SyncRunSection } from './SyncRunSection'
 const text = productText['zh-CN'].settings.intelligenceSources.syncRun
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 beforeEach(() => {
   vi.spyOn(syncRunClient, 'list').mockResolvedValue({
@@ -56,11 +55,16 @@ describe('sync run section', () => {
     expect(dom.textContent).toContain('官方日历排期')
     expect(dom.textContent).toContain('美联储官方日历')
     expect(dom.textContent).toContain(text.allSourcesNote)
-    // The sentence, not `provider-disabled`: the raw code lives only in the title.
+    // The sentence, not `provider-disabled`: the raw code lives only in the popover.
     expect(dom.textContent).toContain(text.failureCodes['provider-disabled'])
     expect(dom.textContent).not.toContain('provider-disabled')
-    // The code and the raw error text are both reachable by hovering, neither is printed.
-    expect(dom.querySelector('[title^="错误码：provider-disabled"]')).not.toBeNull()
+    // The code and the raw error text are a sentence built from data, so they are the cell's
+    // accessible name: a screen reader gets them, and no unfocusable span pretends to be a control.
+    const trigger = dom.querySelector('.mi-sync-run__failure')
+    expect(trigger).not.toBeNull()
+    expect(trigger?.getAttribute('tabindex')).toBeNull()
+    expect(trigger?.getAttribute('aria-label')).toContain('provider-disabled')
+    expect(trigger?.getAttribute('aria-label')).toContain('Macro calendar schedule run failed')
     expect(dom.textContent).toContain(text.outcomes.failed)
     expect(dom.textContent).not.toContain('Macro calendar schedule run failed')
     expect(dom.textContent).toContain('32.0s')
@@ -103,8 +107,10 @@ describe('sync run section', () => {
     const dom = await render()
     await selectAllWindow(dom)
 
-    expect(dom.textContent).toContain(text.aggregates.unavailable['memory-store-has-no-aggregates'])
-    expect(dom.textContent).not.toContain(text.aggregates.empty)
+    // A store that keeps no summary is a capability gap, not a failed read: `disabled`, no action.
+    expect(dom.querySelector('[data-state="disabled"]')).not.toBeNull()
+    expect(dom.querySelector('[data-state="empty"]')).toBeNull()
+    expect(dom.querySelector('.state-view__action')).toBeNull()
   })
 
   it('offers every registered source in the filter, including one that has not run lately', async () => {
@@ -138,13 +144,16 @@ describe('sync run section', () => {
   it('shows the empty sentence when the window has no runs', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'available', rows: [] })
     const dom = await render()
-    expect(dom.textContent).toContain(text.empty)
+    expect(dom.querySelector('[data-state="empty"]')).not.toBeNull()
+    // The window is what hid the records, so the way out is widening it.
+    expect(dom.querySelector('.state-view__action')).not.toBeNull()
   })
 
   it('names the failure instead of pretending to load forever', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'unavailable', failureCode: 'runs-unavailable' })
     const dom = await render()
-    expect(dom.textContent).toContain(text.unavailable)
+    expect(dom.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(dom.querySelector('.state-view__action')).not.toBeNull()
   })
 
   it('renders each run in the display time zone, not the machine zone', async () => {

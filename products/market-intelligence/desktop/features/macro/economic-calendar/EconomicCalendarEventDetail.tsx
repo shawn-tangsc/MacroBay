@@ -1,14 +1,17 @@
 import { useState, type ReactElement } from 'react'
 import { Button, DatePicker } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
-import { RefreshCw } from 'lucide-react'
+import { Pencil, RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
 import { calendarDisplayDate } from './economicCalendarDayModel'
@@ -16,6 +19,8 @@ import {
   economicCalendarCaveats,
   formatEconomicCalendarTime,
   fromWallClock,
+  resolveReleaseTimeWrite,
+  toWallClock,
   wallClockIsAmbiguous
 } from './economicCalendarModel'
 
@@ -138,7 +143,8 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
   timeZone: string; timeZoneLabel: string
 }): ReactElement {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<Dayjs | null>(null)
+  /** Wall-clock text in the display zone; the picker is naive and interprets no zone. */
+  const [draft, setDraft] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'rejected' | 'ambiguous'>('idle')
   const edited = event.releaseTimeSource === 'user-edited'
   const shown = releaseTimeText(event, text, timeZone, timeZoneLabel)
@@ -146,30 +152,38 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
    * A row that carries an actual value has already been released: the time it happened is history,
    * and letting the reader move it would be editing the past. Those rows show the time as plain text.
    */
+  const resolveKey = useProductTextKey()
   const canEdit = event.actual === undefined && event.lifecycleState === 'scheduled'
 
   const open = (): void => {
     const instant = event.scheduledAt
-    // The picker shows the instant in the browser's own zone; the value that is saved is
-    // re-derived from the wall-clock text through the checked conversion below, so the two
-    // never disagree about what the reader picked.
-    setDraft(instant === undefined ? null : dayjs(instant))
+    // Filled from the display zone, the same zone the save path reads back. Formatting the instant
+    // on the reader's machine here is what made the editor and the store disagree by an offset.
+    setDraft(instant === undefined ? null : toWallClock(instant, timeZone) ?? null)
     setState('idle')
     setEditing(true)
   }
 
   async function save(): Promise<void> {
     if (draft === null) return
-    const wallClock = draft.format('YYYY-MM-DDTHH:mm')
-    if (wallClockIsAmbiguous(wallClock, timeZone)) { setState('ambiguous'); return }
-    const instant = fromWallClock(wallClock, timeZone)
-    if (instant === undefined) { setState('rejected'); return }
+    const decision = resolveReleaseTimeWrite(draft, timeZone)
+    if (decision.kind === 'ambiguous') { setState('ambiguous'); return }
+    if (decision.kind === 'invalid') { setState('rejected'); return }
     setState('saving')
-    const result = await client.setReleaseTime({ eventKey: event.eventKey, scheduledAt: instant, scheduledDate: wallClock.slice(0, 10) })
+    const result = await client.setReleaseTime({
+      eventKey: event.eventKey, scheduledAt: decision.instant, scheduledDate: decision.scheduledDate
+    })
     if (result.state !== 'saved') { setState('rejected'); return }
     setState('saved')
-    setEditing(false)
     await onChanged()
+    // A spring gap resolves forward, so the stored instant can differ from the text the reader
+    // picked. Writing the correction back into the picker and leaving the row open is the only way
+    // the reader sees what was stored: closing straight away would hide a value that changed.
+    if (decision.correctedWallClock !== undefined) {
+      setDraft(decision.correctedWallClock)
+      return
+    }
+    setEditing(false)
   }
 
   async function restore(): Promise<void> {
@@ -191,12 +205,21 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
             className="mi-economic-calendar__release-time-picker"
             format="YYYY-MM-DD HH:mm"
             minuteStep={1}
-            onChange={(value) => { setDraft(value); setState('idle') }}
+            onChange={(value) => { setDraft(value === null ? null : value.format('YYYY-MM-DDTHH:mm')); setState('idle') }}
             showTime={{ format: 'HH:mm' }}
-            value={draft}
+            value={draft === null ? null : dayjs(draft)}
           />
         : canEdit
-          ? <button aria-label={text.details.time} className="mi-economic-calendar__release-time-value" onClick={open} type="button">{shown}</button>
+          ? <span className="mi-economic-calendar__release-time-value">
+              {shown}
+              <IconButton
+                ariaLabelKey="pages.intelligence.portal.calendar.details.editTime.label"
+                icon={Pencil}
+                onSelect={open}
+                resolveText={resolveKey}
+                size="sm"
+              />
+            </span>
           : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}</span>}
       {editing
         ? <span className="mi-economic-calendar__release-time-actions">
@@ -261,9 +284,28 @@ function confirmRefresh(message: string): boolean {
   try { return typeof window.confirm === 'function' && window.confirm(message) } catch { return false }
 }
 
-/** The detail surface with nothing to show: its state, never a blank pane. */
-export function EconomicCalendarEventDetailState({ text }: { text: string }): ReactElement {
-  return <aside className="mi-economic-calendar__inspector" aria-live="polite"><LoadingState label={text} minHeight={220} /></aside>
+/**
+ * The detail surface with nothing to show: its state, never a blank pane.
+ *
+ * A wait and a failed read are two different answers. This used to render the spinner for both,
+ * so a read that had already failed span forever with the failure sentence underneath — the reader
+ * waits for a result that is never coming. A wait stays `LoadingState`; a failure is
+ * `error · unreadable` with a retry that asks again.
+ */
+export function EconomicCalendarEventDetailState(props: Readonly<{ text: string } & (
+  | { state: 'loading' }
+  | { state: 'error'; onRetry: () => void }
+)>): ReactElement {
+  // The retry is part of the error, not an option: `error · unreadable` promises the reader that
+  // asking again is the way out, and a state that offers it only when the caller happened to pass a
+  // callback renders the same state in two shapes. A caller with nothing to re-read has the wrong
+  // state, not a missing prop.
+  return <aside className="mi-economic-calendar__inspector" aria-live="polite">
+    {props.state === 'loading'
+      ? <LoadingState label={props.text} minHeight={220} />
+      : <StateView state="error" reasonCode="unreadable" size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: props.onRetry }} />}
+  </aside>
 }
 
 function Meta({ label, value }: { label: string; value: string }): ReactElement {

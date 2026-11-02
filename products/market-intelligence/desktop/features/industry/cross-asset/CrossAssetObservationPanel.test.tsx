@@ -8,11 +8,21 @@ import { productText } from '../../../shared/i18n/productText'
 import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
 import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/cross-asset/crossAssetSnapshotQuery'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+/**
+ * 同一个面板，但**壳层语言**是英文。
+ *
+ * 日频那几行在换成平台气泡后由 `useProductTextKey()` 解析（和所有已迁的调用点一致），
+ * 所以「读者语言」由壳层语言决定，而不是由传入的 `text` 决定——写用例也得按这条来。
+ */
+const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
+  createElement(ShellLanguageProvider, { language: 'en-US' },
+    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props)))
 
 /** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
 function ratesView(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -111,14 +121,20 @@ describe('cross-asset observation workspace', () => {
       // The synthetic label rides with the level and carries the caveat the wire published.
       const tag = host.querySelector('[data-synthetic="dxy"]')
       expect(tag?.textContent).toBe(text.syntheticTag)
-      expect(tag?.getAttribute('title')).toBe(text.syntheticCaveat)
+      // 不是真控件就不迁：没有 title、没有 tabindex，说明挂到可访问名上。
+      expect(tag?.getAttribute('title')).toBeNull()
+      expect(tag?.getAttribute('tabindex')).toBeNull()
+      expect(tag?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
       expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
-      // 7d was not in the gold reading: the cell is a dash whose title still says 无数据, not a zero.
+      // 7d was not in the gold reading: the cell is a dash whose accessible name still says 无数据,
+      // not a zero. It is not a control, so there is no tooltip and no focus stop.
       const missing = host.querySelector('[data-asset-return="gold:7d"]')
       expect(missing?.textContent).toBe(text.windowNoData)
-      expect(missing?.getAttribute('title')).toBe(text.noData)
+      expect(missing?.getAttribute('title')).toBeNull()
+      expect(missing?.getAttribute('tabindex')).toBeNull()
+      expect(missing?.getAttribute('aria-label')).toBe(text.noData)
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()
@@ -148,6 +164,35 @@ describe('cross-asset observation workspace', () => {
         expect(cell?.textContent).toContain(text.notConnected)
         expect(cell?.textContent).not.toMatch(/[0-9]/)
       }
+    } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('says the interface and main process differ, and keeps a retry because `unreadable` requires one', async () => {
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const relaunch = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: { app: { relaunch: () => Promise<unknown> } } }).platform = { app: { relaunch } }
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      query: async () => ({ state: 'unavailable', cause: 'contract' }),
+      refresh: vi.fn(async () => ({ state: 'refreshed' })),
+      // 客户端契约里 `release` 返回 Promise，钩子对它 `.catch`；返回 undefined 会让卸载路径直接抛。
+      release: vi.fn(async () => ({ state: 'released' }))
+    }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
+      expect(host.textContent).toContain(text.contractMismatch)
+      // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
+      const action = host.querySelector('.state-view__action') as HTMLButtonElement
+      expect(action).not.toBeNull()
+      expect(action.textContent).not.toBe(text.retry)
+      await act(async () => { action.click() })
+      expect(relaunch).toHaveBeenCalledTimes(1)
+      // 反过来：点它不该去重读，那正是这一处被改掉的原因。
+      expect(client.refresh).not.toHaveBeenCalled()
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
@@ -211,11 +256,18 @@ describe('cross-asset observation workspace', () => {
     const text = productText[language].pages.intelligence.portal.dashboard.crossAsset
     const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }),
       release: vi.fn(), getSourceConfiguration: async () => ({ state: 'configured', enabled: false }) }
+    vi.useFakeTimers()
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      // Not ready yet is not a failed read: the error surface only appears after the retry ladder
+      // (1+2+4+8+16s) is exhausted, so these assertions advance past it.
+      await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
       expect(host.querySelector('[data-cross-asset-workspace]')).not.toBeNull()
       expect(host.querySelector('section')?.getAttribute('aria-label')).toBe(text.title)
-      expect(host.textContent).toContain(text.unavailable)
+      // 拿不到行情是「读不到」，由统一状态面说那句话并给出重试，不再自己写一句文案。
+      const failure = host.querySelector<HTMLElement>('.state-view--error')
+      expect(failure, 'a failed query renders the shared state surface').not.toBeNull()
+      expect(failure?.querySelector('.state-view__action'), 'error always offers an action').not.toBeNull()
       expect(host.querySelector('[data-cross-asset-region="status"]')).not.toBeNull()
       // 跨市场观察 is temporarily unrendered (its data and i18n keys are untouched); this guard is
       // flipped back when the aside returns.
@@ -252,7 +304,14 @@ describe('cross-asset observation workspace', () => {
       const badge = host.querySelector('[data-status-row="gold"] th [data-live-state]')!
       expect(badge.getAttribute('data-live-state')).toBe('live')
       expect(badge.textContent).toBe(text.liveStateLabels.live)
-      expect(badge.getAttribute('title')).toContain(text.liveHint)
+      expect(badge.getAttribute('title')).toBeNull()
+      expect(badge.getAttribute('tabindex')).toBe('0')
+      await act(async () => { (badge as HTMLElement).focus() })
+      // 提示是一句语言模板 + `{time}`：模板那句必须在，且后面真的被填了观测时间——
+      // 只断言「包含模板」会让「时间没填进去」也算通过（模板里本来就有那句话）。
+      const hintHead = text.liveHint.split('{time}')[0]!.trim()
+      const bubbles = [...document.querySelectorAll('.ant-tooltip-inner')].map(node => node.textContent ?? '')
+      expect(bubbles.some(line => line.startsWith(hintHead) && line.length > hintHead.length)).toBe(true)
       expect(badge.getAttribute('data-live-observed')).toBe(String(atMs + 5_000))
       // The four windows are still the closed-bar figures: the live tick moved none of them.
       expect(host.querySelector('[data-asset-return="gold:15m"]')?.textContent).toBe('+0.05%')
@@ -328,7 +387,9 @@ describe('cross-asset observation workspace', () => {
       // expectation is its own series, so it carries its own observation date (10-13 here) rather than
       // borrowing the row's day — the row is 10-09.
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('期限利差 +44bp · 通胀预期 2.33%（截至 2026-10-13）')
-      expect(daily?.getAttribute('title')).toContain('期限利差 +44bp')
+      expect(daily?.getAttribute('title')).toBeNull()
+      await act(async () => { daily?.focus() })
+      expect(document.body.textContent).toContain('期限利差 +44bp')
       expect(daily?.getAttribute('data-caveat')).toBe('official-daily-close')
       // Two legs on one day is not a mixed-observation-date row.
       expect(daily?.getAttribute('data-mixed-observation-dates')).toBeNull()
@@ -363,9 +424,12 @@ describe('cross-asset observation workspace', () => {
       expect(daily.textContent).toContain('日频 −3bp（截至 2026-10-13）')
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('通胀预期 2.35%（截至 2026-10-14）')
       expect(daily.textContent).not.toContain(text.termSpread)
-      // The caveat id comes from its owner, and its sentence is one hover away.
+      // The caveat id comes from its owner; the sentence rides on the cell's accessible name, because
+      // this cell is not a control and must not become a keyboard stop just to explain itself.
       expect(daily.getAttribute('data-mixed-observation-dates')).toBe('macro-rates-mixed-observation-dates')
-      expect(daily.getAttribute('title')).toContain(text.dailyMixedDates)
+      expect(daily.getAttribute('title')).toBeNull()
+      expect(daily.getAttribute('tabindex')).toBeNull()
+      expect(daily.getAttribute('aria-label')).toContain(text.dailyMixedDates)
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
@@ -375,10 +439,12 @@ describe('cross-asset observation workspace', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.crossAsset
     const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
     try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
+      await act(async () => root.render(createElement(EnglishScopedCrossAssetObservationPanel,
         { client: client as never, rates: ratesView() as never, text })))
       expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).toContain('Daily +2bp (as of 2026-10-09)')
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('Term spread +44bp · Inflation expectation 2.33% (as of 2026-10-13)')
+      // 模板化句子的通用判据（Chief 2026-11-02）：渲染结果里不许残留 `{`。
+      expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).not.toContain('{')
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
@@ -565,10 +631,114 @@ describe('cross-asset observation workspace', () => {
       release: vi.fn(async () => ({ state: 'released' })) }
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
-      // 选项直接来自契约：30d 是后来加上去的窗口，手抄一份清单就会漏掉它。
-      expect([...host.querySelectorAll('.ant-segmented-item-label')].map(node => node.textContent)).toEqual(['1H', '24H', '7D'])
+      // 选项直接来自契约：手抄一份清单就会漏掉后来加的窗口。平台分段把整组当一个
+      // `role="group"`、每项一个 `aria-pressed` 按钮，一次 Tab 进组。
+      const group = host.querySelector('[role="group"][aria-label]')
+      expect(group?.getAttribute('aria-label')).toBe(text.rangeLabel)
+      expect([...group!.querySelectorAll('button')].map(node => node.textContent)).toEqual(['1H', '24H', '7D'])
+      expect([...group!.querySelectorAll('button')].filter(node => node.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
       expect(asked).toEqual(['24h'])
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
+})
+
+describe('首次进入的状态顺序', () => {
+  const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+
+  /** 可控的租约/查询：让「读取还没回来」变成一个能断言的时刻，而不是靠肉眼看有没有闪。 */
+  function deferredClient(): {
+    client: Record<string, unknown>
+    resolveQuery: (value: unknown) => void
+    rejectQuery: (error: Error) => void
+  } {
+    let resolveQuery!: (value: unknown) => void
+    let rejectQuery!: (error: Error) => void
+    const pending = new Promise((resolve, reject) => { resolveQuery = resolve; rejectQuery = reject })
+    return {
+      client: {
+        acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+        renew: async () => ({ state: 'active' }),
+        query: () => pending,
+        refresh: async () => ({ state: 'refreshed' }),
+        release: async () => ({ state: 'released' })
+      },
+      resolveQuery,
+      rejectQuery
+    }
+  }
+
+  async function mount(client: Record<string, unknown>): Promise<HTMLElement> {
+    const host = document.createElement('div'); document.body.append(host)
+    await act(async () => createRoot(host).render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+    return host
+  }
+
+  it('shows only the waiting state while the first read is still in flight', async () => {
+    const { client } = deferredClient()
+    const host = await mount(client)
+    for (let tick = 0; tick < 6; tick += 1) await act(async () => { await Promise.resolve() })
+    // 还没 settle：屏幕上不许出现任何「失败/没有」的视图，也不许出现一个可点的重试。
+    expect(host.querySelector('.state-view--error')).toBeNull()
+    expect(host.querySelector('.state-view')).toBeNull()
+    expect(host.textContent).not.toContain(text.unavailable)
+    expect(host.querySelector('[aria-label]')).not.toBeNull()
+    host.remove()
+  })
+
+  it('keeps the chart and names the previous readings when a later read fails', async () => {
+    // 有数据之后的失败不许退回错误屏：图还在，另起一行说明这是上一次的读数。
+    const snapshot = { schemaVersion: 1, servedAt: '2026-10-14T12:00:00.000Z', asOf: '2026-10-14T12:00:00.000Z',
+      analysisEnd: '2026-10-14T12:00:00.000Z', range: '24h', mode: 'current', sourceState: 'live', windowStart: '2026-10-14T11:00:00.000Z',
+      historyCoverage: { index: { count: 12, expectedCount: 13 }, btc: { count: 12, expectedCount: 13 }, eth: { count: 12, expectedCount: 13 } },
+      curves: { index: [], btc: [], eth: [] },
+      closedReturns: { index: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } },
+        btc: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } },
+        eth: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } } },
+      correlations: { indexBtc: { state: 'unavailable', reason: 'missing' }, indexEth: { state: 'unavailable', reason: 'missing' } },
+      relativeReturns: { btcMinusIndex: null, ethMinusBtc: null }, indexSource: 'unavailable' }
+    let calls = 0
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })),
+      refresh: vi.fn(async () => ({ state: 'accepted' })),
+      query: vi.fn(async () => (++calls === 1 ? snapshot : { state: 'unavailable' }))
+    }
+    vi.useFakeTimers()
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    try {
+      const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      for (let tick = 0; tick < 4; tick += 1) await act(async () => { await Promise.resolve() })
+      expect(host.querySelector('[data-cross-asset-stale]')).toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+      expect(host.querySelector('[data-cross-asset-stale]')?.textContent).toBe(text.staleRead)
+      expect(host.querySelector('.state-view--error')).toBeNull()
+      expect(host.textContent).toContain(text.chart)
+    } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
+  })
+
+  it('turns a genuinely failed first read into the error surface with a retry', async () => {
+    // A read that keeps failing is terminal after the ladder — otherwise "not ready yet" would be
+    // a spinner that never ends.
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })), refresh: vi.fn(async () => ({ state: 'accepted' })),
+      query: async () => { throw new Error('request failed') }
+    }
+    vi.useFakeTimers()
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    try {
+      const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+      const failure = host.querySelector('.state-view--error')
+      expect(failure).not.toBeNull()
+      expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+    } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
+  })
 })

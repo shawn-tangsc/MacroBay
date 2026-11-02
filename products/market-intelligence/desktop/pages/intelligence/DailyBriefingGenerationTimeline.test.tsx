@@ -13,7 +13,6 @@ import {
   type GenerationTraceStage
 } from './dailyBriefingGenerationTrace'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -80,7 +79,7 @@ afterEach(() => {
   root = null
   container = null
   // AntD keeps closed popups in its own portal; drop them so a later test cannot read a stale one.
-  for (const tip of document.querySelectorAll('.ant-tooltip')) tip.remove()
+  for (const tip of document.querySelectorAll('.ant-tooltip, .ant-popover')) tip.remove()
 })
 
 function render(value: GenerationTrace | undefined, english = false, copy: typeof text = english ? englishText : text): HTMLDivElement {
@@ -113,6 +112,17 @@ function resultOf(dom: HTMLElement, id: GenerationStageId): HTMLElement {
 
 /** AntD keeps a closed popup mounted but hides its root; only visible tooltips count as shown. */
 function visibleTooltipText(): string {
+  // The stage explanation is a popover: a paragraph, not a one-line hint. The popup stays in the DOM
+  // with a hidden class when closed, so visibility is decided by that class, not by presence.
+  return [...document.querySelectorAll('.ant-popover')]
+    .filter((element) => !element.classList.contains('ant-popover-hidden')
+      // happy-dom does not end the zoom-out motion either, so a leaving popup still sits in the DOM.
+      && !/ant-zoom-.*-(leave|leave-active)/.test(element.className))
+    .map((element) => element.querySelector('.platform-popover__content')?.textContent ?? '')
+    .join(' ')
+}
+
+function visibleTooltipTextLegacy(): string {
   return [...document.querySelectorAll('.ant-tooltip')]
     .filter((element) => !element.classList.contains('ant-tooltip-hidden')
       // happy-dom does not end the zoom-out motion, so a leaving popup is still in the DOM.
@@ -265,46 +275,51 @@ describe('generation stage timeline', () => {
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     const help = dom.querySelector<HTMLButtonElement>('[data-stage-help="source"]')!
 
-    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.source)
     act(() => help.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
     await settle()
-    expect(help.getAttribute('aria-expanded')).toBe('true')
     expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.source)
 
-    // Leaving closes it again; the content is a tooltip, never a permanent row.
+    // Leaving closes it again; the content is a popover, never a permanent row.
     act(() => help.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })))
     await settle()
-    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.source)
 
     await act(async () => { help.focus() })
     await settle()
-    expect(help.getAttribute('aria-expanded')).toBe('true')
     expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.source)
   })
 
-  it('pins on click and closes on Escape', async () => {
+  it('pins on click and closes on a second click', async () => {
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     const help = dom.querySelector<HTMLButtonElement>('[data-stage-help="writing"]')!
 
     act(() => help.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
     await settle()
     act(() => help.click())
-    expect(help.getAttribute('aria-expanded')).toBe('true')
     // Pinned: leaving the icon keeps it open.
     act(() => help.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })))
     await settle()
-    expect(help.getAttribute('aria-expanded')).toBe('true')
-
-    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
-    await settle()
-    expect(help.getAttribute('aria-expanded')).toBe('false')
-    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.writing)
+    expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.writing)
 
     // A pinned icon also closes on a second click.
     act(() => help.click())
-    expect(help.getAttribute('aria-expanded')).toBe('true')
-    act(() => help.click())
-    expect(help.getAttribute('aria-expanded')).toBe('false')
+    await settle()
+    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.writing)
+  })
+
+  it('closes on Escape and leaves the focus on the trigger', async () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    const help = dom.querySelector<HTMLButtonElement>('[data-stage-help="writing"]')!
+
+    await act(async () => { help.focus() })
+    await settle()
+    expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.writing)
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    await settle()
+    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.writing)
+    expect(document.activeElement).toBe(help)
   })
 
   it('renders no question mark when a stage has no help line', () => {

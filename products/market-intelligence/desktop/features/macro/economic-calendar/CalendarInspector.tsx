@@ -1,39 +1,66 @@
-import { Drawer } from 'antd'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, type ReactElement, type ReactNode } from 'react'
 
-// Design 122 §2.1: one owner for the detail surface of an official or a market event.
-// 480, not 320: the drawer now opens from the dashboard's calendar card as well, and at 320 the
-// release title and the source/period rows wrapped on the very first line. Both entry points share
-// this policy, so the card and the calendar page cannot drift to two widths.
-export const CalendarDetailDrawerPolicy = Object.freeze({ width: 480 })
+import { SidePanel } from '@platform/ui/components/side-panel'
+
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 
 /**
- * The detail is a drawer from the left, and it carries no mask.
+ * The detail is a **side panel**, not a drawer: it takes its own column and leaves the calendar
+ * beside it. A reader who opens an event wants the days around it, so the board must not be covered.
  *
- * A mask would put a grey sheet over the calendar and swallow the click that picks the next event,
- * so the drawer floats over the calendar instead: the reader reads a detail and keeps the board
- * underneath. Because there is no mask to click away, the header carries the one visible way out —
- * its close control, at the far corner — beside Escape and picking the same event again.
+ * One form only — the component's `flex` tier (480), the same width the floating card had. What
+ * changed is where that width comes from: the calendar gives it up instead of being covered.
  */
-export function CalendarInspector({ open, title, onClose, children }: {
-  open: boolean; title: string; onClose: () => void; children: ReactNode
-}) {
-  // Escape is read from the document, not from the drawer: with no mask the reader's focus is
-  // regularly outside the drawer (they just clicked a calendar row), and a key handler on the panel
-  // would never see the key.
+export const CalendarDetailPanelPolicy = Object.freeze({ size: 'flex' as const })
+
+/** One title for both entry points (this page and the dashboard's calendar card). */
+const DETAIL_TITLE_KEY = 'pages.intelligence.portal.calendar.details.title'
+
+/**
+ * A reader picks event after event without leaving the list, so the panel **must not** steal focus
+ * (`focusPolicy="stay"`). That has one cost: nothing announces that the content changed. The panel
+ * covers it — it announces "showing {title}, {when}" once per `contentId`, which is also why `when`
+ * is required: two FOMC rows on one day share a title, and a title alone would read as "nothing
+ * happened".
+ *
+ * Escape stays here rather than in the panel: `SidePanel` deliberately does not take the key (the
+ * reader is meant to walk between both sides), but a detail opened from a list still has to be
+ * dismissable from the keyboard, and it was before this change.
+ */
+export function CalendarInspector({ open, contentId, when, onClose, children }: {
+  open: boolean
+  contentId?: string
+  when?: string
+  onClose: () => void
+  children: ReactNode
+}): ReactElement | null {
+  const resolveText = useProductTextKey()
   useEffect(() => {
     if (!open) return
+    // On the document: with focus policy `stay` the reader's focus stays on the row they picked,
+    // which is outside the panel, so a handler bound inside it would never see the key.
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
-  return <Drawer autoFocus={false} closable={{ placement: 'end' }} destroyOnHidden getContainer={false} keyboard mask={false}
-    // `rootClassName`, not `className`: antd hands `className` to `.ant-drawer-content`, so the inset
-    // below never matched anything and the reader's 12px floating card silently did not exist.
-    rootClassName="mi-calendar-drawer"
-    open={open} placement="left" title={title} width={CalendarDetailDrawerPolicy.width} onClose={onClose}>
-    {open ? <div className="mi-calendar-detail-container" data-calendar-detail-container>{children}</div> : null}
-  </Drawer>
+  // No identity, no panel: without these two the announcement cannot say which row changed, and a
+  // panel that silently swaps content is the very failure this policy exists to prevent.
+  if (!open || contentId === undefined || when === undefined) return null
+  return (
+    <SidePanel
+      className="mi-calendar-detail"
+      contentId={contentId}
+      focusPolicy="stay"
+      onClose={onClose}
+      open
+      resolveText={resolveText}
+      size={CalendarDetailPanelPolicy.size}
+      titleKey={DETAIL_TITLE_KEY}
+      when={when}
+    >
+      <div className="mi-calendar-detail-container" data-calendar-detail-container>{children}</div>
+    </SidePanel>
+  )
 }

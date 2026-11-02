@@ -28,7 +28,6 @@ import type { WorkspaceDraftDecision, WorkspaceDraftOwnerPort, WorkspaceDraftPro
  * renderer **不**维护第二份 tab/布局状态（strip 只消费受控 `state` 快照）。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 afterEach(async () => { await act(async () => { root?.unmount() }); root = undefined; document.body.replaceChildren() })

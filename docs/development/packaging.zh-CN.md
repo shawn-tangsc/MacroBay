@@ -4,6 +4,9 @@
 
 本文说明如何从这个仓库产出可分发桌面版本。
 
+这是面向贡献者的说明：命令、包里有什么、怎么验证一次构建。打包契约本身、安装器失败模式与发布门禁属于
+维护者材料，放在公开文档之外，本文不再重复列一份。
+
 ## 当前支持范围
 
 - **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
@@ -93,11 +96,18 @@ pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.a
 ### 签名与公证
 
 `electron-builder.yml` 里的 `mac.identity: null` 让本地构建保持未签名。从网络下载的未签名构建会被
-Gatekeeper 拦截，用户需要右键 → **打开**，或者执行：
+Gatekeeper 拦截，用户需要右键 → **打开**（直接双击会被拒），或者执行：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/MacroBay.app
 ```
+
+Windows 的安装器同样未签名：SmartScreen 会显示「Windows 已保护你的电脑」，用户选择
+**更多信息 → 仍要运行**。这两个提示在**每一次下载更新后都会重现**，不只是第一次安装——更新会替换
+文件，隔离标记与 SmartScreen 的判断每次都重新来。
+
+对外怎么描述一个产物，必须与这个状态一致：**未签名、未公证**。发布说明、README、设置页与帮助
+文案里都不许出现「已签名」「已公证」「安全安装」；唯一诚实的写法就是上面这两步。
 
 要签名，设置 `CSC_LINK`/`CSC_KEY_PASSWORD`（或在钥匙串中安装身份），把 `identity: null` 换成该身份，
 并启用 `hardenedRuntime`。公证还需要 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和
@@ -192,11 +202,11 @@ gate 通过后从 `main` 打 tag。发布清单属于维护材料，不在本文
 ## 发布前验证
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm docs:check
+pnpm verify
 ```
+
+`pnpm verify` 是检查步骤的唯一一处定义（`docs:check`、`check:file-size`、typecheck、test、build），
+CI 跑的也是同一条命令，所以本页不再自己维护一份清单。
 
 然后在干净机器上安装产物，验证：
 

@@ -34,7 +34,8 @@ export type CacheSensitivity = (typeof CACHE_SENSITIVITIES)[number]
 export const CACHE_BACKUP_POLICIES = ['exclude'] as const
 export type CacheBackupPolicy = (typeof CACHE_BACKUP_POLICIES)[number]
 
-export const CACHE_INSPECTION_STATUSES = ['ready', 'empty', 'active', 'inspection_failed'] as const
+/** `active` 已删除：没有任何 provider 产出过它，而它在 UI 里有文案——一个永远不会渲染的状态会让枚举看起来更完整。 */
+export const CACHE_INSPECTION_STATUSES = ['ready', 'empty', 'inspection_failed'] as const
 export type CacheInspectionStatus = (typeof CACHE_INSPECTION_STATUSES)[number]
 
 /** `invalidate` 已删除：没有任何生产者能写出它，服务与 IPC 只有 clear / compact（2026-11-01 契约裁定）。 */

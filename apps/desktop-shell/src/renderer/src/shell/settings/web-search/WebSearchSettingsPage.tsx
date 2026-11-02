@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Button, Empty } from 'antd'
+import { Button } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { WebSearchProviderId, WebSearchSettings } from '@platform/ai/web-search/contracts/webSearchContracts'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { platformText } from '../../../i18n/platformText'
 import { WebSearchPolicyPage } from './WebSearchPolicyPage'
 import { WebSearchProvidersPage } from './WebSearchProvidersPage'
@@ -43,10 +44,16 @@ export function WebSearchSettingsPage({ language }: WebSearchSettingsPageProps):
   }
 
   if (webSearch.error || !webSearch.settings) {
+    // 「没读出来」不等于「这里没有内容」：用 error 态而不是空态，并给一个真的重试。
+    // 原始异常只进日志（`useWebSearchSettings` 已经打在 catch 里），不上屏。
     return (
       <section className="settings-workspace web-search-settings">
         <div className="web-search-loading">
-          <Empty description={webSearch.error ?? labels.loadFailed} />
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            action={{ labelKey: 'ui.state.action.retry', onSelect: () => void webSearch.reload() }}
+          />
         </div>
       </section>
     )
@@ -89,7 +96,6 @@ export function WebSearchSettingsPage({ language }: WebSearchSettingsPageProps):
             </span>
             <Button
               className="ant-primary-button"
-              autoInsertSpace={false}
               loading={saving}
               disabled={!dirty || saving}
               onClick={() => void savePolicy()}>

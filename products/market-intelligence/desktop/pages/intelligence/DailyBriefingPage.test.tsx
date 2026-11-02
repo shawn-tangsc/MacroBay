@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
+import { ConfigProvider } from 'antd'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -188,6 +190,7 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
     getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
     list: vi.fn(async () => ({ state: 'available' as const, result: { editions } })),
     regenerate: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument('2026-10-30', '重新生成版') })),
+    getProgress: vi.fn(async () => ({ state: 'idle' as const })),
     get: vi.fn(async ({ date }: { date: string }) => date === '2026-10-29'
       ? { state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }
       : { state: 'missing' as const }),
@@ -219,21 +222,22 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   onConfigureSources?: () => void
   onOpenModelSettings?: () => void
   locale?: 'zh-CN' | 'en-US'
+  text?: typeof text
 }> = {}): Promise<HTMLDivElement> {
-  const { onBack = vi.fn(), onConfigureSources, onOpenModelSettings, locale = 'zh-CN' } = options
+  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, locale = 'zh-CN', text: textOverride } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DailyBriefingPage
+    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><DailyBriefingPage
       locale={locale}
-      text={locale === 'zh-CN' ? text : englishText}
+      text={textOverride ?? (locale === 'zh-CN' ? text : englishText)}
       eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
       onBack={onBack}
-      {...(onConfigureSources ? { onConfigureSources } : {})}
+      onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
       client={client}
-    />)
+    /></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container
@@ -298,16 +302,19 @@ describe('daily briefing page', () => {
     expect(writeText.mock.calls[0]?.[0]).toContain('历史版次')
   })
 
-  it('guides a clean install to the sources when every reading is missing', async () => {
+  it('guides a clean install through the platform state with the product sentence', async () => {
     const onConfigureSources = vi.fn()
     const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
     }), { onConfigureSources })
-    expect(dom.textContent).toContain(text.emptyGuide)
+    const state = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"]')!
+    expect(state).not.toBeNull()
+    // Only the reason slot is ours; the reason says the product sentence, not a hand-written block.
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.nothingEnabled)
     for (const section of [text.sections.news, text.sections.data, text.sections.conclusion, text.sections.next]) {
       expect(dom.querySelector(`[aria-label="${section}"]`)).toBeNull()
     }
-    const configure = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.configureSources)!
+    const configure = state.querySelector<HTMLButtonElement>('.state-view__action')!
     act(() => configure.click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
@@ -353,17 +360,61 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
   })
 
-  it('shows an unavailable state and retries without crashing', async () => {
+  it('renders an unreadable read as an error, not as "nothing was made", and retries', async () => {
     const getToday = vi.fn()
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce({ state: 'available' as const, document: briefingDocument() })
     const client = fakeClient({ getToday })
     const dom = await renderPage(client)
-    expect(dom.textContent).toContain(text.unavailable)
-    const retry = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.generateNow)!
+    // A read that did not finish is `error`; calling it `empty` is the lie this migration removes.
+    const state = dom.querySelector('.state-view[data-state="error"]')!
+    expect(state).not.toBeNull()
+    expect(dom.querySelector('.state-view[data-state="empty"]')).toBeNull()
+    const reason = state.querySelector('[data-reason-source="product"]')?.textContent ?? ''
+    expect(reason).toContain(text.stateReasons.unreadableSince.split('{moment}')[0]!)
+    expect(reason).not.toContain('{moment}')
+    const retry = state.querySelector<HTMLButtonElement>('.state-view__action')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getToday).toHaveBeenCalledTimes(2)
     expect(dom.textContent).toContain('每日简报')
+  })
+
+  it('tells a first run apart from an unreadable read', async () => {
+    const getToday = vi.fn(async () => ({ state: 'unavailable' as const }))
+    const client = fakeClient({
+      getToday,
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    })
+    const dom = await renderPage(client)
+    const state = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"]')!
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.noBrief)
+    expect(state.querySelector('.state-view__action')?.textContent).toBe('创建')
+    await act(async () => {
+      state.querySelector<HTMLButtonElement>('.state-view__action')!.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(getToday).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the platform sentence when the product sentence is blank', async () => {
+    const blank = { ...text, stateReasons: { ...text.stateReasons, noBrief: '' } }
+    const dom = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    }), { text: blank })
+    const reason = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"] [data-reason-source]')!
+    expect(reason.getAttribute('data-reason-source')).toBe('platform')
+  })
+
+  it('renders an empty history rail through the platform state', async () => {
+    const dom = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    }))
+    const rail = dom.querySelector('.mi-daily-briefing__rail')!
+    const state = rail.querySelector('.state-view[data-state="empty"]')!
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.noEditions)
+    expect(state.querySelector('.state-view__action')).toBeNull()
   })
 
   it('explains an editorial timeout and offers retry, AI settings and model service actions', async () => {
@@ -480,7 +531,7 @@ describe('daily briefing page', () => {
     const groupButtons = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
     expect(groupButtons.length).toBeGreaterThan(0)
     expect(aside.querySelectorAll('[data-issue-detail]')).toHaveLength(0)
-    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
+    expect(document.querySelector('[data-issue-drawer]')).toBeNull()
     const groupLabel = (button: HTMLButtonElement): string | null | undefined =>
       button.querySelector('.mi-daily-briefing-page__group-label')?.textContent
     const groupCount = (button: HTMLButtonElement): string | null | undefined =>
@@ -499,9 +550,12 @@ describe('daily briefing page', () => {
     expect(aside.textContent).not.toContain(`${text.limits.roles.source}${text.labelSeparator}`)
 
     act(() => consensusGroup.click())
-    const drawer = dom.querySelector<HTMLElement>('[data-issue-drawer]')!
+    // The drawer's body is portalled, so it is looked up on the document, not inside the page div.
+    const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
     expect(drawer).not.toBeNull()
-    expect(drawer.textContent).toContain('「预期值未收录」明细（2 项）')
+    // The title lives in the shared drawer's header, filled from the product key by parameters.
+    const drawerRoot = document.querySelector<HTMLElement>('.mi-issue-drawer')!
+    expect(drawerRoot.textContent).toContain('「预期值未收录」明细（2 项）')
     const details = [...drawer.querySelectorAll('[data-issue-detail]')]
     expect(details).toHaveLength(2)
     expect(new Set(details.map((detail) => detail.querySelector('.mi-issue-drawer__title')?.textContent)).size).toBe(2)
@@ -511,17 +565,15 @@ describe('daily briefing page', () => {
       expect(detail.textContent).toContain(text.limits.roles.advice)
     }
 
-    // Escape closes the drawer and returns focus to the summary row that opened it.
-    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
-    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
-    expect(document.activeElement).toBe(consensusGroup)
-
-    // The close button does the same.
-    act(() => consensusGroup.click())
-    expect(dom.querySelector('[data-issue-drawer]')).not.toBeNull()
-    act(() => dom.querySelector<HTMLButtonElement>('[data-drawer-close]')!.click())
-    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
-    expect(document.activeElement).toBe(consensusGroup)
+    // Escape and returning focus to the opening row are the shared drawer's own behaviour, covered by
+    // its suite; this page no longer hand-rolls either.
+    // Closing from the header empties the drawer again, and focus returns to the row that opened it.
+    const closeButton = [...document.querySelectorAll<HTMLButtonElement>('.ant-drawer-header button')].at(-1)!
+    await act(async () => { closeButton.click() })
+    await act(async () => {})
+    expect(document.querySelector('[data-issue-drawer]')).toBeNull()
+    // Focus restoration is the shared drawer's job as well; asserting it here would test the platform
+    // through a page, so it stays in the component's own suite.
 
     // Internal reason strings, machine codes and model ids never reach the rail or the drawer.
     expect(aside.textContent).not.toContain('filled 2 core data rows')
@@ -555,9 +607,11 @@ describe('daily briefing page', () => {
     const consensusGroup = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
       .find((button) => button.querySelector('.mi-daily-briefing-page__group-label')?.textContent === englishText.limits.groupLabels['macro-consensus'])!
     act(() => consensusGroup.click())
-    const drawer = dom.querySelector<HTMLElement>('[data-issue-drawer]')!
+    // The drawer's body is portalled, so it is looked up on the document, not inside the page div.
+    const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
     expect(drawer.textContent).toContain('CPI: consensus not collected')
-    expect(drawer.textContent).toContain(englishText.limits.drawerClose)
+    // The close control belongs to the shared drawer, so its label is the platform's, not this page's.
+    expect(document.querySelector('.mi-issue-drawer .ant-drawer-header')).not.toBeNull()
     expect(drawer.textContent).toContain(englishText.limits.roles.advice)
   })
 
@@ -607,4 +661,72 @@ describe('daily briefing page', () => {
     expect(again.querySelector('[data-daily-brief-failure]')?.textContent).toContain('失败于：落库/发布')
     expect(again.querySelector('[data-stage="store"]')?.getAttribute('data-stage-state')).toBe('failed')
   })
+})
+
+it('says the progress could not be read without falling back to "not generated"', async () => {
+  // getToday never settles, so the page stays in its generating state while getProgress fails.
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    // Today's row is a gap, which is the state the rail must not label "not generated" mid-run.
+    list: vi.fn(async () => ({
+      state: 'available' as const,
+      result: { editions: editions.map((edition) => (edition.date === '2026-10-30' ? { ...edition, state: 'missing' as const } : edition)) }
+    })),
+    getProgress: vi.fn(async () => ({ state: 'unavailable' as const }))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+
+  await act(async () => { await Promise.resolve() })
+
+  const notice = dom.querySelector('[data-progress-unreadable]')
+  expect(notice?.textContent).toContain('生成还在进行')
+  // The rail must not claim the edition was never made while the pipeline is still running.
+  const today = dom.querySelector('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')
+  expect(today?.textContent).toContain('生成中')
+  expect(today?.textContent).toContain('进度未知')
+  expect(today?.textContent).not.toContain('当天未运行')
+})
+
+it('shows only a loading state before the first read resolves', async () => {
+  // Both reads hang: nothing has been read yet, so nothing may be reported as missing or failed.
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    list: vi.fn(() => new Promise(() => undefined))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => { await Promise.resolve() })
+
+  expect(dom.textContent).toContain(text.generating)
+  expect(dom.textContent).toContain(text.history.loading)
+  // No empty state and no error state anywhere before the first read comes back.
+  expect(dom.textContent).not.toContain(text.noBriefTitle)
+  expect(dom.textContent).not.toContain(text.unavailable)
+  expect(dom.textContent).not.toContain(text.history.empty)
+  expect(dom.querySelector('[data-state="error"]')).toBeNull()
+})
+
+it('offers a retry when the read itself fails', async () => {
+  // A read that did not finish is a failure, and a failure without a retry leaves the reader nowhere.
+  const client = fakeClient({ getToday: vi.fn(async () => { throw new Error('down') }) })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+
+  const errorState = dom.querySelector('.state-view[data-state="error"]')
+  expect(errorState).not.toBeNull()
+  expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
+})
+
+it('says the history could not be read instead of claiming there is none', async () => {
+  const client = fakeClient({
+    getToday: vi.fn(async () => { throw new Error('down') }),
+    list: vi.fn(async () => { throw new Error('down') })
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => {})
+  await act(async () => {})
+
+  const rail = dom.querySelector('.mi-daily-briefing__rail')
+  expect(rail?.textContent).not.toContain(text.history.empty)
+  const errorState = rail?.querySelector('.state-view[data-state="error"]')
+  expect(errorState).not.toBeNull()
+  expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
 })

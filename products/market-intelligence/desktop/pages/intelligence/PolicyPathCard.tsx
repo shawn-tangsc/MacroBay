@@ -1,3 +1,7 @@
+import { Button } from 'antd'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
@@ -23,7 +27,6 @@ export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
   lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
-  helpLabel: string; helpLines: readonly string[]
   /** `{month} 月{outcome}` in Chinese; the month and the bucket are separate so English can order them its way. */
   outcomeLead: string
   /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */
@@ -67,6 +70,24 @@ function lastActionOf(reading: PolicyPathReading, settlement: PolicyPathSettleme
   return outcome === 'no-change' ? text.unchanged : text.outcomes[outcome]
 }
 
+/**
+ * The card's freshness word as a state pill.
+ *
+ * `delayed` and `stale` share `warn` because only one of them can be on screen at a time and the two
+ * words differ in what caused them (network lag vs. an old quote); collapsing them would lose that.
+ * The shape of the dot (ring for `warn`, filled for `bad`) is what keeps them apart in greyscale —
+ * the component owns it, the card only names the tone.
+ */
+const VOTE_HINT_KEY = 'pages.intelligence.portal.dashboard.policyPath.voteHint'
+
+const STALENESS_TONE = { live: 'ok', delayed: 'warn', stale: 'warn', unavailable: 'bad' } as const
+const STALENESS_KEY = {
+  live: 'pages.intelligence.portal.dashboard.policyPath.live',
+  delayed: 'pages.intelligence.portal.dashboard.policyPath.delayed',
+  stale: 'pages.intelligence.portal.dashboard.policyPath.stale',
+  unavailable: 'pages.intelligence.portal.dashboard.policyPath.unavailable'
+} as const
+
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
@@ -78,6 +99,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   const Direction = change === undefined || change === 0 ? Minus : change > 0 ? TrendingUp : TrendingDown
   const freshness = text[reading.staleness] ?? text.unavailable
   // The leading bucket is the market's answer, not necessarily a hike.
+  const resolveKey = useProductTextKey()
   const outcomeLabel = probability
     ? text.outcomeLead.replace('{month}', month).replace('{outcome}', text.outcomes[probability.outcome])
     : ''
@@ -132,7 +154,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     ? '—'
     : <>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{reading.sep.asOf.slice(5)}）</span></>
 
-  const facts: ReadonlyArray<Readonly<{ label: string; value: React.ReactNode; hint?: string }>> = strip
+  const facts: ReadonlyArray<Readonly<{ label: string; value: React.ReactNode; hintParams?: Readonly<Record<string, string>> }>> = strip
     ? [
         { label: text.newTargetRange, value: rangeValue },
         { label: text.voteTally, value: reading.lastDecision?.vote ? `${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}` : '—' },
@@ -154,23 +176,16 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
             value: reading.lastDecision?.vote
               ? `${lastActionOf(reading, settlement, text)} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
               : '—',
-            ...(reading.lastDecision?.vote ? { hint: text.voteHint
-              .replace('{for}', String(reading.lastDecision.vote.for))
-              .replace('{against}', String(reading.lastDecision.vote.against)) } : {})
+            // The numbers ride as parameters, not as a sentence built here: the template stays in the
+            // copy table and the callsite only formats what it already knows.
+            ...(reading.lastDecision?.vote ? { hintParams: {
+              for: String(reading.lastDecision.vote.for), against: String(reading.lastDecision.vote.against) } } : {})
           }
         ]
 
   return <section className="mi-policy-card" aria-label={text.title} data-staleness={reading.staleness} data-phase={phase.kind}>
     <header className="mi-policy-card__head">
       <h2>{text.title}</h2>
-      {/* The odds are the one number on this card a reader cannot derive from anything else here. */}
-      <span className="mi-policy-card__help" tabIndex={0} aria-label={text.helpLabel} role="note">
-        ?
-        <span className="mi-policy-card__help-pop" role="tooltip">
-          <b>{text.helpLabel}</b>
-          {text.helpLines.map((line) => <span key={line}>{line}</span>)}
-        </span>
-      </span>
       {markerChip}
       {phaseChip}
       {phase.kind === 'normal' || phase.kind === 'verdict'
@@ -219,24 +234,38 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     <dl className="mi-policy-card__facts">
       {facts.map((row) => <div key={row.label}>
         <dt>{row.label}</dt>
-        <dd title={row.hint}>{row.value}</dd>
+        {/* The hint rides the accessible name, not a focus stop: a `dd` is not a control, so giving
+            it focus put a stop in the Tab order where pressing anything does nothing. The numbers
+            still come from the template through the shared filler. */}
+        {row.hintParams
+          ? <dd aria-label={fillLabelParams(resolveKey(VOTE_HINT_KEY), row.hintParams)}>{row.value}</dd>
+          : <dd>{row.value}</dd>}
       </div>)}
     </dl>
 
     {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
         drawer, so the card keeps the normal reading position and only adds a memory. */}
-    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
+    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <Button type="text" className="mi-policy-card__judged" onClick={onOpen}>
       <span>{text.judgedLabel}</span>
       <b data-direction={judged.direction}>{judged.label}</b>
-    </button> : null}
+    </Button> : null}
 
     <footer className="mi-policy-card__foot">
-      {phase.kind === 'settlement'
-        ? <span className="mi-policy-card__status"><i aria-hidden="true" />{settledFor(phase.minutesSinceDecision, text)}</span>
-        : <span className="mi-policy-card__status"><i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}</span>}
-      {onOpen ? <button className="mi-policy-card__open" onClick={onOpen} type="button">
+      {/* The state word and where the odds come from are one reading, not two cells of a row: the
+          footer spreads its children apart, so as siblings they sat at opposite ends with the
+          venue floating in the middle. Grouping them keeps the provenance together on the left. */}
+      <span className="mi-policy-card__provenance">
+        {phase.kind === 'settlement'
+          // A time phrase ("2 hours after the decision"), not a state word: it stays text.
+          ? <span className="mi-policy-card__status">{settledFor(phase.minutesSinceDecision, text)}</span>
+          : <>
+              <StatusPill tone={STALENESS_TONE[reading.staleness]} labelKey={STALENESS_KEY[reading.staleness]} resolveText={resolveKey} />
+              {probability ? <span className="mi-policy-card__status">· {probability.venue}</span> : null}
+            </>}
+      </span>
+      {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
-      </button> : null}
+      </Button> : null}
     </footer>
   </section>
 }

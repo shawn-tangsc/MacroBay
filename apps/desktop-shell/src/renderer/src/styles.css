@@ -283,6 +283,20 @@ button {
   display: none;
 }
 
+/*
+ * 键盘焦点环：**只在这里定义一次**。
+ *
+ * 七条线各自给控件补过焦点环（全仓曾有几十处各写一份，形状还不一样），换一批控件就少一处。
+ * `:where()` 是零特异性：组件自己的规则仍然覆盖得了它（贴边的行内控件用负 offset），
+ * 但「键盘focus 看不见」这种情况不再需要每处单独补。
+ *
+ * 2px accent + offset 2 是界面规范给的值；不要把尺寸写进各线样式里。
+ */
+:where(a[href], button, [role='button'], [role='tab'], [role='switch'], [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -358,9 +372,159 @@ button {
   outline-offset: -2px;
 }
 
+.notification-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  /* 锚点高度必须等于它**定位的那个东西**——图标盒（`IconButton` 的 md = 24），不是所在行高。
+     不写高度时盒高交给 `.topbar-actions` 的 flex 默认 stretch（42），角标按 42 的盒子往上偏，
+     就被 `overflow: hidden` 裁掉；对齐到 24 之后 `top: -3px` 落到行内的 6px 处。 */
+  height: 24px;
+  align-self: center;
+}
+
+/* 未读用强调色，不用红色：红在这套界面里代表「出错」，未读不是错误。 */
+.notification-bell-badge {
+  position: absolute;
+  /* 相对图标盒定位：盒子本身就是 24，压住它顶 3px；行高怎么变都不用跟着改。 */
+  top: -3px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.notification-center-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notification-center-group-title {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notification-center-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-center-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.notification-center-row[data-state="unread"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.notification-center-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notification-center-title {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notification-center-merged {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.notification-center-body {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 正文两行封顶，再长就收起；「展开」按钮只在超长时出现。 */
+.notification-center-body--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notification-center-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.notification-center-copy strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notification-center-copy span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notification-center-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notification-center-confirm {
+  font-size: 11.5px;
+  color: var(--muted);
+  flex: 1 1 100%;
+}
+
+.notification-center-notice {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 .topbar-actions {
   display: flex;
   height: 100%;
+  /* 右侧光学留白由容器给，不由按钮给：原来最后一颗是 38px 按钮（15px 图标居中，天然留 11.5px），
+     换成 24px 的铃铛后自身只留 4px，若不再补这一笔，图标会贴到窗口边。
+     差值按「图标右缘到窗口右缘与改前相等」算：11.5 − 4 ≈ 7.5px，取 7px 让光学重量与相邻按钮一致。 */
+  padding-right: 7px;
   -webkit-app-region: no-drag;
 }
 
@@ -1115,11 +1279,6 @@ h1 {
   color: var(--muted);
 }
 
-.assistant-library-error {
-  margin: 10px 14px 0;
-  color: var(--danger);
-}
-
 /*
  * PLAT-55 原型视觉映射：原型 --bg/--surface/--surface-2 在应用里由语义 token 承担。
  * 浅色主题下应用 --surface 与 --bg 同为白色，直接映射会抹平「基底 < 卡片 < 控件」层次，
@@ -1479,20 +1638,6 @@ h1 {
 
 .web-search-tags input::placeholder {
   color: var(--muted);
-}
-
-.web-search-tag-remove {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.web-search-tag-remove:hover {
-  color: var(--text-strong);
 }
 
 /* PLAT-60 · 供应商页：筛选 chips / 表格 / 折叠 / 徽标 */
@@ -1968,10 +2113,6 @@ h1 {
   padding: 16px 20px;
 }
 
-.web-search-provider-drawer-root .ant-drawer-mask {
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-}
-
 .web-search-provider-drawer .ant-drawer-footer {
   padding: 12px 14px;
   border-top: 1px solid var(--border);
@@ -1981,12 +2122,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-}
-
-.web-search-drawer-title strong {
-  color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .web-search-drawer-readonly {
@@ -2100,12 +2235,10 @@ h1 {
 
 .storage-cache-settings {
   padding: 0;
-  --storage-cache-ok: hsl(152 45% 62%);
   --storage-cache-warn: hsl(38 92% 58%);
 }
 
 :root[data-theme='light'] .storage-cache-settings {
-  --storage-cache-ok: hsl(152 55% 34%);
   --storage-cache-warn: hsl(32 90% 38%);
 }
 
@@ -2193,29 +2326,6 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-.storage-cache-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.storage-cache-tab {
-  padding: 8px 16px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13.5px;
-  cursor: pointer;
-}
-
-.storage-cache-tab:hover {
-  color: var(--text-strong);
-}
-
-.storage-cache-tab.active {
-  border-bottom-color: var(--accent);
-  color: var(--text-strong);
-  font-weight: 600;
-}
 
 .storage-cache-panel {
   min-width: 0;
@@ -2230,6 +2340,7 @@ h1 {
   padding: 28px;
   text-align: center;
 }
+
 
 .storage-cache-table {
   width: 100%;
@@ -2334,30 +2445,6 @@ h1 {
 
 .storage-cache-col-actions {
   width: 150px;
-}
-
-.storage-cache-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-.storage-cache-status i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.storage-cache-status[data-status='ready'] i,
-.storage-cache-status[data-status='active'] i {
-  background: var(--storage-cache-ok);
-}
-
-.storage-cache-status[data-status='inspection_failed'] i {
-  background: var(--danger);
 }
 
 .storage-cache-updated {
@@ -2745,6 +2832,8 @@ h1 {
 
 .channel-settings { grid-template-columns: 230px minmax(0, 1fr); }
 .channel-settings-rail { border-right: 1px solid var(--border); padding: 12px; display: grid; align-content: start; gap: 8px; }
+/* 侧栏首屏高度归容器：状态组件只表达它能表达的档（md=80），120 是布局要求。 */
+.channel-settings-rail { min-height: 120px; }
 .channel-settings-rail header { display: flex; justify-content: space-between; align-items: center; }
 .channel-settings-rail section { display: grid; gap: 8px; padding-top: 12px; }
 .channel-settings-rail button.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
@@ -3078,8 +3167,8 @@ h1 {
 }
 
 .assistant-inputbar-tool.ant-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   color: var(--muted-strong);
   box-shadow: none;
@@ -3404,8 +3493,7 @@ h1 {
 .agent-tool-copy strong,
 .agent-config-section-button strong,
 .agent-empty-screen strong,
-.agent-message-empty strong,
-.agent-empty-catalog strong {
+.agent-message-empty strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
@@ -3424,7 +3512,6 @@ h1 {
 .agent-config-section-button small,
 .agent-empty-screen span,
 .agent-message-empty span,
-.agent-empty-catalog span,
 .agent-empty-copy {
   color: var(--muted);
 }
@@ -4972,21 +5059,6 @@ h1 {
   color: var(--text-strong);
 }
 
-.agent-message-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-}
-
-.agent-message-status.error {
-  color: var(--danger);
-}
-
-.agent-message-status.paused {
-  color: var(--muted-strong);
-}
-
 .agent-runtime-activity-panel {
   display: grid;
   grid-template-columns: 26px minmax(0, 720px);
@@ -5769,9 +5841,14 @@ h1 {
 .agent-inputbar-error {
   padding: 7px 9px;
   border: 1px solid color-mix(in srgb, #ef4444 34%, var(--border));
+  /* 左侧实色条承担「这是错误」：--danger 对这块浅红底的图形对比度深色 3.63 / 浅色 4.74，过 3:1。
+     9% 底色只能当线索——它与 surface 的对比度只有 1.08，肉眼几乎看不出，不能单独承担语义。 */
+  border-left: 3px solid var(--danger);
   border-radius: 9px;
   background: color-mix(in srgb, #ef4444 9%, var(--surface));
-  color: #dc2626;
+  /* 正文回到正文墨色：白字对这块底 16.56、深字 15.98，原来的 #dc2626 是 3.43 / 4.30。 */
+  color: var(--text-strong);
+  font-weight: 500;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -6616,13 +6693,6 @@ h1 {
   color: #b45309;
 }
 
-.agent-task-empty {
-  padding: 18px 10px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
-}
-
 .agent-task-run-list {
   display: grid;
   gap: 8px;
@@ -6734,8 +6804,7 @@ h1 {
 }
 
 .agent-empty-screen,
-.agent-message-empty,
-.agent-empty-catalog {
+.agent-message-empty {
   display: grid;
   place-items: center;
   align-content: center;
@@ -7552,16 +7621,6 @@ h1 {
 .agent-tool-approval.danger.ant-tag {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
-}
-
-.agent-empty-catalog {
-  min-height: 220px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 7px;
-}
-
-.agent-empty-catalog.compact {
-  min-height: 260px;
 }
 
 .agent-skill-marketplace-modal .ant-modal-content {
@@ -9108,6 +9167,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   line-height: 1.5;
 }
 
+.notification-settings-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .notification-settings-footnote {
   margin: 12px 0 0;
   max-width: 720px;
@@ -9116,21 +9182,28 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   line-height: 1.5;
 }
 
+/* 点完测试按钮的结果：比脚注更强调一档，因为它是对「刚才那一下」的回答。 */
+.notification-settings-result {
+  margin: 6px 0 0;
+  max-width: 720px;
+  color: var(--text-strong);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* 桌面渠道的授权状态：只读的结论，弱化成一行说明，不是第二条开关说明。 */
+.notification-channel-state {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .segmented-control,
 .swatch-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.settings-segmented.ant-segmented {
-  width: fit-content;
-}
-
-.segmented-icon-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .segmented-control button,
@@ -9546,27 +9619,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   margin-left: auto;
   color: var(--muted);
   font-size: 11px;
-}
-
-.task-automation-empty {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  padding: 22px 14px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.task-automation-empty strong {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.task-automation-empty p {
-  max-width: 560px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .task-automation-policy-row {
@@ -10023,28 +10075,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-endpoint-test:disabled {
   color: var(--muted);
   cursor: default;
-}
-
-.model-service-endpoint-test-result {
-  font-size: 11px;
-  line-height: 16px;
-  word-break: break-word;
-}
-
-.model-service-endpoint-test-result.tone-success {
-  color: var(--success, #3d9a6a);
-}
-
-.model-service-endpoint-test-result.tone-warning {
-  color: var(--warning, #c48a2a);
-}
-
-.model-service-endpoint-test-result.tone-error {
-  color: var(--danger, #c44b4b);
-}
-
-.model-service-endpoint-test-result.tone-neutral {
-  color: var(--muted);
 }
 
 .model-service-request-config-icon {
@@ -10560,6 +10590,12 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   border-bottom: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
+  font-size: 12px;
+}
+
+/* 结论有多旧：次级色，别和「已下线」这句话抢注意力。 */
+.in-use-model-retired-age {
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -11561,50 +11597,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 11px;
 }
 
-.model-drawer-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.model-drawer-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.model-drawer-chip:hover {
-  border-color: color-mix(in srgb, var(--border) 70%, var(--text));
-  color: var(--text);
-}
-
-.model-drawer-chip:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.model-drawer-chip.is-active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: var(--surface-2, var(--surface-strong));
-  color: var(--text);
-}
-
-.model-drawer-chip.is-active::before {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  content: '';
-}
-
 .model-drawer-hint {
   margin: 6px 0 0;
   color: var(--muted);
@@ -11790,48 +11782,21 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 6px;
 }
 
-/* PLAT-82：本会话检测结果只写在行内文案里（不落库、没有「未验证」）。 */
+/*
+ * PLAT-82：本会话检测结果 = 状态胶囊（短词）+ 右侧原因句 + 协议计数。
+ * 行内**不省略**：这一行没有详情入口，省略等于把半句原因藏起来（界面设计 2026-11-02）。
+ */
 .model-service-model-detection {
+  display: inline-flex;
   flex: 0 0 auto;
-  max-width: 160px;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
 }
 
-.model-service-model-detection[data-model-detection-status='ok'] {
-  color: var(--success, #3d9a6a);
-}
-
-.model-service-model-detection[data-model-detection-status='skipped'],
-.model-service-model-detection[data-model-detection-status='cancelled'] {
+.model-service-model-reason {
   color: var(--muted);
-}
-
-.model-service-model-detection[data-model-detection-status='failed'] {
-  color: var(--danger);
-}
-
-/* 落库的可用性结论：只在没有本会话结果时出现（配置变过 ⇒ 待检测）。 */
-.model-service-model-availability {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.model-service-model-availability[data-model-availability='ok'] {
-  color: var(--success, #3d9a6a);
-}
-
-.model-service-model-availability[data-model-availability='failed'] {
-  color: var(--danger);
-}
-
-.model-service-model-availability[data-model-availability='stale'] {
-  color: var(--muted);
+  font-size: 11.5px;
 }
 
 /* 厂商声明过的协议实测失败：只做**本会话**标红，不覆盖厂商声明结论。 */
@@ -12224,16 +12189,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent);
 }
-.model-service-model-retired-tag {
-  flex: none;
-  padding: 1px 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--muted);
-  white-space: nowrap;
-}
 
 /* BUG 修复（防御式，放在最后以覆盖任何历史规则）：
    1) 分组容器改回 block —— grid/flex + 祖先 overflow 约束会把行压成 0 高（只剩 border-top 条纹）；
@@ -12317,65 +12272,12 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   align-items: center;
 }
 
-.provider-api-key-eye {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: 0 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.provider-api-key-eye:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text);
-}
-
-.provider-api-key-eye:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.provider-api-key-eye:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* 展开后才有复制：与眼睛同尺寸同位置口径，只是多了「已复制」的短暂回执。 */
 .provider-api-key-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-
-.provider-api-key-copy {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: 0 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.provider-api-key-copy:hover {
-  color: var(--text);
-}
-
-.provider-api-key-copy:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
 .provider-api-key-copied {
   color: var(--muted);
   font-size: 11.5px;

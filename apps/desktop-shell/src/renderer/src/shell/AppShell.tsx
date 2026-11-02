@@ -9,17 +9,13 @@ import {
   Moon,
   Palette,
   Plus,
-  Search,
   Settings,
-  SlidersHorizontal,
   Sun
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, ConfigProvider, Input, Segmented, Select } from 'antd'
-import enUS from 'antd/locale/en_US'
-import zhCN from 'antd/locale/zh_CN'
+import { Button, ConfigProvider, Input, Select } from 'antd'
 
-import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints } from '@platform/ai/providers/modelProviderTypes'
 import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
 import type { LocalizedText } from '@platform/product-manifest'
 
@@ -29,6 +25,8 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { AppShellToastLayer } from './window/AppShellToastLayer'
+import { useNavigationFocusHandoff } from './navigation/useNavigationFocusHandoff'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
@@ -40,12 +38,17 @@ import { productMenuEntries, productSettingsEntries } from '@products/generated/
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
 import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
-import { firstProviderIdForRail } from './model-service/ModelServiceProviderRail'
+import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
+import { useModelServiceProviders } from './model-service/useModelServiceProviders'
 import { InUseModelRetiredBanner } from './model-service/InUseModelRetiredBanner'
 import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDefaultModelsSection'
 import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
+import { NotificationBell } from './notifications/NotificationBell'
+import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { NotificationBanner } from './notifications/NotificationBanner'
+import { createNotificationDeeplinkHandler } from './notifications/notificationDeeplinkHandler'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -74,7 +77,13 @@ import {
 } from './workspace/workspaceClient'
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
-import { buildWindowAntdTheme } from '@platform/ui/theme/windowAntdTheme'
+import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
+import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
+import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
+import { Segmented } from '@platform/ui/components/segmented'
+
+export { resolveAntDesignLocale } from './shellOptionTables'
+import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import {
   createModelServiceSettingsDraftOwner,
   createSettingsDraftOwnerPort,
@@ -157,32 +166,6 @@ type AppShellNavigateDetail = {
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
 
-const languageOptions: Array<{ value: AppLanguage; labelKey: 'chinese' | 'english' }> = [
-  { value: 'zh-CN', labelKey: 'chinese' },
-  { value: 'en-US', labelKey: 'english' }
-]
-
-const themeOptions: Array<{ value: ThemeMode; labelKey: 'system' | 'light' | 'dark'; icon: typeof Sun }> = [
-  { value: 'system', labelKey: 'system', icon: Palette },
-  { value: 'light', labelKey: 'light', icon: Sun },
-  { value: 'dark', labelKey: 'dark', icon: Moon }
-]
-
-const proxyModeOptions: Array<{ value: ProxyMode; labelKey: 'proxySystem' | 'proxyCustom' | 'proxyNone' }> = [
-  { value: 'system', labelKey: 'proxySystem' },
-  { value: 'custom', labelKey: 'proxyCustom' },
-  { value: 'none', labelKey: 'proxyNone' }
-]
-
-const antDesignLocalePolicy = {
-  'zh-CN': zhCN,
-  'en-US': enUS
-} as const
-
-export function resolveAntDesignLocale(language: AppLanguage) {
-  return antDesignLocalePolicy[language]
-}
-
 function createEmptyProviderDraft(): ProviderDraft {
   return {
     enabled: true
@@ -224,9 +207,12 @@ export function AppShell(): React.ReactElement {
     return () => { cancelled = true }
   }, [])
   return (
-    <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
-      <AppShellContent onLanguageChange={setAppLanguage} />
-    </WorkspaceWindowRoot>
+    // 提示宿主与语言上下文收在 AppShellToastLayer：两个渲染根都经这里进入，宿主只挂一次。
+    <AppShellToastLayer language={appLanguage}>
+      <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
+        <AppShellContent onLanguageChange={setAppLanguage} />
+      </WorkspaceWindowRoot>
+    </AppShellToastLayer>
   )
 }
 
@@ -234,15 +220,22 @@ export function AppShell(): React.ReactElement {
 function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => void } = {}): React.ReactElement {
   const [activeNavKey, setActiveNavKey] = useState('assistants')
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
+  const openNotificationTarget = createNotificationDeeplinkHandler({ productMenuEntries, setActiveNavKey, setSettingsPanelKey, setNotificationCenterOpen })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
-  const [bootDataReady, setBootDataReady] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
-  const [providers, setProviders] = useState<SafeModelProvider[]>([])
+  // 供应商列表、选中项与它的读数生命周期收在 hook 里：外壳只拿「现在能不能画」和「重读一次」。
+  const {
+    state: providersState,
+    providers,
+    selectedProviderId,
+    selectProvider,
+    reload: reloadProviders
+  } = useModelServiceProviders()
   // PLAT-75：巡检已挪到主进程的每日任务；界面只读它的全局结论。
   const inUseRetiredModels = useInUseModelPatrol()
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [modelDraft, setModelDraft] = useState<ModelDraft>(createEmptyModelDraft)
@@ -275,6 +268,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。
+  const preferencesText = (key: string): string =>
+    resolvePreferencesText(t.preferences as unknown as Record<string, unknown>, key)
   // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
   const proxySelfTestView =
     proxySelfTest.result === null
@@ -412,9 +408,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     void Promise.all([
       window.platform.app.getInfo().then((value) => { if (!cancelled) setAppInfo(value) }),
       window.platform.app.getProductSummaries().then((value) => { if (!cancelled) setProducts(value) }),
-      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) }),
-      refreshProviders()
-    ]).finally(() => { if (!cancelled) setBootDataReady(true) })
+      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) })
+    ]).catch(() => undefined)
     return () => { cancelled = true }
   }, [])
 
@@ -423,18 +418,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   useEffect(() => {
     const api = window.platform?.modelProviders
     if (!api?.onModelDetectionDone) return undefined
-    // `refreshProviders` 只依赖稳定的 setState 与 IPC，挂载时抓一次即可。
     const unsubscribe = api.onModelDetectionDone(() => {
-      void refreshProviders()
+      void reloadProviders()
     })
     return () => { unsubscribe() }
-  }, [])
+  }, [reloadProviders])
 
   // P1-06h（N2）：语言是「当前设置」的一部分，切换后必须回传给 AppShell 下发给 error-shell/准备期壳。
   useEffect(() => {
     props.onLanguageChange?.(settings.language)
   }, [props.onLanguageChange, settings.language])
 
+  // 导航后的焦点交接收在 hook 里（契约 §14）：导航成功后调一次，effect 在渲染后执行。
+  const scheduleNavFocusHandoff = useNavigationFocusHandoff()
   useEffect(() => {
     const applyNavigation = (detail?: AppShellNavigateDetail): void => {
       // A tab-hosted shell must activate the target tab, not only repaint the sidebar highlight.
@@ -444,6 +440,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         setSettingsPanelKey(resolveAvailableSettingsPanelKey(detail.settingsPanelKey, productSettingsEntries))
       }
       if (detail?.assistant) setAssistantOpenRequest(detail.assistant)
+      scheduleNavFocusHandoff()
     }
 
     const onNavigate = (event: Event): void => {
@@ -538,16 +535,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     void previewModelSync({ autoApplyWhenOnlyAdded: true, openDrawerWhenDiff: false })
   }, [selectedProvider])
 
-  async function refreshProviders(preferredProviderId?: string): Promise<void> {
-    const nextProviders = (await window.platform.modelProviders.list()) as SafeModelProvider[]
-    setProviders(nextProviders)
-    setSelectedProviderId((current) => {
-      if (preferredProviderId && nextProviders.some((provider) => provider.id === preferredProviderId)) return preferredProviderId
-      if (current && nextProviders.some((provider) => provider.id === current)) return current
-      return firstProviderIdForRail(nextProviders)
-    })
-  }
-
   async function updateNetworkSettings(patch: Partial<NetworkSettings>): Promise<void> {
     await updateSettings({
       network: {
@@ -589,7 +576,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       models: []
     }
     await window.platform.modelProviders.upsert(provider)
-    await refreshProviders(id)
+    await reloadProviders(id)
     setIsAddProviderOpen(false)
   }
 
@@ -601,7 +588,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   async function saveApiKeyDraft(): Promise<void> {
     if (!selectedProvider) return
     await persistSelectedProviderDraft()
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
     // 保存成功后清掉输入草稿 ⇒ 控件回到「已保存掩码」，不会把明文 Key 留在界面上。
     setApiKeyDraft('')
     setConnectionStatus(null)
@@ -634,7 +621,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
       endpoints: [...endpoints]
     })
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /** 图像端点（生成 / 编辑）保存：不是聊天协议，单独一份字段。 */
@@ -651,14 +638,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
       ...(Object.keys(next).length > 0 ? { imageEndpoints: next } : { imageEndpoints: undefined })
     })
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /** PLAT-61：右上角唯一启用开关（点一下立即保存）；失败回滚由页面负责。 */
   async function setProviderEnabled(enabled: boolean): Promise<void> {
     if (!selectedProvider) return
     await window.platform.modelProviders.setEnabled(selectedProvider.id, enabled)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /**
@@ -669,7 +656,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     try {
       await window.platform.modelProviders.setEnabled(selectedProvider.id, true)
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       setProviderDraft((current) => ({ ...current, enabled: true }))
     } catch (error) {
       setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
@@ -690,7 +677,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     const index = providers.findIndex((provider) => provider.id === providerId)
     const adjacent = providers[index + 1] ?? providers[index - 1]
     await window.platform.modelProviders.remove(providerId)
-    await refreshProviders(adjacent?.id)
+    await reloadProviders(adjacent?.id)
   }
 
   async function removeSelectedProvider(): Promise<void> {
@@ -699,7 +686,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   async function setProviderEnabledById(providerId: string, enabled: boolean): Promise<void> {
     await window.platform.modelProviders.setEnabled(providerId, enabled)
-    await refreshProviders(providerId)
+    await reloadProviders(providerId)
   }
 
   function resetModelSyncState(): void {
@@ -800,7 +787,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         })
         return
       }
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       const removed = plan.toRemove.length
       setNotice(t.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
       if (options.closeDrawer !== false) setIsModelSyncOpen(false)
@@ -950,7 +937,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     try {
       setPreserveProviderDraftForId(selectedProvider.id)
       await persistSelectedProviderDraft(options.enabledOverride)
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       const report = (await window.platform.modelProviders.runRuntimeChecks(selectedProvider.id, {
         modelId: selectedModel.id,
         apiKey: selectedApiKeyOption.apiKey,
@@ -995,7 +982,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     setModelDraft(createEmptyModelDraft())
     setIsAddModelOpen(false)
     setEditingModelId(null)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   function openAddModelDrawer(): void {
@@ -1019,7 +1006,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   async function removeModel(modelId: string): Promise<void> {
     if (!selectedProvider) return
     await window.platform.modelProviders.removeModel(selectedProvider.id, modelId)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
     setNotice(t.models.modelRemovedNotice(1))
   }
 
@@ -1038,7 +1025,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       toRemove: modelIds
     })
     if (isProviderModelSyncFailure(outcome)) throw new Error(outcome.reasonCode)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   function toggleModelPinned(modelId: string): void {
@@ -1096,17 +1083,23 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         </aside>
 
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'models' ? (
-          <div className="model-service-with-defaults" data-model-service-with-defaults>
-            <ModelServiceDefaultModelsSection
-              labels={t.models}
-              providers={providers}
-              values={settings.modelDefaults}
-              onChange={(field, value) => {
-                void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
-              }}
-            />
-            {renderModelService()}
-          </div>
+          // 供应商列表是这一页的启动读数：等 / 读不到 / 有数据（刷新失败保留旧表）都由它统一判。
+          <ModelServiceLoadSurface
+            language={settings.language}
+            state={providersState}
+            onRetry={() => void reloadProviders()}>
+            <div className="model-service-with-defaults" data-model-service-with-defaults>
+              <ModelServiceDefaultModelsSection
+                labels={t.models}
+                providers={providers}
+                values={settings.modelDefaults}
+                onChange={(field, value) => {
+                  void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
+                }}
+              />
+              {renderModelService()}
+            </div>
+          </ModelServiceLoadSurface>
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'assistant-library' ? (
           <AssistantLibrarySettingsPage language={settings.language} onManageAssistants={() => setActiveNavKey('assistants')} />
@@ -1141,15 +1134,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * 本函数**只保留接线**：状态来自本组件，写入仍是既有 IPC 包装，抽屉/宿主仍在这里挂载。
    */
   function renderModelService(): React.ReactElement {
-    // The provider list is boot data: until `settings.get()` and `listProviders` settle the page
-    // would claim "no providers" and paint an empty rail. Show the wait instead of a false empty.
-    if (!bootDataReady) {
-      return (
-        <section className="settings-workspace model-service-page" aria-busy="true">
-          <LoadingState label={t.status.loading} fill />
-        </section>
-      )
-    }
     return (
       <ModelServiceProviderPage
         labels={t.models}
@@ -1169,7 +1153,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         notice={notice}
         syncError={modelSyncError}
         onProviderSearchChange={setProviderSearch}
-        onSelectProvider={setSelectedProviderId}
+        onSelectProvider={selectProvider}
         onAddProvider={() => setIsAddProviderOpen(true)}
         onApiKeyDraftChange={handleApiKeyDraftChange}
         onToggleGroup={toggleModelGroup}
@@ -1352,14 +1336,15 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <Languages size={18} />
             <span>{t.preferences.language}</span>
           </div>
-          <Segmented<AppLanguage>
-            className="settings-segmented"
-            value={settings.language}
-            options={languageOptions.map((option) => ({
+          <Segmented
+            ariaLabelKey={LANGUAGE_SEGMENTED_KEY}
+            items={languageOptions.map((option) => ({
               value: option.value,
-              label: t.preferences[option.labelKey]
+              labelKey: LANGUAGE_LABEL_KEYS[option.value]
             }))}
-            onChange={(value) => void updateSettings({ language: value })}
+            value={settings.language}
+            onChange={(value) => void updateSettings({ language: value as AppLanguage })}
+            resolveText={preferencesText}
           />
         </div>
 
@@ -1374,22 +1359,16 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <Palette size={18} />
             <span>{t.preferences.displayStyle}</span>
           </div>
-          <Segmented<ThemeMode>
-            className="settings-segmented"
+          <Segmented
+            ariaLabelKey={THEME_SEGMENTED_KEY}
+            items={themeOptions.map((option) => ({
+              value: option.value,
+              labelKey: THEME_LABEL_KEYS[option.value],
+              icon: option.icon
+            }))}
             value={settings.themeMode}
-            options={themeOptions.map((option) => {
-              const Icon = option.icon
-              return {
-                value: option.value,
-                label: (
-                  <span className="segmented-icon-label">
-                    <Icon size={15} />
-                    <span>{t.preferences[option.labelKey]}</span>
-                  </span>
-                )
-              }
-            })}
-            onChange={(value) => void updateSettings({ themeMode: value })}
+            onChange={(value) => void updateSettings({ themeMode: value as ThemeMode })}
+            resolveText={preferencesText}
           />
         </div>
 
@@ -1601,7 +1580,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 providers={providers}
                 pinnedModelIds={pinnedModelIds}
                 defaultAgentModelId={settings.modelDefaults.agentModelId}
-                loadingModelService={!bootDataReady}
+                loadingModelService={providersState.status === 'loading'}
                 onUpdateSettings={updateSettings}
               />
             ),
@@ -1727,7 +1706,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   }
 
   return (
-    <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()}>
+    <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG} wave={WINDOW_ANTD_WAVE_CONFIG}>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
       {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
@@ -1744,16 +1723,28 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {/* 拖动区：页面名不再重复显示（当前页由 Tab 条承载），这里是纯粹的窗口拖动留白 */}
         <div className="titlebar-drag" aria-hidden="true" />
         <div className="topbar-actions">
-          <button type="button" aria-label="Search" title="Search">
-            <Search size={15} />
-          </button>
-          <button type="button" aria-label="Layout" title="Layout">
-            <SlidersHorizontal size={15} />
-          </button>
+          {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
+              等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
+          <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
         </div>
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
       </header>
+
+      {/* 右上角横幅：挂载点只占一行，文案与语言由组件自己取。 */}
+      <NotificationBanner onOpen={() => setNotificationCenterOpen(true)} />
+
+      <NotificationCenterDrawer
+        open={notificationCenterOpen}
+        onOpenDeeplink={openNotificationTarget}
+        onClose={() => {
+          setNotificationCenterOpen(false)
+          // 关闭后焦点回铃铛：键盘用户不该被扔回文档开头。
+          queueMicrotask(() => document.querySelector<HTMLElement>('[data-notification-bell] button')?.focus())
+        }}
+        labels={t.notifications}
+        language={settings.language}
+      />
 
       <InUseModelRetiredBanner
         labels={t.models}

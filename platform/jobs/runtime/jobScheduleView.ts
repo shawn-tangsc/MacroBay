@@ -1,4 +1,12 @@
-import type { JobDefinition, JobOwner, JobRunQuery, JobRunRecord, JobStatus, JobTrigger } from '../contracts/jobTypes'
+import type {
+  JobDefinition,
+  JobOwner,
+  JobRunQuery,
+  JobRunRecord,
+  JobStatus,
+  JobTrigger,
+  ScheduledJobDefinition
+} from '../contracts/jobTypes'
 import { computeNextCronRunAt } from './jobCronSchedule'
 
 /**
@@ -39,7 +47,7 @@ export type JobScheduleView = {
 }
 
 export type JobScheduleSource = {
-  listSchedules: () => readonly JobDefinition[]
+  listSchedules: () => readonly ScheduledJobDefinition[]
   /** 需要按 `definitionId` 过滤，并按最近优先返回（`jobRuntime.listRuns` 的契约）。 */
   listRuns: (query?: JobRunQuery) => JobRunRecord[]
 }
@@ -50,9 +58,17 @@ export function projectJobSchedules(
 ): JobScheduleView[] {
   const nowMs = (options.now ?? new Date()).getTime()
   // 保持注册顺序：投影不重排、不合并，页面看到的就是注册表顺序。
-  return source.listSchedules().map((definition) =>
-    projectJobSchedule(definition, latestRun(source, definition.id), nowMs)
-  )
+  //
+  // 只投影 `resource`：`internal` 是平台自己维护的活（保留期清理、投递重试、状态巡检），用户
+  // 既配置不了也停不了。它们仍在运行，运行记录也照旧可查，只是不进这张"用户能理解的任务"表。
+  //
+  // 投影保持两档，不加第三档诊断、也不在界面上说「还有 N 条内部任务」：`visibility` 在注册口必填，
+  // `assertAudience` 再兜一层，到达这里的定义非 `resource` 即 `internal`，第三种状态不可达。
+  // 给不可达状态写分支只会写死代码并留下一条假防线。
+  return source
+    .listSchedules()
+    .filter((definition) => definition.audience === 'user')
+    .map((definition) => projectJobSchedule(definition, latestRun(source, definition.id), nowMs))
 }
 
 function projectJobSchedule(

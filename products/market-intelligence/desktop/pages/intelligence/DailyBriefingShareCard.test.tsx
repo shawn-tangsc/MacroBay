@@ -71,7 +71,6 @@ const briefing = (): DailyBriefingDocument => ({
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -83,13 +82,14 @@ afterEach(async () => {
 const renderWith = async (
   doc: DailyBriefingDocument,
   copy: typeof text,
-  locale: 'zh-CN' | 'en-US'
+  locale: 'zh-CN' | 'en-US',
+  omitFallbackReadings = false
 ): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime, omitFallbackReadings })))
   return host
 }
 
@@ -126,28 +126,7 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toMatch(CJK)
   })
 
-  it('marks a fallback reading as a fallback on the poster', async () => {
-    // The poster is what gets shared: a row that fell back to the curve's last point carried the
-    // same colour and precision as a live reading, so the reader could not tell them apart.
-    const base = briefing()
-    const staleDoc: DailyBriefingDocument = {
-      ...base,
-      data: {
-        ...base.data,
-        market: base.data.market.map((row) => row.id === 'btc' ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const } : row)
-      }
-    }
-    const rendered = await render(staleDoc)
-    const chip = rendered.querySelector('.mi-brief-poster__stale')
-    expect(chip?.textContent).toBe(text.staleMarker)
-
-    const live = await render(briefing())
-    expect(live.querySelector('.mi-brief-poster__stale')).toBeNull()
-  })
-
-  it('says where a curve fallback came from, not just that it is stale', async () => {
-    // "Fallback" alone leaves the reader guessing whether it is the exact 24h pair; the chip carries
-    // the window and the source, and the exported copy says the same thing.
+  it('keeps the fallback row on the page and says nothing extra when the number is a 24-hour move', async () => {
     const base = briefing()
     const doc: DailyBriefingDocument = {
       ...base,
@@ -159,8 +138,42 @@ describe('daily brief share card in English', () => {
       }
     }
     const rendered = await render(doc)
-    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.curve)
-    expect(text.staleBasis.curve).toContain('24h')
+    // A 24-hour move computed from the curve is still a 24-hour move: the row's own timestamp says
+    // when it is, so an extra "where it came from" note would only repeat it and explain our method.
+    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
+    expect(rendered.textContent).toContain('2026')
+  })
+
+  it('still speaks when the number is not what its name promises', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'last-close' as const }
+          : row)
+      }
+    }
+    const rendered = await render(doc)
+    // The day's move is not a 24-hour move here, so the row has to say so.
+    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.lastClose)
+  })
+
+  it('leaves that row out of the exported image', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
+          : row)
+      }
+    }
+    const rendered = await renderWith(doc, text, 'en-US', true)
+    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
+    expect(rendered.textContent).not.toContain('BTC')
   })
 
   it('renders only the data rows the editor kept', async () => {
@@ -315,7 +328,10 @@ describe('daily brief share card in English', () => {
     const changed = await render(withForecast())
     const chip = changed.querySelector('[data-regime-change="true"]')
     expect(chip?.textContent).toBe(text.conclusion.regimeChanged)
-    expect(chip?.getAttribute('title')).toBe('方向由持平转为偏空')
+    // What changed is on the poster now. It used to be a `title` plus an `aria-label`: the pointer
+    // got the sentence, sighted keyboard readers got a chip, and the exported image carried neither.
+    expect(chip?.getAttribute('title')).toBeNull()
+    expect(chip?.nextElementSibling?.textContent).toBe(`${text.labelSeparator}方向由持平转为偏空`)
 
     const unchanged = await render(withForecast({ regimeChange: '无重要变化' }))
     expect(unchanged.querySelector('[data-regime-change="true"]')).toBeNull()

@@ -11,6 +11,7 @@ import { buildAgentModelOptions, flattenAgentModelOptions, type AgentModelOption
 import { setAgentEffort, setAgentModel } from '../agentStateActions'
 import { setAgentModelViaApi, setAgentViaApi } from '../agentSessionDataApi'
 import { useAgentLanguage, useAgentText } from '../agentTextProvider'
+import { useAgentProviderNames } from '../useAgentProviderNames'
 import {
   isUnconfiguredAgentModel,
   resolveConfiguredAgentModel
@@ -41,15 +42,16 @@ export default function AgentComposerModelMenu({
 }): React.ReactElement {
   const t = useAgentText()
   const language = useAgentLanguage()
+  const providerNames = useAgentProviderNames()
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<View>('menu')
 
   const candidates = useMemo<ModelPickerCandidate[]>(
     () =>
-      flattenAgentModelOptions(buildAgentModelOptions(providers, agent.type, compatibilityByModelKey))
+      flattenAgentModelOptions(buildAgentModelOptions(providers, agent.type, compatibilityByModelKey, providerNames))
         .filter((option: AgentModelOption) => option.selectable)
         .map((option: AgentModelOption) => ({ providerId: option.providerId, model: option.model })),
-    [agent.type, compatibilityByModelKey, providers]
+    [agent.type, compatibilityByModelKey, providers, providerNames]
   )
   const resolvedDefaultModel = useMemo(() => {
     if (!isUnconfiguredAgentModel(agent.model)) return null

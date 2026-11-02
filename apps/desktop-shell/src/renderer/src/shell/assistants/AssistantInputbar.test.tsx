@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { platformText } from '../../i18n/platformText'
+
+// 静态渲染里不挂真宿主：提示只验证「有没有被请求」，不验宿主行为（那归 toast 组件自己的用例）。
+vi.mock('@platform/ui/components/toast', () => ({
+  useToast: () => ({ success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn() })
+}))
 
 import { AssistantInputbar } from './AssistantInputbar'
 
@@ -37,6 +42,8 @@ describe('AssistantInputbar', () => {
         onOpenSettings={() => undefined}
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
+        onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 
@@ -72,6 +79,8 @@ describe('AssistantInputbar', () => {
         onOpenSettings={() => undefined}
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
+        onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 

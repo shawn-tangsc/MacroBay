@@ -17,6 +17,16 @@ ready. From here you open the dashboard, configure data sources, or start a conv
 
 ![Intelligence portal](../assets/screenshots/portal-en.png)
 
+### Daily briefing
+
+The daily briefing reads the same local evidence as the dashboard and puts one day on one page: what
+the market is pricing, what changed overnight, and what to watch next. A reading that could not be
+fetched is reported as a gap rather than dropped, so a missing figure says it was not collected —
+not that nothing happened.
+
+Each edition keeps its source references and the cutoff time it was read at. You can regenerate it,
+export it as an image, and look back at earlier editions; the generation time is a setting.
+
 ### Dashboard
 
 The dashboard groups the market picture into panels:

@@ -1,9 +1,12 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { message, Modal } from 'antd'
+
+import { useToast } from '@platform/ui/components/toast'
 
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
 import { configuredModelChatProtocols } from '@platform/ai/providers/providerChatEndpoints'
+import { confirmAction } from '@platform/ui/components/confirm'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -26,7 +29,7 @@ import { ModelServiceKeySection } from './ModelServiceKeySection'
 import { ModelServiceModelsSection } from './ModelServiceModelsSection'
 import { ModelServiceProviderRail } from './ModelServiceProviderRail'
 import { resolveProviderDisplayName } from './providerDisplayName'
-import { ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
+import { MODEL_REQUEST_CONFIG_TITLE_KEY, ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
 import { useModelServiceAutosave } from './useModelServiceAutosave'
 
 /**
@@ -115,8 +118,6 @@ export function ModelServiceProviderPage({
 }: ModelServiceProviderPageProps): React.ReactElement {
   const autosave = useModelServiceAutosave(statusText.failed)
   const [pendingEnabled, setPendingEnabled] = useState<boolean | null>(null)
-  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
-  const [pendingRemove, setPendingRemove] = useState<SafeModelProvider | null>(null)
   // 摘要态三个入口（地址框 / 齿轮 / 添加端点）都开同一个抽屉。
   const [requestConfigOpen, setRequestConfigOpen] = useState(false)
 
@@ -182,13 +183,41 @@ export function ModelServiceProviderPage({
     return autosave.run(`model:${modelId}`, () => actions.removeModel(modelId))
   }
 
+  /**
+   * 删除供应商的二次确认。
+   *
+   * 一句话 + 危险钮，归平台 `confirmAction`：初始焦点落在「取消」上；删除失败仍由 `autosave` 的
+   * 行内错误展示（确认框已经关了，和旧行为一致——失败时页面上那个删除入口还在，读者可以直接再来一次）。
+   */
+  function confirmRemove(target: SafeModelProvider | null): void {
+    if (target === null) return
+    confirmAction({
+      title: labels.removeProvider,
+      description: labels.removeProviderConfirm(resolveProviderDisplayName(labels, target)),
+      confirmLabel: labels.removeProvider,
+      cancelLabel: labels.cancel,
+      tone: 'danger',
+      onConfirm: async () => {
+        await autosave.run('removeProvider', () => actions.removeProviderById(target.id))
+      }
+    })
+  }
+
+  // 平台 Toast：宿主挂在渲染根上，成功回执不再走 antd 的 message（那是第二套实现）。
+  const toast = useToast()
+  const CLEARED_KEY = 'models.modelsClearedToast'
+
   /** PLAT-72：清空全部模型（含预设模型）；成功 toast，失败由 autosave 行内展示。 */
   async function clearAllModels(): Promise<boolean> {
     if (!provider) return false
     const count = provider.models.length
     if (count === 0) return false
     const ok = await autosave.run('model:clearAll', () => actions.clearAllModels())
-    if (ok) message.success(labels.modelsClearedToast(count))
+    if (ok)
+      toast.success({
+        titleKey: CLEARED_KEY,
+        resolveText: (key) => (key === CLEARED_KEY ? labels.modelsClearedToast(count) : '')
+      })
     return ok
   }
 
@@ -229,15 +258,18 @@ export function ModelServiceProviderPage({
         onSelect={onSelectProvider}
         onAdd={onAddProvider}
         onToggleProvider={(target) => void actions.setProviderEnabledById(target.id, !target.enabled)}
-        onDeleteProvider={(target) => {
-          setPendingRemove(target)
-          setRemoveConfirmOpen(true)
-        }}
+        onDeleteProvider={(target) => confirmRemove(target)}
       />
 
       <div className="model-service-detail">
         {provider === null ? (
-          <p className="model-service-empty">{labels.noProviders}</p>
+          // 「还没有创建过」的码必须带创建动作：这一屏的供应商列表本来就有添加入口。
+          <StateView
+            state="empty"
+            reasonCode="never-created"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onAddProvider }}
+          />
         ) : (
           <>
             {removeError !== null ? (
@@ -272,10 +304,7 @@ export function ModelServiceProviderPage({
               showMainlandProxyNotice={showMainlandProxyNotice}
               onOpenConnectionCheck={actions.openConnectionCheck}
               onOpenExternal={actions.openExternal}
-              onRemoveProvider={() => {
-                setPendingRemove(provider)
-                setRemoveConfirmOpen(true)
-              }}
+              onRemoveProvider={() => confirmRemove(provider)}
               removeProviderDisabled={autosave.isPending('removeProvider')}
             />
 
@@ -325,33 +354,14 @@ export function ModelServiceProviderPage({
           </>
         )}
       </div>
-      <Modal
-        title={labels.removeProvider}
-        open={removeConfirmOpen}
-        centered
-        width={420}
-        okText={labels.removeProvider}
-        cancelText={labels.cancel}
-        okButtonProps={{ danger: true, 'data-remove-provider-confirm-button': true } as never}
-        cancelButtonProps={{ 'data-remove-provider-cancel': true } as never}
-        onOk={() => {
-          setRemoveConfirmOpen(false)
-          const target = pendingRemove ?? provider
-          void autosave.run('removeProvider', target ? () => actions.removeProviderById(target.id) : actions.removeProvider)
-        }}
-        onCancel={() => {
-          setRemoveConfirmOpen(false)
-          setPendingRemove(null)
-        }}>
-        <p data-remove-provider-confirm>
-          {labels.removeProviderConfirm((pendingRemove ?? provider) ? resolveProviderDisplayName(labels, (pendingRemove ?? provider)!) : '')}
-        </p>
-      </Modal>
 
       {provider !== null ? (
         <ModelServiceRequestConfigDrawer
           open={requestConfigOpen}
           labels={labels}
+          titleKey={MODEL_REQUEST_CONFIG_TITLE_KEY}
+          // 未知键返回空串，不回退键名：宁可标题空着，也不能把 `models.requestConfig` 念给读者。
+          resolveText={(key) => (key === MODEL_REQUEST_CONFIG_TITLE_KEY ? labels.requestConfig : '')}
           provider={provider}
           onClose={() => setRequestConfigOpen(false)}
           onSaveEndpoints={(endpoints) => saveEndpoints(endpoints).then(() => undefined)}

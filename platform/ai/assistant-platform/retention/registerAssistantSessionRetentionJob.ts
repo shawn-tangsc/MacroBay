@@ -30,6 +30,7 @@ export function registerAssistantSessionRetentionJob(
     owner: 'platform',
     handlerId: assistantSessionRetentionJobId,
     title: 'Assistant session retention',
+    audience: 'internal' as const,
     trigger: { kind: 'cron', expression: '20 3 * * *' },
     payload: {}
   })

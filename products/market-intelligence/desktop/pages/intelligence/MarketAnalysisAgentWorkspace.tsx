@@ -4,6 +4,7 @@ import { Button } from 'antd'
 import { Bot } from 'lucide-react'
 import { AgentChatSurface } from '@renderer/shell/agents/AgentChatSurface'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -14,6 +15,7 @@ import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayoutPolicy'
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { createMarketAnalysisContextRenderers } from './MarketAnalysisContextCard'
 import { useMarketAnalysisChat } from './useMarketAnalysisChat'
 import { AgentFloatingControl, type AgentFloatingControlText } from './AgentFloatingControl'
@@ -43,8 +45,6 @@ type Props = {
   selectedEventKey?: string
   selectedEventMonth?: string
   onClearSelectedContext?: () => void
-  /** Opens the product's source settings from the news card's empty state. */
-  onOpenSources?: () => void
   floatingText: AgentFloatingControlText
 }
 
@@ -56,8 +56,9 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext, onOpenSources }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
+  const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
     [t.contextAnalysis, t.selectedEvent]
@@ -147,8 +148,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
               history: t.sessionHistory,
               delete: t.deleteSession,
               deleteConfirm: t.deleteSessionConfirm,
-              cancel: t.cancel,
-              empty: t.noSessions
+              cancel: t.cancel
             }}
             onNewConversation={() => void chat.startNewConversation()}
             onSelectConversation={chat.selectConversation}
@@ -156,10 +156,13 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
           />
         </header>
         <div className="mi-analysis-chat__binding">
+          {/* No hint here: the row wraps (`overflow-wrap: anywhere`), so the whole title is on
+              screen. A tooltip that repeats visible text only added a hover-only duplicate and a
+              Tab stop with nothing to say. */}
           {selectedNews
-            ? <span title={selectedNews.title}>{t.selectedNews}·{selectedNews.title}</span>
+            ? <span>{t.selectedNews}·{selectedNews.title}</span>
             : selectedContextLabel
-              ? <span title={selectedContextLabel}>{t.selectedEvent}·{selectedContextLabel}</span>
+              ? <span>{t.selectedEvent}·{selectedContextLabel}</span>
               : selectionBlocked ? <span>{selectionState === 'loading' ? text.analysisTimeline.loading : text.analysisTimeline.unavailable}</span> : binding ? <span>{t.selectedAnalysis}</span> : <span>{t.noSelection}</span>}
           {selectedNews
             ? <Button size="small" type="text" onClick={() => setSelectedNews(undefined)}>{t.clearSelection}</Button>
@@ -174,7 +177,11 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
               composeText={chat.composeOutgoingText}
               contextRenderers={contextRenderers}
               disabled={selectionBlocked}
-              emptyState={<p className="mi-analysis-chat__empty">{t.empty}</p>}
+              emptyState={<StateView
+                state="empty"
+                reasonCode="not-yet"
+                productReason={{ key: 'pages.intelligence.portal.analysisWorkspace.empty', resolve: resolveProductText }}
+              />}
             />
           : chat.failed || selectionState === 'unavailable'
             ? <p className="mi-analysis-chat__pending" role="status">{chat.failed ? t.failed : text.analysisTimeline.unavailable}</p>
@@ -199,7 +206,6 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
     <NewsSentimentFeature
       language={language}
       text={text.newsSentiment}
-      onOpenSources={onOpenSources}
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
     />
     </div>

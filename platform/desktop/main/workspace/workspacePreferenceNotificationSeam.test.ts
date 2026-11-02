@@ -15,7 +15,7 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  *
  * 现状把偏好对账**挂在受控读取上**（`getHostContext` 成功即 `reconcile`）⇒ **读带副作用**。
  * S1 把它改成**显式通知**：`app.ts` 的 `settingsUpdate` 成功路径加一行
- * `panelWorkspaceForDisposal?.notifyPreferencesChanged()`，对账/定向投递仍由 PLAT-30 抽出的
+ * `getPanelWorkspaceForDisposal()?.notifyPreferencesChanged()`，对账/定向投递仍由 PLAT-30 抽出的
  * `workspacePreferenceChangePublisher` 负责。
  *
  * 本文件固定两条判据（**语义与 PLAT-10/PLAT-28 逐字一致，判据绝不放宽**）：
@@ -255,6 +255,7 @@ describe('S1 ④：OS 外观变化（nativeTheme updated）与设置切换同一
 describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式通知一行）', () => {
   const composeSource = readFileSync(resolve(__dirname, './composePanelWorkspace.ts'), 'utf8')
   const appSource = readFileSync(resolve(__dirname, '../app.ts'), 'utf8')
+  const settingsIpcSource = readFileSync(resolve(__dirname, '../ipc/settingsIpc.ts'), 'utf8')
 
   it('compose 的受控读取包装里不再出现 reconcile（读带副作用已移除）', () => {
     expect(composeSource).not.toContain('preferenceChanges.reconcile(outcome.context.preferences)')
@@ -263,26 +264,32 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     expect(composeSource).toContain('await preferenceFollow.ensureBaseline()')
   })
 
-  it('app.ts 的 settingsUpdate 成功路径含显式通知（唯一调用点）', () => {
-    const start = appSource.indexOf('ipcMain.handle(IpcChannels.settingsUpdate')
+  it('settingsUpdate 成功路径含显式通知（handler 已搬到 ipc/settingsIpc.ts）', () => {
+    // 搬家后断言跟着实现走：读 app.ts 文本的旧写法会把「搬走」误判成「丢了」。
+    const start = settingsIpcSource.indexOf('ipcMain.handle(IpcChannels.settingsUpdate')
     expect(start).toBeGreaterThan(-1)
-    const end = appSource.indexOf('ipcMain.handle(', start + 10)
-    const block = appSource.slice(start, end === -1 ? undefined : end)
+    const end = settingsIpcSource.indexOf('ipcMain.handle(', start + 10)
+    const block = settingsIpcSource.slice(start, end === -1 ? undefined : end)
 
-    expect(block).toContain('const next = await settingsStore.update(patch)')
-    expect(block).toContain('panelWorkspaceForDisposal?.notifyPreferencesChanged()')
+    expect(block).toContain('const next = await ports.settings.update(patch)')
+    expect(block).toContain('ports.notifyPreferencesChanged()')
     expect(block).toContain('return next')
   })
 
   it('app.ts 把 OS 外观变化接到同一对账入口（nativeTheme 复用既有 import，不新增通道）', () => {
     expect(appSource).toContain(
-      "nativeTheme.on('updated', () => { void panelWorkspaceForDisposal?.notifyPreferencesChanged() })"
+      "nativeTheme.on('updated', () => { void getPanelWorkspaceForDisposal()?.notifyPreferencesChanged() })"
     )
     // 既有 import 风格：nativeTheme 来自 electron 的那一条 import（不新增依赖、不新增通道/preload
     // 方法）。成员列表会随功能增减（例如 Windows 菜单条引入的 Menu），所以只断言这条 import 里有
     // nativeTheme，而不是锁死整行文本。
     expect(appSource).toMatch(/import \{[^}]*\bnativeTheme\b[^}]*\} from 'electron'/)
-    // 恰两处显式通知：设置写入（settingsUpdate 成功路径）+ OS 外观变化；没有第三条对账链
-    expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(2)
+    // 恰两处显式通知：设置写入（settingsIpc 成功路径）+ OS 外观变化；没有第三条对账链。
+    expect(settingsIpcSource.split('ports.notifyPreferencesChanged()').length - 1).toBe(1)
+    // 「设置写入 → 现取宿主」那层端口接线随装配搬进 `composition/settingsAndStorage.ts`，由该文件的
+    // 用例按运行时钉住（保存后恰通知一次、无宿主不抛），所以 `app.ts` 只剩 nativeTheme 回调一处。
+    // 两条合起来仍是「两处」；旧写法在 app.ts 里数 2，接线一搬走就红——它红的原因正是「搬对了」，
+    // 这正是「读源码文本的断言要跟着对象走」的例子。
+    expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(1)
   })
 })

@@ -55,7 +55,7 @@ export type HostState =
       transfer: WorkspacePendingTransferView
       client: WorkspaceClient
     }
-  | { status: 'error'; reason: 'context-unavailable' | 'panel-unmounted' }
+  | { status: 'error'; reason: 'context-unavailable' | 'panel-unmounted' | 'panel-unreadable' }
 
 /**
  * 独立页面窗订阅 Tab 权威快照：任何受控事件到达即重取（含容器漂移/回停靠后的收敛）。

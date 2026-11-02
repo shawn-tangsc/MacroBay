@@ -49,7 +49,6 @@ function packageFixture(
 }
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -134,7 +133,7 @@ async function mount({ search }: { search: string }): Promise<HTMLElement> {
   await act(async () => {
     root?.render(
       <AgentTextProvider language="zh-CN">
-        <ProductToolPackagesCatalog text={text} agentId="agent-1" search={search} />
+        <ProductToolPackagesCatalog text={text} agentId="agent-1" search={search} onClearSearch={() => undefined} />
       </AgentTextProvider>
     )
   })

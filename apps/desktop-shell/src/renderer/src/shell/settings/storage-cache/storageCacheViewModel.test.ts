@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
+import { platformText } from '../../../i18n/platformText'
 import {
   buildConfirmMessage,
   buildStorageCacheSummary,
   confirmStorageCacheAction,
-  formatStorageOperationToast,
   filterCachesByKey,
+  STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+  STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+  STORAGE_CACHE_SKIPPED_TOAST_KEY,
+  formatStorageOperationErrorNotice,
+  formatStorageOperationNotice,
   listStorageCacheFilters,
   resolveStorageCacheText,
   resolveStorageCacheWarnings,
@@ -113,7 +118,7 @@ describe('storageCacheViewModel', () => {
     expect(resolveStorageCacheText(cache.displayName, cache.displayNameI18n, 'zh-CN')).toBe('派生分析缓存')
     expect(resolveStorageCacheWarnings(cache, 'zh-CN')).toEqual(['本地化警告'])
     expect(
-      formatStorageOperationToast(
+      formatStorageOperationNotice(
         cache,
         {
           operationId: 'op-1',
@@ -124,7 +129,88 @@ describe('storageCacheViewModel', () => {
         },
         'zh-CN'
       )
-    ).toContain('当前没有可执行变更')
+    ).toEqual({
+      tone: 'info',
+      titleKey: STORAGE_CACHE_SKIPPED_TOAST_KEY,
+      title: '“派生分析缓存”当前没有可执行变更'
+    })
+  })
+
+  /**
+   * 回归：失败**不许**显示成「已清理」。
+   *
+   * 旧实现先判 `skipped`、再按操作类型选句，于是 `failed` 落进 `toastCleared`。
+   * 提示还是静默空操作时没人看得见；补丁让提示真能显示之后，这就是读者看到
+   * 「清理失败」的缓存却收到「已清理」。
+   */
+  it('never renders a failed operation as a success sentence', () => {
+    const cache = createCache({ displayNameI18n: { 'zh-CN': '派生分析缓存', 'en-US': 'Derived analysis cache' } })
+    const labels = platformText['zh-CN'].storageCache
+
+    const notice = formatStorageOperationNotice(
+      cache,
+      {
+        operationId: 'op-2',
+        cacheId: cache.cacheId,
+        operation: 'clear',
+        dryRun: false,
+        status: 'failed',
+        normalizedErrorCode: 'cache_runtime_active',
+        // 运行时原文只进审计与日志：这句话一个字都不许出现在提示里。
+        message: "ENOENT: no such file or directory, open '/Users/reader/Library/Caches/x.db'"
+      },
+      'zh-CN'
+    )
+
+    expect(notice).toEqual({
+      tone: 'danger',
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.cache-runtime-active',
+      reason: labels.errorReasonRuntimeActive
+    })
+    // 标题与原因句都不许夹带运行时原文。
+    expect(notice.title).not.toContain('ENOENT')
+    expect(notice.reason).not.toContain('ENOENT')
+    expect(notice.title).not.toBe(labels.toastCleared('派生分析缓存', false))
+  })
+
+  it('says the reason was not available when the result carries no error code', () => {
+    const cache = createCache()
+    const labels = platformText['zh-CN'].storageCache
+
+    const notice = formatStorageOperationNotice(
+      cache,
+      { operationId: 'op-3', cacheId: cache.cacheId, operation: 'compact', dryRun: false, status: 'failed' },
+      'zh-CN'
+    )
+
+    expect(notice).toEqual({
+      tone: 'danger',
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
+    })
+  })
+
+  it('keeps exception text off screen when the call itself throws', () => {
+    const labels = platformText['zh-CN'].storageCache
+
+    expect(formatStorageOperationErrorNotice('clear', 'zh-CN')).toEqual({
+      tone: 'danger',
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
+    })
+    expect(formatStorageOperationErrorNotice('recheck', 'zh-CN')).toEqual({
+      tone: 'danger',
+      titleKey: STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+      title: labels.recheckFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
+    })
   })
 })
 

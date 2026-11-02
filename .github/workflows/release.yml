@@ -73,6 +73,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # 打包前写 build-info.json：产物必须能反查提交与 tag，这条不依赖 Actions 页面留存。
+      # `--require-clean`：带未提交改动打出的包，commit 记的是 HEAD，但构建用的不是它，发布通道直接红。
+      - name: Write build info
+        env:
+          BUILD_PLATFORM: darwin
+          BUILD_ARCH: arm64
+        run: pnpm build:info "$BUILD_PLATFORM" "$BUILD_ARCH" --require-clean
+
       - name: Package macOS dmg
         run: pnpm exec electron-builder --mac --arm64 --publish never
 
@@ -129,6 +137,16 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # 与 macOS 那条同构：以为打的是 x64、实际不是，这种事只会在用户机器上暴露。
+      - name: Assert an x64 runner
+        run: node -e "if (process.arch !== 'x64') { throw new Error('expected an x64 runner, got ' + process.arch) }"
+
+      - name: Write build info
+        env:
+          BUILD_PLATFORM: win32
+          BUILD_ARCH: x64
+        run: pnpm build:info "$env:BUILD_PLATFORM" "$env:BUILD_ARCH" --require-clean
+
       - name: Package Windows installer
         run: pnpm exec electron-builder --win --x64 --publish never
 
@@ -182,7 +200,16 @@ jobs:
           echo 'attaching:'
           list_assets | tr '\0' '\n'
 
-          notes="Unsigned alpha build. **macOS**: right-click the app → Open, or \`xattr -dr com.apple.quarantine /Applications/MacroBay.app\`. **Windows**: SmartScreen → More info → Run anyway."
+          notes='Unsigned alpha build: this release is **not code-signed and not notarized**, so the first launch takes two steps. **macOS**: drag the app into Applications, then right-click (Control-click) it → **Open** and confirm **Open**; double-clicking is blocked by Gatekeeper. If it still refuses, run `xattr -dr com.apple.quarantine /Applications/MacroBay.app` and open it again. **Windows**: run the installer, then in the SmartScreen dialog click **More info → Run anyway**. Both steps repeat with every downloaded update until a signed build ships.'
+
+          # The reader-facing notes live in the repository, so the release body points at them
+          # instead of restating them. The path is derived from the tag, so a new version only
+          # adds a file under docs/reference/release-notes/ and this block stays unchanged.
+          #
+          # One line, built with printf: a multi-line shell string inside this block scalar must be
+          # indented with the block, and an unindented continuation line ends the scalar and breaks
+          # the whole workflow file — which is exactly how this file stopped parsing.
+          notes="$(printf '%s\n\nFull release notes: https://github.com/%s/blob/%s/docs/reference/release-notes/%s.md' "$notes" "$GH_REPO" "$BUILD_REF" "${BUILD_REF#v}")"
 
           if gh release view "$BUILD_REF" >/dev/null 2>&1; then
             # Re-running a tag that already has a release only replaces the assets.

@@ -20,7 +20,9 @@ it('keeps the card copy complete and identical in both locales', () => {
 
 it('names every string the card and the column controls need', () => {
   expect(Object.keys(card('zh-CN')).sort()).toEqual([
-    'agentTitle', 'awaitingData', 'categories', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'dxy', 'empty', 'eventContext', 'expandAgent', 'importanceHigh', 'openCalendar', 'openEventInCalendar', 'reactionHint', 'refresh',
-    'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'upcomingSection'
+    'agentTitle', 'awaitingData', 'categories', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'dxy', 'empty', 'eventContext', 'expandAgent', 'importanceHigh', 'loading', 'openCalendar', 'openEventInCalendar', 'reactionHint', 'refresh', 'releasedEmpty',
+    'staleNotice', 'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'upcomingSection'
   ])
+  // `loading` and `staleNotice` arrived with the three waiting states; a key the card renders but
+  // this list does not know about is exactly what makes the list stop meaning anything.
 })

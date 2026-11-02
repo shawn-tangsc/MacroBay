@@ -1,8 +1,12 @@
 /**
  * 「当前是目标时区的第几分钟」——免打扰窗口这类按读者本地墙上时间判断的地方用它，
  * 调用方必须传入设置时区（主进程唯一提供者），不许再让 `Date.getHours()` 冒充本地时间。
+ *
+ * **算不出来就返回 `null`，不拿 UTC 冒充。** 这与同文件 `instantForWallClock` 的策略一致：
+ * 坏时区与「用户真的在 UTC」在结果上无法区分，混成同一个数会让调用方在错的钟点做判定，
+ * 而且不留任何可观测痕迹。调用方必须显式处理「无法判定」，不能把它当成某一个具体时刻。
  */
-export function minutesOfDayInTimeZone(now: Date, timeZone: string): number {
+export function minutesOfDayInTimeZone(now: Date, timeZone: string): number | null {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,
@@ -10,17 +14,13 @@ export function minutesOfDayInTimeZone(now: Date, timeZone: string): number {
       minute: '2-digit',
       hourCycle: 'h23'
     }).formatToParts(now)
-    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0')
-    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0')
-    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return utcMinutesOfDay(now)
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 'NaN')
+    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 'NaN')
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null
     return (hour % 24) * 60 + minute
   } catch {
-    return utcMinutesOfDay(now)
+    return null
   }
-}
-
-function utcMinutesOfDay(now: Date): number {
-  return now.getUTCHours() * 60 + now.getUTCMinutes()
 }
 
 export type WallClockComponents = {
@@ -75,7 +75,11 @@ export function instantForWallClock(input: WallClockComponents): Date | null {
   }
 }
 
-type WallClockAt = { year: number; month: number; day: number; hour: number; minute: number }
+/**
+ * A wall clock as it reads in one zone. Exported with {@link wallClockAt} because a caller that is
+ * handed only the instant cannot name the shape it gets back.
+ */
+export type WallClockAt = { year: number; month: number; day: number; hour: number; minute: number }
 
 function offsetMinutesAt(instantMs: number, timeZone: string): number | null {
   try {
@@ -100,7 +104,13 @@ function offsetMinutesAt(instantMs: number, timeZone: string): number | null {
   }
 }
 
-function wallClockAt(instantMs: number, timeZone: string): WallClockAt | null {
+/**
+ * The wall clock one instant reads as in `timeZone` — the reverse of {@link instantForWallClock}.
+ *
+ * Pairs with it so a picker can be filled from an instant and read back through the same conversion;
+ * a reader that formats the instant on its own machine is the second source of truth this avoids.
+ */
+export function wallClockAt(instantMs: number, timeZone: string): WallClockAt | null {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,

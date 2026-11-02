@@ -1,40 +1,26 @@
 .mi-divergence {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   min-width: 0;
   padding: 6px 0 2px;
 }
+/* A quiet day is a footnote to the card above, not a band of its own: no extra padding above the
+   line, so the strip is one text row plus the band's own breathing room. */
+.mi-divergence[data-state='empty'] { padding: 0; }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
+/* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
+.mi-divergence__quiet { margin: 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.5; }
 .mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
-/* A quiet day is one sentence with its badge at the end of the same line. */
-.mi-divergence__quiet { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
-.mi-divergence__quiet .mi-divergence__note { flex: 0 1 auto; margin: 0; }
 .mi-divergence__head {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
-/* The `?` sits before the title: the explanation is an aside to the heading, not content. */
-.mi-divergence__help {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 11px;
-  height: 11px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--mi-dashboard-muted);
-  cursor: help;
-}
-.mi-divergence__help:hover { color: var(--mi-dashboard-text); }
-.mi-divergence__help-body { display: grid; gap: 5px; max-width: 360px; font-size: 11px; line-height: 1.55; }
-.mi-divergence__help-body b { font-weight: 400; }
-.mi-divergence__help-body b:first-child { color: var(--mi-dashboard-text); }
 .mi-divergence__retry {
   margin-left: auto;
   padding: 0 4px;
@@ -69,17 +55,8 @@
 }
 .mi-divergence__status b { font-size: 11px; }
 .mi-divergence__status-sub { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-divergence__act {
-  margin-left: auto;
-  padding: 2px 8px;
-  border: 1px solid color-mix(in srgb, var(--mi-dashboard-text) 28%, transparent);
-  border-radius: 4px;
-  background: none;
-  color: var(--mi-dashboard-text);
-  font-size: 9px;
-  cursor: pointer;
-}
-.mi-divergence__act:hover { background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent); }
+/* Placement only: size, paint and hover come from the shared button base. */
+.mi-divergence .mi-divergence__act { margin-left: auto; }
 .mi-divergence__judge {
   display: inline-flex;
   align-items: center;
@@ -113,12 +90,6 @@
   background: color-mix(in srgb, var(--mi-dashboard-surface) 78%, var(--mi-dashboard-line));
 }
 .mi-divergence[data-state='empty'] .mi-divergence__banner { background: color-mix(in srgb, var(--mi-dashboard-surface) 92%, transparent); }
-.mi-divergence__note {
-  margin: 0;
-  color: var(--mi-dashboard-text);
-  font-size: 10px;
-  line-height: 1.5;
-}
 .mi-divergence__rows {
   display: grid;
   gap: 8px;
@@ -191,3 +162,35 @@
 .mi-divergence__withheld-title { font-weight: 650; }
 .mi-divergence__withheld-item + .mi-divergence__withheld-item::before { content: '、'; }
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
+
+
+/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy —
+   never a chip. Hover brightens the word and draws nothing: a block behind a short entry reads as a
+   second button ring. Its label never changes with the state; only the arrows in `aria-expanded`
+   do, so a screen reader does not hear the state twice.
+   Type comes from the dashboard's reading-note tokens: the same shape exists on another card, and a
+   number written in two places drifts (these two cards already disagreed once, 10px against 11.5). */
+.mi-divergence__help-toggle {
+  padding: 0; border: 0; background: none;
+  color: var(--mi-dashboard-muted); font: inherit;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  white-space: nowrap; cursor: pointer;
+}
+.mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
+.mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+
+/* The notes that would not fit the bubble: opened on purpose, so they get their own row and their
+   own scroll instead of stretching the card.
+ *
+ * Same size as the entry that opened it. The entry says "come and read this"; shrinking the text once
+ * the reader does is self-contradictory, and that argument survives a taste change better than "which
+ * size looks nicer" — so both sides read the same dashboard tokens and neither card writes the
+ * numbers down again. */
+.mi-divergence__help {
+  display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
+  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
+  color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
+}
+.mi-divergence__help p { margin: 0; }

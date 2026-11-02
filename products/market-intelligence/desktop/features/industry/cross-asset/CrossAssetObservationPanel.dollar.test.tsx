@@ -15,7 +15,6 @@ import { macroMarketSnapshotPublicPolicy } from '../../../../contracts/macro/mac
  * 读者 2026-10-17 的实况也在这里（「这个美元这里怎么还有合成字样」）：周末 FX 收盘，真实那条的最后一根
  * 是周五，而合成那条早就停了。行必须继续显示**真实**那条（只是旧），不能换成另一件东西还挂个标签。
  */
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const asOf = '2026-09-14T12:00:00.000Z'
 const asOfMs = Date.parse(asOf)
@@ -63,7 +62,10 @@ describe('the dollar row on the market-status table', () => {
     const host = await render(snapshotOf([syntheticReading]))
     expect(host.querySelector('[data-asset-price="dxy"]')?.textContent).toBe('101.42')
     expect(tag(host)?.textContent).toBe(text.syntheticTag)
-    expect(tag(host)?.getAttribute('title')).toBe(text.syntheticCaveat)
+    // 它不是真控件，所以不套浮层：说明挂在可访问名上，`title` 与 `tabindex` 都不再有。
+    expect(tag(host)?.getAttribute('title')).toBeNull()
+    expect(tag(host)?.getAttribute('tabindex')).toBeNull()
+    expect(tag(host)?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
     expect(tag(host)?.getAttribute('data-caveat')).toBe(macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex)
   })
 

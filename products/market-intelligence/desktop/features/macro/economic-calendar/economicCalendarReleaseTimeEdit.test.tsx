@@ -13,11 +13,17 @@ vi.mock('antd', async () => {
   const actual = await vi.importActual<typeof import('antd')>('antd')
   return {
     ...actual,
-    DatePicker: (props: { 'aria-label'?: string; className?: string; format?: string; value?: { format: (format: string) => string } }) =>
+    DatePicker: (props: {
+      'aria-label'?: string; className?: string; format?: string
+      value?: { format: (format: string) => string }
+    }) =>
       <input aria-label={props['aria-label']} className={props.className} data-format={props.format}
         data-value={props.value?.format(props.format ?? '')} readOnly type="text" />
   }
 })
+
+// React 18 warns — and silently skips — `act` work when this flag is missing; the reopened-editor
+// assertion depends on the update actually flushing.
 
 const asOf = '2026-08-12T00:00:00.000Z'
 const queryAsOf = new Date(asOf).toISOString()
@@ -45,7 +51,7 @@ function event(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderInspector(subject: Record<string, unknown>) {
+async function renderInspector(subject: Record<string, unknown>, timeZone = 'Asia/Shanghai') {
   container = document.createElement('div')
   document.body.append(container)
   const localRoot = createRoot(container)
@@ -61,7 +67,7 @@ async function renderInspector(subject: Record<string, unknown>) {
     refreshFedFomcDecision: vi.fn(async () => ({ state: 'unavailable' as const })),
     syncBlsEmploymentSchedule: vi.fn(async () => ({ state: 'unavailable' as const }))
   }
-  const calendar = <ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
+  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
   await act(async () => localRoot.render(calendar))
   for (let attempt = 0; attempt < 12; attempt += 1) await act(async () => { await Promise.resolve() })
   return { host: container, input }
@@ -89,7 +95,7 @@ describe('the release time is edited where it is shown', () => {
     expect(row?.textContent).toContain('10-14 20:30')
     // The control is not the default state: nothing to fill in until the reader opens it.
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).toBeNull()
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).not.toBeNull()
   })
 
@@ -111,7 +117,7 @@ describe('the release time is edited where it is shown', () => {
 
   it('re-reads the detail after a saved release time', async () => {
     const { host, input } = await renderInspector(event())
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     await click(host, text.details.editTime.save)
     await flush()
 
@@ -128,13 +134,35 @@ describe('the release time is edited where it is shown', () => {
     input.setReleaseTime = vi.fn(async () => ({ state: 'rejected' as const }))
     const readsBefore = input.getEventDetail.mock.calls.length
 
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     await click(host, text.details.editTime.save)
     await flush()
 
     expect(host.textContent).toContain(text.details.editTime.rejected)
     expect(input.getEventDetail.mock.calls.length).toBe(readsBefore)
     expect(host.querySelector('[data-release-time-row]')?.getAttribute('data-release-time-row')).toBe('convention-default')
+  })
+})
+
+describe('the picker shows the wall clock of the display zone, and what was stored', () => {
+  it('shows 03:00 for a spring gap the store resolved forward, never the 02:30 that does not exist', async () => {
+    // The store holds the corrected instant (03:00 EDT = 07:00Z) for a reader who picked 02:30 on the
+    // spring-forward day. The row and the picker both read it back through the display zone, so
+    // neither can show a time that was never stored. The decision itself is covered by
+    // `resolveReleaseTimeWrite` in the wall-clock model test.
+    const { host } = await renderInspector(event({
+      // The inspector opens on the event's own month; the stored instant is the corrected gap time.
+      scheduledAt: '2026-03-08T07:00:00.000Z',
+      conventionScheduledAt: '2026-03-08T07:00:00.000Z', releaseTimeSource: 'user-edited'
+    }), 'America/New_York')
+    const row = host.querySelector('[data-release-time-row]')
+    expect(row?.textContent).toContain('03-08 03:00')
+    expect(row?.textContent).not.toContain('02:30')
+
+    await click(host, text.details.editTime.label)
+    await flush()
+    expect(host.querySelector<HTMLInputElement>('.mi-economic-calendar__release-time-picker')?.dataset.value)
+      .toBe('2026-03-08 03:00')
   })
 })
 
@@ -150,14 +178,17 @@ describe('a release that has already happened cannot be moved', () => {
     expect(value?.getAttribute('data-release-time-fixed')).toBe('true')
     expect(value?.tagName).toBe('SPAN')
     expect(host.querySelector('button[aria-label="' + text.details.time + '"]')).toBeNull()
+    expect(host.querySelector('button[aria-label="' + text.details.editTime.label + '"]')).toBeNull()
     expect(host.textContent).not.toContain(text.details.editTime.restore)
   })
 
   it('still lets a scheduled row without an actual value be edited', async () => {
     const { host } = await renderInspector(event())
     const value = host.querySelector<HTMLElement>('.mi-economic-calendar__release-time-value')
-    expect(value?.tagName).toBe('BUTTON')
+    // The time stays visible; the edit trigger is its own icon button beside it.
+    expect(value?.tagName).toBe('SPAN')
     expect(value?.getAttribute('data-release-time-fixed')).toBeNull()
+    expect(host.querySelector(`button[aria-label="${text.details.editTime.label}"]`)).not.toBeNull()
   })
 })
 

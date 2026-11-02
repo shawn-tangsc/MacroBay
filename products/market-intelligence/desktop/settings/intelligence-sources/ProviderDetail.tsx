@@ -1,6 +1,9 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { Eye, EyeOff } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { setSourceEnabled } from '../../shared/intelligenceSourceToggle'
@@ -9,7 +12,8 @@ import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/i
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
-import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { SOURCE_REPEATED_FAILURE_THRESHOLD, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 
 function isCalendar(source: SourceView): boolean {
@@ -23,6 +27,7 @@ export type ProviderDetailLabels = {
   badges: { pending: string; advanced: string; calendar: string; proxy: string }
   status: { enabled: string; disabled: string }
   capabilities: string
+  toggleSource: Readonly<{ enable: string; disable: string }>
   credentials: string
   website: string
   signup: string
@@ -34,6 +39,34 @@ export type ProviderDetailLabels = {
   connectionFailed: string
   connectionUnsupported: string
   apiKey: { label: string; save: string; emptyHint: string; savedHint: string; revealFailed: string }
+}
+
+/** The badge's own words; the tone rides along, the word carries the meaning. */
+const HEALTH_LABEL_KEYS = {
+  healthy: 'settings.intelligenceSources.health.statuses.healthy',
+  multipleFailures: 'settings.intelligenceSources.health.statuses.multiple-failures',
+  dataStale: 'settings.intelligenceSources.health.statuses.data-stale',
+  failed: 'settings.intelligenceSources.health.statuses.failed',
+  paused: 'settings.intelligenceSources.health.statuses.paused'
+} as const
+
+/**
+ * One place maps a runtime state to its word and tone, so a call site cannot show a calm word on a
+ * red badge. `degraded` covers two causes and the failure count is the only one the payload can
+ * separate: at or past the shared threshold it is repeated failures (really broken), below it the
+ * last collections simply did not land, which is stale data. `paused` is what the service reports
+ * for a disabled source, so its word is "off", not "paused".
+ */
+export function healthBadgeView(
+  status: 'healthy' | 'degraded' | 'failed' | 'paused',
+  consecutiveFailures: number
+): Readonly<{ labelKey: string; tone: StatusPillTone }> {
+  if (status === 'healthy') return { labelKey: HEALTH_LABEL_KEYS.healthy, tone: 'ok' }
+  if (status === 'failed') return { labelKey: HEALTH_LABEL_KEYS.failed, tone: 'bad' }
+  if (status === 'paused') return { labelKey: HEALTH_LABEL_KEYS.paused, tone: 'muted' }
+  return consecutiveFailures >= SOURCE_REPEATED_FAILURE_THRESHOLD
+    ? { labelKey: HEALTH_LABEL_KEYS.multipleFailures, tone: 'bad' }
+    : { labelKey: HEALTH_LABEL_KEYS.dataStale, tone: 'warn' }
 }
 
 /**
@@ -75,6 +108,7 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
   const [runningSourceId, setRunningSourceId] = useState<string>()
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
+  const resolveText = useProductTextKey()
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
@@ -211,12 +245,13 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
               placeholder={labels.apiKey.emptyHint}
               type={revealed || credentialPristine ? 'text' : 'password'}
               value={revealed ? rawKey ?? '' : credentialDraft}
-              suffix={<button
-                aria-label={labels.apiKey.label}
-                className="source-provider-detail__reveal"
-                type="button"
-                onClick={() => void toggleReveal()}
-              >{revealed ? <EyeOff size={13} /> : <Eye size={13} />}</button>}
+              suffix={<IconButton
+                ariaLabelKey={revealed ? 'settings.intelligenceSources.apiKey.hide' : 'settings.intelligenceSources.apiKey.reveal'}
+                icon={revealed ? EyeOff : Eye}
+                onSelect={() => void toggleReveal()}
+                resolveText={resolveText}
+                size="sm"
+              />}
               onChange={(event) => { setCredentialPristine(false); setRevealed(false); setRevealFailed(false); setCredentialDraft(event.target.value) }}
             />
             <Button disabled={credentialPristine || !credentialDraft.trim() || savingCredential} loading={savingCredential} onClick={() => void saveCredential()}>{labels.apiKey.save}</Button>
@@ -267,15 +302,21 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
                 // A source with no generic adapter is collected by the product's own job; the
                 // pipeline has nothing to say about it, and an old failure from a manual attempt
                 // would otherwise read as "this source is broken".
-                const detailHealth = source.collection === 'none' ? undefined : details[source.sourceId]?.health.runtimeStatus
-                const calendarHealth = !detailHealth && source.enabled && source.jobRegistered && source.kind.includes('calendar') ? 'healthy' : undefined
-                const status = detailHealth ?? calendarHealth
-                return status ? <em className={`source-provider-detail__health is-${status}`}>{sourceDetailLabels?.health.statuses[status] ?? status}</em> : null
+                const health = source.collection === 'none' ? undefined : details[source.sourceId]?.health
+                const calendarOnly = !health && source.enabled && source.jobRegistered && source.kind.includes('calendar')
+                if (!health && !calendarOnly) return null
+                const view = healthBadgeView(health?.runtimeStatus ?? 'healthy', health?.consecutiveFailures ?? 0)
+                return <StatusPill labelKey={view.labelKey} resolveText={resolveText} tone={view.tone} />
               })()}
             </span>
+            {/* The one visible sign this row opens something: it is an entrance, not an action,
+                so it stays a row with an arrow rather than becoming a button. */}
+            <ChevronRight aria-hidden="true" className="source-provider-detail__chevron" size={13} />
           </button>
           <Switch
-            aria-label={name}
+            /* The row's label is the source name; the switch has to say what it does, or a screen
+               reader reads the same name twice and cannot tell the two controls apart. */
+            aria-label={(source.enabled ? labels.toggleSource.disable : labels.toggleSource.enable).replace('{name}', name)}
             checked={source.enabled}
             disabled={source.visibility === 'pending'}
             onChange={(enabled) => void toggle(source, enabled)}

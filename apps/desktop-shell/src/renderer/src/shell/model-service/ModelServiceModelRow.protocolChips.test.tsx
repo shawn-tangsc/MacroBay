@@ -22,7 +22,6 @@ import type { ModelDetectionModelStatus } from './useModelDetection'
 const labels = platformText['en-US'].models
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -213,7 +212,7 @@ describe('PLAT-82 行内协议 chip', () => {
 })
 
 describe('PLAT-82 行内协议摘要（不落库，刷新即消失）', () => {
-  it('appends the protocol count and keeps the per-protocol detail in the title', async () => {
+  it('appends the protocol count and puts no sentence in title (title is not a detail entry)', async () => {
     const model = syncedModel('chat-completions', { messagesSupport: 'yes' })
     const container = await mountRow(model, {
       runId: 'run-1',
@@ -226,12 +225,14 @@ describe('PLAT-82 行内协议摘要（不落库，刷新即消失）', () => {
     })
 
     const status = container.querySelector('[data-model-detection-status]')
-    expect(status?.textContent).toBe('OK · Protocols 2/2')
+    expect(status?.querySelector('.status-pill__label')?.textContent).toBe(labels.detectionStatusLabel('ok'))
+    expect(status?.textContent).toContain(labels.detectionProtocolCount(2, 2))
     expect(status?.getAttribute('data-model-protocol-summary')).toBe('2/2')
-    expect(status?.getAttribute('title')).toContain('OpenAI Chat ✓（reused connectivity）')
+    // 行内不靠 title 补详情：逐协议明细在检测弹窗里，行内留 title 等于把它藏进悬停。
+    expect(status?.getAttribute('title')).toBeNull()
   })
 
-  it('shows the failing protocol in the inline title', async () => {
+  it('shows the count without moving the failing protocol into a title', async () => {
     const model = syncedModel('chat-completions', { messagesSupport: 'yes' })
     const container = await mountRow(model, {
       runId: 'run-1',
@@ -245,9 +246,9 @@ describe('PLAT-82 行内协议摘要（不落库，刷新即消失）', () => {
     })
 
     const status = container.querySelector('[data-model-detection-status]')
-    expect(status?.textContent).toBe('OK · Protocols 1/2')
+    expect(status?.textContent).toContain(labels.detectionProtocolCount(1, 2))
     expect(status?.getAttribute('data-model-protocol-summary')).toBe('1/2')
-    expect(status?.getAttribute('title')).toContain(`Anthropic Messages ✗ ${labels.probeReasonEndpointUnsupported}`)
+    expect(status?.getAttribute('title')).toBeNull()
   })
 
   it('keeps the plain status when this run did not check protocols', async () => {
@@ -260,9 +261,9 @@ describe('PLAT-82 行内协议摘要（不落库，刷新即消失）', () => {
     })
 
     const status = container.querySelector('[data-model-detection-status]')
-    expect(status?.textContent).toBe('OK')
+    expect(status?.querySelector('.status-pill__label')?.textContent).toBe(labels.detectionStatusLabel('ok'))
     expect(status?.getAttribute('data-model-protocol-summary')).toBeNull()
-    expect(status?.getAttribute('title')).toBe('OK')
+    expect(status?.getAttribute('title')).toBeNull()
   })
 })
 

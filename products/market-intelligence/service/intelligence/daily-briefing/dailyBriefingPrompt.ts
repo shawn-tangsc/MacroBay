@@ -293,3 +293,14 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
     ].join('\n') }
   ]
 }
+
+/**
+ * The sentence the model reads after its reply was rejected.
+ *
+ * The reason has to travel in this text: the model cannot read our logs, so a detail recorded only
+ * there leaves the next attempt guessing — the loop that produced three identical failures in one
+ * evening (MI-2-R16).
+ */
+export function repairPromptFor(failureCode: string, failureDetail: string | undefined): string {
+  return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
+}

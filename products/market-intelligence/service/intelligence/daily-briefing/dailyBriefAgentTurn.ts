@@ -1,6 +1,6 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
-import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
+import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
@@ -200,7 +200,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       throwIfAborted(input.signal)
       const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
       stage({ stage: repairStage, state: 'begin' })
-      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`, undefined, input.signal)
+      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail), undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })

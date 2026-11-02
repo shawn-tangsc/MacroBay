@@ -1,0 +1,33 @@
+/*
+ * 上下文菜单的弹出壳。定位、夹取、关闭都在组件里，这里只管外观。
+ *
+ * 菜单列表本身用 antd `Menu`，所以边框、行高、选中态不在这里重画——重画就是第二套。
+ * 只做两件事：去掉竖排菜单右侧那条分隔线；把危险项的颜色拉回本仓的 `--danger`
+ * （antd 的 `colorError` 默认是它自己的红，全仓主题没有覆盖，那会多出第二种红）。
+ */
+.context-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 200px;
+  max-width: min(360px, calc(100vw - 8px));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / 18%));
+}
+
+.context-menu .ant-menu {
+  border-inline-end: 0;
+  background: transparent;
+}
+
+/*
+ * 危险项的正文色。菜单项是正文大小，纯 `--danger` 在深色下只有 3.25–3.94：够图形的 3:1，
+ * 不够正文的 4.5。混一点 `--text-strong` 抬过基线，于是这条不必进 `--danger` 前景色基线
+ * （基线只减不增），危险语义也不靠颜色单独承担——同一行还有文案与位置。
+ */
+.context-menu .ant-menu-item-danger,
+.context-menu .ant-menu-item-danger:hover {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-strong));
+}

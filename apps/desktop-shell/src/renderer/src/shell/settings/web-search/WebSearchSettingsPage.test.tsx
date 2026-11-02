@@ -4,19 +4,21 @@ import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ConfigProvider } from 'antd'
 
 import type {
   SafeWebSearchProviderView,
   WebSearchSettings
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import { createDefaultWebSearchSettings } from '@platform/ai/web-search/contracts/webSearchSettings'
+import { expectWaitingFirst } from '@platform/ui/async/expectWaitingFirst'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { platformText } from '../../../i18n/platformText'
 import { WebSearchSettingsPage } from './WebSearchSettingsPage'
 
 const labels = platformText['zh-CN'].webSearch
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -83,7 +85,10 @@ async function mountPage(): Promise<{ container: HTMLElement; updateSettings: Re
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => root?.render(createElement(WebSearchSettingsPage, { language: 'zh-CN' })))
+  // 页面在真机上永远在 AppShell 的 ConfigProvider 之下；这里补上同一份按钮配置，
+  // 否则测试按 antd 默认在汉字之间插空格，看到的文案与真机不是一回事。
+  await act(async () => root?.render(createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+    createElement(WebSearchSettingsPage, { language: 'zh-CN' }))))
   await settle()
   return { container, updateSettings }
 }
@@ -96,6 +101,47 @@ async function click(container: ParentNode, selector: string): Promise<void> {
 }
 
 describe('PLAT-60 settings page shell', () => {
+  it('shows a load failure as an error with a retry, and keeps the raw message off screen', async () => {
+    const raw = 'ENOENT: no such file or directory, open settings.json'
+    const getSettings = vi.fn()
+      .mockRejectedValueOnce(new Error(raw))
+      .mockResolvedValue(settings())
+    Object.assign(window, {
+      platform: {
+        webSearch: {
+          getSettings,
+          listProviders: async () => providers(),
+          updateSettings: async () => settings(),
+          updateProvider: async () => provider('tavily'),
+          checkProvider: async () => ({ valid: true }),
+          revealApiKey: async () => null
+        },
+        app: { openExternal: vi.fn() }
+      }
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+      createElement(WebSearchSettingsPage, { language: 'zh-CN' }))))
+    await settle()
+
+    // 「没读出来」不是「这里没有内容」：必须是 error 态，不是空态。
+    const errorView = container.querySelector('[data-state="error"]')
+    expect(errorView).not.toBeNull()
+    // 原始异常只进日志，一个字都不上屏。
+    expect(container.textContent).not.toContain('ENOENT')
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+
+    // 重试是真的重新拉一次，并且恢复后页面正常渲染。
+    await click(container, '[data-state="error"] .state-view__action')
+    expect(getSettings).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+  })
+
   it('owns its own single-column workspace and hides the old rail', async () => {
     const css = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
     const rule = css.match(/\.settings-workspace\.web-search-settings\s*\{[^}]*\}/)?.[0] ?? ''
@@ -165,6 +211,47 @@ describe('PLAT-60 settings page shell', () => {
     expect(container.querySelector('[data-web-search-deferred-row="exa"]')?.textContent).toContain(labels.deferredBadge)
   })
 
+  it('draws only the loading state before the first read resolves', async () => {
+    // 台账 §25 的第 ① 种处境：读还没 settle 时，屏幕上不许出现错误，也不许出现空态。
+    let resolveSettings: (value: WebSearchSettings) => void = () => undefined
+    let resolveProviders: (value: SafeWebSearchProviderView[]) => void = () => undefined
+    const pendingSettings = new Promise<WebSearchSettings>((resolve) => { resolveSettings = resolve })
+    const pendingProviders = new Promise<SafeWebSearchProviderView[]>((resolve) => { resolveProviders = resolve })
+    Object.assign(window, {
+      platform: {
+        webSearch: {
+          getSettings: vi.fn(() => pendingSettings),
+          listProviders: vi.fn(() => pendingProviders),
+          updateSettings: async () => settings(),
+          updateProvider: async () => provider('tavily'),
+          checkProvider: async () => ({ valid: true }),
+          revealApiKey: async () => null
+        },
+        app: { openExternal: vi.fn() }
+      }
+    })
+
+    // 同一个页面元素，渲染两次：先证明悬着时只有加载态，再证明读回来能翻成页面。
+    await expectWaitingFirst(pageElement())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const pageRoot = createRoot(container)
+    root = pageRoot
+    await act(async () => pageRoot.render(pageElement()))
+    const loadingBefore = container.querySelector('[data-state="error"]')
+    expect(loadingBefore).toBeNull()
+
+    await act(async () => {
+      resolveSettings(settings())
+      resolveProviders(providers())
+      await Promise.all([pendingSettings, pendingProviders])
+    })
+    await vi.waitFor(() => expect(container.querySelector('[data-web-search-settings-page]')).not.toBeNull())
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+    expect(container.querySelector('[data-loading-state]')).toBeNull()
+  })
+
   it('shows one row per provider and read-only default badges', async () => {
     const { container } = await mountPage()
     await click(container, '[data-web-search-tab="providers"]')
@@ -179,6 +266,11 @@ describe('PLAT-60 settings page shell', () => {
     expect(jina.querySelector('.ant-select')).toBeNull()
   })
 })
+
+function pageElement(): React.ReactElement {
+  return createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+    createElement(WebSearchSettingsPage, { language: 'zh-CN' }))
+}
 
 function rows(container: HTMLElement): string[] {
   return [...container.querySelectorAll('[data-web-search-provider-row]')].map(

@@ -1,8 +1,10 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import type { StatusPillTone } from '@platform/ui/components/status-pill'
 import type {
   CacheBackupPolicy,
   CacheCategory,
   CacheDurability,
+  CacheErrorCode,
   CacheInspectionStatus,
   CacheKind,
   CacheOperationAuditRecord,
@@ -114,17 +116,51 @@ export function formatBackupPolicy(policy: CacheBackupPolicy, labels: StorageCac
   }
 }
 
-export function formatInspectionStatus(status: CacheInspectionStatus | undefined, labels: StorageCacheLabels): string {
-  switch (status) {
+/**
+ * 展示层的第四个值：它表示「还没有这个数据」，不是「某个巡检结果」。
+ *
+ * 领域层不产出它（服务只会给出三种），所以它不能进 `CacheInspectionStatus`——
+ * 那会让缺失值看起来像一个状态值，而「没有」和「拿不到」是两件事。
+ */
+export type CacheInspectionDisplayStatus = CacheInspectionStatus | 'never-inspected'
+
+export function toInspectionDisplayStatus(status: CacheInspectionStatus | undefined): CacheInspectionDisplayStatus {
+  return status ?? 'never-inspected'
+}
+
+/**
+ * 档位与文案都按**展示值**穷举：多一个状态就编译不过，不允许静默落回某一档。
+ * 档位是闭集（`StatusPillTone`），没有“自定义颜色”这一档。
+ */
+export const CACHE_INSPECTION_TONES: Record<CacheInspectionDisplayStatus, StatusPillTone> = {
+  ready: 'ok',
+  empty: 'muted',
+  inspection_failed: 'bad',
+  'never-inspected': 'muted'
+}
+
+export const INSPECTION_STATUS_KEY_PREFIX = 'storageCacheStatus.'
+
+/** `StatusPill` 只收键：把键还原成展示值，再走同一张穷举表取文案。 */
+export function resolveInspectionStatusLabel(key: string, labels: StorageCacheLabels): string {
+  const display = key.slice(INSPECTION_STATUS_KEY_PREFIX.length) as CacheInspectionDisplayStatus
+  return formatInspectionStatus(display, labels)
+}
+
+export function formatInspectionStatus(
+  status: CacheInspectionStatus | CacheInspectionDisplayStatus | undefined,
+  labels: StorageCacheLabels
+): string {
+  // 穷举四个展示值、不留 `default`：将来领域层多一种状态时，这里必须编译失败，
+  // 而不是静默落进「尚未巡检」——那正是今天删掉的 `return ''` 换了个位置。
+  switch (toInspectionDisplayStatus(status as CacheInspectionStatus | undefined)) {
     case 'ready':
       return labels.statusReady
     case 'empty':
       return labels.statusEmpty
-    case 'active':
-      return labels.statusActive
     case 'inspection_failed':
       return labels.statusInspectionFailed
-    default:
+    case 'never-inspected':
       return labels.neverInspected
   }
 }
@@ -141,6 +177,62 @@ export function formatOperationStatus(
     case 'skipped':
       return labels.statusSkipped
   }
+}
+
+/**
+ * 原因码 → **文案键 + 文案字段**的同一张表：多一个原因码就编译不过。
+ *
+ * 为什么要两个：提示走 `Toast`，它只收键（句子在入队时由调用方的解析器解成快照）；
+ * 而页面上的其它地方要句子。两样都从这一张表来，就不会出现「键改了、句子没改」。
+ * 表里写死字面量、不拼 `'reason.' + code`：拼串在静态守卫眼里看不见形状。
+ */
+type CacheErrorReasonField =
+  | 'errorReasonNotFound'
+  | 'errorReasonNotClearable'
+  | 'errorReasonNotCompactable'
+  | 'errorReasonInProgress'
+  | 'errorReasonDenied'
+  | 'errorReasonProviderFailed'
+  | 'errorReasonInspectionFailed'
+  | 'errorReasonRequiresProduct'
+  | 'errorReasonRuntimeActive'
+
+const CACHE_ERROR_REASONS: Record<CacheErrorCode, { key: string; field: CacheErrorReasonField }> = {
+  cache_not_found: { key: 'storageCache.reason.cache-not-found', field: 'errorReasonNotFound' },
+  cache_not_clearable: { key: 'storageCache.reason.cache-not-clearable', field: 'errorReasonNotClearable' },
+  cache_not_compactable: { key: 'storageCache.reason.cache-not-compactable', field: 'errorReasonNotCompactable' },
+  cache_operation_in_progress: {
+    key: 'storageCache.reason.cache-operation-in-progress',
+    field: 'errorReasonInProgress'
+  },
+  cache_operation_denied: { key: 'storageCache.reason.cache-operation-denied', field: 'errorReasonDenied' },
+  cache_provider_failed: { key: 'storageCache.reason.cache-provider-failed', field: 'errorReasonProviderFailed' },
+  cache_inspection_failed: { key: 'storageCache.reason.cache-inspection-failed', field: 'errorReasonInspectionFailed' },
+  cache_requires_product: { key: 'storageCache.reason.cache-requires-product', field: 'errorReasonRequiresProduct' },
+  cache_runtime_active: { key: 'storageCache.reason.cache-runtime-active', field: 'errorReasonRuntimeActive' }
+}
+
+/** 「这次没拿到具体原因」的键：没有原因码、或原因码在闭集外，都用它。 */
+export const STORAGE_CACHE_REASON_UNAVAILABLE_KEY = 'storageCache.reason.unavailable'
+
+/** 提示用的原因键。 */
+export function cacheErrorReasonKey(code: CacheErrorCode | undefined): string {
+  const entry = code === undefined ? undefined : CACHE_ERROR_REASONS[code]
+  return entry === undefined ? STORAGE_CACHE_REASON_UNAVAILABLE_KEY : entry.key
+}
+
+/**
+ * 原因句。
+ *
+ * `undefined`（服务没留下原因码）与「原因码认不出来」（第三方 provider 送了个闭集外的值）
+ * 都走同一句「这次没拿到具体原因」：这两种都是**没拿到**，不是「确实没有原因」。
+ */
+export function formatCacheErrorReason(
+  code: CacheErrorCode | undefined,
+  labels: StorageCacheLabels
+): string {
+  const entry = code === undefined ? undefined : CACHE_ERROR_REASONS[code]
+  return entry === undefined ? labels.errorReasonUnavailable : labels[entry.field]
 }
 
 export function dedupeWarnings(warnings: string[]): string[] {

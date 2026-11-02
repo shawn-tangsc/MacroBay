@@ -1,0 +1,27 @@
+/*
+ * 视觉顺序：**原因在左、控件在右**；DOM 顺序反过来（控件在前）。
+ *
+ * `flex-direction: row-reverse` 只改**视觉排布**，不改 DOM 顺序——这是「换行不算搬家」能落地的那个机制：
+ *
+ *   宽度够    主轴从右往左排：控件贴最右，原因在它左边      → 原因在控件左侧，同一行
+ *   宽度不够  放不下的是原因，按 wrap 落到第二行            → 原因在控件下方，仍在右列
+ *   DOM 顺序  控件始终在原因之前 → 读屏、Tab、`aria-describedby` 都不用改
+ *
+ * 不要把它改成 `row`：那样原因会先排，换行后落到控件**上方**，而且“原因在左”和“换行到下方”
+ * 这两个要求会打架（`order` 在每一行都生效，表达不了“只在换行后变”）。
+ *
+ * 尺寸跟着行内次要文字走（12px / `--muted`）：它是解释，不是标题，也不该和正文抢注意力。
+ */
+.disabled-hint {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.disabled-hint__reason {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

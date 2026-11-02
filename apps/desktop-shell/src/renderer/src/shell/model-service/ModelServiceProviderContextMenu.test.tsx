@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { platformText } from '../../i18n/platformText'
 import { renderModelServiceSettings } from './modelServicePageHarness'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+const confirmSpy = vi.hoisted(() => vi.fn())
+vi.mock('@platform/ui/components/confirm', () => ({ confirmAction: confirmSpy }))
+
 const labels = platformText['en-US'].models
 
 afterEach(() => {
@@ -23,7 +25,7 @@ async function openMenu(container: HTMLElement): Promise<void> {
 }
 
 describe('PLAT-62 provider row context menu', () => {
-  it('opens menu, deletes custom providers after confirmation, and closes on Escape', async () => {
+  it('opens menu, asks the platform confirm before deleting, and closes on Escape', async () => {
     const page = await renderModelServiceSettings({ provider: { id: 'custom', name: 'Custom', isSystem: false } })
     await openMenu(page.container)
     expect(document.querySelector('[data-provider-context-menu]')).not.toBeNull()
@@ -37,27 +39,33 @@ describe('PLAT-62 provider row context menu', () => {
     })
     expect(document.querySelector('[data-provider-context-menu]')).toBeNull()
 
+    // 二次确认改由平台 `confirmAction` 承担。这里断言的是「菜单把正确的参数交给了它」：
+    // 标题/正文带着供应商名、危险档、按钮文案。对话框本身的真渲染由清空模型那组用例覆盖，
+    // 两边各守一段，不重复也不留空档。
+    confirmSpy.mockClear()
     await openMenu(page.container)
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-provider-context-delete]')?.click()
       await Promise.resolve()
     })
-    await vi.waitFor(() => expect(document.querySelector('[data-remove-provider-confirm]')).not.toBeNull())
-    expect(document.querySelector('[data-remove-provider-confirm]')?.textContent).toContain('Custom')
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-remove-provider-cancel]')?.click()
-    })
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    const props = confirmSpy.mock.calls[0]?.[0] as {
+      title: string
+      description: string
+      confirmLabel: string
+      tone: string
+      onConfirm: () => Promise<void>
+    }
+    expect(props.title).toBe(labels.removeProvider)
+    expect(props.description).toContain('Custom')
+    expect(props.tone).toBe('danger')
+    expect(props.confirmLabel).toBe(labels.removeProvider)
+    // 没有确认就绝不删除。
     expect(page.api.remove).not.toHaveBeenCalled()
 
-    await openMenu(page.container)
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-provider-context-delete]')?.click()
-      await Promise.resolve()
-    })
-    await vi.waitFor(() => expect(document.querySelector('[data-remove-provider-confirm-button]')).not.toBeNull())
-    await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-remove-provider-confirm-button]')?.click()
-      await Promise.resolve()
+      await props.onConfirm()
     })
     expect(page.api.remove).toHaveBeenCalledWith('custom')
     await vi.waitFor(() => expect(page.container.querySelectorAll('[data-provider-row]')).toHaveLength(0))

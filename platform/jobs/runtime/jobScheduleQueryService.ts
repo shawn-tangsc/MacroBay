@@ -1,4 +1,4 @@
-import type { JobDefinition, JobRunQuery, JobRunRecord } from '../contracts/jobTypes'
+import type { JobDefinition, JobRunQuery, JobRunRecord, ScheduledJobDefinition } from '../contracts/jobTypes'
 import { projectJobSchedules, type JobScheduleView } from './jobScheduleView'
 
 /** 只读查询面：只暴露投影后的调度视图，没有 setSchedule/removeSchedule 等写入口。 */
@@ -7,7 +7,7 @@ export type JobScheduleQueryService = {
 }
 
 export type JobScheduleReadable = {
-  listSchedules: () => readonly JobDefinition[]
+  listSchedules: () => readonly ScheduledJobDefinition[]
   listRuns: (query?: JobRunQuery) => JobRunRecord[]
 }
 

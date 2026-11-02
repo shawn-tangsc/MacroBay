@@ -1,3 +1,4 @@
+import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
@@ -11,13 +12,23 @@ import {
   type NotificationState
 } from '../contracts/notificationContracts'
 
+/**
+ * 熔断的每日写入计数：`<ownerId>|<UTC 日>` → 次数。
+ *
+ * 必须与记录存在同一份 JSON 里：被折叠的原文不落库，计数无法从记录反推；
+ * 重启后若从零开始，熔断就永远触发不了。
+ */
+export type NotificationDailyCounters = Record<string, number>
+
 export type NotificationStoreState = {
   records: NotificationRecord[]
+  dailyCounters?: NotificationDailyCounters
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
-    records: []
+    records: [],
+    dailyCounters: {}
   }
 }
 
@@ -35,15 +46,19 @@ export function resetNotificationIdCounterForTests(): void {
 export function normalizeNotificationRecord(value: unknown): NotificationRecord | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Partial<NotificationRecord>
-  if (!candidate.id || !candidate.sourceId || !candidate.title) return null
+  if (!candidate.id || !candidate.sourceId || !candidate.titleKey) return null
 
   return {
     id: String(candidate.id),
     owner: candidate.owner === 'platform' ? 'platform' : 'product',
     productId: candidate.productId ? String(candidate.productId) : undefined,
     sourceId: String(candidate.sourceId),
-    title: String(candidate.title),
-    body: candidate.body ? String(candidate.body) : undefined,
+    // 存储里读回来的键不做闭集校验（旧记录可能带已删除的键）；解析器解析不到会保留占位，
+    // 而不是把键名当句子显示。
+    titleKey: String(candidate.titleKey) as NotificationCopyKey,
+    titleParams: normalizeTextParams(candidate.titleParams),
+    bodyKey: candidate.bodyKey ? String(candidate.bodyKey) as NotificationCopyKey : undefined,
+    bodyParams: normalizeTextParams(candidate.bodyParams),
     severity: normalizeSeverity(candidate.severity),
     priority: normalizePriority(candidate.priority),
     channels: normalizeChannels(candidate.channels),
@@ -57,6 +72,10 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
         ? (candidate.safeMetadata as Record<string, unknown>)
         : undefined,
     occurrenceCount: typeof candidate.occurrenceCount === 'number' ? Math.max(1, candidate.occurrenceCount) : 1,
+    collapsedCount:
+      typeof candidate.collapsedCount === 'number' && candidate.collapsedCount > 0
+        ? Math.floor(candidate.collapsedCount)
+        : undefined,
     createdAt: String(candidate.createdAt ?? new Date().toISOString()),
     updatedAt: String(candidate.updatedAt ?? candidate.createdAt ?? new Date().toISOString()),
     readAt: candidate.readAt ? String(candidate.readAt) : undefined,
@@ -74,7 +93,33 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   const records = Array.isArray(candidate.records)
     ? candidate.records.map(normalizeNotificationRecord).filter((record): record is NotificationRecord => Boolean(record))
     : []
-  return { records }
+  return { records, dailyCounters: normalizeDailyCounters(candidate.dailyCounters) }
+}
+
+/**
+ * 计数桶的键必须是 `<ownerId>|<YYYY-MM-DD>`、值必须是正整数：坏桶直接丢弃，
+ * 否则一个 `NaN` 会让熔断永远不触发，而界面看不出任何异常。
+ */
+function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const counters: NotificationDailyCounters = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^.+\|\d{4}-\d{2}-\d{2}$/.test(key)) continue
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) continue
+    counters[key] = Math.floor(raw)
+  }
+  return counters
+}
+
+/** 文案参数只收短字符串：这里进的是任务名之类的实体名，不是日志正文。 */
+function normalizeTextParams(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const params: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'string' || raw.length > 200) continue
+    params[key] = raw
+  }
+  return Object.keys(params).length > 0 ? params : undefined
 }
 
 export function createNotificationFromRequest(request: NotificationRequest, now = new Date().toISOString()): NotificationRecord {
@@ -83,8 +128,10 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
     owner: request.owner,
     productId: request.productId,
     sourceId: request.sourceId,
-    title: request.title,
-    body: request.body,
+    titleKey: request.titleKey,
+    titleParams: request.titleParams,
+    bodyKey: request.bodyKey,
+    bodyParams: request.bodyParams,
     severity: request.severity,
     priority: request.priority,
     channels: request.requestedChannels.includes('center') ? request.requestedChannels : ['center', ...request.requestedChannels],
@@ -104,8 +151,10 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
 export function mergeDuplicateNotification(existing: NotificationRecord, incoming: NotificationRequest, now: string): NotificationRecord {
   return {
     ...existing,
-    title: incoming.title,
-    body: incoming.body ?? existing.body,
+    titleKey: incoming.titleKey,
+    titleParams: incoming.titleParams ?? existing.titleParams,
+    bodyKey: incoming.bodyKey ?? existing.bodyKey,
+    bodyParams: incoming.bodyParams ?? existing.bodyParams,
     severity: strongerSeverity(existing.severity, incoming.severity),
     priority: strongerPriority(existing.priority, incoming.priority),
     channels: uniqueChannels([...existing.channels, ...incoming.requestedChannels]),

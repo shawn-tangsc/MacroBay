@@ -15,6 +15,14 @@ import {
   type SourceDefinition
 } from './providerRegistry'
 
+/**
+ * 连续失败达到这个次数，一个来源才算「多次失败」而不是「数据偏旧」。
+ *
+ * 只有一处定义：设置页的状态词与提醒能力（读来源状态的 Agent 能力）都从这里取，
+ * 两边各写一个 3 的那天，读者会看到「多次失败」而提醒从不触发。
+ */
+export const SOURCE_REPEATED_FAILURE_THRESHOLD = 3
+
 export type SourceHealth = 'healthy' | 'degraded' | 'failed' | 'never-run'
 
 export type ProjectionState = {

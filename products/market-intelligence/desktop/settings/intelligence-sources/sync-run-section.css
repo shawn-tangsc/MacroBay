@@ -6,7 +6,6 @@
 .mi-sync-run__filters select { background: var(--surface-2, #14171e); color: inherit; border: 1px solid var(--border, #22252d); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
 .mi-sync-run__filters button { border: 1px solid var(--border, #22252d); background: none; color: inherit; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
 .mi-sync-run__notice { color: var(--accent, #b7cf52); }
-.mi-sync-run__empty { color: var(--text-secondary); font-size: 12px; margin: 12px 0; }
 .mi-sync-run__time, .mi-sync-run__duration { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
 /* A handler id is one long token; without a clamp it widens the fixed column and pushes the whole
    table sideways, which reads as a second kind of misalignment. */
@@ -62,3 +61,9 @@
 .mi-sync-run__aggregate-table { max-height: 240px; overflow: auto; }
 .mi-sync-run__grid--aggregate { grid-template-columns: 92px minmax(0, 1fr) 56px 56px; }
 .mi-sync-run__grid--aggregate span[data-has-failures='true'] { color: var(--danger); }
+
+/* The dash's meaning is one line under the headers: a per-cell bubble repeated it and hid it from
+   anyone without a mouse. */
+.mi-sync-run__legend { color: var(--muted); font-size: 11px; margin: 4px 8px 0; }
+/* How many more sources a row touched, as visible text rather than a tooltip. */
+.mi-sync-run__more { color: var(--muted); }

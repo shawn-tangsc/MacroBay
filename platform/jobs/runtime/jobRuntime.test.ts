@@ -4,7 +4,108 @@ import { DEFAULT_RETRY_POLICY } from '../contracts/jobTypes'
 import { createJobRunSqliteStore } from './jobRunSqliteStore'
 import { createJobRuntime } from './jobRuntime'
 
+describe('jobRuntime terminal hook', () => {
+  it('reports a finished run once, with the cause the consumer needs', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const runtime = createJobRuntime({ onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    runtime.registerHandler('ok', async () => {})
+    runtime.registerHandler('boom', async () => {
+      throw new Error('collector failed')
+    })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
+
+    await runtime.enqueueManual('job-ok')
+    await runtime.enqueueManual('job-boom')
+    await vi.waitFor(() => expect(reported).toHaveLength(2))
+
+    // A failed run is an `executed` outcome: that is what a "task failed" notification may report.
+    expect(reported).toEqual([{ status: 'completed', cause: 'executed' }, { status: 'failed', cause: 'executed' }])
+  })
+
+  it('marks a run that never started as rejected instead of executed', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const runtime = createJobRuntime({ onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    const definition = {
+      id: 'job-queued', owner: 'platform' as const, handlerId: 'noop', title: 'Queued',
+      trigger: { kind: 'manual' as const }, payload: {}
+    }
+    runtime.registerHandler('noop', async () => {})
+    setSchedule(runtime, definition)
+
+    const run = runtime.createQueuedRun(definition)
+    runtime.cancel(run.id)
+    await vi.waitFor(() => expect(reported).toHaveLength(1))
+
+    // Cancelled before the handler ran: not a task failure, so the consumer can skip it.
+    expect(reported).toEqual([{ status: 'cancelled', cause: 'rejected' }])
+  })
+
+  it('reports a run settled by startup recovery as recovered, not as this process outcome', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const store = createJobRunSqliteStore(':memory:')
+    const runtime = createJobRuntime({ store, onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    const definition = {
+      id: 'job-stale', owner: 'platform' as const, handlerId: 'noop', title: 'Stale',
+      trigger: { kind: 'manual' as const }, payload: {}
+    }
+    runtime.createQueuedRun(definition)
+    runtime.recover()
+
+    expect(reported).toEqual([{ status: 'cancelled', cause: 'recovered' }])
+    store.close()
+  })
+
+  it('keeps scheduling when a terminal listener throws', async () => {
+    const runtime = createJobRuntime({
+      onRunTerminal: () => {
+        throw new Error('listener exploded')
+      }
+    })
+    const calls: string[] = []
+    runtime.registerHandler('ok', async () => {
+      calls.push('ran')
+    })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+
+    await runtime.enqueueManual('job-ok')
+    await vi.waitFor(() => expect(calls).toEqual(['ran']))
+    runtime.registerHandler('ok2', async () => {
+      calls.push('ran-again')
+    })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
+    await runtime.enqueueManual('job-ok-2')
+    await vi.waitFor(() => expect(calls).toEqual(['ran', 'ran-again']))
+  })
+})
+
+/**
+ * Test-local wrapper: the fixtures here are about "can this run", not about which audience the
+ * definition belongs to, so they all register as a user-facing resource by default.
+ */
+function setSchedule(runtime: ReturnType<typeof createJobRuntime>, definition: Record<string, unknown> | object): void {
+  runtime.setSchedule({ ...(definition as object), audience: 'user' } as never)
+}
+
 describe('jobRuntime', () => {
+  /**
+   * 类型能被 `as never` 之类绕开，注册这一步挡得住才是真的挡得住（`MI-11-R40`）。
+   * 不设默认值的理由：默认可见会让内部维护任务悄悄出现在读者面前，默认隐藏会让真实任务悄悄消失。
+   */
+  it('refuses a scheduled definition that never declared its audience', () => {
+    const runtime = createJobRuntime()
+    runtime.registerHandler('noop', async () => {})
+
+    expect(() => (runtime.setSchedule as (definition: unknown) => void)({
+      id: 'job-undeclared',
+      owner: 'platform',
+      handlerId: 'noop',
+      title: 'Undeclared',
+      trigger: { kind: 'manual' },
+      payload: {}
+    })).toThrow(/must declare audience/)
+  })
+
   it('registers handlers and enqueues manual jobs', async () => {
     const runtime = createJobRuntime()
     const calls: string[] = []
@@ -23,7 +124,7 @@ describe('jobRuntime', () => {
       payload: 'hello'
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     await runtime.enqueueManual('job-echo')
 
     await vi.waitFor(() => {
@@ -43,7 +144,7 @@ describe('jobRuntime', () => {
         calls.push(String(payload))
       })
 
-      runtime.setSchedule({
+      setSchedule(runtime, { audience: 'user' as const,
         id: 'job-cron-runtime',
         owner: 'platform',
         handlerId: 'cron',
@@ -87,7 +188,7 @@ describe('jobRuntime', () => {
       payload: {}
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.markRunningForTest(run.id)
 
@@ -110,7 +211,7 @@ describe('jobRuntime', () => {
       payload: {}
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const queued = runtime.createQueuedRun(definition)
 
     const recovered = runtime.recover()
@@ -139,7 +240,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = await runtime.enqueueManual('job-cancel')
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -167,7 +268,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -289,7 +390,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -437,7 +538,7 @@ describe('jobRuntime', () => {
       observedReason = context.signal.reason
     })
 
-    runtime.setSchedule({
+    setSchedule(runtime, { audience: 'user' as const,
       id: 'job-stop-running',
       owner: 'platform',
       handlerId: 'wait',
@@ -564,7 +665,7 @@ describe('jobRuntime', () => {
 
   it('rejects enqueue when handler is not registered', async () => {
     const runtime = createJobRuntime()
-    runtime.setSchedule({
+    setSchedule(runtime, { audience: 'user' as const,
       id: 'job-missing',
       owner: 'platform',
       handlerId: 'missing',

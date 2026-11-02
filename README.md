@@ -41,12 +41,16 @@ what changed, with the source and the cutoff time attached to every number.
 A claim that cannot be traced to a source record and a timestamp is supposed to be reported as a gap.
 That is the whole product: **not a paragraph you have to take on faith.**
 
+A daily briefing collects the same evidence into one page: what the market is pricing, what changed
+overnight, and what to watch today. It can be generated on a schedule or on demand, and every item
+keeps its source and its cutoff time.
+
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: crypto market checklist, market status, cross-asset returns, capital conditions, sentiment, funding and the watchlist" width="100%">
+  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
 </p>
 
 <p align="center">
-  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
+  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
 </p>
 
 ## Download
@@ -55,9 +59,16 @@ That is the whole product: **not a paragraph you have to take on faith.**
 **[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
-The build is unsigned. On macOS, right-click the app → **Open**, or run
-`xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose
-**More info → Run anyway** in the SmartScreen prompt.
+This build is **not code-signed and not notarized**, so the first launch takes two steps:
+
+1. **macOS** — drag the app into *Applications*, then **right-click (Control-click) the app → Open**
+   and confirm **Open** in the dialog. Double-clicking is blocked by Gatekeeper. If macOS still
+   refuses, run `xattr -dr com.apple.quarantine /Applications/MacroBay.app` in Terminal and open it
+   again.
+2. **Windows** — run the installer. When SmartScreen says *Windows protected your PC*, click
+   **More info → Run anyway**.
+
+Every update you download repeats those same two steps, until a signed build ships.
 
 **No API key yet?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
 recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar months and three
@@ -68,9 +79,6 @@ need your own model provider and data-source credentials.
 
 ### ⭐ If this is useful to you, a star keeps it going
 
-<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
-  <img alt="Star MacroBay" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
-</a>
 
 </div>
 
@@ -200,7 +208,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.3.0`). macOS is the verified platform. A **sample mode** ships with the app:
+MacroBay is **alpha** (`0.3.1`). macOS is the verified platform. A **sample mode** ships with the app:
 with no key and no network you can open the full dashboard and one published analysis, replayed from a
 real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified

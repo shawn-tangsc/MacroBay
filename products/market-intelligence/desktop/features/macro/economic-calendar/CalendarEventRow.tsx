@@ -1,6 +1,7 @@
-import { Tooltip } from 'antd'
 import { Landmark, Newspaper, TrendingUp, type LucideIcon } from 'lucide-react'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarItemType, isHighImportanceCalendarItem, type CalendarDayItem } from './economicCalendarDayModel'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -27,6 +28,9 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
     ? marketSources.find(source => source.eventType === item.event.eventType)?.latestAttempt
     : undefined
   const status = calendarEventStatus(item, statusNow, useShellTimeZone(), attempt)
+  // `dataText` still takes the resolver: the type keeps both branches the same shape, and a caller
+  // that switches this hint to a key later must not also have to find a new resolver.
+  const resolveText = useProductTextKey()
   // The 0xRouter route carries the country; the official route is US-only and says so in its own
   // copy, so a country chip there would be noise. Read straight from the provider, which localises
   // the name with the same request (a code like `US` would be a machine token to the reader).
@@ -38,10 +42,13 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // and the hover text both say them, rather than leaving the reader to decode two glyphs.
   const importanceNote = important ? ` · ${text.details.importance} ${text.importance.high}` : ''
   const description = `${time} ${text.market.kinds[kind]} ${country ? `${country} ` : ''}${title} · ${text.eventStatus[status]}${importanceNote}`
-  return <Tooltip title={description} trigger={['hover', 'focus']}>
+  // The description is runtime data (time, title, status), not a sentence from the text table, so it
+  // goes through `dataText`. The hint is the same line on hover and on focus; the accessible name is
+  // that same line — it used to repeat the time, because the template added it a second time.
+  return <Tooltip dataText={description} resolveText={resolveText}>
     <button className="mi-economic-calendar__event" data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
       data-market-event={item.source === 'market' ? item.event.eventKey : undefined} data-calendar-row data-importance={important ? 'high' : item.source === 'market' ? item.event.importance : undefined}
-      data-event-status={status} type="button" aria-label={`${time} ${description}`} aria-pressed={selected} onClick={() => onSelect(item)}>
+      data-event-status={status} type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
       <span className="mi-economic-calendar__event-time">{time}</span>
       {/* The marks sit inside the title, not beside it: a third grid child collapsed the title to an
           ellipsis once already. The kind glyph leads the run so it lines up down the column, and the

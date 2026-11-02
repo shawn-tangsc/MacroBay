@@ -1,4 +1,5 @@
 import type { AgentType } from '@platform/ai/agent-platform/schemas/agentSchemas'
+import { resolveProviderDisplayName } from '../model-service/providerDisplayName'
 import {
   isAgentCompatibleModel as isAgentRuntimeCompatibleModel,
   resolveAgentModelCompatibility
@@ -43,6 +44,9 @@ export type BuildAgentModelOptionsInput = {
   compatibilityByModelKey?: ReadonlyMap<string, AgentRuntimeCompatibilityResult>
 }
 
+/** 供应商展示名：与模型服务页同一张 `providerNames` 表，回退到配置名（`resolveProviderDisplayName`）。 */
+const EMPTY_PROVIDER_NAMES: Readonly<Record<string, string>> = {}
+
 /**
  * PLAT-70：候选 = **带该 agentType 标记**的模型（chat + `agentRuntimes.<runtime> === true`）。
  *
@@ -52,13 +56,14 @@ export type BuildAgentModelOptionsInput = {
 export function buildAgentModelOptions(
   providers: readonly SafeModelProvider[],
   agentType: AgentType | string | undefined,
-  compatibilityByModelKey?: ReadonlyMap<string, AgentRuntimeCompatibilityResult>
+  compatibilityByModelKey?: ReadonlyMap<string, AgentRuntimeCompatibilityResult>,
+  providerNames: Readonly<Record<string, string>> = EMPTY_PROVIDER_NAMES
 ): AgentModelOptionGroup[] {
   return providers
     // 供应商已停用 ⇒ 它的模型不该出现在智能体候选里（用户已明确关掉这家）。
     .filter((provider) => provider.enabled !== false)
     .map((provider) => ({
-      label: provider.name,
+      label: resolveProviderDisplayName({ providerNames }, provider),
       options: provider.models.flatMap((model): AgentModelOption[] => {
         const key = `${provider.id}:${model.id}`
         const compatibility = compatibilityByModelKey?.get(key)
@@ -70,7 +75,7 @@ export function buildAgentModelOptions(
           value: key,
           label: model.name,
           providerId: provider.id,
-          providerName: provider.name,
+          providerName: resolveProviderDisplayName({ providerNames }, provider),
           model,
           ...(compatibility ? { compatibility } : {}),
           ...state

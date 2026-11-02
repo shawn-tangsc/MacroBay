@@ -10,15 +10,17 @@ const read = (relativePath: string): string => readFileSync(resolve(process.cwd(
 
 describe('PLAT-61 provider platform fetch wiring', () => {
   const appSource = read('platform/desktop/main/app.ts')
+  // 连接检测/端点探测/模型同步/图片生成这些 handler 已搬进 ipc/modelIpc.ts：注入断言跟着实现走。
+  const modelIpcSource = read('platform/desktop/main/ipc/modelIpc.ts')
 
   it('injects the platform fetch into the provider connection probe', () => {
-    expect(appSource).toMatch(
+    expect(modelIpcSource).toMatch(
       /testModelProviderConnection\(provider,\s*\{[\s\S]{0,200}?fetch:\s*getPlatformFetch\(\)/
     )
   })
 
   it('injects the platform fetch into the model sync preview', () => {
-    expect(appSource).toMatch(
+    expect(modelIpcSource).toMatch(
       /previewProviderModelSync\(provider,\s*\{\s*fetch:\s*getPlatformFetch\(\)\s*\}/
     )
   })

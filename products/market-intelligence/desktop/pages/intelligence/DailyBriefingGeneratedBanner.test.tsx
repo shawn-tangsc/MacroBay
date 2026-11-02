@@ -12,7 +12,6 @@ import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const bannerText = (language: DailyBriefingLocale) =>
   productText[language].pages.intelligence.portal.dailyBriefingGeneratedBanner

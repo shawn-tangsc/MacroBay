@@ -144,7 +144,6 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
           key={line.atMs}
           onClick={() => onSelectEvent?.(line)}
           style={{ left: `${x(line.atMs) / policy.width * 100}%` }}
-          title={line.identityUnconfirmed ? `${line.label} · ${text.eventLineIdentityUnconfirmed}` : line.label}
           type="button"
         ><i aria-hidden="true" /><span className="mi-cross-asset__event-line-label">{line.label}</span></button>)}
         {eventsCollapsed && eventsCollapsed > 0

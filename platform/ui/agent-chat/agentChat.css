@@ -113,10 +113,6 @@
   font-size: 11px;
 }
 
-.agent-chat-composer__notices > p[role='alert'] {
-  color: var(--danger);
-}
-
 .agent-chat-composer__toolbar {
   display: flex;
   flex-wrap: wrap;

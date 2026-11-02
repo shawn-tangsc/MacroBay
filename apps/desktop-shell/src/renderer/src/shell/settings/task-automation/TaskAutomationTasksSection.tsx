@@ -5,10 +5,19 @@ import { Fragment } from 'react'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
+import { BlockLoading } from './TaskAutomationBlockParts'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
+import {
+  AUDIT_OUTCOME_PILL,
+  RUN_OUTCOME_PILL,
+  TASK_STATUS_PILL,
+  pillTextResolver
+} from './taskAutomationStatusPills'
 import type {
   DeliveryHealthCounts,
   TaskAutomationStatusFilter,
@@ -25,6 +34,22 @@ export function TaskAutomationTasksSection(props: {
 }): React.ReactElement {
   const { labels, language, controller } = props
   const { state } = controller
+  const pillText = pillTextResolver(labels)
+
+  /**
+   * 读失败只有一套渲染：没有数据时它就是整块内容，有数据时压在表格上方。
+   * 之前失败会顶掉整张表，读者看到「读取失败」就以为任务没了——数据其实还在。
+   */
+  const errorNotice = (
+    <div className="task-automation-block-body">
+      <StateView
+        state="error"
+        reasonCode="unreadable"
+        size="md"
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+      />
+    </div>
+  )
 
   return (
     <section className="task-automation-block" aria-busy={controller.loading}>
@@ -65,20 +90,14 @@ export function TaskAutomationTasksSection(props: {
       </header>
       {controller.loading ? (
         <BlockLoading label={labels.tasksLoading} />
-      ) : controller.error ? (
-        <div className="task-automation-block-body">
-          <BlockError label={labels.tasksLoadFailed} retryLabel={labels.retry} onRetry={() => void controller.reload()} />
-        </div>
-      ) : state.emptyState === 'never-created' ? (
-        <BlockEmpty title={labels.emptyTasksTitle} body={labels.emptyTasksBody} />
-      ) : state.emptyState === 'filter-empty' ? (
-        <BlockEmpty
-          body={labels.filterEmpty}
-          actionLabel={labels.clearFilters}
-          onAction={controller.clearFilters}
-        />
-      ) : (
-        <table className="task-automation-table">
+      ) : controller.error && state.rows.length === 0 ? (
+        errorNotice
+      ) : state.rows.length > 0 ? (
+        // Rendering is decided by "are there rows to render", never by the empty-state verdict:
+        // a wrong verdict must degrade to a wrong sentence, not to an invisible table.
+        <>
+          {controller.error ? errorNotice : null}
+          <table className="task-automation-table">
           <thead>
             <tr>
               <th>{labels.columns.name}</th>
@@ -102,9 +121,11 @@ export function TaskAutomationTasksSection(props: {
                       <span className="task-automation-name">{row.task.name}</span>
                     </td>
                     <td>
-                      <span className={`task-automation-tag ${statusTone(row.task.status)}`}>
-                        {labels.status[row.task.status]}
-                      </span>
+                      <StatusPill
+                        tone={TASK_STATUS_PILL[row.task.status].tone}
+                        labelKey={TASK_STATUS_PILL[row.task.status].labelKey}
+                        resolveText={pillText}
+                      />
                     </td>
                     <td className="task-automation-mono">
                       {formatTaskSchedule(row.task.trigger, labels, language)}
@@ -113,7 +134,13 @@ export function TaskAutomationTasksSection(props: {
                       {formatTimestamp(row.task.nextRun ?? null, language) ?? labels.emptyValue}
                     </td>
                     <td>
-                      <LastRun task={row.task} snapshot={row.lastRun} labels={labels} language={language} />
+                      <LastRun
+                        task={row.task}
+                        snapshot={row.lastRun}
+                        unreadable={row.runUnreadable}
+                        labels={labels}
+                        language={language}
+                      />
                     </td>
                     <td className="task-automation-col-actions">
                       <Button
@@ -139,6 +166,7 @@ export function TaskAutomationTasksSection(props: {
                               language={language}
                               task={row.task}
                               health={controller.state.deliveryHealth}
+                              unreadable={row.runUnreadable}
                             />
                           </div>
                           <div>
@@ -153,9 +181,34 @@ export function TaskAutomationTasksSection(props: {
               )
             })}
           </tbody>
-        </table>
+          </table>
+        </>
+      ) : state.emptyState === 'filter-empty' ? (
+        // 有数据、被筛选挡住：状态与动作都归 `StateView`（`filtered-out` 必带「清除筛选」）。
+        <StateView
+          state="empty"
+          reasonCode="filtered-out"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: controller.clearFilters }}
+        />
+      ) : (
+        // 一条任务都没有过：`never-created` 要求一个真能用的「创建」动作，导航接缝
+        // （`navigateTo`，契约 §14）落地后这个动作存在了——去对话页，任务就在那里建。
+        // 平台句说明状态，下面那句只解释「怎么会有第一条」，不重复判断「这里没有」。
+        <>
+          <StateView
+            state="empty"
+            reasonCode="never-created"
+            size="md"
+            action={{
+              labelKey: STATE_VIEW_ACTION_KEYS.create,
+              onSelect: () => navigateTo({ page: 'agents' })
+            }}
+          />
+          <p className="task-automation-note">{labels.emptyTasksBody}</p>
+        </>
       )}
-      {!controller.loading && !controller.error && state.emptyState === 'none' && controller.hasMore ? (
+      {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (
         <div className="task-automation-block-footer">
           <Button size="small" onClick={() => void controller.loadMore()}>
             {labels.loadMore}
@@ -169,17 +222,25 @@ export function TaskAutomationTasksSection(props: {
 function LastRun(props: {
   task: ScheduledTaskEntity
   snapshot: TaskRunSnapshot | null
+  /** The latest run exists but could not be read: say so, do not claim the task never ran. */
+  unreadable: boolean
   labels: TaskAutomationLabels
   language: AppLanguage
 }): React.ReactElement {
-  const { labels, language, snapshot } = props
+  const { labels, language, snapshot, unreadable } = props
+  const pillText = pillTextResolver(labels)
+  if (unreadable) return <span className="task-automation-muted">{labels.runUnreadable}</span>
   if (!snapshot) return <span className="task-automation-muted">{labels.outcome.never}</span>
   const at = formatTimestamp(snapshot.at, language)
   const outcome = outcomeFromRunStatus(snapshot.status)
   if (!outcome) return <span className="task-automation-muted">{at ?? labels.emptyValue}</span>
   return (
     <>
-      <span className={`task-automation-tag ${outcomeTone(outcome)}`}>{labels.outcome[outcome]}</span>
+      <StatusPill
+        tone={RUN_OUTCOME_PILL[outcome].tone}
+        labelKey={RUN_OUTCOME_PILL[outcome].labelKey}
+        resolveText={pillText}
+      />
       {at ? <span className="task-automation-mono task-automation-muted"> {at}</span> : null}
       {snapshot.skipReasons.length > 0 ? (
         // Why it was skipped, in words: each reason leads to a different action, so a bare "skipped"
@@ -202,8 +263,22 @@ function TaskHealth(props: {
   language: AppLanguage
   task: ScheduledTaskEntity
   health: DeliveryHealthCounts
+  /** The run history could not be read: show that, never a row of zeros that reads as "nothing happened". */
+  unreadable: boolean
 }): React.ReactElement {
   const { health, labels, language } = props
+  if (props.unreadable) {
+    return (
+      <dl className="task-automation-kv">
+        <dt>{labels.columns.lastResult}</dt>
+        <dd className="task-automation-muted">{labels.runUnreadable}</dd>
+        <dt>{labels.columns.nextRun}</dt>
+        <dd className="task-automation-mono">
+          {formatTimestamp(props.task.nextRun ?? null, language) ?? labels.emptyValue}
+        </dd>
+      </dl>
+    )
+  }
   return (
     <dl className="task-automation-kv">
       <dt>{labels.delivered}</dt>
@@ -230,14 +305,17 @@ function AuditList(props: {
   audits: TaskMutationAuditEntity[]
 }): React.ReactElement {
   const { audits, labels, language } = props
+  const pillText = pillTextResolver(labels)
   if (audits.length === 0) return <p className="task-automation-note">{labels.noChanges}</p>
   return (
     <ul className="task-automation-audit">
       {audits.slice(0, 5).map((audit) => (
         <li key={audit.id}>
-          <span className={`task-automation-tag ${audit.outcome === 'accepted' ? 'task-automation-tag-ok' : 'task-automation-tag-off'}`}>
-            {audit.outcome === 'accepted' ? labels.auditAccepted : labels.auditRejected}
-          </span>
+          <StatusPill
+            tone={AUDIT_OUTCOME_PILL[audit.outcome].tone}
+            labelKey={AUDIT_OUTCOME_PILL[audit.outcome].labelKey}
+            resolveText={pillText}
+          />
           <span>{labels.auditAction[audit.action] ?? audit.action}</span>
           <span className="task-automation-mono task-automation-muted">
             {formatTimestamp(audit.createdAt, language) ?? labels.emptyValue}

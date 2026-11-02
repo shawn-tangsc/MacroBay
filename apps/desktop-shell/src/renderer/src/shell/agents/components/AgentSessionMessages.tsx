@@ -254,6 +254,7 @@ export default function AgentSessionMessages({
           activeMessageId={activeAnchorMessageId}
           bottomActive={isAtBottom}
           ariaLabel={t.messages.anchorRailAria}
+          bottomLabel={t.messages.navigateBottom}
           onBottom={() => scrollToBoundary('bottom')}
           onSelectMessage={(messageId) => {
             scrollToMessage(messageId)

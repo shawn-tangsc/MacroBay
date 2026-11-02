@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { platformText } from '../../i18n/platformText'
-import { resolveAssistantStreamErrorText } from './AssistantPage'
+import { resolveAssistantStreamErrorText } from './assistantPageReadiness'
 import { selectTopicAfterDeletion } from './assistantTopicSelection'
 
 describe('AssistantPage stream scoping', () => {

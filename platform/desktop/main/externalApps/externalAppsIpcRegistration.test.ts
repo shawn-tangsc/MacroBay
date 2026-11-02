@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const appSource = readFileSync(resolve(__dirname, '../app.ts'), 'utf8')
+const storageIpcSource = readFileSync(resolve(__dirname, '../ipc/storageIpc.ts'), 'utf8')
 const channelsSource = readFileSync(resolve(__dirname, '../../ipc/channels.ts'), 'utf8')
 const preloadSource = readFileSync(resolve(__dirname, '../../preload/index.ts'), 'utf8')
 const buttonSource = readFileSync(
@@ -39,21 +40,21 @@ describe('PLAT-27：外部应用通道不再「已声明但无 handler」', () =
     expect(buttonSource).toContain('.launchExternalAppWorkspace(')
   })
 
-  it('app.ts 为两个通道各注册恰好一个 handler（当前 0 个 ⇒ RED）', () => {
+  it('两个通道各注册恰好一个 handler（handler 已搬到 ipc/storageIpc.ts）', () => {
     for (const channel of declaredChannelKeys) {
       const pattern = `ipcMain.handle(IpcChannels.${channel},`
-      expect(appSource.split(pattern).length - 1).toBe(1)
+      expect(storageIpcSource.split(pattern).length - 1).toBe(1)
     }
   })
 
   it('handler 复用既有 ExternalAppsService（不新增第二套枚举实现、不新增通道）', () => {
     expect(appSource).toContain("import { ExternalAppsService } from './externalApps/ExternalAppsService'")
     expect(appSource).toContain('new ExternalAppsService({')
-    expect(appSource).toContain('externalAppsService.listInstalledAppViews()')
-    expect(appSource).toContain('externalAppsService.launchWorkspace(')
+    expect(storageIpcSource).toContain('externalApps.listInstalledAppViews()')
+    expect(storageIpcSource).toContain('externalApps.launchWorkspace(')
     // 枚举来源必须是 OS 协议处理器查询（真机唯一可信来源），且路径入参经既有 allow-list 校验
     expect(appSource).toContain('app.getApplicationInfoForProtocol(protocol)')
-    expect(appSource).toContain('validateLaunchExternalAppRequest(input)')
+    expect(storageIpcSource).toContain('validateLaunchExternalAppRequest(input)')
   })
 })
 

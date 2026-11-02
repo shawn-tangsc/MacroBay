@@ -7,6 +7,11 @@ import type {
   SafeCacheView
 } from '@platform/storage/cache-governance/cacheContracts'
 import { platformText } from '../../../i18n/platformText'
+import {
+  STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+  cacheErrorReasonKey,
+  formatCacheErrorReason
+} from './storageCacheDisplay'
 
 export type StorageCacheFilterKey = 'all' | 'platform' | 'ai-runtime' | 'product' | 'derived-data'
 
@@ -119,15 +124,104 @@ export function resolveStorageCacheWarnings(cache: SafeCacheView, language: AppL
   return cache.warnings
 }
 
-export function formatStorageOperationToast(
+export type StorageOperationNoticeTone = 'success' | 'info' | 'danger'
+
+/**
+ * 一条提示：**键和句子一起交**。
+ *
+ * 键给 `Toast`（契约要求 `titleKey` / `descKey`，句子在入队时由调用方的解析器解成快照），
+ * 句子给这个解析器——带名字、带预演标记的那几句（「已清理『X』」）是参数化的，
+ * 一张纯键表装不下，所以解析器是调用点里的单键闭包，未知键一律返回空串（不回退键名）。
+ */
+export type StorageOperationNotice = {
+  tone: StorageOperationNoticeTone
+  titleKey: string
+  title: string
+  reasonKey?: string
+  reason?: string
+}
+
+export const STORAGE_CACHE_CLEARED_TOAST_KEY = 'storageCache.toast.cleared'
+export const STORAGE_CACHE_COMPACTED_TOAST_KEY = 'storageCache.toast.compacted'
+export const STORAGE_CACHE_SKIPPED_TOAST_KEY = 'storageCache.toast.skipped'
+export const STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY = 'storageCache.toast.operation-failed'
+export const STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY = 'storageCache.toast.recheck-failed'
+/** 危险档强制带动作：重试同一个入口，不另造回调。 */
+export const STORAGE_CACHE_RETRY_ACTION_KEY = 'storageCache.toast.retry'
+
+/**
+ * 操作结果 → 一条提示。**按 `status` 穷举**。
+ *
+ * 这里原来先判 `skipped`、再按操作类型选句，于是 `failed` 落进了「已清理 / 已压缩」那一支：
+ * 提示还是静默空操作的时候没人看得见，提示真能显示之后就是「失败显示成成功」。
+ * 失败句的原因只走原因码 → 键的映射，运行时原文只进审计与日志。
+ */
+export function formatStorageOperationNotice(
   cache: SafeCacheView,
   result: CacheOperationResult,
   language: AppLanguage
-): string {
+): StorageOperationNotice {
   const labels = platformText[language].storageCache
   const name = resolveStorageCacheText(cache.displayName, cache.displayNameI18n, language)
-  if (result.status === 'skipped') return labels.toastSkipped(name)
-  if (result.operation === 'clear') return labels.toastCleared(name, result.dryRun)
-  if (result.operation === 'compact') return labels.toastCompacted(name, result.dryRun)
-  return labels.operationSuccess
+  switch (result.status) {
+    case 'failed':
+      return {
+        tone: 'danger',
+        titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+        title: labels.operationFailed,
+        reasonKey: cacheErrorReasonKey(result.normalizedErrorCode),
+        reason: formatCacheErrorReason(result.normalizedErrorCode, labels)
+      }
+    case 'skipped':
+      return {
+        tone: 'info',
+        titleKey: STORAGE_CACHE_SKIPPED_TOAST_KEY,
+        title: labels.toastSkipped(name)
+      }
+    case 'succeeded':
+      switch (result.operation) {
+        case 'clear':
+          return {
+            tone: 'success',
+            titleKey: STORAGE_CACHE_CLEARED_TOAST_KEY,
+            title: labels.toastCleared(name, result.dryRun)
+          }
+        case 'compact':
+          return {
+            tone: 'success',
+            titleKey: STORAGE_CACHE_COMPACTED_TOAST_KEY,
+            title: labels.toastCompacted(name, result.dryRun)
+          }
+      }
+  }
+}
+
+/**
+ * IPC 层直接抛错时拿不到原因码（模型层还可能把 `ENOENT: ...` 这类原文塞进 `message`）：
+ * 原因句明说「这次没拿到具体原因」，原文一概不上屏。
+ */
+export function formatStorageOperationErrorNotice(
+  operation: CacheOperationType | 'recheck',
+  language: AppLanguage
+): StorageOperationNotice {
+  const labels = platformText[language].storageCache
+  switch (operation) {
+    case 'clear':
+    case 'compact':
+      return {
+        tone: 'danger',
+        titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+        title: labels.operationFailed,
+        reasonKey: STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+        reason: labels.errorReasonUnavailable
+      }
+    case 'recheck':
+      return {
+        tone: 'danger',
+        titleKey: STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+        title: labels.recheckFailed,
+        reasonKey: STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+        reason: labels.errorReasonUnavailable
+      }
+  }
 }

@@ -11,7 +11,6 @@ import type { ProviderView, SourceView } from '../../../service/intelligence/app
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
 let root: Root | null = null
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -28,6 +27,7 @@ function labels(): ProviderDetailLabels {
     badges: settingsText.sourceBadges,
     status: settingsText.status,
     capabilities: settingsText.providerSummary,
+    toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
     signup: settingsText.signup,

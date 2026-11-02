@@ -22,7 +22,15 @@ export type DailyBriefingSettingsView = Readonly<{
     webSearchEnabled: boolean
     webSearchAuthorizedAt?: string
   }>
-  generation: Readonly<{ generationTime: string; windowHours: number; cronExpression: string }>
+  generation: Readonly<{
+    generationTime: string
+    /** The zone the time means; null while it is unknown or unreadable. */
+    generationTimeZone: string | null
+    /** The saved value that is not a usable zone; automatic generation is paused while set. */
+    generationTimeZoneInvalid: string | null
+    windowHours: number
+    cronExpression: string
+  }>
   /** 日报 agent 实际模型能否使用 Anthropic server-side WebSearch/WebFetch。 */
   webSearchSupported: boolean
   resolved:

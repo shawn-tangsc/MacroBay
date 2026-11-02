@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
-import { Tabs } from 'antd'
 import type { MenuProps } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { PanelContainerMode, WorkspaceSize } from '@platform/workspace/contracts'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { Tabs } from '@platform/ui/components/tabs'
 import { platformText } from '../../i18n/platformText'
 import { useWorkspaceSplitter } from './useWorkspaceSplitter'
 import {
@@ -13,7 +13,7 @@ import {
   type WorkspacePresentation,
   type WorkspaceRegion
 } from './workspacePresentation'
-import { WorkspacePanelToolbar } from './WorkspacePanelToolbar'
+import { WorkspacePanelToolbar, type WorkspacePanelTextKey } from './WorkspacePanelToolbar'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace 单个面板的稳定挂载帧。
@@ -58,6 +58,9 @@ export type WorkspacePanelFrameProps = {
 
 const modeOrder = ['embedded', 'docked-right', 'docked-bottom', 'detached'] as const
 
+/** 标签条那组的可访问名。面板标题来自注册表、不是键，所以只有这一个键走文案表。 */
+const PANEL_TABS_LABEL_KEY = 'workspace.panelTabs'
+
 export function WorkspacePanelFrame(props: WorkspacePanelFrameProps): React.ReactElement {
   const labels = platformText[props.language].workspace
   const docked: DockedMode | null = props.presentation === 'normal' && (props.region === 'right' || props.region === 'bottom')
@@ -100,6 +103,33 @@ export function WorkspacePanelFrame(props: WorkspacePanelFrameProps): React.Reac
     props.onSwitchContainer(key as PanelContainerMode)
   }
 
+  /*
+   * 标签条（契约 §7）：`value` 用**面板实例 key**，不是下标——下标会随关闭/排序漂移，一旦存进布局就是错项。
+   * 面板标题由模块注册时给出的那对已解析语言文本提供（`LocalizedText`，不是 i18n 键），所以 `labelKey`
+   * 收的是同一个稳定标识，再由这一个解析器把它查回注册的标题；查不到退回通用「面板」，绝不把裸 key 上屏。
+   */
+  const panelTitles = new Map(props.tabs.map((tab) => [tab.panelKey, tab.title]))
+  const tabItems = props.tabs.map((tab) => ({ value: tab.panelKey, labelKey: tab.panelKey }))
+  const resolveTabText = (key: string): string =>
+    key === PANEL_TABS_LABEL_KEY ? labels.panelTabs : (panelTitles.get(key) ?? labels.panelFallback)
+
+  /*
+   * 权威 active 可能指向刚关闭、本区域已不再列出的面板。此时回落到**本帧自己的 key**（它必定在清单里），
+   * 而不是让组件兜底选第一个——兜底会对同区域每个隐藏帧各发一次激活命令，布局还没更新就先抖一轮。
+   */
+  const requested = props.activePanelKey
+  const activeTabValue = requested !== undefined && panelTitles.has(requested) ? requested : props.panelKey
+  const hasTabStrip = props.tabs.length > 1
+  const panelContent = (
+    <ShellLanguageProvider language={props.language}>{props.content}</ShellLanguageProvider>
+  )
+  /*
+   * 面板正文**留在标签条外面**，位置固定：同区域的面板各自是一个帧，那些帧为了「换 Tab 不卸载、不丢草稿」
+   * 一直挂载着，正文本来就归它们自己。把正文塞进 `Tabs.panels` 会在「本区域只剩一个面板」时把结构从
+   * 「有标签条」切成「没有标签条」，React 于是在同一位置换掉子树 —— 实测会重建正文（输入框里的草稿被清空）。
+   * 所以这里只借标签条：`panels` 留空，`roles="tabpanel"` 的空块不承载正文，也不重复挂载任何内容。
+   */
+
   const onFrameKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return
     if (props.presentation === 'normal') return
@@ -125,25 +155,30 @@ export function WorkspacePanelFrame(props: WorkspacePanelFrameProps): React.Reac
     >
       <WorkspacePanelToolbar
         title={props.title}
-        actionsLabel={labels.panelActions}
-        closeLabel={labels.panelClose}
         menuItems={menuItems}
         onMenuClick={onMenuClick}
         onClose={props.onClose}
-        returnToPage={props.presentation === 'normal' ? undefined : { label: labels.panelReturnToPage, onClick: props.onReturnToPage }}
+        resolveText={(key: WorkspacePanelTextKey) =>
+          key === 'workspace.panelActions'
+            ? labels.panelActions
+            : key === 'workspace.panelClose'
+              ? labels.panelClose
+              : labels.panelReturnToPage
+        }
+        returnToPage={props.presentation === 'normal' ? undefined : { onClick: props.onReturnToPage }}
       />
-      {props.tabs.length > 1 ? (
-        <div className="workspace-panel-tabs" style={{ gridArea: 'tabs' }}>
-          <Tabs
-            size="small"
-            activeKey={props.activePanelKey}
-            onChange={(key) => props.onActivate(key)}
-            items={props.tabs.map((tab) => ({ key: tab.panelKey, label: tab.title }))}
-          />
-        </div>
-      ) : null}
       <div className="workspace-panel-body" style={{ gridArea: 'body' }}>
-        <ShellLanguageProvider language={props.language}>{props.content}</ShellLanguageProvider>
+        {hasTabStrip ? (
+          <Tabs
+            ariaLabelKey={PANEL_TABS_LABEL_KEY}
+            items={tabItems}
+            onChange={props.onActivate}
+            panels={{}}
+            resolveText={resolveTabText}
+            value={activeTabValue}
+          />
+        ) : null}
+        <div className="workspace-panel-content">{panelContent}</div>
       </div>
       {docked && bounds ? (
         <div

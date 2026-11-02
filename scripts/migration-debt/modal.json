@@ -1,0 +1,4 @@
+{
+  "$comment": "antd Modal call sites still to migrate. One entry per file — the debt is a whole-file import. Delete an entry in the same commit that migrates its file; a stale entry fails the guard, both directions. Currently empty: the last site migrated and struck its line, which is why this file exists as an empty list rather than being deleted — an empty list keeps both directions running, so the next antd Modal import fails immediately instead of going unnoticed. This file lives outside platform/ui/components on purpose: a caller migrating a site must be able to strike the line without touching the component directory.",
+  "entries": {}
+}

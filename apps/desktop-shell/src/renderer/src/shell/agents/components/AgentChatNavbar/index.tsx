@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Select, Tooltip } from 'antd'
+import { Button, Select } from 'antd'
 import { CalendarClock, FolderOpen, Settings2, SquarePen, TerminalSquare, Trash2 } from 'lucide-react'
 
 import type { AgentEntity, UniqueModelId } from '@platform/ai/agent-platform/schemas/agentSchemas'
@@ -24,7 +24,12 @@ import {
   setSessionWorkspaceByPathViaApi,
   setSessionWorkspaceViaApi
 } from '../../agentSessionDataApi'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
+import { useAgentProviderNames } from '../../useAgentProviderNames'
 import { platformText } from '../../../../i18n/platformText'
 import {
   isUnconfiguredAgentModel,
@@ -71,18 +76,38 @@ export default function AgentChatNavbar({
   onEditAgent
 }: AgentChatNavbarProps): React.ReactElement {
   const t = useAgentText()
+  // 键取自闭合联合 `AgentTooltipKey`：写错一处编译就红。
+  const tooltipKeys = {
+    agentConfig: 'chatNavbar.agentConfig',
+    openWorkspace: 'chatNavbar.openWorkspace',
+    clearMessages: 'chatNavbar.clearMessages',
+    taskCenter: 'chatNavbar.taskCenter',
+    chatSettings: 'chatNavbar.chatSettings'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
+  // 权限模式：默认确认是基线（muted），计划模式「正在发生」（info），
+  // 自动接受编辑与跳过确认都需要读者看一眼（warn）。`bad` 留给真正的失败，不兼职。
+  const permissionMode = activeAgent.configuration?.permission_mode ?? 'default'
+  const PERMISSION_TONE: Record<string, StatusPillTone> = {
+    default: 'muted',
+    plan: 'info',
+    acceptEdits: 'warn',
+    bypassPermissions: 'warn'
+  }
+  const permissionKey = `permissionMode.${permissionMode}`
   const language = useAgentLanguage()
+  const providerNames = useAgentProviderNames()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [taskCenterOpen, setTaskCenterOpen] = useState(false)
   // 智能体候选仍是 `buildAgentModelOptions` 那一份判据；messages 硬约束由选择器数据层执行。
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
     () =>
       flattenAgentModelOptions(
-        buildAgentModelOptions(providers, activeAgent.type, compatibilityByModelKey)
+        buildAgentModelOptions(providers, activeAgent.type, compatibilityByModelKey, providerNames)
       )
         .filter((option) => option.selectable)
         .map((option) => ({ providerId: option.providerId, model: option.model })),
-    [activeAgent.type, compatibilityByModelKey, providers]
+    [activeAgent.type, compatibilityByModelKey, providers, providerNames]
   )
   // 智能体没有显式模型时，工具栏显示「跟随默认：<模型>」而不是 `unconfigured:` 原始值。
   const followsDefaultModel = isUnconfiguredAgentModel(activeAgent.model)
@@ -138,7 +163,7 @@ export default function AgentChatNavbar({
           <span className="agent-chat-identity-copy">
             <strong>{activeAgent.name}</strong>
           </span>
-          <Tooltip title={t.chatNavbar.agentConfig}>
+          <Tooltip labelKey={tooltipKeys.agentConfig} resolveText={resolveText}>
             <Button
               className="ant-shell-icon-button agent-chat-agent-config-button"
               type="text"
@@ -181,7 +206,7 @@ export default function AgentChatNavbar({
           onChange={(value) => void selectWorkspace(value)}
         />
         {activeSession.workspace.path ? (
-          <Tooltip title={t.chatNavbar.openWorkspace}>
+          <Tooltip labelKey={tooltipKeys.openWorkspace} resolveText={resolveText}>
             <Button
               className="ant-shell-icon-button"
               type="text"
@@ -193,8 +218,12 @@ export default function AgentChatNavbar({
           </Tooltip>
         ) : null}
         <OpenExternalAppButton workspacePath={activeSession.workspace.path} />
-        <span className="agent-permission-chip">{getAgentPermissionModeLabel(activeAgent, t.permissionMode)}</span>
-        <Tooltip title={t.chatNavbar.clearMessages}>
+        <StatusPill
+          tone={PERMISSION_TONE[permissionMode] ?? 'muted'}
+          labelKey={permissionKey}
+          resolveText={(key) => resolveAgentTextKey(t, key)}
+        />
+        <Tooltip labelKey={tooltipKeys.clearMessages} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"
@@ -209,7 +238,7 @@ export default function AgentChatNavbar({
             }}
           />
         </Tooltip>
-        <Tooltip title={t.chatNavbar.taskCenter}>
+        <Tooltip labelKey={tooltipKeys.taskCenter} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"
@@ -219,7 +248,7 @@ export default function AgentChatNavbar({
             onClick={() => setTaskCenterOpen(true)}
           />
         </Tooltip>
-        <Tooltip title={t.chatNavbar.chatSettings}>
+        <Tooltip labelKey={tooltipKeys.chatSettings} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"

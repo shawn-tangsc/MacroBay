@@ -10,6 +10,9 @@ conditional analysis next to the dashboard that produced it.
 Every statement is bound to evidence records and an `asOf` boundary. When the evidence is missing,
 the answer says so instead of filling the gap with a neutral value.
 
+Three ways in: the daily briefing for the last day, the dashboard for the current picture, and the
+analyst agent for the reasoning behind either.
+
 Two sibling agents appear in the same portal, the Equities Market Analyst and the Futures Market
 Analyst. Both are marked **coming soon** and cannot be configured yet.
 

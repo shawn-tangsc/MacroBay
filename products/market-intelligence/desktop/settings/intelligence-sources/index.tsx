@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { Segmented } from '@platform/ui/components/segmented'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { ProviderDetail } from './ProviderDetail'
@@ -21,6 +24,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   const [view, setView] = useState<'sources' | 'runs'>('sources')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const language = useShellLanguage()
+  const resolveText = useProductTextKey()
   const t = productText[language].settings.intelligenceSources
   const {
     settingsView,
@@ -36,6 +40,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     replaying,
     errorCode,
     notice,
+    reload,
     selectSource,
     setEnabled,
     updateProfile,
@@ -79,11 +84,37 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     )
   }
 
+  // The first read failed: say so and offer the retry. Drawing the page anyway would look like a
+  // module with no sources registered, which is a different fact from "we could not read them".
+  if (!settingsView && errorCode) {
+    return (
+      <section className="settings-workspace intelligence-sources-workspace">
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: reload }}
+          reasonCode="unreadable"
+          size="md"
+          state="error"
+        />
+      </section>
+    )
+  }
+
   return (
     <section className="settings-workspace intelligence-sources-workspace">
       <div className="intelligence-sources-view-switch">
-        <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
-        <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
+        {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader
+            can compare both views before committing. Both labels and the group's own name are keys,
+            so the sentences never live in this file. */}
+        <Segmented
+          ariaLabelKey="settings.intelligenceSources.title"
+          items={[
+            { labelKey: 'settings.intelligenceSources.viewSources', value: 'sources' },
+            { labelKey: 'settings.intelligenceSources.viewRuns', value: 'runs' }
+          ]}
+          onChange={(value) => setView(value as 'sources' | 'runs')}
+          resolveText={resolveText}
+          value={view}
+        />
       </div>
       {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection
         knownSources={knownSources}
@@ -91,7 +122,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
       /></div> : <>
       <SettingsSourceTree
         filter={sourceFilter}
-        labels={{ title: t.title, categories: t.sourceCategories, filters: t.sourceFilters, providerNames: t.providerNames, providerSummary: t.providerSummary }}
+        labels={{ title: t.title, categories: t.sourceCategories, providerNames: t.providerNames, providerSummary: t.providerSummary }}
         selectedProviderId={selectedProviderId}
         view={settingsView}
         onFilterChange={setSourceFilter}
@@ -101,11 +132,11 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         {selectedProviderId ? (() => {
           const provider = settingsView?.groups.flatMap((group) => group.providers).find((entry) => entry.providerId === selectedProviderId)
           return provider ? <div className="intelligence-detail-scroll"><ProviderDetail
-            labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey }}
+            labels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, panelNames: t.panelNames, badges: { pending: t.sourceBadges.pending, advanced: t.sourceBadges.advanced, calendar: t.sourceBadges.calendar, proxy: t.sourceBadges.proxy }, status: t.status, capabilities: t.providerSummary, toggleSource: t.toggleSource, credentials: t.credentialsRequired, website: t.website, signup: t.signup, inviteNote: t.inviteNote, testConnection: t.testConnection, jobRegistered: t.jobRegistered, jobNotRegistered: t.jobNotRegistered, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, connectionUnsupported: t.connectionUnsupported, apiKey: t.apiKey }}
             provider={provider}
             showSourceDetails
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
-            translation={language !== 'en-US' ? { settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
+            translation={language !== 'en-US' ? { settings: translation.settings, loading: translation.loading, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, savedThisSession: translation.savedThisSession, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
             onSelectSource={() => undefined}
           /></div> : null
         })() : null}

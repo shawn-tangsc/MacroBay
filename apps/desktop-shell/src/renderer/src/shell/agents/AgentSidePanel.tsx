@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Button, Input, Tooltip } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Input } from 'antd'
 import { Bot, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 
 import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
@@ -9,12 +9,16 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 
 import AgentRoster from './components/AgentRoster'
 import Sessions from './components/Sessions'
-import { createDefaultAgentSession, deleteSessions, selectAgentById, selectSession, setAgentModel } from './agentStateActions'
-import { createSessionViaApi, deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi, setAgentModelViaApi } from './agentSessionDataApi'
+import { deleteSessions, selectAgentById, selectSession } from './agentStateActions'
+import { deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi } from './agentSessionDataApi'
 import { getSessionChannelTypeBySessionId } from './agentChannelVisuals'
-import { filterSessionsForAgent, getAgentPrimarySessionId, getCreateSessionAgentId } from './agentSessionViewModel'
+import { filterSessionsForAgent, getAgentPrimarySessionId } from './agentSessionViewModel'
+import { DisabledHint } from '@platform/ui/components/disabled-hint'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from './agentTextProvider'
-import { isUnconfiguredAgentModel } from '@platform/ai/agent-platform/runtime/effectiveAgentModel'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from './agentTooltipText'
+import { startDefaultSession } from './startDefaultSession'
 
 type AgentSidePanelTab = 'agents' | 'sessions'
 
@@ -28,6 +32,8 @@ type AgentSidePanelProps = {
   onEditAgent: (agentId: string) => void
   defaultAgentModelId?: string
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
+  /** 每次自增表示「把读者送到智能体列表」：会话指向的智能体被删掉时用。 */
+  focusAgentListTick?: number
 }
 
 export default function AgentSidePanel({
@@ -39,10 +45,28 @@ export default function AgentSidePanel({
   onCreateAgent,
   onEditAgent,
   defaultAgentModelId,
-  onStateChange
+  onStateChange,
+  focusAgentListTick = 0
 }: AgentSidePanelProps): React.ReactElement {
   const t = useAgentText()
+  // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
+  const tooltipKeys = { createAgent: 'navbar.createAgent' } as const satisfies Record<string, AgentTooltipKey>
+  // 键名跟着**按钮的动作**走：那颗按钮删除筛选后的会话，不是「清除筛选」。
+  const disabledHintKeys = {
+    newSession: 'sidePanel.newSessionNeedsAgent',
+    deleteFiltered: 'sidePanel.deleteFilteredNeedsSessions'
+  } as const
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
+  const resolveHintText = (key: string): string => resolveAgentTextKey(t, key)
   const [activeTab, setActiveTab] = useState<AgentSidePanelTab>('sessions')
+  const panelRef = useRef<HTMLElement | null>(null)
+
+  // 「回到列表」：切到智能体页，把焦点交给第一个智能体，读屏才知道列表在哪。
+  useEffect(() => {
+    if (focusAgentListTick === 0) return
+    setActiveTab('agents')
+    panelRef.current?.querySelector<HTMLButtonElement>('.agent-roster-main')?.focus()
+  }, [focusAgentListTick])
   const [keyword, setKeyword] = useState('')
   const activeAgentId = state.activeAgentId ?? state.agents[0]?.id ?? null
   const agentSessions = useMemo(
@@ -67,21 +91,13 @@ export default function AgentSidePanel({
   const channelTypeBySessionId = useMemo(() => getSessionChannelTypeBySessionId(state.channels), [state.channels])
 
   function createDefaultSession(): void {
-    const agentId = getCreateSessionAgentId(activeAgentId)
-    if (!agentId) return
-    const agent = state.agents.find((item) => item.id === agentId)
-    if (agent && defaultAgentModelId && isUnconfiguredAgentModel(agent.model)) {
-      void setAgentModelViaApi(window.platform, agent.id, defaultAgentModelId).catch(() => {
-        onStateChange((current) => setAgentModel(current, agent.id, defaultAgentModelId))
-      })
-    }
-
-    void createSessionViaApi(window.platform, {
-      agentId,
-      name: t.sidePanel.defaultSessionName,
-      workspace: { type: 'system' }
-    }).catch(() => {
-      onStateChange((current) => createDefaultAgentSession(current, t.sidePanel.defaultSessionName, agentId))
+    // 流程在 `startDefaultSession` 里，空会话页用的是同一份实现。
+    startDefaultSession({
+      state,
+      activeAgentId,
+      defaultAgentModelId,
+      sessionName: t.sidePanel.defaultSessionName,
+      onStateChange
     })
   }
 
@@ -102,7 +118,7 @@ export default function AgentSidePanel({
   }
 
   return (
-    <aside className="agent-side-panel">
+    <aside ref={panelRef} className="agent-side-panel">
       <div className="agent-side-panel-tabs" role="tablist" aria-label={t.sidePanel.navigationTabs}>
         <button
           type="button"
@@ -124,14 +140,16 @@ export default function AgentSidePanel({
 
       <div className="agent-side-panel-action">
         {activeTab === 'agents' ? (
-          <Tooltip title={t.navbar.createAgent}>
+          <Tooltip labelKey={tooltipKeys.createAgent} resolveText={resolveText}>
             <Button className="agent-side-panel-add-button" icon={<Bot size={15} />} onClick={onCreateAgent}>
               {t.navbar.createAgent}
             </Button>
           </Tooltip>
         ) : (
           <>
-            <Tooltip title={t.sidePanel.newSession}>
+            <DisabledHint
+              labelKey={disabledHintKeys.newSession}
+              resolveText={resolveHintText}>
               <Button
                 className="agent-side-panel-add-button"
                 icon={<MessageSquarePlus size={15} />}
@@ -139,8 +157,10 @@ export default function AgentSidePanel({
                 onClick={createDefaultSession}>
                 {t.sidePanel.newSession}
               </Button>
-            </Tooltip>
-            <Tooltip title={t.sidePanel.clearFilteredSessions}>
+            </DisabledHint>
+            <DisabledHint
+              labelKey={disabledHintKeys.deleteFiltered}
+              resolveText={resolveHintText}>
               <Button
                 className="ant-shell-icon-button"
                 type="text"
@@ -157,7 +177,7 @@ export default function AgentSidePanel({
                   })
                 }}
               />
-            </Tooltip>
+            </DisabledHint>
           </>
         )}
       </div>

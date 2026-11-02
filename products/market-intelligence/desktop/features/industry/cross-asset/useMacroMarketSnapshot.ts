@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { MacroMarketSnapshotView } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshotClient } from '../../../shared/ipc/macroMarketSnapshotClient'
@@ -39,6 +39,8 @@ export function useMacroMarketSnapshot({ client }: { client?: MacroMarketSnapsho
   state: MacroMarketViewState
 } {
   const [snapshot, setSnapshot] = useState<MacroMarketSnapshotView>()
+  /** Read synchronously inside the poll's catch: a failed poll may not blank what is on screen. */
+  const snapshotRef = useRef<MacroMarketSnapshotView>(undefined)
   const [state, setState] = useState<MacroMarketViewState>('loading')
   useEffect(() => {
     if (!client) {
@@ -53,13 +55,15 @@ export function useMacroMarketSnapshot({ client }: { client?: MacroMarketSnapsho
       try {
         const result = await client.query()
         if (!active) return
+        snapshotRef.current = result
         setSnapshot(result)
         setState(result.state === 'unavailable' ? 'unavailable' : 'ready')
         nextDelay = hasLiveReading(result) ? macroMarketViewPolicy.liveQueryMs : macroMarketViewPolicy.settledQueryMs
       } catch {
         if (!active) return
-        setSnapshot(undefined)
-        setState('unavailable')
+        // A failed poll is not a failed read. Before the first answer the table keeps waiting
+        // (loading); afterwards it keeps the rows it has and the next poll may fill them again.
+        setState(snapshotRef.current === undefined ? 'loading' : 'ready')
       }
       if (active) timer = setTimeout(() => { void poll() }, nextDelay)
     }

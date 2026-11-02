@@ -11,11 +11,11 @@ import type { JobScheduleView } from '@platform/jobs'
 import { platformText } from '../../../i18n/platformText'
 import { TaskAutomationResourceJobsSection } from './TaskAutomationResourceJobsSection'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
+import type { ResourceJobSchedulesErrorReason } from './useResourceJobSchedules'
 
 const labels = platformText['zh-CN'].taskAutomation
 
 describe('TaskAutomationResourceJobsSection filters', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     document.body.replaceChildren()
@@ -57,7 +57,7 @@ describe('TaskAutomationResourceJobsSection filters', () => {
       typeInto(input, 'zzz')
     })
     expect(rows(container)).toHaveLength(0)
-    expect(container.textContent).toContain(labels.filterEmpty)
+    expect(container.textContent).toContain('有数据，但被当前筛选挡住了')
     const clear = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.trim() === labels.clearFilters)
     expect(clear).toBeDefined()
@@ -71,7 +71,6 @@ describe('TaskAutomationResourceJobsSection filters', () => {
 })
 
 describe('TaskAutomationResourceJobsSection pagination', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     document.body.replaceChildren()
@@ -131,7 +130,7 @@ describe('TaskAutomationResourceJobsSection pagination', () => {
     })
 
     expect(rows(container)).toHaveLength(0)
-    expect(text(container)).toContain(labels.filterEmpty)
+    expect(text(container)).toContain('有数据，但被当前筛选挡住了')
     expect(container.querySelector('.task-automation-pagination')).toBeNull()
     expect(container.querySelector('.task-automation-filters')).not.toBeNull()
   })
@@ -174,6 +173,42 @@ describe('TaskAutomationResourceJobsSection pagination', () => {
   })
 })
 
+describe('TaskAutomationResourceJobsSection error states', () => {
+
+  afterEach(() => {
+    document.body.replaceChildren()
+  })
+
+  it('renders the read-failure reason through StateView with a real retry', async () => {
+    const controller = { ...controllerWith([]), error: true, errorReason: 'read-failed' as const }
+    const container = await renderSection(controller)
+
+    // 原因码 `unreadable` 的句子由组件码表给：读取失败 + 可以重试。
+    expect(text(container)).toContain('读取失败')
+    expect(text(container)).toContain('数据没有读出来，可以重试')
+    // 旧的行内报错不再出现：换组件之后只保留一个错误面。
+    expect(text(container)).not.toContain(labels.resourceLoadFailed)
+
+    const retry = container.querySelector('.state-view__action') as HTMLButtonElement
+    expect(retry).not.toBeNull()
+    expect(retry.textContent).toBe('重试')
+    await act(async () => {
+      retry.click()
+    })
+    expect(controller.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the preload-missing case inline until a restart seam exists', async () => {
+    const controller = { ...controllerWith([]), error: true, errorReason: 'bridge-missing' as const }
+    const container = await renderSection(controller)
+
+    // `error.needs-restart` 必带 `restart-app`，平台还没有这条接缝，所以这一支不许挂 StateView。
+    expect(text(container)).toContain(labels.resourceBridgeMissing)
+    expect(container.querySelector('.state-view__action')).toBeNull()
+    expect(text(container)).not.toContain('读取失败')
+  })
+})
+
 function jobs18(): JobScheduleView[] {
   return Array.from({ length: 18 }, (_, index) => job({
     id: `job-${index + 1}`,
@@ -187,7 +222,7 @@ function controllerWith(items: JobScheduleView[]) {
   return {
     loading: false,
     error: false,
-    errorReason: null,
+    errorReason: null as ResourceJobSchedulesErrorReason | null,
     items,
     productNames: { 'market-intelligence': 'Market Intelligence' },
     reload: vi.fn()

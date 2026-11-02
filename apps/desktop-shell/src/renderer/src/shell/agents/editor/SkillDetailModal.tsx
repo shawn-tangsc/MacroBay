@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Tag } from 'antd'
+import { Tag } from 'antd'
 import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Modal } from '@platform/ui/components/modal'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import type { useAgentText } from '../agentTextProvider'
 import { buildAgentSkillRuntimeViewModel } from './agentSkillRuntimeViewModel'
@@ -14,6 +17,14 @@ import {
   guessSkillFileLanguage,
   isSkillMarkdownFile
 } from './skillFileTreeViewModel'
+
+const SKILL_DETAIL_TITLE_KEY = 'editor.tools.skillDetailTitle'
+
+/** 分类名词：技能来源、工具标识、入口文件、文件语言。句子是数据，键只回答「这是哪一类」。 */
+const SKILL_SOURCE_KEY = 'agent.skills.source'
+const SKILL_TOOL_ID_KEY = 'agent.skills.toolId'
+const SKILL_ENTRY_KEY = 'agent.skills.entry'
+const SKILL_LANGUAGE_KEY = 'agent.skills.language'
 
 type SkillDetailModalProps = {
   open: boolean
@@ -99,7 +110,13 @@ export default function SkillDetailModal({
   }, [open, selectedFile, skill])
 
   return (
-    <Modal open={open} width={860} footer={null} title={skill?.name ?? text.editor.tools.skillDetailTitle} onCancel={onClose}>
+    <Modal
+      open={open}
+      width="maximum"
+      titleKey={SKILL_DETAIL_TITLE_KEY}
+      // 标题是运行时数据：技能名，取不到时回落键句。句子由本调用点给，组件只认键。
+      resolveText={(key) => (key === SKILL_DETAIL_TITLE_KEY ? (skill?.name ?? text.editor.tools.skillDetailTitle) : '')}
+      onClose={onClose}>
       {skill ? (
         <div className="agent-skill-detail">
           <header className="agent-skill-detail-header">
@@ -194,7 +211,9 @@ export default function SkillDetailModal({
             <section className="agent-skill-file-preview">
               <div className="agent-skill-preview-title">
                 <strong>{selectedFile ?? text.editor.tools.selectSkillFile}</strong>
-                {selectedFile ? <Tag className="agent-tool-approval">{guessSkillFileLanguage(selectedFile)}</Tag> : null}
+                {selectedFile ? (
+                  <Tag className="agent-tool-approval">{guessSkillFileLanguage(selectedFile)}</Tag>
+                ) : null}
               </div>
               {loadingContent ? (
                 <LoadingState layout="inline" size="sm" label={text.editor.tools.loadingSkillFile} />
@@ -205,11 +224,23 @@ export default function SkillDetailModal({
                   <pre className="agent-skill-code-preview">{fileContent}</pre>
                 )
               ) : (
-                <div className="agent-empty-catalog compact">
-                  <FileText size={17} />
-                  <strong>{text.editor.tools.selectSkillFile}</strong>
-                  <span>{text.editor.tools.selectSkillFileDescription}</span>
-                </div>
+                flatFiles.length === 0 ? (
+                  // 这个技能包里确实没有可预览的文件：不是「没选中」，读者也没有可点的东西。
+                  <StateView state="empty" reasonCode="not-yet" size="md" />
+                ) : (
+                  <StateView
+                    state="empty"
+                    reasonCode="no-target-selected"
+                    size="md"
+                    action={{
+                      labelKey: STATE_VIEW_ACTION_KEYS.select_target,
+                      onSelect: () => {
+                        const first = findFirstSkillPreviewFile(fileTree)
+                        if (first !== null) setSelectedFile(first)
+                      }
+                    }}
+                  />
+                )
               )}
             </section>
           </div>

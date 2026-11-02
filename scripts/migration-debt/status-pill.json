@@ -1,0 +1,13 @@
+{
+  "$comment": "antd Tag call sites still to migrate. One entry per file — the debt is a whole-file import. Delete an entry in the same commit that migrates its file; a stale entry fails the guard, both directions. Scope note, deliberately narrow: this list counts antd <Tag> imports only. Hand-written chip/pill/badge class names are NOT counted here, because a class name does not say whether it is a settled status word — it is equally likely to be a count badge, a category label or a type annotation. Counting those here would seed the list with entries nobody can ever migrate, and a list that cannot shrink gets switched off. Those sites are decided one by one from the mapping doc.",
+  "entries": {
+    "apps/desktop-shell/src/renderer/src/shell/agents/editor/SkillDetailModal.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/agents/editor/SkillMarketplaceModal.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/McpCatalog.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/SkillCatalog.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/assistants/library/AssistantTemplateCard.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/assistants/library/AssistantTemplateDetailDialog.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelRow.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProtocolChip.tsx": 1
+  }
+}

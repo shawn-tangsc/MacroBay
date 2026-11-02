@@ -99,8 +99,10 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
     if (result.state === 'updated') setAsOf(now().toISOString())
   }
 
-  return <CalendarInspector open title={text.details.title} onClose={onClose}>
-    {detail.state === 'loading' ? <EconomicCalendarEventDetailState text={text.status.loading} /> : null}
+  // The inspector owns its title now (one platform key), and announces which row the panel is showing:
+  // `contentId` is the identity, `when` is the value that tells two same-named events apart.
+  return <CalendarInspector open contentId={selection.eventKey} when={selection.label} onClose={onClose}>
+    {detail.state === 'loading' ? <EconomicCalendarEventDetailState state="loading" text={text.status.loading} /> : null}
     {detail.state === 'available' ? <EconomicCalendarEventDetail
       event={detail.event}
       now={now}
@@ -121,6 +123,15 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
         : null}
       <MarketCalendarInspector event={detail.event} source={detail.source} text={text} />
     </> : null}
-    {detail.state === 'unavailable' ? <EconomicCalendarEventDetailState text={text.failures[detail.failureCode]} /> : null}
+    {detail.state === 'unavailable' && detail.failureCode === 'event-not-found'
+      // The event is gone from the calendar, not unreadable: asking again cannot find it, so the
+      // reader gets the sentence and no retry. It moves to `empty · target-missing` once that code
+      // lands; until then it stays a line rather than borrowing a state that promises a way out.
+      ? <p className="mi-economic-calendar__comparison-rule">{text.failures[detail.failureCode]}</p>
+      : null}
+    {detail.state === 'unavailable' && detail.failureCode !== 'event-not-found'
+      ? <EconomicCalendarEventDetailState state="error" text={text.failures[detail.failureCode]}
+          onRetry={() => setReload(value => value + 1)} />
+      : null}
   </CalendarInspector>
 }

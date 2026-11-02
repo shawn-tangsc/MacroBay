@@ -30,6 +30,22 @@ export function probeReasonLabel(labels: PlatformText['models'], reason: string 
   return labels.probeReasonOther
 }
 
+/**
+ * 行内短原因（≤12 字）。
+ *
+ * 模型行没有详情入口（行里的「设置」打开的是配置抽屉，里面没有检测结论），所以行内**不许省略**：
+ * 省略的前提是「点开能看全」，没有那个入口时省略只会制造一个看不到全的地方。
+ * 因此长句在行内换成短句；完整原因仍留在检测弹窗的明细里。
+ */
+export function probeReasonShortLabel(labels: PlatformText['models'], reason: string | undefined): string {
+  if (reason === 'model_not_activated') return labels.detectionReasonShortNotActivated
+  if (reason === 'model_not_found') return labels.detectionReasonShortModelNotFound
+  if (reason === 'model_retired') return labels.detectionReasonShortRetired
+  if (reason === 'model_unavailable') return labels.detectionReasonShortNoChannel
+  if (reason === 'missing_api_key') return labels.detectionReasonShortMissingKey
+  return probeReasonLabel(labels, reason)
+}
+
 /** PLAT-82：跳过原因码 → 人话（`ModelDetectionSkipReasonCode` 四个码）。 */
 export function probeSkipReasonLabel(
   labels: PlatformText['models'],

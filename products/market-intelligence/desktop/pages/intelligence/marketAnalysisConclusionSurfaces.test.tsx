@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
-import { analysisTimelineRefreshPolicy, useMarketAnalysisTimeline, type UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
+import { analysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
+import { useMarketAnalysisTimeline, type UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { MarketAnalysisTimeline } from './MarketAnalysisTimeline'
 import { LatestAnalysisConclusionCard, selectLatestPublishedEntry } from './LatestAnalysisConclusionCard'
 import { AnalysisDetailDrawer } from './AnalysisDetailDrawer'
@@ -19,7 +20,6 @@ const timelineText = portal.analysisTimeline
 const workspaceText = portal.analysisWorkspace
 const completeConclusion = `${'宏观数据已发布，资本流向与价格反应需要结合后续证据判断。'.repeat(12)}结论仍需观察。`
 let root: Root | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -258,19 +258,71 @@ describe('market analysis conclusion surfaces', () => {
     // to "暂不可用" until a different node became the newest, which read as the card coming and going.
     const { reads, holder } = await mountDetailProbe({ failures: 1 })
 
-    expect(holder.current.detailState['mi-tl-1']).toBe('unavailable')
+    // The first failed read is still inside its retry budget, so the card stays in its loading
+    // state: showing "unavailable" here is the flash this card was reported for.
+    expect(holder.current.detailState['mi-tl-1']).toBe('loading')
     await act(async () => { await vi.advanceTimersByTimeAsync(analysisTimelineRefreshPolicy.detailRetryDelaysMs[0]) })
     expect(holder.current.details['mi-tl-1']).toBeDefined()
     expect(holder.current.detailState['mi-tl-1']).toBeUndefined()
     expect(reads()).toBe(2)
   })
 
-  it('stops retrying a detail that keeps failing instead of polling it forever', async () => {
-    const { reads } = await mountDetailProbe({ failures: Number.POSITIVE_INFINITY })
+  it('stops retrying a detail that keeps failing, and only then says it could not read', async () => {
+    const { reads, holder } = await mountDetailProbe({ failures: Number.POSITIVE_INFINITY })
 
     const totalRetryMs = analysisTimelineRefreshPolicy.detailRetryDelaysMs.reduce((sum, delay) => sum + delay, 0)
     await act(async () => { await vi.advanceTimersByTimeAsync(totalRetryMs + 60_000) })
     expect(reads()).toBe(1 + analysisTimelineRefreshPolicy.detailRetryDelaysMs.length)
+    // The failure is reported once, after the budget, never during it.
+    expect(holder.current.detailState['mi-tl-1']).toBe('unavailable')
+  })
+
+  it('renders the published state through the shared status pill, not a hand-drawn span', async () => {
+    const { container } = await mountSurface([entry()], timeline =>
+      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
+
+    const pill = container.querySelector<HTMLElement>('.mi-analysis-conclusion-card header .status-pill')
+    expect(pill).not.toBeNull()
+    expect(pill?.textContent).toBe(timelineText.status.published)
+    // `published` 是「在正常工作」，档位是 ok；词与档位都来自那一张表。
+    expect(pill?.className).toContain('status-pill--ok')
+    expect(container.querySelector('.mi-analysis-conclusion-card header em')).toBeNull()
+  })
+
+  it('renders a failed detail read as the shared error state, and its retry re-reads that one node', async () => {
+    // Before this, a failed detail read was one bare sentence with no icon, no live region and no
+    // way out: the automatic retries stop, and the reader was left with a dead end. The surface is
+    // now the platform's error state; only the reason slot keeps this product's sentence.
+    const ensureDetail = vi.fn()
+    const notFound = entry()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const timeline = {
+      details: {},
+      detailState: { [notFound.id]: 'unavailable' as const },
+      ensureDetail
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(
+      <ShellTimeZoneProvider timeZone="UTC">
+        <AnalysisDetailDrawer text={timelineText} workspaceText={workspaceText} timeline={timeline} openEntry={notFound as never} onOpenChange={vi.fn()} />
+      </ShellTimeZoneProvider>))
+
+    // The entry's publish state is the shared pill here too: one word, one shape, four surfaces.
+    expect(container.querySelector('.mi-analysis-drawer__meta .status-pill')?.className).toContain('status-pill--ok')
+    const surface = container.querySelector<HTMLElement>('[data-state="error"]')
+    expect(surface).not.toBeNull()
+    expect(surface?.querySelector('[data-reason-source]')?.getAttribute('data-reason-source')).toBe('product')
+    expect(surface?.textContent).toContain(workspaceText.detailUnavailable)
+    expect(surface?.textContent).not.toContain('{')
+
+    // The mount's own priming read is not what this asserts: clear it, then make the retry the only call.
+    ensureDetail.mockClear()
+    await act(async () => {
+      surface?.querySelector<HTMLButtonElement>('.state-view__action')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(ensureDetail).toHaveBeenCalledTimes(1)
+    expect(ensureDetail).toHaveBeenCalledWith(notFound)
   })
 
   it('never stays in the loading state when the service never answers', async () => {

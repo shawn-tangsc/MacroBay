@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react'
 
 import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
+import { BlockError, BlockLoading } from './TaskAutomationBlockParts'
 import {
   buildResourceJobSourceOptions,
   buildResourceJobSourceSelectOptions,
@@ -14,6 +17,7 @@ import {
   type ResourceJobRegistrationFilter,
   type ResourceJobSourceFilter
 } from './resourceJobFilters'
+import { REGISTRATION_PILL, RUN_OUTCOME_PILL, pillTextResolver } from './taskAutomationStatusPills'
 import {
   clampPage,
   DEFAULT_RESOURCE_JOB_PAGE_SIZE,
@@ -25,7 +29,7 @@ import {
   TASK_AUTOMATION_CONTROL_CLASSES,
   TASK_AUTOMATION_SOURCE_POPUP_PROPS
 } from './taskAutomationControlWidths'
-import type { ResourceJobSchedulesController, ResourceJobSchedulesErrorReason } from './useResourceJobSchedules'
+import type { ResourceJobSchedulesController } from './useResourceJobSchedules'
 
 export function TaskAutomationResourceJobsSection(props: {
   labels: TaskAutomationLabels
@@ -53,12 +57,38 @@ export function TaskAutomationResourceJobsSection(props: {
   const pages = pageCount(matched.length, pageSize)
   const currentPage = clampPage(page, matched.length, pageSize)
   const visibleItems = slicePage(matched, page, pageSize)
+  const pillText = pillTextResolver(labels)
   const clearFilters = (): void => {
     setNameQuery('')
     setSource('all')
     setRegistration('all')
     setPage(1)
   }
+
+  /**
+   * 读失败只有一套渲染：预加载缺接口走行内提示（重启接缝未落地），其余走 `unreadable` + 真重试。
+   * 有数据时它压在表格上方，无数据时它就是整块内容——同一个元素，两处引用。
+   */
+  const errorNotice = controller.error
+    ? controller.errorReason === 'bridge-missing'
+      ? (
+        <div className="task-automation-block-body">
+          <BlockError
+            label={labels.resourceBridgeMissing}
+            retryLabel={labels.retry}
+            onRetry={() => void controller.reload()}
+          />
+        </div>
+      )
+      : (
+        <StateView
+          state="error"
+          reasonCode="unreadable"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+        />
+      )
+    : null
 
   return (
     <section className="task-automation-block" aria-busy={controller.loading}>
@@ -76,18 +106,44 @@ export function TaskAutomationResourceJobsSection(props: {
       </header>
       {controller.loading ? (
         <BlockLoading label={labels.resourceLoading} />
-      ) : controller.error ? (
+      ) : controller.error && controller.items.length === 0 && controller.errorReason === 'bridge-missing' ? (
+        // 预加载缺接口的唯一出路是重启应用，而 `error.needs-restart` 必带 `restart-app` 动作，
+        // 平台还没这条接缝（架构师 2026-11-02：不许挂一个点了没反应的重启按钮）。
+        // 所以这一支保留行内提示，等接缝落地再换；另外两支走下面的 `StateView`。
         <div className="task-automation-block-body">
           <BlockError
-            label={resourceErrorLabel(controller.errorReason, labels)}
+            label={labels.resourceBridgeMissing}
             retryLabel={labels.retry}
             onRetry={() => void controller.reload()}
           />
         </div>
+      ) : controller.error && controller.items.length === 0 ? (
+        // 读失败 / 超时：原因码 `unreadable`，动作是**真的**重试（同一个 `reload`），不需要导航接缝。
+        <StateView
+          state="error"
+          reasonCode="unreadable"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+        />
       ) : controller.items.length === 0 ? (
-        <BlockEmpty title={labels.resourceEmptyTitle} body={labels.resourceEmptyBody} />
+        // 这些任务由产品注册：`nothing-enabled` 要求一个真能用的「去启用」动作，
+        // 导航接缝落地后它就是「去情报源设置」，而不是一个点了没反应的按钮。
+        // 平台句说明状态，下面那句解释「未注册 ≠ 出错」——那是读者最容易误解的一层。
+        <>
+          <StateView
+            state="empty"
+            reasonCode="nothing-enabled"
+            size="md"
+            action={{
+              labelKey: STATE_VIEW_ACTION_KEYS.enable,
+              onSelect: () => navigateTo({ page: 'settings', panel: 'market-intelligence.intelligence-sources' })
+            }}
+          />
+          <p className="task-automation-note">{labels.resourceEmptyBody}</p>
+        </>
       ) : (
         <>
+          {errorNotice}
           <div className="task-automation-filters">
             <Input
               size="small"
@@ -134,7 +190,12 @@ export function TaskAutomationResourceJobsSection(props: {
             </span>
           </div>
           {matched.length === 0 ? (
-            <BlockEmpty body={labels.filterEmpty} actionLabel={labels.clearFilters} onAction={clearFilters} />
+            <StateView
+              state="empty"
+              reasonCode="filtered-out"
+              size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: clearFilters }}
+            />
           ) : (
             <>
               <table className="task-automation-table">
@@ -160,9 +221,11 @@ export function TaskAutomationResourceJobsSection(props: {
                       <td>{sourceLabel(job, controller.productNames, labels)}</td>
                       <td className="task-automation-mono">{formatJobSchedule(job.trigger, labels, language)}</td>
                       <td>
-                        <span className={`task-automation-tag ${job.registered ? 'task-automation-tag-ok' : 'task-automation-tag-off'}`}>
-                          {job.registered ? labels.registered : labels.notRegistered}
-                        </span>
+                        <StatusPill
+                          tone={REGISTRATION_PILL[job.registered ? 'registered' : 'unregistered'].tone}
+                          labelKey={REGISTRATION_PILL[job.registered ? 'registered' : 'unregistered'].labelKey}
+                          resolveText={pillText}
+                        />
                       </td>
                       <td className="task-automation-mono">
                         {formatTimestamp(job.nextRunAt, language) ?? labels.emptyValue}
@@ -225,15 +288,18 @@ function JobLastRun(props: {
   language: AppLanguage
 }): React.ReactElement {
   const { job, labels, language } = props
+  const pillText = pillTextResolver(labels)
   if (job.lastOutcome === 'never' && !job.lastRunAt) {
     return <span className="task-automation-muted">{labels.outcome.never}</span>
   }
   const at = formatTimestamp(job.lastRunAt, language)
   return (
     <>
-      <span className={`task-automation-tag ${outcomeTone(job.lastOutcome)}`}>
-        {labels.outcome[job.lastOutcome]}
-      </span>
+      <StatusPill
+        tone={RUN_OUTCOME_PILL[job.lastOutcome].tone}
+        labelKey={RUN_OUTCOME_PILL[job.lastOutcome].labelKey}
+        resolveText={pillText}
+      />
       {at ? <span className="task-automation-mono task-automation-muted"> {at}</span> : null}
     </>
   )
@@ -246,20 +312,4 @@ function sourceLabel(
 ): string {
   if (job.owner === 'platform') return labels.platform
   return productNames[job.productId ?? ''] ?? job.productId ?? labels.product
-}
-
-/** error 态必须给出一行可读原因：读取失败 / 缺少接口（多为未重启）/ 超时。 */
-function resourceErrorLabel(
-  reason: ResourceJobSchedulesErrorReason | null,
-  labels: TaskAutomationLabels
-): string {
-  if (reason === 'bridge-missing') return labels.resourceBridgeMissing
-  if (reason === 'timeout') return labels.resourceLoadTimeout
-  return labels.resourceLoadFailed
-}
-
-function outcomeTone(outcome: JobScheduleView['lastOutcome']): string {
-  if (outcome === 'success') return 'task-automation-tag-ok'
-  if (outcome === 'failed') return 'task-automation-tag-bad'
-  return 'task-automation-tag-off'
 }

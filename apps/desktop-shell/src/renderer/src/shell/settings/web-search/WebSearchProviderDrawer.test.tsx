@@ -12,7 +12,6 @@ import { WebSearchProviderDrawer } from './WebSearchProviderDrawer'
 
 const labels = platformText['zh-CN'].webSearch
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -110,7 +109,9 @@ function drawer(): HTMLElement {
 describe('PLAT-60 provider drawer', () => {
   it('opens as a right-side masked drawer with hints below the control cell', async () => {
     await mount(provider('jina'))
-    const root = document.querySelector('.web-search-provider-drawer-root')
+    // 根类随平台抽屉变化：判据是「右侧 + 有遮罩 + 根节点存在」，不是某条具体类名。
+    const root = document.querySelector('.ant-drawer')
+    expect(root).not.toBeNull()
     expect(root?.className).toContain('ant-drawer-right')
     expect(document.querySelector('.ant-drawer-mask')).not.toBeNull()
 
@@ -191,7 +192,10 @@ describe('PLAT-60 provider drawer', () => {
     await mount(provider('tavily'))
     const text = drawer().textContent ?? ''
     const input = drawer().querySelector('.web-search-api-key-control input') as HTMLInputElement
-    const eye = drawer().querySelector('.web-search-api-key-eye') as HTMLButtonElement
+    // 眼睛已迁移到 IconButton：按读屏名找，不再依赖私有类名。
+    const eye = drawer().querySelector(
+      `button[aria-label="${labels.showApiKey}"],button[aria-label="${labels.hideApiKey}"]`
+    ) as HTMLButtonElement
 
     expect(input.placeholder).toBe(labels.apiKeyPlaceholder)
     expect(input.placeholder).toContain('必填')

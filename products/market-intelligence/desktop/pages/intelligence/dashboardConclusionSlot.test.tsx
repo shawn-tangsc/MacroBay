@@ -13,7 +13,6 @@ const portal = productText['zh-CN'].pages.intelligence.portal
 const asOf = '2026-10-07T09:06:14.792Z'
 const conclusion = '方向：偏多：ETF 连续流入，资金面转强。'
 let root: Root | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -97,7 +96,8 @@ describe('dashboard conclusion slot', () => {
     await act(async () => {})
     expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBeGreaterThan(0)
 
-    const close = document.querySelector<HTMLButtonElement>('.mi-analysis-timeline-drawer__head button')
+    // The close control belongs to the shared drawer now; find it by its accessible name.
+    const close = [...document.querySelectorAll<HTMLButtonElement>('.ant-drawer-header button')].at(-1)
     expect(close).not.toBeNull()
     await act(async () => { close?.click() })
     await act(async () => {})

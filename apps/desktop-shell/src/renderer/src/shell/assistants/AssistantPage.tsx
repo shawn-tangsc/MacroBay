@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppLanguage, ChatSettings } from '@platform/settings/schema/appSettings'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
-import { ProviderRuntimeFailurePolicy } from '@platform/ai/providers/modelProviderTypes'
 import type { AssistantEntity } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { AssistantTopicEntity } from '@platform/ai/assistant-platform/schemas/topicSchemas'
 import type { AssistantMessageEntity } from '@platform/ai/assistant-platform/schemas/messageSchemas'
@@ -16,7 +15,13 @@ import { AssistantHeader } from './AssistantHeader'
 import { AssistantSidePanel } from './AssistantSidePanel'
 import { AssistantChatPane } from './AssistantChatPane'
 import { AssistantSettingsDrawer } from './AssistantSettingsDrawer'
-import { platformText, type PlatformText } from '../../i18n/platformText'
+import { platformText } from '../../i18n/platformText'
+import {
+  isAssistantChatReady,
+  isTerminalAssistantComposerSnapshot,
+  normalizeAssistantStatusMessage,
+  resolveAssistantStreamErrorText
+} from './assistantPageReadiness'
 import type { AssistantBranchEntry } from './assistantMessageRendering'
 import type { AssistantInputbarToolId } from './inputbar/assistantInputbarRegistry'
 import { useAssistantMentionModels } from './useAssistantMentionModels'
@@ -58,66 +63,6 @@ export type AssistantOpenRequest = {
 
 type AssistantSidePanelTab = 'assistants' | 'topics'
 
-function parseAssistantModelId(value: string | null | undefined): { providerId: string; modelId: string } | null {
-  if (!value) return null
-  const separatorIndex = value.indexOf(':')
-  if (separatorIndex <= 0 || separatorIndex >= value.length - 1) return null
-  return {
-    providerId: value.slice(0, separatorIndex),
-    modelId: value.slice(separatorIndex + 1)
-  }
-}
-
-function hasReadyChatModel(provider: SafeModelProvider): boolean {
-  return provider.enabled && provider.hasApiKey && provider.models.some((model) => model.capabilities.chat)
-}
-
-function isAssistantChatReady(
-  assistant: AssistantEntity | null,
-  providers: readonly SafeModelProvider[]
-): boolean {
-  if (!assistant) return false
-  const modelReference = parseAssistantModelId(assistant.modelId)
-  if (!modelReference) {
-    return providers.some(hasReadyChatModel)
-  }
-
-  const provider = providers.find((entry) => entry.id === modelReference.providerId)
-  if (!provider || !provider.enabled || !provider.hasApiKey) return false
-  return provider.models.some((model) => model.id === modelReference.modelId && model.capabilities.chat)
-}
-
-function normalizeAssistantStatusMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) return error.message
-  return fallback
-}
-
-type AssistantStreamErrorTextLabels = Pick<
-  PlatformText['assistants'],
-  'modelNotReady' | 'conversationOperationFailed' | 'modelRetired' | 'modelNotActivated' | 'modelNotFound'
->
-
-/** Renderer-safe stream errors are stable runtime codes, never upstream messages. */
-export function resolveAssistantStreamErrorText(error: unknown, labels: AssistantStreamErrorTextLabels): string {
-  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-  if (code === ProviderRuntimeFailurePolicy.configurationRequired) return labels.modelNotReady
-  // PLAT-74：模型生命周期失败给真实结论，不再只说「请重试」。
-  if (code === ProviderRuntimeFailurePolicy.modelRetired) return labels.modelRetired
-  if (code === ProviderRuntimeFailurePolicy.modelNotActivated) return labels.modelNotActivated
-  if (code === ProviderRuntimeFailurePolicy.modelNotFound) return labels.modelNotFound
-  return labels.conversationOperationFailed
-}
-
-const AssistantComposerTerminalStreamStatuses = new Set<AssistantTopicStreamSnapshot['status']>([
-  'done',
-  'aborted',
-  'error'
-])
-
-function isTerminalAssistantComposerSnapshot(snapshot: AssistantTopicStreamSnapshot): boolean {
-  return AssistantComposerTerminalStreamStatuses.has(snapshot.status)
-}
-
 export function AssistantPage({
   language,
   providers,
@@ -141,6 +86,10 @@ export function AssistantPage({
   const [draft, setDraft] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  /** 输入条要求「先选话题」时加一：侧栏据此把焦点交给话题列表。 */
+  const [focusTopicsTick, setFocusTopicsTick] = useState(0)
+  /** 提及选择器不可用时，把读者送到顶部的模型选择器。 */
+  const [focusModelPickerTick, setFocusModelPickerTick] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const deletingTopicIds = useRef(new Set<string>())
@@ -607,6 +556,7 @@ export function AssistantPage({
         labels={t}
         assistants={assistants}
         activeAssistantId={activeAssistantId}
+        focusModelPickerTick={focusModelPickerTick}
         modelPicker={
           <ModelPicker
             pickerId="assistant-header"
@@ -651,6 +601,7 @@ export function AssistantPage({
             onCreateAssistant={() => void handleCreateAssistant()}
             onCreateTopic={() => void handleCreateTopic()}
             onDeleteTopic={handleDeleteTopic}
+            focusTopicsTick={focusTopicsTick}
           />
         ) : null}
         <div className="assistant-workspace-main">
@@ -672,6 +623,11 @@ export function AssistantPage({
             onSend={() => void handleSend()}
             onStop={() => void handleStop()}
             onToolAction={handleToolAction}
+            onRequireTopic={() => {
+              setActiveTab('topics')
+              setFocusTopicsTick((tick) => tick + 1)
+            }}
+            onRequireModel={() => setFocusModelPickerTick((tick) => tick + 1)}
             onOpenSettings={() => setSettingsOpen(true)}
             onSelectSibling={(messageId) => void handleSelectSibling(messageId)}
             onDeleteMessage={(messageId) => void handleDeleteMessage(messageId)}

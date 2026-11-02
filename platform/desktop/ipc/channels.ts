@@ -21,6 +21,8 @@ export const IpcChannels = {
   dialogSelectFiles: 'platform:dialog-select-files',
   appReadTextFile: 'platform:app-read-text-file',
   appSaveClipboardImage: 'platform:app-save-clipboard-image',
+  // 重启应用：只在「界面与主进程版本不一致」这类必须整包重启的原因下使用（`needs-restart`）。
+  appRelaunch: 'platform:app-relaunch',
   settingsGet: 'platform:settings-get',
   settingsUpdate: 'platform:settings-update',
   channelsCatalog: 'platform:channels-catalog',
@@ -199,12 +201,23 @@ export const IpcChannels = {
   storageCompactCache: 'platform:storage-compact-cache',
   storageListCacheOperations: 'platform:storage-list-cache-operations',
   notificationsList: 'platform:notifications-list',
-  notificationsGetUnreadCount: 'platform:notifications-get-unread-count',
+  notificationsGetUnreadState: 'platform:notifications-get-unread-state',
   notificationsMarkRead: 'platform:notifications-mark-read',
+  /** 清空 = 全部未读标为已读（不是删除）。一次落盘，返回新的未读数与版本。 */
+  notificationsMarkAllRead: 'platform:notifications-mark-all-read',
+  /** 发送一条测试通知：走真实 submit()，用来验证「链路通不通、系统放没放行」。 */
+  notificationsSendTest: 'platform:notifications-send-test',
   notificationsAcknowledge: 'platform:notifications-acknowledge',
+  /** 真删除：只删已读记录（清空是标已读、单条收起是状态迁移，都不走这里）。 */
+  notificationsDeleteRead: 'platform:notifications-delete-read',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',
-  notificationsRequestDesktopPermission: 'platform:notifications-request-desktop-permission',
+  /** 只读：主进程能查状态，但没有 API 能让系统弹一次授权框。名字不许再写 request。 */
+  notificationsReadDesktopPermission: 'platform:notifications-read-desktop-permission',
+  /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
+  notificationsChanged: 'platform:notifications-changed',
+  /** 应用内投递（横幅 / 弹窗）：事件带那条记录的键与参数，渲染层自己解析句子。 */
+  notificationsDelivered: 'platform:notifications-delivered',
   jobsGetRun: 'platform:jobs-get-run',
   jobsListRunPage: 'platform:jobs-list-run-page',
   /** 只读：`jobRuntime.listSchedules()` 的平台投影（无 payload/密钥/路径/写入口）。 */

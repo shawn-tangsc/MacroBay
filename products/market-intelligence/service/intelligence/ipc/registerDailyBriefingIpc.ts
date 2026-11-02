@@ -11,6 +11,7 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
   regenerate: 'intelligence.dailyBriefing.regenerate',
+  getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
@@ -23,6 +24,10 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     service.list(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.regenerate, async (payload) =>
     service.regenerate(readQuery(payload)))
+  // Read-only and cheap: the answer is the live snapshot of the run in progress, never a new read
+  // of the store, and it says `idle` as soon as that run settles.
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getProgress, async (payload) =>
+    service.getProgress(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
     service.get(readGet(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getSettings, async () => {

@@ -27,7 +27,6 @@ function client(initial: SampleModeState): SampleModeClient & { calls: boolean[]
   }
 }
 
-beforeAll(() => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true })
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined

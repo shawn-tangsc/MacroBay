@@ -20,8 +20,8 @@ export type DashboardPositioningPoint = Readonly<{ observedAt: string; notionalU
 
 export type DashboardPositioningViewState =
   | Readonly<{ state: 'loading' }>
-  | Readonly<{ state: 'empty' }>
-  | Readonly<{ state: 'unavailable' }>
+  | Readonly<{ state: 'empty'; onReload: () => void }>
+  | Readonly<{ state: 'unavailable'; onReload: () => void }>
   | Readonly<{
       state: 'available'
       window: OpenInterestWindow
@@ -33,6 +33,11 @@ export type DashboardPositioningViewState =
       staleSince?: string
       /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
       signal: DashboardSignalChip
+      /**
+       * Re-reads the card. Carried on the view state because the error surface needs a recovery
+       * action and the panel is the component that draws it, not the page that owns the hook.
+       */
+      onReload: () => void
     }>
 
 /**
@@ -61,12 +66,12 @@ export const dashboardPositioningPresentationPolicy = Object.freeze({
   chart: Object.freeze({ minimumNotionalSpan: 1, minimumVisibleHeightPercent: 4, maximumHeightPercent: 100 })
 })
 
-export function projectDashboardPositioning(value: unknown, asOf: string, window: OpenInterestWindow): DashboardPositioningViewState {
+export function projectDashboardPositioning(value: unknown, asOf: string, window: OpenInterestWindow, onReload: () => void = () => undefined): DashboardPositioningViewState {
   try {
-    if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable' }
-    if (!isOpenInterestHistoryResult(value, asOf, window)) return { state: 'unavailable' }
-    if (value.state === 'empty') return { state: 'empty' }
-    if (value.state === 'unavailable') return { state: 'unavailable' }
+    if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable', onReload }
+    if (!isOpenInterestHistoryResult(value, asOf, window)) return { state: 'unavailable', onReload }
+    if (value.state === 'empty') return { state: 'empty', onReload }
+    if (value.state === 'unavailable') return { state: 'unavailable', onReload }
 
     const latest = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
     const staleSince = latest && Date.parse(asOf) - Date.parse(latest) > dashboardPositioningPresentationPolicy.staleAfterMs ? latest : undefined
@@ -80,10 +85,11 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       // The card no longer carries the query's hint marks: the chip and the chart mark both come
       // from the module rule, so one reading cannot be drawn as two different things.
       signal: { state: 'hidden' },
+      onReload,
       ...(staleSince ? { staleSince } : {})
     }
   } catch {
-    return { state: 'unavailable' }
+    return { state: 'unavailable', onReload }
   }
 }
 

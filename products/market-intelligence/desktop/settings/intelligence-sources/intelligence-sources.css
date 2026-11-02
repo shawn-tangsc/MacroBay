@@ -65,28 +65,6 @@
   white-space: nowrap;
 }
 
-.intelligence-titlebar-actions {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.intelligence-titlebar-actions small {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.intelligence-titlebar-actions small[data-tone='error'] {
-  color: var(--danger);
-}
-
 .intelligence-detail-scroll {
   min-height: 0;
   overflow: auto;
@@ -538,30 +516,6 @@
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 68%, transparent);
-}
-
-.intelligence-health-value {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.intelligence-health-value[data-status='healthy'] {
-  color: var(--accent);
-}
-
-.intelligence-health-value[data-status='degraded'],
-.intelligence-health-value[data-status='failed'] {
-  color: var(--danger);
-}
-
-.intelligence-health-value[data-status='paused'] {
-  color: var(--muted-strong);
 }
 
 .intelligence-translation-preferences {
@@ -1136,8 +1090,10 @@
 .source-provider-detail__main {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: 4px;
+  /* Name and tags on one line so the row's entrance arrow sits at the end of the content. */
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1148,7 +1104,22 @@
 }
 
 .source-provider-detail__main strong {
+  flex: 1;
   font-size: 13px;
+  min-width: 0;
+}
+
+.source-provider-detail__main .intelligence-source-tags {
+  min-width: 0;
+}
+
+.source-provider-detail__main:hover {
+  background: var(--surface-soft);
+}
+
+.source-provider-detail__chevron {
+  color: var(--muted);
+  flex: none;
 }
 
 .intelligence-provider-row.selected {
@@ -1292,15 +1263,6 @@
 
 .source-provider-detail__credential label > .ant-btn {
   flex: none;
-}
-
-.source-provider-detail__reveal {
-  display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
 }
 
 .source-provider-detail__actions {
@@ -1468,31 +1430,6 @@
   font-size: 11px;
 }
 
-.source-provider-detail__health {
-  padding: 1px 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-style: normal;
-}
-
-.source-provider-detail__health.is-healthy {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.source-provider-detail__health.is-degraded {
-  border-color: #c48a1a;
-  border-color: var(--warning, #c48a1a);
-  color: #c48a1a;
-  color: var(--warning, #c48a1a);
-}
-
-.source-provider-detail__health.is-failed {
-  border-color: var(--danger);
-  color: var(--danger);
-}
 
 /* Two views on one page: the switch spans both columns, the active view owns the row beneath. */
 .settings-workspace.intelligence-sources-workspace { grid-template-rows: auto minmax(0, 1fr); }
@@ -1502,19 +1439,5 @@
   gap: 6px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border, #22252d);
-}
-.intelligence-sources-view-switch button {
-  border: 1px solid transparent;
-  background: none;
-  color: var(--text-secondary, #8b8d94);
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.intelligence-sources-view-switch button.is-active {
-  color: var(--text, #e8e9ec);
-  border-color: var(--border, #22252d);
-  background: var(--surface-2, #14171e);
 }
 .intelligence-sources-view-body { grid-column: 1 / -1; min-height: 0; }

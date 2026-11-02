@@ -1,3 +1,5 @@
+import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type NotificationChannel = 'center' | 'toast' | 'popup' | 'desktop'
@@ -15,7 +17,8 @@ export type NotificationDeeplink = {
 
 export type NotificationAction = {
   id: string
-  label: string
+  /** 动作标签的键；调用点不写句子，句子在文案表里。 */
+  labelKey: NotificationCopyKey
   kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom'
   deeplink?: NotificationDeeplink
 }
@@ -25,8 +28,11 @@ export type NotificationRecord = {
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
-  title: string
-  body?: string
+  /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
+  titleKey: NotificationCopyKey
+  titleParams?: Record<string, string>
+  bodyKey?: NotificationCopyKey
+  bodyParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
@@ -37,6 +43,8 @@ export type NotificationRecord = {
   correlationId?: string
   safeMetadata?: Record<string, unknown>
   occurrenceCount: number
+  /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */
+  collapsedCount?: number
   createdAt: string
   updatedAt: string
   readAt?: string
@@ -54,8 +62,11 @@ export type NotificationRequest = {
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
-  title: string
-  body?: string
+  /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
+  titleKey: NotificationCopyKey
+  titleParams?: Record<string, string>
+  bodyKey?: NotificationCopyKey
+  bodyParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   requestedChannels: NotificationChannel[]
@@ -71,7 +82,10 @@ export type NotificationListQuery = {
   state?: NotificationState[]
   productId?: string
   limit?: number
+  /** 键游标 `createdAt|id`：同一毫秒的多条不会丢，也不随新记录插入而错位。不是数组下标。 */
   cursor?: string
+  /** 未读排在已读之前，组内仍按时间倒序。排序在查询里做，渲染层不许拼两次查询。 */
+  unreadFirst?: boolean
 }
 
 export type NotificationListPage = {
@@ -79,8 +93,20 @@ export type NotificationListPage = {
   nextCursor?: string
 }
 
+/** 角标状态：未读数 + 版本号。版本号随每次记录变化递增，订阅方据此判断「是不是比上次新」。 */
+export type NotificationUnreadState = {
+  unread: number
+  version: number
+}
+
+/**
+ * 桌面通知的授权状态。**`unknown` 是常态，不是异常**：Electron 41 没有 `getNotificationSettings`，
+ * 而 `Notification.isSupported()` 回答的是「这个平台支不支持通知」，不是「用户授没授权」。
+ * 拿它冒充 `granted` 会让排查全部指向「发送失败」，把一个查不到的结论说成已知事实。
+ */
+export type DesktopNotificationPermission = 'granted' | 'denied' | 'unknown'
+
 export type NotificationRuntimeSettings = {
-  centerEnabled: boolean
   desktopEnabled: boolean
   toastEnabled: boolean
   popupEnabled: boolean
@@ -110,7 +136,6 @@ export type NotificationRuntimeSettings = {
 
 export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeSettings {
   return {
-    centerEnabled: true,
     desktopEnabled: true,
     toastEnabled: true,
     popupEnabled: true,
@@ -120,11 +145,21 @@ export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeS
 }
 
 /**
- * Whether anything in the platform submits notifications yet. With no producer the delivery
- * switches filter an empty stream, so the settings pane must present them as unavailable instead
- * of as working toggles. Flip this in the same change that wires the first producer.
+ * 每条投递渠道背后**有没有用户看得见的落点**。可点状态必须等于这一栏，不是等于「平台能不能发通知」。
+ *
+ * 这一格曾被写成一个布尔量（`notificationProducerWired`），它的含义是「有没有生产者了」。接上第一个
+ * 生产者后它变成 `true`，于是四个开关一起点亮——可那一刻只有中心与桌面有落点，应用内横幅与弹窗连
+ * 渲染者都没有。**一个布尔量代表四件事，必然有一次说谎。**
+ *
+ * 接上一个真实落点时改这一处：`toast` 在右上角横幅落地后转真；`popup` 还没有形态，保持 `false`，
+ * 设置页据此逐条禁用并各说各的原因。
  */
-export const notificationProducerWired = false
+export const notificationDeliveryWired: Readonly<Record<NotificationChannel, boolean>> = Object.freeze({
+  center: true,
+  desktop: true,
+  toast: true,
+  popup: false
+})
 
 export function toSafeNotificationRecord(record: NotificationRecord): SafeNotificationRecord {
   const metadata = record.safeMetadata ? sanitizeMetadata(record.safeMetadata) : undefined

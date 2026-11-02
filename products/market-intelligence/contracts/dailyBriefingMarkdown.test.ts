@@ -76,19 +76,20 @@ const options = {
 }
 
 describe('daily briefing markdown', () => {
-  it('says in the copy where a fallback reading came from', () => {
-    // The screen marks it; a pasted edition must carry the same fact, or the exported number reads
-    // as the exact 24h pair.
+  it('keeps every source and fallback word out of the exported copy', () => {
+    // The reader decided: the brief text and the exported image carry the reading, not the
+    // provenance. Trace lives in the trace column.
     const base = document()
     const doc: DailyBriefingDocument = {
       ...base,
       data: {
         ...base.data,
-        market: [{ ...base.data.market[0]!, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }]
+        market: [{ ...base.data.market[0]!, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'published' as const }]
       }
     }
     const markdown = dailyBriefingToMarkdown(doc, options)
-    expect(markdown).toContain(labels.staleBasis.curve)
+    for (const phrase of Object.values(labels.staleBasis)) expect(markdown).not.toContain(phrase)
+    expect(markdown).not.toContain(labels.states.stale)
   })
 
   it('exports a text edition with rows, conclusion and citations', () => {

@@ -26,7 +26,6 @@ export type AgentTextWorkbench = {
     taskList: string
     taskCount: (count: number) => string
     loading: string
-    empty: string
     overdue: string
     editTask: string
     createTask: string
@@ -75,18 +74,17 @@ export type AgentTextWorkbench = {
     runNow: string
     cancelRun: string
     deleteTask: string
-    noLogs: string
     loadMoreRuns: string
     openSession: string
     deliverySummary: (delivered: number, failed: number, skipped: number, unknown: number) => string
     deliveryAttempts: string
-    noDeliveryAttempts: string
     loadMoreDeliveryAttempts: string
     retryDelivery: string
     retryDeliveryFailed: string
     deliveryAttempt: (channelId: string, attemptNumber: number) => string
     deliveryStatus: Record<'pending' | 'delivered' | 'failed' | 'skipped-no-active-target' | 'skipped-channel-inactive' | 'unknown-after-restart' | 'unknown-after-send', string>
-    loadFailed: string
+    /** 有旧数据、这次刷新没读到时挂在数据上方的那一句：说的是「屏上是旧读数」，不是「这里没有」。 */
+    staleDataNotice: string
     saveFailed: string
     deleteFailed: string
     runFailed: string
@@ -147,9 +145,12 @@ export type AgentTextWorkbench = {
       title: string
       description: string
       searchPlaceholder: string
-      builtinTab: (enabled: number, total: number) => string
-      mcpTab: (count: number) => string
-      skillsTab: (count: number) => string
+      /** 标签模板：计数走 `labelParams` 填 `{enabled}`／`{total}`，调用点不拼句子。 */
+      builtinTab: string
+      mcpTab: string
+      skillsTab: string
+      /** 工具区那组页签的可访问名。 */
+      tabsLabel: string
       productPackagesTab: string
       saveAgentBeforeProductToolsTitle: string
       saveAgentBeforeProductToolsDescription: string

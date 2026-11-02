@@ -15,7 +15,6 @@ const fiveModels = ['m-1', 'm-2', 'm-3', 'm-4', 'm-5'].map((id) => ({
 
 const labels = platformText['en-US'].models
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -177,8 +176,11 @@ describe('PLAT-82 后台检测', () => {
     expect(declared?.querySelector('[data-model-protocol-failed-chip="messages"]')).not.toBeNull()
     // 没声明 messages ⇒ 同一条失败结论也不标红 responses。
     expect(undeclared?.getAttribute('data-model-protocol-failed')).toBeNull()
-    expect(declared?.querySelector('[data-model-detection-status="failed"]')?.textContent)
-      .toContain('Failed:')
+    // 状态词进药丸，原因句在右侧独立元素里（行内不省略，也没有 title 补偿）。
+    expect(declared?.querySelector('[data-model-detection-status="failed"] .status-pill__label')?.textContent)
+      .toBe(labels.detectionStatusLabel('failed'))
+    expect(declared?.querySelector('[data-model-detection-reason]')?.textContent)
+      .toContain('endpoint does not support')
 
     await act(async () => page.root.unmount())
   })
@@ -197,10 +199,11 @@ describe('PLAT-82 后台检测', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status="skipped"]')?.textContent)
-      .toBe('Skipped: not a chat model')
-    expect(page.container.querySelector('[data-model-row="m-2"] [data-model-detection-status="cancelled"]')?.textContent)
-      .toBe('Stopped')
+    const skippedRow = page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status="skipped"]')
+    expect(skippedRow?.querySelector('.status-pill__label')?.textContent).toBe(labels.detectionStatusLabel('skipped'))
+    expect(skippedRow?.querySelector('[data-model-detection-reason]')?.textContent).toBe(labels.probeSkipNotChatModel)
+    expect(page.container.querySelector('[data-model-row="m-2"] [data-model-detection-status="cancelled"] .status-pill__label')?.textContent)
+      .toBe(labels.detectionStatusLabel('cancelled'))
 
     await act(async () => page.root.unmount())
   })
@@ -233,10 +236,11 @@ describe('PLAT-82 协议结果看得见', () => {
 
     // 行内：一个状态位 + 协议摘要（通/总数）。
     const failedRow = page.container.querySelector('[data-model-row="m-1"] [data-model-detection-status]')
-    expect(failedRow?.textContent).toBe('OK · Protocols 1/2')
+    expect(failedRow?.querySelector('.status-pill__label')?.textContent).toBe(labels.detectionStatusLabel('ok'))
+    expect(failedRow?.textContent).toContain(labels.detectionProtocolCount(1, 2))
     expect(failedRow?.getAttribute('data-model-protocol-summary')).toBe('1/2')
     expect(page.container.querySelector('[data-model-row="m-2"] [data-model-detection-status]')?.textContent)
-      .toBe('OK · Protocols 2/2')
+      .toContain(labels.detectionProtocolCount(2, 2))
 
     // 弹窗：一行汇总（M=1 项不通）。
     expect(document.body.querySelector('[data-model-detect-protocol-summary]')?.textContent)
@@ -277,7 +281,10 @@ describe('PLAT-82 协议结果看得见', () => {
     })
 
     const row = page.container.querySelector('[data-model-row="m-1"]')
-    expect(row?.querySelector('[data-model-detection-status]')?.textContent).toBe('OK · Protocols 2/2')
+    expect(row?.querySelector('[data-model-detection-status] .status-pill__label')?.textContent)
+      .toBe(labels.detectionStatusLabel('ok'))
+    expect(row?.querySelector('[data-model-detection-status]')?.textContent)
+      .toContain(labels.detectionProtocolCount(2, 2))
     const messagesChip = row?.querySelector('[data-model-protocol-chip="messages"]')
     expect(messagesChip?.getAttribute('data-model-protocol-source')).toBe('probe')
     expect(messagesChip?.getAttribute('title')).toBe('Anthropic Messages · Passed by detection')

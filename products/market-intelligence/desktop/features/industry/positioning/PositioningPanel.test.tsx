@@ -43,6 +43,22 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
 
 afterEach(() => { document.body.innerHTML = '' })
 
+
+/** Renders the panel and opens the readings region under the card, where every note lives. */
+async function mountAndOpenReadings(): Promise<HTMLElement> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+      funding, positioning, window: '7d', onWindowChange: () => undefined, text
+    })))
+  })
+  const toggle = [...container.querySelectorAll('button')].find(button => button.textContent === text.helpDetailsLabel)
+  await act(async () => { toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  return container
+}
+
 describe('positioning panel', () => {
   it('prints the funding rate and the notional reading side by side, one asset per row', () => {
     const markup = render()
@@ -63,7 +79,11 @@ describe('positioning panel', () => {
   })
 
   it('names the window it is showing and switches through the callback', () => {
-    expect(render()).toContain(`aria-pressed="true" data-window="7d"`)
+    const markup = render()
+    // One group, one Tab stop, and the chosen window carries aria-pressed rather than only a colour.
+    expect(markup).toContain('role="group"')
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('7 天')
     const onWindowChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -71,9 +91,9 @@ describe('positioning panel', () => {
     act(() => { root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
       funding, positioning, window: '7d', onWindowChange, text
     }))) })
-    const buttons = [...container.querySelectorAll('button[data-window]')]
-    expect(buttons).toHaveLength(2)
-    act(() => { (buttons[1] as HTMLButtonElement).click() })
+    const options = [...container.querySelectorAll('[role="group"] button')] as HTMLButtonElement[]
+    expect(options).toHaveLength(2)
+    act(() => { options[1]!.click() })
     expect(onWindowChange).toHaveBeenCalledWith('24h')
     act(() => root.unmount())
   })
@@ -100,15 +120,35 @@ describe('positioning panel', () => {
   it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
     const markup = render({ positioning: { state: 'empty' } })
     expect(markup).toContain('data-state="empty"')
-    expect(markup).toContain(text.empty)
+    // An empty card is a state, and the shared StateView owns its sentence and shape now.
+    expect(markup).toContain('class="state-view')
+    expect(markup).toContain('data-state="empty"')
     expect(markup).toContain('+0.0062%')
     expect(markup).toContain('—')
+  })
+
+  it('tells a failed read from an empty one', () => {
+    // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
+    // "we have nothing" and "we could not look" start reading alike.
+    expect(render({ positioning: { state: 'unavailable' } })).toContain('data-state="error"')
+    expect(render({ positioning: { state: 'empty' } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
   })
 
   it('shows the loading state through the shared component', () => {
     const markup = render({ positioning: { state: 'loading' } })
     expect(markup).toContain(text.loading)
     expect(markup).not.toContain('class="mi-positioning-panel__chart"')
+  })
+
+  it('waits without drawing a failure or an empty card before the first read returns', () => {
+    // First paint: neither half has answered. Waiting is its own state — "could not read" and
+    // "nothing collected" are both claims about a read that has not happened yet.
+    const markup = render({ positioning: { state: 'loading' }, funding: { state: 'loading' } })
+    expect(markup).toContain('data-state="loading"')
+    expect(markup).toContain(text.loading)
+    expect(markup).not.toContain('class="state-view')
+    expect(markup).not.toContain('data-state="error"')
+    expect(markup).not.toContain(text.empty)
   })
 
   it('flags a stale reading without dropping it', () => {
@@ -167,7 +207,8 @@ describe('hover readout', () => {
         funding, positioning, window: '7d', onWindowChange: () => undefined, text
       })))
     })
-    const svg = container.querySelector('svg')!
+    // The help trigger is an SVG icon too; pick the chart, not the glyph.
+    const svg = container.querySelector('.mi-positioning-panel__chart svg')!
     act(() => {
       svg.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 40 }))
     })
@@ -199,19 +240,51 @@ describe('bars at the axis edge', () => {
 })
 
 describe('combined readout', () => {
-  it('shows the state and the two numbers behind it', () => {
-    const markup = render()
-    expect(markup).toContain(text.states.deleveraging)
-    expect(markup).toContain('mi-positioning-panel__state-tip')
-    // The tooltip quotes the open interest change and both funding readings, so the label can be
-    // checked instead of taken on trust.
-    expect(markup).toContain('24h')
-    expect(markup).toContain('+0.0062%')
-    expect(markup).toContain('+0.0121%')
+  it('shows the state, and the two numbers behind it on its own line', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+        funding, positioning, window: '7d', onWindowChange: () => undefined, text
+      })))
+    })
+    expect(container.textContent).toContain(text.states.deleveraging)
+    // The "why" line is a one-line tooltip: the numbers appear only once the reader asks for them.
+    const trigger = container.querySelector('.mi-positioning-panel__state')!
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+    })
+    // The platform tooltip waits 0.3s before it appears, so the assertion waits with it.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)) })
+    expect(document.body.textContent).toContain('+0.0121%')
   })
 
-  it('explains the six states in the help popover', () => {
-    expect(render()).toContain('六档判定')
+  it('explains the card in one place, not two', async () => {
+    // The card used to carry an icon button opening four bullets and a text entry opening the long
+    // notes: two explanations of one card, and the reader had to pick. The bullets now lead the
+    // notes inside the one region the visible entry opens.
+    const panel = await mountAndOpenReadings()
+    const region = panel.querySelector('#mi-positioning-help-details')!
+    expect(region.textContent).toContain(text.helpBullets[0])
+    expect(region.textContent).toContain('六档判定')
+    expect(region.textContent).toContain('只标 15 分钟内的骤降')
+    expect(region.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    // Nothing else opens an explanation on this card: the icon button is gone, not hidden.
+    expect(panel.querySelector(`button[aria-label="${text.helpLabel}"]`)).toBeNull()
+  })
+
+  it('still keeps the four bullets short enough to be a glance', () => {
+    // The count and the length are the design's acceptance line; a fifth bullet or a long one means
+    // the sentence belongs in the readings below them, not in the lead.
+    expect(text.helpBullets).toHaveLength(4)
+    for (const bullet of text.helpBullets) expect(bullet.length).toBeLessThanOrEqual(60)
+  })
+
+  it('keeps the readings closed until the reader asks for them', () => {
+    // The entry is always there; the region it controls is not. An always-open note is the defect.
+    expect(render()).not.toContain('class="mi-positioning-panel__help-details"')
   })
 })
 
@@ -234,22 +307,21 @@ describe('line-end readings', () => {
   })
 
   it('says in the help that the two lines are scaled to their own ranges', () => {
-    expect(text.helpLines.some(line => line.includes('不能直接比较'))).toBe(true)
+    expect(text.helpBullets.some(line => line.includes('不能直接比'))).toBe(true)
   })
 })
 
 describe('what the mark does not cover', () => {
   it('says that only a 15-minute collapse is marked, not a slow decline', () => {
-    expect(text.helpLines.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
+    expect(text.helpDetails.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
   })
 })
 
 describe('the liquidation multiple', () => {
-  it('names what the multiple measures, on the mark and in the help', () => {
-    const markup = render()
-    // A bare "14.4×" over a chart said nothing about what was multiplied.
-    expect(markup).toContain('量 3.4×')
-    expect(text.helpLines.some(line => line.includes('相对过去 24 小时同长度桶均量的倍数'))).toBe(true)
+  it('names what the multiple measures, in the readings the reader can open', async () => {
+    // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the readings.
+    const panel = await mountAndOpenReadings()
+    expect(panel.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
   })
 })
 
@@ -287,11 +359,12 @@ describe('the module rule chip', () => {
     expect(chipText).not.toContain('强平')
   })
 
-  it('names the rule, the window and that the reading is inferred, on hover', () => {
+  it('keeps the rule, the window and the inference out of a title attribute', () => {
+    // A `title` carries a sentence to neither the keyboard nor the touch reader. The same facts
+    // live behind the chip's own expansion, where the reader can actually reach them.
     const markup = render({ positioning: alert() })
-    expect(markup).toContain('oi-liquidation-proxy')
-    expect(markup).toContain('15 分钟')
-    expect(markup).toContain('推断值')
+    expect(markup).not.toContain('title="')
+    expect(markup).not.toContain('oi-liquidation-proxy')
   })
 })
 
@@ -305,7 +378,9 @@ describe('opening the reading', () => {
 
   async function mount() {
     const invoke = vi.fn(async () => { throw new Error('the panel must not reach the bridge') })
-    vi.stubGlobal('window', { platform: { products: { invoke } } })
+    // Keep the real window: the platform tooltip needs its animation frame APIs. Only the bridge is
+    // stubbed, which is also the thing this test watches.
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
     const root = createRoot(container)
     await act(async () => {
@@ -329,6 +404,7 @@ describe('opening the reading', () => {
     expect(detail.textContent).toContain('3.4×')
     // Opening the numbers is free: nothing reaches the bridge, so no analysis or budget is spent.
     expect(invoke).not.toHaveBeenCalled()
+    delete (window as unknown as { platform?: unknown }).platform
     await act(async () => { root.unmount() })
   })
 })

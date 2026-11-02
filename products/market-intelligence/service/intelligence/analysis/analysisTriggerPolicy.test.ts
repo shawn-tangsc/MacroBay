@@ -36,12 +36,14 @@ describe('analysisTriggerPolicy', () => {
     expect(policy.decide({ ...base, change: { ...base.change, severity: 'critical', sourceKind: 'proxy', comparability: 'proxy' } }).decision).toBe('skipped')
   })
 
-  it('writes a skipped decision for cooldown, review limit, and hourly/daily budgets', () => {
+  it('writes a skipped decision for cooldown and the review limit, and leaves the quotas to the budget', () => {
     const policy = createAnalysisTriggerPolicy()
     expect(policy.decide({ ...base, lastTriggeredAt: '2026-09-27T00:50:00.000Z', lastTriggeredPhase: 'initial' }).reasonCode).toBe('cooldown-active')
     expect(policy.decide({ ...base, hasInitialRun: true, reviewCount: 2, change: { ...base.change, severity: 'high' } }).reasonCode).toBe('review-limit-reached')
-    expect(policy.decide({ ...base, hourTriggerCount: 12 }).reasonCode).toBe('hour-budget-exhausted')
-    expect(policy.decide({ ...base, dayTriggerCount: 48 }).reasonCode).toBe('day-budget-exhausted')
+    // The counts still arrive (the budget reads them), but this policy no longer rules on them:
+    // a spent hour or day is refused once, by `analysisBudgetPolicy`.
+    expect(policy.decide({ ...base, hourTriggerCount: 12 }).decision).toBe('queued')
+    expect(policy.decide({ ...base, dayTriggerCount: 48 }).decision).toBe('queued')
   })
 
   it('skips semantic no-op and review only when market reaction crosses a named boundary', () => {

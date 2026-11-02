@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.3.0`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.3.1`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -13,8 +13,9 @@ supported yet.
 - Agent sessions can run with the bundled `market-intelligence` product.
 - The intelligence portal, dashboard, macro calendar, source configuration, and analyst agent are
   reachable from the product.
+- The daily briefing reads the collected evidence and can be generated from the briefing page.
 - Structured agent questions and tool approvals are rendered in the conversation.
-- The repository passes `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+- The repository passes `pnpm verify`.
 
 ## Not usable in this release
 
@@ -29,10 +30,14 @@ unavailable until an adapter is deliberately enabled.
 ### Packaged installers
 
 `pnpm build` produces Electron bundles under `out/`. A macOS `.dmg` can be built from source with
-`pnpm dist:mac`; it is unsigned and not notarized, so Gatekeeper blocks a downloaded copy until the
-user allows it. Windows packaging is configured and its installer builds both in CI and on Windows 11
-x64 hardware, but the installed app is not accepted yet; Linux packaging is not configured. There is
-no auto-update channel. See [Packaging](../development/packaging.md).
+`pnpm dist:mac`; it is unsigned and not notarized, so a downloaded copy takes two steps: **right-click
+the app → Open** (a double-click is refused), or run
+`xattr -dr com.apple.quarantine /Applications/MacroBay.app`. The Windows installer is unsigned too:
+SmartScreen shows *Windows protected your PC* and the user picks **More info → Run anyway**. Both
+prompts return after **every downloaded update**, not just the first install. Windows packaging is
+configured and its installer builds both in CI and on Windows 11 x64 hardware, but the installed app is
+not accepted yet; Linux packaging is not configured. There is no auto-update channel. See
+[Packaging](../development/packaging.md).
 
 ### Demo data
 
@@ -77,6 +82,13 @@ hiding it.
   [Data and third-party services](./data-disclaimer.md).
 - The product is not a hosted service and has no account recovery.
 
+## Network and proxy limits
+
+- Proxy mode defaults to following the system proxy. If the system still keeps an old proxy that no
+  longer connects, a new install's outbound requests go through it first and then fail. That case is
+  meant to be visible in the proxy self-check: it is there to name the unreachable system proxy, so a
+  blocked connection is not read as the model service being down.
+
 ## Product limits
 
 - Market intelligence is decision support, not investment advice.
@@ -86,7 +98,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.3.0` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.3.1` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

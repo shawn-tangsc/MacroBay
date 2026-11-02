@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { createAssistantInputbarTools, listVisibleAssistantInputbarTools } from './assistantInputbarRegistry'
 
 describe('assistantInputbarRegistry', () => {
-  it('keeps placeholder tools visible but disabled', () => {
+  it('never renders a placeholder tool as a disabled button', () => {
     const tools = createAssistantInputbarTools()
     const visible = listVisibleAssistantInputbarTools(tools)
-    expect(visible.some((tool) => tool.id === 'mcp-tools' && tool.placeholder)).toBe(true)
-    expect(visible.some((tool) => tool.id === 'attachment' && tool.enabled)).toBe(true)
+    expect(visible.some((tool) => tool.placeholder)).toBe(false)
+    expect(visible.map((tool) => tool.id)).toEqual(['attachment', 'new-topic', 'clear-topic', 'quick-panel'])
   })
 })

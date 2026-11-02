@@ -301,7 +301,13 @@ describe('product registry generator', () => {
       expect(productServicesSource).toContain('secretVault: SecretVault')
       expect(productServicesSource).toContain('platformFetch: typeof fetch')
       expect(productServicesSource).toContain('export async function registerProductServices')
-      expect(productServicesSource).toContain('await registermarketIntelligenceProductManifestServices(deps)')
+      // 每个产品单独包一层：注册失败时产品 id 挂在错误上，启动失败日志与失败页共用这一条。
+      expect(productServicesSource).toContain(
+        "await runProductRegistration('market-intelligence', () => registermarketIntelligenceProductManifestServices(deps))"
+      )
+      expect(productServicesSource).toContain(
+        "import { runProductRegistration } from '@platform/product-registry/productRegistrationFailure'"
+      )
       const seedSource = readFileSync(join(outputDir, 'productAgentSeeds.ts'), 'utf8')
       expect(seedSource).toContain("import type { ProductAgentSeedFactory } from '@platform/ai/agent-platform/seeds/mergeAgentSeeds'")
       expect(seedSource).toContain('../market-intelligence/agents/agents/cryptoMarketAnalyst')

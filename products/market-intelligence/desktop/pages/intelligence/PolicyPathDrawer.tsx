@@ -1,5 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 
+import { StateView } from '@platform/ui/components/state'
+
 import { MiSideDrawer } from './MiSideDrawer'
 
 import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
@@ -18,7 +20,6 @@ export type PolicyPathDrawerText = Readonly<{
   title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
   median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
   odds: string; change24h: string; range30d: string; quote: string
-  sepMissing: string; decisionMissing: string
   meeting: string; daysAway: string; projection: string; unchanged: string; range: string
   /** Same split as the card: the month and the bucket stay separate so English can order them. */
   outcomeLead: string
@@ -26,11 +27,14 @@ export type PolicyPathDrawerText = Readonly<{
   longerRun: string
   /** The two FRED series behind the range, labelled so the series ids do not have to be memorised. */
   rangeLower: string; rangeUpper: string
+  /** Where the odds come from and what they are not: one sentence, visible under the basis table. */
+  basisNote: string
+  /** Points at the dissenters listed above; it used to ride the card's accessible name only. */
+  dissentNote: string
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
   /** Short enough to sit beside the dash, so the reader is not left guessing. */
-  change24hPendingShort: string
   /** "The median is one 25bp step above the range midpoint" - the design's core question. */
   sepSteps: string; sepStepsLevel: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
@@ -150,7 +154,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
             : text.sepSteps.replace('{steps}', String(Math.abs(reading.sep.stepsFromCurrent)))
               .replace('{direction}', reading.sep.stepsFromCurrent > 0 ? '↑' : '↓')}
         </p>}
-      </> : <p className="mi-policy-drawer__empty">{text.sepMissing}</p>}
+      </> : <StateView state="empty" reasonCode="not-yet" size="md" />}
     </section>
 
     <section className="mi-policy-drawer__section">
@@ -163,7 +167,11 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         </div>
         <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? [])
           .map((row) => `${row.name}（${text.preferred[row.preferred]}）`).join('、') || '—'}</p>
-      </> : <p className="mi-policy-drawer__empty">{text.decisionMissing}</p>}
+        {/* This sentence used to live in the card's accessible name: sighted readers never saw it,
+            screen readers did. It is guidance, not a transcription of what is on screen, so it
+            belongs where the reader can look at the dissenters it points to. */}
+        <p className="mi-policy-drawer__note">{text.dissentNote}</p>
+      </> : <StateView state="empty" reasonCode="not-yet" size="md" />}
     </section>
 
     <section className="mi-policy-drawer__section">
@@ -177,11 +185,15 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       </h3>
       <dl className="mi-policy-drawer__kv">
         {probability ? <>
-          <div><dt>{text.change24h}</dt><dd title={probability.changeInPp24h === undefined ? text.change24hPending : undefined}>
+          <div><dt>{text.change24h}</dt>
+            {/* The reason is the line itself now: it used to sit in a hint, so a reader who could not
+                hover got a dash and no explanation. */}
             {probability.changeInPp24h === undefined
-              ? <><span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span></>
-              : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
-          </dd></div>
+              ? <dd>
+                  <span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPending}）</span>
+                </dd>
+              : <dd>{`${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}</dd>}
+          </div>
           <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${percentOf(probability.range30d.min)}–${percentOf(probability.range30d.max)}` : '—'}</dd></div>
           <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>
         </> : null}
@@ -191,6 +203,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
         {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
       </dl>
+      {/* The card used to hide this behind a hand-drawn "?" bubble; the basis is where a reader looks
+          for it, and a sentence that says what the number is not should not need a hover. */}
+      <p className="mi-policy-drawer__note">{text.basisNote}</p>
     </section>
   </MiSideDrawer>
 }

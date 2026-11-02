@@ -101,16 +101,19 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
   const verificationDefinition = {
     id: VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, owner: 'product', productId: marketAnalysisJobPolicy.productId,
     handlerId: VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, title: 'Verify market analysis predictions',
+    audience: 'user' as const,
     trigger: { kind: 'interval', intervalMs: analysisTriggerPolicy.verificationIntervalMs, anchor: 'lastComplete' }, payload: {}
   } as const
   const sessionSlotDefinition = {
     id: ANALYSIS_SESSION_SLOTS_JOB, owner: 'product', productId: marketAnalysisJobPolicy.productId,
     handlerId: ANALYSIS_SESSION_SLOTS_JOB, title: 'Serve the market analysis session slots',
+    audience: 'user' as const,
     trigger: { kind: 'interval', intervalMs: analysisSlotTickPolicy.intervalMs, anchor: 'lastComplete' }, payload: {}
   } as const
   const recoveryDefinition = {
     id: RECOVER_MARKET_ANALYSIS_RUNS_JOB, owner: 'product', productId: marketAnalysisJobPolicy.productId,
     handlerId: RECOVER_MARKET_ANALYSIS_RUNS_JOB, title: 'Recover market analysis runs',
+    audience: 'user' as const,
     trigger: { kind: 'startup' }, payload: {}
   } as const
   let armed = false

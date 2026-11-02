@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Select, Switch } from 'antd'
+import { Button, Select, Switch } from 'antd'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { Modal } from '@platform/ui/components/modal'
 
 import type { NewsSentimentSettingsView } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { intelligenceTranslationClient } from '../../../shared/ipc/intelligenceTranslationClient'
 import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentText } from './NewsSentimentCard'
 
 export function NewsSentimentSettingsModal(props: {
@@ -17,6 +19,7 @@ export function NewsSentimentSettingsModal(props: {
   onClose: () => void
 }): React.ReactElement {
   const { text } = props
+  const resolveText = useProductTextKey()
   const [view, setView] = useState<NewsSentimentSettingsView>()
   const [enabled, setEnabled] = useState(true)
   const [modelRef, setModelRef] = useState('')
@@ -86,14 +89,20 @@ export function NewsSentimentSettingsModal(props: {
 
   return (
     <Modal
-      cancelText={text.settingsModal.cancel}
-      okText={text.settingsModal.save}
-      okButtonProps={{ loading: saving }}
-      onCancel={props.onClose}
-      onOk={() => void save()}
       open={props.open}
-      title={text.settingsModal.title}
-      zIndex={1400}
+      width="standard"
+      layer="over-drawer"
+      titleKey="pages.intelligence.portal.newsSentiment.settingsModal.title"
+      resolveText={resolveText}
+      onClose={props.onClose}
+      footer={
+        <>
+          <Button onClick={props.onClose}>{text.settingsModal.cancel}</Button>
+          <Button type="primary" loading={saving} onClick={() => void save()}>
+            {text.settingsModal.save}
+          </Button>
+        </>
+      }
     >
       <div className="mi-news-settings">
         <label className="mi-news-settings__row">
@@ -120,9 +129,9 @@ export function NewsSentimentSettingsModal(props: {
                   ? '—'
                   : translationEnabled ? text.settingsModal.translation.on : text.settingsModal.translation.off}
               </span>
-              <button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} type="button">
+              <Button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} size="small" type="link">
                 {text.settingsModal.translation.open}
-              </button>
+              </Button>
             </div>
             <p className="mi-news-settings__hint">
               {text.settingsModal.translation.modelLabel}: {translationModelLabel ?? text.settingsModal.translation.followDefault}

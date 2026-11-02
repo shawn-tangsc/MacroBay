@@ -2,8 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Input } from 'antd'
 import { Check, Copy, Eye, EyeOff, Pencil } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { PlatformText } from '../../../i18n/platformText'
 import { copyTextToClipboard } from '../../clipboard'
+
+/** 图标按钮的读屏名只收点分键：句子由调用方注入的 resolver 给。 */
+export const EDIT_KEY = 'webSearch.editApiKey'
+export const COPY_KEY = 'webSearch.copyApiKey'
+export const COPY_DONE_KEY = 'webSearch.apiKeyCopied'
+export const EYE_SHOW_KEY = 'webSearch.showApiKey'
+export const EYE_HIDE_KEY = 'webSearch.hideApiKey'
 
 const ALL_MASK = '••••••••'
 export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
@@ -45,7 +54,14 @@ export function WebSearchApiKeyField({
   const [revealedKey, setRevealedKey] = useState<string | null>(null)
   const [revealDraft, setRevealDraft] = useState(false)
   const [revealing, setRevealing] = useState(false)
-  const [revealError, setRevealError] = useState<string | null>(null)
+  /**
+   * 失败要带一个「重试能不能改变结果」的标记，而不是只带一句话。
+   *
+   * 判据：**动作必须与失败类型匹配**——桥不存在、没有存过 Key 这类确定性失败，重试永远得到同一
+   * 结果，给按钮只会让人以为是自己点法不对；只有「没连上主进程」这类瞬时失败才给重试。
+   * 原来四种失败共用一个渲染块，于是按钮被无条件画出来。
+   */
+  const [revealError, setRevealError] = useState<{ text: string; retryable: boolean } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -122,18 +138,18 @@ export function WebSearchApiKeyField({
     setRevealError(null)
     // 旧 preload：桥不存在时直接给可诊断文案，不能和“主进程报错/没有 Key”混为一谈。
     if (typeof window.platform?.webSearch?.revealApiKey !== 'function') {
-      setRevealError(labels.revealApiKeyUnavailable)
+      setRevealError({ text: labels.revealApiKeyUnavailable, retryable: false })
       return
     }
     setRevealing(true)
     try {
       const key = await onReveal()
       if (key === null) {
-        setRevealError(labels.revealApiKeyMissing)
+        setRevealError({ text: labels.revealApiKeyMissing, retryable: false })
         return
       }
       if (typeof key !== 'string' || key.length === 0) {
-        setRevealError(labels.revealApiKeyFailed)
+        setRevealError({ text: labels.revealApiKeyFailed, retryable: false })
         return
       }
       setRevealedKey(key)
@@ -143,7 +159,7 @@ export function WebSearchApiKeyField({
         timerRef.current = null
       }, API_KEY_REVEAL_TIMEOUT_MS)
     } catch {
-      setRevealError(labels.revealApiKeyBridgeFailed)
+      setRevealError({ text: labels.revealApiKeyBridgeFailed, retryable: true })
     } finally {
       setRevealing(false)
     }
@@ -167,6 +183,11 @@ export function WebSearchApiKeyField({
       setRemoving(false)
     }
   }
+
+  // 眼睛在「尚无 Key」时是禁用的，而禁用的按钮接不到焦点、挂不了 Tooltip。
+  // 原因必须**在别处有可见的字**：没 Key 也没草稿时，把「尚无 Key」这句放到字段下方的提示行里，
+  // 输入框占位另行说明「粘贴 API Key（必填）」。不许出现「点不了、也不知道为什么」。
+  const visibleHint = hint ?? (hasApiKey || hasDraft ? undefined : labels.noApiKeyHint)
 
   const eyeIcon = savedMode ? revealedKey ? <EyeOff size={14} /> : <Eye size={14} /> : revealDraft ? <EyeOff size={14} /> : <Eye size={14} />
   const eyeLabel = savedMode
@@ -210,34 +231,51 @@ export function WebSearchApiKeyField({
           suffix={
             <span className="web-search-api-key-suffix">
               {savedMode ? (
-                <button
-                  type="button"
-                  className="web-search-api-key-icon web-search-api-key-pencil"
-                  aria-label={labels.editApiKey}
-                  disabled={disabled}
-                  onClick={startEditing}>
-                  <Pencil size={13} />
-                </button>
+                disabled ? (
+                  <IconButton
+                    ariaLabelKey={EDIT_KEY}
+                    disabled
+                    icon={Pencil}
+                    onSelect={startEditing}
+                    resolveText={(key) => (key === EDIT_KEY ? labels.editApiKey : '')}
+                    size="sm"
+                  />
+                ) : (
+                  <IconButton
+                    ariaLabelKey={EDIT_KEY}
+                    icon={Pencil}
+                    onSelect={startEditing}
+                    resolveText={(key) => (key === EDIT_KEY ? labels.editApiKey : '')}
+                    size="sm"
+                  />
+                )
               ) : null}
               {revealedKey ? (
-                <button
-                  type="button"
-                  className="web-search-api-key-copy"
-                  aria-label={labels.copyApiKey}
-                  title={copied ? labels.apiKeyCopied : labels.copyApiKey}
-                  onClick={() => void copyRevealedKey()}>
-                  {copied ? <Check size={13} /> : <Copy size={13} />}
-                </button>
+                <IconButton
+                  ariaLabelKey={copied ? COPY_DONE_KEY : COPY_KEY}
+                  icon={copied ? Check : Copy}
+                  onSelect={() => void copyRevealedKey()}
+                  resolveText={(key) => {
+                    if (key === COPY_KEY) return labels.copyApiKey
+                    if (key === COPY_DONE_KEY) return labels.apiKeyCopied
+                    return ''
+                  }}
+                  size="sm"
+                />
               ) : null}
-              <button
-                type="button"
-                className="web-search-api-key-eye"
-                aria-label={eyeLabel}
-                title={canToggle ? undefined : labels.noApiKeyHint}
-                disabled={!canToggle || disabled || revealing}
-                onClick={toggleEye}>
-                {eyeIcon}
-              </button>
+              {(() => {
+                const eyeDisabled = !canToggle || disabled || revealing
+                const eyeProps = {
+                  ariaLabelKey: eyeLabel === labels.hideApiKey ? EYE_HIDE_KEY : EYE_SHOW_KEY,
+                  icon: revealedKey || revealDraft ? EyeOff : Eye,
+                  onSelect: toggleEye,
+                  resolveText: (key: string) =>
+                    key === EYE_HIDE_KEY ? labels.hideApiKey : key === EYE_SHOW_KEY ? labels.showApiKey : '',
+                  size: 'sm' as const
+                }
+                // `IconButton` 的禁用与提示在类型上是互斥的两支，变量形态的布尔值进不去，所以分两次写。
+                return eyeDisabled ? <IconButton {...eyeProps} disabled /> : <IconButton {...eyeProps} />
+              })()}
             </span>
           }
         />
@@ -245,10 +283,13 @@ export function WebSearchApiKeyField({
         {copied ? <span className="web-search-api-key-copied" role="status">{labels.apiKeyCopied}</span> : null}
         {revealError ? (
           <span className="web-search-api-key-error" role="alert">
-            {revealError}
-            <Button type="link" size="small" onClick={() => void reveal()}>
-              {labels.retry}
-            </Button>
+            {revealError.text}
+            {/* 只有「重试可能改变结果」的失败才给按钮：确定性失败上的按钮永远不会成功。 */}
+            {revealError.retryable ? (
+              <Button type="link" size="small" onClick={() => void reveal()}>
+                {labels.retry}
+              </Button>
+            ) : null}
           </span>
         ) : null}
       </div>
@@ -279,7 +320,7 @@ export function WebSearchApiKeyField({
           )}
         </div>
       ) : null}
-      {hint ? <span className="web-search-api-key-hint">{hint}</span> : null}
+      {visibleHint ? <span className="web-search-api-key-hint">{visibleHint}</span> : null}
     </div>
   )
 }

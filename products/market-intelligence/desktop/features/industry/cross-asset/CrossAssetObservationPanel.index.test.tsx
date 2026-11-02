@@ -43,7 +43,6 @@ const bothLegs = (nowMs: number) => ({
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 async function render(input: Readonly<{
   nowMs: number; bySymbol: Record<string, readonly unknown[]>; feed: CrossAssetIndexFeedState
@@ -98,7 +97,9 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       const label = page.host.querySelector('[data-index-proxy="true"]')
       expect(label?.textContent).toBe(text.proxyTag)
       expect(label?.getAttribute('data-caveat')).toBe('tokenized-index-proxy')
-      expect(label?.getAttribute('title')).toBe(text.proxyCaveat)
+      expect(label?.getAttribute('title')).toBeNull()
+      expect(label?.getAttribute('tabindex')).toBeNull()
+      expect(label?.getAttribute('aria-label')).toBe(text.proxyCaveat)
       // A 24/7 contract has no session to report, so no closure tag rides beside the live price.
       expect(indexRow.dataset.marketState).toBe('open')
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()

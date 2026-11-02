@@ -1,4 +1,6 @@
-import { Button, Input, Switch, Tag, Tooltip, message } from 'antd'
+import { useRef } from 'react'
+import { Button, Input, Switch, Tag } from 'antd'
+import type { InputRef } from 'antd'
 import { Copy, ExternalLink, Network, Plus, RefreshCw, Settings2 } from 'lucide-react'
 
 import type { AgentMcpCatalogItem } from '@platform/ai/agent-platform/mcp/agentMcpViewModel'
@@ -6,8 +8,14 @@ import type { RuntimeCredentialAction } from '@platform/ai/agent-platform/mcp/ru
 import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { resolveAgentTextKey } from '../../../agentTooltipText'
 import type { AgentText } from '../../../agentText'
-import { EmptyCatalog } from './EmptyCatalog'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import { Tooltip } from '@platform/ui/components/tooltip'
+import { useToast, type ToastApi } from '@platform/ui/components/toast'
 import {
   emptyToolsHint,
   McpStatusTag,
@@ -31,6 +39,13 @@ type McpCatalogProps = {
   onRefresh: (mcpId: string) => void
 }
 
+/** 「手动绑定」是状态词，不是描述标签。 */
+const MANUAL_BADGE_KEY = 'agent.tools.mcpManualBadge'
+/** 工具名是分类名词（这个服务器提供了什么），不是状态。 */
+const MCP_TOOL_CHIP_KEY = 'agent.tools.mcpToolChip'
+/** 复制动作的回执键。 */
+const COPIED_TOAST_KEY = 'agent.tools.mcpActionCopied'
+
 export function McpCatalog({
   text,
   value,
@@ -43,14 +58,19 @@ export function McpCatalog({
   onRemove,
   onRefresh
 }: McpCatalogProps): React.ReactElement {
+  const manualInputRef = useRef<InputRef | null>(null)
+  // 「去绑定」是真的能做的一步：把光标送到同一面板里的手动添加框，而不是指去一个不存在的设置页。
+  const focusManualInput = (): void => manualInputRef.current?.focus()
+
   return (
     <div className="agent-tool-catalog">
       <div className="agent-tool-list-heading">{text.editor.tools.boundHeading}</div>
       {catalog.bound.length === 0 && manualMcps.length === 0 ? (
-        <EmptyCatalog
-          icon={<Network size={17} />}
-          title={text.editor.tools.noMcpTitle}
-          description={text.editor.tools.noMcpDescription}
+        <StateView
+          state="empty"
+          reasonCode="none-installed"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.bind_target, onSelect: focusManualInput }}
         />
       ) : (
         <div className="agent-tool-catalog compact">
@@ -83,10 +103,11 @@ export function McpCatalog({
 
       <div className="agent-tool-list-heading">{text.editor.tools.mcpRegistryHeading}</div>
       {catalog.addable.length === 0 ? (
-        <EmptyCatalog
-          icon={<Network size={17} />}
-          title={text.editor.tools.noMcpRegistryTitle}
-          description={text.editor.tools.noMcpRegistryDescription}
+        <StateView
+          state="empty"
+          reasonCode="none-installed"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.bind_target, onSelect: focusManualInput }}
         />
       ) : (
         <div className="agent-tool-catalog compact">
@@ -109,6 +130,7 @@ export function McpCatalog({
       <div className="agent-tool-list-heading">{text.editor.tools.mcpManualHeading}</div>
       <div className="agent-mcp-add-row">
         <Input
+          ref={manualInputRef}
           value={value}
           placeholder={text.editor.tools.mcpPlaceholder}
           onChange={(event) => onValueChange(event.target.value)}
@@ -140,7 +162,11 @@ function ManualMcpRow({
         <strong>{mcpId}</strong>
         <small>{text.editor.tools.mcpManualCustomDescription}</small>
       </span>
-      <Tag className="agent-tool-approval">{text.editor.tools.mcpManualBadge}</Tag>
+      <StatusPill
+        tone="warn"
+        labelKey={MANUAL_BADGE_KEY}
+        resolveText={(key) => (key === MANUAL_BADGE_KEY ? text.editor.tools.mcpManualBadge : '')}
+      />
       <Switch
         size="small"
         checked
@@ -179,9 +205,7 @@ function McpRow({
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (
-              <Tag key={tool.id} className="agent-mcp-tool-chip">
-                {tool.name}
-              </Tag>
+              <Tag key={tool.id} className="agent-mcp-tool-chip">{tool.name}</Tag>
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
@@ -207,19 +231,18 @@ function McpRow({
           className="ant-secondary-button"
           size="small"
           aria-label={text.editor.tools.mcpUnbind}
-          autoInsertSpace={false}
           onClick={onUnbind}>
           {text.editor.tools.mcpUnbind}
         </Button>
       ) : null}
       {checked && onRefresh ? (
-        <Button
-          className="ant-icon-button"
-          size="small"
-          icon={<RefreshCw size={13} />}
-          aria-label={text.editor.tools.refreshMcpTools}
-          title={text.editor.tools.refreshMcpTools}
-          onClick={onRefresh}
+        <IconButton
+          ariaLabelKey="editor.tools.refreshMcpTools"
+          icon={RefreshCw}
+          onSelect={onRefresh}
+          resolveText={(key) => resolveAgentTextKey(text, key)}
+          size="md"
+          tooltipKey="editor.tools.refreshMcpTools"
         />
       ) : null}
       <Switch
@@ -242,30 +265,26 @@ function McpCredentialActionButton({
   text: AgentText
   onRestart?: () => void
 }): React.ReactElement {
-  const label = resolveCredentialActionLabel(action, text)
+  // 动作自带的是键（`editor.tools.mcpActionOpenUrl` 这类），句子由本线文案表解析——
+  // 不再在调用点按 id 重写一张 if 表，动作多一种也不会漏（`RuntimeCredentialAction` 自己带键）。
+  const resolveText = (key: string): string => resolveAgentTextKey(text, key)
+  const label = resolveText(action.labelKey)
+  const toast = useToast()
 
   return (
-    <Tooltip title={label}>
+    <Tooltip labelKey={action.labelKey} resolveText={resolveText}>
       <Button
         className="ant-secondary-button"
         size="small"
         icon={credentialActionIcon(action.id)}
         aria-label={label}
         onClick={() => {
-          void runCredentialAction(action, text, onRestart)
+          void runCredentialAction(action, text, toast, onRestart)
         }}>
         {label}
       </Button>
     </Tooltip>
   )
-}
-
-function resolveCredentialActionLabel(action: RuntimeCredentialAction, text: AgentText): string {
-  if (action.id === 'open-url') return text.editor.tools.mcpActionOpenUrl
-  if (action.id === 'restart') return text.editor.tools.mcpActionRestart
-  if (action.id === 'open-settings') return text.editor.tools.mcpActionOpenSettings
-  if (action.id === 'copy-hint') return text.editor.tools.mcpActionCopyHint
-  return text.editor.tools.mcpActionRetry
 }
 
 function credentialActionIcon(id: RuntimeCredentialAction['id']): React.ReactNode {
@@ -278,6 +297,7 @@ function credentialActionIcon(id: RuntimeCredentialAction['id']): React.ReactNod
 async function runCredentialAction(
   action: RuntimeCredentialAction,
   text: AgentText,
+  toast: ToastApi,
   onRestart?: () => void
 ): Promise<void> {
   if (action.id === 'open-url' && action.url) {
@@ -296,7 +316,10 @@ async function runCredentialAction(
 
   if (action.id === 'copy-hint' && action.hint) {
     await copyTextToClipboard(action.hint)
-    message.success(text.editor.tools.mcpActionCopied)
+    toast.success({
+      titleKey: COPIED_TOAST_KEY,
+      resolveText: (key) => (key === COPIED_TOAST_KEY ? text.editor.tools.mcpActionCopied : '')
+    })
     return
   }
 

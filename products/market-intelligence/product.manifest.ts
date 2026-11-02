@@ -9,7 +9,7 @@ import { toManifestRegistrations } from './service/intelligence/agent-capabiliti
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.3.0',
+  version: '0.3.1',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
@@ -103,6 +103,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dailyBriefing.list' },
     { method: 'intelligence.dailyBriefing.get' },
     { method: 'intelligence.dailyBriefing.regenerate' },
+    { method: 'intelligence.dailyBriefing.getProgress' },
     { method: 'intelligence.dailyBriefing.getSettings' },
     { method: 'intelligence.dailyBriefing.saveSettings' },
     { method: 'intelligence.queryRelatedEvents' },

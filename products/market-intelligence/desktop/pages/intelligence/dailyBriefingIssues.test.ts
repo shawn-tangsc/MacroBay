@@ -136,7 +136,7 @@ describe('daily briefing issues', () => {
       text: zhText,
       formatTime
     }).find((entry) => entry.id === 'data:etf-eth:unavailable')!
-    expect(gated.title).toContain('随稳定币/资金面快照不可用')
+    expect(gated.title).toContain('随稳定币/资金面数据不可用')
     expect(gated.advice).toContain('ETF 会随之恢复')
 
     const disabled = briefingIssues({
