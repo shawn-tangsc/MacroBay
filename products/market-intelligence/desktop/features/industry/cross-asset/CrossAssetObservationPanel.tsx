@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Popover } from 'antd'
+import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover as FocusPopover } from '@platform/ui/components/popover'
 import { Segmented } from '@platform/ui/components/segmented'
@@ -70,6 +71,14 @@ const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
   noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
+  dailyFrequency: 'pages.intelligence.portal.dashboard.crossAsset.dailyFrequency',
+  dailyMixedDates: 'pages.intelligence.portal.dashboard.crossAsset.dailyMixedDates',
+  dailyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.dailyCaveat',
+  dailySpreadAndInflation: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadAndInflation',
+  dailySpreadOnly: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadOnly',
+  dailyChangeWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeWithDate',
+  dailyChangeUnknownWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeUnknownWithDate',
+  inflationExpectationWithDate: 'pages.intelligence.portal.dashboard.crossAsset.inflationExpectationWithDate',
   syntheticCaveat: 'pages.intelligence.portal.dashboard.crossAsset.syntheticCaveat',
   proxyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.proxyCaveat',
   marketClosedHint: 'pages.intelligence.portal.dashboard.crossAsset.marketClosedHint',
@@ -157,9 +166,6 @@ function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }): Reac
     <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
   </tr>
 }
-function format(template: string, values: Readonly<Record<string, string>>): string {
-  return Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, value), template)
-}
 /**
  * A daily FRED close. The 最新 cell prints the level at two decimals; the four intraday window
  * columns collapse into one cell that prints the day-over-day change in basis points with the
@@ -175,16 +181,38 @@ function RatesStatusRow({ id, reading, rates, text }: {
   rates: ReadonlyMap<string, MacroRatesReading>; text: Text
 }): React.ReactElement {
   const extras = crossAssetRatesDailyExtras({ id, reading, rates })
-  const detail = [
-    extras.termSpreadDelta === undefined ? undefined : `${text.termSpread} ${basisPointsText(extras.termSpreadDelta)}${text.bpUnit}`,
-    extras.breakeven === undefined ? undefined : format(text.inflationExpectationWithDate, { value: extras.breakeven.value.toFixed(2), date: extras.breakeven.date })
-  ].filter(Boolean).join(' · ') || undefined
+  const resolveText = useProductTextKey()
+  /**
+   * 「期限利差」与「通胀预期」是同一句话里本来就该并列的两段（同一张表相邻两个读数），所以合一个键：
+   * 组合模板带三个参数，` · ` 是句子的一部分，不是调用点拼出来的结构（产品经理 2026-11-02 定的边界）。
+   * 只有一段时各走单段键——不为少一行硬合，也不许两段拼在调用点。
+   */
+  const spread = extras.termSpreadDelta === undefined
+    ? undefined
+    : `${basisPointsText(extras.termSpreadDelta)}${text.bpUnit}`
+  const inflation = extras.breakeven === undefined
+    ? undefined
+    : { value: extras.breakeven.value.toFixed(2), date: extras.breakeven.date }
+  const detailLine: HintLine | undefined =
+    spread !== undefined && inflation !== undefined
+      ? { labelKey: crossAssetTextKeys.dailySpreadAndInflation, params: { spread, inflation: inflation.value, date: inflation.date } }
+      : spread !== undefined
+        ? { labelKey: crossAssetTextKeys.dailySpreadOnly, params: { spread } }
+        : inflation !== undefined
+          ? { labelKey: crossAssetTextKeys.inflationExpectationWithDate, params: { value: inflation.value, date: inflation.date } }
+          : undefined
+  const detail = detailLine === undefined ? undefined : fillLabelParams(resolveText(detailLine.labelKey), detailLine.params)
   const change = reading.previous === undefined
-    ? format(text.dailyChangeUnknownWithDate, { date: reading.period })
-    : format(text.dailyChangeWithDate, { change: `${basisPointsText(reading.actual - reading.previous)}${text.bpUnit}`, date: reading.period })
-  const dailyFacts = [text.dailyFrequency, detail, extras.mixedObservationDates ? text.dailyMixedDates : undefined, text.dailyCaveat]
-    .filter((fact): fact is string => Boolean(fact))
-  // 说明有五行，`title` 只能塞一行、触屏不出现、读屏也不念；这里换成可聚焦的气泡，焦点进去就展开。
+    ? fillLabelParams(resolveText(crossAssetTextKeys.dailyChangeUnknownWithDate), { date: reading.period })
+    : fillLabelParams(resolveText(crossAssetTextKeys.dailyChangeWithDate), { change: `${basisPointsText(reading.actual - reading.previous)}${text.bpUnit}`, date: reading.period })
+  // 气泡里的每一行都是「键 + 它自己的参数」：句子在 `productText`，调用点只给已格式化好的值。
+  const dailyFacts: readonly HintLine[] = [
+    { labelKey: crossAssetTextKeys.dailyFrequency },
+    ...(detailLine === undefined ? [] : [detailLine]),
+    ...(extras.mixedObservationDates ? [{ labelKey: crossAssetTextKeys.dailyMixedDates }] : []),
+    { labelKey: crossAssetTextKeys.dailyCaveat }
+  ]
+  // 说明有多行，`title` 只能塞一行、触屏不出现、读屏也不念；这里换成可聚焦的气泡，焦点进去就展开。
   const dailyCell = <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
     data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
     data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
@@ -195,10 +223,7 @@ function RatesStatusRow({ id, reading, rates, text }: {
   return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
     <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
     <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
-    <Popover placement="left" trigger={['hover', 'focus']}
-      content={<div className="mi-cross-asset__daily-facts">{dailyFacts.map(fact => <div key={fact}>{fact}</div>)}</div>}>
-      {dailyCell}
-    </Popover>
+    <FocusPopover lines={dailyFacts} resolveText={resolveText}>{dailyCell}</FocusPopover>
   </tr>
 }
 function MacroStatusRow({ id, reading, text, formatTime }: {

@@ -8,10 +8,21 @@ import { productText } from '../../../shared/i18n/productText'
 import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
 import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/cross-asset/crossAssetSnapshotQuery'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+
+/**
+ * 同一个面板，但**壳层语言**是英文。
+ *
+ * 日频那几行在换成平台气泡后由 `useProductTextKey()` 解析（和所有已迁的调用点一致），
+ * 所以「读者语言」由壳层语言决定，而不是由传入的 `text` 决定——写用例也得按这条来。
+ */
+const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
+  createElement(ShellLanguageProvider, { language: 'en-US' },
+    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props)))
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 /** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
@@ -421,10 +432,12 @@ describe('cross-asset observation workspace', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.crossAsset
     const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }), release: vi.fn() }
     try {
-      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel,
+      await act(async () => root.render(createElement(EnglishScopedCrossAssetObservationPanel,
         { client: client as never, rates: ratesView() as never, text })))
       expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).toContain('Daily +2bp (as of 2026-10-09)')
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('Term spread +44bp · Inflation expectation 2.33% (as of 2026-10-13)')
+      // 模板化句子的通用判据（Chief 2026-11-02）：渲染结果里不许残留 `{`。
+      expect(host.querySelector('[data-asset-daily="us10y"]')?.textContent).not.toContain('{')
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 

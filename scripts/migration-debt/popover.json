@@ -5,7 +5,6 @@
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx": 1,
-    "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": 1
   },
   "$decidedComment": "Reviewed and deliberately kept, not debt. A line here says \"we looked and decided\", so nobody re-opens the discussion; a line in `entries` says \"still to do\". If the file stops importing antd Popover, delete its line here too — a decided entry that no longer matches the code is the same lie as a stale debt entry.",

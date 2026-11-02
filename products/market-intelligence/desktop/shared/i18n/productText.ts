@@ -334,6 +334,10 @@ export const productText = {
               termSpread: '期限利差',
               // 通胀预期是自己一条序列，可以比这两行早一天（2026-10-15 就是），所以永远带自己的观察日。
               inflationExpectationWithDate: '通胀预期 {value}%（截至 {date}）',
+              // 同一句话里本来就并列的两段（同一张表相邻两个读数）合成一个键：` · ` 是句子的一部分，
+              // 不是调用点拼出来的结构。只有一段时各走单段键，不为少一行硬合。
+              dailySpreadAndInflation: '期限利差 {spread} · 通胀预期 {inflation}%（截至 {date}）',
+              dailySpreadOnly: '期限利差 {spread}',
               dailyMixedDates: '两条日频序列观察日不一致，不计算差值',
               dailyCaveat: '官方日频收盘，仅反映交易日收盘水平，不解释盘中波动。',
               // 跨市场判读（设计 142）。文案一律读者语言：剧本名是口语短名，解释是"钱在做什么"，
@@ -2200,6 +2204,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               // The expectation is its own series and can be a day ahead of these rows; the date
               // therefore travels with the value instead of being inherited from the row.
               inflationExpectationWithDate: 'Inflation expectation {value}% (as of {date})',
+              // Two readings of the same table that belong in one sentence; ` · ` is part of the copy.
+              dailySpreadAndInflation: 'Term spread {spread} · Inflation expectation {inflation}% (as of {date})',
+              dailySpreadOnly: 'Term spread {spread}',
               dailyMixedDates: 'Two daily series disagree on the observation date; no difference stated',
               dailyCaveat: 'Official daily close: the level of a trading day, and no explanation of intraday moves.',
               // The cross-market reading (design 142), in the same plain words as the Chinese copy.
