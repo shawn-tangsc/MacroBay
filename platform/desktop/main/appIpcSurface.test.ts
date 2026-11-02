@@ -18,6 +18,7 @@ const appSource = readSource('app.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
+const modelIpcSource = readSource('ipc/modelIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -78,8 +79,8 @@ describe('desktop main IPC surface', () => {
   })
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
-    expect(appSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
-    expect(appSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
     expect(appSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
     expect(appSource).toContain('IpcChannels.agentsProbeRuntimeCompatibility')
     expect(appSource).toContain('IpcChannels.agentsGetModelGatewayStatus')
@@ -214,11 +215,13 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
       appSource.indexOf('const providerStore = createProviderStore(')
     )
-    expect(appSource).toContain('IpcChannels.modelProvidersList')
-    expect(appSource).toContain('IpcChannels.modelProvidersUpsert')
-    expect(appSource).toContain('IpcChannels.modelProvidersTestConnection')
-    expect(appSource).toContain('IpcChannels.modelProvidersPreviewModelSync')
-    const modelSyncHandler = appSource.slice(appSource.indexOf('IpcChannels.modelProvidersPreviewModelSync'))
+    // 模型服务 19 个 handler 已搬到 ipc/modelIpc.ts。
+    expect(appSource).toContain('registerModelIpc(ipcMain, {')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersList')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersUpsert')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersTestConnection')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersPreviewModelSync')
+    const modelSyncHandler = modelIpcSource.slice(modelIpcSource.indexOf('IpcChannels.modelProvidersPreviewModelSync'))
     expect(modelSyncHandler).toContain('const provider = await providerStore.resolveRuntimeProvider(providerId)')
     expect(modelSyncHandler).not.toContain("(await providerStore.getState()).providers.find((item) => item.id === providerId)")
     expect(appSource).not.toContain('testModelProviderConnection(provider, options)')
@@ -545,7 +548,7 @@ describe('desktop main IPC surface', () => {
 
   it('wires exactly one image generation/edit channel behind strict validation and message persistence', () => {
     expect(IpcChannels.modelProvidersGenerateImage).toBe('platform:model-providers-generate-image')
-    const block = mainRegistrationBlock(appSource, 'modelProvidersGenerateImage')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersGenerateImage')
 
     // 先校验参数（provider/model/prompt/count/size 白名单 + 编辑原图 ≤4MB/mime 白名单），再解析 provider 并出站。
     expect(block).toContain("typeof providerId !== 'string'")
@@ -560,7 +563,7 @@ describe('desktop main IPC surface', () => {
     expect(block).toContain('getPlatformFetch()')
     // 编辑复用同一通道：operation 是 additive 参数，不存在第二条图像通道。
     expect(block).toContain("request.operation === 'edit'")
-    expect(appSource).not.toContain('modelProvidersEditImage')
+    expect(modelIpcSource).not.toContain('modelProvidersEditImage')
     expect(appSource).not.toContain('ipcMain.handle(IpcChannels.modelProvidersGenerateImageV2')
     expect(block.indexOf('validateImageGenerationInput(')).toBeLessThan(
       block.indexOf('resolveRuntimeProvider(providerId)')
@@ -605,8 +608,8 @@ describe('desktop main IPC surface', () => {
   })
 
   it('runs the comparison probe only inside the on-demand self-test', () => {
-    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里。
-    expect(appSource.split('probeDirectEgress(').length - 1).toBe(1)
+    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里（现已随模型服务搬家）。
+    expect(modelIpcSource.split('probeDirectEgress(').length - 1).toBe(1)
   })
 
   it('rejects an invalid proxy address before the settings file is written', () => {
@@ -650,16 +653,16 @@ describe('desktop main IPC surface', () => {
     expect(preloadSource).not.toContain('probeModelMessages')
     expect(Object.keys(IpcChannels)).not.toContain('modelProvidersProbeModelMessages')
 
-    const block = mainRegistrationBlock(appSource, 'modelProvidersDetectModels')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersDetectModels')
     // 运行器在主进程：供应商解析 + 平台 fetch（Key 只在主进程解析）。
-    expect(appSource).toContain('resolveProvider: (providerId: string) => providerStore.resolveRuntimeProvider(providerId)')
-    expect(appSource).toContain('fetch: () => getPlatformFetch()')
+    expect(modelIpcSource).toContain('resolveProvider: (providerId: string) => providerStore.resolveRuntimeProvider(providerId)')
+    expect(modelIpcSource).toContain('fetch: () => getPlatformFetch()')
     // 检测**绝不写库**：旧 handler 里的落盘调用不得回来。
     expect(block).not.toContain('addOrUpdateModel')
     // progress = 完整 result（含 protocols / protocolSkipReason / declaredProtocolFailures）；
     // done = (runId, { stopped })。
-    expect(appSource).toContain('IpcChannels.modelProvidersDetectionProgress, result')
-    expect(appSource).toContain('IpcChannels.modelProvidersDetectionDone, runId, payload')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersDetectionProgress, result')
+    expect(modelIpcSource).toContain('IpcChannels.modelProvidersDetectionDone, runId, payload')
 
     const preloadBlock = preloadMethodBlock(preloadSource, 'detectModels')
     expect(preloadBlock).toContain('IpcChannels.modelProvidersDetectModels')
@@ -675,7 +678,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('reuses the existing test-connection channel for per-endpoint probes with strict validation', () => {
-    const block = mainRegistrationBlock(appSource, 'modelProvidersTestConnection')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersTestConnection')
 
     // 不新增通道：端点探测走既有 testConnection 的 additive 参数。
     expect(block).toContain('endpointTest')
@@ -695,7 +698,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('registers the reveal handler behind strict provider validation and never logs the key', () => {
-    const block = mainRegistrationBlock(appSource, 'modelProvidersRevealApiKey')
+    const block = mainRegistrationBlock(modelIpcSource, 'modelProvidersRevealApiKey')
 
     expect(block).toContain("typeof providerId !== 'string'")
     expect(block).toContain('providerStore.list()')
@@ -703,8 +706,8 @@ describe('desktop main IPC surface', () => {
     expect(block).toContain('{ apiKey:')
     expect(block).not.toMatch(/console\./)
     expect(block).not.toContain('JSON.stringify')
-    // 整个 main handler 文件不得把凭据打印到任何 console（含既有日志语句）。
-    expect(appSource).not.toMatch(/console\.[a-z]+\([^)]*apiKey/i)
+    // 整个 handler 模块不得把凭据打印到任何 console（含既有日志语句）。
+    expect(modelIpcSource).not.toMatch(/console\.[a-z]+\([^)]*apiKey/i)
     expect(preloadMethodBlock(preloadSource, 'revealApiKey')).toContain(
       'IpcChannels.modelProvidersRevealApiKey'
     )
