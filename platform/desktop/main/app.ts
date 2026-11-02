@@ -17,49 +17,8 @@ import {
   TaskManagementToolRuntimeService
 } from '../../ai/agent-platform/runtime/tasks'
 import {
-  ChannelInboundExecutionCoordinator,
-  ChannelDispatchRunRepository,
-  ChannelInboundExecutionRunner,
-  ChannelInboundRepository,
-  ChannelInboundService,
-  createChannelInboundContentGuard,
-  ChannelDeliveryMaintenance,
-  ChannelDeliveryRepository,
   registerChannelMaintenanceJobHandlers,
-  scheduleChannelMaintenanceJobs,
-  ChannelDeliveryService,
-  ChannelAdapterAcceptanceRegistry,
-  ChannelAcceptanceService,
-  ChannelManagementRepository,
-  ChannelManagementService,
-  ChannelSecureHandoff,
-  TelegramOffsetRepository,
-  TelegramDeliveryTransport,
-  TelegramRuntimeManager,
-  TelegramRuntimeMaintenance,
-  SlackRuntimeRepository,
-  SlackDeliveryTransport,
-  SlackRuntimeManager,
-  SlackRuntimeMaintenance,
-  LarkRuntimeRepository,
-  LarkDeliveryTransport,
-  LarkRuntimeManager,
-  LarkRuntimeMaintenance,
-  QqRuntimeRepository,
-  QqDeliveryTransport,
-  QqRuntimeManager,
-  QqRuntimeMaintenance,
-  DiscordRuntimeRepository,
-  DiscordDeliveryTransport,
-  DiscordRuntimeManager,
-  DiscordRuntimeMaintenance,
-  WechatEnrollmentRepository,
-  WechatRuntimeRepository,
-  WechatDeliveryTransport,
-  WechatRuntimeManager,
-  WechatRuntimeMaintenance,
-  ChannelDeliveryTransportRouter,
-  ChannelRuntimeSupervisor
+  scheduleChannelMaintenanceJobs
 } from '../../ai/agent-platform/channels'
 import { createElectronChannelCredentialVault } from '../../secrets/channels'
 import { createAssistantImageMessageService } from '../../ai/assistant-platform/images/assistantImageMessageService'
@@ -88,7 +47,6 @@ import {
   createDefaultAssistantSeed
 } from '../../ai/assistant-platform/seeds/defaultAssistantSeed'
 import { getPlatformFetch } from '../../network/platformFetch'
-import { createPlatformWebSocketFactory } from '../../network/platformWebSocket'
 import { createAgentPlatformRepositories } from '../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../ai/agent-platform/store/agentSqliteStore'
 import { createDefaultAgentPersistentState, mergeAgentStoreSeeds } from '../../ai/agent-platform/store/agentPersistentStore'
@@ -225,8 +183,6 @@ import { createMcpRuntimeServerHostFactory } from './mcpRuntimeServerHostFactory
 import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver } from './skillRuntimeCapabilities'
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
 import { persistSkillRowChanges } from './skillRowPersistence'
-import { createTaskChannelDelivery } from './taskChannelDelivery'
-import { createTaskAutomationMaintenance } from './taskAutomationMaintenance'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
@@ -262,6 +218,7 @@ import { bindReplaceAgentState } from './composition/agentStateBridge'
 import { createPlatformCore } from './composition/platformCore'
 import { createRepositories } from './composition/repositories'
 import { createAgentRuntime, platformRuntimesDisposed } from './composition/agentRuntime'
+import { createChannelsAndJobs } from './composition/channelsAndJobs'
 
 // 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
 bindReplaceAgentState(replaceAgentState)
@@ -449,197 +406,59 @@ const runtimeDisposer = createRuntimeDisposer({
 async function disposePlatformRuntimes(): Promise<void> {
   await runtimeDisposer.dispose()
 }
-function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
-  agentBroadcasts.channelRuntimeStateChanged(snapshot)
-}
-const channelRuntimeSupervisor = new ChannelRuntimeSupervisor({
-  query: channelManagementRepository.query,
-  restart: async (channelId) => {
-    await channelManagementService.restart({ id: channelId, actorId: 'agent-runtime-ui' })
-    broadcastChannelRuntimeSnapshot(channelRuntimeSupervisor.snapshot())
+// 两条纯闭包（唯一依赖是接缝之后就绪的 `mainWindowHost`）提到通道构造之前：行为不变——发送那一刻
+// 仍然现取主窗。通道运行时快照的广播就是这个出口，而通道构造仍在它原本的位置。
+const getMainWindow = (): BrowserWindow | null => mainWindowHost.getMainWindow()
+const agentBroadcasts = createAgentBroadcasts({ getMainWindow: () => getMainWindow() })
+
+/**
+ * 通道与任务作业的构造。**退出链没有搬**：`markClosed → flush 布局 → 8 个维护定时器 → 6 个
+ * adapter dispose → fenceAllForQuit → jobs stopAll` 仍在下面的 `createRuntimeDisposer` 里，
+ * 那条链错位在退出瞬间静默出错，全量测试看不见。
+ */
+const channelsAndJobs = createChannelsAndJobs({
+  settingsStore,
+  agentBroadcasts,
+  agentRuntimeService,
+  repositories: {
+    agentDatabase,
+    agentRepositories,
+    agentServices,
+    agentStore,
+    channelInboundRepository,
+    channelDeliveryRepository,
+    channelManagementRepository,
+    channelCredentialVault,
+    channelManagementService,
+    telegramOffsetRepository,
+    slackRuntimeRepository,
+    larkRuntimeRepository,
+    qqRuntimeRepository,
+    discordRuntimeRepository,
+    wechatEnrollmentRepository,
+    wechatRuntimeRepository
   }
 })
-const telegramDeliveryTransport = new TelegramDeliveryTransport()
-const slackDeliveryTransport = new SlackDeliveryTransport()
-const larkDeliveryTransport = new LarkDeliveryTransport()
-const qqDeliveryTransport = new QqDeliveryTransport()
-const discordDeliveryTransport = new DiscordDeliveryTransport()
-const wechatDeliveryTransport = new WechatDeliveryTransport()
-const channelDeliveryService = new ChannelDeliveryService({
-  repository: channelDeliveryRepository,
-  cipher: channelCredentialVault.payloadCipher,
-  transport: new ChannelDeliveryTransportRouter({
-    typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
-    telegram: telegramDeliveryTransport,
-    slack: slackDeliveryTransport,
-    lark: larkDeliveryTransport,
-    qq: qqDeliveryTransport,
-    discord: discordDeliveryTransport,
-    wechat: wechatDeliveryTransport
-  })
-})
-const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
-const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
-  inbound: channelInboundRepository,
-  delivery: channelDeliveryService,
-  cipher: channelCredentialVault.payloadCipher,
-  runtime: agentRuntimeService,
-  runs: channelDispatchRuns,
-  failureText: async (kind) => {
-    const language = (await settingsStore.get()).language
-    if (language === 'zh-CN') {
-      return kind === 'run-interrupted' ? '上一条消息处理被中断，请重新发送。' : '处理失败，请稍后重试。'
-    }
-    return kind === 'run-interrupted'
-      ? 'The previous request was interrupted. Please send it again.'
-      : 'The request failed. Please try again later.'
-  }
-})
-const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
-  inbound: channelInboundRepository,
-  coordinator: channelInboundExecutionCoordinator
-})
-let channelInboundService!: ChannelInboundService
-channelInboundService = new ChannelInboundService({
-  repository: channelInboundRepository,
-  encryption: { cipher: channelCredentialVault.payloadCipher },
-  sessions: {
-    createForConversation: async ({ agentId }) => (await agentServices.sessions.create({
-      agentId,
-      name: 'Channel conversation',
-      workspace: { type: 'system' }
-    })).id,
-    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
-    exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
-  },
-  // Untrusted external text is wrapped and narrowly screened before it is encrypted and stored.
-  contentGuard: createChannelInboundContentGuard({
-    channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
-  }),
-  onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
-})
-const telegramRuntimeManager = new TelegramRuntimeManager({
-  inbound: channelInboundRepository,
-  inboundService: channelInboundService,
-  offsets: telegramOffsetRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  delivery: telegramDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const slackRuntimeManager = new SlackRuntimeManager({
-  inbound: channelInboundService,
-  runtime: slackRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: slackDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const larkRuntimeManager = new LarkRuntimeManager({
-  inbound: channelInboundService,
-  runtime: larkRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: larkDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const qqRuntimeManager = new QqRuntimeManager({
-  inbound: channelInboundService,
-  runtime: qqRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: qqDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const discordRuntimeManager = new DiscordRuntimeManager({
-  inbound: channelInboundService,
-  runtime: discordRuntimeRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: discordDeliveryTransport,
-  getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
-  isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
-  ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-    channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
-})
-const wechatRuntimeManager = new WechatRuntimeManager({
-  inbound: channelInboundService,
-  runtime: wechatRuntimeRepository,
-  enrollments: wechatEnrollmentRepository,
-  vault: channelCredentialVault,
-  getPlatformFetch,
-  createPlatformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: async () => (await settingsStore.get()).network }),
-  delivery: wechatDeliveryTransport
-})
-channelManagementService.setRuntime({
-  start: (channelId, generation, token) => {
-    const type = channelManagementRepository.channelType(channelId)
-    if (type === 'telegram') return telegramRuntimeManager.start(channelId, generation, token)
-    if (type === 'slack') return slackRuntimeManager.start(channelId, generation, token)
-    if (type === 'feishu') return larkRuntimeManager.start(channelId, generation, token)
-    if (type === 'qq') return qqRuntimeManager.start(channelId, generation, token)
-    if (type === 'discord') return discordRuntimeManager.start(channelId, generation, token)
-    if (type === 'wechat') return wechatRuntimeManager.start(channelId, generation, token)
-    return Promise.resolve(false)
-  },
-  stop: (channelId, token) => {
-    telegramRuntimeManager.stop(channelId, token)
-    slackRuntimeManager.stop(channelId, token)
-    larkRuntimeManager.stop(channelId, token)
-    qqRuntimeManager.stop(channelId, token)
-    discordRuntimeManager.stop(channelId, token)
-    wechatRuntimeManager.stop(channelId, token)
-  }
-})
-const telegramRuntimeMaintenance = new TelegramRuntimeMaintenance(telegramOffsetRepository)
-const slackRuntimeMaintenance = new SlackRuntimeMaintenance(slackRuntimeRepository)
-const larkRuntimeMaintenance = new LarkRuntimeMaintenance(larkRuntimeRepository)
-const qqRuntimeMaintenance = new QqRuntimeMaintenance(qqRuntimeRepository)
-const discordRuntimeMaintenance = new DiscordRuntimeMaintenance(discordRuntimeRepository)
-const wechatRuntimeMaintenance = new WechatRuntimeMaintenance(wechatEnrollmentRepository, wechatRuntimeRepository)
-const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({
-  repository: channelDeliveryRepository,
-  retryDue: () => channelDeliveryService.retryDue()
-})
-const deliverTaskResultToChannels = createTaskChannelDelivery({
-  delivery: channelDeliveryService,
-  repository: channelDeliveryRepository,
-  patchDeliverySummary: async (runLogId, deliverySummary) => {
-    await agentServices.tasks.patchRunLog(runLogId, { deliverySummary })
-  },
-  runs: agentRepositories.taskRunLogs,
-  readSessionMessages: async (sessionId: string) => {
-    const state = await agentStore.getState()
-    return (state.messagesBySessionId[sessionId] ?? []).map((message) => ({ role: message.role, status: message.status, text: message.searchableText }))
-  },
-  getLanguage: async () => (await settingsStore.get()).language
-})
-const taskAutomationMaintenance = createTaskAutomationMaintenance({
-  attempts: {
-    markPendingUnknown: () => 0,
-    deleteOlderThan: () => 0
-  },
-  runs: agentRepositories.taskRunLogs,
-  audits: agentRepositories.taskMutationAudits,
-  checkpoints: agentRepositories.taskAutomationMaintenance
-})
+const {
+  channelRuntimeSupervisor,
+  channelInboundService,
+  channelInboundExecutionRunner,
+  channelDeliveryMaintenance,
+  deliverTaskResultToChannels,
+  taskAutomationMaintenance,
+  telegramRuntimeManager,
+  slackRuntimeManager,
+  larkRuntimeManager,
+  qqRuntimeManager,
+  discordRuntimeManager,
+  wechatRuntimeManager,
+  telegramRuntimeMaintenance,
+  slackRuntimeMaintenance,
+  larkRuntimeMaintenance,
+  qqRuntimeMaintenance,
+  discordRuntimeMaintenance,
+  wechatRuntimeMaintenance
+} = channelsAndJobs
 const agentTaskDispatchService = new AgentTaskDispatchService({
   services: agentServices,
   runtime: agentRuntimeService,
@@ -982,10 +801,6 @@ async function ensureDefaultAssistantSeed(): Promise<void> {
   }
 }
 
-const getMainWindow = (): BrowserWindow | null => mainWindowHost.getMainWindow()
-
-/** 智能体三条状态广播的唯一出处；窗口在发送那一刻现取（主窗可被销毁重建）。 */
-const agentBroadcasts = createAgentBroadcasts({ getMainWindow: () => getMainWindow() })
 
 const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
   mainWindowHost.resolveInvokingWindow(event)
