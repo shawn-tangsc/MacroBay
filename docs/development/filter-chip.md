@@ -10,7 +10,7 @@ A multi-select filter — a condition that narrows a list — renders `FilterChi
 | Several filters can be on at once | `FilterChip` |
 | One value out of a set, same content | `Segmented` |
 | A status word | `StatusPill` |
-| A category label that is not a control | `MetaChip` |
+| A category label that is not a control | a plain span — no shared component |
 | A row with a selected state | none of these — a row is not a chip |
 
 **Basis: antd `Button`.** Keyboard, `type="button"`, disabled and focus come from the library; the
