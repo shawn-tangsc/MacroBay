@@ -34,7 +34,7 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
   const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
-  return <div className="mi-daily-briefing-page__empty mi-daily-briefing-page__failure" role="alert"
+  return <div className="mi-daily-briefing-page__failure" role="alert"
     data-daily-brief-failure="true" data-failure-kind={failure.kind} data-failure-advice={advice}
     {...(failure.code ? { 'data-failure-code': failure.code } : {})}>
     <h2>{failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}</h2>
@@ -42,7 +42,7 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
     {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
     <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
     <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
-    <div className="mi-daily-briefing-page__empty-actions">
+    <div className="mi-daily-briefing-page__failure-actions">
       <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
         {regenerating ? text.regenerating : text.regenerate}
       </Button>
