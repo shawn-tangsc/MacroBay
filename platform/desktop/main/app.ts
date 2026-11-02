@@ -119,7 +119,7 @@ import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachab
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
-import { composeUpdateCheck } from './composition/updateCheck'
+import { composeUpdateCheck, updateCheckModeFor } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
@@ -939,9 +939,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   )
   registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
 
-  // 开发期按「能力开」传死值：源码启动也能真查、真开下载页，否则没法联调。版本号 / 出网 / 时钟都在这里注入。
+  // 交付门：源码启动是开发态（只有 get-state，查/开/说明三条通道不注册，零出网）；安装版/目录版才有全部能力。
   const updateCheck = await composeUpdateCheck({
-    ipcMain, mode: 'packaged', // DEV-GATE: 交付前必须改成 app.isPackaged ? 'packaged' : 'development'
+    ipcMain, mode: updateCheckModeFor(app.isPackaged),
     currentVersion: app.getVersion(), platform: process.platform,
     stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), releaseNotesFilePath: join(platformDataDirectory, 'updates', 'release-notes.json'), fetch: getPlatformFetch(),
     now: () => new Date(), isCheckEnabled: async () => (await settingsStore.get()).updates.checkEnabled,

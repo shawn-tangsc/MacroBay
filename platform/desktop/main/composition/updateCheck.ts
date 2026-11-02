@@ -13,8 +13,8 @@ import { createReleaseNotesService } from '../../../updates/runtime/releaseNotes
  * 更新检查的装配：建服务、注册三条通道、把自动检查排到主界面之后。
  *
  * 为什么单独一片而不是塞回 `app.ts`：`app.ts` 是受保护接缝、而且是体积基线文件（只减不增）。
- * 这里只做接线，**不含任何判断**；判断全在 `platform/updates/**` 里，模式仍由组合根判一次传进来
- * （开发期写死 `'packaged'`，交付前改成按「装没装」判的三元；那一行带交付标记，留在 app.ts 里）。
+ * 这里只做接线，**不含任何判断**；判断全在 `platform/updates/**` 里，模式由组合根读一次「装没装」
+ * 后经 `updateCheckModeFor` 传进来——**源码启动是开发态（无能力），安装版/目录版才有**。
  * 这个文件**不读任何应用级事实**（数据目录、应用名、装没装都从入参来），有守卫用例盯着。
  */
 export type UpdateCheckCompositionPorts = Readonly<{
@@ -40,6 +40,18 @@ export type UpdateCheckComposition = Readonly<{
   /** 主界面出来之后调用一次：延迟 15 秒的单次自动检查。不在退出链上，一次性定时器没有清理义务。 */
   startAutomaticCheck: () => void
 }>
+
+/**
+ * 交付门：**源码启动没有更新能力，安装版/目录版才有**。
+ *
+ * 只收一个布尔值，不读 `app`——`isPackaged` 由组合根在接缝之后读一次传进来。
+ * 上锁后开发版连 `check-now` / `open-link` / `release-notes` 三条通道都不注册，
+ * 零出网由「没有那条路」保证，不靠调用方自觉。**改这一行等于开/关能力**，
+ * 验收必须同时覆盖 `packaged` 与 `development` 两侧。
+ */
+export function updateCheckModeFor(isPackaged: boolean): UpdateCheckMode {
+  return isPackaged ? 'packaged' : 'development'
+}
 
 export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Promise<UpdateCheckComposition> {
   const service = await createUpdateCheckService({
