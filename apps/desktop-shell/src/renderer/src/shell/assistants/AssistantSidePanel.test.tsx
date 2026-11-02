@@ -11,7 +11,10 @@ import type { AssistantTopicEntity } from '@platform/ai/assistant-platform/schem
 
 import { AssistantSidePanel } from './AssistantSidePanel'
 
-const modal = vi.hoisted(() => ({ confirm: vi.fn() }))
+const modal = vi.hoisted(() => ({ confirm: vi.fn(), staticConfirm: vi.fn() }))
+
+// 确认框改由 Provider 渲染：本文件的用例只验「点了会不会问」，所以拿到的是那个回调本身。
+vi.mock('@platform/ui/components/confirm', () => ({ useConfirm: () => modal.confirm }))
 
 vi.mock('antd', () => ({
   Button: ({
@@ -64,13 +67,15 @@ vi.mock('antd', () => ({
         : null
     )
   },
-  Modal: { confirm: modal.confirm }
+  // 静态入口必须一次都不被调用：它的渲染在树外，深色下就是浅色框。
+  Modal: { confirm: modal.staticConfirm }
 }))
 
 
 afterEach(() => {
   document.body.replaceChildren()
   modal.confirm.mockReset()
+  modal.staticConfirm.mockReset()
 })
 
 const timestamp = '2026-07-11T00:00:00.000Z'
@@ -212,15 +217,22 @@ describe('AssistantSidePanel', () => {
       deleteButton?.click()
     })
     expect(modal.confirm).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ title: 'Delete conversation', content: expect.stringContaining('Other') })
+      expect.objectContaining({
+        title: 'Delete conversation',
+        description: expect.stringContaining('Other'),
+        confirmLabel: 'Delete conversation',
+        cancelLabel: 'Cancel',
+        tone: 'danger'
+      })
     )
+    expect(modal.staticConfirm).not.toHaveBeenCalled()
 
-    const confirmation = modal.confirm.mock.calls[0]?.[0] as { onOk: () => Promise<void> }
+    const confirmation = modal.confirm.mock.calls[0]?.[0] as { onConfirm: () => Promise<void> }
     let firstSubmit: Promise<void> | undefined
     let duplicateSubmit: Promise<void> | undefined
     await act(async () => {
-      firstSubmit = confirmation.onOk()
-      duplicateSubmit = confirmation.onOk()
+      firstSubmit = confirmation.onConfirm()
+      duplicateSubmit = confirmation.onConfirm()
       expect(onDeleteTopic).toHaveBeenCalledExactlyOnceWith('other')
       resolveDelete?.()
       await firstSubmit
@@ -272,10 +284,11 @@ describe('AssistantSidePanel', () => {
 
     expect(onSelectTopic).not.toHaveBeenCalled()
     expect(modal.confirm).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ title: 'Delete conversation', content: expect.stringContaining('Other') })
+      expect.objectContaining({ title: 'Delete conversation', description: expect.stringContaining('Other') })
     )
-    const confirmation = modal.confirm.mock.calls[0]?.[0] as { onOk: () => Promise<void> }
-    await act(async () => confirmation.onOk())
+    expect(modal.staticConfirm).not.toHaveBeenCalled()
+    const confirmation = modal.confirm.mock.calls[0]?.[0] as { onConfirm: () => Promise<void> }
+    await act(async () => confirmation.onConfirm())
     expect(onDeleteTopic).toHaveBeenCalledExactlyOnceWith('other')
     expect(onSelectTopic).not.toHaveBeenCalled()
     await act(async () => root.unmount())
