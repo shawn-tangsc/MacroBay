@@ -52,6 +52,14 @@ export function registerWindowIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: Windo
     theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   }))
 
+  // 重启应用：给 `needs-restart` 一个真的落点。
+  // 照启动失败窗口的先例（`bootFailureWindow.ts`）——`app.relaunch()` 之后**必须**退出当前进程，
+  // 只 relaunch 不 exit 会变成「开了第二个实例、旧的还占着锁」。
+  ipcMain.handle(IpcChannels.appRelaunch, () => {
+    app.relaunch()
+    app.exit(0)
+  })
+
   // 自绘标题栏的窗口按钮：目标窗口一律由 `event.sender` 推导（主窗/独立窗同一套按钮，见 resolveInvokingWindow）
   ipcMain.handle(IpcChannels.windowMinimize, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.minimize())
   ipcMain.handle(IpcChannels.windowMaximize, (event: IpcMainInvokeEvent) => {

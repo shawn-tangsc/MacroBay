@@ -21,6 +21,8 @@ export const IpcChannels = {
   dialogSelectFiles: 'platform:dialog-select-files',
   appReadTextFile: 'platform:app-read-text-file',
   appSaveClipboardImage: 'platform:app-save-clipboard-image',
+  // 重启应用：只在「界面与主进程版本不一致」这类必须整包重启的原因下使用（`needs-restart`）。
+  appRelaunch: 'platform:app-relaunch',
   settingsGet: 'platform:settings-get',
   settingsUpdate: 'platform:settings-update',
   channelsCatalog: 'platform:channels-catalog',

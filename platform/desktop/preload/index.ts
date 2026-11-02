@@ -57,6 +57,8 @@ const api = {
     selectDirectory: () => ipcRenderer.invoke(IpcChannels.dialogSelectDirectory),
     selectFiles: () => ipcRenderer.invoke(IpcChannels.dialogSelectFiles),
     readTextFile: (path: string) => ipcRenderer.invoke(IpcChannels.appReadTextFile, path),
+    /** 重启应用：`needs-restart` 那类状态唯一能做的事。 */
+    relaunch: () => ipcRenderer.invoke(IpcChannels.appRelaunch),
     saveClipboardImage: (data: Uint8Array, mimeType: string) =>
       ipcRenderer.invoke(IpcChannels.appSaveClipboardImage, { data, mimeType }),
     onQuotedToMain: (callback: (text: string) => void) => {

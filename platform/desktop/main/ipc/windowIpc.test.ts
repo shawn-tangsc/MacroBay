@@ -9,6 +9,8 @@ import { describe, expect, it, vi } from 'vitest'
  */
 vi.mock('electron', () => ({
   app: {
+    exit: vi.fn(),
+    relaunch: vi.fn(),
     getName: () => 'MacroBay',
     getPath: () => '/tmp',
     getVersion: () => '0.0.0',
@@ -24,6 +26,7 @@ const { registerWindowIpc } = await import('./windowIpc')
 
 const EXPECTED_CHANNELS = [
   'platform:app-info',
+  'platform:app-relaunch',
   'platform:window-minimize',
   'platform:window-maximize',
   'platform:window-close',
@@ -56,7 +59,7 @@ function record(): { channels: string[]; ipcMain: { handle: (channel: string, li
 }
 
 describe('window ipc surface', () => {
-  it('registers exactly the sixteen window/app/shell/dialog channels, in order', () => {
+  it('registers exactly the seventeen window/app/shell/dialog channels, in order', () => {
     const { channels, ipcMain } = record()
     registerWindowIpc(ipcMain as never, {
       getMainWindow: () => null,
@@ -120,5 +123,26 @@ describe('window ipc surface', () => {
       expect(source).not.toContain(disallowed)
     }
     expect(source).toContain('ports: WindowIpcPorts')
+  })
+
+  it('relaunches and exits when the renderer asks for a restart', async () => {
+    // `needs-restart` 只有这一个真实出口：重启之后必须**退出当前进程**，
+    // 只 relaunch 不 exit 会开出第二个实例、旧进程还占着单实例锁。
+    const { app } = await import('electron')
+    const registered = new Map<string, () => void>()
+    registerWindowIpc(
+      {
+        handle: (channel: string, listener: (...args: never[]) => unknown) => {
+          registered.set(channel, () => void listener())
+          return undefined as never
+        }
+      } as unknown as Parameters<typeof registerWindowIpc>[0],
+      { getMainWindow: () => null, resolveInvokingWindow: () => null }
+    )
+
+    registered.get('platform:app-relaunch')?.()
+
+    expect(vi.mocked(app.relaunch)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(app.exit)).toHaveBeenCalledWith(0)
   })
 })
