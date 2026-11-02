@@ -7,6 +7,7 @@ import type { EventBusRuntime } from '@platform/message-bus'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
@@ -19,6 +20,8 @@ import { createIntelligencePipeline } from './application/intelligencePipeline'
 import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
+import { createSourceIssueNotifier } from './application/sourceIssueNotifier'
+import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
@@ -216,6 +219,8 @@ export type IntelligenceModulePlatformHooks = {
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
   isWebSearchProviderReady?: () => Promise<boolean>
+  /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 }
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
@@ -400,6 +405,12 @@ export function getIntelligenceModule(
     const eventPublisher = hooks?.eventBusRuntime
       ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
       : undefined
+    const sourceIssueNotifier = hooks?.submitNotification
+      ? createSourceIssueNotifier({
+          submit: hooks.submitNotification,
+          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS
+        })
+      : undefined
     const pipeline = createIntelligencePipeline({
       profileStore,
       rawRecordStore,
@@ -413,7 +424,8 @@ export function getIntelligenceModule(
         join(dataDir, 'intelligence-runtime-state-history.json')
       ),
       runtimeStateHistoryStorage,
-      eventPublisher
+      eventPublisher,
+      ...(sourceIssueNotifier === undefined ? {} : { sourceIssueNotifier })
     })
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))

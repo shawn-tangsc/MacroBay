@@ -8,10 +8,8 @@ import {
   type SourceCoverageAsOf
 } from './queryContracts'
 import { compareIsoTime, isVisibleAsOf, VISIBLE_AT } from './asOfVisibility'
-import { isSourceStaleAsOf } from '../application/macroSourceHealth'
+import { DEFAULT_SOURCE_FRESHNESS_MS, isSourceStaleAsOf } from '../application/macroSourceHealth'
 import { isDefillamaStablecoinRetiredPath } from '../application/sourceCatalog'
-
-const DEFAULT_FRESHNESS_MS = 6 * 60 * 60 * 1000
 
 export type SourceCoverageInput = {
   definitions: IntelligenceSourceDefinition[]
@@ -97,7 +95,7 @@ function buildOneSourceCoverage(input: {
       adapterConfig: input.definition.adapterConfig,
       lastSuccessAt,
       asOf: input.asOf,
-      defaultFreshnessMs: DEFAULT_FRESHNESS_MS
+      defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS
     })
   ) {
     productionState = 'stale'

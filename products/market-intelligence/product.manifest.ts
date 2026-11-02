@@ -282,7 +282,7 @@ export const marketIntelligenceProductManifest = {
    */
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
-      bodyVariants: ['failed', 'data-only'],
+      bodyVariants: ['not-generated', 'editorial-missing'],
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
       dedupeKeyTemplate: 'brief-failed:{date}:{period}',
@@ -357,6 +357,12 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     })
   ],
+  /**
+   * 让渡给本产品的 producerId（契约 §14）：日报 job 的终态失败由本产品发
+   * `market-intelligence.briefing.failed`，平台不再为它发 `platform.job.failed-terminal`。
+   * 键是稳定的 job handler id，不是带期号的 definitionId。
+   */
+  notificationProducerClaims: ['market-intelligence.dailyBriefing'],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest

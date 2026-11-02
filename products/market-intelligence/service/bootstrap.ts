@@ -1,5 +1,6 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 import type { JobRuntime } from '@platform/jobs'
+import { getNotificationRuntime } from '@platform/notifications'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
@@ -178,6 +179,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     deleteAgentSessions: deps.deleteAgentSessions,
     updateAgent: deps.updateAgent,
     isWebSearchProviderReady: deps.isWebSearchProviderReady,
+    // 通知运行时是平台单例，等用的时候再取：装配完成在注册产品服务之后。
+    submitNotification: (request) => getNotificationRuntime().submit(request),
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings
