@@ -97,7 +97,8 @@ describe('dashboard conclusion slot', () => {
     await act(async () => {})
     expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBeGreaterThan(0)
 
-    const close = document.querySelector<HTMLButtonElement>('.mi-analysis-timeline-drawer__head button')
+    // The close control belongs to the shared drawer now; find it by its accessible name.
+    const close = [...document.querySelectorAll<HTMLButtonElement>('.ant-drawer-header button')].at(-1)
     expect(close).not.toBeNull()
     await act(async () => { close?.click() })
     await act(async () => {})

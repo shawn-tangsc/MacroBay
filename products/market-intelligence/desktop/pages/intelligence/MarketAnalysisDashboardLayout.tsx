@@ -184,8 +184,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           openEntry={openEntry}
           text={text.analysisTimeline}
           timeline={timeline}
-          title={text.analysisDrawer.title}
-          closeLabel={text.analysisDrawer.close}
         />
         <AnalysisDetailDrawer
           text={detailText}
