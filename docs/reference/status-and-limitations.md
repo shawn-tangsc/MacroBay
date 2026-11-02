@@ -82,6 +82,13 @@ hiding it.
   [Data and third-party services](./data-disclaimer.md).
 - The product is not a hosted service and has no account recovery.
 
+## Network and proxy limits
+
+- Proxy mode defaults to following the system proxy. If the system still keeps an old proxy that no
+  longer connects, a new install's outbound requests go through it first and then fail. That case is
+  meant to be visible in the proxy self-check: it is there to name the unreachable system proxy, so a
+  blocked connection is not read as the model service being down.
+
 ## Product limits
 
 - Market intelligence is decision support, not investment advice.
