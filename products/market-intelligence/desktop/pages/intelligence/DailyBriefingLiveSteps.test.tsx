@@ -8,7 +8,6 @@ import { DailyBriefingLiveSteps } from './DailyBriefingLiveSteps'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { productText } from '../../shared/i18n/productText'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing as unknown as DailyBriefingText
 

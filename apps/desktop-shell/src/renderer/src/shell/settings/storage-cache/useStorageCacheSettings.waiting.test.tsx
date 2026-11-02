@@ -57,7 +57,6 @@ const caches = [
   }
 ]
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 describe('storage cache read: first frame', () => {
   afterEach(() => {

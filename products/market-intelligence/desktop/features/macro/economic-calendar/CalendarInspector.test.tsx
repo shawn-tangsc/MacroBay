@@ -6,7 +6,6 @@ import { expect, it, vi } from 'vitest'
 import { productText } from '../../../shared/i18n/productText'
 import { CalendarInspector } from './CalendarInspector'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const DETAIL_TITLE = productText['zh-CN'].pages.intelligence.portal.calendar.details.title
 

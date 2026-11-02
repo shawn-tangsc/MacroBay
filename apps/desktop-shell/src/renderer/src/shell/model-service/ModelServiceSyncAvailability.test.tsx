@@ -13,7 +13,6 @@ import {
  * PLAT-61：模型清单是**只读拉取** ⇒ 只要「baseUrl + Key」就能同步/添加模型，
  * 不要求供应商已启用；停用状态同步成功后也不自动启用供应商。
  */
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 beforeAll(() => {
   // The page reports failed syncs through console.warn, and React may log act() warnings.

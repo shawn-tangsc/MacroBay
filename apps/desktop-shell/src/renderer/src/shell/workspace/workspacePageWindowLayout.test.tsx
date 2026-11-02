@@ -64,7 +64,6 @@ const PAGE_WINDOW_ROOT = '.workspace-window-page'
 const PAGE_WINDOW_PAGE_HOST = '.workspace-window-page > .workspace-page-host'
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(async () => {
   await act(async () => {
     root?.unmount()

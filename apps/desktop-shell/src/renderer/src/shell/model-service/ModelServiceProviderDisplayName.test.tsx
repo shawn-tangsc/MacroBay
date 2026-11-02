@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { platformText } from '../../i18n/platformText'
 import { renderModelServiceSettings } from './modelServicePageHarness'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['zh-CN'].models
 
 afterEach(() => {

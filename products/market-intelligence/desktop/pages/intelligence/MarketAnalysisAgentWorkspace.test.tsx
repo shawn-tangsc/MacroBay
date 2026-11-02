@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
 afterEach(async () => {
   await act(async () => root?.unmount())

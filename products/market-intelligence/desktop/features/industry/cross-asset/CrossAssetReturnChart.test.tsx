@@ -10,7 +10,6 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetReturnChart = (props: Parameters<typeof CrossAssetReturnChart>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetReturnChart, props))
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const points = [0, 1, 2].map(index => ({ at: `2026-09-14T12:${String(index * 5).padStart(2, '0')}:00.000Z`, returnPercent: index }))
 const text = {

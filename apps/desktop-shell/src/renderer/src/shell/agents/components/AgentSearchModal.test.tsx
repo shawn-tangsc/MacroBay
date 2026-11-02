@@ -26,7 +26,6 @@ const ZH = agentText['zh-CN']
 
 let root: Root | undefined
 let container: HTMLElement
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 beforeEach(() => {
   container = document.createElement('div')

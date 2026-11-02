@@ -11,7 +11,6 @@ import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
 
 let root: Root | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   act(() => root?.unmount())

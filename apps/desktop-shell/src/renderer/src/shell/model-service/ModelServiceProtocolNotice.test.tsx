@@ -12,7 +12,6 @@ import { ModelServiceProtocolNotice } from './ModelServiceProtocolNotice'
 const labels = platformText['zh-CN'].models
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 beforeEach(() => {
   window.localStorage.clear()

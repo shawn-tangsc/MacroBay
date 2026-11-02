@@ -15,7 +15,6 @@ import { platformText } from '../../i18n/platformText'
 import { WorkspaceWindowRoot, type WorkspacePendingTimerPort, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
 import type { WorkspaceBridge } from './workspaceClient'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const labels = platformText['en-US'].workspace
 const loadingLabel = platformText['en-US'].status.loading

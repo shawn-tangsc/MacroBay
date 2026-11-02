@@ -13,7 +13,6 @@ import { WorkspacePanelHost } from './WorkspacePanelHost'
 import { createWorkspaceContentAdapter, type WorkspacePanelHostPort } from './workspaceHostAdapter'
 import { WorkspaceUiPolicy } from './workspacePresentation'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].workspace
 
 /**

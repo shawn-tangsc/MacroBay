@@ -27,7 +27,6 @@ const text = productText['zh-CN'].pages.intelligence.portal
 const dashboardView = panelView('dashboard')!
 let root: Root | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 beforeEach(() => {
   mockGetPanelView.mockReset()

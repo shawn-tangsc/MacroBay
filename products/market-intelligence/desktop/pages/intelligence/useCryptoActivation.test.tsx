@@ -12,7 +12,6 @@ vi.mock('../../shared/ipc/intelligenceSourcesClient', () => ({
 import { useCryptoActivation } from './useCryptoActivation'
 
 let root: Root | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

@@ -5,7 +5,6 @@ import { expect, it, vi } from 'vitest'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { useMarketAnalysisChat } from './useMarketAnalysisChat'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 it.each(['success', 'failure', 'failure-with-new-draft'] as const)('clears the exact submitted draft before the reply and handles %s safely', async outcome => {
   const state = { agents: [{ id: 'crypto-market-analyst', model: 'test:model' }], sessions: [{ id: 'general', agentId: 'crypto-market-analyst', description: 'market-analysis-conversation' }], messagesBySessionId: {} }

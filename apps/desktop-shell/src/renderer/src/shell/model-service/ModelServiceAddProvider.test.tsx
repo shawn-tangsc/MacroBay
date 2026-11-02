@@ -7,7 +7,6 @@ import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 
 import { openProviderMoreMenu, renderModelServiceSettings } from './modelServicePageHarness'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 beforeEach(() => {
   // 与渲染入口 `main.tsx` 同一句：删除供应商的确认框走 antd 静态渲染，测试里也要接一次。

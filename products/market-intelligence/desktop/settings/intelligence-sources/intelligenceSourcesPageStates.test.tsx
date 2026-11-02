@@ -19,7 +19,6 @@ vi.mock('./useIntelligenceTranslationSettings', () => ({ useIntelligenceTranslat
  */
 let root: Root | undefined
 let host: HTMLDivElement | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const reload = vi.fn()
 

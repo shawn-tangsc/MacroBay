@@ -28,7 +28,6 @@ const draft: ModelDraft = {
 let root: Root | undefined
 let copyText = vi.fn(async () => undefined)
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 Object.defineProperty(navigator, 'clipboard', {
   configurable: true,
   value: { writeText: copyText }

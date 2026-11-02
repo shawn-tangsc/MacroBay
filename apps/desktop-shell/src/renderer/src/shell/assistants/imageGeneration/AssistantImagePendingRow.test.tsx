@@ -12,7 +12,6 @@ import { AssistantImagePendingRow } from './AssistantImagePendingRow'
  * settle 后由消息列表里的同一条消息接管。
  */
 const labels = platformText['en-US'].assistants
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 
 async function mount(entry: Parameters<typeof AssistantImagePendingRow>[0]['entry']): Promise<HTMLElement> {

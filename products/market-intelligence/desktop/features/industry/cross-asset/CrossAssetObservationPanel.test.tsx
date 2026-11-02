@@ -23,7 +23,6 @@ const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObs
 const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellLanguageProvider, { language: 'en-US' },
     createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props)))
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 /** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
 function ratesView(overrides: Record<string, unknown> = {}): Record<string, unknown> {

@@ -16,7 +16,6 @@ import type { ResourceJobSchedulesErrorReason } from './useResourceJobSchedules'
 const labels = platformText['zh-CN'].taskAutomation
 
 describe('TaskAutomationResourceJobsSection filters', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     document.body.replaceChildren()
@@ -72,7 +71,6 @@ describe('TaskAutomationResourceJobsSection filters', () => {
 })
 
 describe('TaskAutomationResourceJobsSection pagination', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     document.body.replaceChildren()
@@ -176,7 +174,6 @@ describe('TaskAutomationResourceJobsSection pagination', () => {
 })
 
 describe('TaskAutomationResourceJobsSection error states', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     document.body.replaceChildren()

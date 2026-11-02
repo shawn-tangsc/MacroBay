@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { MarketCalendarPage } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const host = document.createElement('div')
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined })

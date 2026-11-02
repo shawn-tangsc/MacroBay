@@ -45,3 +45,15 @@ export function ensureAnimationFrame(scope: AnimationFrameScope): boolean {
 // 断言文件也会 import 这个模块，但只有在它作为 setup 被加载时才有全局副作用可言；
 // 环境已有实现时这里是空操作，所以重复加载无害。
 ensureAnimationFrame(globalThis as unknown as AnimationFrameScope)
+
+/**
+ * React 的 `act` 环境标记：**全局设一次**。
+ *
+ * 这条原先散在 170 多个测试文件里各写一行。漏掉的那个文件（日报页）平时跑得快、看不出问题，
+ * 并行负载下就会偶发 act 警告甚至一串假红——同一件事写 170 遍，总有漏的一遍。
+ *
+ * 判据：只有存在 `window` 的浏览器型环境才设；node 环境里 React 不会进 act 路径，设了反而误导。
+ */
+if (typeof window !== 'undefined') {
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+}

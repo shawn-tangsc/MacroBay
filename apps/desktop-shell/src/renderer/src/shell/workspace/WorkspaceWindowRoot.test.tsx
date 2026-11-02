@@ -32,7 +32,6 @@ vi.mock('./WorkspacePageHost', () => ({
   }
 }))
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const labels = platformText['en-US'].workspace
 const zhLabels = platformText['zh-CN'].workspace

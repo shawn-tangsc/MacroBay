@@ -12,7 +12,6 @@ import { ToastHost } from '@platform/ui/components/toast'
 
 import { AssistantPage } from './AssistantPage'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const assistant = {
   id: 'assistant-1',

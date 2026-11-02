@@ -24,7 +24,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const MAIN_WINDOW_ID = 'main'
 const HOST_EPOCH = 1

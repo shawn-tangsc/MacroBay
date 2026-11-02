@@ -10,7 +10,6 @@ import { useBlsIcsImport } from './useBlsIcsImport'
 let root: Root | undefined
 let restorePlatform: (() => void) | undefined
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   act(() => root?.unmount())

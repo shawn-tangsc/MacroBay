@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => {
