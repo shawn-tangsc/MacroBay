@@ -1,5 +1,7 @@
 import { CheckCircle2, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { Alert, Button, Checkbox, Drawer } from 'antd'
+import { Alert, Button, Checkbox } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
@@ -42,6 +44,8 @@ type ProviderModelSyncDrawerProps = {
   onToggleAllStale: () => void
 }
 
+export const SYNC_TITLE_KEY = 'models.syncDrawerTitle'
+
 export function ProviderModelSyncDrawer({
   open,
   preview,
@@ -68,11 +72,14 @@ export function ProviderModelSyncDrawer({
   return (
     <Drawer
       className="model-drawer model-sync-drawer"
-      title={labels.title}
-      placement="right"
-      width={520}
+      mode="modal"
+      // 原宽度 520 → large（640）：表格压窄会换行、行高跳，宽 120px 只是多留白。
+      // 档位本身是 min(640px, 92vw)，窗口变窄时照样跟着缩。
+      size="large"
       open={open}
       onClose={onClose}
+      titleKey={SYNC_TITLE_KEY}
+      resolveText={(key) => (key === SYNC_TITLE_KEY ? labels.title : '')}
       footer={
         <div className="model-sync-footer">
           <div className="model-sync-summary">
