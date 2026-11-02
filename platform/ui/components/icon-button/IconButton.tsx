@@ -138,6 +138,15 @@ type IconButtonCommon = {
    */
   controls?: string
   /**
+   * 这是不是一个「开关」按钮（当前已按下 / 已开启）。
+   *
+   * 只影响可访问性：映射到 `aria-pressed`，不传时输出里没有这个属性。
+   * **外观不动**——按下态由图标本身或它控制的面板表达；这里不新增第三套按下样式。
+   * 读屏名保持恒定（`ariaLabelKey` 不随状态改），否则读屏会听到「隐藏 X，已按下」：
+   * 状态说两遍，其中一遍还是错的。
+   */
+  pressed?: boolean
+  /**
    * 调用方自己的类名：**只用来加定位与状态类，不碰尺寸与外观**。
    *
    * 为什么安全：组件的尺寸写在行内 `style`，**行内样式优先于任何类规则**，所以这里加
@@ -195,6 +204,7 @@ export function IconButton({
   variant = 'plain',
   expanded,
   controls,
+  pressed,
   className,
   style,
   dataAttributes,
@@ -234,6 +244,7 @@ export function IconButton({
       // 只有真的传了才写：`aria-expanded={undefined}` 在 DOM 里会变成字符串 "undefined"。
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
       {...(controls === undefined ? {} : { 'aria-controls': controls })}
+      {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       // 尺寸放在最后：调用方拿得到定位，拿不到覆盖 22/24 的机会。
       style={{ ...style, width: pixels, height: pixels }}
       type={variant === 'plain' ? 'text' : 'default'}

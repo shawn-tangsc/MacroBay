@@ -49,6 +49,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `variant` | `'plain' \| 'solid'` | 否，默认 `plain` | `solid` 给工具栏一排加边框与底色。 |
 | `expanded` | `boolean` | 否 | 这是个展开/收起触发器时传（铃铛打开抽屉）。映射到 `aria-expanded`；不传时输出里没有这个属性。 |
 | `controls` | `string` | 否 | 被展开区域的 `id`。映射到 `aria-controls`；不传时不输出。 |
+| `pressed` | `boolean` | 否 | 开关类按钮的当前状态（按下/开启）。映射到 `aria-pressed`；不传时不输出。读屏名在两种状态下保持恒定——状态不在名字里重复。**外观不变**：按下态由图标本身或它控制的面板表达。 |
 
 ### 尺寸
 

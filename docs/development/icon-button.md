@@ -51,6 +51,7 @@ window) — never per button.
 | `variant` | `'plain' \| 'solid'` | no, default `plain` | `solid` adds a border and a surface tint for toolbar rows. |
 | `expanded` | `boolean` | no | Set when the button opens a disclosure (a bell that opens a drawer). Maps to `aria-expanded`; omitted from the DOM when not passed. |
 | `controls` | `string` | no | The `id` of the region the button expands. Maps to `aria-controls`; omitted when not passed. |
+| `pressed` | `boolean` | no | Set for a toggle (the current state is on/off). Maps to `aria-pressed`; omitted when not passed. The accessible name stays constant across both states — the state is not repeated in the name. **No visual change:** the icon or the panel it controls carries the look. |
 
 ### Sizes
 

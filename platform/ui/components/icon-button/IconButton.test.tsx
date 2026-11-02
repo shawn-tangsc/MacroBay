@@ -292,6 +292,29 @@ describe('IconButton', () => {
     expect(button.hasAttribute('aria-controls')).toBe(false)
   })
 
+  it('maps pressed to aria-pressed and keeps the name constant across both states', () => {
+    const on = mountElement({ ariaLabelKey: 'ui.test.show-key', pressed: true }, document.createElement('div'))
+    const off = mountElement({ ariaLabelKey: 'ui.test.show-key', pressed: false }, document.createElement('div'))
+
+    expect(on.getAttribute('aria-pressed')).toBe('true')
+    expect(off.getAttribute('aria-pressed')).toBe('false')
+    // 名字不随状态改：否则读屏会念「隐藏密钥，已按下」，同一件事说两遍。
+    expect(on.getAttribute('aria-label')).toBe(off.getAttribute('aria-label'))
+  })
+
+  it('writes no aria-pressed when the button is not a toggle', () => {
+    const html = markup()
+    const button = mountElement()
+
+    expect(html).not.toContain('aria-pressed')
+    expect(button.hasAttribute('aria-pressed')).toBe(false)
+  })
+
+  it('adds no pressed look: the state rides on aria-pressed, not on a third style', () => {
+    // 契约「零外观变化」：开关态由图标本身或它控制的面板表达；这里不新增按下样式。
+    expect(rules).not.toMatch(/aria-pressed|icon-button--pressed|\[data-pressed/)
+  })
+
   it('resolves the tooltip copy through the same resolver and never uses a native title', () => {
     const seen: string[] = []
     const resolved = (value: string): string => {
