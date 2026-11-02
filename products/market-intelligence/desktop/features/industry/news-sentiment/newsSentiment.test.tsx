@@ -123,6 +123,63 @@ describe('icon label keys', () => {
   })
 })
 
+describe('a read that has not settled is not a failure', () => {
+  // "Not read yet" is neither "nothing there" nor "failed". These three pin the order of states,
+  // not a lucky frame: nothing settled may ever paint an error or an empty view.
+  it('paints only loading until the first read settles', async () => {
+    let settle: ((value: NewsSentimentView) => void) | undefined
+    const query = vi.fn(() => new Promise<NewsSentimentView>((resolve) => { settle = resolve }))
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+
+    expect(container.querySelector('.loading-state')).not.toBeNull()
+    expect(container.querySelector('.state-view--error')).toBeNull()
+    expect(container.querySelector('.state-view--empty')).toBeNull()
+    expect(container.querySelector('[data-news-sentiment-stale-read]')).toBeNull()
+    // A retry must not be offered while a read is in flight: that is a button that can only harm.
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent?.includes(text.retry)))
+      .toBe(false)
+
+    await act(async () => { settle?.(VIEW) })
+    await act(async () => {})
+    expect(container.querySelector('.loading-state')).toBeNull()
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
+  })
+
+  it('shows an error with a retry only after a read really failed', async () => {
+    const query = vi.fn(async () => { throw new Error('boom') })
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    expect(container.querySelector('.state-view--error')).not.toBeNull()
+    expect(container.querySelector('.mi-news-sentiment .state-view--error button')).not.toBeNull()
+  })
+
+  it('keeps the rows it already had when a refresh fails, and says they are older', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce(VIEW)
+      .mockRejectedValueOnce(new Error('boom'))
+    // A refresh moves the as-of instant, so the hook's effect actually re-reads.
+    let tick = 0
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query })} now={() => new Date(Date.UTC(2026, 9, 24, 13, 0, tick++))} />
+    )
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
+
+    const refresh = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
+    expect(refresh).not.toBeNull()
+    await act(async () => { refresh?.click() })
+    await act(async () => {})
+    await act(async () => {})
+
+    // The reading is still true, only older: it stays, and a note says why.
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
+    expect(container.querySelector('[data-news-sentiment-stale-read]')?.textContent).toContain(text.staleRead)
+    expect(container.querySelector('.mi-news-sentiment .state-view--error')).toBeNull()
+  })
+})
+
 describe('card empty states', () => {
   const readiness = (overrides: Partial<NonNullable<NewsSentimentView['readiness']>> = {}) => ({
     total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,

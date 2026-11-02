@@ -53,6 +53,8 @@ export function NewsSentimentCard(props: {
     : []
   useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
+  // "Nothing read yet" is not "nothing there": only a read that came back may end in empty or error.
+  const hasRows = Boolean(view && view.items.length > 0)
   // A view that did not come from the query (a fixture, a partial DTO) must not throw here: without
   // a usable instant there is no window edge, and the card then says only what it can support.
   const windowStart = view?.asOf && NEWS_SENTIMENT_WINDOW_MS[view.window] !== undefined
@@ -132,8 +134,8 @@ export function NewsSentimentCard(props: {
         </div>
       </header>
 
-      {failed || causeUnknown ? (
-        // The whole read is unavailable: the feature itself cannot tell which number would come back.
+      {(failed || causeUnknown) && !hasRows ? (
+        // Nothing was ever read, so the card has nothing to keep: error plus the way out.
         <div className="mi-news-sentiment__state" data-news-sentiment-state="unavailable">
           <StateView
             action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
@@ -177,6 +179,14 @@ export function NewsSentimentCard(props: {
         </div>
       ) : (
         <>
+          {failed && hasRows ? (
+            // A refresh that failed keeps what the reader already had; replacing it with an error
+            // panel would throw away a reading that is still true, only older.
+            <p className="mi-news-sentiment__stale-read" data-news-sentiment-stale-read role="status">
+              <span>{text.staleRead}</span>
+              <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+            </p>
+          ) : null}
           <div
             className="mi-news-sentiment__drivers"
             onScroll={(event) => {

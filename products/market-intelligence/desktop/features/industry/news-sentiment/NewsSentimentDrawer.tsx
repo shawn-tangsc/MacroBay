@@ -298,7 +298,8 @@ export function NewsSentimentDrawer(props: {
 
         <div className="mi-news-drawer__body">
           <div className="mi-news-drawer__list" role="list">
-            {props.failed ? (
+            {props.failed && rows.length === 0 ? (
+              // Nothing was ever read here: error plus the way out.
               <StateView
                 action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
                 reasonCode="unreadable"
@@ -306,6 +307,14 @@ export function NewsSentimentDrawer(props: {
                 size="md"
                 state="error"
               />
+            ) : null}
+            {props.failed && rows.length > 0 ? (
+              // A failed refresh keeps the rows this drawer already had; the note says so instead
+              // of replacing a still-true reading with an error panel.
+              <p className="mi-news-drawer__stale-read" data-news-sentiment-stale-read role="status">
+                <span>{text.staleRead}</span>
+                <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+              </p>
             ) : null}
             {!props.failed && rows.length === 0 ? (
               filtered
