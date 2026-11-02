@@ -26,6 +26,7 @@
 | `resolveText` | `(key: string) => string` | 是 | 调用方解析入口，用于 `titleKey`。 |
 | `focusPolicy` | `'move-in' \| 'stay'` | 否，默认 `move-in` | 读者按按钮打开用 `move-in`；面板只跟着列表选中换内容用 `stay`。 |
 | `contentId` | `string` | `focusPolicy="stay"` 时必填 | 当前内容的稳定标识。**这一支必填**：没有它，组件分不清「重渲染」和「真的换了」。 |
+| `when` | `string` | `focusPolicy="stay"` 时必填 | 播报句里用来区分同名条目的值（格式化好的时刻）。**必填**：`stay` 就是给「同名会出现两次」的列表用的。 |
 
 ## 组件自己保证的几条
 

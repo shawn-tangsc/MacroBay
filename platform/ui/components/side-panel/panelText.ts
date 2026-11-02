@@ -11,18 +11,22 @@ import { useShellLanguage } from '../../shell/ShellLanguageContext'
  */
 
 export const PANEL_COLLAPSE_KEY = 'ui.panel.close' as const
-/** `stay` 档的播报句：只报「当前显示什么」，不播正文。 */
+/**
+ * `stay` 档的播报句：只报「当前显示什么」，不播正文。
+ * 带 `{when}` 是因为这一档只用于「读者在列表里选」的场景，而那个场景的失败模式正是
+ * **同名两条念出同一句话**——日历里同一时段两场「FOMC 会议」很常见。
+ */
 export const PANEL_SHOWING_KEY = 'ui.panel.showing' as const
 
 type PanelTextKey = typeof PANEL_COLLAPSE_KEY | typeof PANEL_SHOWING_KEY
 
 const ZH_CN: Record<PanelTextKey, string> = {
   'ui.panel.close': '收起面板',
-  'ui.panel.showing': '当前显示：{title}'
+  'ui.panel.showing': '当前显示：{title}（{when}）'
 }
 const EN_US: Record<PanelTextKey, string> = {
   'ui.panel.close': 'Collapse panel',
-  'ui.panel.showing': 'Showing: {title}'
+  'ui.panel.showing': 'Showing: {title} ({when})'
 }
 
 const COPY: Record<AppLanguage, Record<PanelTextKey, string>> = { 'zh-CN': ZH_CN, 'en-US': EN_US }

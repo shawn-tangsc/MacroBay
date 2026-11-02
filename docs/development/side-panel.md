@@ -27,6 +27,7 @@ Yes → `SidePanel`. No → `Drawer`.
 | `resolveText` | `(key: string) => string` | yes | The caller's resolver, for `titleKey`. |
 | `focusPolicy` | `'move-in' \| 'stay'` | no, default `move-in` | `move-in` for a panel the reader opened with a button; `stay` when the panel only follows a selection in a list. |
 | `contentId` | `string` | with `focusPolicy="stay"` | The stable id of what the panel currently shows. **Required on that branch**: without it the component cannot tell a re-render from a real change. |
+| `when` | `string` | with `focusPolicy="stay"` | What tells two same-named items apart in the announcement (a formatted time). **Required**: `stay` exists for lists where the same title can appear twice. |
 
 ## Rules the component enforces
 

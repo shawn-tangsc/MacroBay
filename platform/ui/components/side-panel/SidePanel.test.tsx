@@ -160,7 +160,7 @@ describe('SidePanel', () => {
     root = createRoot(host)
     await act(async () => {
       root!.render(
-        <SidePanel contentId="event-1" focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.event">
+        <SidePanel contentId="event-1" focusPolicy="stay" when="10:30" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.event">
           <button type="button" data-inner>
             inner
           </button>
@@ -178,10 +178,10 @@ describe('SidePanel', () => {
     const host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
-    const render = async (titleKey: string, contentId: string): Promise<void> => {
+    const render = async (titleKey: string, contentId: string, when = '10:30'): Promise<void> => {
       await act(async () => {
         root!.render(
-          <SidePanel contentId={contentId} focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey={titleKey}>
+          <SidePanel contentId={contentId} focusPolicy="stay" when={when} onClose={() => undefined} open resolveText={key} size="flex" titleKey={titleKey}>
             <button type="button">inner</button>
           </SidePanel>
         )
@@ -218,7 +218,7 @@ describe('SidePanel', () => {
     for (const _ of [0, 1]) {
       await act(async () => {
         root!.render(
-          <SidePanel contentId="same-id" focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.same">
+          <SidePanel contentId="same-id" focusPolicy="stay" when="10:30" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.same">
             <button type="button">inner</button>
           </SidePanel>
         )
@@ -230,6 +230,72 @@ describe('SidePanel', () => {
     const status = host.querySelector('[role="status"]')?.textContent ?? ''
     expect(status).toContain('ui.test.same')
     expect(status.split('ui.test.same')).toHaveLength(2)
+    vi.useRealTimers()
+  })
+
+  it('tells two same-named items apart in the announcement', async () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const render = async (contentId: string, when: string): Promise<void> => {
+      await act(async () => {
+        root!.render(
+          <SidePanel contentId={contentId} focusPolicy="stay" when={when} onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.fomc">
+            <button type="button">inner</button>
+          </SidePanel>
+        )
+      })
+    }
+
+    await render('fomc-1', '10:30')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    const first = host.querySelector('[role="status"]')?.textContent ?? ''
+
+    await render('fomc-2', '14:00')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    const second = host.querySelector('[role="status"]')?.textContent ?? ''
+
+    // 同名不同 id：两句必须不一样，否则读者听到两遍同一句话，以为没换。
+    expect(first).toContain('10:30')
+    expect(second).toContain('14:00')
+    expect(first).not.toBe(second)
+    expect(second).not.toContain('{')
+    vi.useRealTimers()
+  })
+
+  it('announces again when the panel is reopened on the same content', async () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const render = async (open: boolean): Promise<void> => {
+      await act(async () => {
+        root!.render(
+          <SidePanel contentId="same" focusPolicy="stay" when="10:30" onClose={() => undefined} open={open} resolveText={key} size="flex" titleKey="ui.test.reopen">
+            <button type="button">inner</button>
+          </SidePanel>
+        )
+      })
+    }
+
+    await render(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('ui.test.reopen')
+
+    await render(false)
+    await render(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    // 重开是新的一轮：门闩复位，读者需要知道现在显示的是哪一条。
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('ui.test.reopen')
     vi.useRealTimers()
   })
 

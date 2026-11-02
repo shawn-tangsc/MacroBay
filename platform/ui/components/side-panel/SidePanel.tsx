@@ -52,6 +52,13 @@ type SidePanelFocusShape =
        * 标题一样、id 不同，按标题判重就会漏播，读屏用户以为没换。
        */
       contentId: string
+      /**
+       * 播报句里用来区分的那个值（调用方按平台格式化器算好的字符串，如时刻）。
+       *
+       * **必填**：`stay` 只用于「读者在列表里选」的场景，而那里最容易出现的失败就是
+       * 同名两条念出同一句话。做成可选就等于允许忘记，于是又回到「播了两遍同一句」。
+       */
+      when: string
     }
 
 export type SidePanelProps = SidePanelFocusShape & {
@@ -72,6 +79,7 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
   const { open, onClose, size, titleKey, footer, children, className, resolveText } = props
   const focusPolicy: SidePanelFocusPolicy = props.focusPolicy ?? 'move-in'
   const contentId = props.focusPolicy === 'stay' ? props.contentId : undefined
+  const when = props.focusPolicy === 'stay' ? props.when : undefined
   const panelRef = useRef<HTMLElement>(null)
   // 区域名走 aria-labelledby 指向标题节点：再用 aria-label 写同一句，读屏会把标题念两遍。
   const titleId = useId()
@@ -99,22 +107,31 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
   }, [open, focusPolicy])
 
   // `stay` 档焦点不动，读屏就收不到「内容变了」；所以由面板自己播一句，只播标题、不播正文。
-  // 400ms 去抖 + 标题判重：连点三个事件只播最后一个，正常间隔各播一次。
+  // 按 `contentId` 判重（标题只用来播）+ 400ms 去抖：连点三个事件只播最后一个。
   const [announcement, setAnnouncement] = useState('')
   const announcedId = useRef<string | null>(null)
   const showingLabel = usePanelText()(PANEL_SHOWING_KEY)
 
+  // 最新标题放 ref：调用点多半传内联 `resolveText`，父级每渲染一次就是新引用。
+  // 把它放进依赖会让计时器被无关渲染反复重启——父页比 400ms 快时，播报一次都不会出现。
+  const titleRef = useRef('')
+  titleRef.current = resolveText(titleKey)
+
   useEffect(() => {
-    if (!open || focusPolicy !== 'stay' || contentId === undefined) return
+    if (!open) {
+      // 重开是新的一轮：复位门闩，否则关闭再打开同一条会一声不响。
+      announcedId.current = null
+      return
+    }
+    if (focusPolicy !== 'stay' || contentId === undefined) return
     // 判重按 id：同一条内容重渲染不再念一遍。标题只用来播。
     if (announcedId.current === contentId) return
-    const title = resolveText(titleKey)
     const timer = setTimeout(() => {
       announcedId.current = contentId
-      setAnnouncement(fillLabelParams(showingLabel, { title }))
+      setAnnouncement(fillLabelParams(showingLabel, { title: titleRef.current, when: when ?? '' }))
     }, 400)
     return () => clearTimeout(timer)
-  }, [open, focusPolicy, contentId, resolveText, titleKey, showingLabel])
+  }, [open, focusPolicy, contentId, when, showingLabel])
 
   if (!open) return null
 
