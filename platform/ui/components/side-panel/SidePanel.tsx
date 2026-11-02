@@ -19,7 +19,8 @@ import './sidePanel.css'
  * - 两档闭集 `rail` 282 / `flex` min(480px, 46vw)，比例写在组件里，调用点不传数字；
  * - 左置固定，不提供 `side`（仓库三处左置、零处右置）；
  * - 收起键归组件，读屏名走 `panelText` 常量，不经过调用方 `resolveText`；
- * - 宽度不参与过渡（会连续重排主内容），只做 120ms 的 opacity 淡入，`reduced-motion` 下 0ms。
+ * - 宽度不参与过渡（会连续重排主内容），只做一次 opacity 淡入，时长取 `--motion-enter` token
+ *   （`reduced-motion` 下该 token 为 0ms）。不写字面量：动画时长是主题的决定，不是组件的决定。
  */
 
 export const SIDE_PANEL_SIZES = ['rail', 'flex'] as const
