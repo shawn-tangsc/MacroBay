@@ -13,11 +13,11 @@ describe('app settings', () => {
   it('starts with the platform defaults for language, theme, and accent color', () => {
     expect(createDefaultAppSettings()).toEqual({
       language: 'zh-CN',
-      themeMode: 'system',
+      themeMode: 'dark',
       accentColor: 'lime',
       timeZone: 'system',
       network: {
-        proxyMode: 'none',
+        proxyMode: 'system',
         proxyUrl: '',
         proxyBypassRules: 'localhost,127.0.0.1,::1'
       },
@@ -54,19 +54,21 @@ describe('app settings', () => {
     })
   })
 
-  it('keeps fresh installs on direct networking instead of an implicit local proxy', async () => {
+  it('follows the operating-system proxy on fresh installs, with an empty custom address', async () => {
+    // 2026-11-02 用户决定：默认跟随系统代理（系统没配代理时 Chromium 的 system 模式等价于直连）。
+    // 自定义地址留空：切到「自定义代理」时不该继承任何旧地址。
     const store = createSettingsStore()
 
     await expect(store.get()).resolves.toMatchObject({
       network: {
-        proxyMode: 'none',
+        proxyMode: 'system',
         proxyUrl: '',
         proxyBypassRules: 'localhost,127.0.0.1,::1'
       }
     })
   })
 
-  it('migrates the legacy implicit proxy default to direct networking', () => {
+  it('migrates the legacy implicit proxy default to the platform default', () => {
     expect(
       normalizeAppSettings({
         network: {
@@ -220,7 +222,7 @@ describe('app settings', () => {
     await expect(store.get()).resolves.toMatchObject({ agent: { taskAutomation: { policyPreset: 'balanced' } } })
     await Promise.all([store.update({ language: 'en-US' }), store.update({ themeMode: 'light' })])
     await expect(store.get()).resolves.toMatchObject({ language: 'en-US', themeMode: 'light' })
-    expect(writes).toEqual(['en-US:system', 'en-US:light'])
+    expect(writes).toEqual(['en-US:dark', 'en-US:light'])
   })
 
   it('persists recovered local policy and concurrent agent patches across reopen', async () => {
@@ -264,7 +266,7 @@ describe('app settings', () => {
 
     await expect(store.get()).resolves.toEqual({
       language: 'en-US',
-      themeMode: 'system',
+      themeMode: 'dark',
       accentColor: 'violet',
       timeZone: 'system',
       network: defaultNetwork,

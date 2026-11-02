@@ -142,7 +142,14 @@ const legacyImplicitProxyDefault: NetworkSettings = {
 
 function createDefaultNetworkSettings(): NetworkSettings {
   return {
-    proxyMode: 'none',
+    /**
+     * 默认跟随操作系统代理（2026-11-02 用户决定，取代此前「默认直连」）：
+     * 系统里配了代理的用户开箱即用；系统里没配代理时，Chromium 的 `system` 模式等价于直连。
+     *
+     * 代价写在这里，别让下一个人以为是随手改的：系统里若留着一条连不通的旧代理，
+     * 新装用户的所有出站请求都会先走它再失败——「测试代理」按钮要能一眼看出归因。
+     */
+    proxyMode: 'system',
     proxyUrl: '',
     proxyBypassRules: defaultProxyBypassRules
   }
@@ -151,7 +158,8 @@ function createDefaultNetworkSettings(): NetworkSettings {
 export function createDefaultAppSettings(): AppSettings {
   return {
     language: 'zh-CN',
-    themeMode: 'system',
+    /** 默认深色（2026-11-02 用户决定）：与 `styles.css` 的 `:root` 深色 token 一致，首帧不会先亮一下。 */
+    themeMode: 'dark',
     accentColor: 'lime',
     timeZone: systemTimeZoneSetting,
     network: createDefaultNetworkSettings(),

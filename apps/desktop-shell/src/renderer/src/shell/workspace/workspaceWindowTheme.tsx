@@ -32,8 +32,11 @@ import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFI
 /** 分离窗的窗口级外观：与主窗**同一来源**（既有 `platform.settings.get()`）与同一写入函数。 */
 export type WorkspaceWindowAppearance = { themeMode: ThemeMode; accentColor: AccentColor }
 
-/** 与 `createDefaultAppSettings()` 逐字一致：只在**读不到**设置时用于 antd 算法的兜底（不写根属性）。 */
-const DEFAULT_WINDOW_APPEARANCE: WorkspaceWindowAppearance = Object.freeze({ themeMode: 'system', accentColor: 'lime' })
+/**
+ * 读到 app 外观之前的兜底（只在 `getTheme` 拿不到时用，不写根属性）：与 `createDefaultAppSettings()`
+ * 逐字一致（`themeMode: 'dark'`），否则窗口会先按 OS 亮一帧再翻成 app 的深色。
+ */
+const DEFAULT_WINDOW_APPEARANCE: WorkspaceWindowAppearance = Object.freeze({ themeMode: 'dark', accentColor: 'lime' })
 
 /** 既有 preload 面（`platform.settings.get`）的结构子集；缺一即视为「读不到外观」⇒ 不写（fail closed）。 */
 export function readWindowAppearanceBridge(host: unknown = globalThis): { get: () => Promise<unknown> } | null {
