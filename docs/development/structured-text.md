@@ -20,8 +20,10 @@ type StructuredTextNode =
 type StructuredTextRun = { text: string; bold: boolean; code?: boolean }
 ```
 
-Parsing happens in the main process. `StructuredText` only arranges these three shapes into semantic
-DOM. There is no code path that takes HTML or a Markdown string — the type has no such hole, which is a
+The node types live in **`platform/contracts/structuredText.ts`**, not in this component: the parser runs in
+the main process and must be able to depend on the shape without depending on the renderer. The component
+re-exports them so call sites have one import, and it declares no copy of its own. `StructuredText` only
+arranges these shapes into semantic DOM. There is no code path that takes HTML or a Markdown string — the type has no such hole, which is a
 design decision rather than an omission.
 
 ## The rules, and why each exists

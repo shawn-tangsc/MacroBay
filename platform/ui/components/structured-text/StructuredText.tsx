@@ -1,5 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
+import type { StructuredTextNode, StructuredTextRun } from '@platform/contracts/structuredText'
+
 import './structuredText.css'
 
 /**
@@ -19,23 +21,8 @@ import './structuredText.css'
  *   不是一个开关）。
  */
 
-/** 行内片段：`bold` 与 `code` 各自只有真假两态，没有斜体/链接/颜色——多一种就是多一个远端能控制的东西。 */
-export type StructuredTextRun = {
-  text: string
-  bold: boolean
-  /** 行内代码：**只是换字体**，内容仍是纯文本，不可点、不是链接、不解析任何标记。 */
-  code?: boolean
-}
-
-export type StructuredTextNode =
-  | { kind: 'section'; title: string }
-  | { kind: 'paragraph'; runs: readonly StructuredTextRun[] }
-  | { kind: 'list'; items: readonly (readonly StructuredTextRun[])[] }
-  /**
-   * 整块代码（README 里的命令、配置片段）。**逐行原样**：里面的 `-` 不是列表、`**` 不是加粗、
-   * `<img>` 不是元素——只有换行结构被保留，其余一个字符都不解释。
-   */
-  | { kind: 'code'; lines: readonly string[] }
+// 类型从契约取，**不在组件里留第二份定义**：解析器与渲染层共用同一份形状，谁也不许各自长一个别名。
+export type { StructuredTextNode, StructuredTextRun } from '@platform/contracts/structuredText'
 
 export type StructuredTextProps = {
   nodes: readonly StructuredTextNode[]

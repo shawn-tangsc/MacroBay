@@ -20,7 +20,9 @@ type StructuredTextNode =
 type StructuredTextRun = { text: string; bold: boolean; code?: boolean }
 ```
 
-解析在主进程做，`StructuredText` 只把三种形状摆成语义化 DOM。**类型上没有「传一段 HTML」或
+节点类型住在 **`platform/contracts/structuredText.ts`**，不在这个组件里：解析在主进程，必须能只依赖形状、
+不依赖渲染层。组件 re-export 它们，调用点只 import 一处，**组件自己不留第二份定义**。
+`StructuredText` 只把这些形状摆成语义化 DOM。**类型上没有「传一段 HTML」或
 「传一段 Markdown」的口子**——这是设计，不是遗漏。
 
 ## 规则，以及每一条为什么存在
