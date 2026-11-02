@@ -13,7 +13,7 @@ import {
   type WorkspacePresentation,
   type WorkspaceRegion
 } from './workspacePresentation'
-import { WorkspacePanelToolbar } from './WorkspacePanelToolbar'
+import { WorkspacePanelToolbar, type WorkspacePanelTextKey } from './WorkspacePanelToolbar'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace 单个面板的稳定挂载帧。
@@ -155,12 +155,17 @@ export function WorkspacePanelFrame(props: WorkspacePanelFrameProps): React.Reac
     >
       <WorkspacePanelToolbar
         title={props.title}
-        actionsLabel={labels.panelActions}
-        closeLabel={labels.panelClose}
         menuItems={menuItems}
         onMenuClick={onMenuClick}
         onClose={props.onClose}
-        returnToPage={props.presentation === 'normal' ? undefined : { label: labels.panelReturnToPage, onClick: props.onReturnToPage }}
+        resolveText={(key: WorkspacePanelTextKey) =>
+          key === 'workspace.panelActions'
+            ? labels.panelActions
+            : key === 'workspace.panelClose'
+              ? labels.panelClose
+              : labels.panelReturnToPage
+        }
+        returnToPage={props.presentation === 'normal' ? undefined : { onClick: props.onReturnToPage }}
       />
       <div className="workspace-panel-body" style={{ gridArea: 'body' }}>
         {hasTabStrip ? (
