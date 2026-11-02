@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
@@ -41,6 +42,7 @@ export type PositioningPanelProps = Readonly<{
 // nominal size and the drawing is 186 units tall instead of being blown up with the container.
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const resolveProductKey = useProductTextKey()
   // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
   // is one level deeper and is not this button.
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -70,7 +72,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         </button>
       ) : (
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
-        <span className="mi-positioning-panel__signal" data-state="insufficient">{text.signalInsufficient}</span>
+        <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
       )) : null}
       <span className="mi-positioning-panel__help" tabIndex={0} role="note" aria-label={text.helpLabel} data-help>
         <i aria-hidden="true">?</i>
@@ -130,6 +132,17 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   )
 }
 
+/**
+ * The six states are a reading, not a verdict on severity: a market that is deleveraging or
+ * crowded needs a look, refilling is ordinary, and "neutral" or "mixed" is simply information.
+ * Tones are the closed set; the word stays on the row either way.
+ */
+function statePillTone(state: PositioningState): StatusPillTone {
+  if (state === 'refilling') return 'ok'
+  if (state === 'neutral' || state === 'mixed') return 'info'
+  return 'warn'
+}
+
 function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInterestWindow; onWindowChange: (window: OpenInterestWindow) => void; text: PositioningPanelText }>): React.ReactElement {
   // One Tab reaches the group; the arrow keys move focus and Enter/Space picks. Both options and
   // the group's own name are keys, so the sentences never live in this file.
@@ -167,6 +180,7 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
   notional?: DashboardPositioningPoint
   state: PositioningState | undefined
 }>): React.ReactElement {
+  const resolveProductKey = useProductTextKey()
   return (
     <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
       <div className="mi-positioning-panel__asset-head">
@@ -175,7 +189,7 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
           // The label alone is a conclusion. Hovering it shows the two numbers the conclusion was
           // drawn from, which is what makes it checkable rather than another opaque badge.
           <span className="mi-positioning-panel__state" data-state={state} tabIndex={0}>
-            {text.states[state]}
+            <StatusPill tone={statePillTone(state)} labelKey={`pages.intelligence.portal.dashboard.positioning.states.${state}`} resolveText={resolveProductKey} />
             <span className="mi-positioning-panel__state-tip" role="tooltip">
               {text.stateWhy
                 .replace('{change}', formatDashboardChange(change?.h24Pct))
