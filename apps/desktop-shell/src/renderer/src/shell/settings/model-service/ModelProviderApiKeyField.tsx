@@ -242,19 +242,17 @@ export function ModelProviderApiKeyField({
                 dataAttributes={{ 'data-provider-api-key-copy': 'true' }}
               />
             ) : null}
+            {/*
+              读屏名**恒定**为「显示…」：当前是否明文由 `aria-pressed` 表达。
+              名字随状态改（显示/隐藏）会让读屏用户听名字去猜状态，而状态本来就有专门的位置。
+            */}
             <IconButton
-              ariaLabelKey={plainVisible ? 'modelService.hideApiKey' : 'modelService.showApiKey'}
+              ariaLabelKey="modelService.showApiKey"
               disabled={!canToggle || revealPending}
               icon={plainVisible ? EyeOff : Eye}
               onSelect={() => void handleVisibleChange(!plainVisible)}
               pressed={plainVisible}
-              resolveText={(key) =>
-                key === 'modelService.hideApiKey'
-                  ? labels.hideApiKey
-                  : key === 'modelService.showApiKey'
-                    ? labels.showApiKey
-                    : ''
-              }
+              resolveText={(key) => (key === 'modelService.showApiKey' ? labels.showApiKey : '')}
               size="sm"
               dataAttributes={{ 'data-provider-api-key-eye': 'true' }}
             />

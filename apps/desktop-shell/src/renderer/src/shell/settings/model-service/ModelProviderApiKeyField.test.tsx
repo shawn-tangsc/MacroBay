@@ -144,8 +144,9 @@ describe('PLAT-58 model provider API key reveal field', () => {
     expect(reveal).toHaveBeenCalledTimes(1)
     expect(reveal).toHaveBeenCalledWith('openai')
     expect(apiKeyInput(container).value).toBe(savedKey)
-    // 明文态显示"隐藏密钥"（再点一次收起）。
-    expect(eyeButton(container).getAttribute('aria-label')).toBe(labels.hideApiKey)
+    // 读屏名恒定：状态由 aria-pressed 表达，名字不许随可见性改名。
+    expect(eyeButton(container).getAttribute('aria-label')).toBe(labels.showApiKey)
+    expect(eyeButton(container).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('offers copy only while the key is on screen, and copies the revealed value', async () => {
