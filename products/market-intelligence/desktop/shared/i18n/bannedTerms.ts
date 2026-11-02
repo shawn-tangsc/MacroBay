@@ -38,11 +38,7 @@ export const INTERNAL_ONLY_SCOPES: readonly Readonly<{ path: readonly string[]; 
  * the list **only shrinks** — a new finding outside it fails the scan, and a fixed entry left behind
  * fails it too, so nobody has to remember to delete a line after cleaning one up.
  */
-export const KNOWN_OFFENDERS: Readonly<Record<string, string>> = {
-  'zh-CN.pages.intelligence.overview.sourceFreshness': '配置 · 新鲜度',
-  'zh-CN.pages.intelligence.console.layerDesk.collectionStates.degraded': '配置 · 降级',
-  'zh-CN.pages.intelligence.operations.runtimeStatuses.degraded': '配置 · 降级'
-}
+export const KNOWN_OFFENDERS: Readonly<Record<string, string>> = {}
 
 export type BannedTermFinding = Readonly<{ key: string; term: string; sentence: string }>
 

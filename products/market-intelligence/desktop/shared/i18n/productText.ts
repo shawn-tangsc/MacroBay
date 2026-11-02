@@ -1094,7 +1094,7 @@ export const productText = {
           highImpact: '高影响事件',
           sentimentSummary: '情绪摘要',
           alertChanges: '告警相关变更',
-          sourceFreshness: '来源新鲜度',
+          sourceFreshness: '来源最近更新时间',
           empty: '暂无数据',
           columns: {
             title: '事件',
@@ -1165,7 +1165,7 @@ export const productText = {
             fearGreedNotCollected: '未采集',
             collectionStates: {
               healthy: '健康',
-              degraded: '降级',
+              degraded: '部分可用',
               failed: '失败',
               pending: '待采集',
               paused: '已暂停',
@@ -1384,7 +1384,7 @@ export const productText = {
           failures: '连续失败',
           runtimeStatuses: {
             healthy: '健康',
-            degraded: '降级',
+            degraded: '部分可用',
             failed: '失败',
             paused: '已暂停',
             pending: '待采集'
@@ -2968,7 +2968,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           highImpact: 'High-impact events',
           sentimentSummary: 'Sentiment summary',
           alertChanges: 'Alert-relevant changes',
-          sourceFreshness: 'Source freshness',
+          sourceFreshness: 'Source last updated',
           empty: 'No data yet',
           columns: {
             title: 'Event',
@@ -3033,7 +3033,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             fearGreedNotCollected: 'Not collected',
             collectionStates: {
               healthy: 'Healthy',
-              degraded: 'Degraded',
+              degraded: 'Partially available',
               failed: 'Failed',
               pending: 'Pending',
               paused: 'Paused',
@@ -3246,7 +3246,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           failures: 'Consecutive failures',
           runtimeStatuses: {
             healthy: 'Healthy',
-            degraded: 'Degraded',
+            degraded: 'Partially available',
             failed: 'Failed',
             paused: 'Paused',
             pending: 'Pending collection'
