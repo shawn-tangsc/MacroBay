@@ -1,5 +1,3 @@
-import type { AgentText } from './agentText'
-
 /**
  * 本线提示允许出现的键：闭合联合。
  *
@@ -39,8 +37,12 @@ export type AgentTooltipKey =
  * 逐段取值即可——**不做 kebab→camel 之类的改名**，否则同一句话会有两个名字。
  *
  * 未知键返回空串——`Tooltip` 据此整条不渲染，绝不把键名念给读者。
+ *
+ * 第一个参数收 `object` 而不是整棵 `AgentText`：消息组手里只有 `messages/input/runtimeText/…`
+ * 这几支（`Pick<AgentText, …>`），逼它去拼一整棵文案表才能解析一个键，是把类型当门禁用错了地方。
+ * 取值本身就是逐段走对象，任何对象都成立。
  */
-export function resolveAgentTextKey(text: AgentText, key: string): string {
+export function resolveAgentTextKey(text: object, key: string): string {
   let current: unknown = text
   for (const segment of key.split('.')) {
     if (current === null || typeof current !== 'object') return ''
@@ -50,6 +52,6 @@ export function resolveAgentTextKey(text: AgentText, key: string): string {
 }
 
 /** 提示键是闭集（四个导航提示），走同一份取值实现。 */
-export function resolveAgentTooltipText(text: AgentText, key: AgentTooltipKey): string {
+export function resolveAgentTooltipText(text: object, key: AgentTooltipKey): string {
   return resolveAgentTextKey(text, key)
 }
