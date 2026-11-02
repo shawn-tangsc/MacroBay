@@ -1,7 +1,7 @@
 import { Input } from 'antd'
 import { Filter, Search, X } from 'lucide-react'
 
-import { FilterChip } from '@platform/ui/components/filter-chip'
+import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip'
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../../i18n/platformText'
@@ -145,33 +145,35 @@ export function ModelPickerPanel({
         data-open={filtersOpen}
         hidden={!filtersOpen}
         style={{ display: filtersOpen ? 'flex' : 'none' }}>
-        <div className="model-picker-chips" data-model-picker-categories>
-          {built.categories.map((chip) => (
-            <FilterChip
-              count={String(chip.count)}
-              dataAttributes={{ 'data-model-picker-category': chip.key }}
-              key={chip.key}
-              labelKey={CATEGORY_LABEL_KEYS[chip.key]}
-              onPressedChange={() => onToggleCategory(chip.key)}
-              pressed={categories.includes(chip.key)}
-              resolveText={resolveChipText}
-            />
-          ))}
-        </div>
-
-        {built.showProtocolFilter ? (
-          <div className="model-picker-chips" data-model-picker-protocols>
-            {built.protocols.map((chip) => (
+        <div className="model-picker-chips">
+          <FilterChipGroup ariaLabelKey="pickerFilterCategories" resolveText={resolveChipText}>
+            {built.categories.map((chip) => (
               <FilterChip
                 count={String(chip.count)}
-                dataAttributes={{ 'data-model-picker-protocol': chip.key }}
                 key={chip.key}
-                labelKey={PROTOCOL_LABEL_KEYS[chip.key]}
-                onPressedChange={() => onToggleProtocol(chip.key)}
-                pressed={protocols.includes(chip.key)}
+                labelKey={CATEGORY_LABEL_KEYS[chip.key]}
+                onPressedChange={() => onToggleCategory(chip.key)}
+                pressed={categories.includes(chip.key)}
                 resolveText={resolveChipText}
               />
             ))}
+          </FilterChipGroup>
+        </div>
+
+        {built.showProtocolFilter ? (
+          <div className="model-picker-chips">
+            <FilterChipGroup ariaLabelKey="pickerFilterProtocols" resolveText={resolveChipText}>
+              {built.protocols.map((chip) => (
+                <FilterChip
+                  count={String(chip.count)}
+                  key={chip.key}
+                  labelKey={PROTOCOL_LABEL_KEYS[chip.key]}
+                  onPressedChange={() => onToggleProtocol(chip.key)}
+                  pressed={protocols.includes(chip.key)}
+                  resolveText={resolveChipText}
+                />
+              ))}
+            </FilterChipGroup>
           </div>
         ) : null}
       </div>

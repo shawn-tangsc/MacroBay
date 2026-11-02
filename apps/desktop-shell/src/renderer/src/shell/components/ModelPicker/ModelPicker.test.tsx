@@ -22,6 +22,16 @@ import type { ModelPickerCandidate } from './modelPickerOptions'
 const labels = platformText['en-US'].models
 const zhLabels = platformText['zh-CN'].models
 
+/** 按「组名 + 胶囊可访问名」定位：不靠 data-* 钩子，顺带验证读屏能不能听懂。 */
+function chip(groupLabel: string, label: string): HTMLElement | undefined {
+  const group = [...document.querySelectorAll<HTMLElement>('[role="group"]')].find(
+    (element) => element.getAttribute('aria-label') === groupLabel
+  )
+  return [...(group?.querySelectorAll<HTMLElement>('button') ?? [])].find((button) =>
+    button.textContent?.startsWith(label)
+  )
+}
+
 function provider(
   id: string,
   name: string,
@@ -308,7 +318,7 @@ describe('ModelPicker panel', () => {
     expect(tagOf('priced:deal-model')).toBe(labels.pickerTagDiscount)
     expect(tagOf('priced:free-model')).toBe(labels.modelFreeTag)
     expect(tagOf('priced:paid-model')).toBeUndefined()
-    expect(document.querySelector('[data-model-picker-category="deal"]')?.textContent)
+    expect(chip(labels.pickerFilterCategories, labels.pickerCategoryDeal)?.textContent)
       .toContain(labels.pickerCategoryDeal)
   })
 
@@ -328,7 +338,7 @@ describe('ModelPicker panel', () => {
     await openPanel(container)
 
     await act(async () => {
-      document.querySelector<HTMLElement>('[data-model-picker-category="tools"]')?.dispatchEvent(
+      chip(labels.pickerFilterCategories, labels.pickerCategoryTools)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
       await Promise.resolve()
@@ -336,10 +346,10 @@ describe('ModelPicker panel', () => {
     expect(optionValues()).toEqual(['silicon:deepseek-v3'])
 
     await act(async () => {
-      document.querySelector<HTMLElement>('[data-model-picker-category="tools"]')?.dispatchEvent(
+      chip(labels.pickerFilterCategories, labels.pickerCategoryTools)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
-      document.querySelector<HTMLElement>('[data-model-picker-protocol="messages"]')?.dispatchEvent(
+      chip(labels.pickerFilterProtocols, labels.protocolFilterMessages)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
       await Promise.resolve()
@@ -428,13 +438,13 @@ describe('ModelPicker panel', () => {
     const container = await mountPicker({ pickerId: 'empty-filtered' })
     await openPanel(container)
     await act(async () => {
-      document.querySelector<HTMLElement>('[data-model-picker-category="tools"]')?.dispatchEvent(
+      chip(labels.pickerFilterCategories, labels.pickerCategoryTools)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
-      document.querySelector<HTMLElement>('[data-model-picker-category="deal"]')?.dispatchEvent(
+      chip(labels.pickerFilterCategories, labels.pickerCategoryDeal)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
-      document.querySelector<HTMLElement>('[data-model-picker-protocol="gemini"]')?.dispatchEvent(
+      chip(labels.pickerFilterProtocols, labels.protocolFilterGemini)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
       await Promise.resolve()
@@ -549,7 +559,7 @@ describe('ModelPicker panel', () => {
     await openPanel(container)
 
     await act(async () => {
-      document.querySelector<HTMLElement>('[data-model-picker-category="tools"]')?.dispatchEvent(
+      chip(labels.pickerFilterCategories, labels.pickerCategoryTools)?.dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       )
       await Promise.resolve()

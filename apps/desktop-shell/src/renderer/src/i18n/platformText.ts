@@ -779,6 +779,10 @@ export type PlatformText = {
     pickerSelectModel: string
     pickerClearSelection: string
     pickerFilters: string
+    /** 分类筛选组的可访问名（`FilterChipGroup` 的 aria-label）。 */
+    pickerFilterCategories: string
+    /** 协议筛选组的可访问名。 */
+    pickerFilterProtocols: string
     pickerClearFilters: string
     pickerFilteredCount: (count: number) => string
     pickerCategoryVision: string
@@ -1884,6 +1888,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       pickerSelectModel: '请选择模型',
       pickerClearSelection: '清除选择',
       pickerFilters: '筛选',
+      pickerFilterCategories: '分类',
+      pickerFilterProtocols: '协议',
       pickerClearFilters: '清除筛选',
       pickerFilteredCount: (count) => `已筛选 · ${count} 个结果`,
       pickerCategoryVision: '视觉',
@@ -2976,6 +2982,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       pickerSelectModel: 'Select a model',
       pickerClearSelection: 'Clear selection',
       pickerFilters: 'Filters',
+      pickerFilterCategories: 'Categories',
+      pickerFilterProtocols: 'Protocols',
       pickerClearFilters: 'Clear filters',
       pickerFilteredCount: (count) => `Filtered · ${count} result${count === 1 ? '' : 's'}`,
       pickerCategoryVision: 'Vision',
