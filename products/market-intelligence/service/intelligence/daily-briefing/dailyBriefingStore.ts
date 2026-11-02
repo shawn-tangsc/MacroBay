@@ -5,10 +5,19 @@ import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
+import {
+  DAILY_BRIEFING_STORAGE_VERSION,
+  LEGACY_EDITION_SERIAL,
+  createAttemptsSql,
+  createEditionsSql,
+  migrateDailyBriefingStorage
+} from './dailyBriefingStorageMigration'
 
 export const dailyBriefingStoragePolicy = Object.freeze({
   fileName: 'daily-briefings.sqlite',
-  schemaVersion: 2
+  schemaVersion: DAILY_BRIEFING_STORAGE_VERSION,
+  /** Every edition written before issue numbers existed is issue "default". */
+  defaultEditionSerial: LEGACY_EDITION_SERIAL
 })
 
 /**
@@ -20,37 +29,17 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
   const db = openSqliteDatabase(filePath)
   db.exec('pragma synchronous = full;')
-  const stored = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
-  if (stored !== dailyBriefingStoragePolicy.schemaVersion) {
-    // The document is derived; when the schema changes, old editions are rebuilt on next open.
-    db.exec('drop table if exists daily_briefings;')
-  }
-  db.exec(`
-    create table if not exists daily_briefings (
-      edition_date text not null,
-      locale text not null,
-      generated_at text not null,
-      window_start text not null,
-      window_end text not null,
-      document_json text not null,
-      schema_version integer not null,
-      primary key (edition_date, locale)
-    );
-    create table if not exists daily_briefing_attempts (
-      edition_date text not null,
-      locale text not null,
-      trace_json text not null,
-      updated_at text not null,
-      primary key (edition_date, locale)
-    );
-    pragma user_version = ${dailyBriefingStoragePolicy.schemaVersion};
-  `)
-  const getStatement = db.prepare('select * from daily_briefings where edition_date = ? and locale = ?')
+  // An edition is written once and never re-derived, so a schema change copies the rows across
+  // instead of throwing them away; the migration also leaves a restorable copy beside the file.
+  migrateDailyBriefingStorage({ db, filePath, stamp: new Date().toISOString().replace(/[:.]/g, '-') })
+  db.exec(createEditionsSql('daily_briefings'))
+  db.exec(createAttemptsSql('daily_briefing_attempts'))
+  const getStatement = db.prepare('select * from daily_briefings where edition_date = ? and locale = ? and edition_serial = ?')
   const listStatement = db.prepare('select * from daily_briefings where locale = ? and edition_date >= ? and edition_date <= ? order by edition_date asc')
   const putStatement = db.prepare(`
-    insert into daily_briefings (edition_date, locale, generated_at, window_start, window_end, document_json, schema_version)
-    values (?, ?, ?, ?, ?, ?, ?)
-    on conflict(edition_date, locale) do update set
+    insert into daily_briefings (edition_date, locale, edition_serial, generated_at, window_start, window_end, document_json, schema_version)
+    values (?, ?, ?, ?, ?, ?, ?, ?)
+    on conflict(edition_date, locale, edition_serial) do update set
       generated_at = excluded.generated_at,
       window_start = excluded.window_start,
       window_end = excluded.window_end,
@@ -59,25 +48,26 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   `)
   const pruneStatement = db.prepare('delete from daily_briefings where edition_date < ?')
   const putAttemptStatement = db.prepare(`
-    insert into daily_briefing_attempts (edition_date, locale, trace_json, updated_at)
-    values (?, ?, ?, ?)
-    on conflict(edition_date, locale) do update set
+    insert into daily_briefing_attempts (edition_date, locale, edition_serial, trace_json, updated_at)
+    values (?, ?, ?, ?, ?)
+    on conflict(edition_date, locale, edition_serial) do update set
       trace_json = excluded.trace_json,
       updated_at = excluded.updated_at
   `)
-  const getAttemptStatement = db.prepare('select trace_json from daily_briefing_attempts where edition_date = ? and locale = ?')
-  const clearAttemptStatement = db.prepare('delete from daily_briefing_attempts where edition_date = ? and locale = ?')
+  const getAttemptStatement = db.prepare('select trace_json from daily_briefing_attempts where edition_date = ? and locale = ? and edition_serial = ?')
+  const clearAttemptStatement = db.prepare('delete from daily_briefing_attempts where edition_date = ? and locale = ? and edition_serial = ?')
   const pruneAttemptsStatement = db.prepare('delete from daily_briefing_attempts where edition_date < ?')
 
   return Object.freeze({
     async get(date, locale) {
-      return parseRow(getStatement.get(date, locale) as Row | undefined)
+      return parseRow(getStatement.get(date, locale, dailyBriefingStoragePolicy.defaultEditionSerial) as Row | undefined)
     },
     async put(edition) {
       if (!isDailyBriefingDocumentWithinBudget(edition.document)) throw new Error('daily-briefing-document-too-large')
       putStatement.run(
         edition.date,
         edition.locale,
+        dailyBriefingStoragePolicy.defaultEditionSerial,
         edition.generatedAt,
         edition.windowStart,
         edition.windowEnd,
@@ -93,10 +83,10 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       }))
     },
     async putAttempt(attempt) {
-      putAttemptStatement.run(attempt.date, attempt.locale, JSON.stringify(attempt.trace), attempt.trace.finishedAt)
+      putAttemptStatement.run(attempt.date, attempt.locale, dailyBriefingStoragePolicy.defaultEditionSerial, JSON.stringify(attempt.trace), attempt.trace.finishedAt)
     },
     async getAttempt(date, locale) {
-      const row = getAttemptStatement.get(date, locale) as { trace_json?: string } | undefined
+      const row = getAttemptStatement.get(date, locale, dailyBriefingStoragePolicy.defaultEditionSerial) as { trace_json?: string } | undefined
       if (!row?.trace_json) return undefined
       try {
         const parsed = JSON.parse(row.trace_json) as unknown
@@ -106,7 +96,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       }
     },
     async clearAttempt(date, locale) {
-      clearAttemptStatement.run(date, locale)
+      clearAttemptStatement.run(date, locale, dailyBriefingStoragePolicy.defaultEditionSerial)
     },
     async prune(beforeDate) {
       pruneStatement.run(beforeDate)
