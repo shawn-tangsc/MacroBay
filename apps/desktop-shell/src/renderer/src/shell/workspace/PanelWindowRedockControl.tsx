@@ -23,6 +23,12 @@ import { platformText } from '../../i18n/platformText'
 /** 读屏名/提示的键本身；句子仍由 `platformText` 提供。 */
 export const PANEL_WINDOW_REDOCK_KEY = 'workspace.panelWindowRedock'
 
+/**
+ * `pending` 的上界：主进程不响应时 `await` 会永远挂着，而中间态的所有表现都是「看起来正常」。
+ * 超时与「被拒」走同一句提示——对用户来说都是「没回去，可以再试一次」。
+ */
+const REDOCK_TIMEOUT_MS = 5_000
+
 export type PanelWindowRedockControlProps = {
   language: AppLanguage
   /** 本面板窗唯一承载的面板实例键（`data-redock-panel` 与命令都只带它）。 */
@@ -43,8 +49,14 @@ export function PanelWindowRedockControl(props: PanelWindowRedockControlProps): 
     setNotice(null)
     setPhase('pending')
     void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const result = await props.redock?.({ panelInstanceKey: props.panelInstanceKey })
+        const result = await Promise.race([
+          props.redock?.({ panelInstanceKey: props.panelInstanceKey }),
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error('redock-timeout')), REDOCK_TIMEOUT_MS)
+          })
+        ])
         // 端口在 await 期间被卸载/替换时不做任何状态写入（绝不制造幽灵成功）
         if (result === undefined) { inFlight.current = false; setPhase('idle'); return }
         if (result.status === 'rejected') {
@@ -58,6 +70,8 @@ export function PanelWindowRedockControl(props: PanelWindowRedockControlProps): 
         setNotice(labels.panelWindowRedockFailed)
         setPhase('idle')
         inFlight.current = false
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
       }
     })()
   }

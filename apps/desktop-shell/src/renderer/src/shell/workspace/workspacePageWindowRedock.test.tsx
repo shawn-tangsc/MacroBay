@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { platformText } from '../../i18n/platformText'
 import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
@@ -163,5 +163,35 @@ describe('P2-15：独立页面窗的回停靠悬浮入口', () => {
     const view = await renderPageWindow()
     expect(view.querySelector('[data-window-shell="page"]')).not.toBeNull()
     expect(tabs.commands).toEqual([])
+  })
+
+  it('⑥ 主进程不响应时按钮不会永久灰着：超时后回到可点并给出失败提示', async () => {
+    const tabs = fakeTabs()
+    tabs.install('detached')
+    // 主进程不响应：命令永不返回。这是唯一无法用「成功 / 被拒 / 抛错」收场的路径。
+    const platform = (window as unknown as { platform: { workspace: Record<string, unknown> } }).platform
+    platform.workspace.tabsCommand = () => new Promise(() => undefined)
+    const view = await renderPageWindow()
+
+    const pick = (): HTMLButtonElement | null =>
+      view.querySelector<HTMLButtonElement>(`[data-redock-tab="${TAB_KEY}"]`)
+    expect(pick()?.disabled).toBe(false)
+
+    vi.useFakeTimers()
+    try {
+      await act(async () => { pick()?.click() })
+      // 点击后进入 pending：变灰，且此刻没有任何说明
+      expect(pick()?.disabled).toBe(true)
+      expect(view.querySelector('.workspace-page-redock-notice')).toBeNull()
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+
+      // 超时收场：控件回到可点，并给出与「被拒 / 抛错」相同的那句说明，用户能再试一次。
+      expect(pick()).not.toBeNull()
+      expect(pick()?.disabled).toBe(false)
+      expect(view.querySelector('.workspace-page-redock-notice')?.textContent).toBe(labels.tabCommandFailed)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

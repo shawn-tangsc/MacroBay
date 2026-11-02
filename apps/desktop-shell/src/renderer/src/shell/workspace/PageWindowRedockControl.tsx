@@ -24,6 +24,13 @@ import { platformText } from '../../i18n/platformText'
 /** 读屏名/提示的键本身；句子仍由 `platformText` 提供，组件只认键。 */
 export const PAGE_WINDOW_REDOCK_KEY = 'workspace.pageWindowRedock'
 
+/**
+ * `pending` 的上界。主进程不响应时 `await` 会永远挂着，而**中间态的所有表现都是「看起来正常」**：
+ * 按钮在、界面不报错，用户只能以为是自己点错了。任何「点一下变灰」都必须有终止条件——成功、
+ * 失败、超时三者都要有，少一个就会永久停在中间态。
+ */
+const REDOCK_TIMEOUT_MS = 5_000
+
 export type PageWindowRedockControlProps = {
   language: AppLanguage
   /** 本页窗的 Tab 身份（`data-redock-tab` 与回停靠命令都只带它）。 */
@@ -49,8 +56,15 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
     setNotice(null)
     setRedockPhase('pending')
     void (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const result = await props.redockTab({ workspaceInstanceKey: props.workspaceInstanceKey })
+        const result = await Promise.race([
+          props.redockTab({ workspaceInstanceKey: props.workspaceInstanceKey }),
+          // 超时按「失败」处理：它和抛错在用户眼里是同一件事——没回去，可以再试一次。
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error('redock-timeout')), REDOCK_TIMEOUT_MS)
+          })
+        ])
         // 拒绝必须可见：绝不静默什么都不发生（原生关闭路径仍在，用户不会被困住）
         if (result.status === 'rejected') {
           setNotice(labels.tabCommandRejected)
@@ -61,6 +75,8 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
       } catch {
         setNotice(labels.tabCommandFailed)
         setRedockPhase('idle')
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
       }
     })()
   }
