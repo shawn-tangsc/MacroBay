@@ -1,10 +1,13 @@
+import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
-export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, formatTime, generatingStage, onSelect }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, loading = false, selectedDate, todayDate, locale, text, formatTime, generatingStage, onSelect }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
+  /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
+  loading?: boolean
   selectedDate?: string
   todayDate: string
   locale: DailyBriefingLocale
@@ -16,7 +19,7 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
-    {editions.length === 0 ? <StateView
+    {loading && editions.length === 0 ? <LoadingState label={text.history.loading} /> : editions.length === 0 ? <StateView
       state="empty"
       reasonCode="not-yet"
       size="md"

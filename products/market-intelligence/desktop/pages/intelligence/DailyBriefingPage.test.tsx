@@ -686,3 +686,31 @@ it('says the progress could not be read without falling back to "not generated"'
   expect(today?.textContent).toContain('进度未知')
   expect(today?.textContent).not.toContain('当天未运行')
 })
+
+it('shows only a loading state before the first read resolves', async () => {
+  // Both reads hang: nothing has been read yet, so nothing may be reported as missing or failed.
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    list: vi.fn(() => new Promise(() => undefined))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => { await Promise.resolve() })
+
+  expect(dom.textContent).toContain(text.generating)
+  expect(dom.textContent).toContain(text.history.loading)
+  // No empty state and no error state anywhere before the first read comes back.
+  expect(dom.textContent).not.toContain(text.noBriefTitle)
+  expect(dom.textContent).not.toContain(text.unavailable)
+  expect(dom.textContent).not.toContain(text.history.empty)
+  expect(dom.querySelector('[data-state="error"]')).toBeNull()
+})
+
+it('offers a retry when the read itself fails', async () => {
+  // A read that did not finish is a failure, and a failure without a retry leaves the reader nowhere.
+  const client = fakeClient({ getToday: vi.fn(async () => { throw new Error('down') }) })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+
+  const errorState = dom.querySelector('.state-view[data-state="error"]')
+  expect(errorState).not.toBeNull()
+  expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
+})

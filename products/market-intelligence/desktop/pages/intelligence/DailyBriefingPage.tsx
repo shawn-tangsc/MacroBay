@@ -60,6 +60,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const requestRef = useRef(0)
   const emptyGenerateRef = useRef(false)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
+  // The rail starts empty while the list is still being read. "Nothing yet" and "nothing at all"
+  // look the same once the array is empty, so the rail has to be told which one it is.
+  const [editionsLoading, setEditionsLoading] = useState(true)
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -89,6 +92,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     let active = true
     setView({ status: 'loading' })
     setEditions([])
+    setEditionsLoading(true)
     setRegenerateFailure(null)
     void (async () => {
       const todayPromise = withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
@@ -96,6 +100,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
+      // The list has been read (successfully or not): from here an empty rail means "none".
+      setEditionsLoading(false)
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
       if (cachedRow) {
         const cached = await client.get({ date: cachedRow.date, locale }).catch(() => undefined)
@@ -311,7 +317,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </header>
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} loading={editionsLoading} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
