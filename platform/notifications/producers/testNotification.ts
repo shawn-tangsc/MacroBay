@@ -18,8 +18,11 @@ export function buildTestNotificationRequest(nowMs: number = Date.now()): Notifi
     bodyKey: 'notification.test.body',
     severity: 'info',
     priority: 'normal',
-    // 走完整链路：桌面被系统拦了，中心里那条仍要在——那是用户判断「系统放没放行」的唯一手段。
-    requestedChannels: ['center', 'desktop'],
+    // 走完整链路（中心 + 应用内横幅 + 桌面）：
+    // - 横幅是按钮旁边那句文案承诺的「右上角会出现一条」，不带它就等于文案撒谎；
+    // - 桌面那条被系统拦了也要发，中心里那条仍在——那是用户判断「系统放没放行」的唯一手段。
+    // 开关关着时对应通道会被记为 `skipped`，那是正常降级，不是错误。
+    requestedChannels: ['center', 'toast', 'desktop'],
     dedupeKey: `test-${nowMs}`
   }
 }

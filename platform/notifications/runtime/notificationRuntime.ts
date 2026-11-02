@@ -36,7 +36,13 @@ import {
 } from './notificationBreaker'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
-import { normalizeRequestedChannels, routeTransientDelivery, type DeliveryHooks, type NotificationClock } from '../runtime/notificationRouting'
+import {
+  normalizeRequestedChannels,
+  routeTransientDelivery,
+  type DeliveryAttempt,
+  type DeliveryHooks,
+  type NotificationClock
+} from '../runtime/notificationRouting'
 
 export type NotificationStorage = JsonFileStorage<NotificationStoreState>
 
@@ -198,7 +204,14 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 用户手动自检专用：**不占当日写入额度**。绕过口只在这里，
      * 公开的 `submit()` 没有参数能让产品线传进来——不是“不该传”，是没有地方传。
      */
-    async submitSelfTest(request: NotificationRequest): Promise<SafeNotificationRecord> {
+    /**
+     * 测试通知：走**完整投递链路**并把每次投递的结果一起交回。
+     *
+     * 为什么必须投递而不是只落库：按钮旁边的文案承诺「右上角会出现一条横幅」，
+     * 只落库等于横幅永不出现；而用户点它的目的本来就是判断「系统放没放行」，
+     * 把 `desktop` 那条的 `ok` / `reason` 丢掉，这次测试就白点了。不占熔断额度仍由调用方负责。
+     */
+    async submitSelfTest(request: NotificationRequest): Promise<{ record: SafeNotificationRecord; delivery: DeliveryAttempt[] }> {
       const state = await load()
       const settings = await deps.getSettings()
       const now = nowIso()
@@ -211,7 +224,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       )
       await persist({ ...state, records: [record, ...state.records] })
       notifyChanged()
-      return toSafeNotificationRecord(record)
+      const delivery = await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
+      return { record: toSafeNotificationRecord(record), delivery }
     },
 
     async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
