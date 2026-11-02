@@ -5,9 +5,10 @@ import { Fragment } from 'react'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
+import { BlockEmpty, BlockLoading } from './TaskAutomationBlockParts'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
 import type {
   DeliveryHealthCounts,
@@ -67,7 +68,12 @@ export function TaskAutomationTasksSection(props: {
         <BlockLoading label={labels.tasksLoading} />
       ) : controller.error ? (
         <div className="task-automation-block-body">
-          <BlockError label={labels.tasksLoadFailed} retryLabel={labels.retry} onRetry={() => void controller.reload()} />
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+          />
         </div>
       ) : state.rows.length > 0 ? (
         // Rendering is decided by "are there rows to render", never by the empty-state verdict:
@@ -156,12 +162,16 @@ export function TaskAutomationTasksSection(props: {
           </tbody>
         </table>
       ) : state.emptyState === 'filter-empty' ? (
-        <BlockEmpty
-          body={labels.filterEmpty}
-          actionLabel={labels.clearFilters}
-          onAction={controller.clearFilters}
+        // 有数据、被筛选挡住：状态与动作都归 `StateView`（`filtered-out` 必带「清除筛选」）。
+        <StateView
+          state="empty"
+          reasonCode="filtered-out"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: controller.clearFilters }}
         />
       ) : (
+        // 「还没有定时任务」不是六态里的空：产生一条任务的动作在对话里，不在这一屏，
+        // 所以按契约 §13 的判定问句它不属于 `not-yet`，也不该硬塞进别的码——保留行内说明。
         <BlockEmpty title={labels.emptyTasksTitle} body={labels.emptyTasksBody} />
       )}
       {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (

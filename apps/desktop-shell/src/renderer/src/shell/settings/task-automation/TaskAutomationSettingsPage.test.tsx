@@ -158,7 +158,7 @@ describe('TaskAutomationSettingsPage', () => {
     }))
     hooks.schedules.mockReturnValue(schedules({ items: [] }))
     const filterEmpty = renderPage()
-    expect(filterEmpty).toContain('当前筛选下没有任务。')
+    expect(filterEmpty).toContain('有数据，但被当前筛选挡住了')
     expect(filterEmpty).toContain('清除筛选')
     expect(filterEmpty).not.toContain('还没有定时任务')
   })
