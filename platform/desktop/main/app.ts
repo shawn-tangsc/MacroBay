@@ -177,6 +177,7 @@ import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
 import { composeAgentIpc } from './composition/agent'
 import { composeSettingsIpc, composeStorageIpc } from './composition/settingsAndStorage'
+import { createAssistantStreamSink } from './assistantStreamBroadcast'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -925,10 +926,6 @@ function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   void agentRuntimeProbeSnapshotStore.clear()
 }
 
-function broadcastAssistantStreamEvent(channel: string, payload: unknown): void {
-  getMainWindow()?.webContents.send(channel, payload)
-}
-
 const assistantTopicNamingService = new AssistantTopicNamingService({
   isEnabled: async () => (await settingsStore.get()).assistant.topicNamingEnabled,
   getLanguage: async () => (await settingsStore.get()).language,
@@ -951,12 +948,11 @@ const assistantChatRuntime = createAssistantChatRuntimeService({
   getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId,
   logContextPlan: (summary) =>
     appLog.log('info', 'assistant.context-plan', { ...summary }),
-  events: {
-    onChunk: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamChunk, payload),
-    onDone: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamDone, payload),
-    onError: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamError, payload),
-    onStatus: (snapshot) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamStatusChanged, snapshot)
-  }
+  // 流式广播的装配只有这一行：通道名与窗口都在 assistantStreamBroadcast 里，
+  // 组合根不再出现任何一个 assistantsStream* 的名字。
+  // 传 thunk 而不是引用：`getMainWindow` 在本文件更靠后声明，直接取值会撞 TDZ（tsc 2448）。
+  // 而它本来就应该在**发送那一刻**取窗口——所以延迟取值正是我们想要的行为。
+  events: createAssistantStreamSink({ getMainWindow: () => getMainWindow() })
 })
 const assistantTemplateRegistry = new AssistantTemplateRegistry()
 assistantTemplateRegistry.registerMany(platformAssistantTemplates)
