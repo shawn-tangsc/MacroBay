@@ -15,6 +15,42 @@ import type { AppLanguage, ProxyMode, ThemeMode } from '@platform/settings/schem
  * 搬家不改变引用位置。
  */
 
+/**
+ * 两个偏好分段的**键**与**键→句子解析**。
+ *
+ * 键写成一枚举一张表（`Record<AppLanguage, string>` / `Record<ThemeMode, string>`），
+ * 不用模板串：模板串拼出来的键静态校验不到形状，`choiceKeyGuard` 只判得动字面量；
+ * 而查表还让「加一种语言／主题」在编译期就红——两层都保住了。
+ *
+ * 住在选项表旁边，是因为它们属于同一件事：**一张表管取值，一张表管这个取值怎么说**。
+ */
+export const LANGUAGE_SEGMENTED_KEY = 'preferences.language'
+export const THEME_SEGMENTED_KEY = 'preferences.displayStyle'
+
+export const LANGUAGE_LABEL_KEYS: Record<AppLanguage, string> = {
+  'zh-CN': 'preferences.chinese',
+  'en-US': 'preferences.english'
+}
+
+export const THEME_LABEL_KEYS: Record<ThemeMode, string> = {
+  system: 'preferences.system',
+  light: 'preferences.light',
+  dark: 'preferences.dark'
+}
+
+/**
+ * 键 → 句子：分段只用 `preferences.*` 这几句；未知键返回空串，组件据此整块不渲染，
+ * 不会把键名念给读者（与平台其余解析器同口径）。句子来源仍是 `platformText`，这里只做匹配。
+ */
+export function resolvePreferencesText(
+  labels: Readonly<Record<string, unknown>>,
+  key: string
+): string {
+  const path = key.startsWith('preferences.') ? key.slice('preferences.'.length) : key
+  const value = labels[path]
+  return typeof value === 'string' ? value : ''
+}
+
 export const languageOptions: Array<{ value: AppLanguage; labelKey: 'chinese' | 'english' }> = [
   { value: 'zh-CN', labelKey: 'chinese' },
   { value: 'en-US', labelKey: 'english' }
