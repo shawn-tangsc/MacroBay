@@ -205,9 +205,11 @@ jobs:
           # The reader-facing notes live in the repository, so the release body points at them
           # instead of restating them. The path is derived from the tag, so a new version only
           # adds a file under docs/reference/release-notes/ and this block stays unchanged.
-          notes="${notes}
-
-Full release notes: https://github.com/${GH_REPO}/blob/${BUILD_REF}/docs/reference/release-notes/${BUILD_REF#v}.md"
+          #
+          # One line, built with printf: a multi-line shell string inside this block scalar must be
+          # indented with the block, and an unindented continuation line ends the scalar and breaks
+          # the whole workflow file — which is exactly how this file stopped parsing.
+          notes="$(printf '%s\n\nFull release notes: https://github.com/%s/blob/%s/docs/reference/release-notes/%s.md' "$notes" "$GH_REPO" "$BUILD_REF" "${BUILD_REF#v}")"
 
           if gh release view "$BUILD_REF" >/dev/null 2>&1; then
             # Re-running a tag that already has a release only replaces the assets.
