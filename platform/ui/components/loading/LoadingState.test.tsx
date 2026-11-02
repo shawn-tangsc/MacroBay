@@ -1,4 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { LoadingSpinner, LoadingState } from './LoadingState'
@@ -71,5 +74,13 @@ describe('LoadingSpinner', () => {
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('loading-spinner loading-spinner--sm model-service-pill__spinner')
     expect(html).not.toContain('role="status"')
+  })
+
+  it('stops the ring under reduced motion instead of only slowing it down', () => {
+    // 「慢转」仍然在转；规范要的是**静止的弧**。弧来自 border-top-color，停掉动画不会让它消失。
+    const css = readFileSync(join(__dirname, 'loadingState.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '')
+    const block = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/u.exec(css)?.[1] ?? ''
+    expect(block).toContain('animation: none')
+    expect(block).not.toMatch(/animation-duration/u)
   })
 })
