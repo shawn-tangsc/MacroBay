@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { message, Modal } from 'antd'
+import { Modal } from 'antd'
+
+import { useToast } from '@platform/ui/components/toast'
 
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
@@ -183,13 +185,21 @@ export function ModelServiceProviderPage({
     return autosave.run(`model:${modelId}`, () => actions.removeModel(modelId))
   }
 
+  // 平台 Toast：宿主挂在渲染根上，成功回执不再走 antd 的 message（那是第二套实现）。
+  const toast = useToast()
+  const CLEARED_KEY = 'models.modelsClearedToast'
+
   /** PLAT-72：清空全部模型（含预设模型）；成功 toast，失败由 autosave 行内展示。 */
   async function clearAllModels(): Promise<boolean> {
     if (!provider) return false
     const count = provider.models.length
     if (count === 0) return false
     const ok = await autosave.run('model:clearAll', () => actions.clearAllModels())
-    if (ok) message.success(labels.modelsClearedToast(count))
+    if (ok)
+      toast.success({
+        titleKey: CLEARED_KEY,
+        resolveText: (key) => (key === CLEARED_KEY ? labels.modelsClearedToast(count) : '')
+      })
     return ok
   }
 
