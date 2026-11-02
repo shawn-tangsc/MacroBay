@@ -49,6 +49,17 @@ it('explains the odds in the drawer instead of a hand-drawn bubble on the card',
   expect(rendered.querySelector('[role="note"]')).toBeNull()
 })
 
+it('keeps the freshness word and the venue in one group, so the footer cannot spread them apart', async () => {
+  const rendered = await render(reading)
+  const foot = rendered.querySelector('.mi-policy-card__foot')!
+  // One child on the left: when the pill and the venue were siblings, `space-between` pushed the
+  // venue into the middle of the row, and the provenance read as a second, centred cell.
+  expect(foot.children).toHaveLength(1)
+  const provenance = foot.querySelector('.mi-policy-card__provenance')!
+  expect(provenance.querySelector('.status-pill')).not.toBeNull()
+  expect(provenance.textContent).toContain('polymarket')
+})
+
 describe('policy path card', () => {
   it('names the month and the bucket through one localized template, with no Chinese left in English', async () => {
     const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath, 'en-US')

@@ -48,6 +48,9 @@
   color: var(--muted, #8b8d94);
   font-size: 10.5px;
 }
+/* The state word and the venue are one reading on the left; the footer's `space-between` then only
+   has two children, so the venue cannot end up floating in the middle of the row. */
+.mi-policy-card__provenance { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .mi-policy-card__open {
   display: inline-flex;
   align-items: center;

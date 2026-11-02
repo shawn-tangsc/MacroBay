@@ -251,13 +251,18 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     </Button> : null}
 
     <footer className="mi-policy-card__foot">
-      {phase.kind === 'settlement'
-        // A time phrase ("2 hours after the decision"), not a state word: it stays text.
-        ? <span className="mi-policy-card__status">{settledFor(phase.minutesSinceDecision, text)}</span>
-        : <>
-            <StatusPill tone={STALENESS_TONE[reading.staleness]} labelKey={STALENESS_KEY[reading.staleness]} resolveText={resolveKey} />
-            {probability ? <span className="mi-policy-card__status"> · {probability.venue}</span> : null}
-          </>}
+      {/* The state word and where the odds come from are one reading, not two cells of a row: the
+          footer spreads its children apart, so as siblings they sat at opposite ends with the
+          venue floating in the middle. Grouping them keeps the provenance together on the left. */}
+      <span className="mi-policy-card__provenance">
+        {phase.kind === 'settlement'
+          // A time phrase ("2 hours after the decision"), not a state word: it stays text.
+          ? <span className="mi-policy-card__status">{settledFor(phase.minutesSinceDecision, text)}</span>
+          : <>
+              <StatusPill tone={STALENESS_TONE[reading.staleness]} labelKey={STALENESS_KEY[reading.staleness]} resolveText={resolveKey} />
+              {probability ? <span className="mi-policy-card__status">· {probability.venue}</span> : null}
+            </>}
+      </span>
       {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </Button> : null}
