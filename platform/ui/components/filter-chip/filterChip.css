@@ -45,9 +45,15 @@
   color: var(--text-strong);
 }
 
-/* 禁用只有一个灰：整颗降透明，旁边由调用点给看得见的说明。 */
+/*
+ * 禁用只有一个灰：**用颜色表达，不再叠透明度**，旁边由调用点给看得见的说明。
+ *
+ * 原来这里是 `opacity: .4`：文字被压成深色约 2.0:1 / 浅色约 1.7:1。它传达的是"这字很难认"，
+ * 不是"这颗不可用"——和 `Tabs`、`Segmented` 是同一类缺陷，第三处，已按同办法收掉。
+ */
 .filter-chip.ant-btn:disabled {
-  opacity: 0.4;
+  color: var(--muted);
+  opacity: 1;
   cursor: not-allowed;
 }
 

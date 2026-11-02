@@ -1,0 +1,6 @@
+{
+  "$comment": "Component CSS rules that dim a disabled control with `opacity < 1`. The guard is about TEXT: dimming a label composites it down to ~2:1 against its surface, which reads as 'hard to read' rather than 'unavailable'. Three sites were found this way (tabs, segmented, filter-chip) and all three were fixed to express disabled with a muted token instead. An entry here is only legitimate when the dimmed thing is a GLYPH rather than text, and it must say why. This list only shrinks.",
+  "entries": {
+    "platform/ui/components/icon-button/iconButton.css": "dims the glyph of an icon-only control; there is no text to composite, and a disabled control is exempt from the non-text contrast floor (which applies to controls a reader can operate)"
+  }
+}
