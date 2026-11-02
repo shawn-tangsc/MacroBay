@@ -173,4 +173,13 @@ describe('Segmented', () => {
     // 浅色下 raised 的亮度已到顶（对容器 1.13），浮起的信号由阴影补足。
     expect(body).toMatch(/box-shadow/)
   })
+
+  it('keeps a disabled segment readable: greyed by colour, not by washing it out', () => {
+    // 与 `Tabs` 同一处缺陷：`opacity: .5` 把文字压到深色 2.43:1 / 浅色 2.04:1，低于 3:1。
+    // 禁用靠灰 + 不可选 + 键盘跳过，不靠「再淡一点」。
+    const css = readFileSync(join(__dirname, 'segmented.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//gu, '')
+    const rule = /\.segmented__item:disabled\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+    expect(rule).toContain('opacity: 1')
+    expect(rule).not.toMatch(/opacity:\s*0\.\d/u)
+  })
 })
