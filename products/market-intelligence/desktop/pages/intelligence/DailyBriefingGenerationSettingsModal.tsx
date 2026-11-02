@@ -48,12 +48,16 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
         setLoadFailed(true)
         return
       }
-      setZone(settings.view.generation.generationTimeZone ?? null)
-      setInvalidZone(settings.view.generation.generationTimeZoneInvalid ?? null)
-      setDraft({
-        generationTime: settings.view.generation.generationTime,
-        windowHours: settings.view.generation.windowHours
-      })
+      // The list is the whole view: the flat copy this dialog once read was removed, and the period
+      // it edits (the save below applies to the first period) is the only place its values live.
+      const period = settings.view.generation.periods[0]
+      if (!period) {
+        setLoadFailed(true)
+        return
+      }
+      setZone(period.generationTimeZone)
+      setInvalidZone(period.generationTimeZoneInvalid)
+      setDraft({ generationTime: period.generationTime, windowHours: period.windowHours })
     }).catch(() => { if (active) setLoadFailed(true) })
     return () => { active = false }
   }, [open, client])

@@ -76,10 +76,6 @@ export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
 export type DailyBriefingGenerationSettingsView = Readonly<{
-  generationTime: string
-  /** The zone the first period means; null while unknown or unreadable. */
-  generationTimeZone: string | null
-  windowHours: number
   /** Every saved period, projected by the service. The list is the view; there is no flat copy. */
   periods: readonly DailyBriefingPeriodView[]
 }>

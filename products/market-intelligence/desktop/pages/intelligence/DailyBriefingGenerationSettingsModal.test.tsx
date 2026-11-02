@@ -10,7 +10,11 @@ import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationS
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const view: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-  generation: { generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' },
+  // The generation block is the period list only: the dialog edits the first period, so the values
+  // it shows have to come from that entry — a flat copy at this level does not exist on the wire.
+  generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
+  language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
+  webSearchSupported: false,
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
 }
 
@@ -24,13 +28,13 @@ afterEach(() => {
   container = null
 })
 
-async function render() {
+async function render(settingsView: DailyBriefingSettingsView = view) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   const client = {
-    getSettings: vi.fn(async () => ({ state: 'available' as const, view })),
-    saveSettings: vi.fn(async () => ({ state: 'available' as const, view }))
+    getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+    saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
   }
   const onClose = vi.fn()
   await act(async () => {
@@ -64,6 +68,18 @@ describe('daily briefing generation settings modal', () => {
     expect(capsule?.textContent).toBe('GMT+8')
     expect(capsule?.getAttribute('data-time-zone')).toBe('Asia/Shanghai')
     expect(document.body.querySelector('.mi-daily-briefing__settings-warning')).toBeNull()
+  })
+
+  it('names the saved value that is not a zone, read from the period it edits', async () => {
+    // The verdict lives only on the period entry. Reading it from a flat field left the warning
+    // silently dead: the dialog would run with a zone it never told the reader about.
+    await render({
+      ...view,
+      generation: { periods: [{ ...view.generation.periods[0]!, generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }] }
+    })
+    expect(document.body.querySelector('.mi-daily-briefing__settings-zone')).toBeNull()
+    expect(document.body.querySelector('.mi-daily-briefing__settings-warning')?.textContent)
+      .toBe(text.generationSettings.invalidTimeZone.replace('{zone}', 'Asia/Shangai'))
   })
 
   it('keeps the dialog open and reports a failed save', async () => {
