@@ -7,6 +7,7 @@ import type { CrossAssetRange } from '../../../../contracts/crossAssetObservatio
  */
 export const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
+  analysis: 'pages.intelligence.portal.dashboard.crossAsset.analysis',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
   noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
   dailyFrequency: 'pages.intelligence.portal.dashboard.crossAsset.dailyFrequency',

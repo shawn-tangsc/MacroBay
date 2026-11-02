@@ -275,17 +275,21 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           {...historyHint}
           resolveText={resolveProductText}
           trigger={(triggerProps) => (
-            <Button
-              aria-expanded={triggerProps.expanded}
-              aria-label={text.analysis}
-              icon={<Info size={13} />}
+            // The same IconButton as the status block's help: two explanations beside two titles
+            // must not be two different-looking triggers.
+            <IconButton
+              ariaLabelKey={crossAssetTextKeys.analysis}
+              expanded={triggerProps.expanded}
+              icon={Info}
               onBlur={triggerProps.onBlur}
               onClick={triggerProps.onSelect}
               onFocus={triggerProps.onFocus}
               onMouseEnter={triggerProps.onMouseEnter}
               onMouseLeave={triggerProps.onMouseLeave}
-              size="small"
-              type="text" />
+              onSelect={() => undefined}
+              resolveText={resolveProductText}
+              size="md"
+            />
           )} /></div>
         <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}
             items={crossAssetRanges.map(range => ({ value: range, labelKey: crossAssetWindowLabelKeys[range] }))}
