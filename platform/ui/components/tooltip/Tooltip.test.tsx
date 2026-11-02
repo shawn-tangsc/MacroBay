@@ -162,6 +162,28 @@ describe('Tooltip', () => {
     expect(source.match(/placement=/g)).toHaveLength(1)
   })
 
+  it('can carry runtime data verbatim, without turning it into a key', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const headline = '美联储维持利率不变'
+    await act(async () => {
+      root!.render(
+        <Tooltip dataText={headline} resolveText={key}>
+          <button type="button" data-trigger>
+            trigger
+          </button>
+        </Tooltip>
+      )
+    })
+    const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')!
+    await act(async () => {
+      trigger.focus()
+    })
+    // 数据原样显示，不被解析器改写、也不做占位符填充。
+    expect(await tooltipText(trigger)).toBe(headline)
+  })
+
   it('pins the bubble type size at 12px instead of inheriting the page', async () => {
     const trigger = await mount()
     await act(async () => {

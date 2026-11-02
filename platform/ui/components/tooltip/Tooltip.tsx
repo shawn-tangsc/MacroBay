@@ -33,22 +33,41 @@ import { fillLabelParams } from '../textKeyParams'
  *
  * 默认 `string`：还没接键联合的调用点照旧能编译，迁移可以一块一块来。
  */
+/**
+ * 文案两种来源（契约 §6）：界面上写的句子只收键；**数据**（新闻标题、品种名、regime 名）
+ * 走 `dataText`——数据不是文案，逼每条标题造一个键，等于给数据建一张文案表。
+ *
+ * 两支持互斥（`?: never`）：同时传编译不过。`dataText` 只准来自变量或查询结果，
+ * 不许放字面句子：守卫扫字面量，含中文或空白即红。
+ *
+ * `dataText` 同样受**一行**约束：一条数据一行读得完才用它；读不完（新闻标题常超 44 字符）
+ * 改用 `Popover` 的多行说明，别在这里重造一个不带多行结构的 `Popover`。
+ */
 export type TooltipProps<K extends string = string> = {
-  /** 提示文案的 i18n 键；解析器带键联合时不收联合之外的键。 */
-  labelKey: K
-  /**
-   * 要填进模板的数字或名词，**只收已经格式化好的字符串**（`选中应用名`、`289/289`）。
-   *
-   * 与 `IconButton.ariaLabelParams`、`Popover.labelParams` 同一套占位符（`{name}`），
-   * 也共用同一份填充实现（`../textKeyParams`）。三件同类组件里只有一件支持时，带参数的
-   * 提示就只能留在 antd——那会变成第二套，而「动宾 + 对象名」是最常见的提示写法。
-   */
-  labelParams?: Readonly<Record<string, string>>
   /** 调用方的文案解析入口；未知键返回空串时本组件不渲染提示。 */
   resolveText: (key: K) => string
-  /** 触发器：必须是可聚焦元素（按钮、链接、带 tabIndex 的元素）。 */
+  /** 触发器：必须是可聚焦元素（按钮、链接、带 tabIndex 的元素），且不可是禁用元素。 */
   children: ReactElement
-}
+} & (
+  | {
+      /** 提示文案的 i18n 键；解析器带键联合时不收联合之外的键。 */
+      labelKey: K
+      /**
+       * 要填进模板的数字或名词，**只收已经格式化好的字符串**（`选中应用名`、`289/289`）。
+       *
+       * 与 `IconButton.ariaLabelParams`、`Popover.labelParams` 同一套占位符（`{name}`），
+       * 也共用同一份填充实现（`../textKeyParams`）。
+       */
+      labelParams?: Readonly<Record<string, string>>
+      dataText?: never
+    }
+  | {
+      labelKey?: never
+      labelParams?: never
+      /** 整条提示就是一条运行时数据；只准来自变量或查询结果。 */
+      dataText: string
+    }
+)
 
 /**
  * 气泡字号锁死在 12px，不继承外层。
@@ -68,13 +87,11 @@ const BUBBLE_STYLE = { fontSize: 12 } as const
  */
 const PLACEMENT = 'bottom' as const
 
-export function Tooltip<K extends string = string>({
-  labelKey,
-  labelParams,
-  resolveText,
-  children
-}: TooltipProps<K>): ReactElement {
-  const text = fillLabelParams(resolveText(labelKey), labelParams)
+export function Tooltip<K extends string = string>(props: TooltipProps<K>): ReactElement {
+  const { resolveText, children } = props
+  // 数据分支不做占位符填充：数据原样展示，填充只服务于「调用点写的句子」。
+  const text =
+    props.dataText !== undefined ? props.dataText : fillLabelParams(resolveText(props.labelKey), props.labelParams)
 
   // 没有句子就不存在提示：空气泡比没有气泡更糟，键名更糟。
   if (text.trim() === '') return children

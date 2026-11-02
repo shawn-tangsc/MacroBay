@@ -78,6 +78,27 @@ describe('Tooltip call sites', () => {
     expect(offenders).toEqual([])
   })
 
+  it('never lets a literal sentence into dataText: data comes from variables', () => {
+    const offenders: Finding[] = []
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      if (!text.includes(OUR_IMPORT)) continue
+      // `dataText` 只准来自变量或查询结果：字面量里出现中文或空白即红——那是把句子伪装成数据。
+      for (const match of text.matchAll(/dataText\s*=\s*\{?\s*['"`]([^'"`\n]*)['"`]/g)) {
+        const value = match[1] ?? ''
+        if (/[\u4e00-\u9fff]/.test(value) || /\s/.test(value)) {
+          offenders.push({ file: relative(ROOT, file), line: text.slice(0, match.index ?? 0).split('\n').length, detail: value })
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('catches a sentence smuggled into dataText, so the guard is not vacuous', () => {
+    const literal = '变化还在计算中'
+    expect(/[\u4e00-\u9fff]/.test(literal) || /\s/.test(literal)).toBe(true)
+  })
+
   it('never attaches a hint to a disabled trigger', () => {
     const offenders: Finding[] = []
     for (const file of files) {
