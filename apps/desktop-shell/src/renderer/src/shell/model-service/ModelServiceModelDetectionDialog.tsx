@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { AlertTriangle, Square } from 'lucide-react'
-import { Button, Modal } from 'antd'
+import { Button } from 'antd'
 
 import type { ModelDetectionMode } from '@platform/ai/providers/modelDetection/types'
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import { Modal } from '@platform/ui/components/modal'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -44,6 +45,9 @@ export type ModelServiceModelDetectionDialogProps = {
 }
 
 const ALL_MODES: readonly ModelDetectionMode[] = ['connectivity', 'protocol']
+
+/** 标题键只在本调用点出现一次；句子由 `platformText` 给，组件只认键。 */
+const MODEL_DETECTION_TITLE_KEY = 'models.detectTitle'
 
 const WARNING = 'var(--warning, #c48a2a)'
 
@@ -106,27 +110,24 @@ export function ModelServiceModelDetectionDialog({
   return (
     <Modal
       open={open}
-      width={460}
-      centered
+      width="compact"
+      align="center"
       className="model-detect-modal"
-      title={(
-        <div style={{ display: 'flex', flexDirection: 'column', rowGap: 2, paddingRight: 24 }}>
-          <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 600, lineHeight: '20px' }}>
-            {labels.detectModels}
-          </span>
-          <span
-            data-detect-count
-            style={{ color: 'var(--muted)', fontSize: 11, fontWeight: 400, lineHeight: '15px' }}>
-            {labels.detectModelsCount(models.length)}
-          </span>
-        </div>
-      )}
-      onCancel={onClose}
+      titleKey={MODEL_DETECTION_TITLE_KEY}
+      resolveText={(key) => (key === MODEL_DETECTION_TITLE_KEY ? labels.detectModels : '')}
+      onClose={onClose}
       footer={null}
       destroyOnHidden>
       <div
         data-model-detect-dialog
         style={{ display: 'flex', flexDirection: 'column', rowGap: 14, paddingTop: 6 }}>
+        {/* 计数原先挤在标题里做第二行；骨架的标题只收键，它改到正文首行、仍紧贴标题。
+            测试钩子 `data-detect-count` 不变。 */}
+        <span
+          data-detect-count
+          style={{ marginTop: -10, color: 'var(--muted)', fontSize: 11, fontWeight: 400, lineHeight: '15px' }}>
+          {labels.detectModelsCount(models.length)}
+        </span>
         <div data-detect-grid style={{ display: 'flex', flexDirection: 'column', rowGap: 8 }}>
           {modeCards.map((card) => {
             const selected = modes.includes(card.mode)
