@@ -57,6 +57,7 @@ export function NewsSentimentDrawer(props: {
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
   const [detailFailed, setDetailFailed] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
@@ -72,6 +73,7 @@ export function NewsSentimentDrawer(props: {
   const resetTransientState = useCallback(() => {
     setDetail(undefined)
     setDetailFailed(false)
+    setDetailLoading(false)
     setSelectedId(undefined)
     setBodyView('translated')
     setContextMenu(undefined)
@@ -126,13 +128,18 @@ export function NewsSentimentDrawer(props: {
     // "this row says that", and a failed read must not leave it in place either.
     setDetail(undefined)
     setDetailFailed(false)
+    setDetailLoading(true)
     void props.client
       .getItem({ itemId: activeId, asOf: view.asOf })
       .then((next) => {
-        if (!cancelled && next?.itemId === activeId) setDetail(next)
+        if (cancelled) return
+        setDetailLoading(false)
+        if (next?.itemId === activeId) setDetail(next)
       })
       .catch(() => {
-        if (!cancelled) setDetailFailed(true)
+        if (cancelled) return
+        setDetailLoading(false)
+        setDetailFailed(true)
       })
     return () => { cancelled = true }
   }, [props.open, activeId, view?.asOf, props.client])
@@ -316,7 +323,11 @@ export function NewsSentimentDrawer(props: {
                 <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
               </p>
             ) : null}
-            {!props.failed && rows.length === 0 ? (
+            {!props.failed && props.loading && !props.view ? (
+              // First read in flight: "not yet" would claim the window is empty before we know.
+              <StateView resolveText={props.resolveStateText} size="md" state="loading" />
+            ) : null}
+            {!props.failed && !props.loading && rows.length === 0 ? (
               filtered
                 ? <StateView
                     action={{ labelKey: 'ui.state.action.clear-filter', onSelect: () => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }) }}
@@ -451,6 +462,8 @@ export function NewsSentimentDrawer(props: {
                     </>
                   ) : displayedBody ? (
                     displayedBody
+                  ) : detailLoading ? (
+                    <LoadingState label={text.loading} minHeight={80} />
                   ) : activeTranslationState === 'failed' ? (
                     <>{text.drawer.detail.translationFailed}<br />{detail?.bodyExcerpt ?? text.drawer.detail.noBody}</>
                   ) : detailFailed ? (

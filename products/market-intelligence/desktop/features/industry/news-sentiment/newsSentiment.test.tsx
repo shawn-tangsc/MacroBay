@@ -180,6 +180,57 @@ describe('a read that has not settled is not a failure', () => {
   })
 })
 
+describe('a read that never answers has a deadline', () => {
+  it('turns a hung read into a failure with a retry, instead of loading forever', async () => {
+    // The fix for "a failure flashes before the data" must not become "never admit the failure".
+    const query = vi.fn(() => new Promise<NewsSentimentView>(() => {}))
+    const container = await mount(
+      <NewsSentimentFeature readDeadlineMs={30} text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    expect(container.querySelector('.state-view--error')).toBeNull()
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 80)) })
+    expect(container.querySelector('.state-view--error')).not.toBeNull()
+    expect(container.querySelector('.mi-news-sentiment .state-view--error button')).not.toBeNull()
+    expect(container.querySelector('.loading-state')).toBeNull()
+  })
+})
+
+describe('the drawer does not answer before its reads do', () => {
+  it('shows loading, not "not yet", while the first read is in flight', async () => {
+    let settle: ((value: NewsSentimentView) => void) | undefined
+    const query = vi.fn(() => new Promise<NewsSentimentView>((resolve) => { settle = resolve }))
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const list = document.body.querySelector('.mi-news-drawer__list')
+    expect(list?.querySelector('.state-view--empty')).toBeNull()
+    expect(list?.querySelector('.loading-state')).not.toBeNull()
+
+    await act(async () => { settle?.(VIEW) })
+    await act(async () => {})
+    expect(document.body.querySelectorAll('.mi-news-drawer__row').length).toBeGreaterThan(0)
+  })
+
+  it('does not call the body missing while the detail read is still in flight', async () => {
+    let resolveDetail: ((value: unknown) => void) | undefined
+    const getItem = vi.fn(() => new Promise((resolve) => { resolveDetail = resolve }))
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem: getItem as never })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const body = document.body.querySelector('.mi-news-drawer__bodytext')
+    expect(body?.textContent ?? '').not.toContain(text.drawer.detail.noBody)
+    expect(body?.querySelector('.loading-state')).not.toBeNull()
+
+    await act(async () => { resolveDetail?.({ ...VIEW.items[0]!, bodyExcerpt: 'body:item-a' }) })
+    await act(async () => {})
+    expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-a')
+  })
+})
+
 describe('card empty states', () => {
   const readiness = (overrides: Partial<NonNullable<NewsSentimentView['readiness']>> = {}) => ({
     total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,

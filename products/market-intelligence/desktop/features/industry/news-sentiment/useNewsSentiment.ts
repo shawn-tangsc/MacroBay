@@ -24,10 +24,20 @@ export type UseNewsSentimentResult = Readonly<{
 
 const DEFAULT_FILTERS: NewsSentimentFilters = { direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }
 
+/**
+ * How long a read may stay unanswered before the card says it failed.
+ *
+ * Without a deadline a hung IPC leaves the card on "加载中" forever, which is the other half of the
+ * flash bug: the fix for "a failure flashes before the data" must not be "never admit the failure".
+ */
+const DEFAULT_READ_DEADLINE_MS = 15_000
+
 /** One read per window/refresh. Never polls: the dashboard is a snapshot, not a stream. */
 export function useNewsSentiment(input: {
   client: Pick<NewsSentimentClient, 'query'>
   now: () => Date
+  /** Tests shorten this; production keeps the deadline above. */
+  readDeadlineMs?: number
 }): UseNewsSentimentResult {
   const [window, setWindow] = useState<NewsSentimentWindow>('all')
   const [filters, setFiltersState] = useState<NewsSentimentFilters>(DEFAULT_FILTERS)
@@ -41,18 +51,33 @@ export function useNewsSentiment(input: {
     const id = ++requestId.current
     setLoading(true)
     setFailed(false)
+    const deadlineMs = input.readDeadlineMs ?? DEFAULT_READ_DEADLINE_MS
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<'deadline'>((resolve) => {
+      timer = setTimeout(() => resolve('deadline'), deadlineMs)
+    })
     try {
-      const next = await input.client.query({ asOf, window, limit: 100 })
+      const next = await Promise.race([
+        input.client.query({ asOf, window, limit: 100 }),
+        deadline
+      ])
       if (id !== requestId.current) return
+      if (next === 'deadline') {
+        // Bounded waiting, not endless: a read that never answers becomes a failure the reader can
+        // retry, and whatever was already on screen stays (the callers keep data + mark it older).
+        setFailed(true)
+        return
+      }
       setView(next)
       setFailed(next.state === 'unavailable')
     } catch {
       if (id !== requestId.current) return
       setFailed(true)
     } finally {
+      if (timer !== undefined) clearTimeout(timer)
       if (id === requestId.current) setLoading(false)
     }
-  }, [asOf, input.client, window])
+  }, [asOf, input.client, input.readDeadlineMs, window])
 
   useEffect(() => {
     void load()

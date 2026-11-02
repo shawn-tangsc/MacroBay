@@ -24,6 +24,8 @@ export function NewsSentimentFeature(props: {
   text: NewsSentimentText
   client?: NewsSentimentClient
   now?: () => Date
+  /** Tests shorten the read deadline; production uses the hook's default. */
+  readDeadlineMs?: number
   /** Injected in tests; production reads the product's own source client. */
   sourcesClient?: {
     runNow: (sourceId: string) => Promise<unknown>
@@ -35,7 +37,7 @@ export function NewsSentimentFeature(props: {
   const client = props.client ?? newsSentimentClient
   const sourcesClient = props.sourcesClient ?? intelligenceSourcesClient
   const now = props.now ?? (() => new Date())
-  const state = useNewsSentiment({ client, now })
+  const state = useNewsSentiment({ client, now, ...(props.readDeadlineMs === undefined ? {} : { readDeadlineMs: props.readDeadlineMs }) })
   const refresh = state.refresh
   // The `older-than-window` state advertises "widen the time window"; this is that action, and it must
   // really change the window (a plain re-read would leave the same emptiness on screen).
