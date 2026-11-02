@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input } from 'antd'
 import { Bot, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 
@@ -32,6 +32,8 @@ type AgentSidePanelProps = {
   onEditAgent: (agentId: string) => void
   defaultAgentModelId?: string
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
+  /** 每次自增表示「把读者送到智能体列表」：会话指向的智能体被删掉时用。 */
+  focusAgentListTick?: number
 }
 
 export default function AgentSidePanel({
@@ -43,7 +45,8 @@ export default function AgentSidePanel({
   onCreateAgent,
   onEditAgent,
   defaultAgentModelId,
-  onStateChange
+  onStateChange,
+  focusAgentListTick = 0
 }: AgentSidePanelProps): React.ReactElement {
   const t = useAgentText()
   // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
@@ -56,6 +59,14 @@ export default function AgentSidePanel({
   const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const resolveHintText = (key: string): string => resolveAgentTextKey(t, key)
   const [activeTab, setActiveTab] = useState<AgentSidePanelTab>('sessions')
+  const panelRef = useRef<HTMLElement | null>(null)
+
+  // 「回到列表」：切到智能体页，把焦点交给第一个智能体，读屏才知道列表在哪。
+  useEffect(() => {
+    if (focusAgentListTick === 0) return
+    setActiveTab('agents')
+    panelRef.current?.querySelector<HTMLButtonElement>('.agent-roster-main')?.focus()
+  }, [focusAgentListTick])
   const [keyword, setKeyword] = useState('')
   const activeAgentId = state.activeAgentId ?? state.agents[0]?.id ?? null
   const agentSessions = useMemo(
@@ -107,7 +118,7 @@ export default function AgentSidePanel({
   }
 
   return (
-    <aside className="agent-side-panel">
+    <aside ref={panelRef} className="agent-side-panel">
       <div className="agent-side-panel-tabs" role="tablist" aria-label={t.sidePanel.navigationTabs}>
         <button
           type="button"

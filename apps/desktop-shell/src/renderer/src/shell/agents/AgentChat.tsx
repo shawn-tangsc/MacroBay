@@ -53,6 +53,8 @@ type AgentChatProps = {
   onEditAgent: (agentId: string) => void
   /** 从「还没有智能体」的空态直接去新建——空态不给死路。 */
   onCreateAgent: () => void
+  /** 会话指向的智能体已不存在时，把读者送回智能体列表。 */
+  onReturnToAgentList: () => void
 }
 
 export default function AgentChat({
@@ -71,7 +73,8 @@ export default function AgentChat({
   onRuntimeSnapshotChange,
   onChannelRuntimeSnapshotChange,
   onEditAgent,
-  onCreateAgent
+  onCreateAgent,
+  onReturnToAgentList
 }: AgentChatProps): React.ReactElement {
   const t = useAgentText()
   const activeAgent = getActiveAgent(state)
@@ -266,16 +269,14 @@ export default function AgentChat({
   }
 
   if (pageStatus.type === 'orphan-session') {
-    const orphanAgentId = activeAgent?.id
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Link2Off}
-          title={t.chat.orphanTitle}
-          description={t.chat.orphanDescription}
-          actions={
-            orphanAgentId ? <Button onClick={() => onEditAgent(orphanAgentId)}>{t.chat.openAgentConfig}</Button> : null
-          }
+        {/* 这是「拿不到」不是「没有」：会话指向的智能体已经不存在了，唯一出路是回列表挑一个。 */}
+        <StateView
+          state="empty"
+          reasonCode="target-missing"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.back_to_list, onSelect: onReturnToAgentList }}
         />
       </main>
     )

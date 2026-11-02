@@ -89,6 +89,7 @@ function render(input: {
         onChannelRuntimeSnapshotChange={() => undefined}
         onEditAgent={() => undefined}
         onCreateAgent={() => undefined}
+        onReturnToAgentList={() => undefined}
       />
     </AgentTextProvider>
   )
