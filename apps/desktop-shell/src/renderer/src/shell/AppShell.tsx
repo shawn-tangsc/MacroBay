@@ -120,7 +120,7 @@ import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndp
 import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
 import { PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId } from './modelPins'
 import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
-import { VersionCheckRow } from './settings/version/VersionCheckRow'
+import { AboutSettingsPage } from './settings/about/AboutSettingsPage'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
@@ -1120,6 +1120,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
+        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'about' ? <AboutSettingsPage settings={settings} onUpdateSettings={updateSettings} productName={appInfo?.name ?? ''} /> : null}
         {productSettingsEntry ? (
           <ProductContributionHost
             language={settings.language}
@@ -1455,7 +1456,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           ) : null}
         </div>
 
-        <VersionCheckRow settings={settings} onUpdateSettings={updateSettings} />
       </section>
     )
   }

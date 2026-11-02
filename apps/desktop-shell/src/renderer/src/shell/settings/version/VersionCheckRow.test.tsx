@@ -11,6 +11,7 @@ import { VersionCheckRow } from './VersionCheckRow'
 import type { UpdateCheckClient } from './updateCheckClient'
 
 const text = platformText['zh-CN'].preferences.version
+const linkText = platformText['zh-CN'].about.links
 
 const available: UpdateCheckProjection = {
   state: 'available',
@@ -105,7 +106,7 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain('0.3.1')
     expect(container.textContent).toContain('0.4.0')
     expect(container.textContent).toContain(text.pill.available)
-    expect(buttonWithText(container, text.openDownloadPage)).not.toBeNull()
+    expect(buttonWithText(container, linkText.download)).not.toBeNull()
     expect(buttonWithText(container, text.check)).not.toBeNull()
   })
 
@@ -126,7 +127,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     await act(async () => {
-      buttonWithText(container, text.openDownloadPage)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonWithText(container, linkText.download)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(calls.openUpdateLink).toBe(1)
@@ -137,12 +138,12 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     await act(async () => {
-      buttonWithText(container, text.openDownloadPage)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonWithText(container, linkText.download)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     const notice = container.querySelector('[role="status"]')
     // 断言**字面量**而不是常量：断言常量本身的话，文案被改坏测试照样绿（上一版就是这么漏的）。
-    expect(notice?.textContent).toBe('打不开浏览器，可以稍后再试，或到项目的 Releases 页下载。')
+    expect(notice?.textContent).toBe('打不开浏览器，可以稍后再试。')
     // 结论一个字不动：仍是「有新版本 0.4.0」，没有被改写成查不到或已是最新。
     expect(container.textContent).toContain(text.pill.available)
     expect(container.textContent).toContain('0.4.0')
@@ -165,7 +166,7 @@ describe('the version row in the settings page', () => {
     expect(checkedLine?.textContent).toContain('2026-11-03')
     expect(checkedLine?.textContent).toContain('这不代表没有新版本')
     expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
-    expect(buttonWithText(container, text.openDownloadPage)).toBeNull()
+    expect(buttonWithText(container, linkText.download)).toBeNull()
   })
 
   it('turns the button into "just checked" after a manual check, without a second waiting area', async () => {
@@ -200,7 +201,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client, enabled: false })
 
     expect(container.textContent).toContain(text.pill.available)
-    const download = buttonWithText(container, text.openDownloadPage)
+    const download = buttonWithText(container, linkText.download)
     expect(download).not.toBeNull()
     expect(download?.className).toContain('ant-primary-button')
     expect(buttonWithText(container, text.check)).not.toBeNull()
@@ -241,7 +242,7 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain(text.pill.autoOff)
     expect(container.textContent).toContain(text.autoOffLine)
     expect(buttonWithText(container, text.check)).not.toBeNull()
-    expect(buttonWithText(container, text.openDownloadPage)).toBeNull()
+    expect(buttonWithText(container, linkText.download)).toBeNull()
   })
 
   it('writes the switch through the injected settings updater', async () => {
@@ -264,7 +265,7 @@ describe('the version row in the settings page', () => {
 
     const focusable = [...container.querySelectorAll('button')].map((button) => button.textContent ?? '')
     // 下载入口独占一行、排在说明句下面，顺序才是「检查更新 → 打开下载页 → 开关」。
-    expect(focusable).toEqual([text.check, text.openDownloadPage, ''])
+    expect(focusable).toEqual([text.check, linkText.download, ''])
     expect(container.querySelector('[role="switch"]')).not.toBeNull()
   })
 
@@ -281,7 +282,7 @@ describe('the version row in the settings page', () => {
       'version-check-frequency-hint'
     )
     // 下载入口不挂：它跟频率无关。
-    expect(buttonWithText(container, text.openDownloadPage)?.getAttribute('aria-describedby')).toBeNull()
+    expect(buttonWithText(container, linkText.download)?.getAttribute('aria-describedby')).toBeNull()
   })
 
   it('stays quiet when the check cannot even be sent (development channel absent)', async () => {

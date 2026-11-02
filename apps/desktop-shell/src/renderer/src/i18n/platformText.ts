@@ -1043,8 +1043,6 @@ export type PlatformText = {
       devBuild: string
       autoOffLine: string
       availableLine: (version: string) => string
-      openDownloadPage: string
-      openDownloadFailed: string
       unavailableLine: string
       lastCheckedAt: (time: string) => string
       pill: {
@@ -1055,6 +1053,33 @@ export type PlatformText = {
         notChecked: string
         autoOff: string
       }
+    }
+  }
+  /**
+   * 关于我们页。链接的动作字与失败句都在这里：**五颗按钮共用一个失败句**，
+   * 不带目的地（点了「官网」失败却提示去 Releases，是错的）。
+   */
+  about: {
+    title: string
+    tagline: string
+    updates: string
+    settingsWithUpdate: string
+    links: {
+      title: string
+      hint: string
+      download: string
+      changelog: string
+      docs: string
+      site: string
+      feedback: string
+      actionView: string
+      actionFeedback: string
+      openFailed: string
+    }
+    notes: {
+      title: string
+      expand: string
+      collapse: string
     }
   }
   notifications: {
@@ -2197,9 +2222,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         devBuild: '开发版本，不检查更新',
         autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
         availableLine: (version) => `有新版本 ${version} 可以下载。`,
-        openDownloadPage: '打开下载页',
         // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
-        openDownloadFailed: '打不开浏览器，可以稍后再试，或到项目的 Releases 页下载。',
         // 与「上次检查：{时刻}」合成一行（时间在前、`·` 连接）：药丸已经说了「暂时查不到」，
         // 这句要补的是「这不代表没有新版本」——丢了它就是把「拿不到」说成「没有」。
         unavailableLine: '这不代表没有新版本。',
@@ -2212,6 +2235,29 @@ export const platformText: Record<AppLanguage, PlatformText> = {
           notChecked: '还没检查',
           autoOff: '未开启自动检查'
         }
+      }
+    },
+    about: {
+      title: '关于我们',
+      tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
+      updates: '更新',
+      settingsWithUpdate: '设置，有新版本可用',
+      links: {
+        title: '链接',
+        hint: '由应用代你打开，只会打开本项目自己的页面。',
+        download: '打开下载页',
+        changelog: '更新日志',
+        docs: '帮助文档',
+        site: '官网',
+        feedback: '反馈问题',
+        actionView: '查看',
+        actionFeedback: '反馈',
+        openFailed: '打不开浏览器，可以稍后再试。'
+      },
+      notes: {
+        title: '更新说明',
+        expand: '展开全部',
+        collapse: '收起'
       }
     },
     notifications: {
@@ -3363,8 +3409,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         devBuild: 'Development build — update checks are disabled',
         autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
         availableLine: (version) => `Version ${version} is available to download.`,
-        openDownloadPage: 'Open download page',
-        openDownloadFailed: 'The browser could not be opened. Try again later, or download from the project releases page.',
         unavailableLine: 'this does not mean there is no newer version.',
         lastCheckedAt: (time) => `Last checked: ${time}`,
         pill: {
@@ -3375,6 +3419,29 @@ export const platformText: Record<AppLanguage, PlatformText> = {
           notChecked: 'Not checked yet',
           autoOff: 'Automatic checks are off'
         }
+      }
+    },
+    about: {
+      title: 'About',
+      tagline: 'A local-first AI workspace: platform plus removable modules',
+      updates: 'Updates',
+      settingsWithUpdate: 'Settings, an update is available',
+      links: {
+        title: 'Links',
+        hint: 'Opened by the app for you; only this project’s own pages can be opened.',
+        download: 'Open download page',
+        changelog: 'Release notes',
+        docs: 'Documentation',
+        site: 'Website',
+        feedback: 'Report a problem',
+        actionView: 'View',
+        actionFeedback: 'Feedback',
+        openFailed: 'The browser did not open. Try again later.'
+      },
+      notes: {
+        title: 'What changed',
+        expand: 'Show all',
+        collapse: 'Show less'
       }
     },
     notifications: {

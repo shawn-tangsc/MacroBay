@@ -5,7 +5,7 @@ import {
   type BuiltInWorkspacePageTitleKey
 } from '@platform/workspace/registry/builtInWorkspacePages'
 import type { LucideIcon } from 'lucide-react'
-import { Bell, Bot, Database, Globe2, KeyRound, Languages, ListChecks, MessagesSquare } from 'lucide-react'
+import { Bell, Bot, Database, Globe2, Info, KeyRound, Languages, ListChecks, MessagesSquare } from 'lucide-react'
 
 import { platformText } from '../../i18n/platformText'
 import { resolveShellIcon } from './shellIconRegistry'
@@ -65,6 +65,7 @@ export type BuiltInSettingsPanelId =
   | 'notifications'
   | 'task-automation'
   | 'channels'
+  | 'about'
 
 export interface BuiltInSettingsPanel {
   id: BuiltInSettingsPanelId
@@ -83,7 +84,9 @@ export function createBuiltInSettingsPanels(language: AppLanguage): BuiltInSetti
     { id: 'task-automation', label: t.settings.taskAutomation, icon: ListChecks },
     { id: 'preferences', label: t.settings.basicSettings, icon: Languages },
     { id: 'notifications', label: t.settings.notifications, icon: Bell },
-    { id: 'channels', label: t.settings.channels, icon: MessagesSquare }
+    { id: 'channels', label: t.settings.channels, icon: MessagesSquare },
+    // 「关于我们」放在最后：它是最不像「设置」的一页，放前面会把配置区切碎。
+    { id: 'about', label: t.about.title, icon: Info }
   ]
 }
 
@@ -96,6 +99,7 @@ export function isBuiltInSettingsPanelId(value: string): value is BuiltInSetting
     value === 'task-automation' ||
     value === 'preferences' ||
     value === 'notifications' ||
-    value === 'channels'
+    value === 'channels' ||
+    value === 'about'
   )
 }

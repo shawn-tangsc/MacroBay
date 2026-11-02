@@ -44,6 +44,8 @@ export function VersionCheckRow(props: {
   const language: AppLanguage = props.settings.language
   const timeZone: TimeZoneSetting = props.settings.timeZone
   const text = platformText[language].preferences.version
+  // 「打开下载页」与失败句属于关于页的链接文案（五颗按钮共用一句），不再留在更新块自己的键里。
+  const linkText = platformText[language].about.links
   const row = useUpdateCheckRow(props.client ?? platformUpdateCheckClient)
   const view = describeVersionCheck({
     state: row.state,
@@ -138,7 +140,7 @@ export function VersionCheckRow(props: {
           {view.showDownloadButton ? (
             <div className="version-download">
               <Button className="ant-primary-button" size="small" onClick={() => void row.openUpdateLink()}>
-                {text.openDownloadPage}
+                {linkText.download}
               </Button>
             </div>
           ) : null}
@@ -146,7 +148,7 @@ export function VersionCheckRow(props: {
           {view.showOpenFailed ? (
             // 读屏能念；不是弹窗、不着色、不新增按钮——原按钮再点就是重试。
             <p className="preference-hint version-open-failed" role="status">
-              {text.openDownloadFailed}
+              {linkText.openFailed}
             </p>
           ) : null}
 
