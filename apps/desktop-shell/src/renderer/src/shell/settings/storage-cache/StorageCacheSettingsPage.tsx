@@ -51,13 +51,17 @@ type StorageToastRetry = { label: string; onSelect: () => void }
 /**
  * 危险提示上那个动作：重跑**同一个入口**（会再走一次确认），文字就是它要做的那件事。
  * 成功与提示档不消费它——两档都没有槽放动作。
+ *
+ * `requestDryRun` 是**发起那次操作时**的模式，不是点击重试那一刻的开关状态：读者看到「预演失败」
+ * 之后把开关关掉再点重试，重试仍必须是预演——否则同一次重试会突然变成真删。
  */
 function retryOf(
   cache: SafeCacheView,
-  run: (target: SafeCacheView) => Promise<void>,
-  label: string
+  run: (target: SafeCacheView, requestDryRun: boolean) => Promise<void>,
+  label: string,
+  requestDryRun = false
 ): StorageToastRetry {
-  return { label, onSelect: () => void run(cache) }
+  return { label, onSelect: () => void run(cache, requestDryRun) }
 }
 
 /**
@@ -134,34 +138,34 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     })
   }
 
-  async function runClear(cache: SafeCacheView): Promise<void> {
+  async function runClear(cache: SafeCacheView, requestDryRun: boolean = dryRun): Promise<void> {
     const confirmed = confirmStorageCacheAction(
-      { cache, operation: 'clear', dryRun },
+      { cache, operation: 'clear', dryRun: requestDryRun },
       language,
       window.confirm.bind(window)
     )
     if (!confirmed) return
     try {
-      const result = await clearCache(cache.cacheId, dryRun)
-      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runClear, labels.clear))
+      const result = await clearCache(cache.cacheId, requestDryRun)
+      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runClear, labels.clear, requestDryRun))
     } catch {
       // 原文（可能是 `ENOENT: no such file or directory…`）只该进日志，不上屏。
-      notify(formatStorageOperationErrorNotice('clear', language), retryOf(cache, runClear, labels.clear))
+      notify(formatStorageOperationErrorNotice('clear', language), retryOf(cache, runClear, labels.clear, requestDryRun))
     }
   }
 
-  async function runCompact(cache: SafeCacheView): Promise<void> {
+  async function runCompact(cache: SafeCacheView, requestDryRun: boolean = dryRun): Promise<void> {
     const confirmed = confirmStorageCacheAction(
-      { cache, operation: 'compact', dryRun },
+      { cache, operation: 'compact', dryRun: requestDryRun },
       language,
       window.confirm.bind(window)
     )
     if (!confirmed) return
     try {
-      const result = await compactCache(cache.cacheId, dryRun)
-      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runCompact, labels.compact))
+      const result = await compactCache(cache.cacheId, requestDryRun)
+      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runCompact, labels.compact, requestDryRun))
     } catch {
-      notify(formatStorageOperationErrorNotice('compact', language), retryOf(cache, runCompact, labels.compact))
+      notify(formatStorageOperationErrorNotice('compact', language), retryOf(cache, runCompact, labels.compact, requestDryRun))
     }
   }
 
