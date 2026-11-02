@@ -180,6 +180,8 @@ describe('period runs', () => {
     snapshotHash,
     contentVersion: 1,
     writingRounds: 0,
+    direction: 'bearish' as const,
+    editionRows: ['market:btc', 'funds:etf-btc'],
     state: 'running' as const,
     startedAt: '2026-11-02T00:00:00.000Z'
   })
@@ -191,7 +193,8 @@ describe('period runs', () => {
     await store.openPeriodRun!(run('bs_second', 'hash-second'))
 
     expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({
-      periodId: 'default', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second', state: 'running'
+      periodId: 'default', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second',
+      state: 'running', direction: 'bearish', editionRows: ['market:btc', 'funds:etf-btc']
     })
 
     await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })

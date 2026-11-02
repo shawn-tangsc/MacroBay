@@ -103,6 +103,8 @@ export function createPeriodRunsSql(table: string): string {
   snapshot_hash text not null,
   content_version integer not null default 1,
   writing_rounds integer not null default 0,
+  direction text not null default 'undecided',
+  edition_rows text not null default '[]',
   state text not null check(state in ('running','published','partial','failed')),
   started_at text not null,
   finished_at text,

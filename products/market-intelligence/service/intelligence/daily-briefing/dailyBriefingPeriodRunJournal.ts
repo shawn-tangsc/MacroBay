@@ -1,5 +1,5 @@
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingStore } from './dailyBriefingService'
+import type { DailyBriefingPeriodRun, DailyBriefingStore } from './dailyBriefingService'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import { briefingSnapshot, type DailyBriefingSnapshot } from './dailyBriefingSnapshot'
 
@@ -12,7 +12,11 @@ import { briefingSnapshot, type DailyBriefingSnapshot } from './dailyBriefingSna
  */
 export type DailyBriefingPeriodRunJournal = Readonly<{
   /** Freezes the facts and records the run; returns the snapshot both editions are written from. */
-  open: (document: DailyBriefingDocument, packet: DailyBriefingFactPacket) => Promise<DailyBriefingSnapshot>
+  open: (
+    document: DailyBriefingDocument,
+    packet: DailyBriefingFactPacket,
+    facts: Readonly<{ rowIds: readonly string[]; direction: DailyBriefingPeriodRun['direction'] }>
+  ) => Promise<DailyBriefingSnapshot>
   settle: (state: 'published' | 'partial' | 'failed', writingRounds: number) => Promise<void>
 }>
 
@@ -24,7 +28,7 @@ export function createDailyBriefingPeriodRunJournal(
   // and a failed source read is already visible through the attempt's trace.
   let opened = false
   return Object.freeze({
-    async open(document, packet) {
+    async open(document, packet, facts) {
       const snapshot = briefingSnapshot(document, packet)
       await store.openPeriodRun?.({
         date: input.date,
@@ -36,6 +40,8 @@ export function createDailyBriefingPeriodRunJournal(
         snapshotHash: snapshot.hash,
         contentVersion: 1,
         writingRounds: 0,
+        direction: facts.direction,
+        editionRows: facts.rowIds,
         state: 'running',
         startedAt: input.now()
       }).catch(() => undefined)

@@ -46,6 +46,13 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   db.exec(createEditionsSql('daily_briefings'))
   db.exec(createAttemptsSql('daily_briefing_attempts'))
   db.exec(createPeriodRunsSql('daily_briefing_period_runs'))
+  // The run table was introduced one commit ago; adding its two columns is idempotent and stays
+  // out of the two migrated tables, whose shape is frozen for this release.
+  for (const [column, ddl] of [['direction', "text not null default 'undecided'"], ['edition_rows', "text not null default '[]'"]] as const) {
+    if (!tableColumns(db, 'daily_briefing_period_runs').includes(column)) {
+      db.exec(`alter table daily_briefing_period_runs add column ${column} ${ddl};`)
+    }
+  }
 
   const build = () => {
     const editionPeriod = tableColumns(db, 'daily_briefings').includes('period_id')
@@ -75,13 +82,14 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     // run describes. When both languages are written in one run they share this single record.
     const insertRun = db.prepare(`insert into daily_briefing_period_runs
       (edition_date, period_id, expected_locales, primary_requested, primary_used, fallback_reason,
-       snapshot_id, snapshot_hash, content_version, writing_rounds, state, started_at, finished_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
+       snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
       on conflict(edition_date, period_id) do update set
         expected_locales = excluded.expected_locales, primary_requested = excluded.primary_requested,
         primary_used = excluded.primary_used, fallback_reason = excluded.fallback_reason,
         snapshot_id = excluded.snapshot_id, snapshot_hash = excluded.snapshot_hash,
         content_version = excluded.content_version, writing_rounds = excluded.writing_rounds,
+        direction = excluded.direction, edition_rows = excluded.edition_rows,
         state = excluded.state, started_at = excluded.started_at, finished_at = null`)
     const settleRun = db.prepare(`update daily_briefing_period_runs
       set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
@@ -158,7 +166,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         insertRun.run(
           run.date, run.periodId, JSON.stringify(run.expectedLocales), run.primaryRequested,
           run.primaryUsed, run.fallbackReason ?? null, run.snapshotId, run.snapshotHash,
-          run.contentVersion, run.writingRounds, run.state, run.startedAt
+          run.contentVersion, run.writingRounds, run.direction, JSON.stringify(run.editionRows), run.state, run.startedAt
         )
       },
       settlePeriodRun(run: Readonly<{ date: string; periodId: string; state: string; finishedAt: string; writingRounds?: number }>) {
@@ -271,6 +279,8 @@ type RunRow = Readonly<{
   snapshot_hash: string
   content_version: number
   writing_rounds: number
+  direction: string | null
+  edition_rows: string | null
   state: string
   started_at: string
   finished_at: string | null
@@ -300,10 +310,22 @@ function parseRun(row: RunRow | undefined): DailyBriefingPeriodRun | undefined {
     snapshotHash: row.snapshot_hash,
     contentVersion: Number(row.content_version),
     writingRounds: Number(row.writing_rounds),
+    direction: (row.direction ?? 'undecided') as DailyBriefingPeriodRun['direction'],
+    editionRows: Object.freeze(parseRows(row.edition_rows)),
     state,
     startedAt: row.started_at,
     ...(row.finished_at ? { finishedAt: row.finished_at } : {})
   })
+}
+
+function parseRows(value: string | null): string[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {

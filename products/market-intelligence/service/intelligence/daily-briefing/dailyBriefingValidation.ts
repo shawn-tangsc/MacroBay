@@ -46,7 +46,7 @@ export type DailyBriefingEditorialOutput = Readonly<{
 }>
 
 export type DailyBriefingValidationFailure =
-  | 'invalid-shape'
+  | 'invalid-shape' | 'direction-conflict' | 'row-set-mismatch'
   | 'unknown-fact'
   | 'forbidden-content'
   | 'unknown-number'

@@ -22,6 +22,8 @@ import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefB
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
+import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
@@ -85,6 +87,10 @@ export type DailyBriefingPeriodRun = Readonly<{
   snapshotHash: string
   contentVersion: number
   writingRounds: number
+  /** The data layer's verdict; the writing may not call the opposite one. */
+  direction: import('../../../contracts/marketAnalysisContracts').AnalysisConclusionDirection
+  /** The ordered row ids both editions of this run must carry. */
+  editionRows: readonly string[]
   state: 'running' | 'published' | 'partial' | 'failed'
   startedAt: string
   finishedAt?: string
@@ -398,7 +404,11 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     // The digest is what lets a later reader check "same batch" instead of trusting that two
     // generations happened to agree.
-    await run.open(document, packet)
+    // One derivation per run: the row ids and the verdict are read off the frozen facts once, then
+    // handed to every version of it.
+    const periodFacts = Object.freeze({ rowIds: briefingEditionRowIds(document), direction: briefingFactDirection(document) })
+    await run.open(document, packet, periodFacts)
+    document = restrictEditionRows(document, periodFacts.rowIds)
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {
@@ -425,6 +435,7 @@ export function createDailyBriefingService(deps: Readonly<{
           turn = await withDeadline(runDailyBriefAgentTurn({
             runner: deps.agentRunner,
             document,
+            periodFacts,
             locale: input.locale,
             priorConclusions: packet.priorConclusions ?? [],
             ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}),
@@ -643,29 +654,3 @@ function lastDays(today: string, days: number): readonly string[] {
   return Object.freeze(Array.from({ length: days }, (_, index) =>
     new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
 }
-
-/** A failed read without a fresh trace still shows the last persisted attempt for that edition. */
-async function withStoredAttempt(
-  store: DailyBriefingStore,
-  result: DailyBriefingTodayResult,
-  date: string,
-  locale: DailyBriefingLocale,
-  periodId: string
-): Promise<DailyBriefingTodayResult> {
-  if (result.state !== 'unavailable' || result.generationTrace || !store.getAttempt) return result
-  try {
-    const generationTrace = await store.getAttempt(date, locale, periodId)
-    return generationTrace ? { ...result, generationTrace } : result
-  } catch {
-    return result
-  }
-}
-
-/** A stored edition carries its own trace, so a later read does not need a second store hit. */
-function withGenerationTrace(document: DailyBriefingDocument, generationTrace: BriefingGenerationTrace): DailyBriefingDocument {
-  return Object.freeze({
-    ...document,
-    provenance: Object.freeze({ ...document.provenance, generationTrace })
-  })
-}
-

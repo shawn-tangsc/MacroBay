@@ -1,7 +1,8 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { DEFAULT_PERIOD_ID, dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
-import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
+import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
+import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
@@ -50,7 +51,7 @@ export type DailyBriefTurnStageEvent = Readonly<{
 export type DailyBriefAgentTurnInput = Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
-  locale: DailyBriefingLocale
+  locale: DailyBriefingLocale; periodFacts?: DailyBriefingPeriodFacts
   /**
    * The window's earlier AI conclusions, oldest first. The editor synthesizes them into a new
    * conclusion instead of copying the analysis page's verdict.
@@ -185,7 +186,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
-      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations, priorConclusions)
+      const validation = validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts)
       if (validation.ok) {
         stage({ stage: 'validation', state: 'success' })
         const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions)

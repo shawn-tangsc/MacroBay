@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import { briefingConclusionBasis, validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
+import { briefingEditionRowIds } from './dailyBriefingEditionSet'
+import { validateEditorialForPeriod } from './dailyBriefingPeriodFactsValidation'
 import { repairPromptFor } from './dailyBriefingPrompt'
 
 const document = (): DailyBriefingDocument => ({
@@ -110,6 +112,27 @@ const synthesis = (overrides: Record<string, unknown> = {}) => ({
 })
 
 describe('daily briefing conclusion synthesis', () => {
+  const factDirection = (direction: 'bullish' | 'bearish' | 'undecided', rowIds = briefingEditionRowIds(document())) => ({ direction, rowIds })
+
+  it('rejects a written direction opposite to the frozen facts instead of publishing it', () => {
+    // The fixture the acceptance asks for: data layer says up, the writing says down.
+    const validation = validateEditorialForPeriod(document(), editorial(synthesis()), 'zh-CN', [], [bearishPrior()], factDirection('bullish'))
+    expect(validation).toMatchObject({ ok: false, failureCode: 'direction-conflict' })
+  })
+
+  it('accepts a written direction that matches the facts', () => {
+    const validation = validateEditorialForPeriod(document(), editorial(synthesis()), 'zh-CN', [], [bearishPrior()], factDirection('bearish'))
+    expect(validation.ok).toBe(true)
+  })
+
+  it('rejects an edition that dropped a row the run froze', () => {
+    // The other fixture: the run froze three rows, the version would publish two.
+    const shorter = briefingEditionRowIds(document()).slice(1)
+    const validation = validateEditorialForPeriod(document(), editorial(synthesis()), 'zh-CN', [], [bearishPrior()], factDirection('bearish', shorter))
+    expect(validation).toMatchObject({ ok: false, failureCode: 'row-set-mismatch' })
+    if (!validation.ok) expect(validation.detail).toBeUndefined()
+  })
+
   it('keeps the single fact-layer conclusion as a marked fallback when there are no priors', () => {
     const validation = validateDailyBriefingEditorial(editorial(synthesis()), document(), 'zh-CN', [], [])
     expect(validation.ok).toBe(true)
