@@ -14,7 +14,7 @@
  * 同样只减不增。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 const ROOT = resolve(process.cwd())
 const BASELINE_PATH = process.env.FILE_SIZE_BASELINE
@@ -50,7 +50,9 @@ const failures = []
 
 for (const root of SCAN_ROOTS) {
   for (const file of walk(join(ROOT, root))) {
-    const rel = relative(ROOT, file)
+    // 基线键一律是正斜杠：Windows 的 relative() 给出反斜杠，直接查表会把每个基线文件
+    // 都当成「新文件超过 500 行」，本地跑一次就红一片（CI 是 Linux，看不出来）。
+    const rel = relative(ROOT, file).split(sep).join('/')
     if (rel.includes('/i18n/')) continue
     const lines = countLines(file)
     const known = baseline[rel]
