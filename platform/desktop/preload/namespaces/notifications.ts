@@ -28,6 +28,17 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
     readDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsReadDesktopPermission),
+    /** 事件目录投影：带 `notifyOnlyIfSubscribed` 与批准档位；清单按它渲染，不写死事件名。 */
+    listEventCatalog: () => ipcRenderer.invoke(IpcChannels.notificationsListEventCatalog),
+    getSubscriptions: () => ipcRenderer.invoke(IpcChannels.notificationsGetSubscriptions),
+    setSubscription: (eventTypeId: string, patch: Record<string, unknown>) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetSubscription, { eventTypeId, patch }),
+    /** 当前提示开关 / 通道选择 / 接线状态：设置页首帧要三个值，不是只给写口。 */
+    getDeliverySettings: () => ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings),
+    setPushChannel: (channelId: string | null) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetPushChannel, { channelId }),
+    setToastEnabled: (enabled: boolean) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetToastEnabled, { enabled }),
     /**
      * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是那条记录本身（键与参数）。
      * 渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。

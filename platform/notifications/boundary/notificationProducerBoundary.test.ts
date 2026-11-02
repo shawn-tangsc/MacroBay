@@ -64,8 +64,12 @@ describe('notification producer boundary', () => {
       // 删除已读是**数据操作**，不是生产者：它只能删掉已存在的记录，不能凭空造一条。
       'deleteRead',
       'dismiss',
+      // 订阅与投递设置：读写的是「读者要不要」，不是「谁可以产生一条通知」。
+      'getDeliverySettings',
+      'getSubscriptions',
       'getUnreadState',
       'list',
+      'listEventCatalog',
       'markAllRead',
       'markRead',
       // 两条订阅都是只读：事件由 Main 推，渲染层不能借此写入任何东西。
@@ -73,6 +77,9 @@ describe('notification producer boundary', () => {
       'onDelivered',
       'readDesktopPermission',
       'sendTest',
+      'setPushChannel',
+      'setSubscription',
+      'setToastEnabled',
       'snooze'
     ])
   })

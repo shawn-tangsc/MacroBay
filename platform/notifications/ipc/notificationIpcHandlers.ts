@@ -33,4 +33,24 @@ export function registerNotificationIpcHandlers(): void {
   )
   // 只读授权状态：主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web Notification API。
   ipcMain.handle(IpcChannels.notificationsReadDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
+
+  // ── 订阅与投递设置（契约 §5.2）：五条读/写都只调 runtime，渲染层没有第二个写入 IO。 ──
+  ipcMain.handle(IpcChannels.notificationsListEventCatalog, () => getNotificationRuntime().listEventCatalog())
+  ipcMain.handle(IpcChannels.notificationsGetSubscriptions, () => getNotificationRuntime().getSubscriptions())
+  ipcMain.handle(IpcChannels.notificationsSetSubscription, (_event, input) => {
+    const payload = (input ?? {}) as { eventTypeId?: string; patch?: Record<string, unknown> }
+    if (!payload.eventTypeId) throw new Error('eventTypeId is required.')
+    return getNotificationRuntime().setSubscription(payload.eventTypeId, (payload.patch ?? {}) as never)
+  })
+  ipcMain.handle(IpcChannels.notificationsGetDeliverySettings, () =>
+    getNotificationRuntime().getDeliverySettings()
+  )
+  ipcMain.handle(IpcChannels.notificationsSetPushChannel, (_event, input) => {
+    const payload = (input ?? {}) as { channelId?: string | null }
+    return getNotificationRuntime().setPushChannel(payload.channelId ?? null)
+  })
+  ipcMain.handle(IpcChannels.notificationsSetToastEnabled, (_event, input) => {
+    const payload = (input ?? {}) as { enabled?: boolean }
+    return getNotificationRuntime().setToastEnabled(payload.enabled === true)
+  })
 }

@@ -130,7 +130,7 @@ import { registerAssistantIpc } from './ipc/assistantIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
-import { composeNotificationRuntime } from './composition/notifications'
+import { composeNotificationRuntimeForApp } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
 import { composeAgentIpc } from './composition/agent'
@@ -1026,8 +1026,8 @@ function registerIpcHandlers(
     getLanguage: async () => (await settingsStore.get()).language
   })
 
-  // 通知运行时的端口在 composition 里定义；这里只提供它需要的两份状态。
-  composeNotificationRuntime({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get() })
+  // 通知运行时的端口在 composition 里定义；这里只给设置、时区、产品声明与日志出口。
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)

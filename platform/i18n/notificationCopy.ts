@@ -36,6 +36,12 @@ export type NotificationCopyTable = {
   'notification.event.platform.channel.push-resumed.reason': string
   'notification.event.platform.desktop.blocked.title': string
   'notification.event.platform.desktop.blocked.reason': string
+  /** 桌面 / 通道投递的五个原因句（P7 五种可显示事实；S15 逐键 grep）。 */
+  'notification.deliveryReason.desktopDisabled': string
+  'notification.deliveryReason.pushUnavailable': string
+  'notification.deliveryReason.systemUnsupported': string
+  'notification.deliveryReason.handedToSystem': string
+  'notification.deliveryReason.sendFailedUnknown': string
 }
 
 /** 通知文案的键闭集：写错一个键编译不过，不靠评审。 */
@@ -66,6 +72,11 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.channel.push-resumed.reason': '之前暂停的通道重新能发消息了。',
     'notification.event.platform.desktop.blocked.title': '系统不允许桌面通知',
     'notification.event.platform.desktop.blocked.reason': '系统设置里关掉了本应用的桌面通知，应用内的提醒不受影响。',
+    'notification.deliveryReason.desktopDisabled': '桌面通知已在设置里关闭',
+    'notification.deliveryReason.pushUnavailable': '这条没接通投递通道',
+    'notification.deliveryReason.systemUnsupported': '这台系统不支持桌面通知',
+    'notification.deliveryReason.handedToSystem': '已推送到系统，未确认显示',
+    'notification.deliveryReason.sendFailedUnknown': '发送失败，原因没有上报',
   }),
   'en-US': Object.freeze({
     'notification.taskFailed.title': 'Task failed: {taskName}',
@@ -90,6 +101,11 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.channel.push-resumed.reason': 'The channel that was paused can send messages again.',
     'notification.event.platform.desktop.blocked.title': 'System settings block desktop notifications',
     'notification.event.platform.desktop.blocked.reason': 'Desktop notifications for this app are off in system settings; in-app reminders are unaffected.',
+    'notification.deliveryReason.desktopDisabled': 'Desktop notifications are turned off in settings.',
+    'notification.deliveryReason.pushUnavailable': 'This notification has no delivery channel connected.',
+    'notification.deliveryReason.systemUnsupported': 'This system does not support desktop notifications.',
+    'notification.deliveryReason.handedToSystem': 'Handed to the system; display is unconfirmed.',
+    'notification.deliveryReason.sendFailedUnknown': 'Sending failed and the reason was not reported.',
   })
 })
 
