@@ -273,6 +273,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
                   onSelect={triggerProps.onSelect}
                   resolveText={resolveProductText}
                   size="sm"
+                  variant="plain"
                 />}
               />
               : null}
