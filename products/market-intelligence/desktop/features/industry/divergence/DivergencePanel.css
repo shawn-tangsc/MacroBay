@@ -176,12 +176,16 @@
 .mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-/* The notes that would not fit the bubble: opened on purpose, so they get their own row, a smaller
-   size than the card's numbers, and their own scroll instead of stretching the card. */
+/* The notes that would not fit the bubble: opened on purpose, so they get their own row and their
+   own scroll instead of stretching the card.
+ *
+ * Same size as the entry that opened it (11.5px). The entry says "come and read this"; shrinking the
+ * text once the reader does is self-contradictory, and that argument survives a taste change better
+ * than "which size looks nicer" — so it is written here, not left to memory. */
 .mi-divergence__help {
   display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
   padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6;
+  color: var(--mi-dashboard-muted); font-size: 11.5px; line-height: 1.6;
   max-height: 320px; overflow-y: auto;
 }
 .mi-divergence__help p { margin: 0; }
