@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * 谁加了一步只改一处，这个测试就红。
  */
 
-import { compareSamples, type TreeSample } from '../../../scripts/verify-sample.mts'
+import { compareSamples, type TreeSample } from '../../../scripts/verify-sample'
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePath}`, 'utf8')

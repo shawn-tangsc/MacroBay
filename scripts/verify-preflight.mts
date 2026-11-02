@@ -16,7 +16,7 @@
  */
 import { writeFileSync } from 'node:fs'
 
-import { samplePath, sampleTree } from './verify-sample.mts'
+import { samplePath, sampleTree } from './verify-sample'
 
 type Verdict = 'clean' | 'polluted'
 

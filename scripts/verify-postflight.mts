@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 
-import { compareSamples, samplePath, sampleTree, type TreeSample } from './verify-sample.mts'
+import { compareSamples, samplePath, sampleTree, type TreeSample } from './verify-sample'
 
 const path = samplePath()
 if (!existsSync(path)) {
