@@ -36,7 +36,9 @@ const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/tabs-segmented.json')
  * 搬家那两半曾被一次路径级提交切进两笔（守卫先进了 `9bbe246`，清单晚了半拍）。谁 checkout 到
  * 那一棵树都会撞上它，而裸 ENOENT 只会让人以为是自己配错了路径。
  */
-function readDebt(): ReadonlySet<string> {
+type DebtException = { reason?: string; tracked?: string }
+
+function readDebt(): { rows: ReadonlySet<string>; exceptions: ReadonlyMap<string, DebtException> } {
   if (!existsSync(DEBT_FILE)) {
     throw new Error(
       `migration debt list missing: ${DEBT_FILE}\n` +
@@ -44,12 +46,17 @@ function readDebt(): ReadonlySet<string> {
         'the list was an inline constant in this file — read `git log` for this path.'
     )
   }
-  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as {
+    entries?: Record<string, number>
+    exceptions?: Record<string, DebtException>
+    $exceptions?: Record<string, DebtException>
+  }
   if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
-  return new Set(Object.keys(parsed.entries))
+  const exceptions = parsed.$exceptions ?? parsed.exceptions ?? {}
+  return { rows: new Set(Object.keys(parsed.entries)), exceptions: new Map(Object.entries(exceptions)) }
 }
 
-const ANTD_BASELINE: ReadonlySet<string> = readDebt()
+const { rows: ANTD_BASELINE, exceptions: ANTD_EXCEPTIONS } = readDebt()
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
@@ -108,6 +115,34 @@ describe('Tabs / Segmented call sites', () => {
     })
 
     expect(stale).toEqual([])
+  })
+
+  it('keeps every exception honest: it must still be a real violation, and must name a tracked row', () => {
+    // 例外不是「违规改了个名字」。两条都要：
+    // ① 那处**现在仍然违规**——有人把它迁了却忘删例外，必须红，而不是安静留一张过期许可证；
+    //    过期例外和过期基线是同一种东西（今天 `danger-color` 那条失效基线刚教过一次）。
+    // ② `tracked` 必须是一条**格式正确**的台账行 id——没有立项的例外三个月后会变成默认状态。
+    //
+    // 只校验格式、不校验台账里真有那一行：台账在 `docs-private`，被 gitignore，CI 和快照里读不到。
+    // 去读它只会得到 `existsSync` 跳过（这条红在签字跑里永远不生效）——那和「没有检查」一样。
+    const stale = [...ANTD_EXCEPTIONS.keys()].filter((file) => {
+      try {
+        return !importsAntdChoice(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        return true
+      }
+    })
+    expect(stale).toEqual([])
+
+    const untracked = [...ANTD_EXCEPTIONS.entries()]
+      .filter(([, value]) => !/^MI-\d+-R\d+$/u.test(value.tracked ?? ''))
+      .map(([file]) => file)
+    expect(untracked).toEqual([])
+
+    const unexplained = [...ANTD_EXCEPTIONS.entries()]
+      .filter(([, value]) => (value.reason ?? '').trim().length < 20)
+      .map(([file]) => file)
+    expect(unexplained).toEqual([])
   })
 
   it('catches each shape, so the guard cannot pass vacuously', () => {
