@@ -10,6 +10,9 @@ const UPDATE_AVAILABLE_KEY = 'assistants.library.updateAvailable'
 const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
 const TEMPLATE_TAG_KEY = 'assistants.template.tag'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type AssistantTemplateCardProps = {
   labels: PlatformText['assistants']['library']
   item: AssistantTemplateCatalogItem
@@ -41,7 +44,7 @@ export function AssistantTemplateCard({
           <small>{item.description || item.promptPreview}</small>
         </span>
         <span className="assistant-template-card-tags">
-          <MetaChip labelKey={TEMPLATE_SOURCE_KEY} resolveText={() => source} />
+          <MetaChip kind="text" text={source} resolveText={noopText} />
           {item.hasUpdate ? (
             <StatusPill
               tone="info"
@@ -50,7 +53,7 @@ export function AssistantTemplateCard({
             />
           ) : null}
           {item.tags.slice(0, 2).map((tag) => (
-            <MetaChip key={tag} labelKey={TEMPLATE_TAG_KEY} resolveText={() => tag} />
+            <MetaChip key={tag} kind="text" text={tag} resolveText={noopText} />
           ))}
         </span>
       </button>

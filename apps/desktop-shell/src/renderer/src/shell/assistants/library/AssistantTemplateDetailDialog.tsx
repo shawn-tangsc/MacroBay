@@ -10,6 +10,9 @@ const TEMPLATE_DETAIL_TITLE_KEY = 'assistants.library.title'
 const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
 const TEMPLATE_TAG_KEY = 'assistants.template.tag'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type AssistantTemplateDetailDialogProps = {
   labels: PlatformText['assistants']['library']
   template: AssistantTemplateDetail | null
@@ -64,9 +67,9 @@ export function AssistantTemplateDetailDialog({
             <div>
               <p>{template.description || template.promptPreview}</p>
               <div className="assistant-template-detail-tags">
-                <MetaChip labelKey={TEMPLATE_SOURCE_KEY} resolveText={() => source} />
+                <MetaChip kind="text" text={source} resolveText={noopText} />
                 {template.tags.map((tag) => (
-                  <MetaChip key={tag} labelKey={TEMPLATE_TAG_KEY} resolveText={() => tag} />
+                  <MetaChip key={tag} kind="text" text={tag} resolveText={noopText} />
                 ))}
               </div>
             </div>
