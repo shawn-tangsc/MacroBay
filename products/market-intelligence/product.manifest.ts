@@ -237,6 +237,118 @@ export const marketIntelligenceProductManifest = {
       handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB
     }
   ],
+  /**
+   * 通知事件声明（契约 §3）。**只声明「这条事件存不存在、能不能发、怎么去重」**，
+   * 不声明怎么触发（触发点在运行时，节奏由产品另定）；批准档位在平台批准表里，这里只写申请。
+   *
+   * 文案只填键、不填句子（句子归营销）：`notifications.<事件>.<title|body|reason>`。
+   * 去重粒度的出处是情报通知目录 §四之一（`intelligence-notification-catalog.md`），
+   * 键形状的出处是契约 §7 / §7.1；这里两处都只引用，不重写清单。
+   */
+  notificationEvents: [
+    {
+      id: 'market-intelligence.briefing.failed',
+      titleKey: 'notifications.briefing.failed.title',
+      bodyKeyByVariant: {
+        failed: 'notifications.briefing.failed.body.failed',
+        'data-only': 'notifications.briefing.failed.body.data-only'
+      },
+      reasonKey: 'notifications.briefing.failed.reason',
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyTemplate: 'brief-failed:{date}:{period}',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.briefing.ready',
+      titleKey: 'notifications.briefing.ready.title',
+      bodyKey: 'notifications.briefing.ready.body',
+      reasonKey: 'notifications.briefing.ready.reason',
+      requiresUserAction: false,
+      requestedDisruptionLevels: ['desktop', 'channel'],
+      dedupeKeyTemplate: 'brief-done:{date}:{period}',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: true,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.signal.triggered',
+      titleKey: 'notifications.signal.triggered.title',
+      bodyKey: 'notifications.signal.triggered.body',
+      reasonKey: 'notifications.signal.triggered.reason',
+      requiresUserAction: false,
+      requestedDisruptionLevels: ['desktop', 'channel'],
+      dedupeKeyBuilder: 'moduleSignal',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.macro.event-landed',
+      titleKey: 'notifications.macro.event-landed.title',
+      bodyKey: 'notifications.macro.event-landed.body',
+      reasonKey: 'notifications.macro.event-landed.reason',
+      requiresUserAction: false,
+      requestedDisruptionLevels: ['desktop', 'channel'],
+      dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.source.consecutive-failed',
+      titleKey: 'notifications.source.consecutive-failed.title',
+      bodyKey: 'notifications.source.consecutive-failed.body',
+      reasonKey: 'notifications.source.consecutive-failed.reason',
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.source.stale',
+      titleKey: 'notifications.source.stale.title',
+      bodyKey: 'notifications.source.stale.body',
+      reasonKey: 'notifications.source.stale.reason',
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.calibration.result',
+      titleKey: 'notifications.calibration.result.title',
+      bodyKey: 'notifications.calibration.result.body',
+      reasonKey: 'notifications.calibration.result.reason',
+      requiresUserAction: false,
+      requestedDisruptionLevels: [],
+      dedupeKeyTemplate: 'calibration:{date}',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: true,
+      requestedBypassQuietHours: false
+    },
+    {
+      id: 'market-intelligence.timezone.invalid',
+      titleKey: 'notifications.timezone.invalid.title',
+      bodyKey: 'notifications.timezone.invalid.body',
+      reasonKey: 'notifications.timezone.invalid.reason',
+      requiresUserAction: true,
+      requestedDisruptionLevels: [],
+      dedupeKeyTemplate: 'timezone-invalid:{date}',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: false,
+      requestedBypassQuietHours: false
+    }
+  ],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest
