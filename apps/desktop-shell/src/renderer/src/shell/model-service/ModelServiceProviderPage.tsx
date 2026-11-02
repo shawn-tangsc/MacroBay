@@ -4,7 +4,7 @@ import { message, Modal } from 'antd'
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
 import { configuredModelChatProtocols } from '@platform/ai/providers/providerChatEndpoints'
-import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -238,8 +238,13 @@ export function ModelServiceProviderPage({
 
       <div className="model-service-detail">
         {provider === null ? (
-          // 空态走平台组件：图标、文案、读屏播报只有一处定义；这里只表达「还没有创建过」。
-          <StateView state="empty" reasonCode="never-created" size="md" />
+          // 「还没有创建过」的码必须带创建动作：这一屏的供应商列表本来就有添加入口。
+          <StateView
+            state="empty"
+            reasonCode="never-created"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onAddProvider }}
+          />
         ) : (
           <>
             {removeError !== null ? (

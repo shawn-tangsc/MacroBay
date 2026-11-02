@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
-import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import type { PlatformText } from '../../i18n/platformText'
 import type { ModelGroup } from '../modelGrouping'
@@ -95,6 +95,12 @@ export function ModelServiceModelsSection({
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [activeType, setActiveType] = useState<ModelTypeTab>('all')
   const [activeProtocols, setActiveProtocols] = useState<ModelProtocolFilter>(emptyModelProtocolFilter)
+  /** 清掉筛选（搜索 + 类型 + 协议）：`filtered-out` 那一格的唯一正解动作。 */
+  const clearFilters = (): void => {
+    setSearch('')
+    setActiveType('all')
+    setActiveProtocols(emptyModelProtocolFilter)
+  }
   const syncDisabled = !canSyncModels || isSyncing
   // 禁用原因要可见：无 Key / 同步中；其它情况不显示 tooltip。
   const syncHint = !canSyncModels ? labels.modelSyncNeedsApiKey : isSyncing ? labels.modelSyncInProgress : undefined
@@ -290,9 +296,22 @@ export function ModelServiceModelsSection({
       {/* 一个区域只有一处说「这里没有」：原来这两行在「还没有模型」时**同时成立**，
           同一块地方会渲染两遍同一句话。现在按处境分支，只出一处。 */}
       {modelCount === 0 ? (
-        <StateView state="empty" reasonCode="never-created" size="md" />
+        // 「从来没有创建过」的码**必须带创建动作**：这一屏本来就有添加入口，动作接到那个入口上。
+        // 给不出动作说明码选错了——那也是换码，不是给白名单开口子。
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onAddModel }}
+        />
       ) : visibleGroups.length === 0 ? (
-        <StateView state="empty" reasonCode="filtered-out" size="md" />
+        // 有模型但被筛选挡住：正解是把筛选清掉，不是让用户对着空白猜。
+        <StateView
+          state="empty"
+          reasonCode="filtered-out"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: clearFilters }}
+        />
       ) : null}
 
       <div className="model-service-groups" data-model-list-scroll>
