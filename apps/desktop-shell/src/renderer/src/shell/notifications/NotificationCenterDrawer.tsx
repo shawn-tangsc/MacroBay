@@ -104,7 +104,6 @@ export function NotificationCenterDrawer({
 
   return (
     <Drawer
-      className="notification-center-drawer"
       mode="modal"
       size="large"
       open={open}
