@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { VERIFY_CHECKS } from '../../../scripts/verify-sample'
+
 /**
  * 第四处清单：**脚本本身有没有被接上**。
  *
@@ -39,14 +41,19 @@ function isCheckKey(key: string): boolean {
   return key.includes('acceptance')
 }
 
-/** `verify` 链里直接调用的键（按 `&&` 切，取 `pnpm <key>`）。嵌套的 `verify:preflight` 也算一个键。 */
-function verifyChain(pkg: { scripts?: Record<string, string> }): string[] {
-  const script = pkg.scripts?.verify ?? ''
-  return script
-    .split('&&')
-    .map((step) => step.trim())
-    .map((step) => /^pnpm\s+(\S+)$/u.exec(step)?.[1])
-    .filter((key): key is string => key !== undefined)
+/** 执行器：链、起点采样、终点采样都在它里面，`package.json` 只指向它。 */
+const RUNNER = 'scripts/verify-run.mts'
+const CHAIN_SOURCE = 'scripts/verify-sample.ts'
+
+/**
+ * 执行器直接跑的两步采样。它们**不在** `VERIFY_CHECKS` 里（那不是检查，是「这次结果属于哪棵树」），
+ * 但确实被调用，所以按执行器源码里有没有出现来判定——删掉一行调用，这里立刻不再算它被接上。
+ */
+function runnerSteps(): string[] {
+  const text = read(RUNNER)
+  return ['preflight', 'postflight']
+    .filter((name) => text.includes(`scripts/verify-${name}.mts`))
+    .map((name) => `verify:${name}`)
 }
 
 /** manual-only 清单里声明的键：表格里以 `pnpm <key>` 形式出现。 */
@@ -60,7 +67,8 @@ describe('verification scripts are all wired somewhere', () => {
   it('has no check script that neither runs in verify nor is declared manual-only', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
     const keys = Object.keys(pkg.scripts ?? {}).filter(isCheckKey)
-    const wired = new Set([...verifyChain(pkg), ...manualOnlyKeys()])
+    // 链的唯一来源是 `VERIFY_CHECKS`：`package.json` 里已经没有那条 `&&` 长串了。
+    const wired = new Set<string>([...VERIFY_CHECKS, ...runnerSteps(), ...manualOnlyKeys()])
 
     // 差集要能直接读：说清楚是哪些键、以及两条出路各自是什么。
     const orphans = keys.filter((key) => !wired.has(key)).sort()
@@ -83,12 +91,25 @@ describe('verification scripts are all wired somewhere', () => {
     ).toEqual([])
   })
 
-  it('keeps the preflight in front of the chain, and offers a strict entry', () => {
+  it('samples the tree before and after the checks, and offers a strict entry', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
-    // 跑前断言必须在链首：它要证明的是「这次结果跑在哪棵树上」，跑在最后就失去意义。
-    expect(verifyChain(pkg)[0]).toBe('verify:preflight')
-    expect(pkg.scripts?.['verify:preflight']).toBe('tsx scripts/verify-preflight.mts')
+    // 两个入口都必须走执行器：链只有一份，谁再写一条 `&&` 长串，就不再是这棵树上的那个链。
+    expect(pkg.scripts?.verify).toBe(`tsx ${RUNNER}`)
     // 封版用的严格入口必须真的带 `--strict`，否则它与 warn 版没有区别。
-    expect(pkg.scripts?.['verify:sole']).toContain('scripts/verify-preflight.mts --strict')
+    expect(pkg.scripts?.['verify:sole']).toBe(`tsx ${RUNNER} --strict`)
+
+    // 起点必须在检查之前、终点必须在检查之后：跑前断言证明「跑在哪棵树上」，跑后就失去意义；
+    // 终点无论如何都要采一次，否则一次红会被默认钉在起点那个提交上。
+    const runner = read(RUNNER)
+    const start = runner.indexOf('scripts/verify-preflight.mts')
+    // 找那个循环，不找 import：`VERIFY_CHECKS` 在文件头出现过一次，按名字找会命中 import。
+    const checks = runner.indexOf('for (const check of VERIFY_CHECKS)')
+    const end = runner.indexOf('scripts/verify-postflight.mts')
+    expect(start, `${RUNNER} 里没有调用起点采样`).toBeGreaterThanOrEqual(0)
+    expect(checks, `${RUNNER} 里没有遍历 ${CHAIN_SOURCE} 的链`).toBeGreaterThanOrEqual(0)
+    expect(end, `${RUNNER} 里没有调用终点采样`).toBeGreaterThanOrEqual(0)
+    expect(start).toBeLessThan(checks)
+    expect(checks).toBeLessThan(end)
+    expect(pkg.scripts?.['verify:preflight']).toBe('tsx scripts/verify-preflight.mts')
   })
 })
