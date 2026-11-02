@@ -106,6 +106,20 @@ export type NotificationSettings = NotificationRuntimeSettings
 export type ObservabilitySettings = AgentObservabilitySettings
 export type PlatformWebSearchSettings = WebSearchSettings
 
+/**
+ * 更新提示（「知道有新版本」）的平台设置。
+ *
+ * 只有一个开关，而且它管的是**自动查**：关掉后启动阶段一个请求都不发，但设置页那个
+ * 「检查更新」按钮仍然可点——把手动一起禁掉，等于用户想查时被拦住还要多解释一句。
+ */
+export type UpdateSettings = {
+  checkEnabled: boolean
+}
+
+export function createDefaultUpdateSettings(): UpdateSettings {
+  return { checkEnabled: true }
+}
+
 export type AppSettings = {
   language: AppLanguage
   themeMode: ThemeMode
@@ -128,6 +142,7 @@ export type AppSettings = {
   notifications: NotificationSettings
   observability: ObservabilitySettings
   webSearch: PlatformWebSearchSettings
+  updates: UpdateSettings
 }
 
 export type AppSettingsPatch = Partial<Record<keyof AppSettings, unknown>>
@@ -192,7 +207,8 @@ export function createDefaultAppSettings(): AppSettings {
     },
     notifications: createDefaultNotificationRuntimeSettings(),
     observability: createDefaultAgentObservabilitySettings(),
-    webSearch: createDefaultWebSearchSettings()
+    webSearch: createDefaultWebSearchSettings(),
+    updates: createDefaultUpdateSettings()
   }
 }
 
@@ -291,7 +307,24 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     chat: normalizeChatSettings(candidate.chat, defaults.chat),
     notifications: normalizeNotificationSettings(candidate.notifications, defaults.notifications),
     observability: normalizeAgentObservabilitySettings(candidate.observability, defaults.observability),
-    webSearch: normalizeWebSearchSettings(candidate.webSearch, defaults.webSearch)
+    webSearch: normalizeWebSearchSettings(candidate.webSearch, defaults.webSearch),
+    updates: normalizeUpdateSettings(candidate.updates, defaults.updates)
+  }
+}
+
+/**
+ * 更新设置的归一化。**这里是本功能唯一的静默失败点**：写数据的地方不漏（否则存了读不回），
+ * 旧 `settings.json` 根本没有这一组时补默认（默认开），脏值（字符串、`null`、`{}`）回落默认。
+ * 三条都有测试兜着，`appSettings.test.ts` 与 `settingsStore.test.ts` 各守一半。
+ */
+export function normalizeUpdateSettings(
+  value: unknown,
+  defaults: UpdateSettings = createDefaultAppSettings().updates
+): UpdateSettings {
+  if (!value || typeof value !== 'object') return defaults
+  const candidate = value as Partial<Record<keyof UpdateSettings, unknown>>
+  return {
+    checkEnabled: typeof candidate.checkEnabled === 'boolean' ? candidate.checkEnabled : defaults.checkEnabled
   }
 }
 

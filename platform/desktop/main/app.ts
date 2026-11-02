@@ -119,6 +119,7 @@ import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachab
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
+import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
@@ -1167,6 +1168,15 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   )
   registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
 
+  // 开发期按「能力开」传死值：源码启动也能真查、真开下载页，否则没法联调。版本号 / 出网 / 时钟都在这里注入。
+  const updateCheck = await composeUpdateCheck({
+    ipcMain, mode: 'packaged', // DEV-GATE: 交付前必须改成 app.isPackaged ? 'packaged' : 'development'
+    currentVersion: app.getVersion(), platform: process.platform,
+    stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), fetch: getPlatformFetch(),
+    now: () => new Date(), isCheckEnabled: async () => (await settingsStore.get()).updates.checkEnabled,
+    openExternal: (url) => shell.openExternal(url), log: appLog.log
+  })
+
   if (!productAcceptanceProfile.enabled) app.on('second-instance', () => {
     const window = getMainWindow()
     if (!window) return
@@ -1407,6 +1417,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
   buildAppMenu(getMainWindow)
   await mainWindowHost.loadAndMount()
+
+  // 自动检查：主界面出来之后才排，一次性、延迟 15 秒；闸门与静默都在服务里。
+  updateCheck.startAutomaticCheck()
+
   // 挂载：退订旧 listener → 直发 current snapshot → 续增量（Main 侧顺序由 router 保证）
   if (workspaceMainWindow) {
     panelWorkspace.attachMainWindow({ webContentsId: workspaceMainWindow.webContents.id })

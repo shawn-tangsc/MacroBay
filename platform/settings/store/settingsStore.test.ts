@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createDefaultAppSettings, normalizeAppSettings } from '../schema/appSettings'
+import { createDefaultAppSettings, normalizeAppSettings, normalizeUpdateSettings } from '../schema/appSettings'
 import { createSettingsStore, updateAppSettings } from './settingsStore'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 
@@ -50,7 +50,8 @@ describe('app settings', () => {
       },
       notifications: createDefaultAppSettings().notifications,
       observability: createDefaultAppSettings().observability,
-      webSearch: createDefaultAppSettings().webSearch
+      webSearch: createDefaultAppSettings().webSearch,
+      updates: createDefaultAppSettings().updates
     })
   })
 
@@ -144,7 +145,8 @@ describe('app settings', () => {
       },
       notifications: createDefaultAppSettings().notifications,
       observability: createDefaultAppSettings().observability,
-      webSearch: createDefaultAppSettings().webSearch
+      webSearch: createDefaultAppSettings().webSearch,
+      updates: createDefaultAppSettings().updates
     })
 
     expect(
@@ -289,7 +291,8 @@ describe('app settings', () => {
       },
       notifications: createDefaultAppSettings().notifications,
       observability: createDefaultAppSettings().observability,
-      webSearch: createDefaultAppSettings().webSearch
+      webSearch: createDefaultAppSettings().webSearch,
+      updates: createDefaultAppSettings().updates
     })
 
     await expect(store.update({ themeMode: 'light' })).resolves.toEqual({
@@ -317,7 +320,8 @@ describe('app settings', () => {
       },
       notifications: createDefaultAppSettings().notifications,
       observability: createDefaultAppSettings().observability,
-      webSearch: createDefaultAppSettings().webSearch
+      webSearch: createDefaultAppSettings().webSearch,
+      updates: createDefaultAppSettings().updates
     })
     expect(writes).toEqual([
       {
@@ -345,7 +349,8 @@ describe('app settings', () => {
         },
         notifications: createDefaultAppSettings().notifications,
         observability: createDefaultAppSettings().observability,
-        webSearch: createDefaultAppSettings().webSearch
+        webSearch: createDefaultAppSettings().webSearch,
+      updates: createDefaultAppSettings().updates
       }
     ])
   })
@@ -468,5 +473,49 @@ describe('settings committed registration', () => {
     store.notifyCommitted()
 
     expect(calls).toEqual([])
+  })
+})
+
+describe('the update check switch', () => {
+  it('is on by default, so a fresh install checks without anyone opting in', () => {
+    expect(createDefaultAppSettings().updates).toEqual({ checkEnabled: true })
+  })
+
+  it('fills in the group for a settings file saved before the group existed', async () => {
+    // 旧 settings.json 里没有 updates 这一组。归一化必须补默认值——漏了它就是「存了读不回」，
+    // 而界面上的表现只是「开关每次都被重置」，没人会把它当成缺陷报上来。
+    const legacy = { ...createDefaultAppSettings() } as Record<string, unknown>
+    delete legacy.updates
+
+    expect(normalizeAppSettings(legacy).updates).toEqual({ checkEnabled: true })
+
+    const store = createSettingsStore({ read: async () => legacy, write: async () => undefined })
+    await expect(store.get()).resolves.toMatchObject({ updates: { checkEnabled: true } })
+  })
+
+  it('falls back to the default for anything that is not a boolean', () => {
+    for (const broken of [{ checkEnabled: 'false' }, { checkEnabled: null }, { checkEnabled: 0 }, {}, true, 'on', 1]) {
+      expect(normalizeUpdateSettings(broken)).toEqual({ checkEnabled: true })
+    }
+  })
+
+  it('keeps an explicit off and reads it back after a reopen', async () => {
+    let written: unknown = undefined
+    const storage = {
+      read: async () => written ?? {},
+      write: async (value: unknown) => {
+        written = value
+      }
+    }
+
+    const store = createSettingsStore(storage as never)
+    await expect(store.update({ updates: { checkEnabled: false } })).resolves.toMatchObject({
+      updates: { checkEnabled: false }
+    })
+
+    // 新进程：从磁盘读回，而不是从内存——这才是「存了能读回」。
+    const reopened = createSettingsStore(storage as never)
+    await expect(reopened.get()).resolves.toMatchObject({ updates: { checkEnabled: false } })
+    expect(written).toMatchObject({ updates: { checkEnabled: false } })
   })
 })

@@ -73,6 +73,15 @@ const api = {
     get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
     update: (patch: unknown) => ipcRenderer.invoke(IpcChannels.settingsUpdate, patch)
   },
+  /**
+   * 更新提示：读一个状态、发两个动作。**没有地址参数**——载荷里能传地址，界面就等于能决定打开哪个页面。
+   * 开发态只有 `getState` 在主进程有接收方，另外两个调用会以「没有 handler」reject；界面在开发态不渲染它们。
+   */
+  updates: {
+    getState: () => ipcRenderer.invoke(IpcChannels.updatesGetState),
+    checkNow: () => ipcRenderer.invoke(IpcChannels.updatesCheckNow),
+    openDownloadPage: () => ipcRenderer.invoke(IpcChannels.updatesOpenDownload)
+  },
   channels: {
     catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),
     list: () => ipcRenderer.invoke(IpcChannels.channelsList),
