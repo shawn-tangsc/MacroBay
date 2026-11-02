@@ -38,6 +38,24 @@
   background: var(--surface-soft);
 }
 
+/*
+ * `overlay`：绝对定位挂在内容之上的图标按钮（分离页窗的回停靠等）。
+ *
+ * 它必须有底，而且底色是**刻意半透明**的——浮层透出一点下面的内容才像浮在上面；
+ * 透明档在这里不成立，因为这类按钮下面是任意的图和字，「能不能看见」会取决于底下是什么内容。
+ *
+ * hover 时转成不透明：半透明底在悬停时需要更实的反馈。
+ */
+.icon-button--overlay.ant-btn {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+}
+
+.icon-button--overlay.ant-btn:not(:disabled):hover {
+  background: var(--surface-strong);
+}
+
 /* 工具栏那一档用 antd 的 `default` 类型；它的 hover/active 底色同样归我们。 */
 .icon-button--solid.ant-btn:not(:disabled) {
   border: 1px solid var(--border);

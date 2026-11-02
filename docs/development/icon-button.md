@@ -45,6 +45,7 @@ window) — never per button.
 | `dataAttributes` | `Record<\`data-${string}\`, …>` | no | Test hooks and state flags (`data-redock-tab`). A separate prop rather than arbitrary attributes, so nothing like `width` can slip in. |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver; the component holds no copy and imports no i18n. |
 | `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. Cannot be combined with `tooltipKey` — that combination does not compile. |
+| `variant` | `'plain' \| 'solid' \| 'overlay'` | no, default `plain` | `plain` is transparent (inline). `solid` is the toolbar row: a border and a soft surface. `overlay` is for an icon button **absolutely positioned over content** — a border, radius 5, and a deliberately translucent surface so the layer below shows through; hover makes it opaque. Rule: anything floating over arbitrary content is `overlay`, never `plain`. |
 | `loading` | `boolean` | no | The click is in flight: the button is disabled, the glyph becomes the platform spinner (`LoadingSpinner`, `sm`), and `onSelect` stops firing. The name and the 22/24 size stay, so a screen reader still knows which button is busy. Not a third size and not a variant. |
 | `tooltipKey` | `string` | no | Explanation on hover **and focus**, key only. There is no native `title`. Never together with `disabled`. |
 | `variant` | `'plain' \| 'solid'` | no, default `plain` | `solid` adds a border and a surface tint for toolbar rows. |

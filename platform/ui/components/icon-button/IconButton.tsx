@@ -65,7 +65,14 @@ function fillPlaceholders(template: string, params?: Readonly<Record<string, str
 }
 
 /** 工具栏那一排需要一点底色才不被当成正文，规格里叫 `solid`。 */
-export type IconButtonVariant = 'plain' | 'solid'
+/**
+ * 三档外观（界面设计 2026-11-02 定档）：
+ * - `plain` 透明，行内默认；
+ * - `solid` 工具栏那一排，浅底加边框；
+ * - `overlay` **绝对定位挂在内容之上**的浮层按钮（分离页窗的回停靠按钮就是它）。
+ *   它必须有底：透明意味着「能不能看见取决于下面是什么」，而这类按钮下面永远是任意的图和字。
+ */
+export type IconButtonVariant = 'plain' | 'solid' | 'overlay'
 
 type IconButtonCommon = {
   /**
@@ -192,7 +199,7 @@ export function IconButton({
       className={[
         'icon-button',
         `icon-button--${size}`,
-        variant === 'solid' ? 'icon-button--solid' : 'icon-button--plain',
+        `icon-button--${variant}`,
         'ant-btn-icon-only',
         className
       ]
@@ -216,7 +223,7 @@ export function IconButton({
       {...(controls === undefined ? {} : { 'aria-controls': controls })}
       // 尺寸放在最后：调用方拿得到定位，拿不到覆盖 22/24 的机会。
       style={{ ...style, width: pixels, height: pixels }}
-      type={variant === 'solid' ? 'default' : 'text'}
+      type={variant === 'plain' ? 'text' : 'default'}
     />
   )
 

@@ -159,6 +159,19 @@ describe('IconButton', () => {
     expect(markup({ dataAttributes: { 'data-redock-tab': 'page' } as never })).toContain('data-redock-tab="page"')
   })
 
+  it('offers a third look for buttons that float over arbitrary content', () => {
+    // `overlay`：绝对定位挂在内容之上的图标按钮（分离页窗的回停靠）。
+    // 判据在 CSS 里：有边框、圆角 5、**半透明底**（浮层要透出一点下面的内容），hover 转不透明。
+    const html = markup({ variant: 'overlay' })
+    expect(html).toContain('icon-button--overlay')
+
+    const css = readFileSync(join(__dirname, 'iconButton.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const block = css.slice(css.indexOf('.icon-button--overlay.ant-btn {'), css.indexOf('}', css.indexOf('.icon-button--overlay.ant-btn {')))
+    expect(block).toContain('color-mix(in srgb, var(--surface-strong) 82%, transparent)')
+    expect(block).toContain('border-radius: 5px')
+    expect(css).toContain('.icon-button--overlay.ant-btn:not(:disabled):hover')
+  })
+
   it('is a plain button, so it can never submit a surrounding form', () => {
     expect(markup()).toContain('type="button"')
   })
