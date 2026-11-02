@@ -99,6 +99,15 @@ describe('StructuredText', () => {
     expect(a).toBe(b)
   })
 
+  it('keeps the node kinds a closed set of three, because a fourth kind is a security decision', () => {
+    // 远端文字能决定我们渲染什么，等于写文案的人能决定界面长什么样。所以 `kind` 的闭集不是风格：
+    // 有人想加 `kind: 'html'` 时，这条必须红，并且红在一个写着「安全问题」的地方。
+    const kinds = [...sourceCode.matchAll(/kind:\s*'([a-z]+)'/gu)].map((match) => match[1])
+    expect([...new Set(kinds)].sort()).toEqual(['list', 'paragraph', 'section'])
+    // 类型声明本身也钉住：三种之外的 kind 不许出现在 TypeScript 里。
+    expect(sourceCode).not.toMatch(/kind:\s*'(html|raw|markdown|link)'/u)
+  })
+
   it('admits no rich-text machinery: no HTML sink, no Markdown library, no link builder', () => {
     expect(sourceCode).not.toContain('dangerouslySetInnerHTML')
     expect(sourceCode).not.toMatch(/from ['"](marked|markdown-it|remark|rehype|showdown|micromark)/u)
