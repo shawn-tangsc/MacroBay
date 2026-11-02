@@ -23,6 +23,9 @@ afterEach(async () => {
   root = undefined
   vi.useRealTimers()
   document.body.replaceChildren()
+  // 用例里临时装过 `window.platform`：不还原会漏到同进程的下一个测试文件，
+  // 表现成「单跑全绿、一起跑红」，查起来最费时间。
+  Reflect.deleteProperty(window, 'platform')
 })
 
 function record(overrides: Partial<SafeNotificationRecord> & { id: string }): SafeNotificationRecord {
