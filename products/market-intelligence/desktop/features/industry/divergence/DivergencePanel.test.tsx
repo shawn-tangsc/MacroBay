@@ -138,6 +138,17 @@ describe('withheld grouping', () => {
 })
 
 describe('states that must not be confused', () => {
+  it('waits without drawing a failure or a verdict before the first read returns', () => {
+    // First paint: the read has not returned. Neither "could not read" nor "nothing diverged"
+    // is true yet, and both are claims the card would have to take back a moment later.
+    const markup = render({ state: 'loading' })
+    expect(markup).toContain(text.loading)
+    expect(markup).not.toContain('class="state-view')
+    expect(markup).not.toContain('data-state="error"')
+    expect(markup).not.toContain(text.empty)
+    expect(markup).not.toContain(text.nothingCompared)
+  })
+
   it('says nothing was compared, in the error tone, when every pair was withheld', () => {
     const markup = render({
       state: 'empty',

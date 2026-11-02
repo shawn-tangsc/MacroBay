@@ -145,6 +145,17 @@ describe('positioning panel', () => {
     expect(markup).not.toContain('class="mi-positioning-panel__chart"')
   })
 
+  it('waits without drawing a failure or an empty card before the first read returns', () => {
+    // First paint: neither half has answered. Waiting is its own state — "could not read" and
+    // "nothing collected" are both claims about a read that has not happened yet.
+    const markup = render({ positioning: { state: 'loading' }, funding: { state: 'loading' } })
+    expect(markup).toContain('data-state="loading"')
+    expect(markup).toContain(text.loading)
+    expect(markup).not.toContain('class="state-view')
+    expect(markup).not.toContain('data-state="error"')
+    expect(markup).not.toContain(text.empty)
+  })
+
   it('flags a stale reading without dropping it', () => {
     const markup = render({ positioning: { ...positioning, staleSince: at(120) } })
     expect(markup).toContain('data-stale="true"')

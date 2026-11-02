@@ -54,6 +54,43 @@ async function renderProbe(signalClient: { query: (input: { asOf: string }) => P
   return latest
 }
 
+function ReadProbe(props: Readonly<{ client: { query: (input: { asOf: string; window: '24h' }) => Promise<OpenInterestHistoryResult> } }>) {
+  latest = useDashboardOpenInterest({
+    client: props.client,
+    signalClient: { query: async () => [] },
+    now: () => new Date(asOf),
+    window: '24h'
+  })
+  return null
+}
+
+async function renderReadProbe(client: { query: (input: { asOf: string; window: '24h' }) => Promise<OpenInterestHistoryResult> }) {
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  roots.push(root)
+  await act(async () => { root.render(createElement(ReadProbe, { client })) })
+  return latest
+}
+
+describe('positioning hook first read', () => {
+  it('stays loading while the read is in flight, before the card has anything to say', async () => {
+    let settle: ((value: OpenInterestHistoryResult) => void) | undefined
+    const client = { query: () => new Promise<OpenInterestHistoryResult>((resolve) => { settle = resolve }) }
+    const state = await renderReadProbe(client)
+    // Nothing has come back yet, so waiting is its own state. Drawing a failure or an empty card
+    // here is what makes a card flash "could not read" before the first reading arrives.
+    expect(state).toMatchObject({ state: 'loading' })
+    await act(async () => { settle!(history) })
+    expect(latest).toMatchObject({ state: 'available' })
+  })
+
+  it('becomes a failed read only when the read actually rejects, and the card can retry', async () => {
+    const state = await renderReadProbe({ query: async () => { throw new Error('ipc down') } })
+    expect(state).toMatchObject({ state: 'unavailable' })
+    expect(typeof (state as { onReload?: unknown }).onReload).toBe('function')
+  })
+})
+
 describe('positioning hook signal wiring', () => {
   it('puts the rule’s chip on the card from the same read the panel already makes', async () => {
     const query = vi.fn(async () => [signal])
