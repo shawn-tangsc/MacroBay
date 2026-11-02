@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { useCapitalConditions } from './useCapitalConditions'
+import { capitalConditionsReadRetryDelaysMs, useCapitalConditions } from './useCapitalConditions'
 
 const asOf = '2026-08-18T08:00:00.000Z'
 let root: Root | undefined
@@ -86,6 +86,71 @@ describe('useCapitalConditions', () => {
     expect(querySnapshot).toHaveBeenCalledTimes(2)
     expect(page.state()).toBe('available')
     expect(page.container.textContent).toContain('$254.9B')
+    // Kept, and marked as the previous readings rather than presented as fresh.
+    expect(page.stale()).toBe('true')
+  })
+
+  // The reported flash: an instant failure followed by data. A read that fails and then succeeds
+  // must never paint the error state in between.
+  it('never shows a failure for a read that fails once and then succeeds', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      const querySnapshot = vi.fn(async () => {
+        calls += 1
+        if (calls === 1) throw new Error('source still starting')
+        return available()
+      })
+      const page = await renderHook({ querySnapshot }, () => new Date(asOf))
+      await flush()
+      // First attempt failed; the panel must still say "loading", not "failed".
+      expect(page.state()).toBe('loading')
+
+      await act(async () => { vi.advanceTimersByTime(capitalConditionsReadRetryDelaysMs[0]) })
+      await flush()
+
+      expect(querySnapshot).toHaveBeenCalledTimes(2)
+      expect(page.state()).toBe('available')
+      expect(page.container.textContent).toContain('$254.9B')
+    } finally { vi.useRealTimers() }
+  })
+
+  it('treats a failure after the retries are spent as a real failure, not a permanent spinner', async () => {
+    vi.useFakeTimers()
+    try {
+      const querySnapshot = vi.fn(async () => { throw new Error('down') })
+      const page = await renderHook({ querySnapshot }, () => new Date(asOf))
+      await flush()
+      expect(page.state()).toBe('loading')
+
+      for (const delay of capitalConditionsReadRetryDelaysMs) {
+        await act(async () => { vi.advanceTimersByTime(delay) })
+        await flush()
+      }
+
+      expect(querySnapshot).toHaveBeenCalledTimes(1 + capitalConditionsReadRetryDelaysMs.length)
+      expect(page.state()).toBe('unavailable')
+    } finally { vi.useRealTimers() }
+  })
+
+  // A retry re-reads without asking the sources for a new copy, so the reader's second attempt is
+  // not spent re-collecting.
+  it('re-reads on a retry without waiting for a collection', async () => {
+    let calls = 0
+    const querySnapshot = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) return { state: 'empty', asOf }
+      return available()
+    })
+    const now = vi.fn(() => new Date(asOf))
+    const page = await renderHook({ querySnapshot }, now)
+    await flush()
+
+    await act(async () => page.root.render(createElement(Harness, { client: { querySnapshot }, now, retryKey: 1 })))
+    await flush()
+
+    expect(querySnapshot).toHaveBeenCalledTimes(2)
+    expect(page.state()).toBe('available')
   })
 
   it('ignores stale resolution after unmount', async () => {
@@ -104,9 +169,19 @@ describe('useCapitalConditions', () => {
     await act(async () => clock.root.unmount())
     clock.container.remove()
 
-    const client = await renderHook({ querySnapshot: async () => { throw new Error('secret') } }, () => new Date(asOf))
-    await flush()
-    expect(client.container.textContent).toBe('unavailable')
+    // A first read that keeps failing is retried with backoff, then reported once the attempts are
+    // spent: the reader sees "failed" only when it is actually failed, not on the first hiccup.
+    vi.useFakeTimers()
+    try {
+      const client = await renderHook({ querySnapshot: async () => { throw new Error('secret') } }, () => new Date(asOf))
+      await flush()
+      expect(client.state()).toBe('loading')
+      for (const delay of capitalConditionsReadRetryDelaysMs) {
+        await act(async () => { vi.advanceTimersByTime(delay) })
+        await flush()
+      }
+      expect(client.state()).toBe('unavailable')
+    } finally { vi.useRealTimers() }
   })
 })
 
@@ -114,12 +189,13 @@ async function renderHook(client: { querySnapshot: (input: { asOf: string }) => 
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
   await act(async () => localRoot.render(createElement(Harness, { client, now })))
-  return { root: localRoot, container, state: () => container.querySelector('output')?.getAttribute('data-state') ?? '' }
+  return { root: localRoot, container, state: () => container.querySelector('output')?.getAttribute('data-state') ?? '', stale: () => container.querySelector('output')?.getAttribute('data-stale') ?? '' }
 }
 
-function Harness({ client, now, reloadKey }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number }) {
-  const state = useCapitalConditions({ client: client as never, now, ...(reloadKey === undefined ? {} : { reloadKey }) })
-  return createElement('output', { 'data-state': state.state }, state.state === 'available' ? state.currentUsd : state.state)
+function Harness({ client, now, reloadKey, retryKey }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number }) {
+  const state = useCapitalConditions({ client: client as never, now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
+  const stale = state.state === 'available' && state.stale ? 'true' : 'false'
+  return createElement('output', { 'data-state': state.state, 'data-stale': stale }, state.state === 'available' ? state.currentUsd : state.state)
 }
 
 function available() {

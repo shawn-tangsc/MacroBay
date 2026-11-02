@@ -32,6 +32,8 @@ type Text = {
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
   refresh: string
   refreshFailed: string
+  /** The last readings that did read, kept after a failed re-read. */
+  staleRead: string
 }
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
@@ -68,6 +70,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           <h2>{text.title}</h2>
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
+        {/* These are the last numbers that read successfully. Saying so is the difference between
+            "old" and "gone", and only one of those is true after a failed re-read. */}
+        {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
         <StablecoinTable state={state} text={text} />
         <EtfTable etf={state.etf} text={text} onRetry={onRefresh} />
       </div>

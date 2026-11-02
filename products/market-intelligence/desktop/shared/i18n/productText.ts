@@ -667,7 +667,7 @@ export const productText = {
               streak: '{flow} · {count} 日', streakSingle: '{flow} · 1 日',
               observedAt: '观测时间', etfFlow: '市场资金流', recent7TradingDays: '近 7 个交易日', funds: '资金面', btc: 'BTC ETF', eth: 'ETH ETF',
               flowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
-              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。'
+              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。', staleRead: '这次刷新没读出来，下面是上一次的读数。'
             },
             sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
@@ -2544,7 +2544,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               streak: '{flow} · {count} days', streakSingle: '{flow} · 1 day',
               observedAt: 'Observed at', etfFlow: 'Market flows', recent7TradingDays: 'Last 7 trading days', funds: 'Capital', btc: 'BTC ETF', eth: 'ETH ETF',
               flowDirections: { inflow: 'Net inflow', outflow: 'Net outflow', zero: 'Flat' },
-              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.'
+              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.', staleRead: 'This refresh did not read; these are the previous readings.'
             },
             sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {

@@ -366,6 +366,22 @@ describe('CapitalConditionsPanel', () => {
     expect(container.textContent).not.toContain(text.refreshFailed)
   })
 
+  it('marks the kept readings as previous ones instead of presenting them as fresh', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const state = { ...fullState(), stale: true as const }
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh: () => undefined }))
+
+    expect(markup).toContain(text.staleRead)
+    // The readings themselves are still on the page: "old" is not "gone".
+    expect(markup).toContain('$1B')
+  })
+
+  it('does not claim staleness on a fresh read', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState(), onRefresh: () => undefined }))
+    expect(markup).not.toContain(text.staleRead)
+  })
+
   it('reports a failed re-collection and blocks a second request while it runs', async () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const container = document.createElement('div')
