@@ -2,8 +2,6 @@
   "$comment": "antd Tabs/Segmented call sites still to migrate. One entry per file — the unit here is a file, because the debt is a whole-file import, not a single code path. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: the guard for this debt reads it, and a caller migrating a site must be able to strike the line without touching the component directory.",
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/AppShell.tsx": 1,
-    "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/ToolsSection.tsx": 1,
-    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisDashboardLayout.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": 1
   }
 }
