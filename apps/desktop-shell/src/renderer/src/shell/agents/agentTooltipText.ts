@@ -14,6 +14,7 @@ export type AgentTooltipKey =
   | 'navbar.hideSidebar'
   | 'navbar.showSidebar'
   | 'navbar.openSessions'
+  | 'navbar.createAgent'
   | 'navbar.search'
   | 'messageNavigation.none'
   | 'settingsDrawer.narrowMode'

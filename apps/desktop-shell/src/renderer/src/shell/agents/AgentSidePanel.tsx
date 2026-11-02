@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Tooltip } from 'antd'
+import { Button, Input, Tooltip as AntTooltip } from 'antd'
 import { Bot, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 
 import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
@@ -13,7 +13,10 @@ import { createDefaultAgentSession, deleteSessions, selectAgentById, selectSessi
 import { createSessionViaApi, deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi, setAgentModelViaApi } from './agentSessionDataApi'
 import { getSessionChannelTypeBySessionId } from './agentChannelVisuals'
 import { filterSessionsForAgent, getAgentPrimarySessionId, getCreateSessionAgentId } from './agentSessionViewModel'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from './agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from './agentTooltipText'
 import { isUnconfiguredAgentModel } from '@platform/ai/agent-platform/runtime/effectiveAgentModel'
 
 type AgentSidePanelTab = 'agents' | 'sessions'
@@ -42,6 +45,9 @@ export default function AgentSidePanel({
   onStateChange
 }: AgentSidePanelProps): React.ReactElement {
   const t = useAgentText()
+  // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
+  const tooltipKeys = { createAgent: 'navbar.createAgent' } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
   const [activeTab, setActiveTab] = useState<AgentSidePanelTab>('sessions')
   const [keyword, setKeyword] = useState('')
   const activeAgentId = state.activeAgentId ?? state.agents[0]?.id ?? null
@@ -124,14 +130,14 @@ export default function AgentSidePanel({
 
       <div className="agent-side-panel-action">
         {activeTab === 'agents' ? (
-          <Tooltip title={t.navbar.createAgent}>
+          <Tooltip labelKey={tooltipKeys.createAgent} resolveText={resolveText}>
             <Button className="agent-side-panel-add-button" icon={<Bot size={15} />} onClick={onCreateAgent}>
               {t.navbar.createAgent}
             </Button>
           </Tooltip>
         ) : (
           <>
-            <Tooltip title={t.sidePanel.newSession}>
+            <AntTooltip title={t.sidePanel.newSession}>
               <Button
                 className="agent-side-panel-add-button"
                 icon={<MessageSquarePlus size={15} />}
@@ -139,8 +145,8 @@ export default function AgentSidePanel({
                 onClick={createDefaultSession}>
                 {t.sidePanel.newSession}
               </Button>
-            </Tooltip>
-            <Tooltip title={t.sidePanel.clearFilteredSessions}>
+            </AntTooltip>
+            <AntTooltip title={t.sidePanel.clearFilteredSessions}>
               <Button
                 className="ant-shell-icon-button"
                 type="text"
@@ -157,7 +163,7 @@ export default function AgentSidePanel({
                   })
                 }}
               />
-            </Tooltip>
+            </AntTooltip>
           </>
         )}
       </div>
