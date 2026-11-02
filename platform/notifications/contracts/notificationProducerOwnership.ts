@@ -23,6 +23,8 @@ export type NotificationProducerClaimSource = Pick<ProductManifest, 'id' | 'noti
  *
  * 平台自有任务可以直接给 `platformProducerIds`，表里记成 `platform`——它们不会触发
  * `unclaimed-producer`，也不必让产品去 claim 平台自己的 handler。
+ * **平台自有 ID 由装配层从 job runtime 的 handler 列表生成，不写死一张表**：写死的表
+ * 会让新加的平台任务在第一次提交时误报未登记。
  */
 export function createNotificationProducerOwnership(input: {
   manifests: readonly NotificationProducerClaimSource[]

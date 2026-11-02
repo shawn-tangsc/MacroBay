@@ -39,8 +39,9 @@ import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
-import { pruneNotificationDailyCounters } from './notificationBreaker'
-import { createLegacySubmit, withCenterForDisruptiveChannels } from './notificationRuntimeLegacy'
+import { decideNotificationBreaker, pruneNotificationDailyCounters } from './notificationBreaker'
+import { createLegacySubmit } from './notificationRuntimeLegacy'
+import { foldIntoAggregate, withCenterForDisruptiveChannels } from './notificationAggregate'
 import {
   normalizeRequestedChannels,
   routeTransientDelivery,
@@ -216,13 +217,29 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
     }
 
+    const entry = deps.catalog.get(request.eventTypeId)
+    const ownerId = entry?.productId ?? 'platform'
+    const breaker = decideNotificationBreaker({ counters: state.dailyCounters, ownerId, now })
+    const dailyCounters = pruneNotificationDailyCounters(breaker.counters, now)
+    // 折叠第二层：超过当日上限后原文不落库，只留下「今天还出过几条」（T2/T10）。
+    if (breaker.action === 'fold') {
+      const folded = foldIntoAggregate(state.records, plan.incoming, ownerId, now)
+      await persistWithDiagnostics({ ...state, records: folded.records, dailyCounters })
+      notifyChanged()
+      return {
+        kind: 'collapsed',
+        aggregateRecordId: folded.aggregate.id,
+        collapsedCount: folded.aggregate.collapsedCount ?? 1
+      }
+    }
+
     const record = plan.record
-    await persistWithDiagnostics({ ...state, records: [record, ...state.records] })
+    await persistWithDiagnostics({ ...state, records: [record, ...state.records], dailyCounters })
     notifyChanged()
     const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff)
     if (delivered.record !== record || delivered.pushBackoff !== state.pushBackoff) {
       const records = [delivered.record, ...state.records]
-      await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff })
+      await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff, dailyCounters })
       notifyChanged()
     }
     if (delivered.transition !== undefined) {

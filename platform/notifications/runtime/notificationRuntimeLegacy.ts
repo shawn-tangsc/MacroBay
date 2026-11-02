@@ -14,9 +14,9 @@ import {
   pruneNotificationDailyCounters,
   utcDayOf
 } from './notificationBreaker'
-import { createNotificationId } from '../store/notificationStore'
 import { findActiveDuplicate } from './notificationDedupe'
 import { normalizeRequestedChannels, routeTransientDelivery } from './notificationRouting'
+import { foldIntoAggregate, withCenterForDisruptiveChannels } from './notificationAggregate'
 import type {
   NotificationChannel,
   NotificationRecord,
@@ -97,62 +97,3 @@ export function createLegacySubmit(input: LegacySubmitInput) {
 }
 
 /** 4a「中心必达」：只要这条通知会走任何一个打断式通道，`channels` 就必须含 `center`。 */
-export function withCenterForDisruptiveChannels(
-  request: NotificationRequest,
-  channels: readonly NotificationChannel[]
-): NotificationChannel[] {
-  const disruptive = channels.some((channel) => channel === 'desktop' || channel === 'toast' || channel === 'popup')
-  if (!disruptive || channels.includes('center')) return [...channels]
-  return ['center', ...channels]
-}
-
-const NOTIFICATION_AGGREGATE_TITLE = 'notification-aggregate'
-const NOTIFICATION_AGGREGATE_TITLE_KEY = 'notification.aggregate.title' as const
-
-function aggregateDedupeKey(ownerId: string, now: string): string {
-  return `${NOTIFICATION_AGGREGATE_TITLE}|${ownerId}|${utcDayOf(now)}`
-}
-
-function foldIntoAggregate(
-  records: readonly NotificationRecord[],
-  request: NotificationRequest,
-  ownerId: string,
-  now: string
-): { records: NotificationRecord[]; aggregate: NotificationRecord } {
-  const dedupeKey = aggregateDedupeKey(ownerId, now)
-  const existing = records.find((record) => record.dedupeKey === dedupeKey)
-  if (existing) {
-    const aggregate: NotificationRecord = {
-      ...existing,
-      collapsedCount: (existing.collapsedCount ?? 0) + 1,
-      occurrenceCount: existing.occurrenceCount + 1,
-      updatedAt: now
-    }
-    return {
-      records: records.map((record) => (record.id === aggregate.id ? aggregate : record)),
-      aggregate
-    }
-  }
-
-  const aggregate: NotificationRecord = {
-    id: createNotificationId(),
-    owner: request.owner,
-    productId: request.productId,
-    sourceId: NOTIFICATION_AGGREGATE_TITLE,
-    eventTypeId: 'legacy.aggregate',
-    delivery: {},
-    titleKey: NOTIFICATION_AGGREGATE_TITLE_KEY,
-    severity: 'warning',
-    priority: 'low',
-    channels: ['center'],
-    state: 'unread',
-    actions: [],
-    dedupeKey,
-    safeMetadata: { aggregate: true },
-    occurrenceCount: 1,
-    collapsedCount: 1,
-    createdAt: now,
-    updatedAt: now
-  }
-  return { records: [aggregate, ...records], aggregate }
-}

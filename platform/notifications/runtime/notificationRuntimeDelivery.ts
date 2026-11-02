@@ -88,6 +88,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     }
 
     const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
+    let backoffChanged = false
     let transition: NotificationPushTransition | undefined
     if (delivery.push?.state === 'queued') {
       const at = input.now()
@@ -113,6 +114,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
             failures: decision.failures,
             pausedUntil: decision.pausedUntil
           }
+          backoffChanged = true
         }
         if (decision.transition === 'suspended') transition = { kind: 'paused', channelId }
         if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
@@ -125,7 +127,12 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
           : { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
       }
     }
-    return { record: { ...record, delivery }, pushBackoff: nextBackoff, ...(transition === undefined ? {} : { transition }) }
+    const deliveryChanged = JSON.stringify(delivery) !== JSON.stringify(record.delivery)
+    return {
+      record: deliveryChanged ? { ...record, delivery } : record,
+      pushBackoff: backoffChanged ? nextBackoff : pushBackoff,
+      ...(transition === undefined ? {} : { transition })
+    }
   }
 
   return { resolveContent, deliverNewRecord }
