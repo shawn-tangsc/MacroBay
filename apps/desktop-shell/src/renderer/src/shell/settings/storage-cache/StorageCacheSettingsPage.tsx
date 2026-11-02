@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
@@ -27,6 +28,9 @@ type StorageCacheSettingsPageProps = {
   language: AppLanguage
 }
 
+const FILTER_KEY_PREFIX = 'storageCacheFilter.'
+const SHELL_KEY_FOR_FILTER_GROUP = 'storageCacheFilterGroup'
+
 export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageProps): React.ReactElement {
   const labels = getStorageCacheLabels(language)
   const state = useStorageCacheSettings()
@@ -36,6 +40,16 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const [historyOpen, setHistoryOpen] = useState(false)
 
   const filters = useMemo(() => listStorageCacheFilters(language), [language])
+  // 分段器只收键：文案的唯一定义仍在 platformText，页面只负责把键解析回来。
+  const filterItems = useMemo(
+    () => filters.map((filter) => ({ value: filter.key, labelKey: `${FILTER_KEY_PREFIX}${filter.key}` })),
+    [filters]
+  )
+  function resolveFilterText(key: string): string {
+    if (key === SHELL_KEY_FOR_FILTER_GROUP) return labels.title
+    const filterKey = key.slice(FILTER_KEY_PREFIX.length) as StorageCacheFilterKey
+    return filters.find((filter) => filter.key === filterKey)?.label ?? ''
+  }
   const filteredCaches = useMemo(
     () => filterCachesByKey(state.caches, activeFilter),
     [activeFilter, state.caches]
@@ -118,18 +132,13 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
         ) : null}
 
         <div className="storage-cache-toolbar">
-          <nav className="storage-cache-tabs" aria-label={labels.title}>
-            {filters.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                aria-pressed={filter.key === activeFilter}
-                className={filter.key === activeFilter ? 'storage-cache-tab active' : 'storage-cache-tab'}
-                onClick={() => setActiveFilter(filter.key)}>
-                {filter.label}
-              </button>
-            ))}
-          </nav>
+          <Segmented
+            items={filterItems}
+            value={activeFilter}
+            onChange={(value) => setActiveFilter(value as StorageCacheFilterKey)}
+            ariaLabelKey={SHELL_KEY_FOR_FILTER_GROUP}
+            resolveText={(key) => resolveFilterText(key)}
+          />
           <p className="storage-cache-meta">
             {labels.metaSummary(
               summary.totalCaches,
