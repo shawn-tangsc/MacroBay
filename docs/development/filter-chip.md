@@ -36,7 +36,6 @@ import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip
 | `onPressedChange` | `(pressed: boolean) => void` | yes | Receives the **next value**. The component negates once; call sites do not re-derive it. |
 | `disabled` | `boolean` | no | Disabled. The reason must be **visible next to the chip**; the component offers no tooltip — a disabled element cannot take focus, so a hover-only reason is invisible to keyboard readers. |
 | `resolveText` | `(key: string) => string` | yes | Your resolver; unknown keys return an empty string. |
-| `dataAttributes` | `Record<\`data-${string}\`, …>` | no | Test hooks and state flags (`data-model-picker-category`). Only `data-*` keys; anything else throws at mount. |
 
 There is no `icon`, `tone`, `color`, `className` or `style`: an icon would need a second explanation
 (“what does this glyph mean”), and a series colour is data semantics that belongs to the legend, not

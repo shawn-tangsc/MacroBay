@@ -35,7 +35,6 @@ import { FilterChip, FilterChipGroup } from '@platform/ui/components/filter-chip
 | `onPressedChange` | `(pressed: boolean) => void` | 是 | 收**下一个值**。取反只由组件做一次，调用点不要再取一次。 |
 | `disabled` | `boolean` | 否 | 禁用。原因必须**写在胶囊旁边、看得见**；组件不提供 Tooltip——禁用元素接不到焦点，悬停提示对键盘用户等于不存在。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方解析器；未知键返回空串。 |
-| `dataAttributes` | `Record<\`data-${string}\`, …>` | 否 | 测试钩子与状态属性（`data-model-picker-category`）。只收 `data-*` 键，其他键挂载即抛错。 |
 
 刻意没有 `icon`、`tone`、`color`、`className`、`style`：图标会引出「这个图代表什么」的第二次
 解释；系列色块是数据语义，归图例自己，不归筛选。

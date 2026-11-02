@@ -115,11 +115,6 @@ describe('FilterChip', () => {
     }
   })
 
-  it('passes data-* hooks through, for the tests and state flags call sites already use', () => {
-    const button = mount({ dataAttributes: { 'data-model-picker-category': 'tools' } })
-    expect(button.getAttribute('data-model-picker-category')).toBe('tools')
-  })
-
   it('disables natively and shows no hover-only explanation', () => {
     const button = mount({ disabled: true })
     expect(button.hasAttribute('disabled')).toBe(true)

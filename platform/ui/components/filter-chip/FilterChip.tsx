@@ -36,11 +36,6 @@ type FilterChipBase = {
   disabled?: boolean
   /** 文案解析入口，由调用方注入。 */
   resolveText: (key: string) => string
-  /**
-   * 测试钩子与状态属性（`data-model-picker-category` 这类）。只收 `data-*` 键——
-   * 与 `IconButton` 同一先例：独立 prop 而不是任意属性直传，避免 `width` 这类口子混进来。
-   */
-  dataAttributes?: Readonly<Record<`data-${string}`, string | number | boolean | undefined>>
 }
 
 export type FilterChipProps = FilterChipBase
@@ -53,31 +48,16 @@ export type FilterChipGroupProps = {
   children: ReactNode
 }
 
-/** 只放 `data-*` 键进 DOM；传错当场抛错，不静默过滤（同 `IconButton`）。 */
-function dataOnly(
-  dataAttributes: FilterChipProps['dataAttributes']
-): Record<string, string | number | boolean | undefined> {
-  if (dataAttributes === undefined) return {}
-  for (const key of Object.keys(dataAttributes)) {
-    if (!key.startsWith('data-')) {
-      throw new Error(`FilterChip dataAttributes accepts only data-* keys; received "${key}"`)
-    }
-  }
-  return dataAttributes
-}
-
 export function FilterChip({
   labelKey,
   count,
   pressed,
   onPressedChange,
   disabled,
-  resolveText,
-  dataAttributes
+  resolveText
 }: FilterChipProps): ReactElement {
   return (
     <Button
-      {...dataOnly(dataAttributes)}
       aria-pressed={pressed}
       className="filter-chip"
       disabled={disabled === true}
