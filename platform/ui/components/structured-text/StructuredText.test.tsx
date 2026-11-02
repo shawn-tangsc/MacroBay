@@ -17,6 +17,14 @@ import { StructuredText, type StructuredTextNode } from './StructuredText'
  */
 
 const source = readFileSync(join(__dirname, 'StructuredText.tsx'), 'utf8')
+/**
+ * 节点 `kind` 的**声明**住在契约里，不在这个组件里——所以闭集那条必须扫契约。
+ *
+ * 这条扫错过一次：类型搬去 `platform/contracts/structuredText.ts` 之后，组件里只剩
+ * `node.kind === 'section'` 这种比较，`kind: '…'` 的字面量一个都不剩，于是那条「新节点种类
+ * 是安全决定」的用例在**什么都没坏的情况下**红了。**搬走一个被断言的对象，读它的守卫要同一笔搬。**
+ */
+const contractSource = readFileSync(join(__dirname, '../../../contracts/structuredText.ts'), 'utf8')
 const css = readFileSync(join(__dirname, 'structuredText.css'), 'utf8')
 /** 断言只看代码与规则，不看注释：注释里会写反例（`break-all`、`<a>`）来解释为什么禁止它们。 */
 const sourceCode = source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '')
@@ -102,11 +110,24 @@ describe('StructuredText', () => {
   it('keeps the node kinds a closed set, because a new kind is a security decision', () => {
     // 远端文字能决定我们渲染什么，等于写文案的人能决定界面长什么样。所以 `kind` 的闭集不是风格：
     // 有人想加 `kind: 'html'` 时，这条必须红，并且红在一个写着「安全问题」的地方。
-    const kinds = [...sourceCode.matchAll(/kind:\s*'([a-z]+)'/gu)].map((match) => match[1])
+    const contract = contractSource.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '')
+    const kinds = [...contract.matchAll(/kind:\s*'([a-z]+)'/gu)].map((match) => match[1])
     // 允许集合是**四种**：三种正文节点 + 代码块。加第五种先红在这里。
     expect([...new Set(kinds)].sort()).toEqual(['code', 'list', 'paragraph', 'section'])
     // 类型声明本身也钉住：三种之外的 kind 不许出现在 TypeScript 里。
-    expect(sourceCode).not.toMatch(/kind:\s*'(html|raw|markdown|link|table|image|htmlBlock)'/u)
+    expect(contract).not.toMatch(/kind:\s*'(html|raw|markdown|link|table|image|htmlBlock)'/u)
+  })
+
+  it('keeps one definition of the node shape, in the contract, not in the component', () => {
+    // 一份定义：契约在主进程与渲染层都能取到；组件只 re-export，绝不自己再声明一遍。
+    // 今天已经因为「同一结构两处定义」返工过（发布说明解析器写了自己的三种节点）。
+    expect(contractSource).toContain('export type StructuredTextNode =')
+    expect(contractSource).toContain('export type StructuredTextRun =')
+    expect(sourceCode).toContain("from '@platform/contracts/structuredText'")
+    expect(sourceCode).not.toMatch(/export type StructuredTextNode\s*=/u)
+    expect(sourceCode).not.toMatch(/export type StructuredTextRun\s*=/u)
+    // 组件不许反过来把契约搬回渲染层：节点类型的唯一定义点是 contracts。
+    expect(contractSource).not.toContain('@platform/ui/components')
   })
 
   it('renders a code block verbatim: no list, no bold, no element, no horizontal scroll', () => {
