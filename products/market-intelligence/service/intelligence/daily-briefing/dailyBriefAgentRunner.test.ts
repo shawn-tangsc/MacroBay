@@ -9,8 +9,8 @@ describe('daily brief agent runner', () => {
       state: vi.fn(async () => undefined)
     }
     const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
-    await runner.start({ editionKey: '2026-10-30:zh-CN', date: '2026-10-30', locale: 'zh-CN', prompt: 'task', allowedTools: ['WebSearch'] })
-    expect(port.ensure).toHaveBeenCalledWith(expect.objectContaining({ editionKey: '2026-10-30:zh-CN', agentId: 'daily-brief-editor', allowedTools: ['WebSearch'] }))
+    await runner.start({ date: '2026-10-30', periodId: 'default', locale: 'zh-CN', prompt: 'task', allowedTools: ['WebSearch'] })
+    expect(port.ensure).toHaveBeenCalledWith(expect.objectContaining({ editionDate: '2026-10-30', periodId: 'default', locale: 'zh-CN', agentId: 'daily-brief-editor', allowedTools: ['WebSearch'] }))
     expect(port.send).toHaveBeenCalledWith('s1', expect.objectContaining({ agentId: 'daily-brief-editor', text: 'task' }))
     await runner.continue('s1', 'repair')
     expect(port.send).toHaveBeenLastCalledWith('s1', expect.objectContaining({ text: 'repair' }))
@@ -35,7 +35,7 @@ describe('daily brief agent runner', () => {
         state: async () => undefined
       }
       const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
-      void runner.start({ editionKey: '2026-10-30:zh-CN', date: '2026-10-30', locale: 'zh-CN', prompt: 'task', signal: controller.signal })
+      void runner.start({ date: '2026-10-30', periodId: 'default', locale: 'zh-CN', prompt: 'task', signal: controller.signal })
       await new Promise((resolve) => setTimeout(resolve, 0))
       controller.abort()
       await new Promise((resolve) => setTimeout(resolve, 20))
@@ -58,7 +58,7 @@ describe('daily brief agent runner', () => {
       state: vi.fn(async () => undefined)
     }
     const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
-    await runner.start({ editionKey: '2026-10-30:en-US', date: '2026-10-30', locale: 'en-US', prompt: 'task' })
+    await runner.start({ date: '2026-10-30', periodId: 'default', locale: 'en-US', prompt: 'task' })
     expect(sent[0]?.displayText).toContain('2026-10-30')
     expect(sent[0]?.displayText).toContain('daily brief')
     expect(sent[0]?.displayText).not.toMatch(/[\u4e00-\u9fff]/)

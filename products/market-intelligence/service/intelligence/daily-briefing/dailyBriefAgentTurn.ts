@@ -1,9 +1,9 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
-import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
-import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
+import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
@@ -51,6 +51,12 @@ export type DailyBriefAgentTurnInput = Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
   locale: DailyBriefingLocale
+  /**
+   * Which period of the day this turn writes. Absent until the period model is wired: this version
+   * has exactly one period, and it is the default one, so the identity stays a real value instead
+   * of a third spelling of the edition.
+   */
+  periodId?: string
   /**
    * The window's earlier AI conclusions, oldest first. The editor synthesizes them into a new
    * conclusion instead of copying the analysis page's verdict.
@@ -117,7 +123,7 @@ function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
   let document = input.document
   const priorConclusions = input.priorConclusions ?? []
-  const editionKey = dailyBriefEditionKey(document.edition.date, input.locale)
+  const periodId = input.periodId ?? DEFAULT_PERIOD_ID
   const copy = dailyBriefSessionCopy(input.locale)
   const summary = factSummary(document, input.locale)
   const gaps = collectDataGaps(document)
@@ -130,7 +136,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   ].join('\n\n')
   throwIfAborted(input.signal)
   stage({ stage: 'selection', state: 'begin' })
-  const started = await input.runner.start({ editionKey, date: document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
+  const started = await input.runner.start({ date: document.edition.date, periodId, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
   const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]

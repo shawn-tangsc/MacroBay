@@ -4,6 +4,12 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
 // importing this one path, and a schema change cannot ride along with a budget change.
 import { dailyBriefingPolicy } from './dailyBriefing/policies'
 
+/**
+ * The one issue a reader has before the period list exists. Old rows and new writes share this
+ * literal so a migrated edition is found by the same call that finds a fresh one.
+ */
+export const DEFAULT_PERIOD_ID = 'default'
+
 export {
   dailyBriefingGenerationPolicy,
   dailyBriefingGenerationTimes,
