@@ -62,14 +62,14 @@ import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentR
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
-import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
-import { applyDailyBriefingSchedules, registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
-import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
+import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
@@ -943,12 +943,6 @@ export function getIntelligenceModule(
         })
       }
     })
-    registerDailyBriefingJob(jobRuntime, {
-      service: dailyBriefingService,
-      getLocale: getAppLanguage,
-      timeZone: shellTimeZone,
-      getPeriods: () => dailyBriefingGenerationSettings.getPeriods()
-    })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
     // off. It is fire-and-forget so the renderer is never held; the latest stored edition is the
@@ -962,20 +956,15 @@ export function getIntelligenceModule(
         onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
       }))
       .catch(() => undefined)
-    if (hooks?.deleteAgentSessions) {
-      registerDailyBriefSessionRetentionJob(jobRuntime, {
-        links: dailyBriefSessionLinks,
-        deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
-        today: () => {
-          const zone = shellTimeZone()
-          return localDate(new Date().toISOString(), zone) ?? new Date().toISOString().slice(0, 10)
-        },
-        timeZone: shellTimeZone
-      })
-    }
-    const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
-      applyDailyBriefingSchedules(jobRuntime, await dailyBriefingGenerationSettings.getPeriods(), timeZone)
-    }
+    const rescheduleBriefingForDisplayTimeZone = wireDailyBriefingJobs({
+      jobRuntime,
+      service: dailyBriefingService,
+      getLocale: getAppLanguage,
+      timeZone: shellTimeZone,
+      periods: dailyBriefingGenerationSettings,
+      links: dailyBriefSessionLinks,
+      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {})
+    })
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
       rescheduleBriefingForDisplayTimeZone,
