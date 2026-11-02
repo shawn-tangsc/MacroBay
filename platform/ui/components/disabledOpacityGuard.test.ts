@@ -78,6 +78,10 @@ describe('disabled states', () => {
       // 过期豁免和过期欠账是同一种东西：文件改了、规则没了，这行就是在替一个结束的状态作证。
       expect(disabledRules(readFileSync(join(ROOT, file), 'utf8')).some(dimsWithOpacity), `${file} no longer dims`).toBe(true)
       expect(reason.length).toBeGreaterThan(20)
+      // 例外的边界必须写死：只对「纯图标、无文字」成立，且**不覆盖 loading**——等待指示的弧必须 ≥3:1，
+      // 否则这条例外会被读成「等待指示也可以压暗」。
+      expect(reason.toLowerCase()).toContain('glyph')
+      expect(reason).toContain('loading')
     }
   })
 
