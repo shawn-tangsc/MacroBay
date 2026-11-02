@@ -200,7 +200,7 @@ jobs:
           echo 'attaching:'
           list_assets | tr '\0' '\n'
 
-          notes="Unsigned alpha build. **macOS**: right-click the app → Open, or \`xattr -dr com.apple.quarantine /Applications/MacroBay.app\`. **Windows**: SmartScreen → More info → Run anyway."
+          notes='Unsigned alpha build: this release is **not code-signed and not notarized**, so the first launch takes two steps. **macOS**: drag the app into Applications, then right-click (Control-click) it → **Open** and confirm **Open**; double-clicking is blocked by Gatekeeper. If it still refuses, run `xattr -dr com.apple.quarantine /Applications/MacroBay.app` and open it again. **Windows**: run the installer, then in the SmartScreen dialog click **More info → Run anyway**. Both steps repeat with every downloaded update until a signed build ships.
 
           if gh release view "$BUILD_REF" >/dev/null 2>&1; then
             # Re-running a tag that already has a release only replaces the assets.

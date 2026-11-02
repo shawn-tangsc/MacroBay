@@ -59,9 +59,16 @@ keeps its source and its cutoff time.
 **[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
-The build is unsigned. On macOS, right-click the app → **Open**, or run
-`xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose
-**More info → Run anyway** in the SmartScreen prompt.
+This build is **not code-signed and not notarized**, so the first launch takes two steps:
+
+1. **macOS** — drag the app into *Applications*, then **right-click (Control-click) the app → Open**
+   and confirm **Open** in the dialog. Double-clicking is blocked by Gatekeeper. If macOS still
+   refuses, run `xattr -dr com.apple.quarantine /Applications/MacroBay.app` in Terminal and open it
+   again.
+2. **Windows** — run the installer. When SmartScreen says *Windows protected your PC*, click
+   **More info → Run anyway**.
+
+Every update you download repeats those same two steps, until a signed build ships.
 
 **No API key yet?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
 recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar months and three

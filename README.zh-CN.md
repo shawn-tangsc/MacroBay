@@ -56,9 +56,15 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 **[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
 
-安装包未签名。macOS 上右键 App → **打开**，或执行
-`xattr -dr com.apple.quarantine /Applications/MacroBay.app`；Windows 上在 SmartScreen 里点
-**更多信息 → 仍要运行**。
+安装包**未做代码签名，也未做公证**，所以第一次打开需要两步：
+
+1. **macOS**：把 App 拖进「应用程序」，然后**右键（或按住 Control 点按）App → 打开**，在弹窗里
+   确认「打开」。直接双击会被 Gatekeeper 拦下。如果仍然打不开，在终端执行
+   `xattr -dr com.apple.quarantine /Applications/MacroBay.app`，再打开一次。
+2. **Windows**：运行安装程序。SmartScreen 会提示「Windows 已保护你的电脑」，点
+   **更多信息 → 仍要运行**。
+
+每次下载新版本都要重走这两步，直到发布签名版本。
 
 **还没有 API Key？** 打开应用，选择 **示例模式 → 打开示例看板**。它会回放真实录制的一周数据——
 看板、资金费率、稳定币、ETF 流向、两个月的日历和三条已发布分析——界面上标注「示例数据」，并且不会写入
