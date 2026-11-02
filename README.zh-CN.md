@@ -43,11 +43,11 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 生成，也可以按需重新生成，每一条都保留来源和截止时间。
 
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：数字货币市场检查表、市场状态、同起点收益率、资金面、情绪与资金费率，以及右侧关注清单" width="100%">
+  <img src="./docs/assets/screenshots/dashboard-window-zh.png" alt="MacroBay 看板：AI 结论、市场状态、同起点收益率、市场情绪与资金面、永续持仓与资金费率、来源状态，以及右侧的利率路径与重点舆情" width="100%">
 </p>
 
 <p align="center">
-  <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
+  <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率，右栏是利率路径、日程与舆情。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
 </p>
 
 ## 下载
