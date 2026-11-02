@@ -41,16 +41,46 @@ function sourceFiles(dir: string): string[] {
   return found
 }
 
+/**
+ * 取出每个 `<IconButton …>` 开标签的文本。
+ *
+ * **必须按组件切段**：`ariaLabelKey` 这个属性名在别的组件上也用（过滤器组、状态药丸…），
+ * 全文件扫会把它们的键算到本组件头上——一条只会误伤的守卫，最后会被人加豁免而不是被修。
+ *
+ * 标签里可能含 `{…}`（内联处理器、模板字符串），所以按花括号深度找 `>`，不用 `indexOf('>')`。
+ */
+export function iconButtonTags(text: string): string[] {
+  const tags: string[] = []
+  for (const match of text.matchAll(/<IconButton\b/g)) {
+    let depth = 0
+    let end = -1
+    for (let index = (match.index ?? 0) + 1; index < text.length; index += 1) {
+      const char = text[index]
+      if (char === '{') depth += 1
+      else if (char === '}') depth = Math.max(0, depth - 1)
+      else if (char === '>' && depth === 0) {
+        end = index
+        break
+      }
+    }
+    if (end !== -1) tags.push(text.slice(match.index ?? 0, end + 1))
+  }
+  return tags
+}
+
 function offendersIn(file: string): Offender[] {
   const text = readFileSync(file, 'utf8')
   const offenders: Offender[] = []
   // 只认赋/传字面量：`ariaLabelKey: '…'`、`tooltipKey="…"`。变量、常量、函数调用一律跳过。
   const pattern = /(?:ariaLabelKey|tooltipKey)\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/g
-  for (const match of text.matchAll(pattern)) {
-    const value = match[1] ?? ''
-    if (looksLikeTextKey(value)) continue
-    const line = text.slice(0, match.index ?? 0).split('\n').length
-    offenders.push({ file, line, prop: match[0].split(/[:=]/)[0]!.trim(), value })
+  for (const tag of iconButtonTags(text)) {
+    const tagStart = text.indexOf(tag)
+    for (const match of tag.matchAll(pattern)) {
+      const value = match[1] ?? ''
+      if (looksLikeTextKey(value)) continue
+      const line = text.slice(0, tagStart + (match.index ?? 0)).split('\n').length
+      offenders.push({ file, line, prop: match[0].split(/[:=]/)[0]!.trim(), value })
+    }
   }
   return offenders
 }
@@ -65,8 +95,12 @@ describe('IconButton key guard', () => {
   })
 
   it('catches a sentence and a CJK label, so the guard cannot pass vacuously', () => {
-    const bad = ["ariaLabelKey: 'Close the panel'", "tooltipKey: '关闭面板'", "ariaLabelKey = 'ui.icon.close '"]
-      .map((line) => [...line.matchAll(/(?:ariaLabelKey|tooltipKey)\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/g)][0]?.[1] ?? '')
+    const bad = [
+      "<IconButton ariaLabelKey='Close the panel' />",
+      "<IconButton tooltipKey='关闭面板' />",
+      "<IconButton ariaLabelKey = 'ui.icon.close ' />"
+    ]
+      .map((tag) => [...tag.matchAll(/(?:ariaLabelKey|tooltipKey)\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/g)][0]?.[1] ?? '')
       .filter((value) => !looksLikeTextKey(value))
 
     expect(bad).toHaveLength(3)
