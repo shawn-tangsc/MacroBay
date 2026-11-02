@@ -451,6 +451,8 @@ export const productText = {
               change24h: '24h',
               window7d: '7 天',
               window24h: '24 小时',
+              /** The group's accessible name; the visible labels stay on the two options. */
+              windowGroup: '时间窗口',
               stateWhy: '依据：持仓 24h {change}，费率 {now}（3 个 8h 周期前 {ago}）',
               states: {
                 'deleveraging': '去杠杆 · 多头减仓',
@@ -2300,6 +2302,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               change24h: '24h',
               window7d: '7 days',
               window24h: '24 hours',
+              windowGroup: 'Time window',
               stateWhy: 'Basis: open interest 24h {change}, rate {now} (three 8h periods ago {ago})',
               states: {
                 'deleveraging': 'Deleveraging · longs cutting',

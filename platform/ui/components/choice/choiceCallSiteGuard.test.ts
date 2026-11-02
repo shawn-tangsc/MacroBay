@@ -25,7 +25,6 @@ const ANTD_BASELINE: ReadonlySet<string> = new Set([
   'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx',
   'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentCard.tsx',
   'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx',
-  'products/market-intelligence/desktop/features/industry/positioning/PositioningPanel.tsx',
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisDashboardLayout.tsx',
   'products/market-intelligence/desktop/settings/intelligence-sources/SettingsSourceTree.tsx',
   'products/market-intelligence/desktop/settings/intelligence-sources/index.tsx'

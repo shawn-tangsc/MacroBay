@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
 
-import { Segmented } from 'antd'
+import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import {
@@ -130,16 +131,21 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
 }
 
 function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInterestWindow; onWindowChange: (window: OpenInterestWindow) => void; text: PositioningPanelText }>): React.ReactElement {
-  // One Tab reaches the group and the arrow keys move between the two windows; the shared control
-  // owns the focus ring and the selected state, so the card keeps placement only.
+  // One Tab reaches the group; the arrow keys move focus and Enter/Space picks. Both options and
+  // the group's own name are keys, so the sentences never live in this file.
+  const resolveText = useProductTextKey()
   return (
-    <Segmented className="mi-positioning-panel__tabs" size="small"
-      value={window}
-      options={[
-        { label: text.window7d, value: '7d' },
-        { label: text.window24h, value: '24h' }
-      ]}
-      onChange={value => onWindowChange(value as OpenInterestWindow)} />
+    <div className="mi-positioning-panel__tabs">
+      <Segmented
+        value={window}
+        items={[
+          { value: '7d', labelKey: 'pages.intelligence.portal.dashboard.positioning.window7d' },
+          { value: '24h', labelKey: 'pages.intelligence.portal.dashboard.positioning.window24h' }
+        ]}
+        ariaLabelKey="pages.intelligence.portal.dashboard.positioning.windowGroup"
+        resolveText={resolveText}
+        onChange={value => onWindowChange(value as OpenInterestWindow)} />
+    </div>
   )
 }
 

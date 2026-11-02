@@ -64,9 +64,9 @@ describe('positioning panel', () => {
 
   it('names the window it is showing and switches through the callback', () => {
     const markup = render()
-    // One group, one Tab stop, and the selected window is the one named first.
-    expect(markup).toContain('role="radiogroup"')
-    expect(markup).toContain('ant-segmented-item-selected')
+    // One group, one Tab stop, and the chosen window carries aria-pressed rather than only a colour.
+    expect(markup).toContain('role="group"')
+    expect(markup).toContain('aria-pressed="true"')
     expect(markup).toContain('7 天')
     const onWindowChange = vi.fn()
     const container = document.createElement('div')
@@ -75,7 +75,7 @@ describe('positioning panel', () => {
     act(() => { root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
       funding, positioning, window: '7d', onWindowChange, text
     }))) })
-    const options = [...container.querySelectorAll('.ant-segmented-item-input')] as HTMLInputElement[]
+    const options = [...container.querySelectorAll('[role="group"] button')] as HTMLButtonElement[]
     expect(options).toHaveLength(2)
     act(() => { options[1]!.click() })
     expect(onWindowChange).toHaveBeenCalledWith('24h')
