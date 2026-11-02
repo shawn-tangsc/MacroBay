@@ -200,7 +200,6 @@
 
 .mi-news-drawer__body-toggle { margin: 8px 0 6px; }
 /* The segmented control owns its own border and radii; the row only pins the label size. */
-.mi-news-drawer__body-toggle .ant-segmented-item-label { font-size: 11px; padding: 0 8px; }
 
 .mi-news-drawer__row-waiting { color: var(--muted, #93a196); font-size: 9.5px; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
 

@@ -3,7 +3,6 @@
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/AppShell.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/ToolsSection.tsx": 1,
-    "products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisDashboardLayout.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": 1
   }

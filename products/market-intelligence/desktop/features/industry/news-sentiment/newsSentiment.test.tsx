@@ -375,7 +375,7 @@ describe('NewsSentimentFeature', () => {
     expect(options.filter((option) => option.tabIndex === 0)).toHaveLength(1)
   })
 
-  it('keeps the original/translated toggle on the shared radio base', async () => {
+  it('keeps the original/translated toggle on the shared segmented base', async () => {
     const getItem = vi.fn(async (input: { itemId: string }) => {
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
       return { ...item, bodyExcerpt: `body:${item.itemId}`, translatedBodyExcerpt: '译文正文' }
@@ -385,9 +385,11 @@ describe('NewsSentimentFeature', () => {
     await act(async () => { open?.click() })
     await act(async () => {})
     const toggle = document.body.querySelector('.mi-news-drawer__body-toggle')
-    expect(toggle?.getAttribute('role')).toBe('radiogroup')
-    expect(toggle?.querySelectorAll('input[type="radio"]')).toHaveLength(2)
-    expect(toggle?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
+    expect(toggle?.querySelector('[role="group"]')).not.toBeNull()
+    const options = [...(toggle?.querySelectorAll('button[aria-pressed]') ?? [])]
+    expect(options).toHaveLength(2)
+    expect(options.filter((option) => option.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
+    expect(options.filter((option) => option.tabIndex === 0)).toHaveLength(1)
   })
 
   it('re-reads when the reader retries a failed read', async () => {

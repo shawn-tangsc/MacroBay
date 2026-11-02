@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Segmented, Select } from 'antd'
+import { Button, Select } from 'antd'
 import { MoreVertical } from 'lucide-react'
 
 import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Segmented } from '@platform/ui/components/segmented'
 import { ContextMenu, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -417,17 +418,18 @@ export function NewsSentimentDrawer(props: {
                   </Button>
                 ) : null}
                 {translationEnabled && hasTranslatedBody && activeTranslationState !== 'translating' ? (
+                  <div className="mi-news-drawer__body-toggle">
                   <Segmented
-                    aria-label={text.drawer.detail.body}
-                    className="mi-news-drawer__body-toggle"
-                    onChange={(value) => setBodyView(value as 'original' | 'translated')}
-                    options={[
-                      { label: text.drawer.detail.original, value: 'original' },
-                      { label: text.drawer.detail.translated, value: 'translated' }
+                    ariaLabelKey="pages.intelligence.portal.newsSentiment.drawer.detail.body"
+                    items={[
+                      { labelKey: 'pages.intelligence.portal.newsSentiment.drawer.detail.original', value: 'original' },
+                      { labelKey: 'pages.intelligence.portal.newsSentiment.drawer.detail.translated', value: 'translated' }
                     ]}
-                    size="small"
+                    onChange={(value) => setBodyView(value === 'original' ? 'original' : 'translated')}
+                    resolveText={resolveProductText}
                     value={bodyView}
                   />
+                  </div>
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
                   {activeTranslationState === 'translating' || activeTranslationState === 'waiting' ? (
