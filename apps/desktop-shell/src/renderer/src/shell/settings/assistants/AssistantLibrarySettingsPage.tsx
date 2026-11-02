@@ -90,7 +90,6 @@ export function AssistantLibrarySettingsPage({
             onManage={onManageAssistants}
             onCreate={() => setCreateOpen(true)}
           />
-          {library.error ? <p className="assistant-library-error">{library.error}</p> : null}
           <AssistantTemplateGrid
             labels={labels}
             items={library.items}
@@ -98,6 +97,8 @@ export function AssistantLibrarySettingsPage({
             loadingLabel={platformText[language].status.loading}
             onInstall={(templateId) => void installTemplate(templateId)}
             onOpen={(templateId) => void openTemplateDetail(templateId)}
+            loadFailed={library.error !== null}
+            onRetry={() => void library.refresh()}
             onClearFilters={() => {
               library.setSearch('')
               library.setSelectedProductId(null)

@@ -15,6 +15,9 @@ type AssistantTemplateGridProps = {
   onOpen: (templateId: string) => void
   /** 空列表来自筛选（分类 / 关键词）：给一个真的能回到全量的动作。 */
   onClearFilters: () => void
+  /** 首次读取失败。没有它，「读不到」会被画成「被筛选挡住了」——把没读到说成筛选的错。 */
+  loadFailed: boolean
+  onRetry: () => void
 }
 
 export function AssistantTemplateGrid({
@@ -24,12 +27,27 @@ export function AssistantTemplateGrid({
   loadingLabel,
   onInstall,
   onOpen,
-  onClearFilters
+  onClearFilters,
+  loadFailed,
+  onRetry
 }: AssistantTemplateGridProps): React.ReactElement {
   if (loading) {
     return (
       <div className="assistant-library-empty">
         <LoadingState label={loadingLabel} />
+      </div>
+    )
+  }
+
+  if (loadFailed && items.length === 0) {
+    return (
+      <div className="assistant-library-empty">
+        <StateView
+          state="error"
+          reasonCode="unavailable"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }}
+        />
       </div>
     )
   }

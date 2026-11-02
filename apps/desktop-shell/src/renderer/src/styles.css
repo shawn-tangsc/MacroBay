@@ -1279,11 +1279,6 @@ h1 {
   color: var(--muted);
 }
 
-.assistant-library-error {
-  margin: 10px 14px 0;
-  color: var(--danger);
-}
-
 /*
  * PLAT-55 原型视觉映射：原型 --bg/--surface/--surface-2 在应用里由语义 token 承担。
  * 浅色主题下应用 --surface 与 --bg 同为白色，直接映射会抹平「基底 < 卡片 < 控件」层次，
