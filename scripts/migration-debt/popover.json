@@ -3,11 +3,15 @@
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx": 1,
-    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": 1,
-    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": 1
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": 1
   },
   "$decidedComment": "Reviewed and deliberately kept, not debt. A line here says \"we looked and decided\", so nobody re-opens the discussion; a line in `entries` says \"still to do\". If the file stops importing antd Popover, delete its line here too — a decided entry that no longer matches the code is the same lie as a stale debt entry.",
   "decided": {
+    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A list-shaped floating layer, not an explanation: it holds a clickable session list with per-row actions. The shared Popover renders text lines only, so migrating would drop the list and change what the control is. This needs a menu surface; revisit when one exists."
+    },
     "apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx": {
       "decision": "keep",
       "decidedOn": "2026-11-02",
