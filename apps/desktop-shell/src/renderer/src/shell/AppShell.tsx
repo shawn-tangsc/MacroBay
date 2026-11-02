@@ -26,6 +26,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ToastHost } from '@platform/ui/components/toast/ToastHost'
+import { handoffFocusAfterNavigation } from '@platform/workspace/navigation/navigationRequest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
@@ -428,6 +429,16 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     props.onLanguageChange?.(settings.language)
   }, [props.onLanguageChange, settings.language])
 
+  // 每次导航 +1：导航成功后由下面的 effect 把焦点交给目标（契约 §14）。
+  const [navFocusTick, setNavFocusTick] = useState(0)
+
+  useEffect(() => {
+    if (navFocusTick === 0) return
+    // 目标容器：优先显式标记，其次主内容区。落点顺序在 helper 里定死。
+    const container = document.querySelector<HTMLElement>('[data-nav-container]') ?? document.querySelector<HTMLElement>('main')
+    handoffFocusAfterNavigation(container)
+  }, [navFocusTick])
+
   useEffect(() => {
     const applyNavigation = (detail?: AppShellNavigateDetail): void => {
       // A tab-hosted shell must activate the target tab, not only repaint the sidebar highlight.
@@ -437,6 +448,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         setSettingsPanelKey(resolveAvailableSettingsPanelKey(detail.settingsPanelKey, productSettingsEntries))
       }
       if (detail?.assistant) setAssistantOpenRequest(detail.assistant)
+      // 导航后的焦点交接（契约 §14）：触发它的按钮所在空态随即被卸载，不交接焦点就会掉回 body。
+      setNavFocusTick((tick) => tick + 1)
     }
 
     const onNavigate = (event: Event): void => {
