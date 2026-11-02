@@ -1,4 +1,4 @@
-import { Button, Drawer, Tag } from 'antd'
+import { Button, Tag } from 'antd'
 import { Plus, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
@@ -6,6 +6,7 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-p
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { JobRunRecord } from '@platform/jobs'
+import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
 import {
@@ -56,6 +57,9 @@ const emptyLoadState: LoadState = {
   logsTotalByTaskId: {},
   jobsByRunLogId: {}
 }
+/** 标题键：句子由 `AgentText` 给，键只回答「这是哪一句」。 */
+const TASK_CENTER_TITLE_KEY = 'agent.taskCenter.title'
+
 export default function AgentTaskCenterDrawer({
   open,
   state,
@@ -258,12 +262,16 @@ export default function AgentTaskCenterDrawer({
 
   return (
     <Drawer
+      mode="modal"
+      // 原宽 980：最近的两档是 860 与 1040。选 860 是有意的——1040 在 1440 屏上几乎整屏，
+      // 会盖住用户正在看的东西；窄 120 只让列表多换几行。
+      size="wide"
       open={open}
-      width={980}
-      title={t.taskCenter.title}
+      titleKey={TASK_CENTER_TITLE_KEY}
+      resolveText={(key) => (key === TASK_CENTER_TITLE_KEY ? t.taskCenter.title : '')}
       onClose={onClose}
       className="agent-task-center-drawer"
-      extra={
+      titleExtra={
         <div className="agent-task-center-actions">
           <Button className="ant-secondary-button" size="small" icon={<RefreshCw size={14} />} onClick={() => void refresh()}>
             {t.taskCenter.refresh}

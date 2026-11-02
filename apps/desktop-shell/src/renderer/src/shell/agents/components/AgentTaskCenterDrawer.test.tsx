@@ -21,7 +21,9 @@ vi.mock('antd', () => ({
   Button: ({ children, onClick, ...props }: { children: ReactNode; onClick?: () => void }) =>
     createElement('button', { ...props, onClick }, children),
   Drawer: ({ children }: { children: ReactNode }) => createElement('div', null, children),
-  Tag: ({ children }: { children: ReactNode }) => createElement('span', null, children)
+  Tag: ({ children }: { children: ReactNode }) => createElement('span', null, children),
+  // 平台抽屉的关闭键是一个 IconButton，IconButton 从 antd 取 Tooltip；缺了它渲染直接抛。
+  Tooltip: ({ children }: { children: ReactNode }) => children
 }))
 
 vi.mock('../agentTextProvider', () => ({
