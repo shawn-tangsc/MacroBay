@@ -1064,10 +1064,13 @@ export type PlatformText = {
     tagline: string
     updates: string
     settingsWithUpdate: string
+    /** 更新块里那颗唯一动作按钮（有新版时写「立即更新」）——它不属于链接块，键就挂在 action 下。 */
+    action: {
+      update: string
+    }
     links: {
       title: string
       hint: string
-      download: string
       changelog: string
       docs: string
       site: string
@@ -2242,10 +2245,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
       updates: '更新',
       settingsWithUpdate: '设置，有新版本可用',
+      action: {
+        update: '立即更新'
+      },
       links: {
         title: '链接',
         hint: '由应用代你打开，只会打开本项目自己的页面。',
-        download: '立即更新',
         changelog: '更新日志',
         docs: '帮助文档',
         site: '官网',
@@ -3426,10 +3431,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: 'A local-first AI workspace: platform plus removable modules',
       updates: 'Updates',
       settingsWithUpdate: 'Settings, an update is available',
+      action: {
+        update: 'Update now'
+      },
       links: {
         title: 'Links',
         hint: 'Opened by the app for you; only this project’s own pages can be opened.',
-        download: 'Update now',
         changelog: 'Release notes',
         docs: 'Documentation',
         site: 'Website',

@@ -46,6 +46,7 @@ export function VersionCheckRow(props: {
   const text = platformText[language].preferences.version
   // 「打开下载页」与失败句属于关于页的链接文案（五颗按钮共用一句），不再留在更新块自己的键里。
   const linkText = platformText[language].about.links
+  const actionText = platformText[language].about.action
   const row = useUpdateCheckRow(props.client ?? platformUpdateCheckClient)
   const view = describeVersionCheck({
     state: row.state,
@@ -121,7 +122,7 @@ export function VersionCheckRow(props: {
               {view.checkLabel === 'justChecked'
                 ? text.justChecked
                 : view.action === 'update'
-                  ? linkText.download
+                  ? actionText.update
                   : text.check}
             </Button>
           </div>

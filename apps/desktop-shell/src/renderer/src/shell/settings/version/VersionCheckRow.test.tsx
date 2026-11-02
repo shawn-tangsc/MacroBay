@@ -12,6 +12,7 @@ import type { UpdateCheckClient } from './updateCheckClient'
 
 const text = platformText['zh-CN'].preferences.version
 const linkText = platformText['zh-CN'].about.links
+const actionText = platformText['zh-CN'].about.action
 
 const available: UpdateCheckProjection = {
   state: 'available',
@@ -107,7 +108,7 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain('0.3.1')
     expect(container.textContent).toContain('0.4.0')
     expect(container.textContent).toContain(text.pill.available)
-    expect(buttonWithText(container, linkText.download)).not.toBeNull()
+    expect(buttonWithText(container, actionText.update)).not.toBeNull()
     // 永远只有一颗动作按钮：有新版时它叫「立即更新」，不再有第二颗「检查更新」。
     expect(container.querySelectorAll('button')).toHaveLength(2)
   })
@@ -129,7 +130,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     await act(async () => {
-      buttonWithText(container, linkText.download)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonWithText(container, actionText.update)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(calls.openUpdateLink).toBe(1)
@@ -140,7 +141,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     await act(async () => {
-      buttonWithText(container, linkText.download)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonWithText(container, actionText.update)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     const notice = container.querySelector('[role="status"]')
@@ -168,7 +169,7 @@ describe('the version row in the settings page', () => {
     expect(checkedLine?.textContent).toContain('2026-11-03')
     expect(checkedLine?.textContent).toContain('这不代表没有新版本')
     expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
-    expect(buttonWithText(container, linkText.download)).toBeNull()
+    expect(buttonWithText(container, actionText.update)).toBeNull()
   })
 
   it('turns the button into "just checked" after a manual check, without a second waiting area', async () => {
@@ -203,7 +204,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client, enabled: false })
 
     expect(container.textContent).toContain(text.pill.available)
-    const download = buttonWithText(container, linkText.download)
+    const download = buttonWithText(container, actionText.update)
     expect(download).not.toBeNull()
     expect(download?.className).toContain('ant-primary-button')
     // 描述位只放一句：结论句在，「未开启自动检查」不再叠第二句（叠起来就是最高的一档）。
@@ -243,7 +244,7 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain(text.pill.autoOff)
     expect(container.textContent).toContain(text.autoOffLine)
     expect(buttonWithText(container, text.check)).not.toBeNull()
-    expect(buttonWithText(container, linkText.download)).toBeNull()
+    expect(buttonWithText(container, actionText.update)).toBeNull()
   })
 
   it('writes the switch through the injected settings updater', async () => {
@@ -266,7 +267,7 @@ describe('the version row in the settings page', () => {
 
     const focusable = [...container.querySelectorAll('button')].map((button) => button.textContent ?? '')
     // 一颗动作按钮（有新版时叫「立即更新」）+ 开关，顺序固定。
-    expect(focusable).toEqual([linkText.download, ''])
+    expect(focusable).toEqual([actionText.update, ''])
     expect(container.querySelector('[role="switch"]')).not.toBeNull()
   })
 
@@ -280,7 +281,7 @@ describe('the version row in the settings page', () => {
       'version-check-frequency-hint'
     )
     // 那一颗动作按钮挂着频率说明（有新版时它叫「立即更新」，仍是同一个位置）。
-    expect(buttonWithText(container, linkText.download)?.getAttribute('aria-describedby')).toBe(
+    expect(buttonWithText(container, actionText.update)?.getAttribute('aria-describedby')).toBe(
       'version-check-frequency-hint'
     )
   })
