@@ -1,11 +1,12 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { Modal } from 'antd'
+import { message } from 'antd'
 
 import { useToast } from '@platform/ui/components/toast'
 
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
 import { configuredModelChatProtocols } from '@platform/ai/providers/providerChatEndpoints'
+import { confirmAction } from '@platform/ui/components/confirm'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
@@ -118,8 +119,6 @@ export function ModelServiceProviderPage({
 }: ModelServiceProviderPageProps): React.ReactElement {
   const autosave = useModelServiceAutosave(statusText.failed)
   const [pendingEnabled, setPendingEnabled] = useState<boolean | null>(null)
-  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
-  const [pendingRemove, setPendingRemove] = useState<SafeModelProvider | null>(null)
   // 摘要态三个入口（地址框 / 齿轮 / 添加端点）都开同一个抽屉。
   const [requestConfigOpen, setRequestConfigOpen] = useState(false)
 
@@ -183,6 +182,24 @@ export function ModelServiceProviderPage({
 
   async function removeModel(modelId: string): Promise<boolean> {
     return autosave.run(`model:${modelId}`, () => actions.removeModel(modelId))
+  }
+
+  /**
+   * 删除供应商的二次确认。
+   *
+   * 一句话 + 危险钮，归平台 `confirmAction`：初始焦点落在「取消」上；删除失败仍由 `autosave` 的
+   * 行内错误展示（确认框已经关了，和旧行为一致——失败时页面上那个删除入口还在，读者可以直接再来一次）。
+   */
+  function confirmRemove(target: SafeModelProvider | null): void {
+    if (target === null) return
+    confirmAction({
+      title: labels.removeProvider,
+      description: labels.removeProviderConfirm(resolveProviderDisplayName(labels, target)),
+      confirmLabel: labels.removeProvider,
+      cancelLabel: labels.cancel,
+      tone: 'danger',
+      onConfirm: () => autosave.run('removeProvider', () => actions.removeProviderById(target.id))
+    })
   }
 
   // 平台 Toast：宿主挂在渲染根上，成功回执不再走 antd 的 message（那是第二套实现）。
@@ -289,10 +306,7 @@ export function ModelServiceProviderPage({
               showMainlandProxyNotice={showMainlandProxyNotice}
               onOpenConnectionCheck={actions.openConnectionCheck}
               onOpenExternal={actions.openExternal}
-              onRemoveProvider={() => {
-                setPendingRemove(provider)
-                setRemoveConfirmOpen(true)
-              }}
+              onRemoveProvider={() => confirmRemove(provider)}
               removeProviderDisabled={autosave.isPending('removeProvider')}
             />
 
@@ -342,28 +356,6 @@ export function ModelServiceProviderPage({
           </>
         )}
       </div>
-      <Modal
-        title={labels.removeProvider}
-        open={removeConfirmOpen}
-        centered
-        width={420}
-        okText={labels.removeProvider}
-        cancelText={labels.cancel}
-        okButtonProps={{ danger: true, 'data-remove-provider-confirm-button': true } as never}
-        cancelButtonProps={{ 'data-remove-provider-cancel': true } as never}
-        onOk={() => {
-          setRemoveConfirmOpen(false)
-          const target = pendingRemove ?? provider
-          void autosave.run('removeProvider', target ? () => actions.removeProviderById(target.id) : actions.removeProvider)
-        }}
-        onCancel={() => {
-          setRemoveConfirmOpen(false)
-          setPendingRemove(null)
-        }}>
-        <p data-remove-provider-confirm>
-          {labels.removeProviderConfirm((pendingRemove ?? provider) ? resolveProviderDisplayName(labels, (pendingRemove ?? provider)!) : '')}
-        </p>
-      </Modal>
 
       {provider !== null ? (
         <ModelServiceRequestConfigDrawer

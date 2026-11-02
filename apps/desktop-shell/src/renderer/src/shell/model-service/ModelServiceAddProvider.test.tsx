@@ -1,11 +1,18 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 
 import { openProviderMoreMenu, renderModelServiceSettings } from './modelServicePageHarness'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+beforeEach(() => {
+  // 与渲染入口 `main.tsx` 同一句：删除供应商的确认框走 antd 静态渲染，测试里也要接一次。
+  installAntdStaticRender()
+})
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -15,6 +22,17 @@ afterEach(() => {
 function setValue(input: HTMLInputElement, value: string): void {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
   input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+
+/** 确认框挂在 `document.body`（`Modal.confirm` 的 portal）：正文与两个按钮都从这里找。 */
+function confirmBody(): string {
+  return document.querySelector('.ant-modal-confirm-content')?.textContent ?? ''
+}
+
+function confirmButton(primary: boolean): HTMLButtonElement | null {
+  return [...document.querySelectorAll<HTMLButtonElement>('.ant-modal-confirm-btns button')]
+    .find((entry) => entry.classList.contains('ant-btn-primary') === primary) ?? null
 }
 
 async function click(element: Element | null | undefined): Promise<void> {
@@ -76,10 +94,9 @@ describe('PLAT-62 add provider flow', () => {
     const remove = custom.container.querySelector<HTMLButtonElement>('[data-remove-provider]')
     expect(remove?.disabled).toBe(false)
     await click(remove)
-    await vi.waitFor(() => expect(document.querySelector('[data-remove-provider-confirm]')).not.toBeNull())
-    expect(document.querySelector('[data-remove-provider-confirm]')?.textContent).toContain('Custom')
-    const confirm = document.querySelector<HTMLButtonElement>('[data-remove-provider-confirm-button]')
-    await click(confirm)
+    await vi.waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull())
+    expect(confirmBody()).toContain('Custom')
+    await click(confirmButton(true))
     expect(custom.api.remove).toHaveBeenCalledWith('custom')
     await vi.waitFor(() => expect(custom.container.querySelectorAll('[data-provider-row]')).toHaveLength(0))
     await act(async () => custom.root.unmount())
@@ -96,8 +113,8 @@ describe('PLAT-62 add provider flow', () => {
     const cancelled = await renderModelServiceSettings({ provider: { id: 'custom', name: 'Custom', isSystem: false } })
     await openProviderMoreMenu(cancelled.container)
     await click(cancelled.container.querySelector('[data-remove-provider]'))
-    await vi.waitFor(() => expect(document.querySelector('[data-remove-provider-cancel]')).not.toBeNull())
-    await click(document.querySelector('[data-remove-provider-cancel]'))
+    await vi.waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull())
+    await click(confirmButton(false))
     expect(cancelled.api.remove).not.toHaveBeenCalled()
     await act(async () => cancelled.root.unmount())
     document.body.replaceChildren()
@@ -108,8 +125,8 @@ describe('PLAT-62 add provider flow', () => {
     })
     await openProviderMoreMenu(failing.container)
     await click(failing.container.querySelector('[data-remove-provider]'))
-    await vi.waitFor(() => expect(document.querySelector('[data-remove-provider-confirm-button]')).not.toBeNull())
-    await click(document.querySelector('[data-remove-provider-confirm-button]'))
+    await vi.waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull())
+    await click(confirmButton(true))
     await vi.waitFor(() => expect(failing.container.querySelector('[data-provider-delete-error]')).not.toBeNull())
     await act(async () => failing.root.unmount())
   })

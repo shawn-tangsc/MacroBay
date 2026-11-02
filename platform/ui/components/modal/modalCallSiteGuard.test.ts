@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
  * `Modal` 的调用点守卫。
  *
  * **模态弹窗只有一份实现。** `apps/` 与 `products/` 里不许再 `import { Modal } from 'antd'`：
- * 现存 5 处是迁移欠账，记在下面的清单里，**只减不增**——切一处必须同笔删掉那一行，
+ * 现存 3 处是迁移欠账，记在下面的清单里，**只减不增**——切一处必须同笔删掉那一行，
  * 否则「清单在缩小」那条红。一份只会变长的豁免，第二天就是永久豁免。
  *
  * 为什么这条值得守：直接引 antd 的模态弹窗各有各的宽度数字与层级写法，而档位、居中、层级
@@ -20,9 +20,6 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git',
 
 /** antd `Modal` 的既有调用点（迁移欠账，按文件记，不按行号——行号会随迁移漂）。 */
 const ANTD_BASELINE: ReadonlySet<string> = new Set([
-  'apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSearchModal.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelDetectionDialog.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderPage.tsx',
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog.tsx'
 ])
 
