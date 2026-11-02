@@ -2,10 +2,26 @@ import { describe, expect, it } from 'vitest'
 
 import {
   COMPONENTS_DIR,
+  RULES_SINCE,
   declaresComponentOwner,
   findViolations,
   touchesComponents
 } from './check-components-ownership.mts'
+
+/**
+ * 用例里的时刻**从 `RULES_SINCE` 推导，不写死**。
+ *
+ * 写死过一次的代价：生效点后移之后，所有「规则之后」的样本落到了豁免侧，9 条用例一起红——
+ * 而红的原因不是规则错了，是**样本比规则旧**。凡是「从某一刻起生效」的规则，它的用例必须跟着
+ * 生效点一起动，否则每次后移都要去改一遍测试，而改测试的人会顺手把判据也改松。
+ */
+const shift = (minutes: number): string => new Date(Date.parse(RULES_SINCE) + minutes * 60_000).toISOString()
+/** 生效点之前：不判新规则。 */
+const BEFORE = shift(-60)
+/** 生效点之后：照常严判。 */
+const AFTER = shift(60)
+/** 比 AFTER 更晚，用于「认领那笔」与被认领那笔的先后。 */
+const LATER = shift(120)
 
 describe('components ownership guard', () => {
   it('treats only the components directory as owned, not look-alike prefixes', () => {
@@ -30,7 +46,7 @@ describe('components ownership guard', () => {
         hash: 'aaa',
         subject: 'feat(ui): touch the component',
         message: 'feat(ui): touch the component',
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: [`${COMPONENTS_DIR}/status-pill/StatusPill.tsx`]
       }
     ])
@@ -44,14 +60,14 @@ describe('components ownership guard', () => {
         hash: 'bbb',
         subject: 'fix(ui): owner change',
         message: 'fix(ui): owner change\n\nComponent-Owner: 前端组件',
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: [`${COMPONENTS_DIR}/menu/ContextMenu.tsx`]
       },
       {
         hash: 'ccc',
         subject: 'feat(notifications): unrelated',
         message: 'feat(notifications): unrelated',
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: ['platform/notifications/runtime/notificationRuntime.ts']
       }
     ])
@@ -66,7 +82,7 @@ describe('components ownership guard', () => {
         hash: 'bbb',
         subject: 'feat(state): x',
         message: 'feat(state): x\n\nComponent-Owner: 前端组件\n',
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'platform/desktop/main/channels/channelMaintenanceJobs.ts',
@@ -94,7 +110,7 @@ describe('components ownership guard', () => {
           'Also: platform/contracts/queryOutcome.ts — 白名单是契约，组件读它',
           'Also: docs/development/ui-state-components.md — 公开文档的码表'
         ].join('\n'),
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'platform/contracts/queryOutcome.ts',
@@ -106,13 +122,42 @@ describe('components ownership guard', () => {
     expect(violations).toEqual([])
   })
 
+  it('treats the migration debt lists as the component line\'s own account', () => {
+    // 账本外移到 scripts 之后，组件提交带上一份欠账清单不需要 Also：那是账，不是别人线的实现。
+    const withDebt = findViolations([
+      {
+        hash: 'ddd',
+        subject: 'refactor(ui): move the backlog out of the component dir',
+        message: 'refactor(ui): move the backlog out of the component dir\n\nComponent-Owner: 前端组件',
+        authorDate: AFTER,
+        files: [
+          `${COMPONENTS_DIR}/popover/popoverCallSiteGuard.test.ts`,
+          'scripts/migration-debt/popover.json'
+        ]
+      }
+    ])
+    expect(withDebt).toEqual([])
+
+    // 同一目录里出现代码文件，仍按普通附带改动判——放行的只是 `.json`。
+    const withCode = findViolations([
+      {
+        hash: 'eee',
+        subject: 'refactor(ui): x',
+        message: 'refactor(ui): x\n\nComponent-Owner: 前端组件',
+        authorDate: AFTER,
+        files: [`${COMPONENTS_DIR}/popover/popoverCallSiteGuard.test.ts`, 'scripts/migration-debt/notes.ts']
+      }
+    ])
+    expect(withCode).toHaveLength(1)
+  })
+
   it('does not judge commits older than the Also rule, and never asks for a reason on the component\'s own doc', () => {
     // 判定顺序：`Also:` 只判生效点之后的提交；组件自己的公开文档本来就在允许集合里。
     const commits = [
       {
         hash: 'old',
         subject: 'feat(state): before the rule',
-        authorDate: '2026-11-02T13:00:00+08:00',
+        authorDate: BEFORE,
         message: 'feat(state): before the rule\n\nComponent-Owner: 前端组件\n',
         files: [`${COMPONENTS_DIR}/state/StateView.tsx`, 'platform/contracts/queryOutcome.ts']
       },
@@ -120,7 +165,7 @@ describe('components ownership guard', () => {
         hash: 'new',
         subject: 'feat(state): doc follows the component',
         message: 'feat(state): doc follows the component\n\nComponent-Owner: 前端组件\n',
-        authorDate: '2026-11-02T14:00:00+08:00',
+        authorDate: AFTER,
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'docs/development/ui-state-components.md',
@@ -151,8 +196,8 @@ describe('components ownership guard', () => {
       }
     ]
 
-    expect(findViolations(shape('2026-11-02T13:00:00+08:00'))).toEqual([])
-    expect(findViolations(shape('2026-11-02T14:00:00+08:00'))).toHaveLength(1)
+    expect(findViolations(shape(BEFORE))).toEqual([])
+    expect(findViolations(shape(AFTER))).toHaveLength(1)
     // 读不出日期时从严判：兜底不许静默放行。
     expect(findViolations(shape('not-a-date'))).toHaveLength(1)
   })
@@ -162,14 +207,14 @@ describe('components ownership guard', () => {
       hash: 'd1d1d1d',
       subject: 'test(ui): relax the key-shape guard',
       message: 'test(ui): relax the key-shape guard',
-      authorDate: '2026-11-02T14:00:00+08:00',
+      authorDate: AFTER,
       files: [`${COMPONENTS_DIR}/tooltip/tooltipCallSiteGuard.test.ts`, `${COMPONENTS_DIR}/textKeyShape.ts`]
     }
     const claim = (extra: readonly string[] = [], files: readonly string[] = ['scripts/check-components-ownership.mts']) => ({
       hash: 'c1c1c1c',
       subject: 'chore(ui): claim the guard commit',
       message: ['chore(ui): claim the guard commit', '', 'Component-Owner: 前端组件', 'Owns: d1d1d1d', ...extra].join('\n'),
-      authorDate: '2026-11-02T14:05:00+08:00',
+      authorDate: LATER,
       files
     })
 

@@ -44,13 +44,30 @@ export function isComponentDoc(file: string): boolean {
  * 不做白名单：白名单会逼出「为了合规而拆得别扭」的提交；一句能写的理由就放行，
  * 写不出的（比如 220 行别线业务迁移搭组件提交的车）会红。
  */
+/**
+ * 迁移欠账清单：`scripts/migration-debt/*.json`。
+ *
+ * 这类文件是**账**，不是谁的实现：它记的是「还有哪些文件在用 antd 的那个组件」，产品线迁完一处就要
+ * 划掉自己那行。它本来写在组件目录里，于是「迁完划行」必然触碰组件目录、被判违规——当晚四条正经
+ * 迁移收尾都撞了。外移到 `scripts/` 之后它就是**组件线的账簿**：组件线改它、产品线划行，都不该再要
+ * 一段 `Also:` 解释；真正要解释的是「为什么这笔提交顺手改了别人线的实现」。
+ *
+ * 只放行 `.json`：这个目录里出现代码文件时，仍按普通附带改动判。
+ */
+export function isMigrationDebt(file: string): boolean {
+  return file.startsWith('scripts/migration-debt/') && file.endsWith('.json')
+}
+
 export function unexplainedFiles(files: readonly string[], message: string): string[] {
   const declared = new Set<string>()
   for (const line of message.split('\n')) {
     const match = /^Also:\s*(\S+)/u.exec(line.trim())
     if (match) declared.add(match[1])
   }
-  return files.filter((file) => !touchesComponents([file]) && !isComponentDoc(file) && !declared.has(file))
+  return files.filter(
+    (file) =>
+      !touchesComponents([file]) && !isComponentDoc(file) && !isMigrationDebt(file) && !declared.has(file)
+  )
 }
 
 /**
@@ -76,8 +93,17 @@ export function unexplainedFiles(files: readonly string[], message: string): str
  * 清单已迁出到 `scripts/migration-debt/`（被 git 追踪、不在组件目录），冲突消失。
  *
  * **今后任何后移都必须写清受害原因，写不出就不许后移。**
+ *
+ * 第三次后移（2026-11-02，同一次搬家的尾巴）——受害原因：
+ * `9bbe246`（情报线迁 `news-sentiment`，作者日期 14:11:34）带走了组件线的守卫改动。它自己没写
+ * 组件目录：`git commit -- <路径>` 提交的是**文件当前全部内容**，而那一刻守卫文件里躺着组件线
+ * 正在搬清单的改动。所以它是「路径级提交的受害者」，不是越权者。
+ *
+ * 为什么不必再往后调：这次后移之后，欠账清单已不在组件目录，**再没有「被要求的动作必然触碰
+ * 组件目录」这种情况**了。若将来又出现同类被判违规，先问「是谁的动作逼他碰组件目录」，
+ * 答不上来就不许后移——那时该修的是动作，不是生效点。
  */
-export const RULES_SINCE = '2026-11-02T13:56:41+08:00'
+export const RULES_SINCE = '2026-11-02T14:11:34+08:00'
 
 /** 这条提交是否早于生效点（含等于）：早于生效点的不判新规则。 */
 export function predatesRules(authorDate: string): boolean {
