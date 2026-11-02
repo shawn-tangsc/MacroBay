@@ -307,6 +307,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
         {snapshot?.quotes ? <div className="mi-cross-asset__status">{(['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live').map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot.quotes![asset].state]}</small>)}</div> : null}
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
+        {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
         {snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },

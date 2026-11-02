@@ -254,8 +254,12 @@ describe('cross-asset observation workspace', () => {
     const text = productText[language].pages.intelligence.portal.dashboard.crossAsset
     const client = { acquire: async () => ({ state: 'unavailable' }), query: async () => ({ state: 'unavailable' }),
       release: vi.fn(), getSourceConfiguration: async () => ({ state: 'configured', enabled: false }) }
+    vi.useFakeTimers()
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      // Not ready yet is not a failed read: the error surface only appears after the retry ladder
+      // (1+2+4+8+16s) is exhausted, so these assertions advance past it.
+      await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
       expect(host.querySelector('[data-cross-asset-workspace]')).not.toBeNull()
       expect(host.querySelector('section')?.getAttribute('aria-label')).toBe(text.title)
       // 拿不到行情是「读不到」，由统一状态面说那句话并给出重试，不再自己写一句文案。
@@ -680,14 +684,59 @@ describe('首次进入的状态顺序', () => {
     host.remove()
   })
 
+  it('keeps the chart and names the previous readings when a later read fails', async () => {
+    // 有数据之后的失败不许退回错误屏：图还在，另起一行说明这是上一次的读数。
+    const snapshot = { schemaVersion: 1, servedAt: '2026-10-14T12:00:00.000Z', asOf: '2026-10-14T12:00:00.000Z',
+      analysisEnd: '2026-10-14T12:00:00.000Z', range: '24h', mode: 'current', sourceState: 'live', windowStart: '2026-10-14T11:00:00.000Z',
+      historyCoverage: { index: { count: 12, expectedCount: 13 }, btc: { count: 12, expectedCount: 13 }, eth: { count: 12, expectedCount: 13 } },
+      curves: { index: [], btc: [], eth: [] },
+      closedReturns: { index: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } },
+        btc: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } },
+        eth: { '5m': { state: 'unavailable', reason: 'missing' }, '15m': { state: 'unavailable', reason: 'missing' }, '1h': { state: 'unavailable', reason: 'missing' }, '4h': { state: 'unavailable', reason: 'missing' }, '24h': { state: 'unavailable', reason: 'missing' } } },
+      correlations: { indexBtc: { state: 'unavailable', reason: 'missing' }, indexEth: { state: 'unavailable', reason: 'missing' } },
+      relativeReturns: { btcMinusIndex: null, ethMinusBtc: null }, indexSource: 'unavailable' }
+    let calls = 0
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })),
+      refresh: vi.fn(async () => ({ state: 'accepted' })),
+      query: vi.fn(async () => (++calls === 1 ? snapshot : { state: 'unavailable' }))
+    }
+    vi.useFakeTimers()
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    try {
+      const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      for (let tick = 0; tick < 4; tick += 1) await act(async () => { await Promise.resolve() })
+      expect(host.querySelector('[data-cross-asset-stale]')).toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+      expect(host.querySelector('[data-cross-asset-stale]')?.textContent).toBe(text.staleRead)
+      expect(host.querySelector('.state-view--error')).toBeNull()
+      expect(host.textContent).toContain(text.chart)
+    } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
+  })
+
   it('turns a genuinely failed first read into the error surface with a retry', async () => {
-    const { client, rejectQuery } = deferredClient()
-    const host = await mount(client)
-    await act(async () => { rejectQuery(new Error('request failed')); await Promise.resolve() })
-    for (let tick = 0; tick < 6; tick += 1) await act(async () => { await Promise.resolve() })
-    const failure = host.querySelector('.state-view--error')
-    expect(failure).not.toBeNull()
-    expect(failure?.querySelector('.state-view__action')).not.toBeNull()
-    host.remove()
+    // A read that keeps failing is terminal after the ladder — otherwise "not ready yet" would be
+    // a spinner that never ends.
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      release: vi.fn(async () => ({ state: 'released' })), refresh: vi.fn(async () => ({ state: 'accepted' })),
+      query: async () => { throw new Error('request failed') }
+    }
+    vi.useFakeTimers()
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    try {
+      const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+      const failure = host.querySelector('.state-view--error')
+      expect(failure).not.toBeNull()
+      expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+    } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
   })
 })

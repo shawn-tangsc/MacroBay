@@ -313,6 +313,7 @@ export const productText = {
               indexNames: { real: '纳斯达克 100', proxy: 'QQQ' },
               noData: '无数据', windowNoData: '—', forming: '实时未闭合',
               refresh: '更新历史', loading: '正在加载行情…', unavailable: '行情暂不可用',
+              staleRead: '这次刷新没有读到，下面是上一次的读数。',
               contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。请完全退出观潮后重新启动，只刷新页面不够。',
               quote: '纳斯达克 100 最新收盘', closed: '已闭合涨跌', observed: '成交时间', analysis: '闭合数据截至',
               observations: '跨市场观察', correlations: '24h · 5m 收益率相关性', indexBtc: '纳斯达克 100 ↔ BTC', indexEth: '纳斯达克 100 ↔ ETH',
@@ -518,11 +519,18 @@ export const productText = {
             divergence: {
               title: '跨面板背离',
               helpLabel: '这张卡怎么来的',
-              helpLines: [
+              /** Four one-look bullets: the bubble is a glance, not a document. */
+              helpBullets: [
                 '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
-                '这几行由固定阈值判定，没有模型参与：同一组数字每次读到的结论都相同，也不用等模型。',
-                '不常规的组合（同时出现两对、方向互相冲突、某条腿正压在阈值上）不在这张卡里解释——它会被标出来，交给页面右侧的 AI 总结说清为什么特殊。',
-                '「舆情」是模型给新闻标题打的标签：24 小时内明确表态的标题里，看空的占多少；它不是交易所数据，其余几组才是。',
+                '这几行由固定阈值判定，没有模型参与：同一组数字每次读到的结论都相同。',
+                '不常规的组合会被标出来，交给页面右侧的 AI 总结说清为什么特殊，这张卡不解释。',
+                '「舆情」是模型给新闻标题打的标签，不是交易所数据；其余几组才是。'
+              ],
+              /** The longer notes: opened below the card, never inside the bubble. */
+              helpDetailsLabel: '口径说明',
+              helpDetails: [
+                '不常规的组合指：同时出现两对、方向互相冲突、某条腿正压在阈值上。',
+                '「舆情」的口径：24 小时内明确表态的新闻标题里，看空的占多少。',
                 '比对前先对时间：按天更新的数据超过 36 小时、或某条腿超过它自己节奏的允许滞后时，这一对不下结论，并在下方写明原因。'
               ],
               withheldGroup: '（{count} 对）',
@@ -2193,6 +2201,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               indexNames: { real: 'Nasdaq 100', proxy: 'QQQ' },
               noData: 'No data', windowNoData: '—', forming: 'Live, unclosed',
               refresh: 'Update history', loading: 'Loading market data…', unavailable: 'Market data unavailable',
+              staleRead: 'This refresh did not read; these are the previous readings.',
               contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. Quit the app completely and start it again; reloading the page is not enough.',
               quote: 'Nasdaq 100 latest close', closed: 'Closed returns', observed: 'Trade time', analysis: 'Closed data through',
               observations: 'Cross-market observations', correlations: '24h · 5m return correlation', indexBtc: 'Nasdaq 100 ↔ BTC', indexEth: 'Nasdaq 100 ↔ ETH',
@@ -2390,11 +2399,18 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             divergence: {
               title: 'Cross-panel divergence',
               helpLabel: 'How this card is produced',
-              helpLines: [
+              /** Four one-look bullets: the bubble is a glance, not a document. */
+              helpBullets: [
                 'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
-                'These lines come from fixed thresholds, with no model in the loop: the same readings always give the same answer, and nothing waits on a request.',
-                'Unusual combinations — two pairs at once, directions that contradict each other, a leg sitting on its threshold — are not explained here. They are flagged and handed to the page’s written analysis, which says in one sentence why they are special.',
-                'Sentiment is the model labelling headlines: of the day’s items that took a side, how many were bearish. The rest are exchange and on-chain readings.',
+                'These lines come from fixed thresholds, with no model in the loop: the same readings always give the same answer.',
+                'Unusual combinations are flagged and handed to the written analysis on the right, which says why they are special.',
+                'Sentiment is the model labelling headlines; it is not an exchange reading. The other legs are.'
+              ],
+              /** The longer notes: opened below the card, never inside the bubble. */
+              helpDetailsLabel: 'Reading notes',
+              helpDetails: [
+                'Unusual means two pairs at once, directions that contradict each other, or a leg sitting on its threshold.',
+                'Sentiment counts the headlines that took a side in the last 24 hours: of those, how many were bearish.',
                 'Windows are checked first: data updated daily that is older than 36 hours, or any leg older than its own cadence allows, withholds the pair and names the reason.'
               ],
               withheldGroup: ' ({count} pairs)',

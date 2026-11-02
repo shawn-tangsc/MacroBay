@@ -24,7 +24,7 @@ async function render(api: ReturnType<typeof client>) {
 }
 
 describe('cross-asset visible lease hook', () => {
-  it('removes live claims when a lease renewal fails and reacquires on its next bounded attempt', async () => {
+  it('keeps the rows when a lease renewal fails, and reacquires on its next backoff step', async () => {
     vi.useFakeTimers()
     const api = client()
     const cached = { schemaVersion: 1, range: '24h', mode: 'current', sourceState: 'live', curves: {},
@@ -34,8 +34,11 @@ describe('cross-asset visible lease hook', () => {
     api.renew.mockResolvedValueOnce({ state: 'expired' } as never)
     const page = await render(api)
     await act(async () => vi.advanceTimersByTimeAsync(10_000))
-    expect(page.state().snapshot).toMatchObject({ sourceState: 'unavailable', forming: { index: null } })
-    await act(async () => vi.advanceTimersByTimeAsync(10_000))
+    // A lost lease is not a failed read: the rows stay live-looking and the hook comes back after
+    // the first backoff step instead of painting the error state.
+    expect(page.state().state).toBe('ready')
+    expect(page.state().snapshot).toMatchObject({ sourceState: 'live' })
+    await act(async () => vi.advanceTimersByTimeAsync(1_000))
     expect(api.acquire).toHaveBeenCalledTimes(2)
   })
 
@@ -108,4 +111,64 @@ describe('cross-asset visible lease hook', () => {
     expect(api.release).toHaveBeenCalledWith('late')
     expect(vi.getTimerCount()).toBe(0)
   })
+})
+it('stays loading while the runtime is not ready, and only turns to the error after the retry ladder', async () => {
+  vi.useFakeTimers()
+  const api = client()
+  api.acquire.mockRejectedValue(new Error('runtime not ready'))
+  const page = await render(api)
+  expect(page.state().state).toBe('loading')
+  await act(async () => vi.advanceTimersByTimeAsync(5_000))
+  expect(page.state().state).toBe('loading')
+  // 1 + 2 + 4 + 8 + 16 seconds of backoff, then a sixth failure is terminal.
+  await act(async () => vi.advanceTimersByTimeAsync(40_000))
+  expect(page.state().state).toBe('error')
+  expect(page.state().failure).toBe('query')
+})
+
+it('never paints an error while a slow query is still on its way', async () => {
+  vi.useFakeTimers()
+  const api = client()
+  let resolve!: (value: unknown) => void
+  api.query.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+  const page = await render(api)
+  await act(async () => vi.advanceTimersByTimeAsync(5_000))
+  expect(page.state().state).toBe('loading')
+  const snapshot = { schemaVersion: 1, range: '24h', mode: 'current', sourceState: 'live', curves: {},
+    quotes: { index: { state: 'live', price: '100', tradedAtMs: 1, receivedAtMs: 1 }, btc: { state: 'missing' }, eth: { state: 'missing' } },
+    forming: { index: null, btc: null, eth: null } }
+  await act(async () => resolve(snapshot))
+  await act(async () => vi.advanceTimersByTimeAsync(0))
+  expect(page.state().state).toBe('ready')
+})
+
+it('keeps the previous rows and marks them stale when a later read fails', async () => {
+  vi.useFakeTimers()
+  const api = client()
+  const cached = { schemaVersion: 1, range: '24h', mode: 'current', sourceState: 'live', curves: {},
+    quotes: { index: { state: 'live', price: '100', tradedAtMs: 1, receivedAtMs: 1 }, btc: { state: 'missing' }, eth: { state: 'missing' } },
+    forming: { index: null, btc: null, eth: null } }
+  api.query.mockResolvedValueOnce(cached as never).mockResolvedValue({ state: 'unavailable' } as never)
+  const page = await render(api)
+  await act(async () => vi.advanceTimersByTimeAsync(1_000))
+  expect(page.state().state).toBe('ready')
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(page.state().stale).toBe(true)
+  expect(page.state().snapshot).toMatchObject({ sourceState: 'unavailable' })
+})
+
+it('keeps the rows when an explicit refresh rejects, and only errors with nothing on screen', async () => {
+  vi.useFakeTimers()
+  const api = client()
+  const cached = { schemaVersion: 1, range: '24h', mode: 'current', sourceState: 'live', curves: {},
+    quotes: { index: { state: 'live', price: '100', tradedAtMs: 1, receivedAtMs: 1 }, btc: { state: 'missing' }, eth: { state: 'missing' } },
+    forming: { index: null, btc: null, eth: null } }
+  api.query.mockResolvedValue(cached as never)
+  api.refresh.mockRejectedValueOnce(new Error('refresh failed'))
+  const page = await render(api)
+  await act(async () => vi.advanceTimersByTimeAsync(1_000))
+  await act(async () => page.state().refresh())
+  expect(page.state().stale).toBe(true)
+  expect(page.state().state).toBe('ready')
+  expect(page.state().snapshot).not.toBeUndefined()
 })
