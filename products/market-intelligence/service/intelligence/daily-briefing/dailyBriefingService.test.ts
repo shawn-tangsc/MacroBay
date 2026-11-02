@@ -767,3 +767,26 @@ describe('period run', () => {
     expect(await store.getPeriodRun?.('2026-10-30')).toBeUndefined()
   })
 })
+
+describe('briefing ready notice', () => {
+  it('says nothing when an edition is stored, and nothing when it is read again', async () => {
+    // §28：成功不通知。数的是「通知被调用了几次」，因为那比「有没有弹出来」更能被机器检查。
+    const store = memoryStore()
+    const notices: Array<Record<string, unknown>> = []
+    const service = createDailyBriefingService({
+      source: fakeSource(),
+      store,
+      now: () => asOf,
+      generationSettings: async () => ({ generationTime: '08:00', windowHours: 24 }),
+      noticeSubmit: async (request) => {
+        notices.push(request as unknown as Record<string, unknown>)
+        return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
+      }
+    })
+
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(notices).toHaveLength(0)
+  })
+})

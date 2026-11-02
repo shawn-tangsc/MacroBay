@@ -930,7 +930,6 @@ export function getIntelligenceModule(
       }),
       store: dailyBriefingStore,
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
-      ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
