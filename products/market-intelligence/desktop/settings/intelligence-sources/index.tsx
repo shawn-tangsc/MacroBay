@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Segmented } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { Segmented } from '@platform/ui/components/segmented'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { ProviderDetail } from './ProviderDetail'
@@ -22,6 +23,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   const [view, setView] = useState<'sources' | 'runs'>('sources')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const language = useShellLanguage()
+  const resolveText = useProductTextKey()
   const t = productText[language].settings.intelligenceSources
   const {
     settingsView,
@@ -83,12 +85,17 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   return (
     <section className="settings-workspace intelligence-sources-workspace">
       <div className="intelligence-sources-view-switch">
-        {/* One radio group: Tab enters it once, the arrow keys move between the two views. */}
+        {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader
+            can compare both views before committing. Both labels and the group's own name are keys,
+            so the sentences never live in this file. */}
         <Segmented
-          aria-label={t.title}
+          ariaLabelKey="settings.intelligenceSources.title"
+          items={[
+            { labelKey: 'settings.intelligenceSources.viewSources', value: 'sources' },
+            { labelKey: 'settings.intelligenceSources.viewRuns', value: 'runs' }
+          ]}
           onChange={(value) => setView(value as 'sources' | 'runs')}
-          options={[{ label: t.viewSources, value: 'sources' }, { label: t.viewRuns, value: 'runs' }]}
-          size="small"
+          resolveText={resolveText}
           value={view}
         />
       </div>
