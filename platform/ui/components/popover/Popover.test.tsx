@@ -55,8 +55,24 @@ async function mountLines(keys: readonly string[], resolveText: (value: string) 
   await act(async () => {
     trigger.focus()
   })
-  await tick()
   return trigger
+}
+
+/**
+ * 等到浮层内容真的出现，**轮询到条件成立，不用固定 sleep**。
+ *
+ * 原来这里等一次 20ms，单独跑够用、全套并发跑就不够——同一棵树、同一时刻，跑全套红、单跑绿，
+ * 那是测试在对时序作假设，不是产品行为。等待要等的是「东西出现了」，不是一个时长。
+ */
+async function waitForLines(): Promise<HTMLElement[]> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
+    if (rendered.length > 0) return rendered
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  return []
 }
 
 async function tick(): Promise<void> {
@@ -158,7 +174,7 @@ describe('Popover', () => {
 
   it('renders one key per line, with the first line carrying the emphasis', async () => {
     await mountLines(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
-    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
+    const rendered = await waitForLines()
     expect(rendered.map((node) => node.textContent)).toEqual(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
     // 首行是这句说明的主题，其余是细节：丢了这个区分，三行并列读起来就是同一件事。
     expect(rendered[0]?.style.fontWeight).toBe('600')
@@ -199,7 +215,7 @@ describe('Popover', () => {
       coverage: '289/289',
       total: '289'
     })
-    const rendered = document.querySelector<HTMLElement>('[data-popover-line]')
+    const [rendered] = await waitForLines()
     expect(rendered?.textContent).toBe('Coverage 289/289 of 289')
     // 没有残留占位：`{` 还在说明参数没填进去，读者会把模板当正文。
     expect(rendered?.textContent).not.toContain('{')
@@ -207,7 +223,8 @@ describe('Popover', () => {
 
   it('keeps a missing placeholder visible instead of dropping the number silently', async () => {
     await mountLines(['ui.test.coverage'], (value) => (value === 'ui.test.coverage' ? 'Coverage {coverage}' : ''), {})
-    expect(document.querySelector<HTMLElement>('[data-popover-line]')?.textContent).toBe('Coverage {coverage}')
+    const [kept] = await waitForLines()
+    expect(kept?.textContent).toBe('Coverage {coverage}')
   })
 
   it('renders nothing when every line resolves to an empty string', async () => {
