@@ -130,3 +130,20 @@ describe('policy path drawer uncollected sections', () => {
     expect(rendered.querySelector('.mi-policy-drawer__empty')).toBeNull()
   })
 })
+
+describe('policy drawer pending 24h change', () => {
+  it('explains the dash through a focusable tooltip, not a title attribute', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'normal' },
+      settlement: undefined,
+      probability: { venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40 }
+    })
+    // `title` is not a hint channel: keyboard and touch readers get nothing from it.
+    expect(rendered.querySelector('dd[title]')).toBeNull()
+    const dash = rendered.querySelector('dd[tabindex="0"]')
+    expect(dash).not.toBeNull()
+    expect(dash?.textContent).toContain('—')
+    expect(dash?.textContent).toContain(text.change24hPendingShort)
+  })
+})

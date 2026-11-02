@@ -1,7 +1,9 @@
 import { ExternalLink } from 'lucide-react'
 
 import { StateView } from '@platform/ui/components/state'
+import { Tooltip } from '@platform/ui/components/tooltip'
 
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { MiSideDrawer } from './MiSideDrawer'
 
 import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
@@ -76,6 +78,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
   const vote = reading.lastDecision?.vote
   // On the decision day the next meeting is the one after the realised one; the calendar still
   // returns today's meeting until the date passes, so the strip's own next meeting wins.
+  const resolveKey = useProductTextKey()
   const nextMeeting = reading.settlement?.nextMeeting
   const meetingDate = nextMeeting?.meetingDate ?? reading.meetingDate
   const daysAway = nextMeeting?.daysUntil ?? reading.daysUntilMeeting
@@ -180,11 +183,17 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       </h3>
       <dl className="mi-policy-drawer__kv">
         {probability ? <>
-          <div><dt>{text.change24h}</dt><dd title={probability.changeInPp24h === undefined ? text.change24hPending : undefined}>
+          <div><dt>{text.change24h}</dt>
             {probability.changeInPp24h === undefined
-              ? <><span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span></>
-              : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
-          </dd></div>
+              // The dash explains itself on hover and on a tab stop: a native `title` only answers the
+              // pointer, so a keyboard reader got a dash and no reason for it.
+              ? <Tooltip labelKey="pages.intelligence.portal.dashboard.policyPath.change24hPending" resolveText={resolveKey}>
+                  <dd tabIndex={0}>
+                    <span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span>
+                  </dd>
+                </Tooltip>
+              : <dd>{`${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}</dd>}
+          </div>
           <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${percentOf(probability.range30d.min)}–${percentOf(probability.range30d.max)}` : '—'}</dd></div>
           <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>
         </> : null}
