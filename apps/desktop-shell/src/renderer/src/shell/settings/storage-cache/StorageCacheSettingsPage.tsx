@@ -124,9 +124,14 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </div>
         </header>
 
-        {state.error ? (
-          <div className="storage-cache-error">
-            <span>{state.error}</span>
+        {/*
+         * 「刷新失败、旧数据还在」不是「读不到」：页面级错误态会把用户手里的旧表换成空白，
+         * 等于用一次失败惩罚他。这里只说清「这是上次读到的数据」，并把重试留在原处。
+         * 运行时原文（IPC 的 message）是给实现的证据，不进界面。
+         */}
+        {state.error && state.caches.length > 0 ? (
+          <div className="storage-cache-error" role="status">
+            <span>{labels.staleDataNotice}</span>
             <Button size="small" onClick={() => void state.reload()}>{labels.refresh}</Button>
           </div>
         ) : null}

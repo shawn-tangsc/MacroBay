@@ -1250,6 +1250,8 @@ export type PlatformText = {
     fieldBackupPolicy: string
     operationSuccess: string
     operationFailed: string
+    /** 刷新失败但旧数据仍在：必须说清是旧数据，否则用户以为缓存没了。 */
+    staleDataNotice: string
     confirmClear: (name: string) => string
     confirmCompact: (name: string) => string
     confirmSensitiveClear: string
@@ -2339,6 +2341,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldBackupPolicy: '备份策略',
       operationSuccess: '缓存操作已完成',
       operationFailed: '缓存操作失败',
+      staleDataNotice: '没能更新，下面是上次读到的数据。',
       confirmClear: (name) => `确认清理缓存“${name}”？`,
       confirmCompact: (name) => `确认压缩缓存“${name}”？`,
       confirmSensitiveClear: '该缓存包含用户内容或敏感引用，清理后需要重新生成这些派生结果。',
@@ -3443,6 +3446,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldBackupPolicy: 'Backup',
       operationSuccess: 'Cache operation completed',
       operationFailed: 'Cache operation failed',
+      staleDataNotice: 'Could not refresh; the rows below are from the last successful read.',
       confirmClear: (name) => `Clear cache "${name}"?`,
       confirmCompact: (name) => `Compact cache "${name}"?`,
       confirmSensitiveClear: 'This cache contains user content or secret references. Derived results will be rebuilt after clearing.',

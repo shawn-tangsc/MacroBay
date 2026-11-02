@@ -175,4 +175,24 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain(resolveStateViewText('en-US', STATE_VIEW_ACTION_KEYS.retry))
     expect(markup).not.toContain('data-state="empty"')
   })
+
+  it('keeps the last rows when a refresh fails, and says they are stale', () => {
+    // 「拿到新的失败」不等于「没有数据」：把旧表换成页面级空态，等于用一次刷新失败惩罚用户。
+    const labels = platformText['en-US'].storageCache
+    mockFeed.error = 'Error invoking remote method platform-unavailable'
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="en-US">
+        <StorageCacheSettingsPage language="en-US" />
+      </ShellLanguageProvider>
+    )
+
+    // 旧表仍在
+    expect(markup).toContain('Derived analysis cache')
+    expect(markup).toContain('storage-cache-table')
+    // 说清是「上次读到的」，不是「读不到」
+    expect(markup).toContain(labels.staleDataNotice)
+    expect(markup).not.toContain('data-state="error"')
+    // 运行时原文（IPC message）是给实现的证据，不进界面
+    expect(markup).not.toContain('platform-unavailable')
+  })
 })
