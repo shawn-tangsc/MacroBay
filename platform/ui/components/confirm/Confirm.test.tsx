@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -81,10 +81,15 @@ describe('confirm options', () => {
   })
 
   it('never reaches for the static modal, whose only defect is where it renders', () => {
-    // 静态入口站在 React 树外 ⇒ 只吃 antd 默认主题。守卫是源码级的：四个文件里都不许出现。
-    for (const text of [component, provider, builder]) {
-      expect(text).not.toContain('Modal.confirm(')
-    }
+    // 静态入口站在 React 树外 ⇒ 只吃 antd 默认主题，这正是「深色窗口弹浅色框」的成因。
+    // 守的是**整个目录**，不是列出来的三个文件：以后谁在这个目录里加一个文件、顺手用静态方法，
+    // 它必须当场红，而不是等到某一个窗口里再被肉眼发现。
+    const files = readdirSync(__dirname).filter((name) => /\.tsx?$/u.test(name) && !/\.test\.tsx?$/u.test(name))
+    expect(files.length).toBeGreaterThan(0)
+    const offenders = files
+      .filter((name) => readFileSync(join(__dirname, name), 'utf8').includes('Modal.confirm('))
+      .map((name) => `confirm/${name}`)
+    expect(offenders).toEqual([])
   })
 })
 
