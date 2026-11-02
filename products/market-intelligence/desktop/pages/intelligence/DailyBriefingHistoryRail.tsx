@@ -42,7 +42,7 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
             </span>
             {missing ? <small className="mi-daily-briefing__rail-missing">{
               edition.date === todayDate && generatingStage
-                ? text.generationProgress.running + ' · ' + generatingStage
+                ? text.generationProgress.railRunning + ' · ' + generatingStage
                 : text.history.missingRun
             }</small> : <>
               <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction ?? 'none'}>

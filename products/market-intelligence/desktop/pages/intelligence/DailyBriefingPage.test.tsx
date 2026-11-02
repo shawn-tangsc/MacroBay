@@ -658,3 +658,27 @@ describe('daily briefing page', () => {
     expect(again.querySelector('[data-stage="store"]')?.getAttribute('data-stage-state')).toBe('failed')
   })
 })
+
+it('says the progress could not be read without falling back to "not generated"', async () => {
+  // getToday never settles, so the page stays in its generating state while getProgress fails.
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    // Today's row is a gap, which is the state the rail must not label "not generated" mid-run.
+    list: vi.fn(async () => ({
+      state: 'available' as const,
+      result: { editions: editions.map((edition) => (edition.date === '2026-10-30' ? { ...edition, state: 'missing' as const } : edition)) }
+    })),
+    getProgress: vi.fn(async () => ({ state: 'unavailable' as const }))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+
+  await act(async () => { await Promise.resolve() })
+
+  const notice = dom.querySelector('[data-progress-unreadable]')
+  expect(notice?.textContent).toContain('生成还在进行')
+  // The rail must not claim the edition was never made while the pipeline is still running.
+  const today = dom.querySelector('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')
+  expect(today?.textContent).toContain('生成中')
+  expect(today?.textContent).toContain('进度未知')
+  expect(today?.textContent).not.toContain('当天未运行')
+})

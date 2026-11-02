@@ -80,6 +80,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const generating = view.status === 'loading' || regenerating
   const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
+  // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
+  // must not pretend the run stopped either — the pipeline is still spending model calls.
+  const progressUnreadable = generating && progress?.state === 'unavailable'
 
   useEffect(() => {
     let active = true
@@ -305,7 +308,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     </header>
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
-        generatingStage={liveProgress ? runningRowName(liveProgress, text) : undefined}
+        generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
@@ -317,6 +320,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p>
           {/* The one spinner stays; the rows say which step it is on. */}
           {liveProgress ? <DailyBriefingLiveSteps nowMs={Date.now()} progress={liveProgress} text={text} /> : null}
+          {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
         </div> : null}
         {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
           ? <StateView

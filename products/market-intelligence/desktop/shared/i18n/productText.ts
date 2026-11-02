@@ -821,6 +821,17 @@ export const productText = {
                   system: '重新生成；若反复失败，检查本地存储和运行状态。'
                 }
               },
+              generationProgress: {
+                running: '进行中',
+                waiting: '等待',
+                elapsed: '已用 {duration}',
+                repair: '修正',
+                finished: '已完成',
+                note: '写作和校验各是一次模型调用，会停一会儿；这一步会显示已用时间，说明它仍在运行。',
+                railRunning: '生成中',
+                unknown: '生成还在进行，只是这一步没取回来，会自动再试。',
+                unknownStage: '进度未知'
+              },
               generationTrace: {
                 title: '生成阶段',
                 completed: '已完成',
@@ -2656,6 +2667,17 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   keepRunning: 'Keep the app running at the generation time; a missed run is caught up on the next open.',
                   system: 'Regenerate; if it keeps failing, check local storage and runtime status.'
                 }
+              },
+              generationProgress: {
+                running: 'Running',
+                waiting: 'Waiting',
+                elapsed: 'Elapsed {duration}',
+                repair: 'Revision',
+                finished: 'Done',
+                note: 'Writing and validation are one model call each, so they hold still for a while; the elapsed time keeps counting, which is how you know it is still running.',
+                railRunning: 'Generating',
+                unknown: 'The generation is still running; this step just could not be read. It will be asked again.',
+                unknownStage: 'progress unknown'
               },
               generationTrace: {
                 title: 'Generation stages',
