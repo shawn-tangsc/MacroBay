@@ -34,6 +34,7 @@ import {
   updateTaskViaApi
 } from '../agentTaskDataApi'
 import { selectSessionViaApi } from '../agentSessionDataApi'
+import { resolveAgentTextKey } from '../agentTooltipText'
 import AgentTaskCenterList from './AgentTaskCenterList'
 import AgentTaskDraftForm from './AgentTaskDraftForm'
 import AgentTaskRunSection from './AgentTaskRunSection'
@@ -289,6 +290,7 @@ export default function AgentTaskCenterDrawer({
           selectedTaskId={centerState.selectedTaskId}
           loading={loading}
           labels={t.taskCenter}
+          resolveText={(key) => resolveAgentTextKey(t, key)}
           onSelect={setSelectedTaskId}
           onCreate={startCreate}
         />

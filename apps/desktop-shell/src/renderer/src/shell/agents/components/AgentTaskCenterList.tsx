@@ -1,17 +1,29 @@
-import { Tag } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import type { AgentTaskCenterItem } from '../agentTaskCenterViewModel'
 import type { AgentText } from '../agentText'
 
+/**
+ * 状态词 → 档位：查表，不写默认值。`已暂停` 与 `已完成` 都是「不用你管」，
+ * 区别由文案承担；`已到期` 才需要读者看一眼，所以是 `warn` 而不是 `bad`（那留给已经出错）。
+ */
+const TASK_TAG_TONE = {
+  paused: 'muted',
+  completed: 'muted',
+  overdue: 'warn'
+} as const satisfies Record<string, StatusPillTone>
+
 type AgentTaskCenterListProps = {
   items: readonly AgentTaskCenterItem[]
   selectedTaskId: string | null
   loading: boolean
   labels: AgentText['taskCenter']
+  /** 状态文案的解析入口：`StatusPill` 只收键，句子由调用方给。 */
+  resolveText: (key: string) => string
   onSelect: (taskId: string) => void
   onCreate: () => void
 }
@@ -27,6 +39,7 @@ export default function AgentTaskCenterList({
   selectedTaskId,
   loading,
   labels,
+  resolveText,
   onSelect,
   onCreate
 }: AgentTaskCenterListProps): React.ReactElement {
@@ -57,9 +70,15 @@ export default function AgentTaskCenterList({
               <strong>{item.task.name}</strong>
               <small>{item.triggerLabel}</small>
             </span>
-            {item.task.status === 'paused' ? <Tag className="agent-task-tag">{labels.paused}</Tag> : null}
-            {item.task.status === 'completed' ? <Tag className="agent-task-tag">{labels.status.completed}</Tag> : null}
-            {item.isOverdue ? <Tag className="agent-task-tag">{labels.overdue}</Tag> : null}
+            {item.task.status === 'paused' ? (
+              <StatusPill tone={TASK_TAG_TONE.paused} labelKey="taskCenter.paused" resolveText={resolveText} />
+            ) : null}
+            {item.task.status === 'completed' ? (
+              <StatusPill tone={TASK_TAG_TONE.completed} labelKey="taskCenter.status.completed" resolveText={resolveText} />
+            ) : null}
+            {item.isOverdue ? (
+              <StatusPill tone={TASK_TAG_TONE.overdue} labelKey="taskCenter.overdue" resolveText={resolveText} />
+            ) : null}
           </button>
         ))}
       </div>
