@@ -1,6 +1,7 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
@@ -24,6 +25,10 @@ import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingC
 
 export type MarketCalendarCardText = Readonly<{
   title: string; todaySection: string; upcomingSection: string; empty: string; unavailable: string; refresh: string
+  /** Shown until the first read answers; never an error on the first frame. */
+  loading: string
+  /** Shown over rows kept from an earlier successful read, when the newest read failed. */
+  staleNotice: string
   /** Says its own window: an empty section must read as «nothing was released in N days», never as «no data». */
   releasedEmpty: string
   awaitingData: string
@@ -47,8 +52,12 @@ export type MarketCalendarCardText = Readonly<{
   readableNames: MarketAnalysisReadableNames
 }>
 
-export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh, onSelectEvent, onOpenEventInCalendar, selectedEventKey }: Readonly<{
+export function MarketCalendarCard({ projection, state = 'ready', stale = false, text, onOpenCalendar, onRefresh, onSelectEvent, onOpenEventInCalendar, selectedEventKey }: Readonly<{
   projection: CalendarCardProjection
+  /** `loading` is its own state: nothing on screen may turn it into an error. */
+  state?: 'loading' | 'ready' | 'error'
+  /** Rows came from an earlier read; the newest attempt failed. */
+  stale?: boolean
   text: MarketCalendarCardText
   onOpenCalendar: (month: string) => void
   /**
@@ -230,20 +239,22 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
     <div className="mi-calendar-card__body">
-      {projection.state === 'unavailable' ? <StateView state="error" reasonCode="unreadable" size="md"
+      {state === 'loading' ? <LoadingState label={text.loading} /> : null}
+      {state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
         action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
+      {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
       {/* Readable months with no events at all: the card's answer is "nothing here", not a gap.
           Keeping it as a line (not a state surface) is the point — there is no window left to widen
           and no button that would produce an event. */}
-      {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-      {projection.state === 'available' && projection.today.length === 0
+      {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+      {state === 'ready' && projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
         : null}
-      {projection.today.length > 0 ? <>
+      {state === 'ready' && projection.today.length > 0 ? <>
         <p className="mi-calendar-card__section">{text.todaySection}</p>
         <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
       </> : null}
-      {projection.upcoming.length > 0 ? <>
+      {state === 'ready' && projection.upcoming.length > 0 ? <>
         <p className="mi-calendar-card__section">{text.upcomingSection}</p>
         <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
       </> : null}

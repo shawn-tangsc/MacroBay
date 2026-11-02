@@ -1214,7 +1214,7 @@ describe('macro economic calendar', () => {
     expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
   })
 
-  it('converges a permanently pending initial month query to the existing redacted unavailable state without another request', async () => {
+  it('keeps a permanently pending initial month loading instead of calling it unavailable, without another request', async () => {
     vi.useFakeTimers()
     try {
       const { container, client } = await renderCalendar({
@@ -1225,8 +1225,10 @@ describe('macro economic calendar', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
 
       expect(client.queryMonth).toHaveBeenCalledTimes(3)
-      expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
-      expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
+      // The budget expiring is not a failed read: the month has not answered yet, so the page keeps
+      // saying it is loading rather than claiming it failed and then flipping to data.
+      expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
+      expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
     } finally {
       vi.useRealTimers()
     }
@@ -1244,14 +1246,16 @@ describe('macro economic calendar', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
 
       expect(client.queryMonth).toHaveBeenCalledTimes(3)
-      expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
-      expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
+      // The budget expiring is not a failed read: the month has not answered yet, so the page keeps
+      // saying it is loading rather than claiming it failed and then flipping to data.
+      expect(container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
+      expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('replaces the prior month with the pending target and converges only that target to unavailable', async () => {
+  it('replaces the prior month with the pending target and keeps only that target loading', async () => {
     vi.useFakeTimers()
     try {
       const august = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12' })
@@ -1268,7 +1272,8 @@ describe('macro economic calendar', () => {
 
       expect(client.queryMonth).toHaveBeenCalledTimes(6)
       expect(container.querySelector('[data-month-key="2026-08"]')).toBeNull()
-      expect(container.querySelector('[data-month-key="2026-09"]')?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
+      expect(container.querySelector('[data-month-key="2026-09"]')?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
+      expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
     } finally {
       vi.useRealTimers()
     }

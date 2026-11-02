@@ -18,9 +18,26 @@ import { projectUpcomingCalendarCard, type CalendarCardEvent, type CalendarCardP
  * this" never looks like "nothing is scheduled".
  */
 
-const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], state: 'unavailable' }
+/** No rows yet. `empty` is the projection's own word for "read, nothing in the window". */
+const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], state: 'empty' }
 
-export type CalendarCardDataState = Readonly<{ projection: CalendarCardProjection; loading: boolean; reload: () => void }>
+/**
+ * What the card is doing, as three states.
+ *
+ * `loading` must never be spelled `unavailable`: the first frame of a slow read is not a failure,
+ * and a card that opens on «读取失败 + 重试» then flips to data teaches the reader to distrust the
+ * failure state itself. A refresh that fails keeps the rows it already has and says they are the
+ * previous readings (`stale`) instead of falling back to the error screen.
+ */
+export type CalendarCardLoadState = 'loading' | 'ready' | 'error'
+
+export type CalendarCardDataState = Readonly<{
+  projection: CalendarCardProjection
+  state: CalendarCardLoadState
+  /** The rows on screen are from an earlier successful read; the newest attempt failed. */
+  stale: boolean
+  reload: () => void
+}>
 
 /** 「±30 分」反应的读取器，由页面注入（它才拥有跨资产那条查询与它的客户端）。 */
 export type CalendarCardReactionReader = (instant: string) => Promise<CalendarCardReaction | undefined>
@@ -59,12 +76,14 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
    */
   readReaction?: CalendarCardReactionReader
 }>): CalendarCardDataState {
-  const [projection, setProjection] = useState<CalendarCardProjection>(emptyProjection)
-  const [loading, setLoading] = useState(true)
+  const [snapshot, setSnapshot] = useState<Readonly<{ projection: CalendarCardProjection; stale: boolean }>>()
+  const [state, setState] = useState<CalendarCardLoadState>('loading')
   const [attempt, setAttempt] = useState(reloadKey)
   useEffect(() => {
     let live = true
-    setLoading(true)
+    // With rows on screen a re-read does not blank them: they stay until the new answer arrives
+    // (or stays failed, which marks them stale below). Without rows, the first frame is loading.
+    setState(current => current === 'ready' ? 'ready' : 'loading')
     const months = calendarCardMonths(asOf)
     void Promise.all(months.map(async month => {
       const [official, market] = await Promise.all([
@@ -74,13 +93,20 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
       ])
       const events: CalendarCardEvent[] = official.state === 'available' ? official.events.map(toCardEventFromOfficial) : []
       if (market !== null) events.push(...market.events.map(toCardEventFromProvider))
-      return events
+      // A month that answered `unavailable` is a failed read, not an empty window. Losing the
+      // provider route only costs its rows (it is the extra route); losing the official route for
+      // every month means the card has nothing to stand on.
+      return { events, officialRead: official.state === 'available' }
     })).then(async pages => {
       if (!live) return
-      const events = pages.flat()
+      // Only when neither route produced anything at all is the read a failure. The official route
+      // answering `unavailable` while the provider route still lists a release is a degraded read
+      // with real rows, not an error screen.
+      if (!pages.some(page => page.officialRead || page.events.length > 0)) throw new Error('calendar read failed')
+      const events = pages.flatMap(page => page.events)
       const projection = projectUpcomingCalendarCard(events, asOf)
-      setProjection(projection)
-      setLoading(false)
+      setSnapshot({ projection, stale: false })
+      setState('ready')
       if (!readReaction) return
       // 每个「已公布且有确切时刻」的行读一次（同一分钟共用一个窗口），读回来贴到对应时刻上。
       const anchors = reactionAnchors(projection.today)
@@ -89,13 +115,20 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
         const reaction = await readReaction(instant).catch(() => undefined)
         if (reaction !== undefined) reactions.set(instant, reaction)
       }))
-      if (live && reactions.size > 0) setProjection(current => attachReactions(current, reactions))
+      if (live && reactions.size > 0) setSnapshot(current => current ? { ...current, projection: attachReactions(current.projection, reactions) } : current)
     }).catch(() => {
       if (!live) return
-      setProjection(emptyProjection)
-      setLoading(false)
+      // A failed refresh with rows on screen keeps them and marks them as the last readings; only a
+      // card with nothing to show falls to the error state.
+      setSnapshot(current => current ? { ...current, stale: true } : current)
+      setState(current => current === 'ready' ? 'ready' : 'error')
     })
     return () => { live = false }
   }, [asOf, locale, attempt, readReaction])
-  return { projection, loading, reload: () => setAttempt(value => value + 1) }
+  return {
+    projection: snapshot?.projection ?? emptyProjection,
+    state,
+    stale: snapshot?.stale ?? false,
+    reload: () => setAttempt(value => value + 1)
+  }
 }

@@ -118,8 +118,10 @@ export function useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef 
       fallbackRef.current = undefined
       // A month that answered must not be blanked by a neighbour that never did.
       if (reads.has(month)) { finish(); applyWindow(true); return }
-      operationRef.current = undefined
-      setMonthState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
+      // The named month has not answered yet: that is **still loading**, not a failed read. Writing
+      // `unavailable` here made the page show 读取失败 and then flip to data when the late answer
+      // landed — the reader was told the read failed before it had finished. The budget's job is
+      // only to stop a *neighbour* from holding the month; the page keeps waiting for the month.
     }
     fallbackRef.current = setTimeout(markIncomplete, economicCalendarMonthLoadingPolicy.budgetMs)
     months.forEach((candidate) => {

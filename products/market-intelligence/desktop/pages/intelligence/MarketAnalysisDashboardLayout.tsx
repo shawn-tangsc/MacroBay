@@ -214,6 +214,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         card={<MarketCalendarCard
           projection={cardData.projection}
+          state={cardData.state}
+          stale={cardData.stale}
           text={{
             ...text.calendarCard,
             // The card carries its own short category labels: the calendar page's longer ones do

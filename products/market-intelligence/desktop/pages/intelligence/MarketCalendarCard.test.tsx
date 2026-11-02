@@ -116,7 +116,7 @@ it('reports an empty window instead of rendering nothing', async () => {
 
 it('reports a readable failure through the shared state view and offers a retry', async () => {
   const onRefresh = vi.fn()
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'unavailable' }}
+  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty' }}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
   // The sentence now comes from the platform's state table; the card no longer owns a copy of it.
   expect(host.textContent).not.toContain(text.unavailable)
@@ -384,4 +384,37 @@ it('drops that line as soon as one release is listed', async () => {
   const released = row({ eventKey: 'released', kind: 'released' as const, actual: { displayValue: '1.2%' }, previous: { displayValue: '1.0%' } })
   const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available' }} text={text} />)
   expect(host.textContent).not.toContain('没有已公布的事件')
+})
+
+it('opens on loading, never on the failure state, before the first read answers', async () => {
+  const host = await render(<MarketCalendarCard state="loading" projection={{ today: [], upcoming: [row()], state: 'available' }}
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  expect(host.textContent).toContain(text.loading)
+  expect(host.querySelector('.state-view--error')).toBeNull()
+  expect(host.textContent).not.toContain(text.unavailable)
+  // A projection handed in while loading must not leak its rows onto the first frame.
+  expect(host.querySelector('[data-calendar-card-row]')).toBeNull()
+})
+
+it('shows the error state with a retry only after the read actually failed', async () => {
+  const onRefresh = vi.fn()
+  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty' }}
+    onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
+  const failure = host.querySelector<HTMLElement>('.state-view--error')
+  expect(failure).not.toBeNull()
+  expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+  expect(host.querySelector('[data-calendar-card-row]')).toBeNull()
+  const retry = failure?.querySelector<HTMLButtonElement>('.state-view__action button')
+    ?? failure?.querySelector<HTMLButtonElement>('button')
+  await act(async () => retry!.click())
+  expect(onRefresh).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the previous rows and says they are previous when a refresh failed', async () => {
+  const host = await render(<MarketCalendarCard state="ready" stale projection={{ today: [row()], upcoming: [], state: 'available' }}
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  expect(host.querySelector('[data-calendar-card-stale]')?.textContent).toBe(text.staleNotice)
+  // The rows stay: a failed refresh is not a reason to blank a card that already has readings.
+  expect(host.querySelectorAll('[data-calendar-card-row]').length).toBeGreaterThan(0)
+  expect(host.querySelector('.state-view--error')).toBeNull()
 })
