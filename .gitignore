@@ -197,3 +197,6 @@ Desktop.ini
 
 # 示例模式的本地录制产物：只提交人工筛选后的 scenarios/，raw/ 不入库。
 products/market-intelligence/demo/raw/
+
+# archify 工具的本地缓存与运行产物（9.5MB，非代码，不入库）。
+/.archify/
