@@ -8140,8 +8140,14 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   box-shadow: none;
 }
 
-.ant-secondary-button.ant-btn:hover,
-.ant-secondary-button.ant-btn:focus-visible {
+/*
+ * 特异性必须高于 antd 的 `.ant-btn-default:not(:disabled):hover`（0,3,0）。
+ * 原来我们也是 (0,3,0)，而 antd 走 CSS-in-JS、后注入，于是悬停时字与边被染成强调色
+ * （实测 rgb(209, 232, 126)）——全站 32 处次按钮都是这个结果。加 :not(:disabled) 与
+ * .ant-btn 提到 (0,4,0)，一处生效，不写任何页面局部样式。
+ */
+.ant-btn.ant-secondary-button:not(:disabled):hover,
+.ant-btn.ant-secondary-button:not(:disabled):focus-visible {
   border-color: var(--border-strong);
   background: var(--surface-soft);
   color: var(--text-strong);
