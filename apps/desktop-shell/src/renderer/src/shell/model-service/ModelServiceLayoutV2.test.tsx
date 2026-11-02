@@ -19,6 +19,12 @@ import { apiKeyFixture, providerFixture, renderModelServiceSettings } from './mo
  *  ② styles.css 规则：高度 ≥26、品牌块 ≤48、整页只有 2 个 overflow-y 滚动容器。
  */
 const labels = platformText['en-US'].models
+
+/** 协议筛选按**可访问名（文字）**定位：`FilterChip` 不给逐枚 data 钩子。 */
+function protocolChip(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('[data-model-protocol-filter] button')]
+    .find((chip) => (chip.textContent ?? '').includes(label))
+}
 const zhLabels = platformText['zh-CN'].models
 const css = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
 
@@ -162,10 +168,11 @@ describe('R4 协议筛选（4 个 pill，可叠加）', () => {
       `${zhLabels.protocolFilterMessages}1`,
       `${zhLabels.protocolFilterGemini}1`
     ])
-    // 每个 pill 带图标（lucide 的 <svg> 或供应商品牌图标）。
-    expect(pills.every((pill) => pill.querySelector('svg, img, .visual-avatar') !== null)).toBe(true)
+    // 图标已按界面设计 2026-11-02 去掉：协议名文字里已经写清，图标是第二套语言。
+    expect(pills.every((pill) => pill.querySelector('svg, img, .visual-avatar') === null)).toBe(true)
     expect(page.container.querySelector('[data-model-protocol-filter]')?.textContent).not.toContain('全部协议')
-    expect(pills[0]?.getAttribute('aria-label')).toBe(zhLabels.protocolFilterChat)
+    expect(page.container.querySelector('[data-model-protocol-filter] [role="group"]')?.getAttribute('aria-label'))
+      .toBe(zhLabels.pickerFilterProtocols)
 
     await act(async () => page.root.unmount())
   })
@@ -224,14 +231,14 @@ describe('R4 协议筛选（4 个 pill，可叠加）', () => {
     expect(rowIds().sort()).toEqual(['claude-only', 'embedding-only', 'gemini-only', 'plain-chat'])
 
     await act(async () => {
-      page.container.querySelector<HTMLButtonElement>('[data-model-protocol-tab="messages"]')?.click()
+      protocolChip(page.container, labels.protocolFilterMessages)?.click()
       await Promise.resolve()
     })
     expect(rowIds()).toEqual(['claude-only'])
 
     // 取消选中 = 不按协议过滤。
     await act(async () => {
-      page.container.querySelector<HTMLButtonElement>('[data-model-protocol-tab="messages"]')?.click()
+      protocolChip(page.container, labels.protocolFilterMessages)?.click()
       await Promise.resolve()
     })
     expect(rowIds()).toHaveLength(4)
@@ -239,7 +246,7 @@ describe('R4 协议筛选（4 个 pill，可叠加）', () => {
     // 类型 + 协议叠加（AND）：文本 + Gemini 原生。
     await act(async () => {
       page.container.querySelector<HTMLButtonElement>('[data-model-type-tab="text"]')?.click()
-      page.container.querySelector<HTMLButtonElement>('[data-model-protocol-tab="gemini"]')?.click()
+      protocolChip(page.container, labels.protocolFilterGemini)?.click()
       await Promise.resolve()
     })
     expect(rowIds()).toEqual(['gemini-only'])
@@ -267,7 +274,7 @@ describe('R5 API Key 是普通输入框 + 框内自绘眼睛', () => {
     expect(input?.type).toBe('text')
     expect(input?.value).toBe('sk-s**********7890')
     // 眼睛是输入框 suffix 里的自绘按钮；没有额外的自绘边框容器。
-    expect(page.container.querySelector('.provider-api-key-eye')).not.toBeNull()
+    expect(page.container.querySelector('[data-provider-api-key-eye]')).not.toBeNull()
     expect(page.container.querySelector('.provider-api-key-control')).toBeNull()
 
     // 高度/边框全部交给主题 token，CSS 里没有为 Key 框单独写的边框规则。
@@ -295,7 +302,7 @@ describe('R5 API Key 是普通输入框 + 框内自绘眼睛', () => {
 
     expect(page.api.revealApiKey).not.toHaveBeenCalled()
     await act(async () => {
-      page.container.querySelector<HTMLElement>('.provider-api-key-eye')?.click()
+      page.container.querySelector<HTMLElement>('[data-provider-api-key-eye]')?.click()
       await Promise.resolve()
     })
     await vi.waitFor(() => expect(page.api.revealApiKey).toHaveBeenCalledTimes(1))
