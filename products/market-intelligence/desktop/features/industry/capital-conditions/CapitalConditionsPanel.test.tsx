@@ -292,13 +292,16 @@ describe('CapitalConditionsPanel', () => {
     }
   })
 
-  it('renders the empty state through the platform StateView, not a local sentence', () => {
+  it('renders the empty state through the platform StateView, with the card sentence in its reason slot', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'empty' } }))
     expect(markup).toContain('data-state="empty"')
     expect(markup).toContain('data-size="md"')
-    // The panel no longer owns this sentence: the platform state table does.
-    expect(markup).not.toContain(text.empty)
+    // The card says what is missing in its own words; the slot is the platform's reason slot, so
+    // the title, icon and announcement still belong to the platform.
+    expect(markup).toContain(text.empty)
+    // No word from the internal vocabulary can come back through that sentence.
+    expect(markup.toLowerCase()).not.toContain('snapshot')
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
   })
 

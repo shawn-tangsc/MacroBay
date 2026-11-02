@@ -11,6 +11,8 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 type Text = {
   title: string
   loading: string
+  /** The card's own empty sentence, rendered through the platform reason slot (contract §17). */
+  empty: string
   stablecoin: string
   asset: string
   totalSupply: string
@@ -53,7 +55,8 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
         : state.state === 'empty'
-          ? <StateView state="empty" reasonCode="not-yet" />
+          ? <StateView state="empty" reasonCode="not-yet"
+              productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
           : <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} />}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
