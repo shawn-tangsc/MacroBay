@@ -111,12 +111,12 @@ export function AssistantInputbar({
             const Icon = TOOL_ICONS[tool.id]
             const label = labels.inputbarTools[tool.labelKey]
             return (
-              <Tooltip key={tool.id} title={tool.placeholder ? labels.comingSoon : label}>
+              <Tooltip key={tool.id} title={label}>
                 <Button
                   type="text"
                   size="small"
                   className="assistant-inputbar-tool"
-                  disabled={!tool.enabled || (tool.id === 'clear-topic' && !topicSelected)}
+                  disabled={tool.id === 'clear-topic' && !topicSelected}
                   icon={<Icon size={14} />}
                   aria-label={label}
                   onClick={() => onToolAction(tool.id)}
