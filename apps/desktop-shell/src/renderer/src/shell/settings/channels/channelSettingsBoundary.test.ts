@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(__dirname, '../../..')
 const page = readFileSync(resolve(root, 'shell/settings/channels/ChannelSettingsPage.tsx'), 'utf8')
+const presentation = readFileSync(
+  resolve(root, 'shell/settings/channels/channelSettingsPresentation.ts'),
+  'utf8'
+)
 const handoff = readFileSync(resolve(root, 'shell/settings/channels/secureCredentialHandoff.ts'), 'utf8')
 const navigation = readFileSync(resolve(root, 'shell/navigation/builtInNavEntries.ts'), 'utf8')
 
@@ -18,11 +22,15 @@ describe('channel settings boundary', () => {
     expect(page).toContain('channelEnableBlocked')
     // Every adapter states what it is missing; a blocked row is never just "blocked", and no
     // adapter is hidden from the catalog list.
-    expect(page).toContain('catalogReason(')
-    expect(page).toContain('channelCatalogReason')
+    // 文案表与「缺什么」的推理被抽到同目录的呈现层（页面顶到 500 行硬线），断言跟着过去，
+    // 判据不变：每个适配器都必须能给出一句缺什么。
+    expect(presentation).toContain('catalogReason(')
+    expect(presentation).toContain('channelCatalogReason')
     expect(page).toContain('{catalog.map((entry) => (')
     expect(page).not.toContain("entry.type !== 'telegram'")
-    expect(page).toContain("type: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'")
+    // 六家适配器的类型联合跟着类型定义进了呈现层；页面仍以同一联合作为创建类型。
+    expect(presentation).toContain("type: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'")
+    expect(page).toContain("'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'")
     expect(page).toContain('channelAppCredential')
     expect(page).toContain('channelLarkAppSecret')
     expect(page).toContain('channelQqClientSecret')
