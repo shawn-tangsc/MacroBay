@@ -32,7 +32,7 @@ component adds the open/close model, the width cap and the focus return.
 | `lines` | `readonly { labelKey, params? }[]` | one of | A multi-line explanation. Each line carries **its own** params; the first line is the subject and is rendered bold. |
 | `labelParams` | `Readonly<Record<string, string>>` | single-line only | Values to fill `{name}` placeholders in the one-line form. **Already formatted** strings only (`10–2`, `289/289`). It does not exist on the multi-line branch: passing it there does not compile. |
 | `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
-| `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
+| `trigger` | `(props: PopoverTriggerProps) => ReactElement` | yes | Renders the trigger yourself and spreads the props it is handed. Not a bare element: a bare child invites the component to inject handlers, which is exactly what broke composition. |
 
 `labelKey` and `lines` are a union: you give exactly one, never both and never neither. `K` is
 inferred from `resolveText`, so a resolver typed to a key union locks the allowed keys.
@@ -67,6 +67,16 @@ wrapping a picker in an explanation panel is a classification error, not a migra
 
 ## Rules the component enforces
 
+- **The trigger is composed, not captured.** The component hands the call site
+  `{ onSelect, onMouseEnter, onMouseLeave, onFocus, onBlur, expanded }` and the call site spreads
+  them onto a real control (`IconButton` takes `onSelect`/`expanded`; a plain element maps
+  `onSelect` to `onClick` and `expanded` to `aria-expanded`). It never clones the element and never
+  injects handlers behind the call site's back — that older shape could not combine with a control
+  that already binds its own click, which is how a header "?" ended up opening on neither hover nor
+  focus.
+- **A trigger survives an empty sentence.** When the copy resolves to nothing the panel is absent,
+  but the control the caller rendered stays on the page with no behaviour — removing the reader's
+  button would be a change nobody asked for.
 - **Hover and focus both open it.** A reader who tabs in should see it without reaching for the
   mouse; that is the half a tooltip-first design keeps forgetting.
 - **Clicking the trigger pins it.** Hover alone cannot hold a paragraph open while the reader looks

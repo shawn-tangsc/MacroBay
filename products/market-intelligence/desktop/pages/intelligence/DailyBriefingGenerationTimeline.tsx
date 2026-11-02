@@ -129,17 +129,19 @@ function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBr
   if (!labels.stageHelp[id]?.trim()) return null
   return <Popover
     labelKey={STAGE_HELP_KEYS[id]}
-    resolveText={resolveProductText}>
-    <IconButton
-      ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel"
-      ariaLabelParams={{ stage: labels.stages[id] }}
-      dataAttributes={{ 'data-stage-help': id }}
-      icon={CircleHelp}
-      onSelect={() => undefined}
-      resolveText={resolveProductText}
-      size="sm"
-    />
-  </Popover>
+    resolveText={resolveProductText}
+    trigger={(triggerProps) => (
+      <IconButton
+        {...triggerProps}
+        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel"
+        ariaLabelParams={{ stage: labels.stages[id] }}
+        dataAttributes={{ 'data-stage-help': id }}
+        icon={CircleHelp}
+        resolveText={resolveProductText}
+        size="sm"
+      />
+    )}
+  />
 }
 
 function stageResult(

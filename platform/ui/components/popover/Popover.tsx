@@ -1,6 +1,5 @@
 import { Popover as AntPopover } from 'antd'
 import {
-  cloneElement,
   useEffect,
   useRef,
   useState,
@@ -35,12 +34,23 @@ import { fillLabelParams } from '../textKeyParams'
 const MAX_WIDTH = 320
 const PLACEMENT = 'bottom' as const
 
-type TriggerHandlers = {
-  onClick?: (event: ReactMouseEvent<HTMLElement>) => void
-  onMouseEnter?: (event: ReactMouseEvent<HTMLElement>) => void
-  onMouseLeave?: (event: ReactMouseEvent<HTMLElement>) => void
-  onFocus?: (event: ReactFocusEvent<HTMLElement>) => void
-  onBlur?: (event: ReactFocusEvent<HTMLElement>) => void
+/**
+ * 浮层交给触发器的那组属性。
+ *
+ * **不再 `cloneElement` 往子组件里注入处理器**：那是「子组件必须愿意交出自己已绑的事件」的隐式约定，
+ * 子组件一旦自己绑了 onClick（`IconButton` 就是这样），双方就合成不了——持仓卡那颗「?」卡了整整一晚。
+ * 现在由调用方显式把属性摊到自己的触发器上：点击入口叫 `onSelect`（与 `IconButton` 同名），
+ * 普通元素使用处写 `onClick={p.onSelect}`。
+ */
+export type PopoverTriggerProps = {
+  /** 点击：钉住 / 再点一次关闭。 */
+  onSelect: (event: ReactMouseEvent<HTMLElement>) => void
+  onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => void
+  onMouseLeave: (event: ReactMouseEvent<HTMLElement>) => void
+  onFocus: (event: ReactFocusEvent<HTMLElement>) => void
+  onBlur: (event: ReactFocusEvent<HTMLElement>) => void
+  /** 展开态：`IconButton` 的 `expanded` 直接用；普通元素用 `aria-expanded`。 */
+  expanded: boolean
 }
 
 /** 一行说明：键 + 这一行自己的参数（已格式化好的字符串）。 */
@@ -74,12 +84,15 @@ export type PopoverText<K extends string = string> =
 export type PopoverProps<K extends string = string> = PopoverText<K> & {
   /** 调用方的文案解析入口；未知键返回空串时整块浮层不渲染。 */
   resolveText: (key: K) => string
-  /** 触发器：必须是可聚焦元素。 */
-  children: ReactElement<TriggerHandlers>
+  /**
+   * 触发器：交出属性、由调用方自己渲染那个可聚焦控件。
+   * 不接受裸 children——那会退回「注入处理器」的老路，两个平台组件就又能互相咬住。
+   */
+  trigger: (props: PopoverTriggerProps) => ReactElement
 }
 
 export function Popover<K extends string = string>(props: PopoverProps<K>): ReactElement {
-  const { resolveText, children } = props
+  const { resolveText } = props
   // 多行只来自**键数组**，不来自 `\n` 折行：换行属于排版巧合，翻译会被合并或吃掉，而首行强调只有数组能表达。
   // 逐行解析、逐行填占位符：每行的参数各管各的，空行丢弃（原行为不变）。
   const entries: ReadonlyArray<{ key: K; params?: Readonly<Record<string, string>> }> =
@@ -133,34 +146,29 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [open])
 
-  if (!resolved) return children
+  // 没有句子就没有浮层，但**触发器还在**：调用方给的是一个真实控件（按钮），把按钮一起拿掉
+  // 等于从页面上删掉一个东西——那是它们没要求的事。这里只让触发器什么都不做。
+  if (!resolved) {
+    return props.trigger({ onSelect: () => undefined, onMouseEnter: () => undefined, onMouseLeave: () => undefined, onFocus: () => undefined, onBlur: () => undefined, expanded: false })
+  }
 
-  const childHandlers: TriggerHandlers = children.props
-  const trigger_ = cloneElement(children, {
-    onClick: (event: ReactMouseEvent<HTMLElement>) => {
-      childHandlers.onClick?.(event)
+  const triggerProps: PopoverTriggerProps = {
+    onSelect: (event) => {
       trigger.current = event.currentTarget
       setPinned((previous) => !previous)
     },
-    onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => {
-      childHandlers.onMouseEnter?.(event)
+    onMouseEnter: (event) => {
       trigger.current = event.currentTarget
       setHovered(true)
     },
-    onMouseLeave: (event: ReactMouseEvent<HTMLElement>) => {
-      childHandlers.onMouseLeave?.(event)
-      setHovered(false)
-    },
-    onFocus: (event: ReactFocusEvent<HTMLElement>) => {
-      childHandlers.onFocus?.(event)
+    onMouseLeave: () => setHovered(false),
+    onFocus: (event) => {
       trigger.current = event.currentTarget
       setFocused(true)
     },
-    onBlur: (event: ReactFocusEvent<HTMLElement>) => {
-      childHandlers.onBlur?.(event)
-      setFocused(false)
-    }
-  })
+    onBlur: () => setFocused(false),
+    expanded: open
+  }
 
   return (
     <AntPopover
@@ -186,7 +194,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       open={open}
       placement={PLACEMENT}
       trigger={[]}>
-      {trigger_}
+      {props.trigger(triggerProps)}
     </AntPopover>
   )
 }

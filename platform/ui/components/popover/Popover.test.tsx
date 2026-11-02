@@ -5,11 +5,30 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { IconButton } from '../icon-button'
-import { Popover } from './Popover'
+import { Popover, type PopoverTriggerProps } from './Popover'
+
+import type { ReactElement } from 'react'
 
 import { Info } from 'lucide-react'
 
 const key = (value: string): string => value
+
+/** 普通按钮当触发器：属性由调用方显式摊上去——浮层不再注入处理器。 */
+function buttonTrigger(triggerProps: PopoverTriggerProps): ReactElement {
+  return (
+    <button
+      aria-expanded={triggerProps.expanded}
+      data-trigger
+      onBlur={triggerProps.onBlur}
+      onClick={triggerProps.onSelect}
+      onFocus={triggerProps.onFocus}
+      onMouseEnter={triggerProps.onMouseEnter}
+      onMouseLeave={triggerProps.onMouseLeave}
+      type="button">
+      trigger
+    </button>
+  )
+}
 
 let root: Root | undefined
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -26,11 +45,7 @@ async function mount(resolveText: (value: string) => string = key): Promise<HTML
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <Popover labelKey="ui.test.help" resolveText={resolveText}>
-        <button type="button" data-trigger>
-          trigger
-        </button>
-      </Popover>
+      <Popover labelKey="ui.test.help" resolveText={resolveText} trigger={buttonTrigger} />
     )
   })
   const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
@@ -46,11 +61,7 @@ async function mountLines(keys: readonly string[], resolveText: (value: string) 
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <Popover lines={lines} resolveText={resolveText}>
-        <button type="button" data-trigger>
-          trigger
-        </button>
-      </Popover>
+      <Popover lines={lines} resolveText={resolveText} trigger={buttonTrigger} />
     )
   })
   const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
@@ -191,15 +202,13 @@ describe('Popover', () => {
     await act(async () => {
       root!.render(
         <Popover
-          resolveText={(value) => (value === 'ui.test.a' ? 'A {v}' : value === 'ui.test.b' ? 'B {v}' : '')}
           lines={[
             { labelKey: 'ui.test.a', params: { v: '1' } },
             { labelKey: 'ui.test.b', params: { v: '2' } }
-          ]}>
-          <button type="button" data-trigger>
-            trigger
-          </button>
-        </Popover>
+          ]}
+          resolveText={(value) => (value === 'ui.test.a' ? 'A {v}' : value === 'ui.test.b' ? 'B {v}' : '')}
+          trigger={buttonTrigger}
+        />
       )
     })
     const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')!
@@ -258,15 +267,19 @@ describe('Popover', () => {
     root = root_
     act(() => {
       root_.render(
-        <Popover labelKey="ui.test.help" resolveText={key}>
-          <IconButton
-            ariaLabelKey="ui.test.trigger"
-            icon={Info}
-            onSelect={() => undefined}
-            resolveText={key}
-            size="sm"
-          />
-        </Popover>
+        <Popover
+          labelKey="ui.test.help"
+          resolveText={key}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="ui.test.trigger"
+              icon={Info}
+              resolveText={key}
+              size="sm"
+            />
+          )}
+        />
       )
     })
     const button = host.querySelector<HTMLButtonElement>('button')

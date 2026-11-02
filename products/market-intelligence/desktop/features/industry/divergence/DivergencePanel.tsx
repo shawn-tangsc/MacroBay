@@ -64,12 +64,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.3' },
             { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.4' }
           ]}
-          resolveText={resolveProductKey}>
-          <IconButton
-            ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
-            icon={Info} size="sm" resolveText={resolveProductKey}
-            onSelect={() => undefined} />
-        </Popover>
+          resolveText={resolveProductKey}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
+              icon={Info} size="sm" resolveText={resolveProductKey} />
+          )} />
       </div>
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}

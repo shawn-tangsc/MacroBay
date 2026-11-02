@@ -29,13 +29,19 @@ import { Popover } from '@platform/ui/components/popover'
 | `lines` | `readonly { labelKey, params? }[]` | 二选一 | 多行说明，**每行自带参数**；代替 `labelKey`。首行是主题，会被强调。 |
 | `labelParams` | `Record<string, string>` | 仅单行 | 单行分支里填 `{name}` 的值，**只收已经格式化好的字符串**；多行分支没有这个字段，传了编译不过，参数进 `lines[].params`。 |
 | `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键返回空串。 |
-| `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |
+| `trigger` | `(props: PopoverTriggerProps) => ReactElement` | 是 | 自己渲染触发器，把这组属性摊上去。不留裸 children：裸元素会诱使组件去注入处理器，而组合失败正是从那里来的。 |
 
 没有 `placement`、没有 `open`、没有 `onOpenChange`、也不收任意 `content` 节点：开合模型与位置是
 组件固定的行为，不是调用点的选项。
 
 ## 组件自己保证的几条
 
+- **触发器是组合出来的，不是被接管的**：组件把 `{ onSelect, onMouseEnter, onMouseLeave, onFocus,
+  onBlur, expanded }` 交给调用方，由调用方摊到真控件上（`IconButton` 收 `onSelect`/`expanded`；
+  普通元素把 `onSelect` 映射到 `onClick`、`expanded` 映射到 `aria-expanded`）。组件**不 cloneElement、
+  不替调用方注入处理器**——旧形状遇到自己已经绑了点击的控件就组合不了，卡面那颗「?」正是这么失效的。
+- **句子为空时触发器仍在**：浮层不渲染，但调用方渲染的那个控件留在页面上、不再有任何行为——
+  把读者的按钮一起撤掉，是没人要求过的改动。
 - **悬停与聚焦都打开**：读者用 Tab 指过来就该看到，不用回去拿鼠标。
 - **点击触发器钉住**：只靠悬停撑不住「边看边对照」；而直接给 antd 传 `['hover','focus','click']`
   会在鼠标移开时关掉，等于钉不住。

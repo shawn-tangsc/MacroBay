@@ -118,12 +118,13 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       */}
       <Popover
         lines={positioningHelpLineKeys.map(labelKey => ({ labelKey }))}
-        resolveText={resolveProductKey}>
-        <IconButton
-          ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
-          icon={Info} size="sm" resolveText={resolveProductKey}
-          onSelect={() => undefined} />
-      </Popover>
+        resolveText={resolveProductKey}
+        trigger={(triggerProps) => (
+          <IconButton
+            {...triggerProps}
+            ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
+            icon={Info} size="sm" resolveText={resolveProductKey} />
+        )} />
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
