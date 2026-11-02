@@ -68,15 +68,16 @@ async function render(client: MacroEconomicCalendarClient, onClose = vi.fn(), re
 }
 
 describe('the selected calendar event, as a drawer over the dashboard', () => {
-  it('opens the calendar\'s own unmasked left drawer with the event\'s full detail', async () => {
+  it('opens the calendar\'s own panel with the event\'s full detail', async () => {
     const detail = officialEvent({ actual: { displayValue: '0.3%' }, previous: { displayValue: '0.2%' }, lifecycleState: 'released' as const })
     const host = await render(clientWith({ state: 'available', asOf, event: detail }))
 
     expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-    // The calendar's drawer component, not a lookalike: left, unmasked, one way out in the corner.
-    expect(host.querySelector('.ant-drawer-left')).not.toBeNull()
+    // The calendar's own panel, not a lookalike: left, unmasked, and the one way out is the shared
+    // close control (a platform `IconButton`), not a hand-drawn corner button.
+    expect(host.querySelector('.side-panel')).not.toBeNull()
     expect(host.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(host.querySelector('.ant-drawer-close')).not.toBeNull()
+    expect(host.querySelector('.side-panel button[aria-label]')).not.toBeNull()
     const body = host.querySelector('[data-calendar-detail-container]')!
     // 同一个发布，竖线与抽屉同名：抽屉读的是分析侧那份词表（设计 145 §8 D）。
     expect(body.textContent).toContain(portal.analysisWorkspace.readableNames.eventName['core-cpi'])
@@ -97,7 +98,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
   it('carries the drawer\'s one visible way out', async () => {
     const onClose = vi.fn()
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), onClose)
-    await act(async () => host.querySelector<HTMLButtonElement>('.ant-drawer-close')!.click())
+    await act(async () => host.querySelector<HTMLButtonElement>('.side-panel button[aria-label]')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   })
 

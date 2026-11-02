@@ -99,7 +99,9 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
     if (result.state === 'updated') setAsOf(now().toISOString())
   }
 
-  return <CalendarInspector open title={text.details.title} onClose={onClose}>
+  // The inspector owns its title now (one platform key), and announces which row the panel is showing:
+  // `contentId` is the identity, `when` is the value that tells two same-named events apart.
+  return <CalendarInspector open contentId={selection.eventKey} when={selection.label} onClose={onClose}>
     {detail.state === 'loading' ? <EconomicCalendarEventDetailState state="loading" text={text.status.loading} /> : null}
     {detail.state === 'available' ? <EconomicCalendarEventDetail
       event={detail.event}
