@@ -77,8 +77,12 @@ lifecycle question — whether the content exists is unaffected by it.
   from the component's own copy table (`drawerText.ts`) — not through your `resolveText`. That is
   deliberate: a resolver may return `''` for an unknown key, and an empty name leaves a button with
   no accessible name. The title still goes through your resolver.
-- **One mask rule per mode.** `modal` owns mask, focus lock and Esc; `inline` owns none of them.
-  There is no boolean for any of the three.
+- **Mask and focus lock belong to `modal`.** It dims the page, locks focus and lets antd handle Esc;
+  no boolean controls any of the three.
+- **`inline` stays out of the focus model.** Opening it **moves no focus** (the reader is working on
+  the page; pulling them into the panel loses their place), it locks nothing and draws no mask, and
+  while it is open Esc is listened for on the document so it closes even when focus is elsewhere.
+  Closing leaves focus where it was. These are fixed per mode, not call-site switches.
 - **No footer means no footer row** — not an empty wrapper kept for spacing.
 - **Two header states only.** `header="none"` still requires `ariaLabelKey`: an unnamed dialog is
   announced as "dialog".

@@ -191,6 +191,38 @@ describe('Drawer', () => {
     expect(document.querySelector('.ant-drawer-mask')).toBeNull()
   })
 
+  it('opens an inline panel without moving focus, and closes it on Escape from anywhere', async () => {
+    // 改之前这条是红的：inline 走 antd 默认 autoFocus、又关掉了 keyboard，
+    // 于是「焦点被拽进面板」且「按 Esc 毫无反应」——两个毛病一起被这条钉住。
+    const trigger = document.createElement('button')
+    document.body.append(trigger)
+    trigger.focus()
+    expect(document.activeElement).toBe(trigger)
+
+    const onClose = vi.fn()
+    await mount({ mode: 'inline', onClose })
+
+    // ① 打开不移动焦点：读者正在页面上操作，把他拽进面板就是丢位置。
+    expect(document.activeElement).toBe(trigger)
+    // 也不许偷偷换一种写法：antd 收到的是显式的 autoFocus=false。
+    expect(passedProps.at(-1)?.autoFocus).toBe(false)
+
+    // ② 焦点在面板外面，Esc 仍要关得掉。
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    // ③ 关闭后焦点仍然在原处（没进过面板，也就没有「还回去」这回事）。
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('leaves modal focus behaviour exactly to antd', async () => {
+    await mount()
+    // 浮层不传 autoFocus：锁焦点、Esc 都归 antd，我们不在这里改第二个模式的行为。
+    expect(passedProps.at(-1)?.autoFocus).toBeUndefined()
+  })
+
   it('takes the title from a key, never from a sentence', async () => {
     await mount()
     expect(document.querySelector('.drawer__title')?.textContent).toBe('ui.test.title')

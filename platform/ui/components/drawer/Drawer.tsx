@@ -1,6 +1,6 @@
 import { Drawer as AntDrawer } from 'antd'
 import { X } from 'lucide-react'
-import type { ReactElement, ReactNode } from 'react'
+import { useEffect, type ReactElement, type ReactNode } from 'react'
 
 import { IconButton } from '../icon-button'
 import { DRAWER_CLOSE_KEY, useDrawerText } from './drawerText'
@@ -17,6 +17,14 @@ import './drawer.css'
  * - 头部只有两档：`titleKey`（有标题）或 `ariaLabelKey`（无头，但必须有名字）——没有名字的
  *   对话框，读屏只会念「对话框」；
  * - `mode` 只有 `modal` / `inline`，遮罩、Esc、焦点锁定、容器归它决定，不收对应布尔。
+ *
+ * `inline` 与 `modal` 在焦点上不是一套规则，这也是这里唯一按模式分叉的行为：
+ * - **打开不移动焦点**：流内面板嵌在页面里，读者正在页面上操作，把他拽进面板就是丢位置；
+ * - **Esc 在文档层监听**：焦点在页面别处时也要能关——一块嵌在页面流里的面板「按 Esc 没反应」
+ *   对任何使用者都不成立；
+ * - **关闭不动焦点**：没有进过面板，也就没有「还回去」这回事。
+ *
+ * 这三条对 `modal` 一条都不适用：浮层必须锁焦点、Esc 归 antd。
  *
  * 关闭控件归组件：`ui.drawer.close` 一条平台键，16 个抽屉共用；调用方不再各画一个，
  * 要加额外动作走 `titleExtra`。
@@ -98,6 +106,17 @@ export function Drawer(props: DrawerProps): ReactElement {
   // 那会让这个按钮没有名字。标题仍由调用方解析，两者不共用一条路径。
   const closeLabel = useDrawerText()()
 
+  // 流内面板的 Esc：焦点不在面板里也要能关，所以监听落在 document 上（仅在打开期间）。
+  useEffect(() => {
+    if (!inline || !open) return undefined
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [inline, open, onClose])
+
   const title = headless ? (
       // 无头也要有名字：标题块视觉隐藏，但仍作为 `aria-labelledby` 的落点。
       <span className="drawer__sr-only">{resolveText(props.ariaLabelKey)}</span>
@@ -132,7 +151,8 @@ export function Drawer(props: DrawerProps): ReactElement {
       mask={!inline}
       maskClosable={!inline}
       keyboard={!inline}
-      {...(inline ? { getContainer: false as const } : {})}
+      // 流内面板不抢焦点；浮层保持 antd 默认（锁焦点、Esc 归它）。
+      {...(inline ? { autoFocus: false, getContainer: false as const } : {})}
       {...(headless ? { styles: { header: { display: 'none' } } } : {})}
       rootClassName={['drawer', `drawer--${size}`, `drawer--${props.mode}`, inline ? `drawer--${props.side ?? 'right'}` : '']
         .filter(Boolean)
