@@ -40,8 +40,8 @@
     "reason": "两档闭集 SIZE_CSS（282px / min(480px, 46vw)），档位由组件 prop 决定；窄屏那档含视口计算，静态值表达不了。"
   },
   "--mi-flow-height": {
-    "injectedBy": "CapitalConditionsPanel.tsx:213",
-    "file": "products/market-intelligence/desktop/features/industry/capital-conditions/CapitalConditionsPanel.tsx",
+    "injectedBy": "CapitalFlowChart.tsx:144",
+    "file": "products/market-intelligence/desktop/features/industry/capital-conditions/CapitalFlowChart.tsx",
     "reason": "每根资金流柱子自己的量值百分比，一次渲染一个值，静态 CSS 不可能有定义。"
   },
   "--mi-cross-asset-tick-count": {

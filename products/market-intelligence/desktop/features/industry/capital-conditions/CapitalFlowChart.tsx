@@ -1,12 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
-import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
-
 import { dashboardCapitalConditionsPresentationPolicy } from './capitalConditionsModel'
 import { flowAccessibleName, type FlowAccessibleText } from './capitalFlowAccessibleName'
 import { formatFlowUsd } from './capitalFlowFormat'
 import { pickFlowLabelIndexes, placeFlowLabels, type FlowLabelAnchor, type FlowLabelBox } from './capitalFlowLabels'
-import type { FlowChartRow } from './capitalFlowRows'
+import { shortFlowDate, type FlowChartRow } from './capitalFlowRows'
 
 type ChartText = FlowAccessibleText & {
   etfFlow: string
@@ -35,7 +33,6 @@ const tooltipPlacement = { offset: 14, inset: 4, estimatedWidth: 176, estimatedH
  * decoration, and the labels have to carry their own accessible names.
  */
 export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowChartRow[]; text: ChartText }>): React.ReactElement {
-  const language = useShellLanguage()
   const chartRef = useRef<HTMLDivElement>(null)
   const labelRefs = useRef<Record<number, HTMLElement | null>>({})
   const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null)
@@ -110,10 +107,10 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
           const value = rows[index]?.funds ?? 0
           const direction = directionOf(value)
           const box = labelBoxes.find((candidate) => candidate.index === index)
-          return <span className="mi-capital-conditions__chart-label" data-flow-label={index} key={`label-${index}`}
+          return <span className="mi-capital-conditions__chart-label" data-flow-label={index} data-flow-direction={direction} key={`label-${index}`}
             ref={(node) => { labelRefs.current[index] = node }}
             style={{ left: box?.left ?? 0, top: box?.top ?? 0, visibility: box ? 'visible' : 'hidden' }}
-            aria-label={flowAccessibleName(text, value, direction, text.fundsScope, language)}>
+            role="img" aria-label={flowAccessibleName(text, value, direction, text.fundsScope)}>
             {formatFlowUsd(value)}
           </span>
         })}
@@ -126,7 +123,7 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
       </div> : null}
     </div>
     <div className="mi-capital-conditions__chart-ticks" aria-hidden="true">
-      {tickIndexes.map((index) => <span key={rows[index]?.tradingDate}>{rows[index]?.tradingDate}</span>)}
+      {tickIndexes.map((index) => <span key={rows[index]?.tradingDate}>{shortFlowDate(rows[index]?.tradingDate ?? '')}</span>)}
     </div>
   </>
 }

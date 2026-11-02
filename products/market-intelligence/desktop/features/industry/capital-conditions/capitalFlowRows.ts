@@ -15,3 +15,11 @@ export function selectVisibleFlowRows(
   const count = Math.max(0, Math.min(visibleRows, rows.length))
   return count === rows.length ? rows : rows.slice(rows.length - count)
 }
+
+/**
+ * The label a reader sees (`10-26`). It is a slice of the source string, never `new Date()`:
+ * the day is the source's own UTC day, and a timezone shift would move it.
+ */
+export function shortFlowDate(tradingDate: string): string {
+  return tradingDate.length > 5 ? tradingDate.slice(-5) : tradingDate
+}

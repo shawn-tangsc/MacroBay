@@ -1,11 +1,9 @@
 import { useId, useState } from 'react'
 import { Button } from 'antd'
 
-import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
-
 import { flowAccessibleName, type FlowAccessibleText } from './capitalFlowAccessibleName'
 import { formatFlowUsd } from './capitalFlowFormat'
-import type { FlowChartRow } from './capitalFlowRows'
+import { shortFlowDate, type FlowChartRow } from './capitalFlowRows'
 
 type DailyTableText = FlowAccessibleText & {
   fundsColumn: string
@@ -37,7 +35,6 @@ export function CapitalFlowDailyTable({ rows, text, notComparable }: Readonly<{
   notComparable: string
 }>): React.ReactElement {
   const [open, setOpen] = useState(false)
-  const language = useShellLanguage()
   const tableId = useId()
 
   if (rows.length === 0) return <p className="mi-capital-conditions__daily-empty">{text.dailyEmpty}</p>
@@ -52,7 +49,7 @@ export function CapitalFlowDailyTable({ rows, text, notComparable }: Readonly<{
       <span className="mi-capital-conditions__daily-source">{text.sameSource}</span>
     </div>
     {open ? <div id={tableId}>
-      <table className="mi-capital-conditions__daily-table">
+      <table className="mi-capital-conditions__daily-table" tabIndex={0}>
         <caption>{text.dailyCaption}</caption>
         <thead><tr>
           <th scope="col">{text.dateColumn}<span className="mi-capital-conditions__daily-scope">{text.utcDays}</span></th>
@@ -62,10 +59,10 @@ export function CapitalFlowDailyTable({ rows, text, notComparable }: Readonly<{
         </tr></thead>
         <tbody>
           {rows.map((row) => <tr key={row.tradingDate}>
-            <th scope="row">{row.tradingDate}</th>
-            <DailyCell value={row.funds} scope={text.fundsScope} text={text} language={language} />
-            <DailyCell value={row.btc} scope={text.etfScope} text={text} language={language} />
-            <DailyCell value={row.eth} scope={text.etfScope} text={text} language={language} />
+            <th scope="row" data-trading-date={row.tradingDate}>{shortFlowDate(row.tradingDate)}</th>
+            <DailyCell value={row.funds} scope={text.fundsScope} text={text} />
+            <DailyCell value={row.btc} scope={text.etfScope} text={text} />
+            <DailyCell value={row.eth} scope={text.etfScope} text={text} />
           </tr>)}
         </tbody>
       </table>
@@ -74,14 +71,13 @@ export function CapitalFlowDailyTable({ rows, text, notComparable }: Readonly<{
   </div>
 }
 
-function DailyCell({ value, scope, text, language }: Readonly<{
+function DailyCell({ value, scope, text }: Readonly<{
   value: number
   scope: string
   text: DailyTableText
-  language: 'zh-CN' | 'en-US'
 }>): React.ReactElement {
   const direction = value > 0 ? 'inflow' : value < 0 ? 'outflow' : 'zero'
-  return <td aria-label={flowAccessibleName(text, value, direction, scope, language)} data-flow-direction={direction}>
+  return <td aria-label={flowAccessibleName(text, value, direction, scope)} data-flow-direction={direction}>
     {formatFlowUsd(value)}
   </td>
 }

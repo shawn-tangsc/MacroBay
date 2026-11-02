@@ -194,6 +194,10 @@
 /* Bar-top labels ride above the plot. Their box height is fixed here and read back by the
    placement code, so a measured box and the painted box are the same 14px. */
 .mi-capital-conditions__chart-labels { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+.mi-capital-conditions__chart-label[data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
+.mi-capital-conditions__chart-label[data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
+.mi-capital-conditions__chart-label:focus-visible,
+.mi-capital-conditions__daily-table:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 .mi-capital-conditions__chart-label { position: absolute; height: 14px; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, var(--mi-dashboard-surface) 86%, transparent); color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 14px; white-space: nowrap; }
 .mi-capital-conditions__chart-scope,
 .mi-capital-conditions__not-comparable { margin: 0; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.45; }

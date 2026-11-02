@@ -45,7 +45,7 @@ type Text = {
   dateColumn: string
   utcDays: string
   dailyEmpty: string
-  a11yAmount: string
+  a11yNoFlow: string
   a11yLabel: string
   a11yCell: string
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
@@ -53,7 +53,7 @@ type Text = {
   refreshFailed: string
   /** The last readings that did read, kept after a failed re-read. */
   staleRead: string
-}
+} & ({ a11yAmountYi: string; a11yAmountWan: string } | { a11yAmountMillion: string })
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 

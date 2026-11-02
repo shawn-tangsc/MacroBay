@@ -18,18 +18,3 @@ export function formatFlowUsd(value: number, options: { signed?: boolean } = {})
     .format(Math.abs(normalized) / 1_000_000)
   return `${sign}$${amount}M`
 }
-
-/**
- * The number a screen reader hears. `+$402.6M` is read as `4.026 亿美元`, so the conversion
- * happens here — once, at the point where the accessible name is built — and never in a
- * visible string. Chinese uses 亿 (10^8), English says millions.
- */
-export function formatFlowAccessibleNumber(value: number, locale: 'zh-CN' | 'en-US'): string {
-  if (!Number.isFinite(value)) return ''
-  const normalized = Object.is(value, -0) ? 0 : value
-  const absolute = Math.abs(normalized)
-  const divisor = locale === 'zh-CN' ? 100_000_000 : 1_000_000
-  const fractionDigits = locale === 'zh-CN' ? 3 : 1
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: fractionDigits, useGrouping: false })
-    .format(absolute / divisor)
-}

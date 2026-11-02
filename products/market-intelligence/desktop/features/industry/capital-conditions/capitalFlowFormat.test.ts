@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatFlowAccessibleNumber, formatFlowUsd } from './capitalFlowFormat'
+import { formatFlowUsd } from './capitalFlowFormat'
 
 describe('formatFlowUsd', () => {
   it('keeps one scale: millions with a currency sign and an ASCII minus', () => {
@@ -30,18 +30,5 @@ describe('formatFlowUsd', () => {
   it('refuses values a reader could not be shown', () => {
     expect(formatFlowUsd(Number.NaN)).toBe('')
     expect(formatFlowUsd(Number.POSITIVE_INFINITY)).toBe('')
-  })
-})
-
-describe('formatFlowAccessibleNumber', () => {
-  it('speaks Chinese in 亿 and English in millions', () => {
-    expect(formatFlowAccessibleNumber(402_600_000, 'zh-CN')).toBe('4.026')
-    expect(formatFlowAccessibleNumber(402_600_000, 'en-US')).toBe('402.6')
-    expect(formatFlowAccessibleNumber(-318_400_000, 'zh-CN')).toBe('3.184')
-  })
-
-  it('keeps whole numbers whole', () => {
-    expect(formatFlowAccessibleNumber(1_250_000_000, 'zh-CN')).toBe('12.5')
-    expect(formatFlowAccessibleNumber(1_250_000_000, 'en-US')).toBe('1250')
   })
 })

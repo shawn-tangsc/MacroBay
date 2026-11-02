@@ -17,15 +17,15 @@ const row = (tradingDate: string, funds: number, btc = 0, eth = 0): FlowChartRow
 /** The largest inflow is the last day here, so two roles share one label. */
 const overlappingRows: FlowChartRow[] = [
   row('10-26', 312_000_000, 204_000_000, 96_000_000),
-  row('10-27', -176_000_000, -132_000_000, -60_000_000),
-  row('10-28', 402_600_000, 297_000_000, 176_000_000)
+  row('2026-10-27', -176_000_000, -132_000_000, -60_000_000),
+  row('2026-10-28', 402_600_000, 297_000_000, 176_000_000)
 ]
 
 const plainRows: FlowChartRow[] = [
-  row('10-26', 312_400_000, 204_100_000, 96_800_000),
-  row('10-27', -176_200_000, -132_800_000, -60_500_000),
-  row('10-28', 402_600_000, 297_400_000, 176_300_000),
-  row('10-29', 221_500_000, 184_000_000, 88_100_000)
+  row('2026-10-26', 312_400_000, 204_100_000, 96_800_000),
+  row('2026-10-27', -176_200_000, -132_800_000, -60_500_000),
+  row('2026-10-28', 402_600_000, 297_400_000, 176_300_000),
+  row('2026-10-29', 221_500_000, 184_000_000, 88_100_000)
 ]
 
 let root: Root | undefined
@@ -95,6 +95,29 @@ describe('bar-top labels', () => {
   })
 })
 
+describe('accessible names', () => {
+  it('gives each label a role that can carry a name', () => {
+    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+      createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
+    expect((markup.match(/role="img"/g) ?? [])).toHaveLength(3)
+    expect(markup).toContain('role="img" aria-label="净流入 4.026 亿美元，全部美元稳定币"')
+  })
+
+  it('speaks 万 for an amount below one hundred million', () => {
+    const small: FlowChartRow[] = [row('2026-10-27', -45_200_000, -1_000_000, -1_000_000), row('2026-10-28', 82_400_000, 1_000_000, 1_000_000)]
+    const container = mount(cardText(), small)
+    const second = container.querySelector<HTMLElement>('[data-flow-label="1"]')!
+    expect(second.getAttribute('aria-label')).toBe('净流入 8240 万，全部美元稳定币')
+  })
+
+  it('says there is no net inflow when the day is flat', () => {
+    const flat: FlowChartRow[] = [row('2026-10-27', -45_200_000), row('2026-10-28', 0)]
+    const container = mount(cardText(), flat)
+    expect(container.querySelector<HTMLElement>('[data-flow-label="1"]')?.getAttribute('aria-label'))
+      .toBe('没有净流入，全部美元稳定币')
+  })
+})
+
 describe('daily table', () => {
   it('renders nothing until the button is pressed, and keeps focus on the button', async () => {
     const container = mount()
@@ -110,6 +133,11 @@ describe('daily table', () => {
     expect(button.getAttribute('aria-expanded')).toBe('true')
     expect(button.getAttribute('aria-controls')).toBe(container.querySelector('.mi-capital-conditions__daily-table')?.closest('[id]')?.id ?? '')
     expect(document.activeElement).toBe(button)
+
+    // One tab stop for the whole table: the next tabbable thing after the button is the table.
+    const tabbables = [...container.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+    expect(tabbables[tabbables.indexOf(button) + 1]).toBe(table)
+    expect(table.tagName).toBe('TABLE')
 
     await act(async () => button.click())
     expect(container.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
@@ -133,6 +161,9 @@ describe('daily table', () => {
     const cell = container.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody td')!
     expect(cell.getAttribute('aria-label')).toBe('净流入 3.124 亿美元，全部美元稳定币')
     expect(cell.textContent).toBe('+$312.4M')
+    const dateCell = container.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody th')!
+    expect(dateCell.textContent).toBe('10-26')
+    expect(dateCell.getAttribute('data-trading-date')).toBe('2026-10-26')
   })
 
   it('gives no button when there is nothing to show', () => {
