@@ -30,10 +30,14 @@ unavailable until an adapter is deliberately enabled.
 ### Packaged installers
 
 `pnpm build` produces Electron bundles under `out/`. A macOS `.dmg` can be built from source with
-`pnpm dist:mac`; it is unsigned and not notarized, so Gatekeeper blocks a downloaded copy until the
-user allows it. Windows packaging is configured and its installer builds both in CI and on Windows 11
-x64 hardware, but the installed app is not accepted yet; Linux packaging is not configured. There is
-no auto-update channel. See [Packaging](../development/packaging.md).
+`pnpm dist:mac`; it is unsigned and not notarized, so a downloaded copy takes two steps: **right-click
+the app → Open** (a double-click is refused), or run
+`xattr -dr com.apple.quarantine /Applications/MacroBay.app`. The Windows installer is unsigned too:
+SmartScreen shows *Windows protected your PC* and the user picks **More info → Run anyway**. Both
+prompts return after **every downloaded update**, not just the first install. Windows packaging is
+configured and its installer builds both in CI and on Windows 11 x64 hardware, but the installed app is
+not accepted yet; Linux packaging is not configured. There is no auto-update channel. See
+[Packaging](../development/packaging.md).
 
 ### Demo data
 

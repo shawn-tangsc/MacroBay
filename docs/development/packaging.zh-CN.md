@@ -96,11 +96,18 @@ pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.a
 ### 签名与公证
 
 `electron-builder.yml` 里的 `mac.identity: null` 让本地构建保持未签名。从网络下载的未签名构建会被
-Gatekeeper 拦截，用户需要右键 → **打开**，或者执行：
+Gatekeeper 拦截，用户需要右键 → **打开**（直接双击会被拒），或者执行：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/MacroBay.app
 ```
+
+Windows 的安装器同样未签名：SmartScreen 会显示「Windows 已保护你的电脑」，用户选择
+**更多信息 → 仍要运行**。这两个提示在**每一次下载更新后都会重现**，不只是第一次安装——更新会替换
+文件，隔离标记与 SmartScreen 的判断每次都重新来。
+
+对外怎么描述一个产物，必须与这个状态一致：**未签名、未公证**。发布说明、README、设置页与帮助
+文案里都不许出现「已签名」「已公证」「安全安装」；唯一诚实的写法就是上面这两步。
 
 要签名，设置 `CSC_LINK`/`CSC_KEY_PASSWORD`（或在钥匙串中安装身份），把 `identity: null` 换成该身份，
 并启用 `hardenedRuntime`。公证还需要 `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 和
