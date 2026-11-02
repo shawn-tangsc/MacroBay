@@ -40,8 +40,8 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 | `tone` | 含义 | token（圆点 + 描边） |
 | --- | --- | --- |
 | `ok` | 工作中、已启用、已保存 | `--success` |
-| `warn` | 数据偏旧、降级、需要看一眼——**不是**错误 | `--caution` |
-| `bad` | 失败 | `--danger` |
+| `warn` | 数据偏旧、降级、需要看一眼——**不是**错误 | `--caution`（5px 空心环） |
+| `bad` | 失败 | `--danger`（6px 实心点） |
 | `info` | 进行中，或中性提示 | `--accent` |
 | `muted` | 关闭、暂停、未配置 | `--muted` |
 

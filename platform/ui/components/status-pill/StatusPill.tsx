@@ -32,7 +32,12 @@ export type StatusPillProps = {
 export function StatusPill({ tone, labelKey, resolveText }: StatusPillProps): ReactElement {
   return (
     <span className={`status-pill status-pill--${tone}`}>
-      <i className="status-pill__dot" aria-hidden="true" />
+      {/*
+        灰度可分：关掉颜色、或者读者本来就不区分颜色时，`warn` 与 `bad` 不能只靠两种灰的深浅区分。
+        所以这两档的圆点**形状不同**——`warn` 是空心环、`bad` 是实心点；字始终在，点只是辅助。
+        形状写在 `data` 上而不是写在组件里判色，是为了让 CSS 那一份规则成为唯一出口。
+      */}
+      <i className="status-pill__dot" data-dot-shape={tone === 'warn' ? 'ring' : tone === 'bad' ? 'dot' : undefined} aria-hidden="true" />
       <span className="status-pill__label">{resolveText(labelKey)}</span>
     </span>
   )

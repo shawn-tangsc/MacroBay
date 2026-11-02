@@ -116,4 +116,21 @@ describe('StatusPill', () => {
     expect(code).not.toMatch(/[\u4e00-\u9fff]/)
     expect(rules).not.toMatch(/@keyframes|animation|transition/)
   })
+
+  it('separates warn from bad by shape, so the two survive a grayscale reader', () => {
+    // 界面设计 2026-11-02：关掉颜色后，两档不能只靠比较两种灰的深浅——同一时刻只会出现一个，
+    // 没有并排就没有深浅可比较。所以形状不同：`warn` 空心环、`bad` 实心点。
+    expect(markup({ tone: 'warn' })).toContain('data-dot-shape="ring"')
+    expect(markup({ tone: 'bad' })).toContain('data-dot-shape="dot"')
+    // 其余三档没有形状变体：多一档变体就等于多一个要维护的差异，而它们之间没有这种歧义。
+    for (const tone of ['ok', 'info', 'muted'] as const) {
+      expect(markup({ tone })).not.toContain('data-dot-shape')
+    }
+
+    // 形状必须真的来自 CSS，而不是只挂了个属性：环是透明底 + 描边，点是实心。
+    expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('background: transparent')
+    expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('border: 1.5px solid var(--pill-tone)')
+    expect(block(".status-pill__dot[data-dot-shape='dot']")).toContain('background: var(--pill-tone)')
+    expect(block(".status-pill__dot[data-dot-shape='dot']")).not.toContain('background: transparent')
+  })
 })

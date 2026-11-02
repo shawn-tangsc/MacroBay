@@ -33,6 +33,27 @@
   flex: none;
 }
 
+/*
+ * 灰度可分：`warn` 与 `bad` 形状不同，不只颜色不同。
+ *
+ * 判据来自界面设计 2026-11-02：关掉颜色（或读者不区分颜色）时，两档不能只靠比较两种灰的深浅——
+ * 那需要并排才能比，而同一时刻只会出现一个。所以 `warn` 是 5px 空心环、`bad` 是 6px 实心点，
+ * 字始终在，形状是第二道可读的线索。改这两条之前先想清楚：它们存在的唯一理由就是灰度下能分开。
+ */
+.status-pill__dot[data-dot-shape='ring'] {
+  box-sizing: border-box;
+  width: 5px;
+  height: 5px;
+  background: transparent;
+  border: 1.5px solid var(--pill-tone);
+}
+
+.status-pill__dot[data-dot-shape='dot'] {
+  width: 6px;
+  height: 6px;
+  background: var(--pill-tone);
+}
+
 /* 五档各给一个档位色，描边由它混中性边框求出，深浅两个主题下都不会跳成另一种颜色。 */
 .status-pill--ok {
   --pill-tone: var(--success);

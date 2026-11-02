@@ -41,8 +41,8 @@ forbids 9px; a second size would be a new type scale invented at a call site.
 | `tone` | Means | Token (dot + border) |
 | --- | --- | --- |
 | `ok` | Working, enabled, saved | `--success` |
-| `warn` | Stale, degraded, needs a look — **not** an error | `--caution` |
-| `bad` | Failed | `--danger` |
+| `warn` | Stale, degraded, needs a look — **not** an error | `--caution` (5px hollow ring) |
+| `bad` | Failed | `--danger` (6px solid dot) |
 | `info` | In progress, or a neutral notice | `--accent` |
 | `muted` | Off, paused, not configured | `--muted` |
 
@@ -87,6 +87,11 @@ that quietly says the wrong thing.
   refresh" belongs in a button. Making the pill clickable would only make that mistake look
   intended.
 - **`warn` and `bad` never borrow each other's token** — a stale value is not a failure.
+- **`warn` and `bad` differ in shape, not only in colour.** `warn` carries a 5px hollow ring,
+  `bad` a 6px solid dot, so a grayscale reader — or a reader who never compares two shades side by
+  side, since only one state is on screen at a time — still tells them apart. The word is always
+  there; the dot and the border only reinforce it. Changing either rule needs a reason that starts
+  with grayscale, because that is the only reason they exist.
 - **`labelKey` must be a key.** It stays an open string because every call site names its own state
   word, so `statusPillKeyGuard.test.ts` holds the line: a `<StatusPill …>` call site that passes a
   sentence, a CJK label or an already-resolved string turns that guard red. Variables and constants
