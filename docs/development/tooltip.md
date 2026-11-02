@@ -13,9 +13,9 @@ mouse and never enters the accessible description, so keyboard users never see i
 | `Tooltip` | One hint, attached to one focusable trigger. |
 | `TooltipProps` | The props type. |
 
-The copy ceiling — **28 Chinese characters / 60 Latin characters** — is a documented acceptance
-criterion, not a code constant: a test that only asserts "the constant is 28" passes forever and
-guards nothing.
+The copy ceiling — **20 Chinese characters / 44 Latin characters** (what still fits on one line at
+12 px inside the 250 px bubble) — is a documented acceptance criterion, not a code constant: a test
+that only asserts "the constant is 20" passes forever and guards nothing.
 
 ```tsx
 import { Tooltip } from '@platform/ui/components/tooltip'
@@ -51,7 +51,7 @@ only when there is no room.
 
 ## Rules for call sites
 
-- One line only: at most **28 Chinese characters / 60 Latin characters**. Longer text becomes a
+- One line only: at most **20 Chinese characters / 44 Latin characters**. Longer text becomes a
   visible note or a folded detail — a tooltip is not documentation.
 - A tooltip explains; it never carries the only copy of a fact. If losing the tooltip loses the
   information, it belongs in the page.

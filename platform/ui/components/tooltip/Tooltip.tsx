@@ -32,6 +32,14 @@ export type TooltipProps = {
 }
 
 /**
+ * 气泡字号锁死在 12px，不继承外层。
+ *
+ * antd 的 tooltip 样式里没有写 `font-size`，气泡会跟着正文走：`windowTheme` 的字号一改，
+ * 提示就跟着漂。提示是辅助说明，不该随正文字号变——所以这里显式给，并用渲染值断言钉住。
+ */
+const BUBBLE_STYLE = { fontSize: 12 } as const
+
+/**
  * 定位不接受参数（契约 §6），但它**必须显式写死**：antd 的默认位置是 `top`，不是 `bottom`。
  * 直接把参数删掉，提示会跑到上方——那不是「没设置」，是设置错了。
  *
@@ -48,7 +56,12 @@ export function Tooltip({ labelKey, resolveText, children }: TooltipProps): Reac
   if (text.trim() === '') return children
 
   return (
-    <AntTooltip mouseEnterDelay={0.3} placement={PLACEMENT} title={text} trigger={['hover', 'focus']}>
+    <AntTooltip
+      mouseEnterDelay={0.3}
+      placement={PLACEMENT}
+      styles={{ body: BUBBLE_STYLE }}
+      title={text}
+      trigger={['hover', 'focus']}>
       {children}
     </AntTooltip>
   )

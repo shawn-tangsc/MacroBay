@@ -116,6 +116,19 @@ describe('Tooltip', () => {
     expect(source.match(/placement=/g)).toHaveLength(1)
   })
 
+  it('pins the bubble type size at 12px instead of inheriting the page', async () => {
+    const trigger = await mount()
+    await act(async () => {
+      trigger.focus()
+    })
+    await tooltipText(trigger)
+
+    // 读渲染值，不读常量：主题字号一改，这条会因为气泡跟着漂而变红。
+    const bubble = document.querySelector<HTMLElement>('.ant-tooltip-inner')
+    expect(bubble).not.toBeNull()
+    expect(bubble?.style.fontSize).toBe('12px')
+  })
+
   it('rejects placement at the call site too, not only in its own props', () => {
     // 两处都要管：组件 props 里出现 `placement` 是红，调用点把 `placement` 传给 `<Tooltip>` 也是红。
     const offenders: string[] = []
