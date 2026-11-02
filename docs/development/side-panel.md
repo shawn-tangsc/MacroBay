@@ -29,6 +29,20 @@ Yes → `SidePanel`. No → `Drawer`.
 | `contentId` | `string` | with `focusPolicy="stay"` | The stable id of what the panel currently shows. **Required on that branch**: without it the component cannot tell a re-render from a real change. |
 | `when` | `string` | with `focusPolicy="stay"` | What tells two same-named items apart in the announcement (a formatted time). **Required**: `stay` exists for lists where the same title can appear twice. |
 
+## Parent container requirement (a condition of use, not a suggestion)
+
+`SidePanel` is a flow element with `height: 100%`, so **its parent must be a flex row with a
+determinate height**: main content and panel side by side, and the parent itself sized (for example
+the page shell at `display:flex; height:100%`, with no ordinary content-sized block in between).
+Without a determinate parent height, `height:100%` collapses to 0 — the panel looks like it never
+rendered while the DOM is perfectly fine and the tests stay green.
+
+Width never overflows: the component carries `max-width:100%`, so even if the `flex` tier computes
+`min(480px, 46vw)` it is capped at the container's width and **cannot push the parent wider**. In a
+520-wide container it takes 480, leaving 40.
+
+One line: **the parent provides the height, the component provides the width.**
+
 ## Rules the component enforces
 
 - **No mask, no focus trap, no global Esc.** The reader is expected to move between the panel and
