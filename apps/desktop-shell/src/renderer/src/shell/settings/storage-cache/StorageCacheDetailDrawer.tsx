@@ -58,7 +58,7 @@ export function StorageCacheDetailDrawer({
     <Drawer
       className="storage-cache-drawer"
       mode="modal"
-      size="large"
+      size="narrow"
       titleKey={STORAGE_CACHE_DETAIL_TITLE_KEY}
       // 未知键返回空串、不回退键名：宁可标题空着，也不能把键名念给读者。
       resolveText={(key) => (key === STORAGE_CACHE_DETAIL_TITLE_KEY ? name : '')}
