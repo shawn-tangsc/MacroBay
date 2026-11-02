@@ -38,6 +38,17 @@
   white-space: nowrap;
 }
 
+/* `stay` 档的播报节点只给读屏：视觉上不占位，也不该被发现「这里多了一行」。 */
+.side-panel__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .side-panel__body {
   flex: 1;
   min-height: 0;

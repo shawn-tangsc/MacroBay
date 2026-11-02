@@ -51,7 +51,11 @@ describe('SidePanel', () => {
     const host = await mount({ size: 'rail' })
     const panel = host.querySelector<HTMLElement>('.side-panel')!
     expect(panel.style.getPropertyValue('--side-panel-width')).toBe('282px')
-    expect(css).not.toMatch(/\.side-panel[^{]*\{[^}]*\bwidth:\s*\d+px/)
+    // 根块的宽度只准来自变量；像素表在组件里（`SIZE_CSS`），不在样式表里。
+    const rootStart = css.indexOf('.side-panel {')
+    const rootBlock = css.slice(rootStart, css.indexOf('}', rootStart))
+    expect(rootBlock).toContain('width: var(--side-panel-width)')
+    expect(rootBlock).not.toMatch(/width:\s*\d+px/)
   })
 
   it('keeps the ratio cap inside the component for the flex size', async () => {
@@ -144,6 +148,93 @@ describe('SidePanel', () => {
     })
     // 谁移动了焦点谁负责还原：关掉之后焦点回到打开前那一个元素，不是掉到 body 上。
     expect(document.activeElement).toBe(outside)
+  })
+
+  it('leaves focus where it is in the stay policy: the reader is browsing a list', async () => {
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.focus()
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <SidePanel contentId="event-1" focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.event">
+          <button type="button" data-inner>
+            inner
+          </button>
+        </SidePanel>
+      )
+    })
+
+    // 焦点既不进入也不还原：读者正在列表里连着看。
+    expect(document.activeElement).toBe(outside)
+    expect(document.activeElement?.hasAttribute('data-inner')).toBe(false)
+  })
+
+  it('announces the new title once in stay, and only once for a burst of changes', async () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const render = async (titleKey: string, contentId: string): Promise<void> => {
+      await act(async () => {
+        root!.render(
+          <SidePanel contentId={contentId} focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey={titleKey}>
+            <button type="button">inner</button>
+          </SidePanel>
+        )
+      })
+    }
+
+    await render('ui.test.eventA', 'id-a')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('ui.test.eventA')
+
+    await render('ui.test.eventB', 'id-b')
+    await render('ui.test.eventC', 'id-c')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    // 连点两个只播最后一个：读者要的是「换到了哪」，不是一段流水账。
+    const status = host.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain('ui.test.eventC')
+    expect(status).not.toContain('ui.test.eventB')
+    vi.useRealTimers()
+  })
+
+  it('does not announce again when the same content renders twice', async () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    // 同一个 id、同一个标题重渲染：第二次不该再念一遍。
+    for (const _ of [0, 1]) {
+      await act(async () => {
+        root!.render(
+          <SidePanel contentId="same-id" focusPolicy="stay" onClose={() => undefined} open resolveText={key} size="flex" titleKey="ui.test.same">
+            <button type="button">inner</button>
+          </SidePanel>
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500)
+      })
+    }
+    const status = host.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain('ui.test.same')
+    expect(status.split('ui.test.same')).toHaveLength(2)
+    vi.useRealTimers()
+  })
+
+  it('has no live region at all in the move-in policy', async () => {
+    const host = await mount()
+    // move-in 的焦点本身就会播报，再挂一层就是念两遍。
+    expect(host.querySelector('[role="status"]')).toBeNull()
+    expect(host.querySelector('[aria-live]')).toBeNull()
   })
 
   it('renders nothing at all while closed, leaving no empty shell', async () => {

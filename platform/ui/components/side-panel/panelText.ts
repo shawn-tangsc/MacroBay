@@ -11,11 +11,19 @@ import { useShellLanguage } from '../../shell/ShellLanguageContext'
  */
 
 export const PANEL_COLLAPSE_KEY = 'ui.panel.close' as const
+/** `stay` 档的播报句：只报「当前显示什么」，不播正文。 */
+export const PANEL_SHOWING_KEY = 'ui.panel.showing' as const
 
-type PanelTextKey = typeof PANEL_COLLAPSE_KEY
+type PanelTextKey = typeof PANEL_COLLAPSE_KEY | typeof PANEL_SHOWING_KEY
 
-const ZH_CN: Record<PanelTextKey, string> = { 'ui.panel.close': '收起面板' }
-const EN_US: Record<PanelTextKey, string> = { 'ui.panel.close': 'Collapse panel' }
+const ZH_CN: Record<PanelTextKey, string> = {
+  'ui.panel.close': '收起面板',
+  'ui.panel.showing': '当前显示：{title}'
+}
+const EN_US: Record<PanelTextKey, string> = {
+  'ui.panel.close': 'Collapse panel',
+  'ui.panel.showing': 'Showing: {title}'
+}
 
 const COPY: Record<AppLanguage, Record<PanelTextKey, string>> = { 'zh-CN': ZH_CN, 'en-US': EN_US }
 

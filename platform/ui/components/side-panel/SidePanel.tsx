@@ -1,9 +1,10 @@
 import { X } from 'lucide-react'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
 import { IconButton } from '../icon-button'
-import { PANEL_COLLAPSE_KEY, usePanelText } from './panelText'
+import { fillLabelParams } from '../textKeyParams'
+import { PANEL_COLLAPSE_KEY, PANEL_SHOWING_KEY, usePanelText } from './panelText'
 
 import './sidePanel.css'
 
@@ -29,7 +30,31 @@ const SIZE_CSS: Record<SidePanelSize, string> = {
   flex: 'min(480px, 46vw)'
 }
 
-export type SidePanelProps = {
+/**
+ * 焦点策略（契约 §10），两种读者意图：
+ * - `move-in`（默认）：读者**按按钮打开**面板——焦点进正文首个可操作项，收起时还回去；
+ * - `stay`：读者在列表里选中某项、面板**跟着换内容**——焦点既不进入也不还原。不进入就没有可还原的。
+ *
+ * 不用布尔：`focusOnOpen?: boolean` 只是开关的另一个名字，说不清读者想干什么。
+ */
+export type SidePanelFocusPolicy = 'move-in' | 'stay'
+
+type SidePanelFocusShape =
+  | {
+      focusPolicy?: 'move-in'
+      /** `move-in` 不需要内容标识：焦点移动本身就是播报。 */
+      contentId?: never
+    }
+  | {
+      focusPolicy: 'stay'
+      /**
+       * 当前内容的稳定标识。**判重靠它，不靠标题**：日历里同一时段两场「FOMC 会议」很常见，
+       * 标题一样、id 不同，按标题判重就会漏播，读屏用户以为没换。
+       */
+      contentId: string
+    }
+
+export type SidePanelProps = SidePanelFocusShape & {
   open: boolean
   /** 收起时调用；键盘收起后焦点回到触发元素，由调用方负责（组件不猜触发器是谁）。 */
   onClose: () => void
@@ -45,6 +70,8 @@ export type SidePanelProps = {
 
 export function SidePanel(props: SidePanelProps): ReactElement | null {
   const { open, onClose, size, titleKey, footer, children, className, resolveText } = props
+  const focusPolicy: SidePanelFocusPolicy = props.focusPolicy ?? 'move-in'
+  const contentId = props.focusPolicy === 'stay' ? props.contentId : undefined
   const panelRef = useRef<HTMLElement>(null)
   // 区域名走 aria-labelledby 指向标题节点：再用 aria-label 写同一句，读屏会把标题念两遍。
   const titleId = useId()
@@ -56,6 +83,8 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
   // 关：把焦点还回去——三个调用点各写一份等于没人写，而键盘用户的位置会掉到 body 上。
   // 不做焦点陷阱：Tab 仍能走回主内容，这是它与 `Drawer` 在键盘上的区别。
   useEffect(() => {
+    // `stay` 档：焦点既不进入也不还原——读者正在列表里连着看，抢走焦点等于每点一次被拉走一次。
+    if (focusPolicy === 'stay') return
     if (!open) {
       returnFocusRef.current?.focus()
       returnFocusRef.current = null
@@ -67,7 +96,25 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
     const body = panelRef.current?.querySelector<HTMLElement>('.side-panel__body')
     const target = body?.querySelector<HTMLElement>(selector) ?? panelRef.current?.querySelector<HTMLElement>(selector)
     target?.focus()
-  }, [open])
+  }, [open, focusPolicy])
+
+  // `stay` 档焦点不动，读屏就收不到「内容变了」；所以由面板自己播一句，只播标题、不播正文。
+  // 400ms 去抖 + 标题判重：连点三个事件只播最后一个，正常间隔各播一次。
+  const [announcement, setAnnouncement] = useState('')
+  const announcedId = useRef<string | null>(null)
+  const showingLabel = usePanelText()(PANEL_SHOWING_KEY)
+
+  useEffect(() => {
+    if (!open || focusPolicy !== 'stay' || contentId === undefined) return
+    // 判重按 id：同一条内容重渲染不再念一遍。标题只用来播。
+    if (announcedId.current === contentId) return
+    const title = resolveText(titleKey)
+    const timer = setTimeout(() => {
+      announcedId.current = contentId
+      setAnnouncement(fillLabelParams(showingLabel, { title }))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [open, focusPolicy, contentId, resolveText, titleKey, showingLabel])
 
   if (!open) return null
 
@@ -90,6 +137,12 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
           size="sm"
         />
       </header>
+      {/* 只有 `stay` 挂 live region：`move-in` 的焦点本身就会播报，再挂一层就是念两遍。 */}
+      {focusPolicy === 'stay' ? (
+        <span aria-live="polite" className="side-panel__status" role="status">
+          {announcement}
+        </span>
+      ) : null}
       <div className="side-panel__body">{children}</div>
       {footer === undefined ? null : <footer className="side-panel__footer">{footer}</footer>}
     </aside>
