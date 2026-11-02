@@ -143,54 +143,89 @@ export function NotificationCenterDrawer({
           {notice}
         </p>
       )}
-      {state === 'loading' ? (
+      {state === 'loading' && items.length === 0 ? (
+        // 首次进入只画加载中：数据回来之前既不算「没有」，也不算「读不到」。
         <LoadingState ariaLabel={labels.centerTitle} />
+      ) : items.length > 0 ? (
+        <>
+          {state === 'error' ? (
+            // 刷新失败但手上有上一次的列表：**不拿它换一块空白**，只标一句「这是上次的读数」。
+            <p className="notification-center-stale" role="status" data-center-stale>
+              <span>{labels.centerStaleNotice}</span>
+              <button type="button" className="notification-center-link" onClick={() => void load()}>
+                {labels.centerRetry}
+              </button>
+            </p>
+          ) : null}
+          <NotificationGroups
+            labels={labels}
+            language={language}
+            onOpenDeeplink={onOpenDeeplink}
+            onRead={markOneRead}
+            readItems={readItems}
+            recorded={recorded}
+            unreadItems={unreadItems}
+          />
+        </>
       ) : state === 'error' ? (
         <StateView state="error" reasonCode="unreadable" size="md" action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }} />
-      ) : items.length === 0 ? (
+      ) : (
         <>
           <StateView state="empty" reasonCode="not-yet" size="md" />
           {/* 通用空态句说不出「等的是谁」：这个页面的来源是外部事件，所以下面补一句本页专属的说明。
               放在 `StateView` 之外，是因为改了平台键会让另外七处 `not-yet` 开始说别人的话。 */}
           <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
         </>
-      ) : (
-        <div className="notification-center-groups">
-          {unreadItems.length === 0 ? null : (
-            <Group
-              title={labels.centerUnreadGroup}
-              items={unreadItems}
-              language={language}
-              labels={labels}
-              onOpenDeeplink={onOpenDeeplink}
-              onRead={markOneRead}
-              actionable
-            />
-          )}
-          {readItems.length === 0 ? null : (
-            <Group
-              title={labels.centerEarlierGroup}
-              items={readItems}
-              language={language}
-              labels={labels}
-              onOpenDeeplink={onOpenDeeplink}
-              onRead={markOneRead}
-              actionable
-            />
-          )}
-          {recorded.length === 0 ? null : (
-            <Group
-              title={labels.centerRecordedGroup}
-              items={recorded}
-              language={language}
-              labels={labels}
-              onOpenDeeplink={onOpenDeeplink}
-              onRead={markOneRead}
-            />
-          )}
-        </div>
       )}
     </Drawer>
+  )
+}
+
+function NotificationGroups(props: {
+  labels: PlatformText['notifications']
+  language: NotificationCopyLanguage
+  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onRead: (id: string) => Promise<void>
+  unreadItems: readonly SafeNotificationRecord[]
+  readItems: readonly SafeNotificationRecord[]
+  recorded: readonly SafeNotificationRecord[]
+}): React.ReactElement {
+  const { labels, language, onOpenDeeplink, onRead } = props
+  return (
+    <div className="notification-center-groups">
+      {props.unreadItems.length === 0 ? null : (
+        <Group
+          title={labels.centerUnreadGroup}
+          items={props.unreadItems}
+          language={language}
+          labels={labels}
+          onOpenDeeplink={onOpenDeeplink}
+          onRead={onRead}
+          actionable
+        />
+      )}
+      {props.readItems.length === 0 ? null : (
+        <Group
+          title={labels.centerEarlierGroup}
+          items={props.readItems}
+          language={language}
+          labels={labels}
+          onOpenDeeplink={onOpenDeeplink}
+          onRead={onRead}
+          actionable
+        />
+      )}
+      {props.recorded.length === 0 ? null : (
+        <Group
+          title={labels.centerRecordedGroup}
+          items={props.recorded}
+          language={language}
+          labels={labels}
+          onOpenDeeplink={onOpenDeeplink}
+          onRead={onRead}
+        />
+      )}
+    </div>
   )
 }
 

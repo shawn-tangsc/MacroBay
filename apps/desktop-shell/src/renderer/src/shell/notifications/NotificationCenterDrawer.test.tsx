@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -320,5 +320,78 @@ describe('记录里存的是键，句子在展示时解析', () => {
 
     // 一次操作两个效果：既跳转，也标读；只跳不标会留下一条永远不消的未读。
     expect(markRead).toHaveBeenCalledWith('t3')
+  })
+})
+
+describe('首次进入不闪错误或空态', () => {
+  it('读数还没回来时只画加载中：既不画错误，也不画「没有」', async () => {
+    let resolveList: ((page: { items: SafeNotificationRecord[] }) => void) | undefined
+    const source = fakeSource({
+      list: () =>
+        new Promise((resolve) => {
+          resolveList = resolve
+        })
+    })
+
+    await mount(source)
+
+    // 这一帧数据还没回来。旧行为是 `state === 'error'` 的分支排在最前，读取慢一点就先闪一下错误。
+    expect(document.body.querySelector('.loading-state')).not.toBeNull()
+    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
+    expect(document.body.querySelector('[data-state="empty"]')).toBeNull()
+
+    await act(async () => {
+      resolveList?.({ items: [record({ id: 'after-load', deeplink })] })
+      await Promise.resolve()
+    })
+
+    expect(rows()).toHaveLength(1)
+    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
+  })
+
+  it('首次就读不到才出错误 + 重试；那不是「没有」', async () => {
+    await mount(fakeSource({ list: async () => Promise.reject(new Error('bridge down')) }))
+
+    expect(document.body.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(document.body.querySelector('[data-state="empty"]')).toBeNull()
+    expect(document.body.querySelector('.state-view button')).not.toBeNull()
+  })
+
+  it('刷新失败时保留上一次的列表，并标「这是上次的读数」', async () => {
+    let calls = 0
+    const source = fakeSource({
+      list: async () => {
+        calls += 1
+        if (calls === 1) return { items: [record({ id: 'kept', deeplink })] }
+        throw new Error('refresh failed')
+      }
+    })
+
+    await mount(source)
+    expect(rows()).toHaveLength(1)
+
+    // 关掉再打开 = 抽屉的重新读取入口；这一次读失败，但手上有上一次的列表。
+    const render = (open: boolean): React.ReactElement =>
+      createElement(NotificationCenterDrawer, {
+        open,
+        onClose: () => undefined,
+        labels,
+        language: 'zh-CN',
+        onOpenDeeplink: () => undefined,
+        source
+      })
+    await act(async () => {
+      root!.render(render(false))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root!.render(render(true))
+      await Promise.resolve()
+    })
+
+    expect(rows()).toHaveLength(1)
+    expect(document.body.querySelector('[data-center-stale]')?.textContent).toContain(labels.centerStaleNotice)
+    // 有旧数据时不许整块换成页面级错误。
+    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
   })
 })
