@@ -11,13 +11,30 @@ export type AgentSessionGroup = {
 
 export type AgentSessionRuntimeStatus = 'idle' | 'pending' | 'done' | 'error' | 'paused'
 
+/**
+ * 组内顺序：**最近活跃的在最上面**。
+ *
+ * 用 `updatedAt` 而不是 `createdAt`——读者找的是刚聊过的那个，不是刚建的那个。
+ * 并列时按 `createdAt`、再按 `id` 兜底：同一份数据渲染两次必须逐字相同，
+ * 否则并列的几条会在每次重排里换位置。
+ *
+ * **排序只写在这一处**：页面拿到的就是排好的数组，不再自己排第二遍。两处规则一旦分叉，
+ * 以后没人说得清哪一处才是对的。
+ */
+function byRecentActivity(a: AgentSessionEntity, b: AgentSessionEntity): number {
+  const byUpdatedAt = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  if (byUpdatedAt !== 0) return byUpdatedAt
+  const byCreatedAt = (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+  return byCreatedAt !== 0 ? byCreatedAt : b.id.localeCompare(a.id)
+}
+
 export function groupAgentSessions(
   sessions: readonly AgentSessionEntity[],
   pinnedSessionIds: ReadonlySet<string>,
   text: Pick<AgentText['common'], 'pinned' | 'recent'>
 ): AgentSessionGroup[] {
-  const pinned = sessions.filter((session) => pinnedSessionIds.has(session.id))
-  const recent = sessions.filter((session) => !pinnedSessionIds.has(session.id))
+  const pinned = sessions.filter((session) => pinnedSessionIds.has(session.id)).sort(byRecentActivity)
+  const recent = sessions.filter((session) => !pinnedSessionIds.has(session.id)).sort(byRecentActivity)
   const groups: AgentSessionGroup[] = [
     { key: 'pinned', title: text.pinned, sessions: pinned },
     { key: 'recent', title: text.recent, sessions: recent }
