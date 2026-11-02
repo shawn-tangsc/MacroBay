@@ -46,6 +46,7 @@ import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { NotificationToasts } from './notifications/NotificationToasts'
 import { resolveNotificationNavigation } from './notifications/notificationDeeplink'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
@@ -1734,6 +1735,13 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
       </header>
+
+      {/* 右上角横幅：投递事件来了就画，不靠轮询；点它打开通知中心。 */}
+      <NotificationToasts
+        labels={t.notifications}
+        language={settings.language}
+        onOpen={() => setNotificationCenterOpen(true)}
+      />
 
       <NotificationCenterDrawer
         open={notificationCenterOpen}

@@ -1018,6 +1018,10 @@ export type PlatformText = {
     centerCancel: string
     sendTest: string
     sendTestHint: string
+    sendTestSent: string
+    sendTestToastOff: string
+    sendTestFailed: string
+    toastClose: string
     centerRecordedGroup: string
     centerExpand: string
     centerCollapse: string
@@ -2096,6 +2100,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadEmpty: '没有已读通知可删。',
       centerCancel: '取消',
       sendTest: '发送测试通知',
+      sendTestSent: '已发送：右上角会出现一条横幅，六秒后自己消失；点它打开通知中心。',
+      sendTestToastOff: '已发送：应用内提示关着，所以右上角不会出现横幅。这条已经进了通知中心，点铃铛可以看到。',
+      sendTestFailed: '没发出去：这条通知没有写进记录，请稍后再试一次。',
+      toastClose: '关闭这条通知',
       sendTestHint: '这条只用来验证链路：它不代表任何业务事实。桌面横幅没弹出，多半是系统没放行，不是平台没发出去。',
       centerRecordedGroup: '仅记录',
       centerExpand: '展开',
@@ -3193,6 +3201,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadEmpty: 'There are no read notifications to delete.',
       centerCancel: 'Cancel',
       sendTest: 'Send a test notification',
+      sendTestSent: 'Sent — a banner appears in the top right and goes away after six seconds. Click it to open the notification centre.',
+      sendTestToastOff: 'Sent — in-app banners are off, so nothing appears in the top right. It is in the notification centre; open the bell.',
+      sendTestFailed: 'Not sent — this notification was not recorded. Try again in a moment.',
+      toastClose: 'Dismiss this notification',
       sendTestHint: 'This only proves the pipeline works; it describes no real event. If no desktop banner appears, the system probably blocked it rather than the platform failing to send.',
       centerRecordedGroup: 'Recorded only',
       centerExpand: 'Show more',

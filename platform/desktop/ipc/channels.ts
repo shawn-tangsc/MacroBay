@@ -213,6 +213,8 @@ export const IpcChannels = {
   notificationsRequestDesktopPermission: 'platform:notifications-request-desktop-permission',
   /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
   notificationsChanged: 'platform:notifications-changed',
+  /** 应用内投递（横幅 / 弹窗）：事件带那条记录的键与参数，渲染层自己解析句子。 */
+  notificationsDelivered: 'platform:notifications-delivered',
   jobsGetRun: 'platform:jobs-get-run',
   jobsListRunPage: 'platform:jobs-list-run-page',
   /** 只读：`jobRuntime.listSchedules()` 的平台投影（无 payload/密钥/路径/写入口）。 */

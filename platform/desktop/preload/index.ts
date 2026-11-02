@@ -421,6 +421,16 @@ const api = {
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
     requestDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsRequestDesktopPermission),
     /**
+     * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是那条记录本身（键与参数）。
+     * 渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。
+     */
+    onDelivered: (callback: (delivery: { channel: 'toast' | 'popup'; record: unknown }) => void) => {
+      const listener = (_event: unknown, delivery: { channel: 'toast' | 'popup'; record: unknown }): void =>
+        callback(delivery)
+      ipcRenderer.on(IpcChannels.notificationsDelivered, listener)
+      return () => { ipcRenderer.removeListener(IpcChannels.notificationsDelivered, listener) }
+    },
+    /**
      * 订阅「记录有变化」：投递、标读、撤销、稍后、清理之后各推一次，载荷是递增版本号。
      * 返回退订函数；事件只说明「变了」，真值仍由 `list()` / `getUnreadState()` 读。
      */

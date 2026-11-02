@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Bell } from 'lucide-react'
 import { Button, Switch, Tag } from 'antd'
 
@@ -32,6 +33,18 @@ export function NotificationSettingsPane(props: {
   // No producer means these switches cannot change what the user receives: show that instead of a
   // toggle that silently does nothing (MI-11-R7).
   const available = notificationProducerWired
+  // 点完必须**当场看到结果**：之前没有任何反馈，用户点了以为按钮坏了。
+  const [sendResult, setSendResult] = useState<string | null>(null)
+
+  async function sendTest(): Promise<void> {
+    try {
+      await window.platform.notifications.sendTest()
+      // 横幅关着就如实说它不会出现，并告诉用户去哪儿看——不能只说「已发送」。
+      setSendResult(settings.toastEnabled ? labels.sendTestSent : labels.sendTestToastOff)
+    } catch {
+      setSendResult(labels.sendTestFailed)
+    }
+  }
 
   return (
     <section className="settings-detail-pane preferences-pane notification-settings-pane">
@@ -72,10 +85,15 @@ export function NotificationSettingsPane(props: {
 
       {/* 手动说明 + 唯一的动作：发送一条测试通知。权限状态不在这里画——系统答不了「授没授权」。 */}
       <div className="notification-settings-test">
-        <Button size="small" onClick={() => void window.platform.notifications.sendTest()}>
+        <Button size="small" onClick={() => void sendTest()}>
           {labels.sendTest}
         </Button>
         <p className="notification-settings-footnote">{labels.sendTestHint}</p>
+        {sendResult === null ? null : (
+          <p className="notification-settings-result" role="status" data-send-test-result>
+            {sendResult}
+          </p>
+        )}
       </div>
 
       {/* 控件不可操作时不给操作建议：开关全禁用着，还建议「至少保留一个渠道」等于建议一个没得选的选择。 */}

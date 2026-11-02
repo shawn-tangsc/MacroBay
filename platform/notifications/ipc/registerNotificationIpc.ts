@@ -6,7 +6,8 @@ import { IpcChannels } from '../../desktop/ipc/channels'
 import { resolveNotificationCopyText, notificationCopyText, type NotificationCopyLanguage } from '../../i18n/notificationCopy'
 import { createDesktopNotificationAdapter } from '../desktop/desktopNotificationAdapter'
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
-import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import { toSafeNotificationRecord } from '../contracts/notificationContracts'
+import type { NotificationRecord, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationClock } from '../runtime/notificationRouting'
 
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
@@ -31,6 +32,21 @@ export function configureNotificationRuntime(deps: {
 }
 
 /** 记录变化后广播一次：角标与列表订阅它，不轮询。事件只说明「变了」，真值仍由 `list()` 读。 */
+/**
+ * 应用内投递：把那条记录推给渲染层去画。
+ *
+ * 存在理由：`routeTransientDelivery` 早就有 `toast` / `popup` 两个钩子，但没人接——于是开关
+ * 打开了、路由算完「该弹」、`hooks.toast` 缺席，记录被写成 `skipped: toast-unavailable`。
+ * 效果与假开关相同：用户勾了它，屏幕上什么都没发生。
+ */
+function broadcastNotificationDelivered(record: NotificationRecord, channel: 'toast' | 'popup'): void {
+  const payload = { channel, record: toSafeNotificationRecord(record) }
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue
+    window.webContents.send(IpcChannels.notificationsDelivered, payload)
+  }
+}
+
 function broadcastNotificationChanged(change: { version: number }): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) continue
@@ -61,6 +77,9 @@ export function getNotificationRuntime() {
         }),
       clock: notificationClock,
       deliveryHooks: {
+        // 应用内两档直接推给渲染层：句子由渲染层按当前语言解析（记录里只有键与参数）。
+        toast: (record) => broadcastNotificationDelivered(record, 'toast'),
+        popup: (record) => broadcastNotificationDelivered(record, 'popup'),
         // 记录只存键与参数，句子在这里按**当前语言**解析：切语言后历史通知也跟着变。
         desktop: async (record) => {
           // 每次读设置：切语言后**历史通知**也按新语言解析（记录里只有键）。

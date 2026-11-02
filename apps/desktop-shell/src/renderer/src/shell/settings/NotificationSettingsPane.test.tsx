@@ -20,7 +20,10 @@ afterEach(async () => {
   root = undefined
 })
 
-async function mount(onChange = vi.fn()): Promise<HTMLElement> {
+async function mount(
+  onChange = vi.fn(),
+  settings = createDefaultNotificationRuntimeSettings()
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -29,7 +32,7 @@ async function mount(onChange = vi.fn()): Promise<HTMLElement> {
       createElement(NotificationSettingsPane, {
         title: platformText['zh-CN'].settings.notifications,
         notice: null,
-        settings: createDefaultNotificationRuntimeSettings(),
+        settings,
         labels: platformText['zh-CN'].notifications,
         onChange
       })
@@ -84,5 +87,58 @@ describe('notification settings styles', () => {
     // Match a whole class selector, not a prefix: `.notification-channel-controls-extra` must not
     // satisfy `.notification-channel-controls`.
     expect(used.filter((name) => !new RegExp(`\\.${name}(?![\\w-])`).test(styles))).toEqual([])
+  })
+})
+
+describe('发送测试通知的反馈', () => {
+  it('点完当场给出结果，不是点了没反应', async () => {
+    const sendTest = vi.fn(async () => ({ id: 'test-1' }))
+    Object.assign(globalThis, { platform: { notifications: { sendTest } } })
+
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const button = [...container.querySelectorAll('button')].find((node) => node.textContent === labels.sendTest)
+    expect(button).toBeDefined()
+
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
+
+    expect(sendTest).toHaveBeenCalledTimes(1)
+    // 横幅开着：告诉他去哪看，而不是只回一句「已发送」。
+    expect(container.querySelector('[data-send-test-result]')?.textContent).toBe(labels.sendTestSent)
+  })
+
+  it('横幅关着就如实说它不会出现，并指向铃铛', async () => {
+    Object.assign(globalThis, { platform: { notifications: { sendTest: vi.fn(async () => ({ id: 'test-2' })) } } })
+
+    const container = await mount(vi.fn(), { ...createDefaultNotificationRuntimeSettings(), toastEnabled: false })
+    const labels = platformText['zh-CN'].notifications
+    const button = [...container.querySelectorAll('button')].find((node) => node.textContent === labels.sendTest)
+
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-send-test-result]')?.textContent).toBe(labels.sendTestToastOff)
+  })
+
+  it('发不出去时说的是「没发出去」，不是「已发送」', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { sendTest: vi.fn(async () => Promise.reject(new Error('ipc down'))) } }
+    })
+
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const button = [...container.querySelectorAll('button')].find((node) => node.textContent === labels.sendTest)
+
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-send-test-result]')?.textContent).toBe(labels.sendTestFailed)
   })
 })
