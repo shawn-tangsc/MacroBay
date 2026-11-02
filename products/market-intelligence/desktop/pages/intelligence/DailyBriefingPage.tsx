@@ -63,6 +63,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // The rail starts empty while the list is still being read. "Nothing yet" and "nothing at all"
   // look the same once the array is empty, so the rail has to be told which one it is.
   const [editionsLoading, setEditionsLoading] = useState(true)
+  // A list we could not read is not an empty list: the rail says so and offers the same read again.
+  const [editionsFailed, setEditionsFailed] = useState(false)
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -93,6 +95,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     setEditionsLoading(true)
+    setEditionsFailed(false)
     setRegenerateFailure(null)
     void (async () => {
       const todayPromise = withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
@@ -100,8 +103,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
-      // The list has been read (successfully or not): from here an empty rail means "none".
+      // The list has been read: from here an empty rail means "none" — unless the read itself failed.
       setEditionsLoading(false)
+      setEditionsFailed(listed?.state !== 'available')
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
       if (cachedRow) {
         const cached = await client.get({ date: cachedRow.date, locale }).catch(() => undefined)
@@ -317,7 +321,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </header>
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} loading={editionsLoading} selectedDate={selectedDate} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">

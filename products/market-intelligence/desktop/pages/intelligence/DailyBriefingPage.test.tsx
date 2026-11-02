@@ -714,3 +714,19 @@ it('offers a retry when the read itself fails', async () => {
   expect(errorState).not.toBeNull()
   expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
 })
+
+it('says the history could not be read instead of claiming there is none', async () => {
+  const client = fakeClient({
+    getToday: vi.fn(async () => { throw new Error('down') }),
+    list: vi.fn(async () => { throw new Error('down') })
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => {})
+  await act(async () => {})
+
+  const rail = dom.querySelector('.mi-daily-briefing__rail')
+  expect(rail?.textContent).not.toContain(text.history.empty)
+  const errorState = rail?.querySelector('.state-view[data-state="error"]')
+  expect(errorState).not.toBeNull()
+  expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
+})
