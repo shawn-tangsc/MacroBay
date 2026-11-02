@@ -9,6 +9,8 @@ import type { AgentWorkspaceEntity } from '@platform/ai/agent-platform/schemas/w
 import { createAgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
+import { ConfirmProvider } from '@platform/ui/components/confirm'
+
 import AgentChat from './AgentChat'
 import { AgentTextProvider } from './agentTextProvider'
 
@@ -113,8 +115,10 @@ function render(input: {
     summary: string
   }>
 }) {
+  // 确认框改成树内渲染后，凡是用到它的组件都必须在 Provider 下渲染（静态渲染同样要求这一层）。
   return renderToStaticMarkup(
-    <AgentTextProvider language="en-US">
+    <ConfirmProvider>
+      <AgentTextProvider language="en-US">
       <AgentChat
         state={input.state}
         runtimeSnapshot={{ sessions: {}, toolApprovals: [], toolApprovalHistory: [], chunksBySessionId: {}, updatedAt: '' }}
@@ -130,8 +134,9 @@ function render(input: {
         onEditAgent={() => undefined}
         onCreateAgent={() => undefined}
         onReturnToAgentList={() => undefined}
-      />
-    </AgentTextProvider>
+        />
+      </AgentTextProvider>
+    </ConfirmProvider>
   )
 }
 
