@@ -389,7 +389,11 @@ describe('首次进入不闪错误或空态', () => {
     })
 
     expect(rows()).toHaveLength(1)
-    expect(document.body.querySelector('[data-center-stale]')?.textContent).toContain(labels.centerStaleNotice)
+    const stale = document.body.querySelector('[data-center-stale]')
+    expect(stale?.textContent).toContain(labels.centerStaleNotice)
+    // 「重试」是把刚失败的操作再做一次；这个按钮只是重新读一遍列表，名字必须说对。
+    expect(stale?.querySelector('button')?.textContent).toBe(labels.centerReload)
+    expect(stale?.textContent).not.toContain('重试')
     // 有旧数据时不许整块换成页面级错误。
     expect(document.body.querySelector('[data-state="error"]')).toBeNull()
   })

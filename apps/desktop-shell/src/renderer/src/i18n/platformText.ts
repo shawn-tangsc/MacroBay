@@ -1068,7 +1068,7 @@ export type PlatformText = {
     centerMergedCount: (count: string) => string
     centerEmptyHint: string
     centerStaleNotice: string
-    centerRetry: string
+    centerReload: string
     channelsHeading: string
   }
   webSearch: {
@@ -2187,8 +2187,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerCollapse: '收起',
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。',
-      centerStaleNotice: '没能刷新，下面是上一次读到的列表。',
-      centerRetry: '重试'
+      centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
+      centerReload: '重新加载'
     },
     webSearch: {
       title: '网页搜索',
@@ -3316,8 +3316,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerCollapse: 'Show less',
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.',
-      centerStaleNotice: 'Could not refresh — this is the list from last time.',
-      centerRetry: 'Try again'
+      centerStaleNotice: 'Could not refresh — showing what was read last time.',
+      centerReload: 'Reload'
     },
     webSearch: {
       title: 'Web Search',

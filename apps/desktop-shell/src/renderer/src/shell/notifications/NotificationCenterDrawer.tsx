@@ -153,7 +153,7 @@ export function NotificationCenterDrawer({
             <p className="notification-center-stale" role="status" data-center-stale>
               <span>{labels.centerStaleNotice}</span>
               <button type="button" className="notification-center-link" onClick={() => void load()}>
-                {labels.centerRetry}
+                {labels.centerReload}
               </button>
             </p>
           ) : null}
