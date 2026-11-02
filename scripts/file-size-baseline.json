@@ -27,7 +27,7 @@
   "products/market-intelligence/contracts/dailyBriefing.ts": 647,
   "products/market-intelligence/contracts/intelligenceQueryContracts.ts": 501,
   "products/market-intelligence/contracts/marketAnalysisContracts.ts": 678,
-  "products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx": 531,
+  "products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx": 475,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefingIssues.ts": 506,
   "products/market-intelligence/desktop/pages/intelligence/useMarketAnalysisTimeline.ts": 504,
   "products/market-intelligence/desktop/shared/ipc/marketAnalysisTimelineClient.ts": 570,

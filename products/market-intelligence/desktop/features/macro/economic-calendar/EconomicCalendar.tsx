@@ -7,24 +7,22 @@ import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEcono
 import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
 import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
 import {
-  createEconomicCalendarProjection,
   createEconomicCalendarQuery,
   economicCalendarCurrentMonth,
   economicCalendarGridMonths,
   isEconomicCalendarMonth,
   selectEconomicCalendarMonth,
   shiftEconomicCalendarMonth,
-  type EconomicCalendarEventView,
-  type EconomicCalendarProjection
+  type EconomicCalendarEventView
 } from './economicCalendarModel'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
-import { CalendarEmptyMonthState } from './CalendarEmptyMonthState'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
-import { CalendarInspector as DetailDrawer } from './CalendarInspector'
-import { EconomicCalendarEventDetail as EventDetail, EconomicCalendarEventDetailState as EventDetailState, type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
+import { CalendarDetailSurface, type CalendarDetailState } from './CalendarDetailSurface'
+import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
+import { CalendarMonthBoard } from './CalendarMonthBoard'
 import { CalendarEventRow } from './CalendarEventRow'
 import { calendarDayForMonth, calendarDisplayDate, unifiedCalendarDay, type CalendarDayCoverage, type CalendarDayItem } from './economicCalendarDayModel'
 import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
@@ -43,12 +41,6 @@ import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from 
 
 import './economicCalendar.css'
 
-type DetailState =
-  | { state: 'idle' }
-  | { state: 'loading' }
-  | { state: 'unavailable'; failureCode: keyof EconomicCalendarText['failures'] }
-  | { state: 'available'; event: EconomicCalendarEventView }
-
 type Props = {
   client: MacroEconomicCalendarClient
   now: () => Date
@@ -66,9 +58,6 @@ const economicCalendarMonthPickerPolicy = {
   allowClear: false,
   format: 'YYYY-MM',
   picker: 'month'
-} as const
-const economicCalendarEmptyStateActionPolicy = {
-  emptyEventCount: 0
 } as const
 type BlsScheduleFeedback = { year: string; schedule: 'updated' | 'unchanged'; cpi: 'updated' | 'current' | 'not-required' | 'unavailable'; employment: 'updated' | 'current' | 'not-required' | 'unavailable' }
 
@@ -113,7 +102,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     if (monthState.state === 'unavailable') { setSelectedEventKey(undefined); return }
     setSelectedEventKey((current) => monthState.events.some((event) => event.eventKey === current) ? current : undefined)
   }, [monthState])
-  const [detailState, setDetailState] = useState<DetailState>({ state: 'idle' })
+  const [detailState, setDetailState] = useState<CalendarDetailState>({ state: 'idle' })
   /** Bumped after the reader edits a release time, to re-read the detail and the month. */
   const [detailReload, setDetailReload] = useState(0)
   // Design 122 §2.2: newly read values and their release status share a fresh local clock.
@@ -394,7 +383,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       <div className="mi-calendar-status-legend" aria-label={text.eventStatus.label}>{CalendarEventStatusPolicy.states.map(status => <span key={status} data-event-status={status}>{text.eventStatus[status]}</span>)}</div>
 
       <div className="mi-economic-calendar__workspace">
-        <CalendarMonthState
+        <CalendarMonthBoard
           statusNow={statusNow}
           asOf={asOf}
           today={today}
@@ -425,12 +414,14 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </div>
       </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
-      <DetailDrawer contentId={detailContentId} onClose={clearDetail} open={detailContentId !== undefined} when={detailWhen}>
-        {selectedMarket && selectedMarketSourceAdvanced ? <p className="mi-economic-calendar__comparison-rule" data-source-advanced>{text.market.sourceAdvanced}</p> : null}
-        {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={market.sources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}
-        {selectedLinkedMarket ? <MarketCalendarInspector event={selectedLinkedMarket} source={market.sources.find(source => source.eventType === selectedLinkedMarket.eventType)} text={text} /> : null}
-        {!selectedMarket && detailState.state === 'loading' ? <EventDetailState state="loading" text={text.status.loading} /> : null}
-        {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event} now={now} onRefresh={async (operation, eventKey) => {
+      <CalendarDetailSurface
+        client={client}
+        contentId={detailContentId}
+        detailState={detailState}
+        marketSources={market.sources}
+        now={now}
+        onClose={clearDetail}
+        onRefresh={async (operation, eventKey) => {
           if (refreshState?.pending) return
           setRefreshState({ eventKey, operation, pending: true })
           const result = operation === 'bls'
@@ -443,14 +434,20 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             setAsOf(nextAsOf)
             loadMonth(selectedMonthRef.current, true, nextAsOf)
           }
-        }} onReleaseTimeChanged={async () => {
+        }}
+        onReleaseTimeChanged={async () => {
           if (!mountedRef.current) return
           loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))
           setDetailReload((value) => value + 1)
-        }} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
-        {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error"
-          text={text.failures[detailState.failureCode]} onRetry={() => setDetailReload((value) => value + 1)} /> : null}
-      </DetailDrawer>
+        }}
+        onRetry={() => setDetailReload((value) => value + 1)}
+        refreshState={refreshState}
+        selectedLinkedMarket={selectedLinkedMarket}
+        selectedMarket={selectedMarket}
+        sourceAdvanced={selectedMarketSourceAdvanced}
+        text={text}
+        when={detailWhen}
+      />
       <ImportBlsIcsDialog
         dialogState={blsIcsImport.dialogState}
         onClose={blsIcsImport.closeDialog}
@@ -460,68 +457,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     </main>
   )
 }
-
-function CalendarMonthState({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
-  statusNow: string
-  today: string
-  asOf: string
-  events: readonly EconomicCalendarEventView[]
-  marketEvents: readonly MarketCalendarEvent[]
-  marketSources: readonly MarketCalendarSource[]
-  onSelectItem: (item: CalendarDayItem) => void
-  coverage: CalendarDayCoverage
-  month: string
-  onOpenDay: (day: string) => void
-  selectedEventKey: string | undefined
-  state: EconomicCalendarMonthState
-  text: EconomicCalendarText
-}): ReactElement {
-  const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
-  if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
-  const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
-}
-
-function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
-  return <section className="mi-economic-calendar__month" aria-live="polite" data-month-key={month}>
-    {loading ? <LoadingState label={text} minHeight={220} /> : <p className="mi-economic-calendar__more">{text}</p>}
-  </section>
-}
-
-function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
-  statusNow: string
-  today: string
-  events: readonly EconomicCalendarEventView[]
-  marketEvents: readonly MarketCalendarEvent[]
-  marketSources: readonly MarketCalendarSource[]
-  onSelectItem: (item: CalendarDayItem) => void
-  coverage: CalendarDayCoverage
-  month: string
-  projection: EconomicCalendarProjection
-  selectedEventKey: string | undefined
-  onOpenDay: (day: string) => void
-  text: EconomicCalendarText
-}): ReactElement {
-  const timeZone = useShellTimeZone()
-  const linkedMarketKeys = new Set(marketEvents.filter(event => event.officialLink).map(event => event.eventKey))
-  return <section className="mi-economic-calendar__month" aria-label={projection.month} data-month-key={month}>
-    <div className="mi-economic-calendar__weekdays">{text.weekdays.map((day) => <span key={day}>{day}</span>)}</div>
-    <div className="mi-economic-calendar__grid">
-      {projection.days.map((day) => {
-        const unified = unifiedCalendarDay(day.dateKey, events, marketEvents, coverage, timeZone, linkedMarketKeys)
-        return <article className="mi-economic-calendar__day" data-date={day.dateKey} data-month={day.month} key={day.dateKey}>
-          <span className="mi-economic-calendar__date" aria-current={day.dateKey === today ? 'date' : undefined}>{day.day}</span>
-          <div className="mi-economic-calendar__events">
-            {unified.visible.map(item => <CalendarEventRow key={item.key} item={item} marketSources={marketSources} text={text} statusNow={statusNow} selected={item.event.eventKey === selectedEventKey} onSelect={onSelectItem} />)}
-            {unified.coverage !== 'complete' || unified.remaining ? <button data-calendar-more className="mi-economic-calendar__more mi-economic-calendar__more-button" onClick={() => onOpenDay(day.dateKey)} type="button">{unified.coverage === 'complete' ? text.unifiedDay.more.replace('{count}', String(unified.remaining)) : text.unifiedDay[unified.coverage]}</button> : null}
-          </div>
-        </article>
-      })}
-    </div>
-    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyMonthState text={text} /> : null}
-  </section>
-}
-
 
 function toCanonicalUtcMillis(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}.${String(date.getUTCMilliseconds()).padStart(3, '0')}Z`
