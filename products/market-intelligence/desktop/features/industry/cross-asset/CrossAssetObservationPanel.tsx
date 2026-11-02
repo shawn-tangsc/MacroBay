@@ -242,8 +242,14 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
         <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
-        <FocusTooltip labelKey={crossAssetTextKeys.subtitle} resolveText={resolveProductText}>
-          <Button type="text" size="small" aria-label={text.subtitle} icon={<Info size={13} />} /></FocusTooltip></div>
+        <IconButton
+          ariaLabelKey={crossAssetTextKeys.subtitle}
+          icon={Info}
+          onSelect={() => undefined}
+          resolveText={resolveProductText}
+          size="md"
+          tooltipKey={crossAssetTextKeys.subtitle}
+        /></div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>

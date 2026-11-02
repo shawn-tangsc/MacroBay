@@ -7,6 +7,7 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { AgentChatBubble } from '@platform/ui/agent-chat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { copyAgentMessageText, resendAgentMessage } from '../agentMessageActions'
@@ -21,7 +22,7 @@ import { buildAgentRuntimeMessagePartBlocks } from '../agentRuntimeMessageParts'
 import type { AgentText } from '../agentTextTypes'
 import { useAgentLanguage } from '../agentTextProvider'
 import { deleteSessionMessageViaApi } from '../agentSessionDataApi'
-import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 import AgentMessageFileArtifacts from './AgentMessageFileArtifacts'
 import AgentRuntimeMessagePartBlocks from './AgentRuntimeMessagePartBlocks'
 import AgentRuntimeActivityPanel from './AgentRuntimeActivityPanel'
@@ -133,6 +134,7 @@ function AgentSessionMessageUnit({
     delete: 'messages.delete'
   } as const satisfies Record<string, AgentTooltipKey>
   const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(text, key)
+  const resolveAnyText = (key: string): string => resolveAgentTextKey(text, key)
   const runtimeTextOverride =
     message.status === 'pending' && pendingStatusText ? pendingStatusText : undefined
   const replyElapsedMs = assistantReplyElapsedMs(message)
@@ -179,28 +181,27 @@ function AgentSessionMessageUnit({
         </div>
       ) : null}
       <div className="agent-message-actions">
-        <Tooltip labelKey={tooltipKeys.copy} resolveText={resolveText}>
-          <Button
-            type="text"
-            size="small"
-            icon={<Copy size={13} />}
-            aria-label={text.messages.copyAria}
-            onClick={() => void copyAgentMessageText(message.searchableText)}
-          />
-        </Tooltip>
+        <IconButton
+          ariaLabelKey="messages.copyAria"
+          icon={Copy}
+          onSelect={() => void copyAgentMessageText(message.searchableText)}
+          resolveText={resolveAnyText}
+          size="md"
+          tooltipKey={tooltipKeys.copy}
+        />
         {groupRole === 'user' ? (
-          <Tooltip labelKey={tooltipKeys.resend} resolveText={resolveText}>
-            <Button
-              type="text"
-              size="small"
-              icon={<RefreshCw size={13} />}
-              aria-label={text.messages.resendAria}
-              onClick={() =>
-                void resendAgentMessage(activeAgentId, activeSessionId, message.searchableText, onStateChange)
-              }
-            />
-          </Tooltip>
+          <IconButton
+            ariaLabelKey="messages.resendAria"
+            icon={RefreshCw}
+            onSelect={() =>
+              void resendAgentMessage(activeAgentId, activeSessionId, message.searchableText, onStateChange)
+            }
+            resolveText={resolveAnyText}
+            size="md"
+            tooltipKey={tooltipKeys.resend}
+          />
         ) : null}
+        {/* Stays an antd Button: IconButton has no danger tone, and this is the destructive action. */}
         <Tooltip labelKey={tooltipKeys.delete} resolveText={resolveText}>
           <Button
             type="text"
