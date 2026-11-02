@@ -1,14 +1,16 @@
 {
   "$comment": "antd Tooltip call sites still to migrate. One entry per file — the debt is a whole-file import, not a single hint. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: the guard reads it, and a caller migrating a site must be able to strike the line without touching the component directory. The human-readable detail (which hints are single-line, which are data, which are nodes) stays in docs-private/05-desktop/ui-audit/tooltip-call-site-mapping-2026-11-02.md — but the machine count cannot live there: that tree is gitignored, so a guard reading it would skip in CI and vanish exactly where it matters. Two kinds of lines, kept apart: `entries` is still owed (to migrate), `decided` was looked at and kept on purpose. Both are read as one allowed set; each line must still name a real antd `Tooltip` import, so a line that outlives its situation fails the guard.",
-  "entries": {
-    "products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEventRow.tsx": 1,
-    "products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx": 1
-  },
+  "entries": {},
   "decided": {
     "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": {
       "decision": "keep",
       "decidedOn": "2026-11-02",
       "reason": "Two hints, two reasons, both about what a hint can hold rather than about taste. (1) The runtime status hint hangs on a colour dot: its text already reaches assistive tech through the span's aria-label, and the only way to let a keyboard user read the word is to make the dot focusable — that is one Tab stop per session row, which costs more than a mouse-only hint. (2) The channel-runtime hint renders a node (a labelled badge with a tone), not a sentence; the shared tooltip takes a key or one line of data, and its trigger here is an icon span that cannot take focus. Migrating it would either drop the badge or invent a multi-line channel for one site."
+    },
+    "products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "The hint hangs on a plain <small> line of reaction values with no focus of its own. The sentence it explains is already written in full under the card and the values sit right beside it, so a screen reader loses nothing; making the line focusable would add one Tab stop per calendar row, which is the same trade as the session row's dot. The only other route — a popover — needs a trigger, and a non-focusable span cannot be one, so keeping the hover-only hint is the smaller cost."
     }
   }
 }
