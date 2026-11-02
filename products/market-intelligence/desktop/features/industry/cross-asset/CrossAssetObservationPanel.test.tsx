@@ -157,7 +157,7 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
-  it('says the interface and main process differ instead of offering a retry that cannot work', async () => {
+  it('says the interface and main process differ, and keeps a retry because `unreadable` requires one', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
@@ -173,8 +173,13 @@ describe('cross-asset observation workspace', () => {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
       expect(host.textContent).toContain(text.contractMismatch)
-      // Retrying a version mismatch only fails the same way, so the state offers no action at all.
-      expect(host.querySelector('.state-view button')).toBeNull()
+      // `unreadable` is one of the codes whose action is required (contract §16), so the state keeps a
+      // retry. The reason sentence still says the app must be restarted: a retry re-reads the same
+      // contract, so it changes nothing until the main process is updated in place.
+      const retry = host.querySelector('.state-view button')
+      expect(retry).not.toBeNull()
+      await act(async () => { (retry as HTMLButtonElement).click() })
+      expect(client.refresh).toHaveBeenCalled()
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 

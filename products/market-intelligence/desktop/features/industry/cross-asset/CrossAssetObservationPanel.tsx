@@ -417,11 +417,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             ? <LoadingState label={text.loading} fill />
             // 查询失败是「读不到」，不是「没有」：走统一状态面，码用 unreadable（程序故障，可重试）。
             // 「来源被关」那一支等设置深链入口落地后再拆成 disabled · target-disabled。
-            // 主进程发来的快照不符合本版契约（版本不一致）时不给重试：重试只会再失败一次，那是假动作；
-            // 原因句直接说要重启应用。
+            // 主进程发来的快照不符合本版契约（版本不一致）时，重试读的是同一份契约：主进程更新后就
+            // 会成功，没更新就仍然失败——原因句因此明说要重启应用，重试不是空按钮，但它也不是解药。
+            // `unreadable` 在动作表里是 required，`retry` 是它唯一允许的动作（契约 §16）。
             : view.failure === 'contract'
               ? <StateView state="error" reasonCode="unreadable" size="md"
-                  productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }} />
+                  productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }}
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
               : <StateView state="error" reasonCode="unreadable" size="md"
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
       </div>
