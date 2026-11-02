@@ -25,6 +25,7 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { ToastHost } from '@platform/ui/components/toast/ToastHost'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
@@ -223,9 +224,16 @@ export function AppShell(): React.ReactElement {
     return () => { cancelled = true }
   }, [])
   return (
-    <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
-      <AppShellContent onLanguageChange={setAppLanguage} />
-    </WorkspaceWindowRoot>
+    // 提示宿主：每个渲染根挂一次。主窗与每个分离窗都经 AppShell 进入（分离窗由 WorkspaceWindowRoot
+    // 判定 role:'panel'），所以这一处同时覆盖两类窗口；宿主在页面内容之外，弹提示不会被布局裁掉。
+    // 语言上下文显式给一层，宿主自己的关闭/区域读屏名才跟着界面语言走（内层 provider 仍按各页面覆盖）。
+    <ShellLanguageProvider language={appLanguage}>
+      <ToastHost>
+        <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
+          <AppShellContent onLanguageChange={setAppLanguage} />
+        </WorkspaceWindowRoot>
+      </ToastHost>
+    </ShellLanguageProvider>
   )
 }
 
