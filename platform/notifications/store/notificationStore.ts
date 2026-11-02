@@ -9,7 +9,9 @@ import {
   PRIORITY_RANK,
   SEVERITY_RANK,
   type NotificationChannel,
+  type NotificationDeliveryState,
   type NotificationPriority,
+  type NotificationPushBackoff,
   type NotificationRecord,
   type NotificationRequest,
   type NotificationRuntimeSettings,
@@ -27,20 +29,25 @@ export type NotificationDailyCounters = Record<string, number>
 
 export type NotificationStoreState = {
   records: NotificationRecord[]
-  dailyCounters?: NotificationDailyCounters
+  dailyCounters: NotificationDailyCounters
   /**
    * 订阅表与记录**同一份文件**（契约 §5.1）：runtime 在内存里缓存整份 state、整份重写，
    * 所以订阅不许另起一个文件——两个写入方各写各的，最后一个会静默覆盖另一个。
    * 旧文件没有该字段 → 归一化为空表，不回写（空表 = 一条都不勾）。
+   *
+   * **必填**：做成可选就等于允许某一次 persist 把它丢掉（`prune()` 曾经就是这么把订阅整表抹掉的）。
    */
-  subscriptions?: NotificationSubscriptionTable
+  subscriptions: NotificationSubscriptionTable
+  /** 通道熔断：每个 channelId 一条；只由 runtime 写，端口只返回结果（runtime §8）。 */
+  pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
     records: [],
     dailyCounters: {},
-    subscriptions: emptySubscriptionTable()
+    subscriptions: emptySubscriptionTable(),
+    pushBackoff: {}
   }
 }
 
@@ -65,6 +72,10 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     owner: candidate.owner === 'platform' ? 'platform' : 'product',
     productId: candidate.productId ? String(candidate.productId) : undefined,
     sourceId: String(candidate.sourceId),
+    // 旧记录没有事件类型：归一化成保留值，**不回写**（契约 §6）。
+    eventTypeId: candidate.eventTypeId ? String(candidate.eventTypeId) : 'legacy.untyped',
+    mergedEventTypes: normalizeStringList(candidate.mergedEventTypes),
+    delivery: normalizeDelivery(candidate.delivery),
     // 存储里读回来的键不做闭集校验（旧记录可能带已删除的键）；解析器解析不到会保留占位，
     // 而不是把键名当句子显示。
     titleKey: String(candidate.titleKey) as NotificationCopyKey,
@@ -108,8 +119,59 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   return {
     records,
     dailyCounters: normalizeDailyCounters(candidate.dailyCounters),
-    subscriptions: normalizeSubscriptionTable(candidate.subscriptions)
+    subscriptions: normalizeSubscriptionTable(candidate.subscriptions),
+    pushBackoff: normalizePushBackoff(candidate.pushBackoff)
   }
+}
+
+/** 合并进来的事件类型：只收短字符串、去重；空列表等于没有。 */
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const list = [...new Set(value.filter((item): item is string => typeof item === 'string' && item.length > 0))]
+  return list.length > 0 ? list : undefined
+}
+
+/** 投递证据按表面各一条；坏形状整条丢掉，不猜一个状态（契约 §8）。 */
+function normalizeDelivery(value: unknown): NotificationRecord['delivery'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const delivery: NotificationRecord['delivery'] = {}
+  for (const surface of ['toast', 'popup', 'desktop', 'push'] as const) {
+    const raw = (value as Record<string, unknown>)[surface]
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const state = (raw as Record<string, unknown>).state
+    if (state !== 'queued' && state !== 'sent-accepted' && state !== 'failed') continue
+    const at = (raw as Record<string, unknown>).at
+    if (typeof at !== 'string' || at.length === 0) continue
+    const reason = (raw as Record<string, unknown>).reason
+    const messageId = (raw as Record<string, unknown>).messageId
+    delivery[surface] = {
+      state,
+      at,
+      ...(typeof reason === 'string' && reason.length > 0 ? { reason } : {}),
+      ...(typeof messageId === 'string' && messageId.length > 0 ? { messageId } : {})
+    }
+  }
+  return delivery
+}
+
+/** 熔断状态：只收合法 channelId + 非负整数失败数 + null/UTC 时刻；坏条目丢掉。 */
+function normalizePushBackoff(value: unknown): Readonly<Record<string, NotificationPushBackoff>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const backoff: Record<string, NotificationPushBackoff> = {}
+  for (const [channelId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^[a-zA-Z0-9._:-]{1,200}$/.test(channelId)) continue
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const failures = (raw as Record<string, unknown>).failures
+    if (typeof failures !== 'number' || !Number.isFinite(failures) || failures < 0) continue
+    const pausedUntil = (raw as Record<string, unknown>).pausedUntil
+    if (pausedUntil !== null && (typeof pausedUntil !== 'string' || !Number.isFinite(Date.parse(pausedUntil)))) continue
+    backoff[channelId] = {
+      channelId,
+      failures: Math.floor(failures),
+      pausedUntil: pausedUntil as string | null
+    }
+  }
+  return backoff
 }
 
 /**
@@ -144,6 +206,8 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
     owner: request.owner,
     productId: request.productId,
     sourceId: request.sourceId,
+    eventTypeId: request.eventTypeId ?? 'legacy.untyped',
+    delivery: {},
     titleKey: request.titleKey,
     titleParams: request.titleParams,
     bodyKey: request.bodyKey,
@@ -164,18 +228,36 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
   }
 }
 
-export function mergeDuplicateNotification(existing: NotificationRecord, incoming: NotificationRequest, now: string): NotificationRecord {
+/**
+ * 合并的**四条唯一写法**（契约 §16.2，别处只许引用）：
+ *  1. 标题取第一次提交；
+ *  2. 动作取第一次提交；
+ *  3. 正文取最新一次；最新一次没有正文时保留既有；
+ *  4. 次数与最近发生时间跟着更新；跨类型合并不增次数。
+ */
+export function mergeDuplicateNotification(
+  existing: NotificationRecord,
+  incoming: NotificationRequest,
+  now: string,
+  options: { incrementCount?: boolean } = {}
+): NotificationRecord {
+  const incomingEventTypeId = incoming.eventTypeId
+  const crossType = incomingEventTypeId !== undefined && incomingEventTypeId !== existing.eventTypeId
+  const mergedEventTypes = crossType
+    ? [...new Set([...(existing.mergedEventTypes ?? [existing.eventTypeId]), incomingEventTypeId])]
+    : existing.mergedEventTypes
   return {
     ...existing,
-    titleKey: incoming.titleKey,
-    titleParams: incoming.titleParams ?? existing.titleParams,
+    // 标题与动作取第一次：读者靠标题认人，动作一变等于换了一条通知。
     bodyKey: incoming.bodyKey ?? existing.bodyKey,
-    bodyParams: incoming.bodyParams ?? existing.bodyParams,
+    bodyParams: incoming.bodyKey !== undefined ? incoming.bodyParams : existing.bodyParams,
+    mergedEventTypes,
     severity: strongerSeverity(existing.severity, incoming.severity),
     priority: strongerPriority(existing.priority, incoming.priority),
     channels: uniqueChannels([...existing.channels, ...incoming.requestedChannels]),
     updatedAt: now,
-    occurrenceCount: existing.occurrenceCount + 1,
+    occurrenceCount:
+      crossType || options.incrementCount === false ? existing.occurrenceCount : existing.occurrenceCount + 1,
     expiresAt: incoming.expiresAt ?? existing.expiresAt,
     safeMetadata: incoming.safeMetadata ?? existing.safeMetadata
   }

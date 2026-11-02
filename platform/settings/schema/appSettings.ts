@@ -322,9 +322,16 @@ export function normalizeNotificationSettings(
     desktopEnabled: typeof candidate.desktopEnabled === 'boolean' ? candidate.desktopEnabled : defaults.desktopEnabled,
     toastEnabled: typeof candidate.toastEnabled === 'boolean' ? candidate.toastEnabled : defaults.toastEnabled,
     popupEnabled: typeof candidate.popupEnabled === 'boolean' ? candidate.popupEnabled : defaults.popupEnabled,
+    // 通道选择：空字符串视为未选（null 即关，不另加 enabled 布尔，契约 §2）。
+    push: {
+      channelId:
+        typeof candidate.push?.channelId === 'string' && candidate.push.channelId.length > 0
+          ? candidate.push.channelId
+          : null
+    },
     retentionDays:
       typeof candidate.retentionDays === 'number' && candidate.retentionDays > 0
-        ? Math.round(candidate.retentionDays)
+        ? Math.min(90, Math.round(candidate.retentionDays))
         : defaults.retentionDays,
     defaultSnoozeMinutes:
       typeof candidate.defaultSnoozeMinutes === 'number' && candidate.defaultSnoozeMinutes > 0

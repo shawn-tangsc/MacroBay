@@ -70,8 +70,9 @@ export function getNotificationRuntime() {
         getNotificationSettings?.() ??
         Promise.resolve({
           desktopEnabled: true,
-          toastEnabled: true,
+          toastEnabled: false,
           popupEnabled: true,
+          push: { channelId: null },
           retentionDays: 30,
           defaultSnoozeMinutes: 60
         }),

@@ -23,11 +23,32 @@ export type NotificationAction = {
   deeplink?: NotificationDeeplink
 }
 
+/** 每个投递表面各一条证据（契约 §8）：不是一个字段撑四个面。 */
+export type NotificationDeliveryState = {
+  state: 'queued' | 'sent-accepted' | 'failed'
+  reason?: string
+  messageId?: string
+  at: string
+}
+
+/** 通道熔断状态：每个 channelId 一条，随通知 JSON 持久化、重启不丢窗口。 */
+export type NotificationPushBackoff = {
+  channelId: string
+  failures: number
+  pausedUntil: string | null
+}
+
 export type NotificationRecord = {
   id: string
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
+  /** 事件类型；旧记录归一化为 `legacy.untyped`（契约 §6）。 */
+  eventTypeId: string
+  /** 合并进来的其它事件类型（含首条，契约 §16.2）。 */
+  mergedEventTypes?: string[]
+  /** 每个表面的投递证据（契约 §8）。旧记录归一化为空对象。 */
+  delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>>
   /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
   titleKey: NotificationCopyKey
   titleParams?: Record<string, string>
@@ -62,6 +83,8 @@ export type NotificationRequest = {
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
+  /** 兼容旧生产者的迁移字段；新提交路径一定带事件 id（契约 §3.2）。 */
+  eventTypeId?: string
   /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
   titleKey: NotificationCopyKey
   titleParams?: Record<string, string>
@@ -108,8 +131,11 @@ export type DesktopNotificationPermission = 'granted' | 'denied' | 'unknown'
 
 export type NotificationRuntimeSettings = {
   desktopEnabled: boolean
+  /** 全站提示开关，默认 false（契约 §5.1：提示不是订阅列）。 */
   toastEnabled: boolean
   popupEnabled: boolean
+  /** 出站通道；null 即关（契约 §2，通道方案 §2.3）。 */
+  push: { channelId: string | null }
   /**
    * 保留天数：**当前存着但没有任何消费者**——运行时没有剪枝任务，设置页也没暴露这一项
    * （2026-11-01 用户裁决保留字段、暂不实现）。它与「有策略无执行者」那族同源，接通知生产者时
@@ -137,8 +163,11 @@ export type NotificationRuntimeSettings = {
 export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeSettings {
   return {
     desktopEnabled: true,
-    toastEnabled: true,
+    // 契约 §5.1：提示是全站一个开关，新装默认关；生效 = 批准含 toast ∩ 本开关。
+    toastEnabled: false,
     popupEnabled: true,
+    // 通道推送默认关：`channelId = null` 就是关，不另加 enabled 布尔（通道方案 §2.3）。
+    push: { channelId: null },
     retentionDays: 30,
     defaultSnoozeMinutes: 60
   }
@@ -160,6 +189,13 @@ export const notificationDeliveryWired: Readonly<Record<NotificationChannel, boo
   toast: true,
   popup: false
 })
+
+/**
+ * 出站通道有没有装配好：与 `notificationDeliveryWired` 并列，但**不塞进那个 Record**——
+ * 那是「本机表面」真相表，手机不是本机表面。只有装配层真接上 `push` 钩子才置 true；
+ * 设置页第五行读它禁用并写原因。
+ */
+export const notificationPushWired: boolean = false
 
 export function toSafeNotificationRecord(record: NotificationRecord): SafeNotificationRecord {
   const metadata = record.safeMetadata ? sanitizeMetadata(record.safeMetadata) : undefined

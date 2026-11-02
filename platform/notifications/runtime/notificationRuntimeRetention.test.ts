@@ -7,6 +7,7 @@ const settings: NotificationRuntimeSettings = {
   desktopEnabled: true,
   toastEnabled: true,
   popupEnabled: true,
+  push: { channelId: null },
   retentionDays: 30,
   defaultSnoozeMinutes: 60
 }

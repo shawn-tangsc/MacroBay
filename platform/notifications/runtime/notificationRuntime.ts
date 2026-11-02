@@ -165,7 +165,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       const removedCounters = Object.keys(state.dailyCounters ?? {}).length - Object.keys(counters).length
       const removedRecords = state.records.length - pruned.records.length
       if (removedRecords === 0 && removedCounters === 0) return { removedRecords: 0, removedCounters: 0 }
-      await persist({ records: pruned.records, dailyCounters: counters })
+      await persist({ ...state, records: pruned.records, dailyCounters: counters })
       notifyChanged()
       return { removedRecords, removedCounters }
     },
@@ -388,6 +388,8 @@ function foldIntoAggregate(
     owner: request.owner,
     productId: request.productId,
     sourceId: NOTIFICATION_AGGREGATE_TITLE,
+    eventTypeId: 'legacy.aggregate',
+    delivery: {},
     titleKey: NOTIFICATION_AGGREGATE_TITLE_KEY,
     severity: 'warning',
     priority: 'low',

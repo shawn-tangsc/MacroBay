@@ -25,6 +25,8 @@ function record(id: string, createdAt: string, state: NotificationRecord['state'
     id,
     owner: 'platform',
     sourceId: 'source',
+    eventTypeId: 'platform.job.failed-terminal',
+    delivery: {},
     titleKey: 'notification.taskFailed.title',
     severity: 'warning',
     priority: 'normal',

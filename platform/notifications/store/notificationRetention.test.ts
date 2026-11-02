@@ -12,6 +12,8 @@ function record(id: string, createdAt: string): NotificationRecord {
     id,
     owner: 'platform',
     sourceId: `source-${id}`,
+    eventTypeId: 'platform.job.failed-terminal',
+    delivery: {},
     titleKey: 'notification.taskFailed.title',
     titleParams: { taskName: `Notification ${id}` },
     severity: 'info',
