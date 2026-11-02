@@ -144,9 +144,12 @@ export type AgentTextWorkbench = {
       title: string
       description: string
       searchPlaceholder: string
-      builtinTab: (enabled: number, total: number) => string
-      mcpTab: (count: number) => string
-      skillsTab: (count: number) => string
+      /** 标签模板：计数走 `labelParams` 填 `{enabled}`／`{total}`，调用点不拼句子。 */
+      builtinTab: string
+      mcpTab: string
+      skillsTab: string
+      /** 工具区那组页签的可访问名。 */
+      tabsLabel: string
       productPackagesTab: string
       saveAgentBeforeProductToolsTitle: string
       saveAgentBeforeProductToolsDescription: string

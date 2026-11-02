@@ -316,4 +316,29 @@ describe('Tabs', () => {
     }
     expect(effectRuns.mock.calls.length).toBe(before)
   })
+
+  it('fills a counted label from labelParams instead of a pre-built sentence', async () => {
+    // 标签天生带计数（「内置工具 3/5」）。没有这个口子，调用点只能自己拼句子塞给 resolveText，
+    // 「只收键」立刻变成空话——所以按占位符填，句子留在文案表里。
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root_ = createRoot(host)
+    root = root_
+    act(() => {
+      root_.render(
+        <Tabs
+          ariaLabelKey="ui.test.tabs"
+          items={[{ value: 'a', labelKey: 'ui.test.counted', labelParams: { enabled: '3', total: '5' } }]}
+          onChange={() => undefined}
+          panels={{ a: <p>panel</p> }}
+          resolveText={(value) => (value === 'ui.test.counted' ? 'Built-in tools {enabled}/{total}' : value)}
+          value="a"
+        />
+      )
+    })
+    const tab = host.querySelector('[role="tab"]')
+    expect(tab?.textContent).toBe('Built-in tools 3/5')
+    // 缺参时占位符留在脸上，不安静地少一个数字。
+    expect(tab?.textContent).not.toContain('{enabled}')
+  })
 })

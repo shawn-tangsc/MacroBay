@@ -37,11 +37,16 @@ export type AgentTooltipKey =
  *
  * 未知键返回空串——`Tooltip` 据此整条不渲染，绝不把键名念给读者。
  */
-export function resolveAgentTooltipText(text: AgentText, key: string): string {
+export function resolveAgentTextKey(text: AgentText, key: string): string {
   let current: unknown = text
   for (const segment of key.split('.')) {
     if (current === null || typeof current !== 'object') return ''
     current = (current as Record<string, unknown>)[segment]
   }
   return typeof current === 'string' ? current : ''
+}
+
+/** 提示键是闭集（四个导航提示），走同一份取值实现。 */
+export function resolveAgentTooltipText(text: AgentText, key: AgentTooltipKey): string {
+  return resolveAgentTextKey(text, key)
 }

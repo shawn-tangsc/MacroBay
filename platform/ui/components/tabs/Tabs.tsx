@@ -6,6 +6,7 @@ import { CHOICE_GLYPH_PX } from '../choice/choiceItem'
 import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './tabs.css'
+import { fillLabelParams } from '../textKeyParams'
 
 /**
  * 页内标签（规格：`docs-private/05-desktop/ui-audit/2026-11-02-tabs-segmented.html`；契约 §7）。
@@ -116,7 +117,7 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panels
               {item.icon === undefined ? null : (
                 <item.icon aria-hidden="true" className="choice-item__glyph" size={CHOICE_GLYPH_PX} />
               )}
-              {resolveText(item.labelKey)}
+              {fillLabelParams(resolveText(item.labelKey), item.labelParams)}
             </button>
           )
         })}

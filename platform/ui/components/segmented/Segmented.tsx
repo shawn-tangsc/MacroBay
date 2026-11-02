@@ -6,6 +6,7 @@ import { CHOICE_GLYPH_PX } from '../choice/choiceItem'
 import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './segmented.css'
+import { fillLabelParams } from '../textKeyParams'
 
 /**
  * 分段选择（规格同 `Tabs`；契约 §7）。判据：**同一块内容换一个取值 → `Segmented`**；
@@ -79,7 +80,7 @@ export function Segmented({ items, value, onChange, ariaLabelKey, resolveText }:
             {item.icon === undefined ? null : (
               <item.icon aria-hidden="true" className="choice-item__glyph" size={CHOICE_GLYPH_PX} />
             )}
-            {resolveText(item.labelKey)}
+            {fillLabelParams(resolveText(item.labelKey), item.labelParams)}
           </button>
         )
       })}

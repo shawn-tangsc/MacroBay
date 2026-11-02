@@ -23,6 +23,14 @@ export type ChoiceItem = {
   /** 文案的 i18n 键；不收字面量。**必填**：图标不能替代文字，见 `icon`。 */
   labelKey: string
   /**
+   * 填标签模板里 `{name}` 的值，**只收已经格式化好的字符串**（`3`、`3/5`）。
+   *
+   * 有些标签天生带计数（「内置工具 3/5」「MCP 2」）。没有它，调用点只能自己拼好句子塞进
+   * `resolveText`，而「只收键」这条会立刻变成空话。与 `Drawer.titleParams`、`Popover.labelParams`
+   * 同形，共用 `fillLabelParams` 一份实现。
+   */
+  labelParams?: Readonly<Record<string, string>>
+  /**
    * 项前的图标。**只在「用户靠图标认项」时给**——例如主题切换的调色板/太阳/月亮。
    *
    * 两条边界：

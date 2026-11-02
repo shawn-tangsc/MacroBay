@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Input, Tabs, message } from 'antd'
+import { Input, message } from 'antd'
 import { Search, Wrench } from 'lucide-react'
 
 import type { AgentFormState } from '@platform/ai/agent-platform/agents/agentConfigDescriptor'
@@ -12,8 +12,11 @@ import type { Tool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 import { buildAgentSkillCatalog } from '@platform/ai/agent-platform/skills/agentSkillViewModel'
 import type { AgentSkillBinding, AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 
+import { Tabs } from '@platform/ui/components/tabs'
+
 import { useAgentText } from '../../agentTextProvider'
 import { BuiltinToolCatalog } from './tools/BuiltinToolCatalog'
+import { resolveAgentTextKey } from '../../agentTooltipText'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { McpCatalog } from './tools/McpCatalog'
@@ -120,25 +123,16 @@ export default function ToolsSection({
     await window.platform.agents.skills.installFromZip({ zipFilePath })
   }
 
-  return (
-    <div className="agent-form-section">
-      <header>
-        <h3>{t.editor.tools.title}</h3>
-        <p>{t.editor.tools.description}</p>
-      </header>
-
-      <div className="agent-tool-search">
-        <Search size={13} />
-        <Input value={search} placeholder={t.editor.tools.searchPlaceholder} onChange={(event) => setSearch(event.target.value)} />
-      </div>
-
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as ToolTab)}
-        items={[
+  const tabItems: Array<{
+    value: string
+    labelKey: string
+    labelParams?: Record<string, string>
+    children: React.ReactNode
+  }> = [
           {
-            key: 'tools',
-            label: t.editor.tools.builtinTab(enabledBuiltinToolCount, builtinTools.length),
+            value: 'tools',
+            labelKey: 'editor.tools.builtinTab',
+            labelParams: { enabled: String(enabledBuiltinToolCount), total: String(builtinTools.length) },
             children: (
               <BuiltinToolCatalog
                 text={t}
@@ -156,8 +150,9 @@ export default function ToolsSection({
             )
           },
           {
-            key: 'mcp',
-            label: t.editor.tools.mcpTab(form.mcps.length),
+            value: 'mcp',
+            labelKey: 'editor.tools.mcpTab',
+            labelParams: { count: String(form.mcps.length) },
             children: (
               <McpCatalog
                 text={t}
@@ -176,8 +171,8 @@ export default function ToolsSection({
             )
           },
           {
-            key: 'product-packages',
-            label: t.editor.tools.productPackagesTab,
+            value: 'product-packages',
+            labelKey: 'editor.tools.productPackagesTab',
             children: agentId ? (
               <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} onClearSearch={() => setSearch('')} />
             ) : (
@@ -190,8 +185,9 @@ export default function ToolsSection({
             )
           },
           {
-            key: 'skills',
-            label: t.editor.tools.skillsTab(skillCatalog.filter((skill) => skill.enabledForAgent).length),
+            value: 'skills',
+            labelKey: 'editor.tools.skillsTab',
+            labelParams: { count: String(skillCatalog.filter((skill) => skill.enabledForAgent).length) },
             children: agentId ? (
               <SkillCatalog
                 text={t}
@@ -214,7 +210,27 @@ export default function ToolsSection({
               />
             )
           }
-        ]}
+        ]
+
+  return (
+    <div className="agent-form-section">
+      <header>
+        <h3>{t.editor.tools.title}</h3>
+        <p>{t.editor.tools.description}</p>
+      </header>
+
+      <div className="agent-tool-search">
+        <Search size={13} />
+        <Input value={search} placeholder={t.editor.tools.searchPlaceholder} onChange={(event) => setSearch(event.target.value)} />
+      </div>
+
+      <Tabs
+        ariaLabelKey="editor.tools.tabsLabel"
+        items={tabItems.map(({ children: _panel, ...item }) => item)}
+        onChange={(value) => setActiveTab(value as ToolTab)}
+        panels={Object.fromEntries(tabItems.map((item) => [item.value, item.children]))}
+        resolveText={(key) => resolveAgentTextKey(t, key)}
+        value={activeTab}
       />
     </div>
   )
