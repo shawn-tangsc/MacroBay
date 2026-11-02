@@ -196,3 +196,39 @@ describe('the diff is the only way definitions change', () => {
     expect(jobRuntime.listSchedules().map((definition) => definition.id)).not.toContain(INTELLIGENCE_DAILY_BRIEFING_JOB)
   })
 })
+
+describe('paused periods', () => {
+  it('reports only the periods whose own zone cannot be read', () => {
+    const { runtime: jobRuntime } = runtime()
+    const paused: string[] = []
+    const onPaused = (ids: readonly string[]): void => { paused.push(...ids) }
+
+    applyDailyBriefingSchedules(
+      jobRuntime,
+      [period(), period({ id: 'bad-zone', generationTimeZone: 'Asia/Shangai' })],
+      'UTC',
+      onPaused
+    )
+    expect(paused).toEqual(['bad-zone'])
+
+    // 没有暂停就不报：这条通知说的是「自动生成停了」，不是「今天排过期」。
+    paused.length = 0
+    applyDailyBriefingSchedules(jobRuntime, [period()], 'UTC', onPaused)
+    expect(paused).toEqual([])
+  })
+
+  it('reports the pause from the registration path too, not only from the timezone hook', async () => {
+    const { runtime: jobRuntime } = runtime()
+    const paused: string[] = []
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: async () => available },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'UTC',
+      getPeriods: async () => [period({ id: 'bad-zone', generationTimeZone: 'Asia/Shangai' })],
+      onPaused: (ids) => { paused.push(...ids) }
+    })
+    await flush()
+
+    expect(paused).toEqual(['bad-zone'])
+  })
+})

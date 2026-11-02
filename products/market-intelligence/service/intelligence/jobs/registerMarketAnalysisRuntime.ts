@@ -5,7 +5,7 @@ import type { JobContext, JobRuntime } from '@platform/jobs'
 import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
-import { crossAssetAnalysisWindowPolicy, type CrossAssetPriceHorizon } from '../cross-asset/crossAssetAnalysisWindows'
+import { buildMarketAnalysisVerificationObservations, readFundingHistory } from '../analysis/verificationObservations'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import { buildMarketAnalysisContext } from '../public-query/marketAnalysisContextQuery'
@@ -29,13 +29,16 @@ import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisCo
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createPredictionVerificationService } from '../analysis/predictionVerificationService'
+import { notifyCalibrationResult, type CalibrationResultSubmit } from '../analysis/calibrationResultNotifier'
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
-import { parseCrossAssetSnapshot, type CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
+import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { appendAnalysisEventEvidence } from '../analysis/analysisEventEvidence'
 import { appendAnalysisNewsSentiment, newsSentimentSince } from '../analysis/analysisNewsSentimentEvidence'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
+
+export { buildMarketAnalysisVerificationObservations } from '../analysis/verificationObservations'
 
 export type MarketAnalysisRuntime = Readonly<{
   repository: MarketAnalysisRepository
@@ -89,115 +92,6 @@ export function resolveMarketAnalysisSeverity(item: import('../schema/intelligen
   return labels.relevanceOutcome === 'full-intelligence' && labels.sentimentEligible === true ? 'high' : 'low'
 }
 
-type FundingHistory = Readonly<{
-  state: 'available'
-  asOf: string
-  btc: readonly Readonly<{ observedAt: string; ratePercent: number }>[]
-  eth: readonly Readonly<{ observedAt: string; ratePercent: number }>[]
-}>
-
-type VerificationObservationInput = Readonly<{
-  funding?: FundingHistory
-  crossAsset?: Readonly<{ query: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => CrossAssetSnapshot | undefined }>
-}>
-
-export function buildMarketAnalysisVerificationObservations(
-  asOf: string,
-  _items: readonly import('../schema/intelligenceRecord').IntelligenceItem[],
-  input: VerificationObservationInput = {}
-): readonly PredictionVerificationObservation[] {
-  const observations: PredictionVerificationObservation[] = []
-  if (input.funding?.state === 'available' && input.funding.asOf === asOf) {
-    for (const [asset, rows] of [['BTC', input.funding.btc], ['ETH', input.funding.eth] ] as const) {
-      for (let index = 1; index < rows.length; index += 1) {
-        const previous = rows[index - 1]!
-        const current = rows[index]!
-        if (!isCanonicalTime(previous.observedAt) || !isCanonicalTime(current.observedAt) || current.observedAt > asOf || Date.parse(current.observedAt) - Date.parse(previous.observedAt) !== 8 * 60 * 60 * 1_000) continue
-        observations.push({
-          asset, interval: '8h', observedAt: current.observedAt, comparable: true,
-          evidenceRefId: `mi-evidence-funding-${asset}-${previous.observedAt}-${current.observedAt}`,
-          fundingDeltaPctPoints: current.ratePercent - previous.ratePercent
-        })
-      }
-    }
-  }
-  if (input.crossAsset) {
-    // Keyed by the contract's own range union: the analysis windows name their range from that union, so a
-    // narrower literal here stops compiling the moment a window is added (which is how `30d` surfaced).
-    const snapshots = new Map<CrossAssetSnapshot['range'], CrossAssetSnapshot>()
-    // 窗口清单归 owner（分析窗口策略），不在这里手抄：加一个窗口时手抄的那份会静默少读一个快照。
-    // 评审指出这里仍手抄了一份窗口清单（owner 是分析窗口策略）。按策略迭代会牵出一处类型不匹配，
-    // 留待与策略类型一起改；保持现状，缺陷已记档。
-    for (const range of ['1h', '24h', '7d'] as const) {
-      try {
-        const snapshot = input.crossAsset.query({ range, asOf })
-        if (!snapshot) continue
-        if (snapshot.mode === 'historical' && snapshot.asOf <= asOf && snapshot.analysisEnd <= asOf && Object.values(snapshot.historyCoverage).every(value => value.complete)) snapshots.set(range, snapshot)
-      } catch { /* one unavailable range must not block other observations */ }
-    }
-    const oneDay = snapshots.get('24h')
-    // Windows come from one policy the analysis context reads too, so the horizon the model is
-    // shown and the horizon the verifier checks can never drift apart.
-    for (const asset of ['BTC', 'ETH'] as const) {
-      for (const window of crossAssetAnalysisWindowPolicy.priceReturns) {
-        const snapshot = snapshots.get(window.range)
-        if (window.kind === 'curve') appendCurveReturn(observations, asset, window.horizon, snapshot, window.lookbackPoints)
-        else appendMetricReturn(observations, asset, window.horizon, snapshot?.closedReturns[asset === 'BTC' ? 'btc' : 'eth'][crossAssetAnalysisWindowPolicy.closedReturnMetric], snapshot)
-      }
-    }
-    const btc2h = findObservation(observations, 'BTC', '2h')
-    const eth2h = findObservation(observations, 'ETH', '2h')
-    if (btc2h?.priceReturnPct !== undefined && eth2h?.priceReturnPct !== undefined && oneDay) {
-      observations.push({
-        asset: 'BTC', relativeToAsset: 'ETH', horizon: '2h', observedAt: oneDay.analysisEnd, comparable: true,
-        evidenceRefId: `mi-evidence-cross-asset-BTC-ETH-2h-${oneDay.analysisEnd}`,
-        relativeReturnPct: btc2h.priceReturnPct - eth2h.priceReturnPct
-      })
-    }
-  }
-  return observations
-}
-
-function appendCurveReturn(
-  observations: PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: CrossAssetPriceHorizon, snapshot: CrossAssetSnapshot | undefined, lookbackPoints: number
-): void {
-  if (!snapshot) return
-  const curve = snapshot.curves[asset === 'BTC' ? 'btc' : 'eth']
-  const end = curve.at(-1)?.returnPercent
-  const start = curve.at(-(lookbackPoints + 1))?.returnPercent
-  if (typeof end !== 'number' || typeof start !== 'number' || !Number.isFinite(end) || !Number.isFinite(start)) return
-  observations.push({ asset, horizon, observedAt: snapshot.analysisEnd, comparable: true,
-    evidenceRefId: `mi-evidence-cross-asset-${asset}-${horizon}-${snapshot.analysisEnd}`, priceReturnPct: end - start })
-}
-
-function appendMetricReturn(
-  observations: PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: CrossAssetPriceHorizon, metric: CrossAssetSnapshot['closedReturns']['btc']['24h'] | undefined, snapshot: CrossAssetSnapshot | undefined
-): void {
-  if (!snapshot || !metric || metric.state !== 'available' || !Number.isFinite(metric.value)) return
-  observations.push({ asset, horizon, observedAt: snapshot.analysisEnd, comparable: true,
-    evidenceRefId: `mi-evidence-cross-asset-${asset}-${horizon}-${snapshot.analysisEnd}`, priceReturnPct: metric.value })
-}
-
-async function readFundingHistory(
-  service: Pick<MarketIntelligencePublicQueryService, 'queryFundingRateHistory'>,
-  asOf: string
-): Promise<FundingHistory | undefined> {
-  try {
-    const result = await service.queryFundingRateHistory({ asOf })
-    return result.state === 'available' ? result : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function findObservation(observations: readonly PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: '2h') {
-  return observations.find(value => value.asset === asset && value.horizon === horizon && value.priceReturnPct !== undefined)
-}
-
-function isCanonicalTime(value: string): boolean {
-  try { return new Date(value).toISOString() === value } catch { return false }
-}
-
 export function registerMarketAnalysisRuntime(input: Readonly<{
   jobRuntime: JobRuntime
   eventBusRuntime?: EventBusRuntime
@@ -223,6 +117,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 固定值比「回落到运行机器的时区」诚实得多。
    */
   timeZone?: () => string
+  /** 通知端口：判定账本结算完成后提交 `calibration.result`；缺省表示未装配运行时，结算照常。 */
+  submitNotification?: CalibrationResultSubmit
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {
   const now = input.now ?? (() => new Date().toISOString())
@@ -348,6 +244,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
           } } : undefined
         })
       })
+      if (result.verified > 0) await notifyCalibrationResult(input.submitNotification, asOf.slice(0, 10), now())
       await context.log({
         level: 'info',
         message: `Verified ${result.verified} due market prediction(s); skipped ${result.skipped}.`,

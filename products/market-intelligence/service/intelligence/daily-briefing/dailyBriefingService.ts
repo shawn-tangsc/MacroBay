@@ -22,7 +22,7 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { createDailyBriefingReads } from './dailyBriefingReads'
-import { createDailyBriefingNotifier, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
+import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
@@ -290,6 +290,7 @@ export function createDailyBriefingService(deps: Readonly<{
    * cutoff.
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
+  noticeSubmit?: DailyBriefingNoticeSubmit
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -383,6 +384,7 @@ export function createDailyBriefingService(deps: Readonly<{
       const generationTrace = recorder.complete('failed')
       await attempts.settle('failed', generationTrace.finishedAt, { failureCode, trace: generationTrace })
       await run.settle('failed', 0)
+      await notifyDailyBriefing(deps.noticeSubmit, { kind: 'failed', variant: 'not-generated', date: input.date, periodId: input.periodId }, now())
       return { state: 'unavailable', failureCode, generationTrace }
     }
     const onStage = (event: DailyBriefTurnStageEvent): void => {
@@ -567,6 +569,7 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
+      await notifyDailyBriefing(deps.noticeSubmit, { kind: 'ready', date: input.date, periodId: input.periodId }, now())
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
@@ -576,9 +579,9 @@ export function createDailyBriefingService(deps: Readonly<{
     const failedTrace = recorder.complete('failed')
     await attempts.settle('failed', failedTrace.finishedAt, { trace: failedTrace })
     await run.settle('failed', 0)
+    await notifyDailyBriefing(deps.noticeSubmit, { kind: 'failed', variant: 'editorial-missing', date: input.date, periodId: input.periodId }, now())
     return { state: 'available', document: withGenerationTrace(document, failedTrace) }
   }
-
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
     const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }

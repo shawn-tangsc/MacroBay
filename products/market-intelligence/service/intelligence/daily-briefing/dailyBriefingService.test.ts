@@ -768,9 +768,9 @@ describe('period run', () => {
   })
 })
 
-describe('briefing ready notice', () => {
-  it('says nothing when an edition is stored, and nothing when it is read again', async () => {
-    // §28：成功不通知。数的是「通知被调用了几次」，因为那比「有没有弹出来」更能被机器检查。
+describe('briefing notices', () => {
+  it('reports a stored edition once, not on every read of it', async () => {
+    // 一期一条：第二次读的是已落库的那一期，那不是「又完成了一期」。
     const store = memoryStore()
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
@@ -787,6 +787,65 @@ describe('briefing ready notice', () => {
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(notices).toHaveLength(0)
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.briefing.ready',
+      producerId: 'market-intelligence.dailyBriefing',
+      dedupeVars: { builder: 'template', vars: { date: '2026-10-30', period: 'default' } }
+    })
+  })
+
+  it('N5 ①: a terminal failure says the edition was not generated', async () => {
+    const notices: Array<Record<string, unknown>> = []
+    const failing: DailyBriefingSource = {
+      async readFacts() { throw new Error('source-down') },
+      async renderPacket() { throw new Error('source-down') }
+    }
+    const service = createDailyBriefingService({
+      source: failing,
+      store: createDailyBriefingSqliteStore(':memory:'),
+      now: () => asOf,
+      noticeSubmit: async (request) => {
+        notices.push(request as unknown as Record<string, unknown>)
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+      }
+    })
+
+    expect((await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).state).toBe('unavailable')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.briefing.failed',
+      bodyVariant: 'not-generated'
+    })
+  })
+
+  it('N5 ②: data ready but the interpretation missing says that instead', async () => {
+    // 数据齐了、解读没出来：正文变体不同，但仍是同一个事件、同一个键。
+    const notices: Array<Record<string, unknown>> = []
+    const service = createDailyBriefingService({
+      source: fakeSource(),
+      store: memoryStore(),
+      now: () => asOf,
+      agentRunner: {
+        async start() {
+          return { sessionId: 's1', created: true, assistantText: '', toolInvocations: [] }
+        },
+        async continue() { return { assistantText: '', toolInvocations: [] } },
+        async finish() { return undefined }
+      },
+      agentModel: async () => ({ state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }),
+      noticeSubmit: async (request) => {
+        notices.push(request as unknown as Record<string, unknown>)
+        return { kind: 'accepted', recordId: 'r1', levels: ['center', 'desktop'] }
+      }
+    })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('available')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.briefing.failed',
+      bodyVariant: 'editorial-missing'
+    })
   })
 })
