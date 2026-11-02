@@ -30,13 +30,13 @@ function view(overrides: Partial<AssistantImageGenerationView> = {}): AssistantI
   }
 }
 
-async function mount(next: AssistantImageGenerationView): Promise<HTMLElement> {
+async function mount(next: AssistantImageGenerationView, onUnavailable: () => void = () => undefined): Promise<HTMLElement> {
   document.body.replaceChildren()
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(AssistantImageGenerateControl, { labels, view: next }))
+    root?.render(createElement(AssistantImageGenerateControl, { labels, view: next, onUnavailable }))
   })
   return container
 }
@@ -54,12 +54,16 @@ afterEach(async () => {
 })
 
 describe('AssistantImageGenerateControl', () => {
-  it('disables the entry and explains why when no image endpoint is configured', async () => {
-    const container = await mount(view({ target: null }))
+  it('stays clickable when no endpoint is configured and hands the next step to the caller', async () => {
+    const onUnavailable = vi.fn()
+    const container = await mount(view({ target: null }), onUnavailable)
 
-    expect(button(container).disabled).toBe(true)
-    expect(button(container).getAttribute('title')).toBe(labels.imageGenerateTooltipDisabled)
+    expect(button(container).disabled).toBe(false)
+    // 原生 title 已删：原因与下一步走可见回执，不再有“只有鼠标能看”的残留。
+    expect(button(container).getAttribute('title')).toBeNull()
     expect(button(container).getAttribute('aria-label')).toBe(labels.imageGenerate)
+    await act(async () => button(container).click())
+    expect(onUnavailable).toHaveBeenCalledTimes(1)
   })
 
   it('opens a panel with prompt, size, count and a generate action', async () => {
@@ -112,6 +116,8 @@ describe('AssistantImageGenerateControl', () => {
   it('shows a loading entry while an image is being generated', async () => {
     const container = await mount(view({ isGenerating: true }))
 
-    expect(button(container).className).toContain('ant-btn-loading')
+    // `IconButton` 的忙态是组件自己的 `data-state="loading"` + 平台转圈，不再是 antd 的按钮类名。
+    expect(button(container).getAttribute('data-state')).toBe('loading')
+    expect(button(container).disabled).toBe(true)
   })
 })

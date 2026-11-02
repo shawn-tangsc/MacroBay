@@ -61,14 +61,15 @@ function view(overrides: Partial<AssistantImageGenerationView> = {}): AssistantI
 
 async function mount(
   next: AssistantImageGenerationView,
-  availableImages: readonly AssistantImageMessagePart[] = [sessionImage]
+  availableImages: readonly AssistantImageMessagePart[] = [sessionImage],
+  onUnavailable: () => void = () => undefined
 ): Promise<HTMLElement> {
   document.body.replaceChildren()
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(AssistantImageEditControl, { labels, view: next, availableImages }))
+    root?.render(createElement(AssistantImageEditControl, { labels, view: next, availableImages, onUnavailable }))
   })
   return container
 }
@@ -94,12 +95,15 @@ afterEach(async () => {
 })
 
 describe('AssistantImageEditControl', () => {
-  it('disables the entry and explains why when no image edit endpoint is configured', async () => {
-    const container = await mount(view({ editTarget: null }))
+  it('stays clickable when no edit endpoint is configured and hands the next step to the caller', async () => {
+    const onUnavailable = vi.fn()
+    const container = await mount(view({ editTarget: null }), [sessionImage], onUnavailable)
 
-    expect(button(container).disabled).toBe(true)
-    expect(button(container).getAttribute('title')).toBe(labels.imageEditTooltipDisabled)
+    expect(button(container).disabled).toBe(false)
+    expect(button(container).getAttribute('title')).toBeNull()
     expect(button(container).getAttribute('aria-label')).toBe(labels.imageEdit)
+    await act(async () => button(container).click())
+    expect(onUnavailable).toHaveBeenCalledTimes(1)
   })
 
   it('edits a session image by reference and closes the panel', async () => {

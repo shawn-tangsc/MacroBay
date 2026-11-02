@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { Button, Input, Select } from 'antd'
 import { Brush, Upload } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { AssistantImageMessagePart } from '@platform/ai/assistant-platform/schemas/messageSchemas'
 import { buildGeneratedImageUrl } from '@platform/ui/images/generatedImageUrl'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { resolveAssistantsText, type AssistantsTextPath } from '../../../i18n/assistantsTextKey'
 import {
   defaultImageGenerationSize,
   describeImageEditValidationError,
@@ -22,6 +25,8 @@ type Props = {
   view: AssistantImageGenerationView
   /** 本会话已生成的图片（原图来源①）。 */
   availableImages: readonly AssistantImageMessagePart[]
+  /** 编辑端点未配置时把读者送到模型服务。 */
+  onUnavailable: () => void
 }
 
 /**
@@ -30,13 +35,14 @@ type Props = {
  * 原图来源优先「本会话已生成的图片」，其次上传本地文件（png/jpeg/webp、≤4MB）。
  * 派发后由主进程把结果写成助手图片消息，本组件不碰图片字节。
  */
-export function AssistantImageEditControl({ labels, view, availableImages }: Props): React.ReactElement {
+export function AssistantImageEditControl({ labels, view, availableImages, onUnavailable }: Props): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState<ImageGenerationSize>(defaultImageGenerationSize)
   const [source, setSource] = useState<ImageEditSource | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
-  const disabled = view.editTarget === null
+  const unavailable = view.editTarget === null
+  const resolveText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
 
   async function selectFile(file: File | undefined): Promise<void> {
     if (!file) return
@@ -66,19 +72,22 @@ export function AssistantImageEditControl({ labels, view, availableImages }: Pro
 
   return (
     <div className="assistant-image-generation">
-      <Button
-        type="text"
-        size="small"
-        className="assistant-inputbar-tool"
-        data-image-edit
-        icon={<Brush size={14} />}
-        aria-label={labels.imageEdit}
-        title={disabled ? labels.imageEditTooltipDisabled : labels.imageEdit}
-        disabled={disabled}
+      <IconButton
+        ariaLabelKey="imageEdit"
+        dataAttributes={{ 'data-image-edit': true }}
+        icon={Brush}
         loading={view.isGenerating && open}
-        onClick={() => setOpen((current) => !current)}
+        onSelect={() => {
+          if (unavailable) {
+            onUnavailable()
+            return
+          }
+          setOpen((current) => !current)
+        }}
+        resolveText={resolveText}
+        size="md"
       />
-      {open && !disabled ? (
+      {open && !unavailable ? (
         <div
           className="assistant-image-generation-panel assistant-image-edit-panel"
           data-image-edit-panel

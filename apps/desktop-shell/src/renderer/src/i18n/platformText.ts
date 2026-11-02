@@ -322,6 +322,8 @@ export type PlatformText = {
     /** PLAT-63 第二阶段 B：composer 的图像生成入口与小面板。 */
     imageGenerate: string
     imageGenerateTooltipDisabled: string
+    /** 未配置图像端点时的回执：带下一步（去模型服务配置），不是悬停提示。 */
+    imageEndpointMissingHint: string
     imagePromptPlaceholder: string
     imageSize: string
     imageCount: string
@@ -1484,6 +1486,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       streaming: '生成中',
       imageGenerate: '生成图片',
       imageGenerateTooltipDisabled: '未配置图像生成端点',
+      imageEndpointMissingHint: '先在模型服务里配置图像端点',
       imagePromptPlaceholder: '描述要生成的图片…',
       imageSize: '尺寸',
       imageCount: '数量',
@@ -2591,6 +2594,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       streaming: 'Generating',
       imageGenerate: 'Generate image',
       imageGenerateTooltipDisabled: 'No image generation endpoint configured',
+      imageEndpointMissingHint: 'Configure an image endpoint in Model service first',
       imagePromptPlaceholder: 'Describe the image to generate…',
       imageSize: 'Size',
       imageCount: 'Count',
