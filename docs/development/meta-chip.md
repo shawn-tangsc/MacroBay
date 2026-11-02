@@ -43,6 +43,11 @@ is a button — use `IconButton`/`Button`; a filter is `Segmented`.
 - **Length:** at most 8 CJK characters / 16 characters. Longer means it is a sentence, not a
   category; the chip does not truncate or wrap.
 - **One row, up to five.** Beyond five, wrap onto the next line; never collapse into “+3”.
+- **Spacing 6, vertically centred.** Put the chips in a flex row with `gap: 6px` and
+  `align-items: center`. Next to a `StatusPill` (18 vs 20.5 high) centre alignment is the rule —
+  top alignment makes the two rows of text sit off each other.
+- **No tooltip on a chip.** If the text does not fit, the text is not a category; use body copy or a
+  description instead of a hover.
 - **Every chip has a key.** The component holds no copy and imports no i18n.
 - **Not for status or counts.** Those are `StatusPill` and `CountBadge`; “translated / untranslated”
   and sentiment direction are their own labels, not chips.
