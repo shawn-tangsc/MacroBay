@@ -3,9 +3,9 @@ import { Button, Select } from 'antd'
 import type { TaskAutomationPolicyPreset } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { buildPolicyFacts, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockError } from './TaskAutomationBlockParts'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
 import type { TaskAutomationSettingsController } from './useTaskAutomationSettings'
 
@@ -55,10 +55,11 @@ export function TaskAutomationPolicySection(props: {
           ) : null}
         </div>
         {controller.policyError ? (
-          <BlockError
-            label={labels.policyLoadFailed}
-            retryLabel={labels.retry}
-            onRetry={() => void controller.reloadPolicy()}
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reloadPolicy() }}
           />
         ) : null}
         <p className="task-automation-note">{labels.policyExplanation}</p>
