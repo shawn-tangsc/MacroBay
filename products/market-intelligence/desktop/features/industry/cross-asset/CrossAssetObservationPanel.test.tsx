@@ -418,11 +418,12 @@ describe('cross-asset observation workspace', () => {
       expect(daily.textContent).toContain('日频 −3bp（截至 2026-10-13）')
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('通胀预期 2.35%（截至 2026-10-14）')
       expect(daily.textContent).not.toContain(text.termSpread)
-      // The caveat id comes from its owner, and its sentence is one hover away.
+      // The caveat id comes from its owner; the sentence rides on the cell's accessible name, because
+      // this cell is not a control and must not become a keyboard stop just to explain itself.
       expect(daily.getAttribute('data-mixed-observation-dates')).toBe('macro-rates-mixed-observation-dates')
       expect(daily.getAttribute('title')).toBeNull()
-      await act(async () => { daily.focus() })
-      expect(document.body.textContent).toContain(text.dailyMixedDates)
+      expect(daily.getAttribute('tabindex')).toBeNull()
+      expect(daily.getAttribute('aria-label')).toContain(text.dailyMixedDates)
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 

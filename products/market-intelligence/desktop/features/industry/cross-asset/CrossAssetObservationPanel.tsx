@@ -212,18 +212,18 @@ function RatesStatusRow({ id, reading, rates, text }: {
     ...(extras.mixedObservationDates ? [{ labelKey: crossAssetTextKeys.dailyMixedDates }] : []),
     { labelKey: crossAssetTextKeys.dailyCaveat }
   ]
-  // 说明有多行，`title` 只能塞一行、触屏不出现、读屏也不念；这里换成可聚焦的气泡，焦点进去就展开。
-  const dailyCell = <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
-    data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
-    data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
-    {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}
-    tabIndex={0}>
-    <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
-  </td>
+  // 这一格不是控件：撤掉浮层与焦点停靠，说明改由可访问名承载（同一件事不占一个键盘站）。
+  const dailyDescription = dailyFacts.map(line => resolveText(line.labelKey)).join(text.hintListSep)
   return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
     <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
     <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
-    <FocusPopover lines={dailyFacts} resolveText={resolveText}>{dailyCell}</FocusPopover>
+    <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
+      aria-label={dailyDescription}
+      data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
+      data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
+      {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}>
+      <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
+    </td>
   </tr>
 }
 function MacroStatusRow({ id, reading, text, formatTime }: {
