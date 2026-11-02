@@ -30,12 +30,16 @@ export function evaluateProducerGate(input: {
   if (productId === undefined) return { action: 'send' }
 
   const owner = input.ownership?.[producerId]
-  if (owner !== undefined && owner !== 'platform') {
-    // 让渡：平台不发、不落库；产品自己会发它那条。记一条诊断，排查「为什么没发」时能看到是谁接的。
-    input.diagnostics?.({ code: 'delegated', eventTypeId: input.eventTypeId, producerId, at: input.now })
-    return { action: 'delegated', ownerProductId: owner.productId }
+  if (owner !== undefined) {
+    if (owner === 'platform') return { action: 'send' }
+    // 让渡只吞**平台事件**：产品自己的 `market-intelligence.*` 提交照常走，claim 不能把
+    // 来源两条自有事件整 handler 吞掉。
+    if (input.eventTypeId.startsWith('platform.')) {
+      input.diagnostics?.({ code: 'delegated', eventTypeId: input.eventTypeId, producerId, at: input.now })
+      return { action: 'delegated', ownerProductId: owner.productId }
+    }
+    return { action: 'send' }
   }
-  if (owner === 'platform') return { action: 'send' }
 
   if (!input.seenUnclaimedProducers.has(producerId)) {
     // 未声明：平台照发（漏发是安静的），但第一次见到时留一条诊断，别让新任务变成黑箱。

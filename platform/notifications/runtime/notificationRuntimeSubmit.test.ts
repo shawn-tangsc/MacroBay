@@ -19,12 +19,28 @@ const policy: NotificationEventPolicy = {
   'platform.done': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'platform.merge-a': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
   'platform.merge-b': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+  'platform.merge-c': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
 }
 
 const catalog = createNotificationEventCatalog({
   policy,
   sources: [
+    {
+      productId: 'market-intelligence',
+      events: [
+        {
+          id: 'market-intelligence.source.consecutive-failed',
+          titleKey: 'notification.test.title',
+          reasonKey: 'notification.test.body',
+          requiresUserAction: false,
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'source:{sourceId}',
+          dedupeUnit: 'occurrence',
+          notifyOnlyIfSubscribed: false
+        }
+      ]
+    },
     {
       productId: 'platform',
       events: [
@@ -210,6 +226,23 @@ describe('notification runtime submit', () => {
     await runtime.submit(request({ producerId: 'market-intelligence.new-job' }))
     await runtime.submit(request({ producerId: 'market-intelligence.new-job', dedupeVars: { builder: 'template', vars: { id: 'job-2', date: '2026-11-04' } } }))
     expect(diagnostics).toEqual(['unclaimed-producer'])
+  })
+
+  it('S10: a claimed producer does not swallow the product own event', async () => {
+    const { runtime, state, diagnostics } = createRuntime(undefined, {
+      producerOwnership: { 'market-intelligence.dailyBriefing': { productId: 'market-intelligence' } },
+      productIds: ['market-intelligence']
+    })
+    const outcome = await runtime.submit({
+      eventTypeId: 'market-intelligence.source.consecutive-failed',
+      producerId: 'market-intelligence.dailyBriefing',
+      dedupeVars: { builder: 'template', vars: { sourceId: 'macro' } },
+      actions: [],
+      occurredAt: '2026-11-03T00:00:00.000Z'
+    })
+    expect(outcome.kind).toBe('accepted')
+    expect(state().records).toHaveLength(1)
+    expect(diagnostics).toEqual([])
   })
 
   it('S10: a handler with no product prefix is platform-owned and never diagnosed', async () => {
