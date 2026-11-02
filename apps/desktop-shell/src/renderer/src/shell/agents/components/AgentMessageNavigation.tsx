@@ -1,7 +1,10 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp } from 'lucide-react'
 
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from '../agentTextProvider'
+import { resolveAgentTooltipText } from '../agentTooltipText'
 
 type AgentMessageNavigationProps = {
   onTop: () => void
@@ -17,10 +20,11 @@ export default function AgentMessageNavigation({
   onBottom
 }: AgentMessageNavigationProps): React.ReactElement {
   const t = useAgentText()
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
 
   return (
     <div className="agent-message-navigation" aria-label={t.messages.anchorRailAria}>
-      <Tooltip title={t.messages.navigateTop} placement="left">
+      <Tooltip labelKey="messages.navigate-top" resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -30,7 +34,7 @@ export default function AgentMessageNavigation({
           onClick={onTop}
         />
       </Tooltip>
-      <Tooltip title={t.messages.navigatePrevious} placement="left">
+      <Tooltip labelKey="messages.navigate-previous" resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -40,7 +44,7 @@ export default function AgentMessageNavigation({
           onClick={onPrevious}
         />
       </Tooltip>
-      <Tooltip title={t.messages.navigateNext} placement="left">
+      <Tooltip labelKey="messages.navigate-next" resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -50,7 +54,7 @@ export default function AgentMessageNavigation({
           onClick={onNext}
         />
       </Tooltip>
-      <Tooltip title={t.messages.navigateBottom} placement="left">
+      <Tooltip labelKey="messages.navigate-bottom" resolveText={resolveText}>
         <Button
           type="text"
           size="small"
