@@ -13,7 +13,7 @@ import {
   Sun
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, ConfigProvider, Input, Segmented, Select } from 'antd'
+import { Button, ConfigProvider, Input, Segmented as AntSegmented, Select } from 'antd'
 
 import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
@@ -75,6 +75,10 @@ import {
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
+import { Segmented } from '@platform/ui/components/segmented'
+
+/** 语言分段的组名键。分段组件只收键，句子仍在 `platformText`。 */
+const LANGUAGE_SEGMENTED_KEY = 'preferences.language'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
@@ -254,6 +258,13 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 键 → 句子：分段只用 `preferences.*` 这几句；未知键返回空串，组件据此整块不渲染，
+  // 不会把键名念给读者（与平台其余解析器同口径）。
+  const resolvePreferencesText = (key: string): string => {
+    const path = key.startsWith('preferences.') ? key.slice('preferences.'.length) : key
+    const value = (t.preferences as unknown as Record<string, unknown>)[path]
+    return typeof value === 'string' ? value : ''
+  }
   // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
   const proxySelfTestView =
     proxySelfTest.result === null
@@ -1331,14 +1342,15 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <Languages size={18} />
             <span>{t.preferences.language}</span>
           </div>
-          <Segmented<AppLanguage>
-            className="settings-segmented"
-            value={settings.language}
-            options={languageOptions.map((option) => ({
+          <Segmented
+            ariaLabelKey={LANGUAGE_SEGMENTED_KEY}
+            items={languageOptions.map((option) => ({
               value: option.value,
-              label: t.preferences[option.labelKey]
+              labelKey: `preferences.${option.labelKey}`
             }))}
-            onChange={(value) => void updateSettings({ language: value })}
+            value={settings.language}
+            onChange={(value) => void updateSettings({ language: value as AppLanguage })}
+            resolveText={resolvePreferencesText}
           />
         </div>
 
@@ -1353,7 +1365,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <Palette size={18} />
             <span>{t.preferences.displayStyle}</span>
           </div>
-          <Segmented<ThemeMode>
+          <AntSegmented<ThemeMode>
             className="settings-segmented"
             value={settings.themeMode}
             options={themeOptions.map((option) => {
