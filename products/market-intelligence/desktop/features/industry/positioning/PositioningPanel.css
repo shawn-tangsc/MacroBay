@@ -120,24 +120,29 @@
 .mi-positioning-panel__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
 .mi-positioning-panel__signal-detail p { flex-basis: 100%; margin: 0; }
 
-/* The entry to the readings behind the numbers: a word, not a chip. Body-level type (11.5px), not
-   the 10px footnote size it inherited from the chip row beside it; hover brightens the word and
-   draws nothing — a block behind a two-character entry reads as a second button ring. */
+/* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
+   footnote size of the chip row beside it; hover brightens the word and draws nothing — a block
+   behind a two-character entry reads as a second button ring.
+   Type and the region's cap come from the dashboard's reading-note tokens: the same shape exists
+   on another card, and a number written in two places drifts (the two cards already disagreed
+   once: 10px against 11.5px). */
 .mi-positioning-panel__help-toggle {
   padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit; font-size: 11.5px;
-  line-height: 1.6; white-space: nowrap; cursor: pointer;
+  color: var(--mi-dashboard-muted); font: inherit;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  white-space: nowrap; cursor: pointer;
 }
 .mi-positioning-panel__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-positioning-panel__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 /* The long readings: opened on purpose, so they get room and their own scroll instead of
-   stretching the card. Body type matches the entry that opened them (11.5px): an entry that says
-   "come and read" and then hands over a smaller size contradicts itself. */
+   stretching the card. Body type matches the entry that opened them — "come and read", then a
+   smaller size, is a contradiction, which is why this is a token and not a number. */
 .mi-positioning-panel__help-details {
   display: grid; gap: 6px; margin: 0;
   padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted); font-size: 11.5px; line-height: 1.6;
-  max-height: 320px; overflow-y: auto;
+  color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
 }
 .mi-positioning-panel__help-details p { margin: 0; }

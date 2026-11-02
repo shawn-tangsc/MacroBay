@@ -31,6 +31,17 @@
   --mi-dashboard-etf-flow-chart-height: 108px;
   --mi-dashboard-etf-flow-axis-width: 42px;
   --mi-dashboard-etf-flow-tooltip-width: 176px;
+  /*
+    「口径说明」这类内联说明的排版口径：**这份文件是唯一 owner**，卡片只引用、不再抄数。
+
+    为什么收成 token：定位卡与背离卡是同一个形态（纯文字入口 + 展开区），两处曾各自写死，
+    于是入口一个是 10px、一个是 11.5px，展开区一个 11、一个 11.5——文档级文字莫名比入口更小。
+    那不是审美分歧，是**「请来读」和「给你更小的字」不可能同时成立**。三个数只在这一处出现；
+    哪张卡里再写死 11.5 / 320，就是新的漂移点，下次迁移时改回引用。
+  */
+  --mi-reading-note-size: 11.5px;
+  --mi-reading-note-line-height: 1.6;
+  --mi-reading-note-max-height: 320px;
   --mi-dashboard-etf-funds: #63c9ff;
   --mi-dashboard-etf-btc: var(--mi-dashboard-caution);
   --mi-dashboard-etf-eth: #b994ff;
