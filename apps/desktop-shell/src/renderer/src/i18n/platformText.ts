@@ -1388,7 +1388,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'delivery-owner-invalid': '投递由另一次运行持有，本次跳过'
       },
       deliverySkipReasonUnrecorded: (count) => `${count} 次跳过没有记录原因（属于缺陷，已按异常记录）`,
-      auditAccepted: '已接受', auditRejected: '已拒绝',
+      // 说的是「这次改动有没有生效」，不是「谁接受了谁」：与左侧动作词连起来读成一句事实
+      // （「创建 · 已生效」「暂停 · 未生效」）。两种取值都只是平台没让改动落地，不是失败，档位 muted。
+      auditAccepted: '已生效', auditRejected: '未生效',
       auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
       resourceBridgeMissing: '缺少接口，应用可能未重启；请重启应用后重试。', resourceLoadTimeout: '读取资源任务超时，请重试。',
@@ -2472,7 +2474,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'delivery-owner-invalid': 'Another run owns this delivery, so it was skipped'
       },
       deliverySkipReasonUnrecorded: (count) => `${count} skipped ${count === 1 ? 'delivery has' : 'deliveries have'} no recorded reason (a defect, logged as an anomaly)`,
-      auditAccepted: 'Accepted', auditRejected: 'Rejected',
+      auditAccepted: 'Applied', auditRejected: 'Not applied',
       auditAction: { create: 'Created', update: 'Updated', pause: 'Paused', resume: 'Resumed', delete: 'Deleted', 'run-now': 'Run now', 'cancel-run': 'Cancelled run', 'runtime-transition': 'Runtime transition', 'channel-delete-cleanup': 'Channel cleanup' },
       resourceJobs: 'Platform & product jobs', resourceLoading: 'Loading platform jobs…', resourceLoadFailed: 'Failed to load platform jobs.',
       resourceBridgeMissing: 'The app process is missing this interface; restart the app and retry.', resourceLoadTimeout: 'Timed out reading platform jobs. Please retry.',

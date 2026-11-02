@@ -274,7 +274,7 @@ describe('TaskAutomationSettingsPage', () => {
     }
     expect(markup).toContain('本任务投递健康')
     expect(markup).toContain('最近变更')
-    expect(markup).toContain('已接受')
+    expect(markup).toContain('已生效')
     expect(markup).toContain('恢复')
     expect(markup).toContain('每日行情总结')
   })
