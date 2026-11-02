@@ -1,5 +1,6 @@
 import { Button } from 'antd'
 import { Popover } from '@platform/ui/components/popover'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
@@ -68,6 +69,22 @@ function lastActionOf(reading: PolicyPathReading, settlement: PolicyPathSettleme
   // A hold stays one short word here; only a real move needs the band spelled out.
   return outcome === 'no-change' ? text.unchanged : text.outcomes[outcome]
 }
+
+/**
+ * The card's freshness word as a state pill.
+ *
+ * `delayed` and `stale` share `warn` because only one of them can be on screen at a time and the two
+ * words differ in what caused them (network lag vs. an old quote); collapsing them would lose that.
+ * The shape of the dot (ring for `warn`, filled for `bad`) is what keeps them apart in greyscale —
+ * the component owns it, the card only names the tone.
+ */
+const STALENESS_TONE = { live: 'ok', delayed: 'warn', stale: 'warn', unavailable: 'bad' } as const
+const STALENESS_KEY = {
+  live: 'pages.intelligence.portal.dashboard.policyPath.live',
+  delayed: 'pages.intelligence.portal.dashboard.policyPath.delayed',
+  stale: 'pages.intelligence.portal.dashboard.policyPath.stale',
+  unavailable: 'pages.intelligence.portal.dashboard.policyPath.unavailable'
+} as const
 
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   reading: PolicyPathReading
@@ -231,8 +248,12 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
 
     <footer className="mi-policy-card__foot">
       {phase.kind === 'settlement'
-        ? <span className="mi-policy-card__status"><i aria-hidden="true" />{settledFor(phase.minutesSinceDecision, text)}</span>
-        : <span className="mi-policy-card__status"><i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}</span>}
+        // A time phrase ("2 hours after the decision"), not a state word: it stays text.
+        ? <span className="mi-policy-card__status">{settledFor(phase.minutesSinceDecision, text)}</span>
+        : <>
+            <StatusPill tone={STALENESS_TONE[reading.staleness]} labelKey={STALENESS_KEY[reading.staleness]} resolveText={resolveKey} />
+            {probability ? <span className="mi-policy-card__status"> · {probability.venue}</span> : null}
+          </>}
       {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </Button> : null}

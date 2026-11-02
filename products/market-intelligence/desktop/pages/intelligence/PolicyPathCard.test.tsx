@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -29,11 +30,15 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (candidate: PolicyPathReading, cardText: typeof text = text) => {
+// The card resolves its state word through the shell language now, so the test has to supply the
+// same context the app does — a card whose copy is English but whose pill says 实时 is exactly the
+// bug that missing context hides.
+const render = async (candidate: PolicyPathReading, cardText: typeof text = text, language: 'zh-CN' | 'en-US' = 'zh-CN') => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' })))
+  await act(async () => root!.render(createElement(ShellLanguageProvider, { language },
+    createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' }))))
   return host
 }
 
@@ -46,7 +51,7 @@ it('explains the odds in the drawer instead of a hand-drawn bubble on the card',
 
 describe('policy path card', () => {
   it('names the month and the bucket through one localized template, with no Chinese left in English', async () => {
-    const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath)
+    const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath, 'en-US')
     expect(rendered.textContent).not.toMatch(/[\u4e00-\u9fa5]/)
     expect(rendered.textContent).toContain(reading.probability!.outcome === 'hike-25' ? 'hike 25bp' : '')
   })
