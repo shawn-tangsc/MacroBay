@@ -2,6 +2,8 @@ import { type FocusEvent, useEffect, useRef, useState } from 'react'
 import { Input } from 'antd'
 import { Check, Copy, Eye, EyeOff } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { PlatformText } from '../../../i18n/platformText'
 import { copyTextToClipboard } from '../../clipboard'
 
@@ -223,24 +225,39 @@ export function ModelProviderApiKeyField({
         suffix={(
           <span className="provider-api-key-actions">
             {plainVisible && revealedApiKey !== null ? (
-              <button
-                type="button"
-                className="provider-api-key-copy"
-                aria-label={labels.copyModelId}
-                title={copied ? labels.copied : labels.copyModelId}
-                onClick={() => void copyRevealedKey()}>
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
+              // 图标按钮一律走平台组件：读屏名收键、尺寸只有 22/24 两档、焦点环与图形一致性由组件管。
+              <IconButton
+                ariaLabelKey={copied ? 'modelService.copied' : 'modelService.copyModelId'}
+                icon={copied ? Check : Copy}
+                onSelect={() => void copyRevealedKey()}
+                resolveText={(key) =>
+                  key === 'modelService.copied'
+                    ? labels.copied
+                    : key === 'modelService.copyModelId'
+                      ? labels.copyModelId
+                      : ''
+                }
+                size="sm"
+                tooltipKey={copied ? 'modelService.copied' : 'modelService.copyModelId'}
+                dataAttributes={{ 'data-provider-api-key-copy': 'true' }}
+              />
             ) : null}
-            <button
-              type="button"
-              className="provider-api-key-eye"
-              aria-label={plainVisible ? labels.hideApiKey : labels.showApiKey}
-              aria-pressed={plainVisible}
+            <IconButton
+              ariaLabelKey={plainVisible ? 'modelService.hideApiKey' : 'modelService.showApiKey'}
               disabled={!canToggle || revealPending}
-              onClick={() => void handleVisibleChange(!plainVisible)}>
-              {plainVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
+              icon={plainVisible ? EyeOff : Eye}
+              onSelect={() => void handleVisibleChange(!plainVisible)}
+              pressed={plainVisible}
+              resolveText={(key) =>
+                key === 'modelService.hideApiKey'
+                  ? labels.hideApiKey
+                  : key === 'modelService.showApiKey'
+                    ? labels.showApiKey
+                    : ''
+              }
+              size="sm"
+              dataAttributes={{ 'data-provider-api-key-eye': 'true' }}
+            />
             {copied ? <span className="provider-api-key-copied" role="status">{labels.copied}</span> : null}
           </span>
         )}

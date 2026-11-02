@@ -80,13 +80,13 @@ function apiKeyInput(container: HTMLElement): HTMLInputElement {
 
 /** R5：眼睛是 antd `Input.Password` **自带**的图标（`span.ant-input-password-icon`），不是自绘按钮。 */
 function eyeButton(container: HTMLElement): HTMLElement {
-  const eye = container.querySelector<HTMLElement>('.provider-api-key-eye')
+  const eye = container.querySelector<HTMLElement>('[data-provider-api-key-eye]')
   if (!eye) throw new Error('Expected the built-in antd password toggle icon.')
   return eye
 }
 
 function eyeButtonOrNull(container: HTMLElement): HTMLElement | null {
-  return container.querySelector<HTMLElement>('.provider-api-key-eye')
+  return container.querySelector<HTMLElement>('[data-provider-api-key-eye]')
 }
 
 async function clickEye(container: HTMLElement): Promise<void> {
@@ -130,7 +130,7 @@ describe('PLAT-58 model provider API key reveal field', () => {
     // 普通输入框（type=text）+ 框内自绘眼睛；掩码态显示头尾省略的预览。
     expect(apiKeyInput(container).type).toBe('text')
     expect(container.querySelector('.ant-input-password')).toBeNull()
-    expect(container.querySelector('.provider-api-key-eye')).not.toBeNull()
+    expect(container.querySelector('[data-provider-api-key-eye]')).not.toBeNull()
     expect(container.innerHTML).not.toContain(savedKey)
     expect(reveal).not.toHaveBeenCalled()
   })
@@ -154,10 +154,10 @@ describe('PLAT-58 model provider API key reveal field', () => {
     const container = await mount({ revealApiKey: async () => ({ apiKey: savedKey }) })
 
     // 掩码态没有复制入口：看不到就不该能复制。
-    expect(container.querySelector('.provider-api-key-copy')).toBeNull()
+    expect(container.querySelector('[data-provider-api-key-copy]')).toBeNull()
 
     await clickEye(container)
-    const copy = container.querySelector<HTMLElement>('.provider-api-key-copy')
+    const copy = container.querySelector<HTMLElement>('[data-provider-api-key-copy]')
     expect(copy).not.toBeNull()
 
     await act(async () => {
@@ -168,7 +168,7 @@ describe('PLAT-58 model provider API key reveal field', () => {
 
     // 收起明文后复制入口一起消失，不会出现「掩码还能复制」的状态。
     await clickEye(container)
-    expect(container.querySelector('.provider-api-key-copy')).toBeNull()
+    expect(container.querySelector('[data-provider-api-key-copy]')).toBeNull()
   })
 
   it('returns to the mask after the named 30s auto-hide window and drops the key from the DOM', async () => {
