@@ -27,6 +27,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
@@ -325,6 +326,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
+        <DailyBriefingStorageNotice text={text.migration} />
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
