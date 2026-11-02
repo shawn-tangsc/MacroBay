@@ -5,7 +5,11 @@ import { createDefaultNotificationRuntimeSettings } from '../contracts/notificat
 import { normalizeRequestedChannels, routeTransientDelivery } from './notificationRouting'
 import { createNotificationFromRequest } from '../store/notificationStore'
 
-/** 用例显式声明「读者在 UTC」；不再有「没传就按 UTC」的缺省（MI-11-R68）。 */
+/**
+ * 用例显式声明「读者在 UTC」；不再有「没传就按 UTC」的缺省（MI-11-R68）。
+ * **与本批同笔**：运行时改成只读注入时钟后，这条测试若不跟着传时钟，就会按真实时间跑并在
+ * 跨零点自己变红——所以它不是顺手改的测试，是这次修复的一半。
+ */
 const utcClock = { now: () => new Date('2026-11-01T23:30:00.000Z'), timeZone: () => 'UTC' }
 
 describe('notification routing settings boundary', () => {

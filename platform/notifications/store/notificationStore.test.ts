@@ -1,3 +1,8 @@
+/**
+ * 时间必须由调用方给：运行时改成注入 `deps.clock` 之后，这里若继续写死「今天」并按真实时间跑，
+ * 就会在跨零点后自己变红——那正是这次要修的缺陷，不是被人顺手改的测试。**与本批同笔**：
+ * 实现只留一个时钟源，测试也就不再有第二个「现在」。
+ */
 import { describe, expect, it } from 'vitest'
 
 import type { NotificationRequest } from '../contracts/notificationContracts'
