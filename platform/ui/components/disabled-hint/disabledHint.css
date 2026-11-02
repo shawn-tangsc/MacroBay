@@ -1,0 +1,17 @@
+/*
+ * 原因在控件左侧、同一行。右侧是控件区，把原因塞到右边会挤——这是布局判断，写在这里是为了
+ * 下一次有人「顺手」把顺序调过来时，得先读一遍这句话。
+ *
+ * 尺寸跟着行内次要文字走（12px / `--muted`）：它是解释，不是标题，也不该和正文抢注意力。
+ */
+.disabled-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.disabled-hint__reason {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
