@@ -75,6 +75,18 @@ describe('SidePanel', () => {
     expect(css).not.toContain('focus-trap')
   })
 
+  it('names the region through its heading instead of repeating the title twice', async () => {
+    const host = await mount()
+    const panel = host.querySelector<HTMLElement>('.side-panel')!
+    const heading = host.querySelector<HTMLElement>('.side-panel__title')!
+
+    // aria-label 与 <h2> 写同一句，读屏会先念区域名再念标题；所以只留 aria-labelledby。
+    expect(panel.hasAttribute('aria-label')).toBe(false)
+    expect(panel.getAttribute('aria-labelledby')).toBe(heading.id)
+    expect(heading.id).not.toBe('')
+    expect(heading.textContent).toBe('ui.test.panelTitle')
+  })
+
   it('renders no footer row when the caller passes none', async () => {
     const host = await mount()
     expect(host.querySelector('.side-panel__footer')).toBeNull()

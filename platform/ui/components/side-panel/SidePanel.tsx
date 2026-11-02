@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
 import { IconButton } from '../icon-button'
@@ -46,6 +46,8 @@ export type SidePanelProps = {
 export function SidePanel(props: SidePanelProps): ReactElement | null {
   const { open, onClose, size, titleKey, footer, children, className, resolveText } = props
   const panelRef = useRef<HTMLElement>(null)
+  // 区域名走 aria-labelledby 指向标题节点：再用 aria-label 写同一句，读屏会把标题念两遍。
+  const titleId = useId()
   /** 打开前焦点在哪：收起时还回去。谁移动了焦点，谁负责还原。 */
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const collapseLabel = usePanelText()()
@@ -71,12 +73,14 @@ export function SidePanel(props: SidePanelProps): ReactElement | null {
 
   return (
     <aside
-      aria-label={resolveText(titleKey)}
+      aria-labelledby={titleId}
       className={['side-panel', `side-panel--${size}`, className].filter(Boolean).join(' ')}
       ref={panelRef}
       style={{ '--side-panel-width': SIZE_CSS[size] } as React.CSSProperties}>
       <header className="side-panel__header">
-        <h2 className="side-panel__title">{resolveText(titleKey)}</h2>
+        <h2 className="side-panel__title" id={titleId}>
+          {resolveText(titleKey)}
+        </h2>
         <IconButton
           ariaLabelKey={PANEL_COLLAPSE_KEY}
           icon={X}
