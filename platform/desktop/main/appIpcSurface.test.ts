@@ -15,6 +15,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+const webIpcSource = readSource('ipc/webIpc.ts')
+const storageIpcSource = readSource('ipc/storageIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -164,8 +166,8 @@ describe('desktop main IPC surface', () => {
     )
     expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.storageListCaches')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
     expect(appSource).toContain('registerJobIpcHandlers(')
   })
 
@@ -252,7 +254,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
     expect(appSource).toContain(registerIpcHandlersCall)
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
-    expect(appSource).toContain('IpcChannels.productSummaries')
+    expect(storageIpcSource).toContain('IpcChannels.productSummaries')
   })
 
   it('registers the read-only job schedule projection and keeps agent, assistant, and product seams intact', () => {
@@ -360,11 +362,13 @@ describe('desktop main IPC surface', () => {
   })
 
   it('keeps web search IPC handlers registered without removing assistant and agent seams', () => {
+    // handler 已搬到 ipc/webIpc.ts；app.ts 只剩构造与一行接线，断言跟着实现走。
     expect(appSource).toContain('createWebSearchIpcHandlers')
-    expect(appSource).toContain('IpcChannels.webSearchListProviders')
-    expect(appSource).toContain('IpcChannels.webSearchRevealProviderApiKey')
-    expect(appSource).toContain('IpcChannels.webSearchCheckProvider')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(appSource).toContain('registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })')
+    expect(webIpcSource).toContain('IpcChannels.webSearchListProviders')
+    expect(webIpcSource).toContain('IpcChannels.webSearchRevealProviderApiKey')
+    expect(webIpcSource).toContain('IpcChannels.webSearchCheckProvider')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
@@ -374,13 +378,14 @@ describe('desktop main IPC surface', () => {
   it('keeps storage and cache IPC handlers registered without dropping existing seams', () => {
     expect(appSource).toContain('createCacheGovernanceIpcHandlers')
     expect(appSource).toContain("cache-governance.sqlite")
-    expect(appSource).toContain('IpcChannels.storageListCaches')
-    expect(appSource).toContain('IpcChannels.storageInspectCache')
-    expect(appSource).toContain('IpcChannels.storageClearCache')
-    expect(appSource).toContain('IpcChannels.storageCompactCache')
-    expect(appSource).toContain('IpcChannels.storageListCacheOperations')
+    expect(appSource).toContain('registerStorageIpc(ipcMain, {')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
+    expect(storageIpcSource).toContain('IpcChannels.storageInspectCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageClearCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageCompactCache')
+    expect(storageIpcSource).toContain('IpcChannels.storageListCacheOperations')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
   })
 
@@ -463,7 +468,8 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
-    expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
+    // web search handler 已搬到 ipc/webIpc.ts：受保护 seam 看模块而不是只看 app.ts。
+    expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
   })
 

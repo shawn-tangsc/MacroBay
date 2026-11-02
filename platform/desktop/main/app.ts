@@ -167,6 +167,8 @@ import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productI
 import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerWindowIpc } from './ipc/windowIpc'
 import { registerSettingsIpc } from './ipc/settingsIpc'
+import { registerStorageIpc } from './ipc/storageIpc'
+import { registerWebIpc } from './ipc/webIpc'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -1383,12 +1385,12 @@ function registerIpcHandlers(
   // 窗口/应用/外壳/对话框类 16 个 handler 搬到 ipc/windowIpc.ts：运行期状态只经两个端口进来。
   registerWindowIpc(ipcMain, { getMainWindow, resolveInvokingWindow })
 
-  ipcMain.handle(IpcChannels.productSummaries, () => summarizeProductManifests(productManifests))
-
-  // PLAT-27：`platform:external-apps-*` 只补上 handler（此前是死通道）；不新增通道、不改 fail-closed。
-  ipcMain.handle(IpcChannels.externalAppsListInstalled, () => externalAppsService.listInstalledAppViews())
-  ipcMain.handle(IpcChannels.externalAppsLaunchWorkspace, (_event: IpcMainInvokeEvent, input: unknown) =>
-    externalAppsService.launchWorkspace(validateLaunchExternalAppRequest(input)))
+  // 存储/缓存 + 外部应用 + 产品清单摘要 8 个 handler 搬到 ipc/storageIpc.ts。
+  registerStorageIpc(ipcMain, {
+    cacheGovernance: cacheGovernanceIpcHandlers,
+    externalApps: externalAppsService,
+    summarizeProducts: () => summarizeProductManifests(productManifests)
+  })
 
   // 设置读写两个 handler 搬到 ipc/settingsIpc.ts：端口按「设置存储 / 助手种子 / 时区 / 工作区通知」四个域给。
   registerSettingsIpc(ipcMain, {
@@ -1760,39 +1762,8 @@ function registerIpcHandlers(
     return { apiKey: await providerStore.revealApiKey(providerId) }
   })
 
-  ipcMain.handle(IpcChannels.webSearchListProviders, () => webSearchIpcHandlers.listProviders())
-  ipcMain.handle(IpcChannels.webSearchGetSettings, () => webSearchIpcHandlers.getSettings())
-  ipcMain.handle(IpcChannels.webSearchUpdateSettings, (_event: IpcMainInvokeEvent, patch: unknown) =>
-    webSearchIpcHandlers.updateSettings(patch)
-  )
-  ipcMain.handle(IpcChannels.webSearchUpdateProvider, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.updateProvider(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchRevealProviderApiKey, (_event: IpcMainInvokeEvent, providerId: unknown) =>
-    webSearchIpcHandlers.revealProviderApiKey(providerId)
-  )
-  ipcMain.handle(IpcChannels.webSearchCheckProvider, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.checkProvider(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchSearchKeywords, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.searchKeywords(input)
-  )
-  ipcMain.handle(IpcChannels.webSearchFetchUrls, (_event: IpcMainInvokeEvent, input: unknown) =>
-    webSearchIpcHandlers.fetchUrls(input)
-  )
-  ipcMain.handle(IpcChannels.storageListCaches, () => cacheGovernanceIpcHandlers.listCaches())
-  ipcMain.handle(IpcChannels.storageInspectCache, (_event: IpcMainInvokeEvent, cacheId: unknown) =>
-    cacheGovernanceIpcHandlers.inspectCache(cacheId)
-  )
-  ipcMain.handle(IpcChannels.storageClearCache, (_event: IpcMainInvokeEvent, input: unknown) =>
-    cacheGovernanceIpcHandlers.clearCache(input)
-  )
-  ipcMain.handle(IpcChannels.storageCompactCache, (_event: IpcMainInvokeEvent, input: unknown) =>
-    cacheGovernanceIpcHandlers.compactCache(input)
-  )
-  ipcMain.handle(IpcChannels.storageListCacheOperations, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    cacheGovernanceIpcHandlers.listOperations(query)
-  )
+  // Web Search 8 个 handler 搬到 ipc/webIpc.ts；缓存 5 个已在 storageIpc 那一处接线。
+  registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })
 
   ipcMain.handle(IpcChannels.agentsGetState, () => agentIpcHandlers.getState())
   ipcMain.handle(
