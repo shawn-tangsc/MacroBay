@@ -440,11 +440,12 @@ export function useMarketAnalysisTimeline(input: Readonly<{
         setDetails(current => ({ ...current, [entry.id]: result.detail }))
         return
       }
-      // The failure copy stays on screen while a retry runs: alternating it with "正在读取…" once
-      // per attempt is the flashing this card was reported for. A successful retry replaces it.
-      setDetailState(current => ({ ...current, [entry.id]: 'unavailable' }))
+      // Nothing has been read for this node yet, so the first failure is not the reader's news:
+      // stay in the loading state while the bounded retries run, and only report the failure once
+      // they are spent. Reporting it immediately is the flash this card was reported for.
       const delay = policy.detailRetryDelaysMs[failure]
       if (delay === undefined) {
+        setDetailState(current => ({ ...current, [entry.id]: 'unavailable' }))
         detailRequests.current.delete(entry.id)
         return
       }

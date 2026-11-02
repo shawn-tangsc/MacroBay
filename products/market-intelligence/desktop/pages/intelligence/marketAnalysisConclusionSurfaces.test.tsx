@@ -259,19 +259,23 @@ describe('market analysis conclusion surfaces', () => {
     // to "暂不可用" until a different node became the newest, which read as the card coming and going.
     const { reads, holder } = await mountDetailProbe({ failures: 1 })
 
-    expect(holder.current.detailState['mi-tl-1']).toBe('unavailable')
+    // The first failed read is still inside its retry budget, so the card stays in its loading
+    // state: showing "unavailable" here is the flash this card was reported for.
+    expect(holder.current.detailState['mi-tl-1']).toBe('loading')
     await act(async () => { await vi.advanceTimersByTimeAsync(analysisTimelineRefreshPolicy.detailRetryDelaysMs[0]) })
     expect(holder.current.details['mi-tl-1']).toBeDefined()
     expect(holder.current.detailState['mi-tl-1']).toBeUndefined()
     expect(reads()).toBe(2)
   })
 
-  it('stops retrying a detail that keeps failing instead of polling it forever', async () => {
-    const { reads } = await mountDetailProbe({ failures: Number.POSITIVE_INFINITY })
+  it('stops retrying a detail that keeps failing, and only then says it could not read', async () => {
+    const { reads, holder } = await mountDetailProbe({ failures: Number.POSITIVE_INFINITY })
 
     const totalRetryMs = analysisTimelineRefreshPolicy.detailRetryDelaysMs.reduce((sum, delay) => sum + delay, 0)
     await act(async () => { await vi.advanceTimersByTimeAsync(totalRetryMs + 60_000) })
     expect(reads()).toBe(1 + analysisTimelineRefreshPolicy.detailRetryDelaysMs.length)
+    // The failure is reported once, after the budget, never during it.
+    expect(holder.current.detailState['mi-tl-1']).toBe('unavailable')
   })
 
   it('renders the published state through the shared status pill, not a hand-drawn span', async () => {
