@@ -273,6 +273,40 @@ describe('market analysis conclusion surfaces', () => {
     expect(reads()).toBe(1 + analysisTimelineRefreshPolicy.detailRetryDelaysMs.length)
   })
 
+  it('renders a failed detail read as the shared error state, and its retry re-reads that one node', async () => {
+    // Before this, a failed detail read was one bare sentence with no icon, no live region and no
+    // way out: the automatic retries stop, and the reader was left with a dead end. The surface is
+    // now the platform's error state; only the reason slot keeps this product's sentence.
+    const ensureDetail = vi.fn()
+    const notFound = entry()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const timeline = {
+      details: {},
+      detailState: { [notFound.id]: 'unavailable' as const },
+      ensureDetail
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(
+      <ShellTimeZoneProvider timeZone="UTC">
+        <AnalysisDetailDrawer text={timelineText} workspaceText={workspaceText} timeline={timeline} openEntry={notFound as never} onOpenChange={vi.fn()} />
+      </ShellTimeZoneProvider>))
+
+    const surface = container.querySelector<HTMLElement>('[data-state="error"]')
+    expect(surface).not.toBeNull()
+    expect(surface?.querySelector('[data-reason-source]')?.getAttribute('data-reason-source')).toBe('product')
+    expect(surface?.textContent).toContain(workspaceText.detailUnavailable)
+    expect(surface?.textContent).not.toContain('{')
+
+    // The mount's own priming read is not what this asserts: clear it, then make the retry the only call.
+    ensureDetail.mockClear()
+    await act(async () => {
+      surface?.querySelector<HTMLButtonElement>('.state-view__action')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(ensureDetail).toHaveBeenCalledTimes(1)
+    expect(ensureDetail).toHaveBeenCalledWith(notFound)
+  })
+
   it('never stays in the loading state when the service never answers', async () => {
     // The reported symptom: the timeline stuck on "loading" forever. A read that
     // never settles must become a visible failure, not a permanent spinner.

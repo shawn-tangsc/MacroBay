@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { AnalysisConclusionDetail, type AnalysisDetailText } from './AnalysisConclusionDetail'
 import { MiSideDrawer } from './MiSideDrawer'
@@ -38,7 +39,18 @@ export function AnalysisDetailDrawer({ text, workspaceText, timeline, openEntry,
   return <MiSideDrawer title={text.detail} closeLabel={workspaceText.closeDetail} onClose={() => onOpenChange(undefined)}
     meta={<><time>{formatTime(openEntry.occurredAt, 'second')}</time><em>{text.status[openEntry.status]}</em></>}>
     {!detail && pending !== 'unavailable' ? <LoadingState label={text.loading} minHeight={200} /> : null}
-    {!detail && pending === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{workspaceText.detailUnavailable}</p> : null}
+    {/* 读不到不是「没有这条分析」：走统一状态面，句子仍是本产品那句（只覆盖原因格），
+        动作是真重读这一个节点——自动重试停了之后，读者还留着一个出路。 */}
+    {!detail && pending === 'unavailable' ? <StateView
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => timeline.ensureDetail(openEntry) }}
+      productReason={{
+        key: 'mi.analysisDetail.unavailable',
+        resolve: (key, _params) => key === 'mi.analysisDetail.unavailable' ? workspaceText.detailUnavailable : ''
+      }}
+      reasonCode="unreadable"
+      size="md"
+      state="error"
+    /> : null}
     {detail ? <AnalysisConclusionDetail detail={detail} text={text} /> : null}
   </MiSideDrawer>
 }
