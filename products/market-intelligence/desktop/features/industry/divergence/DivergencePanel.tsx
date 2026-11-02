@@ -1,4 +1,5 @@
-import { Button, Tooltip } from 'antd'
+import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
@@ -64,8 +65,10 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.4' }
           ]}
           resolveText={resolveProductKey}>
-          <Button type="text" size="small" className="mi-divergence__help" aria-label={text.helpLabel}
-            icon={<Info size={11} aria-hidden="true" />} />
+          <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
+            icon={Info} size="sm" resolveText={resolveProductKey}
+            onSelect={() => undefined} />
         </Popover>
       </div>
       <div className="mi-divergence__content">
@@ -85,11 +88,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
               : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
         ) : null}
         {state.state === 'empty' && !nothingCompared ? (
-          // One line, badge at its end: a quiet day is a single sentence, not a block with a
-          // floating label on a row of its own.
-          <div className="mi-divergence__quiet">
-            <p className="mi-divergence__note">{text.empty}</p>
-          </div>
+          // A quiet day is a state, not a hand-written paragraph — but the sentence is ours, so it
+          // rides on `productReason`. No action: when nothing can be compared, the reader has
+          // nothing to do here.
+          <StateView state="empty" reasonCode="nothing-in-window" size="md"
+            productReason={productReason({ key: 'pages.intelligence.portal.dashboard.divergence.empty' })} />
         ) : null}
         {nothingCompared ? (
           <>
@@ -106,8 +109,8 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
               {state.rows.map(row => (
                 // Focusable, not titled: a `title` is invisible to the keyboard and the reader, so the
                 // invalidation sentence opens on focus as well as on hover (single line, so Tooltip).
-                <Tooltip key={row.pairId} trigger={['hover', 'focus']}
-                  title={`${text.invalidationLabel}${text.labelSep}${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
+                <Tooltip key={row.pairId} resolveText={resolveProductKey}
+                  dataText={invalidationLine(row.pairId, text)}>
                 <li className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction} tabIndex={0}>
                   <div className="mi-divergence__line">
                     <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
@@ -182,6 +185,10 @@ export function groupWithheld(entries: readonly DivergenceWithheldView[]): reado
  * outside; a rejected payload or an unreadable clock is the read failing inside. Both are retried
  * the same way, so the split is about the sentence the reader gets, not about the next step.
  */
+/** The one line a reader gets on the row: what invalidates this reading. */
+const invalidationLine = (pairId: string, text: DivergencePanelText): string =>
+  `${text.invalidationLabel}${text.labelSep}${text.pairs[pairId as keyof DivergencePanelText['pairs']].invalidation}`
+
 function unavailableReasonCode(reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'): 'unreadable' | 'unavailable' {
   return reason === 'all-legs-missing' || reason === 'too-large' ? 'unavailable' : 'unreadable'
 }

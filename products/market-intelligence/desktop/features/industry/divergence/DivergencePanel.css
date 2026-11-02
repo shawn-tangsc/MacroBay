@@ -9,26 +9,12 @@
 .mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 .mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
-/* A quiet day is one sentence with its badge at the end of the same line. */
-.mi-divergence__quiet { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
-.mi-divergence__quiet .mi-divergence__note { flex: 0 1 auto; margin: 0; }
 .mi-divergence__head {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
-/* The `?` sits before the title: the explanation is an aside to the heading, not content. */
-/* Geometry only: the base, its colour and its focus ring belong to the shared button. */
-.mi-divergence .mi-divergence__help {
-  width: 11px;
-  min-width: 0;
-  height: 11px;
-  padding: 0;
-  color: var(--mi-dashboard-muted);
-  cursor: help;
-}
-.mi-divergence__help:hover { color: var(--mi-dashboard-text); }
 .mi-divergence__retry {
   margin-left: auto;
   padding: 0 4px;
@@ -98,12 +84,6 @@
   background: color-mix(in srgb, var(--mi-dashboard-surface) 78%, var(--mi-dashboard-line));
 }
 .mi-divergence[data-state='empty'] .mi-divergence__banner { background: color-mix(in srgb, var(--mi-dashboard-surface) 92%, transparent); }
-.mi-divergence__note {
-  margin: 0;
-  color: var(--mi-dashboard-text);
-  font-size: 10px;
-  line-height: 1.5;
-}
 .mi-divergence__rows {
   display: grid;
   gap: 8px;

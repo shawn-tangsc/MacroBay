@@ -6,9 +6,7 @@
     "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/McpCatalog.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantInputbar.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/assistants/library/CreateAssistantDialog.tsx": 1,
-    "products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx": 1,
     "products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEventRow.tsx": 1,
-    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisAgentWorkspace.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx": 1
   }
 }

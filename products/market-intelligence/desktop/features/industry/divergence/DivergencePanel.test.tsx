@@ -196,8 +196,9 @@ describe('help on the shared popover', () => {
         state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
       })))
     })
-    const trigger = container.querySelector('.mi-divergence__help') as HTMLElement
+    const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`) as HTMLElement
     await act(async () => { trigger.focus() })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
     for (const line of text.helpLines) expect(document.body.textContent).toContain(line)
     await act(async () => { root.unmount() })
   })
