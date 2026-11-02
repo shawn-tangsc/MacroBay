@@ -163,12 +163,14 @@ describe('Segmented', () => {
     const start = css.indexOf('.segmented__item--selected {')
     const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start))
 
+    // 必须是那个**语义** token：两套主题各自取值，所以两套都「浮起来」。
+    expect(body).toMatch(/background:\s*var\(--surface-raised\)/)
+    // 别的 surface 档在深浅两套里的明暗关系相反，一行 CSS 用它们必有一半是错的。
+    // 注意精确到 `var(--surface)`：`--surface-raised` 含有 `--surface` 这段子串。
     for (const token of ['--surface', '--surface-soft', '--surface-strong']) {
       expect(body).not.toContain(`var(${token})`)
     }
-    // 相对叠加：深色叠白变亮、浅色叠黑变深，两套都成立。
-    expect(body).toMatch(/background:\s*color-mix\(in srgb, var\(--text-strong\)/)/
-    // 深色界面上纯黑阴影等于不存在，留着只会让人以为它起了作用。
-    expect(body).not.toMatch(/box-shadow/)
+    // 浅色下 raised 的亮度已到顶（对容器 1.13），浮起的信号由阴影补足。
+    expect(body).toMatch(/box-shadow/)
   })
 })

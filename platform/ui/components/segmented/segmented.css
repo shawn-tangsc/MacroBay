@@ -52,13 +52,20 @@
 
 .segmented__item--selected {
   /*
-   * 10% 的 `--text-strong` 叠在容器底色上：深色主题它是白、浅色主题它是黑，
-   * 两套都得到「和容器分开」的一层，不依赖哪个 surface 更亮。
+   * `--surface-raised` = 「从当前容器浮起一层」，两套主题各自取值（深色 #333b48 / 浅色 #ffffff），
+   * 所以两套都是**浮起来**，方向一致。
+   *
+   * 不要换回 `--surface` / `--surface-soft` / `--surface-strong`：它们在两套主题里的明暗关系
+   * 正好相反（浅色 --surface 更亮、深色 --surface 更暗），一行 CSS 在两套里必有一半是错的。
+   * 深色那次的实际后果是「选中块和页面同色、像容器被凿穿一个洞」，读起来正是一颗开关。
+   *
+   * 阴影保留：浅色下 `--surface-raised` 的亮度已到顶（对容器 1.13），浮起的信号由阴影补足；
+   * 深色下这层 `rgb(0 0 0 / 12%)` 几乎不可见，也就无害。
    */
-  background: color-mix(in srgb, var(--text-strong) 10%, transparent);
+  background: var(--surface-raised);
   color: var(--text-strong);
   font-weight: 600;
-  /* 阴影删掉了：深色界面上 `rgb(0 0 0 / 12%)` 等于不存在，留着只会让人以为它起了作用。 */
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
 }
 
 .segmented__item:disabled {
