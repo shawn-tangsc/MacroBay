@@ -18,6 +18,8 @@ export function useDashboardOpenInterest(input: Readonly<{
   signalClient?: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> }
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
+  const [attempt, setAttempt] = useState(0)
+  const reload = () => setAttempt(value => value + 1)
   const [mountInput] = useState(() => input)
   const { window } = input
 
@@ -25,7 +27,7 @@ export function useDashboardOpenInterest(input: Readonly<{
     let active = true
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
-      setState({ state: 'unavailable' })
+      setState({ state: 'unavailable', onReload: reload })
       return () => { active = false }
     }
     setState({ state: 'loading' })
@@ -35,15 +37,17 @@ export function useDashboardOpenInterest(input: Readonly<{
     void mountInput.client.query({ asOf, window })
       .then(async (result) => {
         if (!active) return
-        const projected = projectDashboardPositioning(result, asOf, window)
+        const projected = projectDashboardPositioning(result, asOf, window, reload)
         const chip = projectModuleSignalChip(await signals)
         if (!active) return
-        setState(projected.state === 'available' ? { ...projected, signal: chip } : projected)
+        setState(projected.state === 'available'
+          ? { ...projected, signal: chip }
+          : projected)
       })
-      .catch(() => { if (active) setState({ state: 'unavailable' }) })
+      .catch(() => { if (active) setState({ state: 'unavailable', onReload: reload }) })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
-  }, [mountInput, window])
+  }, [mountInput, window, attempt])
 
   return state
 }

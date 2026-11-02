@@ -10,7 +10,6 @@
 .mi-positioning-panel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .mi-positioning-panel h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 13px; font-weight: 650; }
 .mi-positioning-panel__asof { margin-left: auto; color: var(--mi-dashboard-muted); font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mi-positioning-panel__status { color: var(--mi-dashboard-muted); font-size: 12px; }
 
 /* Placement only: the segmented base owns its frame, selected state and focus ring. */
 .mi-positioning-panel__tabs { margin-left: auto; }

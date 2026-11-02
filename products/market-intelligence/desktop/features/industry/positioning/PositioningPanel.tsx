@@ -7,6 +7,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -132,9 +133,14 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const ethRate = funding.state === 'available' ? funding.eth : []
   const available = positioning.state === 'available'
   const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
+  // Two different facts, two different states: nothing collected yet is empty, a failed read is an
+  // error. The platform owns both sentences and the shape; the card only says which happened.
   const status = (positioning.state === 'loading' || funding.state === 'loading')
     ? <LoadingState label={text.loading} minHeight={140} />
-    : <p className="mi-positioning-panel__status">{positioning.state === 'empty' ? text.empty : text.unavailable}</p>
+    : positioning.state === 'empty'
+      ? <StateView state="empty" reasonCode="not-yet" size="md" />
+      : <StateView state="error" reasonCode="unavailable" size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
