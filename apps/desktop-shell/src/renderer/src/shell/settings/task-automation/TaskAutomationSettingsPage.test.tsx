@@ -32,8 +32,10 @@ describe('TaskAutomationSettingsPage', () => {
     // 「还没有定时任务」 below already said the one true thing.
     expect(markup).not.toContain('任务开始运行后，这里会显示成功、失败与跳过计数。')
     expect(markup).toContain('我的定时任务')
-    // 空态只有 `StateView` 一个出口：没有任务 = `not-yet`，没有可点的动作就不给动作。
-    expect(markup).toContain('还没有发生过；等有数据进来后这里就会出现')
+    // 空态只有 `StateView` 一个出口：没有任务 = `never-created`，动作是「创建」并真的导航到对话页
+    // （导航接缝 050dba6/325cb71 落地后才成立；在那之前这里只能是 `not-yet` 且不给动作）。
+    expect(markup).toContain('从来没有创建过，先创建一个')
+    expect(markup).toContain('每天早上 9 点总结行情')
     expect(markup).toContain('平台与产品资源任务')
     // 资源任务由产品注册，读者在这一屏改不了；原因是「一个都没启用」，不是「等着就会来」。
     expect(markup).toContain('一个都还没有启用，先启用一个')
@@ -157,9 +159,10 @@ describe('TaskAutomationSettingsPage', () => {
     const neverCreated = renderPage()
     expect(neverCreated).toContain('data-state="empty"')
     expect(neverCreated).toContain('data-size="md"')
-    expect(neverCreated).toContain('还没有发生过；等有数据进来后这里就会出现')
-    // 创建入口在对话里，这一屏拿不到按钮：不许给点了没反应的动作，也不许另起一套行内说明。
-    expect(neverCreated).not.toContain('每天早上 9 点总结行情')
+    expect(neverCreated).toContain('从来没有创建过，先创建一个')
+    // 动作现在是真能用的：`create` 导航到对话页（`navigateTo`）。下面那句只解释「怎么会有第一条」，
+    // 紧贴 StateView、纯文本、不承担“这里没有”的判断——判断只有 StateView 一处。
+    expect(neverCreated).toContain('每天早上 9 点总结行情')
     expect(neverCreated).not.toContain('当前筛选下没有任务。')
 
     hooks.settings.mockReturnValue(settings({

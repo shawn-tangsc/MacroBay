@@ -7,6 +7,7 @@ import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtim
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockLoading } from './TaskAutomationBlockParts'
@@ -180,9 +181,21 @@ export function TaskAutomationTasksSection(props: {
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: controller.clearFilters }}
         />
       ) : (
-        // 一条任务都没有过。创建入口在对话里，这一屏拿不到可点的「新建」，
-        // 所以按契约 §13：给 `not-yet`、不给动作——不放一个点了没反应的按钮。
-        <StateView state="empty" reasonCode="not-yet" size="md" />
+        // 一条任务都没有过：`never-created` 要求一个真能用的「创建」动作，导航接缝
+        // （`navigateTo`，契约 §14）落地后这个动作存在了——去对话页，任务就在那里建。
+        // 平台句说明状态，下面那句只解释「怎么会有第一条」，不重复判断「这里没有」。
+        <>
+          <StateView
+            state="empty"
+            reasonCode="never-created"
+            size="md"
+            action={{
+              labelKey: STATE_VIEW_ACTION_KEYS.create,
+              onSelect: () => navigateTo({ page: 'agents' })
+            }}
+          />
+          <p className="task-automation-note">{labels.emptyTasksBody}</p>
+        </>
       )}
       {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (
         <div className="task-automation-block-footer">
