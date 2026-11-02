@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Input, Modal, Select } from 'antd'
+import { Button, Input, Select } from 'antd'
 
 import type { ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndpoints'
 import { createSystemProviderPresets } from '@platform/ai/providers/providerPresets'
+import { Modal } from '@platform/ui/components/modal'
 
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveProviderDisplayName } from './providerDisplayName'
+
+/**
+ * 标题键：字面量只写这一处。
+ *
+ * 模型服务这一屏的文案是可传入的 `labels` 对象（不是平台键表），所以键由调用点自己起、
+ * 再由 `resolveText` 解回 `labels.addProvider`——与频道页 `StatusPill` 的键表同一做法。
+ */
+const ADD_PROVIDER_TITLE_KEY = 'modelService.addProvider'
 
 export type AddProviderInput = {
   name: string
@@ -109,17 +118,27 @@ export function ModelServiceAddProviderDialog({
   return (
     <Modal
       className="model-add-provider-modal"
-      title={labels.addProvider}
+      titleKey={ADD_PROVIDER_TITLE_KEY}
+      resolveText={(key) => (key === ADD_PROVIDER_TITLE_KEY ? labels.addProvider : '')}
       open={open}
-      centered
-      width={520}
-      destroyOnHidden
-      okText={labels.addProviderAction}
-      cancelText={labels.cancel}
-      okButtonProps={{ disabled: !canSubmit, loading: submitting, 'data-add-provider-submit': true } as never}
-      cancelButtonProps={{ 'data-add-provider-cancel': true } as never}
-      onOk={() => void submit()}
-      onCancel={onCancel}>
+      align="center"
+      width="standard"
+      onClose={onCancel}
+      footer={
+        <>
+          <Button data-add-provider-cancel onClick={onCancel}>
+            {labels.cancel}
+          </Button>
+          <Button
+            type="primary"
+            data-add-provider-submit
+            disabled={!canSubmit}
+            loading={submitting}
+            onClick={() => void submit()}>
+            {labels.addProviderAction}
+          </Button>
+        </>
+      }>
       <div className="model-add-provider-grid" data-add-provider-dialog>
         <label className="model-add-provider-label" htmlFor="add-provider-name">
           {labels.addProviderName} *
