@@ -178,6 +178,7 @@ import { composeAgentToolsIpc } from './composition/agentTools'
 import { composeAgentIpc } from './composition/agent'
 import { composeSettingsIpc, composeStorageIpc } from './composition/settingsAndStorage'
 import { createAssistantStreamSink } from './assistantStreamBroadcast'
+import { createAgentBroadcasts } from './composition/agentBroadcast'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -326,7 +327,7 @@ const {
 async function refreshTaskStateAfterCommit(): Promise<void> {
   const state = await agentServices.state.getState()
   agentTaskSchedulerRuntimeService.syncFromState(state)
-  getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
+  agentBroadcasts.stateChanged(state)
 }
 const webSearchCredentialStore = createWebSearchCredentialStore(
   createJsonFileStorage(join(app.getPath('userData'), 'platform', 'web-search-credentials.json'), { providers: {} })
@@ -449,7 +450,7 @@ async function disposePlatformRuntimes(): Promise<void> {
   await runtimeDisposer.dispose()
 }
 function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
-  getMainWindow()?.webContents.send(IpcChannels.agentsChannelRuntimeStateChanged, snapshot)
+  agentBroadcasts.channelRuntimeStateChanged(snapshot)
 }
 const channelRuntimeSupervisor = new ChannelRuntimeSupervisor({
   query: channelManagementRepository.query,
@@ -649,7 +650,7 @@ const agentTaskDispatchService = new AgentTaskDispatchService({
   onStateChanged: async () => {
     const nextState = await agentStore.getState()
     agentTaskSchedulerRuntimeService.syncFromState(nextState)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+    agentBroadcasts.stateChanged(nextState)
   }
 })
 const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
@@ -674,7 +675,7 @@ agentStateCoordinator = createAgentStateCoordinator({
   syncChannelsFromState: () => undefined,
   syncTaskSchedulerFromState: (state) => agentTaskSchedulerRuntimeService.syncFromState(state),
   emitStateChanged: (state) => {
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
+    agentBroadcasts.stateChanged(state)
   }
 })
 const agentModelGatewayService = createAgentModelGatewayService({
@@ -891,7 +892,7 @@ const agentIpcHandlers = createAgentIpcHandlers(
         })
       }))
       syncProductToolsRuntimeFromState(nextState)
-      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+      agentBroadcasts.stateChanged(nextState)
       return nextState
     },
     listProductToolCallTracePage: async (query: {
@@ -983,6 +984,9 @@ async function ensureDefaultAssistantSeed(): Promise<void> {
 
 const getMainWindow = (): BrowserWindow | null => mainWindowHost.getMainWindow()
 
+/** 智能体三条状态广播的唯一出处；窗口在发送那一刻现取（主窗可被销毁重建）。 */
+const agentBroadcasts = createAgentBroadcasts({ getMainWindow: () => getMainWindow() })
+
 const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
   mainWindowHost.resolveInvokingWindow(event)
 
@@ -1019,7 +1023,7 @@ async function mergeAndReplaceAgentSessionState(
   syncProductToolsRuntimeFromState(nextState)
   mcpRuntimeService.syncFromState(nextState)
   agentTaskSchedulerRuntimeService.syncFromState(nextState)
-  getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
+  agentBroadcasts.stateChanged(nextState)
   return nextState
 }
 
@@ -1584,7 +1588,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {
-    getMainWindow()?.webContents.send(IpcChannels.agentsRuntimeStateChanged, snapshot)
+    agentBroadcasts.runtimeStateChanged(snapshot)
   })
   buildAppMenu(getMainWindow)
   await mainWindowHost.loadAndMount()
