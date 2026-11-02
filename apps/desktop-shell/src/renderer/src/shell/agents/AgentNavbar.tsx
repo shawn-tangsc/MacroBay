@@ -37,7 +37,7 @@ export default function AgentNavbar({
     narrowNone: 'messageNavigation.none',
     narrowToggle: 'settingsDrawer.narrowMode'
   } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const sidebarIcon =
     sessionPanelPosition === 'right'
       ? showSidebar

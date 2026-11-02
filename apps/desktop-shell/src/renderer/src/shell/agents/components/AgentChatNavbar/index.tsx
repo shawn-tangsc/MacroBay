@@ -83,7 +83,7 @@ export default function AgentChatNavbar({
     taskCenter: 'chatNavbar.taskCenter',
     chatSettings: 'chatNavbar.chatSettings'
   } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const language = useAgentLanguage()
   const providerNames = useAgentProviderNames()
   const [settingsOpen, setSettingsOpen] = useState(false)

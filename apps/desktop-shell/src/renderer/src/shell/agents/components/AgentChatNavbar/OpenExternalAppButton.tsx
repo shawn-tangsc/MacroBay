@@ -20,7 +20,7 @@ export default function OpenExternalAppButton({
   // 只有「选择外部应用」这颗是纯键；上面那颗的文案带应用名（`openInExternalApp(name)`），
   // 平台的 Tooltip 目前不收参数，先留在 antd，等契约补 params。
   const tooltipKeys = { openInExternalAppMenu: 'chatNavbar.openInExternalAppMenu' } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [apps, setApps] = useState<ExternalAppView[]>([])
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
 

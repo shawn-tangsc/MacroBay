@@ -26,7 +26,7 @@ export default function AgentRoster({
 }: AgentRosterProps): React.ReactElement {
   const t = useAgentText()
   const tooltipKeys = { agentSettings: 'navbar.agentSettings' } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
 
   return (
     <section className="agent-roster">

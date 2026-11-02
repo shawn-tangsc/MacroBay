@@ -62,7 +62,7 @@ export default function SessionItem({
     deleteShortcut: 'sessionItem.deleteShortcut',
     more: 'sessionItem.more'
   } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(session.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)

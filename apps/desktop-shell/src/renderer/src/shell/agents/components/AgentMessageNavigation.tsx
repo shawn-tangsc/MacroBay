@@ -27,7 +27,7 @@ export default function AgentMessageNavigation({
     next: 'messages.navigateNext',
     bottom: 'messages.navigateBottom'
   } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
 
   return (
     <div className="agent-message-navigation" aria-label={t.messages.anchorRailAria}>

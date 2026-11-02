@@ -47,7 +47,7 @@ export default function AgentSidePanel({
   const t = useAgentText()
   // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
   const tooltipKeys = { createAgent: 'navbar.createAgent' } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [activeTab, setActiveTab] = useState<AgentSidePanelTab>('sessions')
   const [keyword, setKeyword] = useState('')
   const activeAgentId = state.activeAgentId ?? state.agents[0]?.id ?? null
