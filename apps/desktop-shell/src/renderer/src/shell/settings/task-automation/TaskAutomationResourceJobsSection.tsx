@@ -6,6 +6,7 @@ import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockError, BlockLoading } from './TaskAutomationBlockParts'
@@ -100,9 +101,21 @@ export function TaskAutomationResourceJobsSection(props: {
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
         />
       ) : controller.items.length === 0 ? (
-        // 这些任务由产品注册，读者在这一屏改不了，所以 `not-yet` + 不给动作；
-        // 「去哪个产品里启用」写在 `nothing-enabled` 的平台原因句里，不另造第二种空态。
-        <StateView state="empty" reasonCode="nothing-enabled" size="md" />
+        // 这些任务由产品注册：`nothing-enabled` 要求一个真能用的「去启用」动作，
+        // 导航接缝落地后它就是「去情报源设置」，而不是一个点了没反应的按钮。
+        // 平台句说明状态，下面那句解释「未注册 ≠ 出错」——那是读者最容易误解的一层。
+        <>
+          <StateView
+            state="empty"
+            reasonCode="nothing-enabled"
+            size="md"
+            action={{
+              labelKey: STATE_VIEW_ACTION_KEYS.enable,
+              onSelect: () => navigateTo({ page: 'settings', panel: 'market-intelligence.intelligence-sources' })
+            }}
+          />
+          <p className="task-automation-note">{labels.resourceEmptyBody}</p>
+        </>
       ) : (
         <>
           <div className="task-automation-filters">
