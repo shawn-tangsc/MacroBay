@@ -331,6 +331,8 @@ export default function AgentTaskCenterDrawer({
               selectedRunLogId={deliveryAttemptRequest?.runLogId ?? null}
               attempts={deliveryAttempts.attempts}
               attemptsTotal={deliveryAttempts.total}
+              attemptsLoadFailed={deliveryAttempts.loadFailed}
+              onRetryLoadAttempts={() => void deliveryAttempts.reload()}
               onLoadMoreAttempts={() => void deliveryAttempts.loadMore()}
               onSelectRun={setSelectedRunLogId}
               onRetryDelivery={(attemptId) => void retryDelivery(attemptId)}

@@ -35,6 +35,9 @@ type AgentTaskRunSectionProps = {
   selectedRunLogId: string | null
   attempts: TaskDeliveryAttemptEntity[]
   attemptsTotal: number
+  /** 这一次读取失败了：它是值不是缺席，不能画成「没有投递记录」。 */
+  attemptsLoadFailed: boolean
+  onRetryLoadAttempts: () => void
   onLoadMoreAttempts: () => void
   onSelectRun: (runLogId: string) => void
   onRetryDelivery: (attemptId: string) => void
@@ -53,6 +56,8 @@ export default function AgentTaskRunSection({
   selectedRunLogId,
   attempts,
   attemptsTotal,
+  attemptsLoadFailed,
+  onRetryLoadAttempts,
   onLoadMoreAttempts,
   onSelectRun,
   onRetryDelivery,
@@ -157,7 +162,16 @@ export default function AgentTaskRunSection({
             </Button>
           ) : null}
         </header>
-        {attempts.length === 0 ? <StateView state="empty" reasonCode="not-yet" size="sm" /> : null}
+        {attemptsLoadFailed ? (
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="sm"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetryLoadAttempts }}
+          />
+        ) : attempts.length === 0 ? (
+          <StateView state="empty" reasonCode="not-yet" size="sm" />
+        ) : null}
         <div className="agent-task-attempt-list">
           {attempts.map((attempt) => (
             <article key={attempt.id} className="agent-task-attempt-row">
