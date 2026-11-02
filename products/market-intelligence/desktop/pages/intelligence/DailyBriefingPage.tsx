@@ -17,7 +17,8 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
-import { DailyBriefingSettingsModal } from './DailyBriefingSettingsModal'
+import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
+import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
@@ -85,6 +86,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // Automatic generation is paused when the stored zone cannot be read; a manual run still works,
   // but it then means the UTC clock, and the panel says so instead of letting the reader guess.
@@ -362,8 +364,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__copy" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </Button> : null}
+        <Button className="mi-daily-briefing__regenerate" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
+          {text.generationSettings.open}
+        </Button>
         <IconButton
-          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.open"
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.open"
           icon={Settings2}
           onSelect={() => setSettingsOpen(true)}
           resolveText={resolveProductText}
@@ -476,10 +481,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </aside> : null}
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
-    <DailyBriefingSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
+    <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
       setSettingsOpen(false)
       void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
     }} />
+    <DailyBriefingGenerationSettingsModal open={generationSettingsOpen} text={text} client={client} onClose={() => setGenerationSettingsOpen(false)} />
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
