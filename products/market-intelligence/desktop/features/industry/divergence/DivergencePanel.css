@@ -5,6 +5,9 @@
   min-width: 0;
   padding: 6px 0 2px;
 }
+/* A quiet day is a footnote to the card above, not a band of its own: no extra padding above the
+   line, so the strip is one text row plus the band's own breathing room. */
+.mi-divergence[data-state='empty'] { padding: 0; }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
