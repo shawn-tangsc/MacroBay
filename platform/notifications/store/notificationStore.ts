@@ -1,5 +1,10 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
+  emptySubscriptionTable,
+  normalizeSubscriptionTable,
+  type NotificationSubscriptionTable
+} from '../contracts/notificationSubscriptions'
+import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
   SEVERITY_RANK,
@@ -23,12 +28,19 @@ export type NotificationDailyCounters = Record<string, number>
 export type NotificationStoreState = {
   records: NotificationRecord[]
   dailyCounters?: NotificationDailyCounters
+  /**
+   * 订阅表与记录**同一份文件**（契约 §5.1）：runtime 在内存里缓存整份 state、整份重写，
+   * 所以订阅不许另起一个文件——两个写入方各写各的，最后一个会静默覆盖另一个。
+   * 旧文件没有该字段 → 归一化为空表，不回写（空表 = 一条都不勾）。
+   */
+  subscriptions?: NotificationSubscriptionTable
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
     records: [],
-    dailyCounters: {}
+    dailyCounters: {},
+    subscriptions: emptySubscriptionTable()
   }
 }
 
@@ -93,7 +105,11 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   const records = Array.isArray(candidate.records)
     ? candidate.records.map(normalizeNotificationRecord).filter((record): record is NotificationRecord => Boolean(record))
     : []
-  return { records, dailyCounters: normalizeDailyCounters(candidate.dailyCounters) }
+  return {
+    records,
+    dailyCounters: normalizeDailyCounters(candidate.dailyCounters),
+    subscriptions: normalizeSubscriptionTable(candidate.subscriptions)
+  }
 }
 
 /**

@@ -113,4 +113,25 @@ describe('notification store', () => {
   it('defaults to an empty counter map so a fresh file has nothing to fold from', () => {
     expect(normalizeNotificationStoreState({ records: [] }).dailyCounters).toEqual({})
   })
+
+  it('keeps the subscription table in the same file and normalizes it without inventing rows', () => {
+    // 契约 §5.1：订阅与记录同一份 JSON（一份真相），旧文件没有该字段 → 空表、不预置。
+    const fresh = normalizeNotificationStoreState({ records: [] })
+    expect(fresh.subscriptions).toEqual({})
+
+    const stored = normalizeNotificationStoreState({
+      records: [],
+      subscriptions: {
+        'market-intelligence.briefing.ready': { record: true },
+        'platform.job.failed-terminal': { desktop: true, record: 'yes' },
+        'market-intelligence.calibration.result': {}
+      }
+    })
+    expect(stored.subscriptions).toEqual({
+      'market-intelligence.briefing.ready': { record: true },
+      'platform.job.failed-terminal': { desktop: true }
+    })
+    // 整份重写后仍是同一张表：空行不复活、不按批准表预置。
+    expect(normalizeNotificationStoreState(JSON.parse(JSON.stringify(stored))).subscriptions).toEqual(stored.subscriptions)
+  })
 })
