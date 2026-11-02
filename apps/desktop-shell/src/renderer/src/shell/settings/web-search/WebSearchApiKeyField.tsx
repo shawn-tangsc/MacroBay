@@ -184,6 +184,11 @@ export function WebSearchApiKeyField({
     }
   }
 
+  // 眼睛在「尚无 Key」时是禁用的，而禁用的按钮接不到焦点、挂不了 Tooltip。
+  // 原因必须**在别处有可见的字**：没 Key 也没草稿时，把「尚无 Key」这句放到字段下方的提示行里，
+  // 输入框占位另行说明「粘贴 API Key（必填）」。不许出现「点不了、也不知道为什么」。
+  const visibleHint = hint ?? (hasApiKey || hasDraft ? undefined : labels.noApiKeyHint)
+
   const eyeIcon = savedMode ? revealedKey ? <EyeOff size={14} /> : <Eye size={14} /> : revealDraft ? <EyeOff size={14} /> : <Eye size={14} />
   const eyeLabel = savedMode
     ? revealedKey
@@ -315,7 +320,7 @@ export function WebSearchApiKeyField({
           )}
         </div>
       ) : null}
-      {hint ? <span className="web-search-api-key-hint">{hint}</span> : null}
+      {visibleHint ? <span className="web-search-api-key-hint">{visibleHint}</span> : null}
     </div>
   )
 }

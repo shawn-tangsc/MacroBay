@@ -315,6 +315,8 @@ describe('PLAT-55 masked API key field', () => {
     // 迁移后这条理由改由字段自身的占位与提示承担，不再挂在这颗按钮上。
     expect(eye.getAttribute('title')).toBeNull()
     expect(inputOf(container).getAttribute('placeholder')).toBe(labels.apiKeyPlaceholder)
+    // 原因必须看得见：字段下方的提示行给出「尚无 Key」，不是悬停才有。
+    expect(container.textContent).toContain(labels.noApiKeyHint)
   })
 
   it('removes a saved key only after an inline second confirmation', async () => {
