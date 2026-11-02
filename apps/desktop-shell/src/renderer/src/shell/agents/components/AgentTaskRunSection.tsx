@@ -4,6 +4,7 @@ import { Check, Play, SkipForward, Square, Trash2, X } from 'lucide-react'
 import type { TaskDeliveryAttemptEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { JobRunRecord } from '@platform/jobs'
 import { LoadingSpinner } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 
 import type { AgentText } from '../agentText'
 import type { AgentTaskCenterItem } from '../agentTaskCenterViewModel'
@@ -67,7 +68,14 @@ export default function AgentTaskRunSection({
           </Button>
         </div>
       </header>
-      {logs.length === 0 ? <div className="agent-task-empty">{labels.noLogs}</div> : null}
+      {logs.length === 0 ? (
+        <StateView
+          state="empty"
+          reasonCode="never-ran"
+          size="sm"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.run_now, onSelect: onRun }}
+        />
+      ) : null}
       <div className="agent-task-run-list">
         {logs.map((log) => {
           const job = jobsByRunLogId[log.id] ?? null
@@ -127,7 +135,7 @@ export default function AgentTaskRunSection({
             </Button>
           ) : null}
         </header>
-        {attempts.length === 0 ? <div className="agent-task-empty">{labels.noDeliveryAttempts}</div> : null}
+        {attempts.length === 0 ? <StateView state="empty" reasonCode="not-yet" size="sm" /> : null}
         <div className="agent-task-attempt-list">
           {attempts.map((attempt) => (
             <article key={attempt.id} className="agent-task-attempt-row">

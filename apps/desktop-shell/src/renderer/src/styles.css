@@ -6712,13 +6712,6 @@ h1 {
   color: #b45309;
 }
 
-.agent-task-empty {
-  padding: 18px 10px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
-}
-
 .agent-task-run-list {
   display: grid;
   gap: 8px;

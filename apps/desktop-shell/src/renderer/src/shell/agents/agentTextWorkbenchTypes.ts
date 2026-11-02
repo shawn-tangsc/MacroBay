@@ -26,7 +26,6 @@ export type AgentTextWorkbench = {
     taskList: string
     taskCount: (count: number) => string
     loading: string
-    empty: string
     overdue: string
     editTask: string
     createTask: string
@@ -75,12 +74,10 @@ export type AgentTextWorkbench = {
     runNow: string
     cancelRun: string
     deleteTask: string
-    noLogs: string
     loadMoreRuns: string
     openSession: string
     deliverySummary: (delivered: number, failed: number, skipped: number, unknown: number) => string
     deliveryAttempts: string
-    noDeliveryAttempts: string
     loadMoreDeliveryAttempts: string
     retryDelivery: string
     retryDeliveryFailed: string

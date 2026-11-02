@@ -8,6 +8,7 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 import type { JobRunRecord } from '@platform/jobs'
 import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useAgentText } from '../agentTextProvider'
 import {
   buildAgentTaskCenterState,
@@ -288,7 +289,14 @@ export default function AgentTaskCenterDrawer({
             <small>{t.taskCenter.taskCount(centerState.items.length)}</small>
           </header>
           {loading && centerState.items.length === 0 ? <LoadingState label={t.taskCenter.loading} minHeight={120} /> : null}
-          {!loading && centerState.items.length === 0 ? <div className="agent-task-empty">{t.taskCenter.empty}</div> : null}
+          {!loading && centerState.items.length === 0 ? (
+            <StateView
+              state="empty"
+              reasonCode="never-created"
+              size="sm"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: startCreate }}
+            />
+          ) : null}
           <div className="agent-task-list">
             {centerState.items.map((item) => (
               <button
