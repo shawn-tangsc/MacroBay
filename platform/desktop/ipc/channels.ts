@@ -27,6 +27,11 @@ export const IpcChannels = {
   settingsUpdate: 'platform:settings-update',
   channelsCatalog: 'platform:channels-catalog',
   channelsList: 'platform:channels-list',
+  /**
+   * 只读投影：通知设置页的「发送到通道」行读它（可投递 + 绑定目标数）。
+   * **不在这里改通道配置**——通知页一旦能改，就又有了第二个配置入口。
+   */
+  channelsListDeliveryTargets: 'platform:channels-list-delivery-targets',
   channelsGet: 'platform:channels-get',
   channelsCreate: 'platform:channels-create',
   channelsUpdate: 'platform:channels-update',

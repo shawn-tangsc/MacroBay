@@ -76,6 +76,8 @@ const api = {
   channels: {
     catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),
     list: () => ipcRenderer.invoke(IpcChannels.channelsList),
+    /** 通知设置页的只读投影：可投递三档 + 绑定目标（0/1/多），不写任何通道配置。 */
+    listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets),
     get: (id: string) => ipcRenderer.invoke(IpcChannels.channelsGet, id),
     create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input),
     update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input),
