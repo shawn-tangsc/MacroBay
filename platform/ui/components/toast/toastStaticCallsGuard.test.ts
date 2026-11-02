@@ -22,10 +22,13 @@ const SKIP = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build'
 // 而这份名单正被用来数剩余处数。宁可多扫一个不显示的，也不要少数一个显示的。
 const STATIC_CALL = /\b(?:message|notification)\.(?:open|success|error|info|warning|loading|destroy|config)\s*\(/
 
-/** 正在迁移、尚未收口的文件（2026-11-02，补丁落地当天扫的）。 */
-const BASELINE = new Set([
-  'apps/desktop-shell/src/renderer/src/shell/settings/storage-cache/StorageCacheSettingsPage.tsx',
-])
+/**
+ * 正在迁移、尚未收口的文件（2026-11-02，补丁落地当天扫的）。
+ *
+ * 现在**空了**：六处全部迁到平台 `Toast`，存储缓存是最后一处（`b116cc9` 修文案、本次接宿主）。
+ * 空集合是目标状态——以后新出现的调用点一条都进不来，这是「只减不增」的最后一步。
+ */
+const BASELINE = new Set<string>([])
 
 function files(dir: string): string[] {
   const out: string[] = []

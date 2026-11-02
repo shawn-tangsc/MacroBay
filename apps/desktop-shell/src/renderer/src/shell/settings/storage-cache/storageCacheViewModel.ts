@@ -7,7 +7,11 @@ import type {
   SafeCacheView
 } from '@platform/storage/cache-governance/cacheContracts'
 import { platformText } from '../../../i18n/platformText'
-import { formatCacheErrorReason } from './storageCacheDisplay'
+import {
+  STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+  cacheErrorReasonKey,
+  formatCacheErrorReason
+} from './storageCacheDisplay'
 
 export type StorageCacheFilterKey = 'all' | 'platform' | 'ai-runtime' | 'product' | 'derived-data'
 
@@ -122,10 +126,28 @@ export function resolveStorageCacheWarnings(cache: SafeCacheView, language: AppL
 
 export type StorageOperationNoticeTone = 'success' | 'info' | 'danger'
 
+/**
+ * 一条提示：**键和句子一起交**。
+ *
+ * 键给 `Toast`（契约要求 `titleKey` / `descKey`，句子在入队时由调用方的解析器解成快照），
+ * 句子给这个解析器——带名字、带预演标记的那几句（「已清理『X』」）是参数化的，
+ * 一张纯键表装不下，所以解析器是调用点里的单键闭包，未知键一律返回空串（不回退键名）。
+ */
 export type StorageOperationNotice = {
   tone: StorageOperationNoticeTone
-  text: string
+  titleKey: string
+  title: string
+  reasonKey?: string
+  reason?: string
 }
+
+export const STORAGE_CACHE_CLEARED_TOAST_KEY = 'storageCache.toast.cleared'
+export const STORAGE_CACHE_COMPACTED_TOAST_KEY = 'storageCache.toast.compacted'
+export const STORAGE_CACHE_SKIPPED_TOAST_KEY = 'storageCache.toast.skipped'
+export const STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY = 'storageCache.toast.operation-failed'
+export const STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY = 'storageCache.toast.recheck-failed'
+/** 危险档强制带动作：重试同一个入口，不另造回调。 */
+export const STORAGE_CACHE_RETRY_ACTION_KEY = 'storageCache.toast.retry'
 
 /**
  * 操作结果 → 一条提示。**按 `status` 穷举**。
@@ -145,16 +167,31 @@ export function formatStorageOperationNotice(
     case 'failed':
       return {
         tone: 'danger',
-        text: labels.operationFailedReason(formatCacheErrorReason(result.normalizedErrorCode, labels))
+        titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+        title: labels.operationFailed,
+        reasonKey: cacheErrorReasonKey(result.normalizedErrorCode),
+        reason: formatCacheErrorReason(result.normalizedErrorCode, labels)
       }
     case 'skipped':
-      return { tone: 'info', text: labels.toastSkipped(name) }
+      return {
+        tone: 'info',
+        titleKey: STORAGE_CACHE_SKIPPED_TOAST_KEY,
+        title: labels.toastSkipped(name)
+      }
     case 'succeeded':
       switch (result.operation) {
         case 'clear':
-          return { tone: 'success', text: labels.toastCleared(name, result.dryRun) }
+          return {
+            tone: 'success',
+            titleKey: STORAGE_CACHE_CLEARED_TOAST_KEY,
+            title: labels.toastCleared(name, result.dryRun)
+          }
         case 'compact':
-          return { tone: 'success', text: labels.toastCompacted(name, result.dryRun) }
+          return {
+            tone: 'success',
+            titleKey: STORAGE_CACHE_COMPACTED_TOAST_KEY,
+            title: labels.toastCompacted(name, result.dryRun)
+          }
       }
   }
 }
@@ -171,8 +208,20 @@ export function formatStorageOperationErrorNotice(
   switch (operation) {
     case 'clear':
     case 'compact':
-      return { tone: 'danger', text: labels.operationFailedReason(labels.errorReasonUnavailable) }
+      return {
+        tone: 'danger',
+        titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+        title: labels.operationFailed,
+        reasonKey: STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+        reason: labels.errorReasonUnavailable
+      }
     case 'recheck':
-      return { tone: 'danger', text: labels.recheckFailedReason(labels.errorReasonUnavailable) }
+      return {
+        tone: 'danger',
+        titleKey: STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+        title: labels.recheckFailed,
+        reasonKey: STORAGE_CACHE_REASON_UNAVAILABLE_KEY,
+        reason: labels.errorReasonUnavailable
+      }
   }
 }

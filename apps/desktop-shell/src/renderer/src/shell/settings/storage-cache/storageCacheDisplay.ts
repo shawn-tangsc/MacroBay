@@ -180,10 +180,11 @@ export function formatOperationStatus(
 }
 
 /**
- * 原因码 → 文案字段的**字面量表**，不拼键名：多一个原因码就编译不过。
+ * 原因码 → **文案键 + 文案字段**的同一张表：多一个原因码就编译不过。
  *
- * 这样做的理由和过滤项那张表一样：`'errorReason' + code` 这种拼串在静态守卫眼里看不见形状，
- * 拼错了界面上就是一句空话；换成表之后，`CACHE_ERROR_CODES` 一增长这里立刻报错。
+ * 为什么要两个：提示走 `Toast`，它只收键（句子在入队时由调用方的解析器解成快照）；
+ * 而页面上的其它地方要句子。两样都从这一张表来，就不会出现「键改了、句子没改」。
+ * 表里写死字面量、不拼 `'reason.' + code`：拼串在静态守卫眼里看不见形状。
  */
 type CacheErrorReasonField =
   | 'errorReasonNotFound'
@@ -196,20 +197,32 @@ type CacheErrorReasonField =
   | 'errorReasonRequiresProduct'
   | 'errorReasonRuntimeActive'
 
-const CACHE_ERROR_REASON_FIELDS: Record<CacheErrorCode, CacheErrorReasonField> = {
-  cache_not_found: 'errorReasonNotFound',
-  cache_not_clearable: 'errorReasonNotClearable',
-  cache_not_compactable: 'errorReasonNotCompactable',
-  cache_operation_in_progress: 'errorReasonInProgress',
-  cache_operation_denied: 'errorReasonDenied',
-  cache_provider_failed: 'errorReasonProviderFailed',
-  cache_inspection_failed: 'errorReasonInspectionFailed',
-  cache_requires_product: 'errorReasonRequiresProduct',
-  cache_runtime_active: 'errorReasonRuntimeActive'
+const CACHE_ERROR_REASONS: Record<CacheErrorCode, { key: string; field: CacheErrorReasonField }> = {
+  cache_not_found: { key: 'storageCache.reason.cache-not-found', field: 'errorReasonNotFound' },
+  cache_not_clearable: { key: 'storageCache.reason.cache-not-clearable', field: 'errorReasonNotClearable' },
+  cache_not_compactable: { key: 'storageCache.reason.cache-not-compactable', field: 'errorReasonNotCompactable' },
+  cache_operation_in_progress: {
+    key: 'storageCache.reason.cache-operation-in-progress',
+    field: 'errorReasonInProgress'
+  },
+  cache_operation_denied: { key: 'storageCache.reason.cache-operation-denied', field: 'errorReasonDenied' },
+  cache_provider_failed: { key: 'storageCache.reason.cache-provider-failed', field: 'errorReasonProviderFailed' },
+  cache_inspection_failed: { key: 'storageCache.reason.cache-inspection-failed', field: 'errorReasonInspectionFailed' },
+  cache_requires_product: { key: 'storageCache.reason.cache-requires-product', field: 'errorReasonRequiresProduct' },
+  cache_runtime_active: { key: 'storageCache.reason.cache-runtime-active', field: 'errorReasonRuntimeActive' }
+}
+
+/** 「这次没拿到具体原因」的键：没有原因码、或原因码在闭集外，都用它。 */
+export const STORAGE_CACHE_REASON_UNAVAILABLE_KEY = 'storageCache.reason.unavailable'
+
+/** 提示用的原因键。 */
+export function cacheErrorReasonKey(code: CacheErrorCode | undefined): string {
+  const entry = code === undefined ? undefined : CACHE_ERROR_REASONS[code]
+  return entry === undefined ? STORAGE_CACHE_REASON_UNAVAILABLE_KEY : entry.key
 }
 
 /**
- * 失败原因句。
+ * 原因句。
  *
  * `undefined`（服务没留下原因码）与「原因码认不出来」（第三方 provider 送了个闭集外的值）
  * 都走同一句「这次没拿到具体原因」：这两种都是**没拿到**，不是「确实没有原因」。
@@ -218,9 +231,8 @@ export function formatCacheErrorReason(
   code: CacheErrorCode | undefined,
   labels: StorageCacheLabels
 ): string {
-  if (code === undefined) return labels.errorReasonUnavailable
-  const field: CacheErrorReasonField | undefined = CACHE_ERROR_REASON_FIELDS[code]
-  return field === undefined ? labels.errorReasonUnavailable : labels[field]
+  const entry = code === undefined ? undefined : CACHE_ERROR_REASONS[code]
+  return entry === undefined ? labels.errorReasonUnavailable : labels[entry.field]
 }
 
 export function dedupeWarnings(warnings: string[]): string[] {

@@ -7,6 +7,9 @@ import {
   buildStorageCacheSummary,
   confirmStorageCacheAction,
   filterCachesByKey,
+  STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+  STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+  STORAGE_CACHE_SKIPPED_TOAST_KEY,
   formatStorageOperationErrorNotice,
   formatStorageOperationNotice,
   listStorageCacheFilters,
@@ -126,7 +129,11 @@ describe('storageCacheViewModel', () => {
         },
         'zh-CN'
       )
-    ).toEqual({ tone: 'info', text: '“派生分析缓存”当前没有可执行变更' })
+    ).toEqual({
+      tone: 'info',
+      titleKey: STORAGE_CACHE_SKIPPED_TOAST_KEY,
+      title: '“派生分析缓存”当前没有可执行变更'
+    })
   })
 
   /**
@@ -155,10 +162,17 @@ describe('storageCacheViewModel', () => {
       'zh-CN'
     )
 
-    expect(notice.tone).toBe('danger')
-    expect(notice.text).toBe(labels.operationFailedReason(labels.errorReasonRuntimeActive))
-    expect(notice.text).not.toContain('ENOENT')
-    expect(notice.text).not.toBe(labels.toastCleared('派生分析缓存', false))
+    expect(notice).toEqual({
+      tone: 'danger',
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.cache-runtime-active',
+      reason: labels.errorReasonRuntimeActive
+    })
+    // 标题与原因句都不许夹带运行时原文。
+    expect(notice.title).not.toContain('ENOENT')
+    expect(notice.reason).not.toContain('ENOENT')
+    expect(notice.title).not.toBe(labels.toastCleared('派生分析缓存', false))
   })
 
   it('says the reason was not available when the result carries no error code', () => {
@@ -173,7 +187,10 @@ describe('storageCacheViewModel', () => {
 
     expect(notice).toEqual({
       tone: 'danger',
-      text: labels.operationFailedReason(labels.errorReasonUnavailable)
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
     })
   })
 
@@ -182,11 +199,17 @@ describe('storageCacheViewModel', () => {
 
     expect(formatStorageOperationErrorNotice('clear', 'zh-CN')).toEqual({
       tone: 'danger',
-      text: labels.operationFailedReason(labels.errorReasonUnavailable)
+      titleKey: STORAGE_CACHE_OPERATION_FAILED_TOAST_KEY,
+      title: labels.operationFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
     })
     expect(formatStorageOperationErrorNotice('recheck', 'zh-CN')).toEqual({
       tone: 'danger',
-      text: labels.recheckFailedReason(labels.errorReasonUnavailable)
+      titleKey: STORAGE_CACHE_RECHECK_FAILED_TOAST_KEY,
+      title: labels.recheckFailed,
+      reasonKey: 'storageCache.reason.unavailable',
+      reason: labels.errorReasonUnavailable
     })
   })
 })

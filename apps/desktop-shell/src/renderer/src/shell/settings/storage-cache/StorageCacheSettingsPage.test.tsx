@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { ToastHost } from '@platform/ui/components/toast'
 import { resolveStateViewText, STATE_VIEW_ACTION_KEYS, stateViewTextKeys } from '@platform/ui/components/state'
 import { platformText } from '../../../i18n/platformText'
 import { StorageCacheSettingsPage } from './StorageCacheSettingsPage'
@@ -121,7 +122,11 @@ describe('Storage and Cache settings UI', () => {
 
   it('renders one summary line, the cache table, and only available row actions', () => {
     const labels = platformText['en-US'].storageCache
-    const markup = renderToStaticMarkup(<StorageCacheSettingsPage language="en-US" />)
+    const markup = renderToStaticMarkup(
+      <ToastHost>
+        <StorageCacheSettingsPage language="en-US" />
+      </ToastHost>
+    )
 
     expect(markup).toContain(labels.title)
     expect(markup).toContain(labels.subtitle)
@@ -153,7 +158,11 @@ describe('Storage and Cache settings UI', () => {
 
   it('prefers localized cache text in zh-CN', () => {
     const labels = platformText['zh-CN'].storageCache
-    const markup = renderToStaticMarkup(<StorageCacheSettingsPage language="zh-CN" />)
+    const markup = renderToStaticMarkup(
+      <ToastHost>
+        <StorageCacheSettingsPage language="zh-CN" />
+      </ToastHost>
+    )
 
     expect(markup).toContain('派生分析缓存')
     expect(markup).toContain('Agent 运行时兼容性')
@@ -164,9 +173,11 @@ describe('Storage and Cache settings UI', () => {
     // The registry always has entries, so no rows means the read failed; it must not say "none yet".
     mockFeed.caches = []
     const markup = renderToStaticMarkup(
-      <ShellLanguageProvider language="en-US">
-        <StorageCacheSettingsPage language="en-US" />
-      </ShellLanguageProvider>
+      <ToastHost>
+        <ShellLanguageProvider language="en-US">
+          <StorageCacheSettingsPage language="en-US" />
+        </ShellLanguageProvider>
+      </ToastHost>
     )
 
     expect(markup).toContain('data-state="error"')
@@ -181,9 +192,11 @@ describe('Storage and Cache settings UI', () => {
     const labels = platformText['en-US'].storageCache
     mockFeed.error = 'Error invoking remote method platform-unavailable'
     const markup = renderToStaticMarkup(
-      <ShellLanguageProvider language="en-US">
-        <StorageCacheSettingsPage language="en-US" />
-      </ShellLanguageProvider>
+      <ToastHost>
+        <ShellLanguageProvider language="en-US">
+          <StorageCacheSettingsPage language="en-US" />
+        </ShellLanguageProvider>
+      </ToastHost>
     )
 
     // 旧表仍在

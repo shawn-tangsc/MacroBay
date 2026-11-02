@@ -1,4 +1,4 @@
-import { Button, Switch, message } from 'antd'
+import { Button, Switch } from 'antd'
 import { ChevronRight, RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
@@ -6,6 +6,7 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Segmented } from '@platform/ui/components/segmented'
+import { useToast } from '@platform/ui/components/toast'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
@@ -22,6 +23,7 @@ import {
   formatStorageOperationErrorNotice,
   formatStorageOperationNotice,
   listStorageCacheFilters,
+  STORAGE_CACHE_RETRY_ACTION_KEY,
   type StorageCacheFilterKey,
   type StorageOperationNotice
 } from './storageCacheViewModel'
@@ -43,8 +45,23 @@ const FILTER_LABEL_KEYS: Record<StorageCacheFilterKey, string> = {
 }
 const SHELL_KEY_FOR_FILTER_GROUP = 'storageCacheFilterGroup'
 
+type StorageToastRetry = { label: string; onSelect: () => void }
+
+/**
+ * 危险提示上那个动作：重跑**同一个入口**（会再走一次确认），文字就是它要做的那件事。
+ * 成功与提示档不消费它——两档都没有槽放动作。
+ */
+function retryOf(
+  cache: SafeCacheView,
+  run: (target: SafeCacheView) => Promise<void>,
+  label: string
+): StorageToastRetry {
+  return { label, onSelect: () => void run(cache) }
+}
+
 export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageProps): React.ReactElement {
   const labels = getStorageCacheLabels(language)
+  const toast = useToast()
   const state = useStorageCacheSettings()
   const [dryRun, setDryRun] = useState(false)
   const [activeFilter, setActiveFilter] = useState<StorageCacheFilterKey>('all')
@@ -75,15 +92,34 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   )
 
   /**
-   * 提示的**唯一出口**。
+   * 提示的**唯一出口**：平台 `Toast`（右下角、最多两条、悬停暂停、成功 3s / 失败 6s）。
    *
-   * 宿主 `ToastHost` 还没挂到渲染根上，而 `useToast` 在没宿主时是 fail-closed 抛错的，
-   * 所以这里暂时仍是 antd 静态提示——但调用方只交 `{ tone, text }`，换出口时只动这一个函数。
+   * 键和句子一起交：`Toast` 只收键，句子在入队时由这个解析器解成快照，所以宿主不认识
+   * `storageCache.*` 也不需要认识。**未知键返回空串**、不回退键名——回退会把键名念给读者。
    */
-  function notify(notice: StorageOperationNotice): void {
-    if (notice.tone === 'danger') message.error(notice.text)
-    else if (notice.tone === 'info') message.info(notice.text)
-    else message.success(notice.text)
+  function notify(notice: StorageOperationNotice, retry: StorageToastRetry): void {
+    const resolveText = (key: string): string => {
+      if (key === notice.titleKey) return notice.title
+      if (notice.reasonKey !== undefined && key === notice.reasonKey) return notice.reason ?? ''
+      if (key === STORAGE_CACHE_RETRY_ACTION_KEY) return retry.label
+      return ''
+    }
+    if (notice.tone === 'success') {
+      toast.success({ titleKey: notice.titleKey, resolveText })
+      return
+    }
+    if (notice.tone === 'info') {
+      toast.info({ titleKey: notice.titleKey, resolveText })
+      return
+    }
+    // 危险档在类型上强制带动作：按钮上写的就是它要做的那件事（清理 / 压缩 / 重新检查），
+    // 点了走同一个入口，重跑一次确认流程，不在这里另造一条旁路。
+    toast.danger({
+      titleKey: notice.titleKey,
+      ...(notice.reasonKey === undefined ? {} : { descKey: notice.reasonKey }),
+      resolveText,
+      action: { labelKey: STORAGE_CACHE_RETRY_ACTION_KEY, onSelect: retry.onSelect }
+    })
   }
 
   async function runClear(cache: SafeCacheView): Promise<void> {
@@ -95,10 +131,10 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     if (!confirmed) return
     try {
       const result = await state.clearCache(cache.cacheId, dryRun)
-      notify(formatStorageOperationNotice(cache, result, language))
+      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runClear, labels.clear))
     } catch {
       // 原文（可能是 `ENOENT: no such file or directory…`）只该进日志，不上屏。
-      notify(formatStorageOperationErrorNotice('clear', language))
+      notify(formatStorageOperationErrorNotice('clear', language), retryOf(cache, runClear, labels.clear))
     }
   }
 
@@ -111,9 +147,9 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     if (!confirmed) return
     try {
       const result = await state.compactCache(cache.cacheId, dryRun)
-      notify(formatStorageOperationNotice(cache, result, language))
+      notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runCompact, labels.compact))
     } catch {
-      notify(formatStorageOperationErrorNotice('compact', language))
+      notify(formatStorageOperationErrorNotice('compact', language), retryOf(cache, runCompact, labels.compact))
     }
   }
 
@@ -121,7 +157,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     try {
       await state.inspectCache(cache.cacheId)
     } catch {
-      notify(formatStorageOperationErrorNotice('recheck', language))
+      notify(formatStorageOperationErrorNotice('recheck', language), retryOf(cache, runRecheck, labels.recheck))
     }
   }
 
