@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { TOOLTIP_MAX_CJK, TOOLTIP_MAX_LATIN, Tooltip } from './Tooltip'
@@ -114,6 +114,38 @@ describe('Tooltip', () => {
     // 位置只出现在组件自己那一行；调用点传 `placement` 一律不生效，因为 props 里根本没有这个字段。
     expect(source).toContain("const PLACEMENT = 'bottom' as const")
     expect(source.match(/placement=/g)).toHaveLength(1)
+  })
+
+  it('rejects placement at the call site too, not only in its own props', () => {
+    // 两处都要管：组件 props 里出现 `placement` 是红，调用点把 `placement` 传给 `<Tooltip>` 也是红。
+    const offenders: string[] = []
+    const roots = ['apps', 'platform', 'products']
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'].includes(entry.name)) continue
+          walk(join(dir, entry.name))
+          continue
+        }
+        if (!/\.tsx$/.test(entry.name)) continue
+        if (entry.name === 'Tooltip.test.tsx') continue
+        const file = join(dir, entry.name)
+        const body = readFileSync(file, 'utf8')
+        // 只看我们这件组件的调用点；仓库里还有直接 import antd `Tooltip` 的老代码，
+        // 那些是迁移对象，不是本守卫的范围（它们正是 26 处清单里要换的东西）。
+        if (!body.includes('@platform/ui/components/tooltip')) continue
+        for (const match of body.matchAll(/<Tooltip\b/g)) {
+          const window = body.slice(match.index ?? 0, (match.index ?? 0) + 400)
+          const close = window.indexOf('/>')
+          if (/\bplacement=/.test(close >= 0 ? window.slice(0, close) : window)) offenders.push(file)
+        }
+      }
+    }
+    for (const root of roots) walk(join(process.cwd(), root))
+
+    expect(offenders).toEqual([])
+    // 铁证在当前调用点为零：这条守卫只在有人开始传 placement 时才咬人。
+    expect(source).toContain("const PLACEMENT = 'bottom' as const")
   })
 
   it('keeps the copy ceiling visible in the exported constants', () => {
