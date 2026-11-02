@@ -164,12 +164,14 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* The entry to the readings behind the numbers: a word, not a chip. Hover brightens the word and
-   draws nothing — a block behind a short entry reads as a second button ring. */
+/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy
+   (11.5px) — never a chip. Hover brightens the word and draws nothing: a block behind a short entry
+   reads as a second button ring. Its label never changes with the state; only the arrows in
+   `aria-expanded` do, so a screen reader does not hear the state twice. */
 .mi-divergence__help-toggle {
   padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit; font-size: 10px;
-  line-height: 16px; white-space: nowrap; cursor: pointer;
+  color: var(--mi-dashboard-muted); font: inherit; font-size: 11.5px;
+  line-height: 1.6; white-space: nowrap; cursor: pointer;
 }
 .mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
