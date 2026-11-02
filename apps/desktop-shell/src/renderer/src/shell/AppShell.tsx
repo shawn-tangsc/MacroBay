@@ -9,9 +9,7 @@ import {
   Moon,
   Palette,
   Plus,
-  Search,
   Settings,
-  SlidersHorizontal,
   Sun
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -1725,13 +1723,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {/* 拖动区：页面名不再重复显示（当前页由 Tab 条承载），这里是纯粹的窗口拖动留白 */}
         <div className="titlebar-drag" aria-hidden="true" />
         <div className="topbar-actions">
+          {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
+              等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
           <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
-          <button type="button" aria-label="Search" title="Search">
-            <Search size={15} />
-          </button>
-          <button type="button" aria-label="Layout" title="Layout">
-            <SlidersHorizontal size={15} />
-          </button>
         </div>
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
