@@ -2,7 +2,9 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 
 import { platformText } from '../../i18n/platformText'
 
@@ -10,20 +12,33 @@ import { ModelServiceClearModelsControl } from './ModelServiceClearModelsControl
 
 /**
  * PLAT-72：「清空模型」按钮 + 二次确认。
- * 只测交互边界：何时可点、弹窗数量文案、取消不提交、确认只提交一次、失败不关窗。
+ *
+ * 这一组是平台 `confirmAction` 的**第一个真渲染用例**：不 mock antd——`confirmAction` 包的是
+ * `Modal.confirm`，mock 掉就等于只验了自己写的那几个参数。断言的是读者真的能看见、能点到的：
+ * 标题、数量文案、危险钮、取消不提交、确认只提交一次、失败后还能再点一次；
+ * 以及界面设计点名的**危险动作初始焦点在「取消」**——焦点落在破坏性按钮上，按住回车就是连续执行。
  */
 const labels = platformText['en-US'].models
 
 let root: Root | undefined
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
+beforeEach(() => {
+  // 与渲染入口 `main.tsx` 同一句：测试里不接这一步，`Modal.confirm` 在 React 19 下什么都不画。
+  installAntdStaticRender()
+})
+
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   document.body.replaceChildren()
+  vi.restoreAllMocks()
 })
 
-async function mount(modelCount: number, onConfirm: () => Promise<boolean> = async () => true): Promise<HTMLElement> {
+async function mount(
+  modelCount: number,
+  onConfirm: () => Promise<boolean> = async () => true
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -39,46 +54,79 @@ function clearButton(container: HTMLElement): HTMLButtonElement {
   return button
 }
 
-/** `open` 状态用 data 属性暴露（antd 关闭动画在 happy-dom 里不落地，不能靠 DOM 增删判断）。 */
-function modalOpen(container: HTMLElement): boolean {
-  return clearButton(container).getAttribute('data-models-clear-open') === 'true'
+/** 确认框由 `Modal.confirm` 通过 portal 挂到 `document.body`，不在组件的容器里。 */
+function dialog(): Element | null {
+  return document.querySelector('.ant-modal-confirm')
+}
+
+function confirmTitle(): string {
+  return document.querySelector('.ant-modal-confirm-title')?.textContent ?? ''
 }
 
 function confirmBody(): string {
-  return document.querySelector('[data-models-clear-confirm]')?.textContent ?? ''
+  return document.querySelector('.ant-modal-confirm-content')?.textContent ?? ''
+}
+
+function confirmButtons(): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>('.ant-modal-confirm-btns button')]
+}
+
+function cancelButton(): HTMLButtonElement {
+  const button = confirmButtons().find((entry) => !entry.classList.contains('ant-btn-primary'))
+  if (!button) throw new Error('Expected the cancel button.')
+  return button
+}
+
+function okButton(): HTMLButtonElement {
+  const button = confirmButtons().find((entry) => entry.classList.contains('ant-btn-primary'))
+  if (!button) throw new Error('Expected the confirm button.')
+  return button
+}
+
+/** 放过一个宏任务：确认框是点下之后才挂载的，焦点也在挂载后一个 effect 里落。 */
+async function settle(ms = 80): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+  })
 }
 
 async function click(element: Element | null): Promise<void> {
   if (!element) throw new Error('Expected clickable element.')
   await act(async () => {
     ;(element as HTMLElement).click()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 50))
   })
 }
 
-/** 工具条按钮与弹窗 OK 文案相同（都是「清空模型」），必须用 data 属性区分。 */
-function modalButton(attribute: string): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>(`[${attribute}]`)
-}
-
 describe('PLAT-72 clear models control', () => {
-  it('is disabled when the provider has no models', async () => {
+  it('is disabled when the provider has no models, and opens nothing', async () => {
     const container = await mount(0)
     expect(clearButton(container).disabled).toBe(true)
 
     await click(clearButton(container))
-    expect(modalOpen(container)).toBe(false)
+    expect(dialog()).toBeNull()
   })
 
-  it('is enabled with models, and the modal states how many will be deleted', async () => {
+  it('states the count, and the confirming button is the dangerous one', async () => {
     const container = await mount(3)
     expect(clearButton(container).disabled).toBe(false)
 
     await click(clearButton(container))
-    expect(document.querySelector('.ant-modal-title')?.textContent).toBe(labels.clearModelsConfirmTitle)
+    expect(confirmTitle()).toBe(labels.clearModelsConfirmTitle)
     expect(confirmBody()).toBe(labels.clearModelsConfirmBody(3))
-    expect(modalButton('data-models-clear-confirm-button')).not.toBeNull()
-    expect(modalButton('data-models-clear-cancel')).not.toBeNull()
+    expect(okButton().textContent).toBe(labels.clearModels)
+    expect(okButton().classList.contains('ant-btn-dangerous')).toBe(true)
+    expect(cancelButton().textContent).toBe(labels.cancel)
+  })
+
+  it('puts the initial focus on cancel, never on the destructive button', async () => {
+    const container = await mount(3)
+
+    await click(clearButton(container))
+    await settle()
+
+    // 危险动作：回车落在「清空模型」上就是连续执行破坏性操作。
+    expect(document.activeElement).toBe(cancelButton())
   })
 
   it('deletes nothing when the confirmation is cancelled', async () => {
@@ -86,31 +134,33 @@ describe('PLAT-72 clear models control', () => {
     const container = await mount(2, onConfirm)
 
     await click(clearButton(container))
-    await click(modalButton('data-models-clear-cancel'))
+    await click(cancelButton())
 
     expect(onConfirm).not.toHaveBeenCalled()
-    expect(modalOpen(container)).toBe(false)
   })
 
-  it('submits exactly once on confirm and closes the modal', async () => {
+  it('submits exactly once on confirm', async () => {
     const onConfirm = vi.fn(async () => true)
     const container = await mount(4, onConfirm)
 
     await click(clearButton(container))
-    await click(modalButton('data-models-clear-confirm-button'))
+    await click(okButton())
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
-    expect(modalOpen(container)).toBe(false)
   })
 
-  it('keeps the modal open when the clear fails', async () => {
+  it('keeps the confirmation usable when the clear did not apply, so the user can retry', async () => {
+    // false = 调用方没清成（错误已在行内展示）；确认框必须还开着，否则读者连「再点一次」都没有。
     const onConfirm = vi.fn(async () => false)
     const container = await mount(2, onConfirm)
 
     await click(clearButton(container))
-    await click(modalButton('data-models-clear-confirm-button'))
+    await click(okButton())
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
-    expect(modalOpen(container)).toBe(true)
+    // 还能再点一次 ⇒ 对话框没有关闭、危险钮已从 loading 恢复。
+    expect(okButton().disabled).toBe(false)
+    await click(okButton())
+    expect(onConfirm).toHaveBeenCalledTimes(2)
   })
 })
