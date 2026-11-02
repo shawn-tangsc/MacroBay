@@ -1,3 +1,4 @@
+import { SOURCE_REPEATED_FAILURE_THRESHOLD } from '../application/sourceProjection'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import { computeConfigurationRevision } from './configurationRevision'
 import {
@@ -28,7 +29,7 @@ export async function handleGetOperationsHealth(
     .sort()
     .at(-1)
   const failedSource = health.sources.some(
-    (source) => source.runtimeStatus === 'failed' || source.consecutiveFailures >= 3
+    (source) => source.runtimeStatus === 'failed' || source.consecutiveFailures >= SOURCE_REPEATED_FAILURE_THRESHOLD
   )
   const stuckRun = running.some((run) => {
     const startedMs = Date.parse(run.startedAt ?? run.createdAt)

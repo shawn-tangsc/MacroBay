@@ -1439,31 +1439,6 @@
   font-size: 11px;
 }
 
-.source-provider-detail__health {
-  padding: 1px 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-style: normal;
-}
-
-.source-provider-detail__health.is-healthy {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.source-provider-detail__health.is-degraded {
-  border-color: #c48a1a;
-  border-color: var(--warning, #c48a1a);
-  color: #c48a1a;
-  color: var(--warning, #c48a1a);
-}
-
-.source-provider-detail__health.is-failed {
-  border-color: var(--danger);
-  color: var(--danger);
-}
 
 /* Two views on one page: the switch spans both columns, the active view owns the row beneath. */
 .settings-workspace.intelligence-sources-workspace { grid-template-rows: auto minmax(0, 1fr); }
