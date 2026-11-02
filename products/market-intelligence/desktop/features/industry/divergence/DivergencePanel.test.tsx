@@ -183,3 +183,22 @@ describe('invalidation on focus', () => {
     await act(async () => { root.unmount() })
   })
 })
+
+describe('help on the shared popover', () => {
+  it('opens the same five lines a keyboard reader used to get', async () => {
+    // The lines used to be five <b> blocks inside a hand-rolled tooltip. They are now five keys on
+    // the shared popover; this asserts none of them went missing in the swap.
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
+      })))
+    })
+    const trigger = container.querySelector('.mi-divergence__help') as HTMLElement
+    await act(async () => { trigger.focus() })
+    for (const line of text.helpLines) expect(document.body.textContent).toContain(line)
+    await act(async () => { root.unmount() })
+  })
+})

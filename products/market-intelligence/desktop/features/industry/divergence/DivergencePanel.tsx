@@ -1,4 +1,6 @@
 import { Button, Tooltip } from 'antd'
+
+import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -51,11 +53,20 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <div className="mi-divergence__lead">
-        <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
-          trigger={['hover', 'focus', 'click']}>
+        {/* Five lines are five keys, one per line: arrays are the semantic shape here, and a
+            joined sentence with newlines would be lost the first time the copy is translated. */}
+        <Popover
+          lines={[
+            'pages.intelligence.portal.dashboard.divergence.helpLines.0',
+            'pages.intelligence.portal.dashboard.divergence.helpLines.1',
+            'pages.intelligence.portal.dashboard.divergence.helpLines.2',
+            'pages.intelligence.portal.dashboard.divergence.helpLines.3',
+            'pages.intelligence.portal.dashboard.divergence.helpLines.4'
+          ]}
+          resolveText={resolveProductKey}>
           <Button type="text" size="small" className="mi-divergence__help" aria-label={text.helpLabel}
             icon={<Info size={11} aria-hidden="true" />} />
-        </Tooltip>
+        </Popover>
       </div>
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}

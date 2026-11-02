@@ -29,9 +29,6 @@
   cursor: help;
 }
 .mi-divergence__help:hover { color: var(--mi-dashboard-text); }
-.mi-divergence__help-body { display: grid; gap: 5px; max-width: 360px; font-size: 11px; line-height: 1.55; }
-.mi-divergence__help-body b { font-weight: 400; }
-.mi-divergence__help-body b:first-child { color: var(--mi-dashboard-text); }
 .mi-divergence__retry {
   margin-left: auto;
   padding: 0 4px;
