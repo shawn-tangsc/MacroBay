@@ -73,7 +73,14 @@
   opacity: 0.5;
 }
 
+/*
+ * 焦点环与其余组件同一套：2px accent、**offset 2**。
+ *
+ * 这里原来是 1px——全仓六处焦点环里唯一一个不同的值，静态看不出来，只有把六处计算值并排才现形
+ * （2026-11-02 做 `Segmented` 交付图时量出来的）。组件之间的差异要么有理由、要么消失；
+ * 这条没有理由，所以对齐到 2px。
+ */
 .segmented__item:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
