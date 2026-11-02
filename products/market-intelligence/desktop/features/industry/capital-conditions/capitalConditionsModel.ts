@@ -7,6 +7,7 @@ import {
   isVisibleEtfPublicSnapshot,
   type EtfPublicAssetSnapshot
 } from '../../../../contracts/intelligenceQueryContracts'
+import { selectVisibleFlowRows, type FlowChartRow } from './capitalFlowRows'
 
 export const dashboardCapitalConditionsPresentationPolicy = {
   usd: {
@@ -35,7 +36,7 @@ export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: st
 export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
 type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
-type DashboardFlowHistory = { state: 'available'; rows: readonly { tradingDate: string; funds: number; btc: number; eth: number }[] }
+type DashboardFlowHistory = { state: 'available'; rows: readonly FlowChartRow[] }
 
 export type DashboardCapitalConditionsState =
   | { state: 'loading' }
@@ -154,7 +155,7 @@ function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[
     return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
   })
   return rows.length >= capitalConditionsDailyFlowPolicy.minimumRows
-    ? { state: 'available', rows: rows.slice(-dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
+    ? { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
     : 'unavailable'
 }
 
