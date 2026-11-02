@@ -30,10 +30,19 @@ export function confirmOptions(props: ConfirmProps): ConfirmOptionsWithSilent {
     // 危险档焦点落在取消上：按住回车连击时，落在确认上就是连续执行破坏性操作。
     autoFocusButton: props.tone === 'danger' ? 'cancel' : 'ok',
     centered: true,
-    // 失败时对话框要留在屏幕上（读者得能改完再提交）。antd 的 ActionButton 在 `onOk` 拒绝后
-    // 会再抛一次，于是出现未处理拒绝；`isSilent` 让 antd 吞掉那一次重抛，**关闭时机仍由我们自己
-    // 的 `onOk` 决定**——这是一处平台缺口的一行补丁，不是「让测试变绿」的开关。
-    onOk: () => props.onConfirm(),
+    /*
+     * 失败的处理：**接住拒绝，关闭弹窗，错误交给调用方在行内展示**（契约 §8）。
+     *
+     * 原来的写法是「返回调用方的 promise，antd 在拒绝时保持弹窗打开」，并靠 `isSilent` 吞掉
+     * antd 自己再抛的那一次。实测（2026-11-02）：`isSilent` 在 `Modal.useModal()` 的实例上
+     * **一次都没被调用到**（在构造器里打点确认过），于是同一次失败会沿 antd 的 promise 链再抛一次，
+     * 变成进程级未处理拒绝——它污染日志，并让 `pnpm verify` 的测试阶段以非零退出。
+     *
+     * 取舍写在明面上：**「弹窗留着让读者原地重试」换不来一条未处理拒绝**。三处调用点本来就会
+     * 在行内展示失败原因（`ModelServiceClearModelsControl` 的注释就是这么写的），所以关掉弹窗
+     * 不会让错误消失。`isSilent` 仍然传：静态路径认它，将来 hook 路径修好也自动受益。
+     */
+    onOk: () => Promise.resolve(props.onConfirm()).catch(() => undefined),
     onCancel: () => props.onCancel?.()
   }
 }

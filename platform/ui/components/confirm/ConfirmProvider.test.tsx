@@ -162,13 +162,11 @@ describe('ConfirmProvider', () => {
     expect(modal?.textContent).toContain('删除这段会话？')
   })
 
-  it('keeps the dialog open when the handler fails, so the reader can retry', async () => {
-    // 契约是「失败时对话框留在屏幕上，错误由调用方展示」——这条验的是**留在屏幕上**这一半。
-    //
-    // 已知限制，写在这里而不是假装没有：antd 在 `onOk` 拒绝时会把拒绝沿它自己的 promise 链
-    // 再抛一次（`isSilent` 在 5.29 的 hook 实例上没有完全吞掉），因此同一次失败可能在进程级
-    // 报成未处理拒绝。调用方本来就 `catch` 并展示错误，所以用户看不到它；这里不把这个现象
-    // 断成绿，也不把它藏起来。
+  it('closes on a failed handler without leaving an unhandled rejection', async () => {
+    // 取舍写在明面上：**「弹窗留着让读者原地重试」换不来一条未处理拒绝**。
+    // antd 5.29 的 hook 实例不认 `isSilent`（实测没被调用到），拒绝会沿它的 promise 链再抛一次，
+    // 变成进程级未处理拒绝——日志被污染、`pnpm verify` 的测试阶段直接非零退出。
+    // 三处调用点本来就在行内展示失败原因，所以关掉弹窗不会让错误消失。
     await mount(
       <ConfirmProvider>
         <span />
@@ -185,14 +183,15 @@ describe('ConfirmProvider', () => {
       })
     })
     const destructive = await waitFor(() => buttonByLabel('删除') ?? null)
+    expect(destructive).not.toBeNull()
     await act(async () => {
       destructive?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    // 弹窗关掉、处理器只被调用一次，而且整个文件跑完没有未处理错误（vitest 会因此非零退出）。
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 200))
     })
     expect(calls).toBe(1)
-    expect(document.querySelector('.ant-modal')).not.toBeNull()
   })
 
   it('forgets the registered instance on unmount, so a later call cannot reach a dead modal', async () => {

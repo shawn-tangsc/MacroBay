@@ -51,12 +51,14 @@ describe('confirm options', () => {
     expect(plain.autoFocusButton).toBe('ok')
   })
 
-  it('lets a rejected confirm keep the dialog open instead of swallowing the error', async () => {
+  it('absorbs a failed handler so the rejection cannot become a process-level error', async () => {
+    // 契约 §8：失败由调用方在行内展示。`onOk` 必须把拒绝**接住**——antd 5.29 的 hook 实例不认
+    // `isSilent`，拒绝会沿它的链再抛一次，那会让 `pnpm verify` 的测试阶段非零退出。
     const onConfirm = vi.fn(async () => {
       throw new Error('write failed')
     })
     const onOk = options({ onConfirm }).onOk as () => Promise<void>
-    await expect(onOk()).rejects.toThrow('write failed')
+    await expect(onOk()).resolves.toBeUndefined()
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
