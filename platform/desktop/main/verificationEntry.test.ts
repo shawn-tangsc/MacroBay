@@ -11,11 +11,13 @@ import { describe, expect, it } from 'vitest'
  * 谁加了一步只改一处，这个测试就红。
  */
 
+import { compareSamples, type TreeSample } from '../../../scripts/verify-sample.mts'
+
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePath}`, 'utf8')
 
 const VERIFY_SCRIPT =
-  'pnpm verify:preflight && pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm check:undefined-token && pnpm check:components-ownership && pnpm check:async-initial-state && pnpm check:state-content-ternary && pnpm typecheck && pnpm test && pnpm build'
+  'pnpm verify:preflight && pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm check:undefined-token && pnpm check:components-ownership && pnpm check:async-initial-state && pnpm check:state-content-ternary && pnpm typecheck && pnpm test && pnpm build && pnpm verify:postflight'
 
 /** `ci.yml` 里所有单行 `run:` 的值。安装步不算检查，单独排掉。 */
 function ciRunSteps(): string[] {
@@ -108,4 +110,29 @@ describe('verification entry', () => {
     expect(text).toContain('pnpm verify')
     expect(text).not.toContain('pnpm docs:check && pnpm typecheck')
   })
+
+describe('verify sampling', () => {
+  const sample = (head: string, dirty: number, at = '2026-11-02T00:00:00.000Z'): TreeSample => ({ head, dirty, at })
+
+  it('accepts a run only when both samples describe the same tree', () => {
+    expect(compareSamples(sample('abc1234', 0), sample('abc1234', 0)).verdict).toBe('valid')
+    // 首尾都脏、但一致：是一次「稳定的污染」，绿的通，但不能冒充干净结果。
+    const stableDirty = compareSamples(sample('abc1234', 3), sample('abc1234', 3))
+    expect(stableDirty.verdict).toBe('valid')
+    expect(stableDirty.reason).toMatch(/dirty/)
+  })
+
+  it('calls a run invalid when someone commits or edits while it runs', () => {
+    // 这两种就是今晚实际发生的：起跑后有人提交（head 变）或有人在写（dirty 变）。
+    expect(compareSamples(sample('abc1234', 0), sample('def5678', 0))).toMatchObject({ verdict: 'invalid' })
+    expect(compareSamples(sample('abc1234', 0), sample('abc1234', 4))).toMatchObject({ verdict: 'invalid' })
+    // 两个都变，仍然是 invalid，而且理由先报 head——那是更好定位的那个。
+    expect(compareSamples(sample('abc1234', 0), sample('def5678', 2)).reason).toMatch(/HEAD moved/)
+  })
+
+  it('refuses to attest a tree it cannot see, instead of guessing', () => {
+    expect(compareSamples(sample('no-git', -1), sample('no-git', -1)).verdict).toBe('unknown')
+    expect(compareSamples(sample('abc1234', 0), sample('no-git', -1)).verdict).toBe('unknown')
+  })
+})
 })

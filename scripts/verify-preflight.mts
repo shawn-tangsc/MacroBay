@@ -14,34 +14,25 @@
  * 为什么不默认阻断：日常验证经常跑在“刚改完还没提交”的树上，直接阻断会逼人去找 `--no-verify`
  * 一类的绕过，而那正是这套门禁最怕的东西——**允许跑、但结果不能冒充干净结果**。
  */
-import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+
+import { samplePath, sampleTree } from './verify-sample.mts'
 
 type Verdict = 'clean' | 'polluted'
 
-function git(args: readonly string[]): string {
-  return execFileSync('git', [...args], { encoding: 'utf8' }).trimEnd()
-}
-
-function dirtyCount(): number {
-  const porcelain = git(['status', '--porcelain'])
-  return porcelain === '' ? 0 : porcelain.split('\n').filter((line) => line.trim() !== '').length
-}
-
 const strict = process.argv.includes('--strict')
 
-let head = 'unknown'
-let dirty = -1
-try {
-  head = git(['rev-parse', '--short', 'HEAD'])
-  dirty = dirtyCount()
-} catch {
-  // 不是 git 仓库（`git archive` 出来的快照、CI 的 tarball）：这不算污染，也不能算干净。
-  head = 'no-git'
-  dirty = -1
-}
+const { head, dirty, at: startedAt } = sampleTree()
 
 const verdict: Verdict = dirty === 0 ? 'clean' : 'polluted'
-const startedAt = new Date().toISOString()
+
+// 把起点采样留给链尾的 `verify:postflight`：没有它，收尾就无从比较。
+try {
+  writeFileSync(samplePath(), JSON.stringify({ head, dirty, at: startedAt }))
+} catch (error) {
+  // 写不进去（只读临时目录之类）：不阻断验证，但明确说出「这次没有收尾见证」。
+  console.log(`verify-preflight: could not record the start sample (${String(error)}); this run cannot be attested at the end.`)
+}
 
 // 一行，字段顺序固定：谁想解析都不必读第二行。
 console.log(
