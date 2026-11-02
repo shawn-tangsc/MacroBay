@@ -169,7 +169,8 @@ export type DailyBriefingListResultView =
   | Readonly<{ state: 'unavailable'; failureCode: 'time-invalid' }>
 
 export type DailyBriefingService = Readonly<{
-  getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
+  /** One named period's edition when the scheduler says which fired; unscheduled callers mean `default`. */
+  getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>) => Promise<DailyBriefingTodayResult>
   regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale }>) => Promise<DailyBriefingGetResult>
@@ -279,14 +280,15 @@ export function createDailyBriefingService(deps: Readonly<{
     }
   }
 
-  async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const window = briefingWindow(now(), input.timeZone, await generation())
+  async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>): Promise<DailyBriefingTodayResult> {
+    const periodId = input.periodId ?? DEFAULT_PERIOD_ID
+    const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const key = `${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`
+    const key = `${window.date}:${periodId}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
-      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale, DEFAULT_PERIOD_ID))
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
+      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale, periodId))
       .finally(() => {
         progress.delete(key)
         inFlight.delete(key)

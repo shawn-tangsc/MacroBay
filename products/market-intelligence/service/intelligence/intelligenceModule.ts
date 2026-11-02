@@ -67,7 +67,7 @@ import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsur
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
-import { briefingScheduleFrom, briefingScheduleInput, registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { applyDailyBriefingSchedules, registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
@@ -799,7 +799,7 @@ export function getIntelligenceModule(
     // generation time, so a change never rewrites an edition that already exists.
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
-      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(settings, shellTimeZone()))
+      onSaved: () => { void dailyBriefingGenerationSettings.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
     })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
@@ -947,7 +947,7 @@ export function getIntelligenceModule(
       service: dailyBriefingService,
       getLocale: getAppLanguage,
       timeZone: shellTimeZone,
-      getSchedule: async () => briefingScheduleInput(await dailyBriefingGenerationSettings.getView())
+      getPeriods: () => dailyBriefingGenerationSettings.getPeriods()
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
@@ -974,7 +974,7 @@ export function getIntelligenceModule(
       })
     }
     const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
-      scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(await dailyBriefingGenerationSettings.reanchor(timeZone), timeZone))
+      applyDailyBriefingSchedules(jobRuntime, await dailyBriefingGenerationSettings.getPeriods(), timeZone)
     }
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {

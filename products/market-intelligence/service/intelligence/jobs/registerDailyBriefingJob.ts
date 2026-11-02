@@ -1,119 +1,75 @@
-import type { JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
+import type { JobRuntime } from '@platform/jobs'
 
-import { dailyBriefingGenerationPolicy, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { dailyBriefingGenerationCronExpression, isDailyBriefingTimeZoneId } from '../daily-briefing/dailyBriefingGenerationSettings'
+import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import {
+  createDefaultDailyBriefingPeriod,
+  generationTimeZoneIssue,
+  type DailyBriefingPeriod
+} from '../daily-briefing/dailyBriefingGenerationSettings'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
+import {
+  syncDailyBriefingSchedules,
+  type DailyBriefingScheduleSync
+} from './dailyBriefingSchedules'
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
 
-export const dailyBriefingJobPolicy = Object.freeze({
-  productId: 'market-intelligence',
-  title: 'Generate the daily briefing',
-  /** Fallback when no settings reader is wired. The reader setting defaults to the same time. */
-  generationTime: dailyBriefingGenerationPolicy.defaultGenerationTime
-})
-
-/** The one trigger definition, so registration and a settings change build it the same way. */
-export function dailyBriefingScheduleDefinition(
-  input: Readonly<{ timeZone: string; generationTime: string }>
-): ScheduledJobDefinition {
-  return {
-    id: INTELLIGENCE_DAILY_BRIEFING_JOB,
-    owner: 'product',
-    productId: dailyBriefingJobPolicy.productId,
-    handlerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
-    title: dailyBriefingJobPolicy.title,
-    audience: 'user' as const,
-    trigger: {
-      kind: 'cron',
-      expression: dailyBriefingGenerationCronExpression({ generationTime: input.generationTime }),
-      timezone: input.timeZone
-    },
-    payload: {}
+/** A definition always carries its period; anything else means the only period there used to be. */
+function periodIdOf(payload: unknown): string {
+  if (typeof payload === 'object' && payload !== null) {
+    const periodId = (payload as { periodId?: unknown }).periodId
+    if (typeof periodId === 'string' && periodId) return periodId
   }
-}
-
-/** Re-registers the same definition id; the runtime replaces the previous timer. */
-export function scheduleDailyBriefingJob(
-  jobRuntime: Pick<JobRuntime, 'setSchedule'>,
-  input: Readonly<{ timeZone: string; generationTime: string }>
-): void {
-  jobRuntime.setSchedule(dailyBriefingScheduleDefinition(input))
+  return DEFAULT_PERIOD_ID
 }
 
 /**
- * The schedule a saved setting means, in one place: the stored zone wins over the reader zone whenever
- * the setting carries one, because the cron and the edition cutoff must be the same clock.
- */
-export function briefingScheduleFrom(
-  settings: Readonly<{ generationTime: string; generationTimeZone?: string }>,
-  readerTimeZone: string
-): Readonly<{ timeZone: string; generationTime: string }> {
-  return { timeZone: settings.generationTimeZone ?? readerTimeZone, generationTime: settings.generationTime }
-}
-
-/** The saved settings as the scheduler reads them, with an unreadable zone carried, not repaired. */
-export function briefingScheduleInput(view: Readonly<{ generationTime: string; generationTimeZone: string | null; generationTimeZoneInvalid: string | null }>): Readonly<{ generationTime: string; generationTimeZone?: string; generationTimeZoneInvalid?: string }> {
-  return {
-    generationTime: view.generationTime,
-    ...(view.generationTimeZone ? { generationTimeZone: view.generationTimeZone } : {}),
-    ...(view.generationTimeZoneInvalid ? { generationTimeZoneInvalid: view.generationTimeZoneInvalid } : {})
-  }
-}
-
-/**
- * One clock job. It does not own a second queue or a timer: the platform scheduler calls the same
- * service the reader calls, and `getToday` coalesces with an open that happened first. The cron is
- * the reader's generation time, which is also the edition cutoff. A day that already exists is a
- * successful no-op; a failed source read throws so the run is visible, and the service has written
- * nothing.
+ * One handler for every period's definition.
  *
- * The service itself runs the deterministic core-fact ensure after building the packet/document
- * and before the editorial turn (see `createDailyBriefingService`), so this job needs no second
- * fetch step: it only asks for the edition, and the Agent backfill protocol remains the fallback
- * for whatever gap the deterministic pass could not fill.
+ * The definition's payload says which period fired, and the handler re-reads the periods before
+ * spending anything: a run queued for a period that has since been removed, or whose zone is now
+ * unreadable, returns without fetching. The generation itself uses the period's own time, window
+ * and zone, so two definitions can never write one period's edition under the other's name.
  */
 export function registerDailyBriefingJob(
   jobRuntime: JobRuntime,
   deps: Readonly<{
     service: Pick<DailyBriefingService, 'getToday'>
     getLocale: () => Promise<DailyBriefingLocale>
-    /** 主进程唯一的读者时区来源；每次生成都重新取，注册时的值只用于排期。 */
+    /** 主进程唯一的读者时区来源；只在期没有自己的时区时决定它的钟。 */
     timeZone: () => string
-    /**
-     * Read once at registration; a save re-registers through `scheduleDailyBriefingJob`. The stored
-     * zone wins over `timeZone` whenever the setting carries one: the cron and the edition cutoff
-     * must be the same clock, and only the stored value can say which clock that is.
-     */
-    getSchedule?: () => Promise<Readonly<{ generationTime: string; generationTimeZone?: string; generationTimeZoneInvalid?: string }>>
+    /** The saved periods, read at registration and again at every run. */
+    getPeriods: () => Promise<readonly DailyBriefingPeriod[]>
   }>
 ): void {
-  jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async () => {
+  jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async (payload) => {
+    const periodId = periodIdOf(payload)
+    const period = (await deps.getPeriods()).find((candidate) => candidate.id === periodId)
+    if (!period) return
+    if (generationTimeZoneIssue(period.generationTimeZone)) return
     const locale = await deps.getLocale()
-    const timeZone = deps.timeZone()
-    const result = await deps.service.getToday({ locale, timeZone })
+    const timeZone = period.generationTimeZone ?? deps.timeZone()
+    const result = await deps.service.getToday({
+      locale,
+      timeZone,
+      periodId,
+      generation: { generationTime: period.generationTime, windowHours: period.windowHours }
+    })
     if (result.state !== 'available') throw new Error(`daily-briefing-generation-${result.failureCode}`)
   })
   if (typeof jobRuntime.setSchedule !== 'function') return
-  const readerTimeZone = deps.timeZone()
-  if (!deps.getSchedule) {
-    scheduleDailyBriefingJob(jobRuntime, { timeZone: readerTimeZone, generationTime: dailyBriefingJobPolicy.generationTime })
-    return
-  }
-  // The settings file is read asynchronously; until it answers the job simply has no schedule,
-  // which is the same state as a fresh install before the first read. The read is the migration
-  // point: by the time the first cron is built, the setting already carries its zone.
-  void deps.getSchedule()
-    .then((schedule) => {
-      // A saved zone that cannot be read pauses the automatic run instead of guessing one: the
-      // panel already tells the reader which value is wrong, and a guessed clock would move the
-      // edition without saying so.
-      if (schedule.generationTimeZoneInvalid) return
-      scheduleDailyBriefingJob(jobRuntime, {
-        timeZone: schedule.generationTimeZone && isDailyBriefingTimeZoneId(schedule.generationTimeZone)
-          ? schedule.generationTimeZone
-          : readerTimeZone,
-        generationTime: schedule.generationTime
-      })
-    })
-    .catch(() => scheduleDailyBriefingJob(jobRuntime, { timeZone: readerTimeZone, generationTime: dailyBriefingJobPolicy.generationTime }))
+  // The settings file is read asynchronously; until it answers, the fallback below is what a fresh
+  // install gets. The fallback registers the period id too, so a fresh install has the same id
+  // shape the saved periods produce.
+  void deps.getPeriods()
+    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods))
+    .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], deps.timeZone()))
+}
+
+/** Re-register the definitions that changed and remove the ones whose period is gone. */
+export function applyDailyBriefingSchedules(
+  jobRuntime: Pick<JobRuntime, 'setSchedule' | 'removeSchedule' | 'listSchedules'>,
+  periods: readonly DailyBriefingPeriod[],
+  readerTimeZone?: string
+): DailyBriefingScheduleSync {
+  return syncDailyBriefingSchedules(jobRuntime, periods, readerTimeZone ?? 'UTC', generationTimeZoneIssue)
 }
