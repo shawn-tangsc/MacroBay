@@ -95,12 +95,72 @@ export type InspectedCommit = {
   files: readonly string[]
 }
 
-export function findViolations(commits: readonly InspectedCommit[]): ComponentOwnershipViolation[] {
+/**
+ * 后置认领（Chief 2026-11-02 批的一次性补账机制）：
+ *
+ * 一笔提交忘了带 `Component-Owner`，而它已经被后来的提交盖住、不能 `amend`——改写历史等于
+ * 把别人记录的哈希全部作废。于是允许**后来的一笔**把责任接过去：那一笔带
+ * `Component-Owner: 前端组件` + 逐行 `Owns: <hash>`，就说清“这笔归我”。
+ *
+ * 四条约束，缺一条就不认（宁可红，也不给「声明一下就过关」开口子）：
+ * 1. **内容要核，不只看声明**：被认领那笔的每个路径必须落在组件目录（或组件自己的文档），
+ *    其余路径要在**认领这笔**的提交信息里逐条写 `Also: <路径> — 为什么必须同一笔`；
+ * 2. **已经被标签过的提交不许再被认领**——同一笔不能被两家都声明；
+ * 3. **只认尚未推送到远程的提交**：认领是一次性补账，不是历史保险；
+ * 4. 认领本身也要有反向实测：拿掉 `Owns:` 那行，原来红的那笔必须重新变红（见用例）。
+ *
+ * 这不是长期保底：从这一笔之后，动组件目录必须自带标签。
+ */
+export function claimsIn(commit: InspectedCommit): string[] {
+  if (!declaresComponentOwner(commit.message)) return []
+  const targets: string[] = []
+  for (const line of commit.message.split('\n')) {
+    const match = /^Owns:\s*([0-9a-f]{7,40})$/u.exec(line.trim())
+    if (match?.[1] !== undefined) targets.push(match[1])
+  }
+  return targets
+}
+
+export type ClaimOptions = {
+  /** 已推送到远程的提交不许被后置认领。默认当作全部未推送（单元用例不必连网）。 */
+  isPushed?: (hash: string) => boolean
+}
+
+/** 被有效认领的提交哈希。无效认领一律忽略——于是那笔照原样红，不会因为“认领过了”就消失。 */
+export function claimedCommits(
+  commits: readonly InspectedCommit[],
+  options: ClaimOptions = {}
+): ReadonlySet<string> {
+  const isPushed = options.isPushed ?? ((): boolean => false)
+  const find = (target: string): InspectedCommit | undefined =>
+    commits.find((commit) => commit.hash === target) ?? commits.find((commit) => commit.hash.startsWith(target))
+
+  const claimed = new Set<string>()
+  for (const claim of commits) {
+    for (const target of claimsIn(claim)) {
+      const claimedCommit = find(target)
+      if (claimedCommit === undefined) continue
+      // 已经被任何一家标签过的提交不再被认领：同一笔不能有第二份归属声明。
+      if (/^Component-Owner:/mu.test(claimedCommit.message)) continue
+      if (isPushed(claimedCommit.hash)) continue
+      if (unexplainedFiles(claimedCommit.files, claim.message).length > 0) continue
+      claimed.add(claimedCommit.hash)
+    }
+  }
+  return claimed
+}
+
+export function findViolations(
+  commits: readonly InspectedCommit[],
+  options: ClaimOptions = {}
+): ComponentOwnershipViolation[] {
+  const claimed = claimedCommits(commits, options)
   const violations: ComponentOwnershipViolation[] = []
   for (const commit of commits) {
     if (!touchesComponents(commit.files)) continue
     // 早于生效点的提交：两条新规则都不判（它们写在规则存在之前，不可能满足）。
     if (predatesRules(commit.authorDate)) continue
+    if (claimed.has(commit.hash)) continue
     const unexplained = unexplainedFiles(commit.files, commit.message)
     if (declaresComponentOwner(commit.message) && unexplained.length === 0) continue
     violations.push({
@@ -155,7 +215,16 @@ function main(): void {
     return
   }
 
-  const violations = findViolations(commits)
+  // 只认尚未推送到远程的提交：认领是一次性补账，不是历史保险。
+  const isPushed = (hash: string): boolean => {
+    try {
+      return git(['branch', '-r', '--contains', hash]).trim() !== ''
+    } catch {
+      // 读不出远程状态时从严：当作已推送，不认领（不静默放行）。
+      return true
+    }
+  }
+  const violations = findViolations(commits, { isPushed })
   if (violations.length === 0) {
     console.log(`components-ownership: ${commits.length} commit(s) checked, none touched ${COMPONENTS_DIR} without a ${OWNER_TRAILER} trailer.`)
     return

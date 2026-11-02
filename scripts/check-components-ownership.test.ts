@@ -157,4 +157,46 @@ describe('components ownership guard', () => {
     expect(findViolations(shape('not-a-date'))).toHaveLength(1)
   })
 
+  describe('later claim (one-off backfill)', () => {
+    const untagged = {
+      hash: 'd1d1d1d',
+      subject: 'test(ui): relax the key-shape guard',
+      message: 'test(ui): relax the key-shape guard',
+      authorDate: '2026-11-02T14:00:00+08:00',
+      files: [`${COMPONENTS_DIR}/tooltip/tooltipCallSiteGuard.test.ts`, `${COMPONENTS_DIR}/textKeyShape.ts`]
+    }
+    const claim = (extra: readonly string[] = [], files: readonly string[] = ['scripts/check-components-ownership.mts']) => ({
+      hash: 'c1c1c1c',
+      subject: 'chore(ui): claim the guard commit',
+      message: ['chore(ui): claim the guard commit', '', 'Component-Owner: 前端组件', 'Owns: d1d1d1d', ...extra].join('\n'),
+      authorDate: '2026-11-02T14:05:00+08:00',
+      files
+    })
+
+    it('rescues an untagged component commit, and only when the claim exists', () => {
+      // 反向实测：拿掉认领，原来红的那笔必须重新红。
+      expect(findViolations([untagged])).toHaveLength(1)
+      expect(findViolations([untagged, claim()])).toEqual([])
+    })
+
+    it('validates the content, not just the declaration', () => {
+      // 认领方要为一个不在自己领域里的路径负责：不写 `Also:` 就不认。
+      const withForeignPath = { ...untagged, files: [...untagged.files, 'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx'] }
+      const withoutReason = claim()
+      withoutReason.files = ['scripts/check-components-ownership.mts']
+      expect(findViolations([withForeignPath, withoutReason])).toHaveLength(1)
+
+      const withReason = claim(['Also: apps/desktop-shell/src/renderer/src/shell/AppShell.tsx — 调用点必须与组件同笔'])
+      expect(findViolations([withForeignPath, withReason])).toEqual([])
+    })
+
+    it('never lets one commit carry two owners', () => {
+      const alreadyTagged = { ...untagged, message: 'test(ui): x\n\nComponent-Owner: 其他线' }
+      expect(findViolations([alreadyTagged, claim()])).toHaveLength(1)
+    })
+
+    it('only claims commits that are not on a remote', () => {
+      expect(findViolations([untagged, claim()], { isPushed: (hash) => hash === 'd1d1d1d' })).toHaveLength(1)
+    })
+  })
 })
