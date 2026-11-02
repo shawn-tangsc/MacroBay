@@ -40,6 +40,7 @@
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts",
     "check:hex-color": "tsx scripts/check-hex-color.mts",
     "check:undefined-token": "tsx scripts/check-undefined-token.mts",
+    "seed:briefing-history": "tsx scripts/seed-daily-briefing-history.mts",
     "check:async-initial-state": "tsx scripts/check-async-initial-state.mts",
     "check:state-content-ternary": "tsx scripts/check-state-content-ternary.mts",
     "check:components-ownership": "tsx scripts/check-components-ownership.mts"
