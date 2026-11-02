@@ -44,6 +44,7 @@ second one.
 | `className` | `string` | no | Your own class, for tests and legacy names. It cannot set a width. |
 | `align` | `'top' \| 'center'` | no, default `top` | Two shapes, not a switch: a task at the top edge, or centred on screen. |
 | `layer` | `'base' \| 'over-drawer'` | no, default `base` | The dialog sits in the normal layer or above a drawer. The z-index numbers live inside the component. |
+| `destroyOnHidden` | `boolean` | no | Unmount the body after close. Passed through to antd only when given; no call site writes its own `{open && …}` equivalent. |
 | `resolveText` | `(key: string) => string` | yes | Your resolver. Unknown keys return an empty string by convention; the component never falls back to the key name. |
 
 ### What the component decides, so call sites do not
@@ -63,6 +64,9 @@ second one.
   the concrete z-index stays in one table in the component, so no call site passes a number.
 - **Titles that are runtime data go through `titleParams`.** A skill or template name is a formatted
   value inside a key's `{name}` template, not a sentence handed to the component.
+- **When the content exists is a lifecycle switch, not a look.** `destroyOnHidden` changes whether
+  the body is unmounted after close; it is passed through untouched, and a call site must not fake
+  it with `{open && <Form />}` — that gives the first and second open different form state.
 
 ### Motion
 

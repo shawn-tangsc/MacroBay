@@ -10,6 +10,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MODAL_ALIGNS, MODAL_LAYERS, MODAL_WIDTHS, Modal, type ModalProps } from './Modal'
 import { MODAL_CLOSE_KEY, resolveModalText } from './modalText'
 
+/**
+ * 截下传给 antd `Modal` 的 props，同时照常渲染真正的组件——
+ * `destroyOnHidden` 的卸载发生在关闭动画之后，happy-dom 不会跑完那段动画，
+ * 所以「有没有原样交给 antd」是这一层能证明的事实，「关闭后卸载」归 antd。
+ */
+const passedProps = vi.hoisted(() => [] as Record<string, unknown>[])
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return {
+    ...actual,
+    Modal: (props: Record<string, unknown>) => {
+      passedProps.push(props)
+      return <actual.Modal {...(props as never)} />
+    }
+  }
+})
+
 const source = readFileSync(join(__dirname, 'Modal.tsx'), 'utf8')
 const css = readFileSync(join(__dirname, 'modal.css'), 'utf8')
 
@@ -208,6 +225,37 @@ describe('Modal 的形态与层级', () => {
     // 缺参数原样保留：少一个名字看得见，比安静地少一个词好。
     await mount({ resolveText })
     expect(document.querySelector('.ant-modal-title')?.textContent).toBe('技能 {name}')
+  })
+})
+
+describe('Modal 的生命周期开关', () => {
+  it('keeps the content mounted after close when the caller omits destroyOnHidden', async () => {
+    await mount({ children: <span data-probe="content">content</span> })
+    expect(document.querySelector('[data-probe="content"]')).not.toBeNull()
+
+    await act(async () => {
+      root!.render(<Modal {...props({ open: false, children: <span data-probe="content">content</span> })} />)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // 不传即 antd 默认：内容留在 DOM 里，下一次打开不会重新挂载。
+    expect(document.querySelector('[data-probe="content"]')).not.toBeNull()
+  })
+
+  it('passes destroyOnHidden to antd only when the caller sets it', async () => {
+    passedProps.length = 0
+    await mount()
+    // 不传就不发：没有隐式行为，也没有第二份「关闭即卸载」的实现。
+    expect(passedProps.every((entry) => !('destroyOnHidden' in entry))).toBe(true)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    passedProps.length = 0
+    await mount({ destroyOnHidden: true })
+    expect(passedProps.at(-1)?.destroyOnHidden).toBe(true)
   })
 })
 

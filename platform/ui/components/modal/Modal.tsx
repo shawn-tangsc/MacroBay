@@ -66,6 +66,14 @@ type ModalBase = {
   align?: ModalAlign
   /** 普通层，或压在抽屉之上（模型服务那 4 处）。 */
   layer?: ModalLayer
+  /**
+   * **生命周期开关**：关闭后是否卸载内容。原样透传给 antd，**不传即 antd 默认**（不加隐式行为）。
+   *
+   * 判据同抽屉：改变「内容何时存在」→ 透传；改变「长什么样」→ 进规格。
+   * 调用点不许自己写等价物（`{open && <Form/>}` 之类）——那会变成同一件事的第二份实现，
+   * 而且第一次打开与第二次打开拿到的表单状态会不一样。
+   */
+  destroyOnHidden?: boolean
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -88,7 +96,7 @@ type ModalHeading =
 export type ModalProps = ModalBase & ModalHeading
 
 export function Modal(props: ModalProps): ReactElement {
-  const { open, width, onClose, footer, children, className, resolveText, align = 'top', layer = 'base' } = props
+  const { open, width, onClose, footer, children, className, resolveText, align = 'top', layer = 'base', destroyOnHidden } = props
   const headless = props.titleKey === undefined
   const closeLabel = useModalText()()
   const zIndex = LAYER_Z_INDEX[layer]
@@ -117,6 +125,8 @@ export function Modal(props: ModalProps): ReactElement {
       {...(zIndex === undefined ? {} : { zIndex })}
       // 无标题档藏掉标题栏，但保留隐藏标题作为读屏名。
       {...(headless ? { styles: { header: { display: 'none' } } } : {})}
+      // 生命周期开关：不传就不发，保持 antd 默认（内容留在 DOM 里）。
+      {...(destroyOnHidden === undefined ? {} : { destroyOnHidden })}
       className={['modal', className].filter(Boolean).join(' ')}>
       {children}
     </AntModal>
