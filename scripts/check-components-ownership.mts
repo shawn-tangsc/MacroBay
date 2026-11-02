@@ -148,28 +148,72 @@ export type InspectedCommit = {
  *
  * 这不是长期保底：从这一笔之后，动组件目录必须自带标签。
  */
-export function claimsIn(commit: InspectedCommit): string[] {
+/**
+ * 认领（Chief 2026-11-02 批准放宽第 3 条后的形状）。
+ *
+ * 「认领」是**在新提交里补一份声明**，不改历史，所以「已推送」本身不该成为拒绝理由。
+ * 要防的是橡皮图章，因此每条认领必须自带理由，且三条反向用例必须红：
+ * 不存在的哈希、同一哈希被两家认领、缺理由。
+ */
+export type Claim = { hash: string; why: string }
+
+export function claimsIn(commit: InspectedCommit): Claim[] {
   if (!declaresComponentOwner(commit.message)) return []
-  const targets: string[] = []
-  for (const line of commit.message.split('\n')) {
-    const match = /^Owns:\s*([0-9a-f]{7,40})$/u.exec(line.trim())
-    if (match?.[1] !== undefined) targets.push(match[1])
+  const lines = commit.message.split('\n').map((line) => line.trim())
+  const claims: Claim[] = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^Owns:\s*([0-9a-f]{7,40})$/u.exec(lines[index] ?? '')
+    if (match?.[1] === undefined) continue
+    const whyMatch = /^Why:\s*(.+)$/u.exec(lines[index + 1] ?? '')
+    claims.push({ hash: match[1], why: whyMatch?.[1]?.trim() ?? '' })
   }
-  return targets
+  return claims
 }
 
-export type ClaimOptions = {
-  /** 已推送到远程的提交不许被后置认领。默认当作全部未推送（单元用例不必连网）。 */
-  isPushed?: (hash: string) => boolean
-  /**
-   * 机械删除豁免（Chief 2026-11-02 定，`MI-11-R166`）：**同一行文本、全仓一致地删掉**，
-   * 允许整体一笔。判据必须机械：提交里只有删除、没有任何新增，且所有删除行的文本完全相同。
-   *
-   * 为什么需要它：把「逐文件各设一行」改成「环境里只设一处」这种清理，天然会横跨上百个文件；
-   * 为它写一百多行 `Also:` 解释，只会把一句真话扩成一百多行套话。
-   * 反过来也必须严：**有一条新增行、或两处删除文本不同，就不算机械删除**。
-   */
-  isMechanicalDeletion?: (hash: string) => boolean
+function findByPrefix(commits: readonly InspectedCommit[], target: string): InspectedCommit | undefined {
+  return commits.find((commit) => commit.hash === target) ?? commits.find((commit) => commit.hash.startsWith(target))
+}
+
+/**
+ * 认领声明本身的问题：哈希不存在、缺理由、同一哈希被两家认领。
+ *
+ * 这些问题**必须让门禁失败**，不能像「无效认领」那样静默忽略——静默忽略会让一份写错的声明
+ * 看起来像已经处理过，而实际那笔还是红的，第二天没人知道该找谁。
+ */
+/**
+ * 「认领必须带理由」这条规则的生效点（Chief 2026-11-02 批准放宽第 3 条时加）。
+ *
+ * 在此之前的两笔认领没有 `Why:` 行——它们当时按旧形状写的，不该被一条后立的规矩判红
+ * （同 `RULES_SINCE` 的理由：用新规矩判旧提交，只会得到一堆正确的红和一次没意义的返工）。
+ */
+export const CLAIM_REASON_SINCE = '2026-11-02T19:00:00+08:00'
+
+export function claimProblems(
+  commits: readonly InspectedCommit[],
+  /** 该哈希是否存在于仓库（可能早于本次检查区间）：区间外但真实存在的目标，不当成「不存在」。 */
+  existsElsewhere: (hash: string) => boolean = (): boolean => false
+): string[] {
+  const problems: string[] = []
+  const owners = new Map<string, string>()
+  for (const claim of commits) {
+    for (const entry of claimsIn(claim)) {
+      const target = findByPrefix(commits, entry.hash)
+      if (target === undefined) {
+        if (!existsElsewhere(entry.hash)) problems.push(`${claim.hash.slice(0, 8)} 认领了不存在的提交 ${entry.hash}`)
+        continue
+      }
+      if (!claim.authorDate || (entry.why === '' && Date.parse(claim.authorDate) > Date.parse(CLAIM_REASON_SINCE))) {
+        problems.push(`${claim.hash.slice(0, 8)} 认领 ${entry.hash} 缺理由（需紧跟一行 \`Why: ...\`）`)
+      }
+      const previous = owners.get(target.hash)
+      if (previous !== undefined && previous !== claim.hash) {
+        problems.push(`${target.hash.slice(0, 8)} 被两家认领：${previous.slice(0, 8)} 与 ${claim.hash.slice(0, 8)}`)
+        continue
+      }
+      owners.set(target.hash, claim.hash)
+    }
+  }
+  return problems
 }
 
 /** 被有效认领的提交哈希。无效认领一律忽略——于是那笔照原样红，不会因为“认领过了”就消失。 */
@@ -177,14 +221,15 @@ export function claimedCommits(
   commits: readonly InspectedCommit[],
   options: ClaimOptions = {}
 ): ReadonlySet<string> {
-  const isPushed = options.isPushed ?? ((): boolean => false)
-  const find = (target: string): InspectedCommit | undefined =>
-    commits.find((commit) => commit.hash === target) ?? commits.find((commit) => commit.hash.startsWith(target))
+  const reasonRequired = (claim: InspectedCommit, why: string): boolean =>
+    why !== '' || Date.parse(claim.authorDate) <= Date.parse(CLAIM_REASON_SINCE)
 
   const claimed = new Set<string>()
   for (const claim of commits) {
-    for (const target of claimsIn(claim)) {
-      const claimedCommit = find(target)
+    for (const entry of claimsIn(claim)) {
+      // 缺理由的认领不算数（生效点之前的旧认领除外）——否则它只是「写了个哈希」。
+      if (!reasonRequired(claim, entry.why)) continue
+      const claimedCommit = findByPrefix(commits, entry.hash)
       if (claimedCommit === undefined) continue
       // 已经被**另一家**标签过的提交不再被认领：同一笔不能有第二份归属声明。
       //
@@ -194,7 +239,6 @@ export function claimedCommits(
       // 「理由漏写」，补的仍是对同一家的声明，不构成两家争一笔。
       const declaredOwner = declaresComponentOwner(claimedCommit.message)
       if (/^Component-Owner:/mu.test(claimedCommit.message) && !declaredOwner) continue
-      if (isPushed(claimedCommit.hash)) continue
       if (unexplainedFiles(claimedCommit.files, claim.message).length > 0) continue
       claimed.add(claimedCommit.hash)
     }
@@ -291,15 +335,23 @@ function main(): void {
     return
   }
 
-  // 只认尚未推送到远程的提交：认领是一次性补账，不是历史保险。
-  const isPushed = (hash: string): boolean => {
+  // 认领不改历史、只补声明，所以「已推送」不再是拒绝理由（Chief 2026-11-02 批准放宽）；
+  // 要防的是橡皮图章——每条认领必须自带理由，声明本身有问题就让门禁失败。
+  const existsElsewhere = (hash: string): boolean => {
     try {
-      return git(['branch', '-r', '--contains', hash]).trim() !== ''
-    } catch {
-      // 读不出远程状态时从严：当作已推送，不认领（不静默放行）。
+      git(['cat-file', '-e', hash])
       return true
+    } catch {
+      return false
     }
   }
+  const problems = claimProblems(commits, existsElsewhere)
+  if (problems.length > 0) {
+    console.error('components-ownership: 认领声明有问题：')
+    for (const problem of problems) console.error(`  ${problem}`)
+    process.exit(1)
+  }
+  const claimedCount = claimedCommits(commits).size
   const mechanical = (hash: string): boolean => {
     try {
       return isMechanicalDeletionPatch(git(['show', '--format=', '--unified=0', hash]))
@@ -308,9 +360,11 @@ function main(): void {
       return false
     }
   }
-  const violations = findViolations(commits, { isPushed, isMechanicalDeletion: mechanical })
+  const violations = findViolations(commits, { isMechanicalDeletion: mechanical })
   if (violations.length === 0) {
     console.log(`components-ownership: ${commits.length} commit(s) checked, none touched ${COMPONENTS_DIR} without a ${OWNER_TRAILER} trailer.`)
+    // 认领数量必须看得见：一晚上认领十几笔，说明分工本身出了问题。
+    console.log(`components-ownership: ${claimedCount} commit(s) claimed after the fact.`)
     return
   }
 

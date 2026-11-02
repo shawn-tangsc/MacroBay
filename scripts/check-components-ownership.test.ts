@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  claimProblems,
+  claimedCommits,
   COMPONENTS_DIR,
   RULES_SINCE,
   declaresComponentOwner,
   findViolations,
+  isMechanicalDeletionPatch,
   touchesComponents
 } from './check-components-ownership.mts'
 
@@ -275,8 +278,9 @@ describe('components ownership guard', () => {
       expect(findViolations([alreadyTagged, claim()])).toHaveLength(1)
     })
 
-    it('only claims commits that are not on a remote', () => {
-      expect(findViolations([untagged, claim()], { isPushed: (hash) => hash === 'd1d1d1d' })).toHaveLength(1)
+    it('claims a published commit too, because a claim does not rewrite history', () => {
+      // 旧规则「只认未推送」已放宽：认领是在新提交里补声明，不改历史。
+      expect(findViolations([untagged, claim()])).toEqual([])
     })
   })
 
@@ -303,5 +307,98 @@ describe('components ownership guard', () => {
       files: [`${COMPONENTS_DIR}/tabs/Tabs.tsx`]
     }
     expect(findViolations([adds], { isMechanicalDeletion: () => false })).toHaveLength(1)
+  })
+
+  it('treats a whole-tree removal of one identical line as mechanical, and nothing else', () => {
+    // 判据只看 diff，不看声明。这是它能在上百个文件上一次性放行的唯一理由。
+    const patch = (lines: string): string => lines
+
+    // ① 只有删除，且删的是同一行文本 → 机械删除
+    expect(
+      isMechanicalDeletionPatch(
+        patch(
+          [
+            'diff --git a/x.ts b/x.ts',
+            '--- a/x.ts',
+            '+++ b/x.ts',
+            '-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })',
+            '-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })'
+          ].join('\n')
+        )
+      )
+    ).toBe(true)
+
+    // ② 有一处新增 → 不是机械删除。那说明它带来了新东西，就得一句一句说清为什么。
+    expect(
+      isMechanicalDeletionPatch(
+        patch(
+          [
+            '--- a/x.ts',
+            '+++ b/x.ts',
+            '-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })',
+            '+setActEnvironmentOnce()'
+          ].join('\n')
+        )
+      )
+    ).toBe(false)
+
+    // ③ 删了两种不同的文本 → 也不是。那不是「同一行全仓删掉」，是两件事。
+    expect(
+      isMechanicalDeletionPatch(
+        patch(
+          [
+            '--- a/x.ts',
+            '+++ b/x.ts',
+            '-import { act } from "react"',
+            '-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })'
+          ].join('\n')
+        )
+      )
+    ).toBe(false)
+
+    // ④ 只有新增 → 不是删除，自然不算。
+    expect(isMechanicalDeletionPatch(patch(['--- a/x.ts', '+++ b/x.ts', '+const x = 1'].join('\n')))).toBe(false)
+  })
+
+  it('rejects a claim of a hash that does not exist', () => {
+    const commits = [
+      { hash: 'd1d1d1d', subject: 'x', message: 'x', authorDate: '2026-11-02T15:00:00+08:00', files: [`${COMPONENTS_DIR}/a.tsx`] },
+      {
+        hash: 'c2c2c2c',
+        subject: 'claim',
+        message: ['chore: claim', '', 'Component-Owner: 前端组件', 'Owns: deadbeef', 'Why: 理由'].join('\n'),
+        authorDate: '2026-11-02T19:30:00+08:00',
+        files: ['scripts/x.ts']
+      }
+    ]
+    expect(claimProblems(commits).join('\n')).toContain('不存在的提交')
+  })
+
+  it('rejects a claim that carries no reason', () => {
+    const commits = [
+      { hash: 'd1d1d1d', subject: 'x', message: 'x', authorDate: '2026-11-02T15:00:00+08:00', files: [`${COMPONENTS_DIR}/a.tsx`] },
+      {
+        hash: 'c3c3c3c',
+        subject: 'claim',
+        message: ['chore: claim', '', 'Component-Owner: 前端组件', 'Owns: d1d1d1d'].join('\n'),
+        authorDate: '2026-11-02T19:30:00+08:00',
+        files: ['scripts/x.ts']
+      }
+    ]
+    expect(claimProblems(commits).join('\n')).toContain('缺理由')
+    // 且这一笔不能因此被算作已认领。
+    expect(claimedCommits(commits).has('d1d1d1d')).toBe(false)
+  })
+
+  it('rejects the same commit being claimed by two different claimers', () => {
+    const target = { hash: 'd1d1d1d', subject: 'x', message: 'x', authorDate: '2026-11-02T15:00:00+08:00', files: [`${COMPONENTS_DIR}/a.tsx`] }
+    const claim = (hash: string) => ({
+      hash,
+      subject: 'claim',
+      message: ['chore: claim', '', 'Component-Owner: 前端组件', 'Owns: d1d1d1d', 'Why: 理由'].join('\n'),
+      authorDate: '2026-11-02T19:30:00+08:00',
+      files: ['scripts/x.ts']
+    })
+    expect(claimProblems([target, claim('c4c4c4c'), claim('c5c5c5c')]).join('\n')).toContain('被两家认领')
   })
 })
