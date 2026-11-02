@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PERIOD_ID,
   dailyBriefingGenerationPolicy,
   isDailyBriefingGenerationTime,
   isDailyBriefingWindowHours,
@@ -6,29 +7,40 @@ import {
 } from '../../../contracts/dailyBriefing'
 
 /**
- * When the automatic edition runs and how far back it looks.
+ * One edition period: **when it runs and how far back it looks** — nothing else.
  *
- * These two numbers are the whole setting: the job trigger is derived from `generationTime`, and so
- * is the edition cutoff, so "generate at 07:30" and "cover the 07:30 cutoff" cannot disagree. The
- * window is the length of the statistical interval ending at that cutoff.
+ * Language is not here on purpose (it is global, and it lives in its own settings file): a period
+ * with its own language would let one morning be Chinese and the evening be English, which no
+ * reader can predict, and the interface language changing would move both.
+ *
+ * Nothing derived is stored either. `generationTimeZone` holds **the reader's raw value**, never a
+ * verdict about it: "is this a zone we can parse" is computed at the read site by
+ * `generationTimeZoneIssue`, so a stored flag cannot contradict the value it describes.
+ */
+export type DailyBriefingPeriod = Readonly<{
+  id: string
+  name?: string
+  generationTime: string
+  /** Raw as the reader saved it (or as an older file carried it); empty means "follow the reader". */
+  generationTimeZone?: string
+  windowHours: DailyBriefingWindowHours
+}>
+
+/** The stored shape: one or more periods. A save is the only thing that writes it. */
+export type DailyBriefingPeriodsSettings = Readonly<{
+  periods: readonly DailyBriefingPeriod[]
+  updatedAt: string
+}>
+
+/**
+ * What one edition needs from a period: the time it runs and the interval it covers.
+ *
+ * Kept as its own type because the window arithmetic (and the services that call it) must not learn
+ * about period lists just to read two numbers. A period is assignable to it.
  */
 export type DailyBriefingGenerationSettings = Readonly<{
   generationTime: string
-  /**
-   * The IANA zone the time is written in. Absent on settings saved before the zone existed; the
-   * first read fills it in from the reader's display zone (see the settings service) — a bare
-   * 08:05 otherwise moves whenever the display zone changes, which is how one day produced two
-   * editions and three runs.
-   */
-  generationTimeZone?: string
-  /**
-   * The zone the reader saved when it was not a usable id (`Asia/Shangai`). Kept, never repaired
-   * to something plausible: the reader has to see which value is wrong, and the schedule pauses
-   * until it is fixed.
-   */
-  generationTimeZoneInvalid?: string
   windowHours: DailyBriefingWindowHours
-  updatedAt: string
 }>
 
 export type DailyBriefingGenerationSettingsPatch = Readonly<{
@@ -44,54 +56,115 @@ export const dailyBriefingGenerationSettingsPolicy = Object.freeze({
   windowHoursInvalidError: 'daily-briefing-window-hours-invalid'
 })
 
-export function createDefaultDailyBriefingGenerationSettings(
+export function createDefaultDailyBriefingPeriodsSettings(
   now = new Date().toISOString()
-): DailyBriefingGenerationSettings {
-  return {
-    generationTime: dailyBriefingGenerationPolicy.defaultGenerationTime,
-    windowHours: dailyBriefingGenerationPolicy.defaultWindowHours,
+): DailyBriefingPeriodsSettings {
+  return Object.freeze({
+    periods: Object.freeze([createDefaultDailyBriefingPeriod()]),
     updatedAt: now
-  }
+  })
+}
+
+export function createDefaultDailyBriefingPeriod(): DailyBriefingPeriod {
+  return Object.freeze({
+    id: DEFAULT_PERIOD_ID,
+    generationTime: dailyBriefingGenerationPolicy.defaultGenerationTime,
+    windowHours: dailyBriefingGenerationPolicy.defaultWindowHours
+  })
+}
+
+/** The period the single-period views read: the first one, or the default when the list is empty. */
+export function firstDailyBriefingPeriod(settings: DailyBriefingPeriodsSettings): DailyBriefingPeriod {
+  return settings.periods[0] ?? createDefaultDailyBriefingPeriod()
+}
+
+function trimmed(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 /**
- * The stored zone as either a usable id or the value that could not be read, never both: a reader
- * who typed `Asia/Shangai` has to see that exact string, and a repaired one would hide the typo.
+ * One stored entry, repaired only where a value cannot be used at all.
+ *
+ * A time or a window that is not one of the supported values falls back to the policy default — an
+ * older file without these keys is simply the default schedule. The zone is **not** repaired and not
+ * classified here: its raw text is carried through so the reader can be told which value is wrong.
  */
-function zoneFields(value: unknown): Readonly<{ generationTimeZone?: string; generationTimeZoneInvalid?: string }> {
-  if (typeof value !== 'string' || value.trim().length === 0) return {}
-  const trimmed = value.trim()
-  return isDailyBriefingTimeZoneId(trimmed) ? { generationTimeZone: trimmed } : { generationTimeZoneInvalid: trimmed }
+function periodFromRecord(record: Record<string, unknown>, id: string): DailyBriefingPeriod {
+  const name = trimmed(record.name)
+  const zone = trimmed(record.generationTimeZone)
+  return Object.freeze({
+    id,
+    ...(name ? { name } : {}),
+    generationTime: isDailyBriefingGenerationTime(record.generationTime)
+      ? record.generationTime
+      : dailyBriefingGenerationPolicy.defaultGenerationTime,
+    ...(zone ? { generationTimeZone: zone } : {}),
+    windowHours: isDailyBriefingWindowHours(record.windowHours)
+      ? record.windowHours
+      : dailyBriefingGenerationPolicy.defaultWindowHours
+  })
 }
 
 /**
- * Stored or patched values are repaired to the defaults instead of failing a read: an old settings
- * file without these keys is simply the default schedule. Writing a patch is strict — see
- * `applyDailyBriefingGenerationSettingsPatch`.
+ * Read whatever is on disk as periods, **pure and without writing anything**.
+ *
+ * Two shapes are accepted:
+ * - `{ periods: [...] }` — this version's shape;
+ * - `{ generationTime, generationTimeZone?, windowHours }` — what every earlier version wrote, read
+ *   as one period with the stable id `default`. Opening settings therefore upgrades nothing on disk;
+ *   the file only becomes the new shape when the reader saves.
+ *
+ * The older `generationTimeZoneInvalid` field is **ignored**: it was a stored verdict about another
+ * field, and the verdict now comes from `generationTimeZoneIssue` alone.
  */
-export function normalizeDailyBriefingGenerationSettings(
-  input: Partial<DailyBriefingGenerationSettings> | undefined,
+export function readDailyBriefingPeriodsSettings(
+  raw: unknown,
   now = new Date().toISOString()
-): DailyBriefingGenerationSettings {
-  const defaults = createDefaultDailyBriefingGenerationSettings(now)
-  return {
-    generationTime: isDailyBriefingGenerationTime(input?.generationTime)
-      ? input.generationTime
-      : defaults.generationTime,
-    ...zoneFields(input?.generationTimeZone),
-    windowHours: isDailyBriefingWindowHours(input?.windowHours)
-      ? input.windowHours
-      : defaults.windowHours,
-    updatedAt: typeof input?.updatedAt === 'string' && input.updatedAt ? input.updatedAt : defaults.updatedAt
+): DailyBriefingPeriodsSettings {
+  if (!isRecord(raw)) return createDefaultDailyBriefingPeriodsSettings(now)
+  const updatedAt = trimmed(raw.updatedAt) ?? now
+
+  if (Array.isArray(raw.periods)) {
+    const seen = new Set<string>()
+    const periods: DailyBriefingPeriod[] = []
+    for (const entry of raw.periods) {
+      if (!isRecord(entry)) continue
+      // A blank id cannot be addressed by a schedule, so it means the one period every file has.
+      const id = trimmed(entry.id) ?? DEFAULT_PERIOD_ID
+      // A repeated id would make "which period does this definition belong to" ambiguous: the first
+      // entry wins, deterministically, and the later one is not silently merged into it.
+      if (seen.has(id)) continue
+      seen.add(id)
+      periods.push(periodFromRecord(entry, id))
+    }
+    // Zero usable periods is not a state the reader can reach; the default keeps every consumer total.
+    if (periods.length === 0) return createDefaultDailyBriefingPeriodsSettings(now)
+    return Object.freeze({ periods: Object.freeze(periods), updatedAt })
   }
+
+  const looksSinglePeriod = 'generationTime' in raw || 'windowHours' in raw || 'generationTimeZone' in raw
+  if (!looksSinglePeriod) return createDefaultDailyBriefingPeriodsSettings(now)
+  return Object.freeze({
+    periods: Object.freeze([periodFromRecord(raw, DEFAULT_PERIOD_ID)]),
+    updatedAt
+  })
 }
 
-/** A save is a reader action: an unsupported time or window must be rejected, not repaired. */
+/**
+ * A save is a reader action: an unsupported time, window or zone is rejected, never repaired.
+ *
+ * The patch addresses **one period** (the first), because that is the only period this version can
+ * show; a file that already holds more periods keeps them untouched rather than dropping them.
+ */
 export function applyDailyBriefingGenerationSettingsPatch(
-  current: DailyBriefingGenerationSettings,
+  current: DailyBriefingPeriodsSettings,
   patch: DailyBriefingGenerationSettingsPatch,
   now: string
-): DailyBriefingGenerationSettings {
+): DailyBriefingPeriodsSettings {
   if (patch.generationTime !== undefined && !isDailyBriefingGenerationTime(patch.generationTime)) {
     throw new Error(dailyBriefingGenerationSettingsPolicy.generationTimeInvalidError)
   }
@@ -101,33 +174,36 @@ export function applyDailyBriefingGenerationSettingsPatch(
   if (patch.windowHours !== undefined && !isDailyBriefingWindowHours(patch.windowHours)) {
     throw new Error(dailyBriefingGenerationSettingsPolicy.windowHoursInvalidError)
   }
-  return normalizeDailyBriefingGenerationSettings({
-    generationTime: patch.generationTime ?? current.generationTime,
-    ...(patch.generationTimeZone ?? current.generationTimeZone
-      ? { generationTimeZone: (patch.generationTimeZone ?? current.generationTimeZone)! }
-      : {}),
-    windowHours: patch.windowHours ?? current.windowHours,
+
+  const target = firstDailyBriefingPeriod(current)
+  const zone = patch.generationTimeZone ?? target.generationTimeZone
+  const next: DailyBriefingPeriod = Object.freeze({
+    ...target,
+    generationTime: patch.generationTime ?? target.generationTime,
+    windowHours: (patch.windowHours ?? target.windowHours) as DailyBriefingWindowHours,
+    ...(zone ? { generationTimeZone: zone } : {})
+  })
+  return Object.freeze({
+    periods: Object.freeze([next, ...current.periods.slice(1)]),
     updatedAt: now
-  }, now)
+  })
 }
 
 /**
- * The scheduler trigger. Derived from the same value that decides the cutoff, so a reader who moves
- * generation to 09:30 gets a 30 9 cron and a 09:30 cutoff in one save.
+ * Is the stored zone value usable? The **one** judgement, shared by the scheduler and the page.
+ *
+ * It reads the raw value and nothing else, so it does not depend on the reader's current zone: the
+ * same setting opened in two zones must reach the same verdict, otherwise "valid" would follow the
+ * window. An absent or blank value is not an issue — it means "use the reader's display zone".
  */
-export function dailyBriefingGenerationCronExpression(settings: Pick<DailyBriefingGenerationSettings, 'generationTime'>): string {
-  const [hour, minute] = settings.generationTime.split(':').map(Number)
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
-    const [fallbackHour, fallbackMinute] = dailyBriefingGenerationPolicy.defaultGenerationTime.split(':').map(Number)
-    return `${fallbackMinute} ${fallbackHour} * * *`
-  }
-  return `${minute} ${hour} * * *`
+export function generationTimeZoneIssue(value?: string): 'unparseable' | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) return undefined
+  return isDailyBriefingTimeZoneId(value.trim()) ? undefined : 'unparseable'
 }
 
-/** The local cutoff a generation time names: minutes after local midnight. */
 /**
  * A zone id is usable when the platform can format a clock in it. Anything else (a mistyped
- * `Asia/Shangai`, a blank, an old numeric offset) is not stored: the reader gets the one sentence
+ * `Asia/Shangai`, a blank, an old numeric offset) is not a zone: the reader gets the one sentence
  * that says automatic generation is paused, and the schedule falls back to no zone rather than
  * silently pretending to be UTC.
  */
@@ -139,6 +215,19 @@ export function isDailyBriefingTimeZoneId(value: unknown): value is string {
   } catch {
     return false
   }
+}
+
+/**
+ * The scheduler trigger. Derived from the same value that decides the cutoff, so a reader who moves
+ * generation to 09:30 gets a 30 9 cron and a 09:30 cutoff in one save.
+ */
+export function dailyBriefingGenerationCronExpression(settings: Pick<DailyBriefingPeriod, 'generationTime'>): string {
+  const [hour, minute] = settings.generationTime.split(':').map(Number)
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+    const [fallbackHour, fallbackMinute] = dailyBriefingGenerationPolicy.defaultGenerationTime.split(':').map(Number)
+    return `${fallbackMinute} ${fallbackHour} * * *`
+  }
+  return `${minute} ${hour} * * *`
 }
 
 /** The wall-clock cutoff a generation time names: minutes after midnight in its own zone. */
