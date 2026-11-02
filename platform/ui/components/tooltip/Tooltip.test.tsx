@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { TOOLTIP_MAX_CJK, TOOLTIP_MAX_LATIN, Tooltip } from './Tooltip'
+import { Tooltip } from './Tooltip'
 
 const source = readFileSync(join(__dirname, 'Tooltip.tsx'), 'utf8')
 
@@ -148,8 +148,4 @@ describe('Tooltip', () => {
     expect(source).toContain("const PLACEMENT = 'bottom' as const")
   })
 
-  it('keeps the copy ceiling visible in the exported constants', () => {
-    expect(TOOLTIP_MAX_CJK).toBe(28)
-    expect(TOOLTIP_MAX_LATIN).toBe(60)
-  })
 })

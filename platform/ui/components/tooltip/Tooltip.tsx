@@ -16,9 +16,11 @@ import type { ReactElement } from 'react'
  * - 悬停 300ms 后出现，**聚焦立即出现**（读者已经明确指向它了，不该再等）。
  */
 
-/** 提示文案的字数上限：超了要改成可见说明或折叠详情，提示不是文档。 */
-export const TOOLTIP_MAX_CJK = 28
-export const TOOLTIP_MAX_LATIN = 60
+/*
+ * 文案上限（28 个汉字 / 60 个英文字符）是**文档与验收口径**，不设代码常量：
+ * 一条「断言常量等于 28」的用例永远通过，它不守护任何真实行为，只会让人以为上限被管住了。
+ * 将来真要机械管，扫的是实际句子，不是常量。
+ */
 
 export type TooltipProps = {
   /** 提示文案的 i18n 键；不收字面量。 */

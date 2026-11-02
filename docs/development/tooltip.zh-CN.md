@@ -10,9 +10,10 @@
 | 导出 | 用途 |
 | --- | --- |
 | `Tooltip` | 一条提示，挂在一个可聚焦触发器上。 |
-| `TOOLTIP_MAX_CJK` | 28 —— 中文提示的字数上限。 |
-| `TOOLTIP_MAX_LATIN` | 60 —— 英文提示的字符上限。 |
 | `TooltipProps` | props 类型。 |
+
+文案上限——**28 个汉字 / 60 个英文字符**——是文档与验收口径，不是代码常量：一条只断言「常量等于 28」
+的用例永远通过，它不守护任何真实行为。
 
 ```tsx
 import { Tooltip } from '@platform/ui/components/tooltip'
@@ -36,7 +37,8 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 - **聚焦立即显示**，悬停等 300ms。读者已经用 Tab 明确指过来了，让人再等就是本组件要修的那个毛病。
 - **句子为空就不渲染提示**，也绝不回退键名：把 `ui.tooltip.refresh` 念出来比不说更糟。
 - **不套包裹元素**：触发器原样透传；包一层会改掉父级布局，也是「可聚焦包裹」那种变体的入口。
-- **禁用元素不挂提示**：禁用接不到焦点，提示只剩鼠标能看。原因要写成可见说明。
+- **禁用元素不挂提示**：禁用接不到焦点，提示只剩鼠标能看。原因要写成可见说明。这条由调用点扫描
+  （`tooltipCallSiteGuard.test.ts`）执行：`<Tooltip>` 的触发器带 `disabled` 即红。
 
 ## 调用点的规则
 

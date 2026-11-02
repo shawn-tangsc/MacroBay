@@ -11,9 +11,11 @@ mouse and never enters the accessible description, so keyboard users never see i
 | Export | Use it for |
 | --- | --- |
 | `Tooltip` | One hint, attached to one focusable trigger. |
-| `TOOLTIP_MAX_CJK` | 28 — the ceiling for a Chinese hint. |
-| `TOOLTIP_MAX_LATIN` | 60 — the ceiling for a Latin hint. |
 | `TooltipProps` | The props type. |
+
+The copy ceiling — **28 Chinese characters / 60 Latin characters** — is a documented acceptance
+criterion, not a code constant: a test that only asserts "the constant is 28" passes forever and
+guards nothing.
 
 ```tsx
 import { Tooltip } from '@platform/ui/components/tooltip'
@@ -43,7 +45,9 @@ only when there is no room.
 - **No wrapper element.** The trigger is passed through untouched; wrapping it would break the
   parent's layout and invite the "focusable wrapper" variant.
 - **Disabled elements never carry a tooltip.** A disabled control cannot take focus, so its hint
-  would only ever be reachable with a mouse. Write the reason as visible text instead.
+  would only ever be reachable with a mouse. Write the reason as visible text instead. Enforced by a
+  call-site scan (`tooltipCallSiteGuard.test.ts`): a `<Tooltip>` whose trigger carries `disabled` is
+  red.
 
 ## Rules for call sites
 
