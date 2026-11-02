@@ -127,7 +127,7 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toMatch(CJK)
   })
 
-  it('keeps the fallback row on the page, labelled with where the number came from', async () => {
+  it('keeps the fallback row on the page and says nothing extra when the number is a 24-hour move', async () => {
     const base = briefing()
     const doc: DailyBriefingDocument = {
       ...base,
@@ -139,7 +139,26 @@ describe('daily brief share card in English', () => {
       }
     }
     const rendered = await render(doc)
-    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.curve)
+    // A 24-hour move computed from the curve is still a 24-hour move: the row's own timestamp says
+    // when it is, so an extra "where it came from" note would only repeat it and explain our method.
+    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
+    expect(rendered.textContent).toContain('2026')
+  })
+
+  it('still speaks when the number is not what its name promises', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'last-close' as const }
+          : row)
+      }
+    }
+    const rendered = await render(doc)
+    // The day's move is not a 24-hour move here, so the row has to say so.
+    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.lastClose)
   })
 
   it('leaves that row out of the exported image', async () => {
