@@ -95,6 +95,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [detailsStale, setDetailsStale] = useState(false)
   /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
   const nameInputRef = useRef<InputRef | null>(null)
+  const railRef = useRef<HTMLElement | null>(null)
+  const focusRail = (): void => {
+    railRef.current?.scrollIntoView({ block: 'nearest' })
+    railRef.current?.focus()
+  }
   const focusCreateForm = (): void => {
     nameInputRef.current?.input?.scrollIntoView({ block: 'nearest' })
     nameInputRef.current?.focus()
@@ -246,7 +251,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   return (
     <section className="settings-workspace channel-settings" aria-busy={initialLoading || undefined}>
-      <aside className="channel-settings-rail">
+      <aside className="channel-settings-rail" ref={railRef} tabIndex={-1}>
         <header>
           <strong>{labels.channels}</strong>
           <Button size="small" icon={<RefreshCw size={14} />} onClick={() => void reload()}>
@@ -474,7 +479,27 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             </Popconfirm>
           </>
           )
-        ) : null}
+        ) : readError && channels.length === 0 ? (
+          // 左栏已经说过「没读到」：右栏不再编一个「还没创建过」，否则同一屏两句话互相矛盾。
+          null
+        ) : channels.length === 0 ? (
+          // 一个通道都没有：这是「还没创建过」，动作指向下方创建表单，不是「没选中」。
+          <StateView
+            state="empty"
+            reasonCode="never-created"
+            size="lg"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: focusCreateForm }}
+          />
+        ) : (
+          // 有通道但当前没有选中（例如刚把选中项删掉）：这是「没选」，不是「没有」。
+          // 动作只把焦点送回左栏列表，不复制第二个创建入口。
+          <StateView
+            state="empty"
+            reasonCode="no-target-selected"
+            size="lg"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.select_target, onSelect: focusRail }}
+          />
+        )}
       </main>
     </section>
   )

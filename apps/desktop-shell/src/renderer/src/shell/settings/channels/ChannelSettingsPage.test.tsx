@@ -277,3 +277,63 @@ describe('detail pane read states', () => {
     expect(stateOf(container, 'error')).toBeNull()
   })
 })
+
+describe('detail pane without a selection', () => {
+  const channel = (id: string, name: string) => ({
+    id,
+    type: 'telegram',
+    name,
+    agentId: 'agent-1',
+    state: 'credential-missing',
+    credential: { status: 'missing', hasCredential: false }
+  })
+
+  it('says nothing was ever created, and its action goes to the create form', async () => {
+    installPlatform({ list: vi.fn(async () => []) })
+
+    const container = await mount()
+
+    // 「一个都没有」不是「没选中」：右侧给一句可行动的说明，而不是空白。
+    expect(container.textContent).toContain('从来没有创建过，先创建一个')
+    const empty = container.querySelectorAll('[data-state="empty"]')
+    expect(empty.length).toBeGreaterThan(0)
+    const action = [...container.querySelectorAll('.state-view__action')].pop() as HTMLButtonElement | undefined
+    await act(async () => action?.click())
+    // 动作把光标放进创建表单的「名称」输入，不是再弹一层说明。
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(labels.channelName)
+  })
+
+  it('says a channel is not selected after deleting the selected one, and the action focuses the rail', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [channel('channel-1', 'Telegram'), channel('channel-2', 'Slack')]),
+      listPolicies: vi.fn(async () => []),
+      listConversations: vi.fn(async () => []),
+      listCandidates: vi.fn(async () => []),
+      runtimeStatus: vi.fn(async () => null),
+      remove: vi.fn(async () => undefined)
+    })
+
+    const container = await mount()
+    expect(container.textContent).toContain('Telegram')
+
+    // 删掉选中项：列表还剩一条，但 current 变成 null——这时右侧必须是「没选中」，不是空白。
+    channels.list.mockResolvedValue([channel('channel-2', 'Slack')])
+    const deleteButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.replace(/\s+/g, '') === labels.channelDelete
+    )
+    await act(async () => deleteButton?.click())
+    const confirm = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent?.replace(/\s+/g, '') === labels.channelDelete && button !== deleteButton
+    )
+    await act(async () => confirm?.click())
+
+    expect(container.textContent).toContain('还没有选中一个目标')
+    const emptyStates = [...container.querySelectorAll('[data-state="empty"]')]
+    expect(emptyStates.length).toBeGreaterThan(0)
+
+    // 动作把焦点送回左栏列表，而不是再给一个创建入口。
+    const action = emptyStates[emptyStates.length - 1].querySelector('.state-view__action') as HTMLButtonElement | null
+    await act(async () => action?.click())
+    expect(document.activeElement?.className).toContain('channel-settings-rail')
+  })
+})
