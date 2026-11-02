@@ -322,9 +322,11 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             // 会成功，没更新就仍然失败——原因句因此明说要重启应用，重试不是空按钮，但它也不是解药。
             // `unreadable` 在动作表里是 required，`retry` 是它唯一允许的动作（契约 §16）。
             : view.failure === 'contract'
-              ? <StateView state="error" reasonCode="unreadable" size="md"
+              // 版本不一致重试多少次都一样：唯一的出口是重启应用。`needs-restart` 这个名字就是
+              // 为它准备的，动作走平台那条窗口通道（`app.relaunch()` 后退出当前进程）。
+              ? <StateView state="error" reasonCode="needs-restart" size="md"
                   productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }}
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void window.platform.app.relaunch() } }} />
               : <StateView state="error" reasonCode="unreadable" size="md"
                   action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
       </div>

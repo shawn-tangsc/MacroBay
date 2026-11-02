@@ -172,6 +172,8 @@ describe('cross-asset observation workspace', () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const relaunch = vi.fn(async () => undefined)
+    ;(window as unknown as { platform: { app: { relaunch: () => Promise<unknown> } } }).platform = { app: { relaunch } }
     const client = {
       acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
       renew: async () => ({ state: 'active' }),
@@ -184,13 +186,14 @@ describe('cross-asset observation workspace', () => {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
       expect(host.textContent).toContain(text.contractMismatch)
-      // `unreadable` is one of the codes whose action is required (contract §16), so the state keeps a
-      // retry. The reason sentence still says the app must be restarted: a retry re-reads the same
-      // contract, so it changes nothing until the main process is updated in place.
-      const retry = host.querySelector('.state-view button')
-      expect(retry).not.toBeNull()
-      await act(async () => { (retry as HTMLButtonElement).click() })
-      expect(client.refresh).toHaveBeenCalled()
+      // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
+      const action = host.querySelector('.state-view__action') as HTMLButtonElement
+      expect(action).not.toBeNull()
+      expect(action.textContent).not.toBe(text.retry)
+      await act(async () => { action.click() })
+      expect(relaunch).toHaveBeenCalledTimes(1)
+      // 反过来：点它不该去重读，那正是这一处被改掉的原因。
+      expect(client.refresh).not.toHaveBeenCalled()
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
