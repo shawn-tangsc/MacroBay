@@ -22,11 +22,20 @@ import type { ReactElement } from 'react'
  * 将来真要机械管，扫的是实际句子，不是常量。
  */
 
-export type TooltipProps = {
-  /** 提示文案的 i18n 键；不收字面量。 */
-  labelKey: string
+/**
+ * `K` 由调用方传进来的 `resolveText` 决定：解析器的参数是一组键联合时，`labelKey` 就被锁在那组键里。
+ *
+ * 这是「静态守卫管字符串、类型系统管传参」里属于类型的那一半（架构师 2026-11-02）：
+ * 守卫只能校验写死在调用点的字面量，键放进常量、包一层函数它就看不见；
+ * 而只要解析器的类型是键联合，写错键在 `tsc` 阶段就红，跟写法无关。
+ *
+ * 默认 `string`：还没接键联合的调用点照旧能编译，迁移可以一块一块来。
+ */
+export type TooltipProps<K extends string = string> = {
+  /** 提示文案的 i18n 键；解析器带键联合时不收联合之外的键。 */
+  labelKey: K
   /** 调用方的文案解析入口；未知键返回空串时本组件不渲染提示。 */
-  resolveText: (key: string) => string
+  resolveText: (key: K) => string
   /** 触发器：必须是可聚焦元素（按钮、链接、带 tabIndex 的元素）。 */
   children: ReactElement
 }
@@ -49,7 +58,7 @@ const BUBBLE_STYLE = { fontSize: 12 } as const
  */
 const PLACEMENT = 'bottom' as const
 
-export function Tooltip({ labelKey, resolveText, children }: TooltipProps): ReactElement {
+export function Tooltip<K extends string = string>({ labelKey, resolveText, children }: TooltipProps<K>): ReactElement {
   const text = resolveText(labelKey)
 
   // 没有句子就不存在提示：空气泡比没有气泡更糟，键名更糟。

@@ -25,8 +25,8 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
-| `labelKey` | `string` | 是 | 提示文案，**收键**。 |
-| `resolveText` | `(key: string) => string` | 是 | 调用方的解析入口；未知键解析成空串。 |
+| `labelKey` | `K extends string` | 是 | 提示文案，**收键**。`K` 由 `resolveText` 反推：解析器的参数是键联合时，允许的键就被锁在联合里。 |
+| `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键解析成空串。 |
 | `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |
 
 没有 `placement`、没有 `open` / `onOpenChange`、也不放富内容：触发方式和位置是固定行为，不是调用点选项。
@@ -44,6 +44,12 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 
 - 只写一行：**最多 20 个汉字 / 44 个英文字符**。更长就改成可见说明或折叠详情——提示不是文档。
 - 提示只做解释，不能是某条信息的唯一载体。丢了提示就丢了信息，那它该写在页面里。
+- **键集固定时用类型收口**：解析器的参数写成键联合（例如 `(key: AgentTooltipKey) => string`），
+  `labelKey` 就变成编译期检查——键放进常量、包一层函数也逃不掉。扫描守卫只看字面量，
+  传参这一半只能靠类型。联合从产品文案的子树派生（`platform/i18n` 的 `DotPaths`），
+  **不要对整张文案表求联合**，否则改一句文案全量重编。
+- **句子由数据拼出来的提示不迁移**：保留 `aria-label`，它本来就是这一行的可访问名，读的是同一件事。
+  也不加 `params`——读者得悬停才知道一句话说的是什么，正是本组件要收掉的东西。
 
 ## 怎么验用了它的页面
 

@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp } from 'lucide-react'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../agentTextProvider'
-import { resolveAgentTooltipText } from '../agentTooltipText'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 
 type AgentMessageNavigationProps = {
   onTop: () => void
@@ -20,7 +20,8 @@ export default function AgentMessageNavigation({
   onBottom
 }: AgentMessageNavigationProps): React.ReactElement {
   const t = useAgentText()
-  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
+  // 解析器带键联合，四个 `labelKey` 因此被锁在闭集里：写错一处编译就红，不靠评审发现。
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
 
   return (
     <div className="agent-message-navigation" aria-label={t.messages.anchorRailAria}>

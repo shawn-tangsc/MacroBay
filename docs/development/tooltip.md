@@ -28,8 +28,8 @@ component adds the focus trigger and the copy rules.
 
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `labelKey` | `string` | yes | The hint, **as a key**. |
-| `resolveText` | `(key: string) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
+| `labelKey` | `K extends string` | yes | The hint, **as a key**. `K` is inferred from `resolveText`, so a resolver typed to an explicit key union locks the allowed keys. |
+| `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
 
 There is no `placement`, no `open`, no `onOpenChange` and no rich content: the trigger set and the
@@ -55,6 +55,15 @@ only when there is no room.
   visible note or a folded detail — a tooltip is not documentation.
 - A tooltip explains; it never carries the only copy of a fact. If losing the tooltip loses the
   information, it belongs in the page.
+- **Typed keys where the key set is closed.** A resolver typed to a key union (for example
+  `(key: AgentTooltipKey) => string`) makes `labelKey` compile-checked: a key outside the union is a
+  `tsc` error even when it lives in a constant or a wrapper. The scan guard only sees literals, so
+  typed keys are what closes the gap. Derive union member types from the product text subtree with
+  `DotPaths` (`platform/i18n`) — never over the whole text table, which would re-type every file on
+  each copy change.
+- **A hint whose sentence is assembled from data is not migrated.** Keep the `aria-label`, which is
+  the accessible name and reads the same fact. `params` will not be added: a sentence the reader has
+  to hover to read is the problem this component exists to remove.
 
 ## How to verify a page that uses it
 
