@@ -4,6 +4,7 @@ import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover as FocusPopover } from '@platform/ui/components/popover'
 import { Segmented } from '@platform/ui/components/segmented'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { Tooltip as FocusTooltip } from '@platform/ui/components/tooltip'
 import type { productText } from '../../../shared/i18n/productText'
@@ -56,6 +57,15 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
  * 平台 `Tooltip` 只收键、句子由调用方的解析器给；写死键名而不是把已解析的句子塞进
  * `resolveText={() => …}`，后者会让键形同虚设（守卫会拦，但更该一开始就写对）。
  */
+/**
+ * 来源状态到药丸档位的映射：五档闭集，越限与滞后都算「需要看一眼」。
+ *
+ * 「资源受限」保留原词配 `warn`——它说的是我们的采集被挡了，不是数据旧，
+ * 并成「数据偏旧」会让读者以为等一会儿就好。
+ */
+const sourceStateTone: Readonly<Record<'disabled' | 'connecting' | 'live' | 'stale' | 'limited' | 'unavailable', StatusPillTone>> = Object.freeze({
+  disabled: 'muted', connecting: 'info', live: 'ok', stale: 'warn', limited: 'warn', unavailable: 'bad'
+})
 const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
@@ -63,7 +73,15 @@ const crossAssetTextKeys = Object.freeze({
   hintAnalysis: 'pages.intelligence.portal.dashboard.crossAsset.hintAnalysis',
   hintCoverage: 'pages.intelligence.portal.dashboard.crossAsset.hintCoverage',
   hintCorrelations: 'pages.intelligence.portal.dashboard.crossAsset.hintCorrelations',
-  unavailable: 'pages.intelligence.portal.dashboard.crossAsset.unavailable'
+  unavailable: 'pages.intelligence.portal.dashboard.crossAsset.unavailable',
+  states: Object.freeze({
+    disabled: 'pages.intelligence.portal.dashboard.crossAsset.states.disabled',
+    connecting: 'pages.intelligence.portal.dashboard.crossAsset.states.connecting',
+    live: 'pages.intelligence.portal.dashboard.crossAsset.states.live',
+    stale: 'pages.intelligence.portal.dashboard.crossAsset.states.stale',
+    limited: 'pages.intelligence.portal.dashboard.crossAsset.states.limited',
+    unavailable: 'pages.intelligence.portal.dashboard.crossAsset.states.unavailable'
+  })
 })
 /** 窗口切换每一项的文案键：句子仍是 1H/24H/7D，只是不再在调用点拼字符串。 */
 const crossAssetWindowLabelKeys: Readonly<Record<CrossAssetRange, string>> = Object.freeze({
@@ -381,7 +399,11 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             onChange={range => view.setRange(range as CrossAssetRange)} />
           <FocusTooltip labelKey={crossAssetTextKeys.refresh} resolveText={resolveProductText}>
             <Button type="text" size="small" aria-label={text.refresh} loading={view.refreshing} icon={<RefreshCw size={13} />} onClick={() => void view.refresh()} /></FocusTooltip></div></div>
-        {snapshot?.sourceState && snapshot.sourceState !== 'live' ? <small data-source-state={snapshot.sourceState}>{text.states[snapshot.sourceState]}</small> : null}
+        {/* 整块来源状态：药丸只标「这一块数据的整体状态」，逐资产的留给下面那行小字。 */}
+        {snapshot?.sourceState && snapshot.sourceState !== 'live'
+          ? <span data-source-state={snapshot.sourceState}><StatusPill tone={sourceStateTone[snapshot.sourceState]}
+              labelKey={crossAssetTextKeys.states[snapshot.sourceState]} resolveText={resolveProductText} /></span>
+          : null}
         {snapshot?.quotes ? <div className="mi-cross-asset__status">{(['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live').map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot.quotes![asset].state]}</small>)}</div> : null}
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
             per figure, so a legend reading 「纳斯达克 100」 can never sit above `QQQUSDT`'s curve. */}
