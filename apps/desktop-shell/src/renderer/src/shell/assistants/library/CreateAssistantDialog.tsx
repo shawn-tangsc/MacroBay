@@ -2,14 +2,14 @@ import { Button, Input } from 'antd'
 import { Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
-import { Tooltip } from '@platform/ui/components/tooltip'
 import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../../i18n/platformText'
+import { resolveTextPath, type Path } from '../../../i18n/assistantsTextKey'
 
 const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
 const COMING_SOON_KEY = 'assistants.library.promptGenerateComingSoon'
-const PROMPT_GENERATE_TOOLTIP_KEY = 'assistants.library.promptGenerate'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -24,6 +24,7 @@ export function CreateAssistantDialog({
   onClose,
   onCreate
 }: CreateAssistantDialogProps): React.ReactElement {
+  const resolveAssistantText = (key: string): string => resolveTextPath(labels, key as Path<typeof labels>)
   const toast = useToast()
   const [icon, setIcon] = useState('💬')
   const [name, setName] = useState('')
@@ -87,22 +88,19 @@ export function CreateAssistantDialog({
           />
         </label>
         <div className="assistant-create-dialog-meta">
-          <Tooltip
-            labelKey={PROMPT_GENERATE_TOOLTIP_KEY}
-            resolveText={(key) => (key === PROMPT_GENERATE_TOOLTIP_KEY ? labels.promptGenerate : '')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<Sparkles size={14} />}
-              aria-label={labels.promptGenerate}
-              onClick={() =>
-                toast.info({
-                  titleKey: COMING_SOON_KEY,
-                  resolveText: (key) => (key === COMING_SOON_KEY ? labels.promptGenerateComingSoon : '')
-                })
-              }
-            />
-          </Tooltip>
+          <IconButton
+            ariaLabelKey="promptGenerate"
+            icon={Sparkles}
+            onSelect={() =>
+              toast.info({
+                titleKey: COMING_SOON_KEY,
+                resolveText: (key) => (key === COMING_SOON_KEY ? labels.promptGenerateComingSoon : '')
+              })
+            }
+            resolveText={resolveAssistantText}
+            size="md"
+            tooltipKey="promptGenerate"
+          />
           <span>{labels.tokenCount(tokenCount)}</span>
         </div>
         <label>

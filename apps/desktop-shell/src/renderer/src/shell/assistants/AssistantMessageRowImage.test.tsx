@@ -19,6 +19,7 @@ vi.mock('antd', () => ({
   Input: {
     TextArea: ({ value = '' }: { value?: string }) => createElement('textarea', { value })
   },
+  Tooltip: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
   Popconfirm: ({ children }: { children?: ReactNode }) => createElement('span', null, children),
   Image: ({ src, alt }: { src?: string; alt?: string }) => createElement('img', { src, alt })
 }))
