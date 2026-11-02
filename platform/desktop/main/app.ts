@@ -166,8 +166,6 @@ import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagemen
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerWindowIpc } from './ipc/windowIpc'
-import { registerSettingsIpc } from './ipc/settingsIpc'
-import { registerStorageIpc } from './ipc/storageIpc'
 import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
@@ -178,6 +176,7 @@ import { composeNotificationRuntime } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
 import { composeAgentIpc } from './composition/agent'
+import { composeSettingsIpc, composeStorageIpc } from './composition/settingsAndStorage'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -1139,19 +1138,20 @@ function registerIpcHandlers(
   registerWindowIpc(ipcMain, { getMainWindow, resolveInvokingWindow })
 
   // 存储/缓存 + 外部应用 + 产品清单摘要 8 个 handler 搬到 ipc/storageIpc.ts。
-  registerStorageIpc(ipcMain, {
+  composeStorageIpc(ipcMain, {
     cacheGovernance: cacheGovernanceIpcHandlers,
     externalApps: externalAppsService,
     summarizeProducts: () => summarizeProductManifests(productManifests)
   })
 
   // 设置读写两个 handler 搬到 ipc/settingsIpc.ts：端口按「设置存储 / 助手种子 / 时区 / 工作区通知」四个域给。
-  registerSettingsIpc(ipcMain, {
+  // 设置与存储两片：端口与状态读法在 composition/settingsAndStorage.ts。
+  composeSettingsIpc(ipcMain, {
     settings: settingsStore,
     ensureDefaultAssistantSeed,
     refreshBuiltinSeedCopy,
-    refreshShellTimeZone: () => shellTimeZone.refresh(),
-    notifyPreferencesChanged: () => getPanelWorkspaceForDisposal()?.notifyPreferencesChanged()
+    refreshTimeZone: () => shellTimeZone.refresh(),
+    getWorkspaceForNotify: () => getPanelWorkspaceForDisposal()
   })
   // 渠道管理 / 入站两个服务共 25 个 handler 搬到 ipc/channelIpc.ts；
   // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。

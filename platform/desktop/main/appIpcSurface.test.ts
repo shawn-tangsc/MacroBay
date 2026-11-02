@@ -403,7 +403,9 @@ describe('desktop main IPC surface', () => {
   it('keeps storage and cache IPC handlers registered without dropping existing seams', () => {
     expect(appSource).toContain('createCacheGovernanceIpcHandlers')
     expect(appSource).toContain("cache-governance.sqlite")
-    expect(appSource).toContain('registerStorageIpc(ipcMain, {')
+    // 装配点已搬进 composition/settingsAndStorage.ts —— 读者跟着被读对象走。
+    expect(readSource('composition/settingsAndStorage.ts')).toContain('registerStorageIpc(ipcMain, {')
+    expect(appSource).toContain('composeStorageIpc(ipcMain, {')
     expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
     expect(storageIpcSource).toContain('IpcChannels.storageInspectCache')
     expect(storageIpcSource).toContain('IpcChannels.storageClearCache')
