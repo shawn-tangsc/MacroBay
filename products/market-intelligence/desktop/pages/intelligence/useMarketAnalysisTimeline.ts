@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { analysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 import {
@@ -50,50 +52,6 @@ type State = Readonly<{
   detailLoading?: boolean
 }>
 
-// The product IPC has no push notification for a completed analysis. This
-// bounded polling policy is owned by the workspace data hook and is covered by
-// the timeline refresh regression test; it stops on a published node or a
-// terminal failure.
-export const analysisTimelineRefreshPolicy = Object.freeze({
-  pollIntervalMs: 1_000,
-  /**
-   * Bounded, but longer than the run job's own timeout: the job is 600s because one run may spend
-   * two model attempts after a contract rejection. The poll stops a minute later, so the job's own
-   * cancellation is observed as a terminal run instead of the panel giving up first. A run that is
-   * still queued/running at the cap releases the action rather than leaving a disabled button
-   * behind — no polling is left that would ever end the spinner.
-   */
-  maxPollAttempts: 660,
-  /**
-   * The bounded poll above stops as soon as a node is published — which is precisely when the
-   * reader stops watching a spinner and starts expecting new analyses. With no push notification
-   * from the product IPC, the list only grew when someone pressed refresh, so a slow background poll
-   * (plus a refresh on focus) keeps it live.
-   */
-  livePollIntervalMs: 60_000,
-  /**
-   * The first page retries on its own. A read can fail transiently while the
-   * product is still starting up, and requiring the user to press refresh for
-   * their own timeline is not acceptable.
-   */
-  initialRetryAttempts: 10,
-  initialRetryDelayMs: 500,
-  initialRetryMaxDelayMs: 6_000,
-  /**
-   * A timeline read must settle. Local reads are far faster than this, so hitting
-   * it means the service is not answering; turning that into a visible failure is
-   * better than a spinner that never ends.
-   */
-  readTimeoutMs: 15_000,
-  /**
-   * A node detail is a second read of the store the list just answered from, and it can fail on
-   * its own: the run, the summary and the snapshot are three separate reads, and the service may be
-   * reloading the store behind them. Nothing re-read a node after a failure, so one transient fault
-   * pinned the newest conclusion to "暂不可用" until a different node became the newest. These are the
-   * wait intervals between the bounded retries; after the last one the failure is final.
-   */
-  detailRetryDelaysMs: [1_500, 4_000, 10_000] as readonly number[]
-})
 
 /** Resolves a read against a bounded wait so a silent service cannot hang the UI. */
 async function withReadTimeout<T>(read: Promise<T>, timeoutMs: number): Promise<T | undefined> {
@@ -162,6 +120,25 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   const selectionGeneration = useRef(0)
   /** True once a read has settled, so the panel has something to keep on screen. */
   const settled = useRef(false)
+  /**
+   * Failed first-page reads since the last successful one.
+   *
+   * Before anything has been applied there is nothing to show and nothing to refresh, so a failed
+   * read is not the reader's problem yet: the bounded retry is the endpoint, and only spending it
+   * turns the read into a visible failure. Counting here (not inside the retry timer) keeps one
+   * number for one thing.
+   */
+  const initialFailures = useRef(0)
+  /** When the first-page wait began; the wall-clock half of the retry budget. */
+  const initialFailureSince = useRef<number | undefined>(undefined)
+  /**
+   * Set while a failed first read is still inside its retry budget.
+   *
+   * The read's `finally` clears `loading`, and a surface with no rows reads that as "empty". Holding
+   * the loading flag here is what keeps the panel from showing its empty state during a wait it has
+   * not given up on.
+   */
+  const holdLoading = useRef(false)
   const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const callbacks = useRef({ onSelect: input.onSelect, onSelectionStateChange: input.onSelectionStateChange, text: input.text })
@@ -209,9 +186,24 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       // permanent spinner; a background retry below heals a transient one.
       if (!result || result.state !== 'available') {
         if (cursor && generation.current !== request) return undefined
-        setState(current => ({ ...current, lastRead: `${trace}->unavailable` }))
-        setState(current => ({ ...current, failed: true }))
-        if (!cursor) scheduleInitialRetry()
+        const retryBudgetSpent = initialFailureSince.current !== undefined
+          && Date.now() - initialFailureSince.current >= policy.initialRetryBudgetMs
+        if (!cursor && !settled.current && !retryBudgetSpent && initialFailures.current < policy.initialRetryAttempts) {
+          initialFailureSince.current ??= Date.now()
+          // Nothing has ever been applied, so the reader has nothing to keep: stay in the loading
+          // state and retry. The previous behaviour flipped the error surface on immediately and the
+          // self-healing retry then removed it, which read as "failed, then suddenly data".
+          initialFailures.current += 1
+          holdLoading.current = true
+          setState(current => ({ ...current, lastRead: `${trace}->waiting(${initialFailures.current})` }))
+          scheduleInitialRetry()
+          return undefined
+        }
+        // Either data was already on screen (keep it, mark it stale) or the budget is spent (this is
+        // the first and final failure, so it may be shown).
+        initialFailureSince.current = undefined
+        setState(current => ({ ...current, lastRead: `${trace}->unavailable`, failed: true }))
+        if (!cursor) settled.current = true
         return undefined
       }
       const readsAttempt = readAttempt || !result.page.items.length
@@ -235,6 +227,9 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       // "not published" and no reason at all.
       if (readsAttempt) setAttempt(latest)
       if (latest) setRequestState(['queued', 'running'].includes(latest.status) ? 'queued' : 'idle')
+      settled.current = true
+      initialFailures.current = 0
+      initialFailureSince.current = undefined
       setState(current => result.state === 'available'
         ? { loading: false, lastRead: `${trace}->applied`, entries: cursor ? [...current.entries, ...result.page.items] : result.page.items, nextCursor: result.page.nextCursor,
           ...(cursor ? { selected: current.selected, detail: current.detail } : {}) }
@@ -245,8 +240,17 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       // generation race — because they are the only inputs the surfaces use to decide whether
       // they have something to show. From here on the view is settled, so later reads refresh it
       // instead of replacing it with a loading state.
-      settled.current = true
-      setState(current => current.loading || current.refreshing ? { ...current, loading: false, refreshing: false } : current)
+      // `settled` means "the reader has something on screen". A failed first read has nothing, so it
+      // must not settle: settling is what switched later reads to `refresh` mode and what made the
+      // error surface legal. It is set by the apply path, or by the retry budget running out.
+      if (holdLoading.current) {
+        // Still waiting on the first read: keep the loading state instead of falling through to an
+        // empty surface that would claim the list has nothing in it.
+        holdLoading.current = false
+        setState(current => ({ ...current, loading: true, refreshing: false }))
+      } else {
+        setState(current => current.loading || current.refreshing ? { ...current, loading: false, refreshing: false } : current)
+      }
     }
   }
 
@@ -279,32 +283,15 @@ export function useMarketAnalysisTimeline(input: Readonly<{
    * user having to press refresh.
    */
   const scheduleInitialRetry = () => {
-    if (retryTimer.current) clearTimeout(retryTimer.current)
-    let attempt = 0
-    const step = () => {
-      if (attempt >= policy.initialRetryAttempts) return
-      const delay = Math.min(policy.initialRetryDelayMs * (attempt + 1), policy.initialRetryMaxDelayMs)
-      attempt += 1
-      retryTimer.current = setTimeout(() => { void retryOnce() }, delay)
-    }
-    const retryOnce = async () => {
-      const result = await marketAnalysisTimelineClient.listTimeline({})
-      // Reload as soon as the read carries anything, or as soon as the product
-      // reports work in flight, because that is when rows are about to appear.
-      if (result.state === 'available' && result.page.items.length > 0) {
-        retryTimer.current = undefined
-        void load()
-        return
-      }
-      const attempt = await marketAnalysisTimelineClient.getLatestAttempt()
-      if (attempt && ['queued', 'running'].includes(attempt.status)) {
-        retryTimer.current = undefined
-        void load()
-        return
-      }
-      step()
-    }
-    step()
+    // One timer, one read. The retry is the same first-page load: its failure path is what counts
+    // the budget and decides when the wait becomes a visible failure, so a separate probe here
+    // would spend attempts without ever counting them.
+    if (retryTimer.current) return
+    const delay = Math.min(policy.initialRetryDelayMs * Math.max(initialFailures.current, 1), policy.initialRetryMaxDelayMs)
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = undefined
+      void load()
+    }, delay)
   }
 
   useEffect(() => {

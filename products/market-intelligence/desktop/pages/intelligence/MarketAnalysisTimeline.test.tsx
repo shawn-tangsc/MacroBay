@@ -1,4 +1,5 @@
-import { analysisTimelineRefreshPolicy, isAlreadyAvailableError } from './useMarketAnalysisTimeline'
+import { analysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
+import { isAlreadyAvailableError } from './useMarketAnalysisTimeline'
 import { marketAnalysisTimelineClient } from '../../shared/ipc/marketAnalysisTimelineClient'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
@@ -164,15 +165,45 @@ describe('MarketAnalysisTimeline', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.requestInitialAnalysis', {})
   })
 
-  it('does not present an IPC failure as an empty timeline', async () => {
+  it('keeps the first read in its loading state until the retry budget is spent, then says it failed', async () => {
+    // A transient startup failure must not be painted as a failure: the bounded retry is the
+    // endpoint, and the empty list is never allowed to stand in for "could not read".
+    const policy = { ...analysisTimelineRefreshPolicy, initialRetryAttempts: 2, initialRetryDelayMs: 40, initialRetryMaxDelayMs: 40 }
     vi.stubGlobal('platform', { products: { invoke: vi.fn(async () => { throw Error('private failure') }) } })
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    await act(async () => root?.render(createElement(Timeline, { onBack: vi.fn(), text })))
+    await act(async () => root?.render(createElement(Timeline, { onBack: vi.fn(), text, policy })))
+    await flushReads()
+
+    // Nothing applied yet: no error surface, and no empty state pretending the list is empty.
+    expect(container.textContent).not.toContain(text.unavailable)
+    expect(container.querySelector('.mi-analysis-timeline__list')?.textContent ?? '').not.toContain(text.empty)
+
+    // The budget runs out, and only now does the failure become visible.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); await Promise.resolve() })
     expect(container.textContent).toContain(text.unavailable)
-    expect(container.querySelector('.mi-analysis-timeline__list')?.textContent).not.toContain(text.empty)
     expect(container.textContent).not.toContain('private failure')
+  })
+
+  it('never shows a failure when the first read heals on its own', async () => {
+    const policy = { ...analysisTimelineRefreshPolicy, initialRetryAttempts: 4, initialRetryDelayMs: 40, initialRetryMaxDelayMs: 40 }
+    let reads = 0
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      if (method !== 'marketAnalysis.listTimeline') return null
+      reads += 1
+      if (reads === 1) throw Error('transient')
+      return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: null, kind: 'system', status: 'published', occurredAt: asOf, summaryRef: null, safeTitle: '恢复后的节点', safeExcerpt: '恢复后的摘要', version: 1, triggerStatus: null }], nextCursor: null }
+    }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { onBack: vi.fn(), text, policy })))
+    await flushReads()
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); await Promise.resolve() })
+
+    expect(container.textContent).not.toContain(text.unavailable)
+    expect(container.textContent).toContain('恢复后的摘要')
   })
 
   it('continues the timeline with the opaque next cursor', async () => {
