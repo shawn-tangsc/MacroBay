@@ -114,7 +114,7 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
     try { await intelligenceSourcesClient.testConnection(sourceId) } finally { setBusy(undefined) }
   }
 
-  return <Drawer className="mi-dashboard-source-drawer" open={open} onClose={onClose} resolveText={resolveKey} size="wide"
+  return <Drawer className="mi-dashboard-source-drawer" mode="modal" open={open} onClose={onClose} resolveText={resolveKey} size="wide"
     titleKey={titleKey ?? 'pages.intelligence.portal.dashboard.sourceConfiguration.title'} footer={
       <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
     }>
