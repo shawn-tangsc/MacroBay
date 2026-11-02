@@ -51,7 +51,24 @@ export const dailyBriefingText = {
       nothingEnabled: '四块读数都没有接通。先检查情报源，再打开今天。',
       noEditions: '还没有历史版次。'
     },
-    settings: { title: '日报设置', generation: '生成', ai: 'AI 编辑', open: '日报设置' },
+    settings: {
+      title: '日报设置', generation: '生成', ai: 'AI 编辑', open: '日报设置',
+      periods: {
+        timeValue: '每天 {time}',
+        windowValue: '最近 {hours} 小时',
+        label: '第 {index} 期',
+        meta: '每天 {time} 生成 · 截至 {time} 的最近 {hours} 小时 · 主语言 {language}',
+        add: '添加一期',
+        addReason: '这个版本还不支持一天多期，位置先留着。',
+        language: '生成语言',
+        languageFollow: '{language}（跟随界面语言）',
+        languageFallback: '{language}（跟随界面语言，暂不支持你的语言）',
+        languageUnsupported: '你的界面语言是{language}，这一版日报还不能用这种语言写，现在用英语代替。',
+        additional: '同时生成英语版',
+        cost: '这一期会写作 {count} 次（主语言 1 次 + 附加语言 {extra} 次），慢一倍。'
+      },
+      languageNames: { 'zh-CN': '中文', 'en-US': '英语' }
+    },
     emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
     noBriefTitle: '还没有可用的日报',
     noBriefBody: '简报只读取已启用的来源和已发布的结论。先在「配置看板来源」里打开需要的源，等一次采集完成后，今天的消息、数据和结论会出现在这里。',
@@ -254,7 +271,24 @@ export const dailyBriefingText = {
       nothingEnabled: 'All four readings are disconnected. Check the sources, then open today again.',
       noEditions: 'No earlier editions yet.'
     },
-    settings: { title: 'Briefing settings', generation: 'Generation', ai: 'AI editing', open: 'Briefing settings' },
+    settings: {
+      title: 'Briefing settings', generation: 'Generation', ai: 'AI editing', open: 'Briefing settings',
+      periods: {
+        timeValue: 'Daily at {time}',
+        windowValue: 'Last {hours} hours',
+        label: 'Edition {index}',
+        meta: 'Runs daily at {time} · last {hours} hours to {time} · primary language {language}',
+        add: 'Add an edition',
+        addReason: 'This version does not support more than one edition a day yet — the spot is reserved.',
+        language: 'Edition language',
+        languageFollow: '{language} (follows the interface)',
+        languageFallback: '{language} (follows the interface; your language is not supported yet)',
+        languageUnsupported: 'Your interface is {language}, but this version cannot write the brief in that language yet, so it uses English instead.',
+        additional: 'Also generate an English edition',
+        cost: 'This edition will be written {count} times (1 primary + {extra} extra), roughly twice as slow.'
+      },
+      languageNames: { 'zh-CN': 'Chinese', 'en-US': 'English' }
+    },
     emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
     noBriefTitle: 'No daily brief yet',
     noBriefBody: 'The brief reads only enabled sources and published conclusions. Open the dashboard sources, wait for one collection, and today’s messages, numbers and conclusion will appear here.',
