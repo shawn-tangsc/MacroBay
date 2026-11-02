@@ -9070,6 +9070,53 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
+/*
+ * 设置 → 基础设置 · 版本那一行。
+ *
+ * 只有排版，没有颜色判断：状态色由 StatusPill 的档位决定，这里不按状态写第二套颜色。
+ * 版本号用等宽数字（`tabular-nums`），换版本时数字不跳位。
+ */
+.version-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.version-key {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.version-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.version-sep {
+  color: var(--muted);
+}
+
+.version-spacer {
+  flex: 1 1 auto;
+}
+
+.version-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.version-open-failed {
+  /* 失败句不着色、不加重：它是说明，不是第二个结论。 */
+  color: var(--muted);
+}
+
 .preference-fields {
   display: grid;
   gap: 12px;

@@ -120,6 +120,7 @@ import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndp
 import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
 import { PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId } from './modelPins'
 import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
+import { VersionCheckRow } from './settings/version/VersionCheckRow'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
@@ -1454,6 +1455,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           ) : null}
         </div>
 
+        <VersionCheckRow settings={settings} onUpdateSettings={updateSettings} />
       </section>
     )
   }
