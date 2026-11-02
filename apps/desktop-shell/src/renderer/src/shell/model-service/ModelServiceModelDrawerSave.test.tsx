@@ -3,6 +3,8 @@
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { platformText } from '../../i18n/platformText'
+
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 
 import { renderModelServiceSettings } from './modelServicePageHarness'
@@ -29,7 +31,8 @@ describe('PLAT-62 模型编辑抽屉保存', () => {
       await Promise.resolve()
     })
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-model-capability="tools"]')?.click()
+      ;[...document.querySelectorAll<HTMLElement>('.filter-chip')]
+        .find((chip) => (chip.textContent ?? '') === platformText['en-US'].models.tools)?.click()
       await Promise.resolve()
     })
 

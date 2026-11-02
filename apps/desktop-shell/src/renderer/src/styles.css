@@ -11602,50 +11602,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 11px;
 }
 
-.model-drawer-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.model-drawer-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.model-drawer-chip:hover {
-  border-color: color-mix(in srgb, var(--border) 70%, var(--text));
-  color: var(--text);
-}
-
-.model-drawer-chip:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.model-drawer-chip.is-active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: var(--surface-2, var(--surface-strong));
-  color: var(--text);
-}
-
-.model-drawer-chip.is-active::before {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  content: '';
-}
-
 .model-drawer-hint {
   margin: 6px 0 0;
   color: var(--muted);

@@ -13,6 +13,12 @@ import { ModelServiceModelDrawer } from './ModelServiceModelDrawer'
 
 const labels = platformText['en-US'].models
 
+/** 能力胶囊按可访问名（文字）定位：`FilterChip` 不给逐枚 data 钩子。 */
+function capabilityChip(container: HTMLElement, label: string): HTMLElement | null {
+  return [...container.querySelectorAll<HTMLElement>('.filter-chip')]
+    .find((chip) => (chip.textContent ?? '') === label) ?? null
+}
+
 const draft: ModelDraft = {
   id: 'vendor/model-1',
   name: 'Model 1',
@@ -96,11 +102,12 @@ describe('PLAT-62 模型编辑抽屉', () => {
     expect(idInput?.value).toBe('vendor/model-1')
     expect(container.querySelector('[data-model-copy]')).not.toBeNull()
 
-    const chips = [...container.querySelectorAll<HTMLElement>('[data-model-capability]')]
+    const chips = [...container.querySelectorAll<HTMLElement>('.filter-chip')]
     expect(chips).toHaveLength(10)
-    expect(chips.every((chip) => chip.querySelector('svg') !== null)).toBe(true)
-    expect(container.querySelector('[data-model-capability="chat"]')?.getAttribute('aria-pressed')).toBe('true')
-    expect(container.querySelector('[data-model-capability="tools"]')?.getAttribute('aria-pressed')).toBe('false')
+    // 图标已按界面设计 2026-11-02 去掉：能力名文字已经写清，图标是第二套语言。
+    expect(chips.every((chip) => chip.querySelector('svg') === null)).toBe(true)
+    expect(capabilityChip(container, labels.chat)?.getAttribute('aria-pressed')).toBe('true')
+    expect(capabilityChip(container, labels.tools)?.getAttribute('aria-pressed')).toBe('false')
   })
 
   it('copies the model id and shows 已复制 for 1.5s', async () => {
@@ -117,15 +124,15 @@ describe('PLAT-62 模型编辑抽屉', () => {
     const container = await mount(createElement(Harness))
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-model-capability="tools"]')?.click()
+      capabilityChip(container, labels.tools)?.click()
       await Promise.resolve()
     })
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-model-capability="chat"]')?.click()
+      capabilityChip(container, labels.chat)?.click()
       await Promise.resolve()
     })
-    expect(container.querySelector('[data-model-capability="tools"]')?.getAttribute('aria-pressed')).toBe('true')
-    expect(container.querySelector('[data-model-capability="chat"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(capabilityChip(container, labels.tools)?.getAttribute('aria-pressed')).toBe('true')
+    expect(capabilityChip(container, labels.chat)?.getAttribute('aria-pressed')).toBe('false')
     expect(container.querySelector('[data-non-chat-hint]')?.textContent).toBe(labels.nonChatModelHint)
   })
 
