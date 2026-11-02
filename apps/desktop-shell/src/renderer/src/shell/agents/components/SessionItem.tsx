@@ -138,7 +138,9 @@ export default function SessionItem({
     })
   }
 
-  function requestInlineDelete(event: React.MouseEvent<HTMLButtonElement>): void {
+  // 参数放宽到 HTMLElement：`IconButton.onSelect` 按 `MouseEvent<HTMLElement>` 收（浮层要能注入处理器），
+  // 写窄的处理器不能当宽的用。这里只用 stopPropagation 与修饰键，不需要更窄的类型。
+  function requestInlineDelete(event: React.MouseEvent<HTMLElement>): void {
     event.stopPropagation()
     const intent = getSessionDeleteClickIntent({
       confirming: confirmingDelete,
