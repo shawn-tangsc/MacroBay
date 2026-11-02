@@ -25,7 +25,8 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
-| `labelKey` | `K extends string` | 是 | 提示文案，**收键**。`K` 由 `resolveText` 反推：解析器的参数是键联合时，允许的键就被锁在联合里。 |
+| `labelKey` | `K extends string` | 二选一 | 提示文案，**收键**。`K` 由 `resolveText` 反推：解析器的参数是键联合时，允许的键就被锁在联合里。 |
+| `dataText` | `string` | 二选一 | 提示**本身就是运行时数据**（新闻标题、品种名）。只准来自变量，不许放字面句子。 |
 | `labelParams` | `Readonly<Record<string, string>>` | 否 | 填进模板 `{name}` 的值，**只收已经格式化好的字符串**（`Finder`、`289/289`）。 |
 | `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键解析成空串。 |
 | `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |

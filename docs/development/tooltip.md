@@ -28,7 +28,8 @@ component adds the focus trigger and the copy rules.
 
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `labelKey` | `K extends string` | yes | The hint, **as a key**. `K` is inferred from `resolveText`, so a resolver typed to an explicit key union locks the allowed keys. |
+| `labelKey` | `K extends string` | one of | The hint, **as a key**. `K` is inferred from `resolveText`, so a resolver typed to an explicit key union locks the allowed keys. |
+| `dataText` | `string` | one of | The hint **is** runtime data — a headline, an instrument name. Comes from a variable, never a literal sentence. |
 | `labelParams` | `Readonly<Record<string, string>>` | no | Values to fill `{name}` placeholders. **Already formatted** strings only (`Finder`, `289/289`). |
 | `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
