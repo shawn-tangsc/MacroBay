@@ -28,7 +28,7 @@ import {
   TASK_AUTOMATION_CONTROL_CLASSES,
   TASK_AUTOMATION_SOURCE_POPUP_PROPS
 } from './taskAutomationControlWidths'
-import type { ResourceJobSchedulesController, ResourceJobSchedulesErrorReason } from './useResourceJobSchedules'
+import type { ResourceJobSchedulesController } from './useResourceJobSchedules'
 
 export function TaskAutomationResourceJobsSection(props: {
   labels: TaskAutomationLabels
@@ -80,14 +80,25 @@ export function TaskAutomationResourceJobsSection(props: {
       </header>
       {controller.loading ? (
         <BlockLoading label={labels.resourceLoading} />
-      ) : controller.error ? (
+      ) : controller.error && controller.errorReason === 'bridge-missing' ? (
+        // 预加载缺接口的唯一出路是重启应用，而 `error.needs-restart` 必带 `restart-app` 动作，
+        // 平台还没这条接缝（架构师 2026-11-02：不许挂一个点了没反应的重启按钮）。
+        // 所以这一支保留行内提示，等接缝落地再换；另外两支走下面的 `StateView`。
         <div className="task-automation-block-body">
           <BlockError
-            label={resourceErrorLabel(controller.errorReason, labels)}
+            label={labels.resourceBridgeMissing}
             retryLabel={labels.retry}
             onRetry={() => void controller.reload()}
           />
         </div>
+      ) : controller.error ? (
+        // 读失败 / 超时：原因码 `unreadable`，动作是**真的**重试（同一个 `reload`），不需要导航接缝。
+        <StateView
+          state="error"
+          reasonCode="unreadable"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+        />
       ) : controller.items.length === 0 ? (
         <BlockEmpty title={labels.resourceEmptyTitle} body={labels.resourceEmptyBody} />
       ) : (
@@ -260,14 +271,4 @@ function sourceLabel(
 ): string {
   if (job.owner === 'platform') return labels.platform
   return productNames[job.productId ?? ''] ?? job.productId ?? labels.product
-}
-
-/** error 态必须给出一行可读原因：读取失败 / 缺少接口（多为未重启）/ 超时。 */
-function resourceErrorLabel(
-  reason: ResourceJobSchedulesErrorReason | null,
-  labels: TaskAutomationLabels
-): string {
-  if (reason === 'bridge-missing') return labels.resourceBridgeMissing
-  if (reason === 'timeout') return labels.resourceLoadTimeout
-  return labels.resourceLoadFailed
 }

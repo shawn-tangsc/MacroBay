@@ -121,7 +121,8 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.error).toBe(true)
     expect(capture.current?.errorReason).toBe('read-failed')
     expect(capture.current?.items).toEqual([])
-    expect(container.textContent).toContain(labels.resourceLoadFailed)
+    // 读失败由 `StateView` 的 `error/unreadable` 承担：标题「读取失败」+ 原因句 + 真重试。
+    expect(container.textContent).toContain('读取失败')
     expect(container.textContent).not.toContain(labels.resourceBridgeMissing)
     expect(container.textContent).not.toContain('正在加载资源任务')
     expect(container.textContent).not.toContain('/private/secret')
@@ -139,7 +140,8 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.error).toBe(true)
     expect(capture.current?.errorReason).toBe('timeout')
     expect(capture.current?.items).toEqual([])
-    expect(container.textContent).toContain(labels.resourceLoadTimeout)
+    // 超时同样走 `error/unreadable`（读失败），不是一句自绘的超时文案。
+    expect(container.textContent).toContain('读取失败')
     expect(container.textContent).not.toContain('正在加载资源任务')
     expect(retryButton(container)).toBeDefined()
   })
