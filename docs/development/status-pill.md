@@ -52,6 +52,32 @@ deliberate departure from colouring the text: `color: var(--danger)` is a foregr
 and an 11px pill word is body text. The pill still reads in grayscale — the word carries the state,
 the dot and the border only reinforce it.
 
+**A tone says what the state asks of the reader, not how serious it sounds.** That is the only
+question a call site answers when it picks one:
+
+| `tone` | What it asks of the reader |
+| --- | --- |
+| `ok` | nothing — it works |
+| `muted` | nothing — it is off, paused, finished, or the default |
+| `info` | wait — something is happening |
+| `warn` | look once |
+| `bad` | **it already failed**, and the reader is affected |
+
+So `bad` is reserved for a failure that has happened. A *dangerous setting* is not a failure: it
+is expressed by the words and by where it sits, never by painting the state red — otherwise `bad`
+means two things at once.
+
+**Map the state to a tone through a table over the closed union**, never through a function with a
+fallback:
+
+```ts
+const STATUS_TONE: Record<ChannelCatalogStatus, StatusPillTone> = { supported: 'ok', … }
+```
+
+A `Record` over the union fails to compile when a new state appears; `if (…) return 'ok'; return ''`
+does not — it renders a bare, colourless word that nobody reports. The worst failure is the one
+that quietly says the wrong thing.
+
 ## Rules the component enforces
 
 - **The pill must have a word.** The dot is `aria-hidden` decoration; turning colour off must not
