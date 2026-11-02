@@ -138,11 +138,14 @@ describe('同一屏不许有两种说法', () => {
     expect(english.sendTestHint).toContain('permission status')
   })
 
-  it('「平台还没有产生通知的来源」那句不再挂在设置页上', () => {
-    // 它已经不成立了：有真实生产者。留着就等于同一屏里同时说「没有来源」和「有开关」。
-    const paneSource = readFileSync(resolve(__dirname, './NotificationSettingsPane.tsx'), 'utf8')
-    expect(paneSource).not.toContain('unavailableNotice')
-    expect(paneSource).not.toContain('unavailableBadge')
+  it('已删掉的键不会悄悄回到设置页：判据放在行为上，不放在源码字符串上', async () => {
+    // 「源码里不含某个字符串」在键被删之后恒真，它证明不了任何事；真正的判据是这一屏渲染出来的东西：
+    // 每一条没有落点的渠道只说它自己的原因，没有任何「未启用」这类通用说法。
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const tags = [...container.querySelectorAll('.ant-tag')].map((tag) => tag.textContent)
+
+    expect(tags).toEqual([labels.popupUnavailable])
   })
 })
 
