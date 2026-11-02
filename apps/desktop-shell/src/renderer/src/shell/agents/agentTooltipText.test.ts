@@ -13,9 +13,9 @@ const text = {
 } as unknown as AgentText
 
 describe('resolveAgentTooltipText', () => {
-  it('resolves a lower-case dotted key onto the camel-cased object path', () => {
-    expect(resolveAgentTooltipText(text, 'messages.navigate-top')).toBe('回到顶部')
-    expect(resolveAgentTooltipText(text, 'messages.navigate-previous')).toBe('上一条消息')
+  it('resolves the real text path, camelCase included', () => {
+    expect(resolveAgentTooltipText(text, 'messages.navigateTop')).toBe('回到顶部')
+    expect(resolveAgentTooltipText(text, 'messages.navigatePrevious')).toBe('上一条消息')
   })
 
   it('keeps the key set closed at the type level, not just at runtime', () => {

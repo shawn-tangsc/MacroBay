@@ -18,15 +18,15 @@ const resolveText = (key: AgentTooltipKey): string => key
 describe('Tooltip labelKey typing', () => {
   it('accepts a key inside the resolver union and rejects one outside it', () => {
     const inside = (
-      <Tooltip labelKey="messages.navigate-top" resolveText={resolveText}>
+      <Tooltip labelKey="messages.navigateTop" resolveText={resolveText}>
         <button type="button">top</button>
       </Tooltip>
     )
     expect(inside).toBeTruthy()
 
-    // @ts-expect-error 闭集之外的键必须编译不过，这是类型接管传参的唯一证据
     const outside = (
-      <Tooltip labelKey="messages.navigate-sideways" resolveText={resolveText}>
+      // @ts-expect-error 闭集之外的键必须编译不过，这是类型接管传参的唯一证据
+      <Tooltip labelKey="messages.navigateSideways" resolveText={resolveText}>
         <button type="button">sideways</button>
       </Tooltip>
     )

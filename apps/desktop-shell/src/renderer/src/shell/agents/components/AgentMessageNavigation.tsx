@@ -20,12 +20,18 @@ export default function AgentMessageNavigation({
   onBottom
 }: AgentMessageNavigationProps): React.ReactElement {
   const t = useAgentText()
-  // 解析器带键联合，四个 `labelKey` 因此被锁在闭集里：写错一处编译就红，不靠评审发现。
-  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
+  // 四个键取自闭合联合 `AgentTooltipKey`：写错一处编译就红，不靠评审发现。
+  const tooltipKeys = {
+    top: 'messages.navigateTop',
+    previous: 'messages.navigatePrevious',
+    next: 'messages.navigateNext',
+    bottom: 'messages.navigateBottom'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
 
   return (
     <div className="agent-message-navigation" aria-label={t.messages.anchorRailAria}>
-      <Tooltip labelKey="messages.navigate-top" resolveText={resolveText}>
+      <Tooltip labelKey={tooltipKeys.top} resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -35,7 +41,7 @@ export default function AgentMessageNavigation({
           onClick={onTop}
         />
       </Tooltip>
-      <Tooltip labelKey="messages.navigate-previous" resolveText={resolveText}>
+      <Tooltip labelKey={tooltipKeys.previous} resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -45,7 +51,7 @@ export default function AgentMessageNavigation({
           onClick={onPrevious}
         />
       </Tooltip>
-      <Tooltip labelKey="messages.navigate-next" resolveText={resolveText}>
+      <Tooltip labelKey={tooltipKeys.next} resolveText={resolveText}>
         <Button
           type="text"
           size="small"
@@ -55,7 +61,7 @@ export default function AgentMessageNavigation({
           onClick={onNext}
         />
       </Tooltip>
-      <Tooltip labelKey="messages.navigate-bottom" resolveText={resolveText}>
+      <Tooltip labelKey={tooltipKeys.bottom} resolveText={resolveText}>
         <Button
           type="text"
           size="small"
