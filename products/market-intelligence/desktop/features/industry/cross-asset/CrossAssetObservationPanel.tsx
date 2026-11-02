@@ -249,6 +249,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           resolveText={resolveProductText}
           size="md"
           tooltipKey={crossAssetTextKeys.subtitle}
+          variant="plain"
         /></div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
@@ -289,6 +290,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
               onSelect={() => undefined}
               resolveText={resolveProductText}
               size="md"
+              variant="plain"
             />
           )} /></div>
         <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}

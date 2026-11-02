@@ -69,7 +69,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <IconButton
               {...triggerProps}
               ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
-              icon={Info} size="sm" resolveText={resolveProductKey} />
+              icon={Info} size="sm" resolveText={resolveProductKey} variant="plain" />
           )} />
       </div>
       <div className="mi-divergence__content">
