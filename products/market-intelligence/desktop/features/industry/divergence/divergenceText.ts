@@ -4,7 +4,11 @@ export type DivergencePanelText = Readonly<{
   title: string
   /** The word that marks the block as a conclusion rather than another section. */
   helpLabel: string
-  helpLines: readonly string[]
+  /** The popover's four one-look bullets, one point each: the bubble is a glance, not a document. */
+  helpBullets: readonly string[]
+  /** The entry beside the help icon that opens the longer notes below the card. */
+  helpDetailsLabel: string
+  helpDetails: readonly string[]
   /** Appended when several pairs were held back for the same reason. */
   withheldGroup: string
   /** What separates two withheld pairs, and what marks a missing instant. Per language. */

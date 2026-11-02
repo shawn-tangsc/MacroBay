@@ -37,7 +37,7 @@ describe('divergence panel', () => {
     expect(markup).not.toContain('mi-divergence__judge')
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
-    expect(markup).not.toContain(text.helpLines[0])
+    expect(markup).not.toContain(text.helpBullets[0])
   })
 
   it('shows a row with both readings, the mechanism and the invalidation', () => {
@@ -224,9 +224,10 @@ describe('help on the shared popover', () => {
     await act(async () => { root.unmount() })
   })
 
-  it('opens the same five lines a keyboard reader used to get', async () => {
-    // The lines used to be five <b> blocks inside a hand-rolled tooltip. They are now five keys on
-    // the shared popover; this asserts none of them went missing in the swap.
+  it('opens the four one-look bullets a keyboard reader can reach', async () => {
+    // The bubble used to carry five lines; the longest moved behind the entry below the card. Four
+    // is also the popover's cap, so this asserts the count as well as every key resolving in order.
+    expect(text.helpBullets).toHaveLength(4)
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
@@ -238,7 +239,7 @@ describe('help on the shared popover', () => {
     const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`) as HTMLElement
     await act(async () => { trigger.focus() })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
-    for (const line of text.helpLines) expect(document.body.textContent).toContain(line)
+    for (const line of text.helpBullets) expect(document.body.textContent).toContain(line)
     await act(async () => { root.unmount() })
   })
 })

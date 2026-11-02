@@ -1,6 +1,4 @@
 {
   "$comment": "Popover call sites whose inline `lines` array is over the four-item cap. One entry per file, the number is how many items the array has today. The cap itself is enforced in the component (width 360 / height 320, content scrolls) and by popoverLimitsGuard.test.ts; this list exists only so a line already over the cap does not turn the whole gate red on the day the guard lands. Delete an entry in the same commit that folds its lines back to four or fewer.",
-  "entries": {
-    "products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx": 5
-  }
+  "entries": {}
 }

@@ -1,5 +1,6 @@
 .mi-divergence {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   min-width: 0;
@@ -161,3 +162,24 @@
 .mi-divergence__withheld-title { font-weight: 650; }
 .mi-divergence__withheld-item + .mi-divergence__withheld-item::before { content: '、'; }
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
+
+
+/* The entry to the readings behind the numbers: a word, not a chip. Hover brightens the word and
+   draws nothing — a block behind a short entry reads as a second button ring. */
+.mi-divergence__help-toggle {
+  padding: 0; border: 0; background: none;
+  color: var(--mi-dashboard-muted); font: inherit; font-size: 10px;
+  line-height: 16px; white-space: nowrap; cursor: pointer;
+}
+.mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
+.mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+
+/* The notes that would not fit the bubble: opened on purpose, so they get their own row, a smaller
+   size than the card's numbers, and their own scroll instead of stretching the card. */
+.mi-divergence__help {
+  display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
+  padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
+  color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6;
+  max-height: 320px; overflow-y: auto;
+}
+.mi-divergence__help p { margin: 0; }

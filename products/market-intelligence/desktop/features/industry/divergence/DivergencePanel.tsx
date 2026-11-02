@@ -7,6 +7,7 @@ import { Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useId, useState } from 'react'
 
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
@@ -21,6 +22,20 @@ import './DivergencePanel.css'
  * before the title, because a reader who came for the readings should not have to step over four
  * lines of explanation to reach them.
  */
+/**
+ * The bubble's four one-look bullets, one literal key per line.
+ *
+ * Literal on purpose: a guard checks that each key is a dotted path, and a template string would
+ * hide the spelling from it. Four is also the popover's cap — the notes that would not fit moved
+ * behind their own entry below the card.
+ */
+export const divergenceHelpBulletKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.0',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.1',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.2',
+  'pages.intelligence.portal.dashboard.divergence.helpBullets.3'
+])
+
 export function DivergencePanel({ state, text, onRetry }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
@@ -35,6 +50,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
   const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
   const resolveProductKey = useProductTextKey()
+  // 长笔记留在读者主动打开的地方：默认收起，打开后是卡片下方一块限高的区域，不盖住要解释的图。
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpDetailsId = useId()
   /**
    * The product's own sentence for the reason line, and only that line.
    *
@@ -54,16 +72,10 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <div className="mi-divergence__lead">
-        {/* Five lines are five keys, one per line: arrays are the semantic shape here, and a
+        {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
             joined sentence with newlines would be lost the first time the copy is translated. */}
         <Popover
-          lines={[
-            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.0' },
-            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.1' },
-            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.2' },
-            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.3' },
-            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.4' }
-          ]}
+          lines={divergenceHelpBulletKeys.map(labelKey => ({ labelKey }))}
           resolveText={resolveProductKey}
           trigger={(triggerProps) => (
             <IconButton
@@ -71,6 +83,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
               ariaLabelKey="pages.intelligence.portal.dashboard.divergence.helpLabel"
               icon={Info} size="sm" resolveText={resolveProductKey} variant="plain" />
           )} />
+        {/* The notes that would not fit the bubble: their own entry, closed by default, so a
+            footnote stays a footnote instead of covering the card it explains. */}
+        <button aria-controls={helpDetailsId} aria-expanded={helpOpen}
+          className="mi-divergence__help-toggle" onClick={() => setHelpOpen(open => !open)}
+          type="button">{text.helpDetailsLabel}</button>
       </div>
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
@@ -134,6 +151,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           </p>
         ) : null}
       </div>
+      {helpOpen ? (
+        // Bounded on purpose: the notes scroll inside 320px instead of stretching the card, and the
+        // readings above stay visible while the reader checks a threshold.
+        <div className="mi-divergence__help" data-divergence-help id={helpDetailsId}>
+          {text.helpDetails.map(line => <p key={line}>{line}</p>)}
+        </div>
+      ) : null}
     </section>
   )
 }
