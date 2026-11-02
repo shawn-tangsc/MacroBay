@@ -128,16 +128,10 @@
 .mi-daily-briefing-page__group-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: #a7b0b7; font-size: 8.5px; line-height: 1.5; white-space: nowrap; }
 .mi-daily-briefing-page__group-example { grid-column: 1 / -1; overflow: hidden; color: #7d8790; font-size: 8.5px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
 
-.mi-issue-drawer { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: flex-end; }
-.mi-issue-drawer__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .5); }
-.mi-issue-drawer__panel { position: relative; width: min(380px, 92vw); height: 100%; overflow-y: auto; padding: 16px; border-left: 1px solid var(--mi-dashboard-line); background: #171b1e; box-shadow: -12px 0 30px rgba(0, 0, 0, .35); }
-.mi-issue-drawer__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mi-issue-drawer__tags { display: flex; gap: 5px; }
 .mi-issue-drawer__tags span { padding: 1px 5px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: #8d979f; font-size: 8.5px; line-height: 1.4; }
 .mi-issue-drawer__tags span[data-severity="blocking"] { border-color: #8b3a3a; color: #f0a3a3; }
 .mi-issue-drawer__tags span[data-severity="warning"] { border-color: #8b6d2e; color: #e7c98f; }
-.mi-issue-drawer__close { flex: none; padding: 3px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 5px; background: transparent; color: var(--mi-dashboard-muted); font-size: 9.5px; cursor: pointer; }
-.mi-issue-drawer__panel h2 { margin: 12px 0 8px; color: #d7dde1; font-size: 13px; }
 .mi-issue-drawer__list { margin: 0; padding: 0; list-style: none; }
 .mi-issue-drawer__item { padding: 9px 0; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-issue-drawer__item:last-child { border-bottom: 0; }

@@ -408,7 +408,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </> : null}
       </aside> : null}
     </div>
-    {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} returnFocusTo={openGroup?.trigger ?? null} onClose={() => setOpenGroup(null)} /> : null}
+    {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
       setSettingsOpen(false)
       void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
