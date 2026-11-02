@@ -31,7 +31,11 @@ describe('shared side drawer', () => {
     const onClose = vi.fn()
     const dom = await render(onClose)
     expect(dom.querySelector('.mi-analysis-drawer')).not.toBeNull()
-    await act(async () => dom.querySelector<HTMLButtonElement>('button')!.click())
+    const close = dom.querySelector<HTMLButtonElement>('button')!
+    // 关闭键是共享的那一枚：平台键给读屏名、sm 档 22px，而不是各壳自己写 aria-label。
+    expect(close.getAttribute('aria-label')).toBe('关闭抽屉')
+    expect(close.className).toContain('icon-button--sm')
+    await act(async () => close.click())
     expect(onClose).toHaveBeenCalledTimes(1)
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
     expect(onClose).toHaveBeenCalledTimes(2)
