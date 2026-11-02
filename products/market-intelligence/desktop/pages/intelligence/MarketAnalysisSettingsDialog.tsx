@@ -1,7 +1,8 @@
-import { Modal, Switch } from 'antd'
+import { Button, Switch } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { Modal } from '@platform/ui/components/modal'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
 import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
@@ -9,6 +10,9 @@ import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { useMarketAnalysisSettings, type MarketAnalysisSettingsRefusal } from './useMarketAnalysisSettings'
 
 const ANALYSIS_MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
+
+/** 标题键只在本调用点出现一次；句子由产品的文案表给，组件只认键。 */
+const ANALYSIS_SETTINGS_TITLE_KEY = 'mi.analysis.settingsTitle'
 
 /**
  * The analysis switches, extracted from the timeline so both the timeline mask and the
@@ -59,16 +63,21 @@ export function MarketAnalysisSettingsDialog(props: {
 
   return (
     <Modal
-      cancelText={text.cancel}
-      className="mi-analysis-timeline__settings-dialog"
-      okText={settingsState.saving ? text.saving : text.save}
-      okButtonProps={{ loading: settingsState.saving }}
-      onCancel={props.onClose}
-      onOk={() => void submit()}
       open={props.open}
-      title={text.settingsTitle}
-      zIndex={1400}
-    >
+      width="standard"
+      titleKey={ANALYSIS_SETTINGS_TITLE_KEY}
+      resolveText={(key) => (key === ANALYSIS_SETTINGS_TITLE_KEY ? text.settingsTitle : '')}
+      onClose={props.onClose}
+      className="mi-analysis-timeline__settings-dialog"
+      // 骨架不内置主按钮：保存/取消由调用方给，顺序与原 antd 默认页脚一致。
+      footer={
+        <>
+          <Button onClick={props.onClose}>{text.cancel}</Button>
+          <Button type="primary" loading={settingsState.saving} onClick={() => void submit()}>
+            {settingsState.saving ? text.saving : text.save}
+          </Button>
+        </>
+      }>
       <div className="mi-analysis-timeline__settings-row">
         <div>
           <strong>{text.analysisEnabled}</strong>
