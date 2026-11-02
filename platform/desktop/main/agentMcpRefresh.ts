@@ -1,7 +1,13 @@
 import type { McpRuntimeService, RefreshMcpServerToolsResult } from '../../ai/agent-platform/mcp'
 import type { AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 
-type AgentMcpRefreshDependencies = {
+/**
+ * 刷新单个 MCP 服务器工具时要的三件事。
+ *
+ * 导出它，是因为**装配现在在 `composition/` 里拼这条链**，而依赖形状属于这个函数、不属于调用点——
+ * 在调用点各抄一份 `{ getState, refreshServerTools, replaceAgentState }`，第三个调用点就会抄漏一项。
+ */
+export type AgentMcpRefreshDependencies = {
   getState: () => Promise<AgentStoreState>
   refreshServerTools: McpRuntimeService['refreshServerTools']
   replaceAgentState: (state: AgentStoreState) => Promise<AgentStoreState>

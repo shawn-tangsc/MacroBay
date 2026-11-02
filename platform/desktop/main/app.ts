@@ -172,12 +172,12 @@ import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerAgentIpc } from './ipc/agentIpc'
-import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { composeNotificationRuntime } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
+import { composeAgentToolsIpc } from './composition/agentTools'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -220,7 +220,6 @@ import { createAgentStateCoordinator, type ReplaceAgentStateOptions } from './ag
 import { createAgentTaskJobBridge } from './agentTaskJobBridge'
 import { createAgentTaskRunController } from './agentTaskRunController'
 import { registerJobIpcHandlers } from './jobIpcHandlers'
-import { refreshAgentMcpTools } from './agentMcpRefresh'
 import { createMcpRuntimeServerHostFactory } from './mcpRuntimeServerHostFactory'
 import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver } from './skillRuntimeCapabilities'
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
@@ -1193,22 +1192,18 @@ function registerIpcHandlers(
   })
 
   // 智能体工具那一半 16 个 handler 搬到 ipc/agentToolsIpc.ts。
-  registerAgentToolsIpc(ipcMain, {
+  // 智能体工具那一半 16 个 handler；MCP 刷新的「读→刷→写回」链在 composition/agentTools.ts 里拼。
+  composeAgentToolsIpc(ipcMain, {
     agentIpcHandlers,
     getState: () => agentStore.getState(),
     skillService,
     skillSearchService,
-    refreshMcpTools: (serverId) =>
-      refreshAgentMcpTools(
-        {
-          getState: () => agentStore.getState(),
-          refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
-          replaceAgentState
-        },
-        serverId
-      ),
-    replaceStateAfterSkillMutation: (previousState, nextState) =>
-      replaceAgentStateAfterSkillMutation(previousState, nextState)
+    mcpRefreshDependencies: {
+      getState: () => agentStore.getState(),
+      refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
+      replaceAgentState
+    },
+    replaceAgentStateAfterSkillMutation
   })
 
   // 助手域 29 个 handler 搬到 ipc/assistantIpc.ts；流事件广播仍在上面那个构造里。
