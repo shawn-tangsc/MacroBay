@@ -290,7 +290,11 @@ describe('cross-asset observation workspace', () => {
       expect(badge.getAttribute('title')).toBeNull()
       expect(badge.getAttribute('tabindex')).toBe('0')
       await act(async () => { (badge as HTMLElement).focus() })
-      expect(document.body.textContent).toContain(text.liveHint)
+      // 提示是一句语言模板 + `{time}`：模板那句必须在，且后面真的被填了观测时间——
+      // 只断言「包含模板」会让「时间没填进去」也算通过（模板里本来就有那句话）。
+      const hintHead = text.liveHint.split('{time}')[0]!.trim()
+      const bubbles = [...document.querySelectorAll('.ant-tooltip-inner')].map(node => node.textContent ?? '')
+      expect(bubbles.some(line => line.startsWith(hintHead) && line.length > hintHead.length)).toBe(true)
       expect(badge.getAttribute('data-live-observed')).toBe(String(atMs + 5_000))
       // The four windows are still the closed-bar figures: the live tick moved none of them.
       expect(host.querySelector('[data-asset-return="gold:15m"]')?.textContent).toBe('+0.05%')

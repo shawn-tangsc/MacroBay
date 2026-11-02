@@ -381,7 +381,7 @@ export const productText = {
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
               liveStateLabels: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', unavailable: '实时不可用' },
-              liveHint: '实时价来自未闭合的价格流，四个窗口仍按已闭合K线计算；观测时间',
+              liveHint: '实时价来自未闭合的价格流，四个窗口仍按已闭合K线计算；观测时间 {time}',
               facts: { up: '纳斯达克 100 与 BTC 近 1h 同向上涨', down: '纳斯达克 100 与 BTC 近 1h 同向下跌', diverging: '纳斯达克 100 与 BTC 近 1h 走势分化', mixed: '纳斯达克 100 与 BTC 近 1h 方向不一致或变化较小', unavailable: '数据不足或延迟，暂不判断' },
               relativeFacts: { stronger: 'ETH 近 1h 较 BTC 强', weaker: 'ETH 近 1h 较 BTC 弱', flat: 'ETH 近 1h 与 BTC 持平', unavailable: '数据不足或延迟，暂不判断' }
             },
@@ -2241,7 +2241,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
               liveStateLabels: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', unavailable: 'Live unavailable' },
-              liveHint: 'The live price comes from an unclosed price stream; all four windows still use closed bars. Observed at',
+              liveHint: 'The live price comes from an unclosed price stream; all four windows still use closed bars. Observed at {time}',
               facts: { up: 'Nasdaq 100 and BTC rose over the last hour', down: 'Nasdaq 100 and BTC fell over the last hour', diverging: 'Nasdaq 100 and BTC diverged over the last hour', mixed: 'Nasdaq 100 and BTC directions differ or changes are small', unavailable: 'Insufficient or delayed data; no current assessment' },
               relativeFacts: { stronger: 'ETH outperformed BTC over 1h', weaker: 'ETH underperformed BTC over 1h', flat: 'ETH and BTC matched over 1h', unavailable: 'Insufficient or delayed data; no current assessment' }
             },
