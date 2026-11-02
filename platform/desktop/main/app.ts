@@ -445,7 +445,7 @@ const {
   channelInboundService,
   channelInboundExecutionRunner,
   channelDeliveryMaintenance,
-  deliverTaskResultToChannels,
+  deliverTaskResultToChannels, channelDeliveryService,
   taskAutomationMaintenance,
   telegramRuntimeManager,
   slackRuntimeManager,
@@ -1028,7 +1028,7 @@ function registerIpcHandlers(
   })
 
   // 通知运行时的端口在 composition 里定义；这里只给设置、时区、产品声明与日志出口。
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog })
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request) })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
