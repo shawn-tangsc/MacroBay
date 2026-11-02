@@ -30,16 +30,39 @@ import type { PositioningPanelText } from './positioningText'
 import './PositioningPanel.css'
 
 /**
- * The help's paragraph, one literal key per line.
+ * The popover's four one-look bullets, one literal key per line.
  *
  * Literal on purpose: the guards check that a key exists and is spelled as a dotted path, which a
  * template string hides from them. A table also makes it obvious that the panel's help and the text
  * table have the same number of lines.
+ *
+ * Four because the bubble is a glance: a fifth bullet, or a paragraph where a bullet belongs, means
+ * the sentence is a reading note and belongs in `positioningHelpDetailKeys` instead.
  */
+export const positioningHelpBulletKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.positioning.helpBullets.0',
+  'pages.intelligence.portal.dashboard.positioning.helpBullets.1',
+  'pages.intelligence.portal.dashboard.positioning.helpBullets.2',
+  'pages.intelligence.portal.dashboard.positioning.helpBullets.3'
+] as const)
+
+/**
+ * The readings behind the numbers: thresholds, window folding, what a mark does not cover.
+ *
+ * These live in a region under the card that the reader opens on purpose. A bubble that covered
+ * half the chart was the same prose in the wrong home.
+ */
+export const positioningHelpDetailKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.positioning.helpDetails.0',
+  'pages.intelligence.portal.dashboard.positioning.helpDetails.1',
+  'pages.intelligence.portal.dashboard.positioning.helpDetails.2',
+  'pages.intelligence.portal.dashboard.positioning.helpDetails.3'
+] as const)
+
 /**
  * The six state labels, one literal key each.
  *
- * Literal for the same reason as the help lines: a template string hides the key from the guard,
+ * Literal for the same reason as the help bullets: a template string hides the key from the guard,
  * and the guard is the only thing that can tell a live key from a typo.
  */
 export const positioningStateLabelKeys: Readonly<Record<PositioningState, string>> = Object.freeze({
@@ -50,16 +73,6 @@ export const positioningStateLabelKeys: Readonly<Record<PositioningState, string
   neutral: 'pages.intelligence.portal.dashboard.positioning.states.neutral',
   mixed: 'pages.intelligence.portal.dashboard.positioning.states.mixed'
 })
-
-export const positioningHelpLineKeys = Object.freeze([
-  'pages.intelligence.portal.dashboard.positioning.helpLines.0',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.1',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.2',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.3',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.4',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.5',
-  'pages.intelligence.portal.dashboard.positioning.helpLines.6'
-] as const)
 
 type Rate = Readonly<{ observedAt: string; ratePercent: number; paymentDirection: 'long-pays-short' | 'short-pays-long' | 'neutral' }>
 
@@ -83,6 +96,8 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
   // is one level deeper and is not this button.
   const [detailsOpen, setDetailsOpen] = useState(false)
+  // The long readings sit behind their own entry: closed by default, so the card stays a card.
+  const [helpOpen, setHelpOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
   // container, no grey "normal": an always-present badge becomes background noise within a fortnight.
   const signal = positioning.state === 'available' ? positioning.signal : undefined
@@ -112,12 +127,12 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
       )) : null}
       {/*
-        The help is a paragraph, not a sentence: hover/focus must open it and a click must pin it,
-        which is the shared popover's job. The trigger is the shared icon button, so the 22px size,
-        the focus ring and the accessible name are not re-invented here.
+        The bubble is a glance: four bullets, no paragraphs. Hover/focus opens it, a click pins it,
+        and both behaviours belong to the shared popover. The trigger is the shared icon button, so
+        the 22px size, the focus ring and the accessible name are not re-invented here.
       */}
       <Popover
-        lines={positioningHelpLineKeys.map(labelKey => ({ labelKey }))}
+        lines={positioningHelpBulletKeys.map(labelKey => ({ labelKey }))}
         resolveText={resolveProductKey}
         trigger={(triggerProps) => (
           <IconButton
@@ -125,6 +140,16 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
             icon={Info} size="sm" resolveText={resolveProductKey} />
         )} />
+      {/*
+        The readings behind the numbers open under the card, not in the bubble. A note that needs a
+        paragraph is a note the reader chose to read; covering half the chart to say it was the
+        mistake this button fixes.
+      */}
+      <button type="button" className="mi-positioning-panel__help-toggle"
+        aria-expanded={helpOpen} aria-controls="mi-positioning-help-details"
+        onClick={() => setHelpOpen(open => !open)}>
+        {text.helpDetailsLabel}
+      </button>
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
@@ -153,6 +178,14 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             : null}
         </>
       )}
+      {helpOpen ? (
+        <div id="mi-positioning-help-details" className="mi-positioning-panel__help-details"
+          role="region" aria-label={text.helpDetailsLabel}>
+          {positioningHelpDetailKeys.map(labelKey => (
+            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
+          ))}
+        </div>
+      ) : null}
       {chip?.state === 'alert' && detailsOpen ? (
         <dl id="mi-positioning-signal-detail" className="mi-positioning-panel__signal-detail" role="region" aria-label={text.signalDetailsTitle}>
           <div><dt>{text.signalDetailsRule}</dt><dd>{chip.ruleId}</dd></div>

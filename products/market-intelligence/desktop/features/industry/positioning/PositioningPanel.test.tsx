@@ -44,7 +44,7 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
 afterEach(() => { document.body.innerHTML = '' })
 
 
-/** Renders the panel and opens the help popover, which is where the prose lives now. */
+/** Renders the panel and opens the help popover, which carries the four one-look bullets. */
 async function mountAndOpenHelp(): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -61,6 +61,21 @@ async function mountAndOpenHelp(): Promise<HTMLElement> {
   })
   // The overlay mounts on the next tick after the trigger reports itself.
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+  return container
+}
+
+/** Renders the panel and opens the readings region under the card, where the long notes live. */
+async function mountAndOpenReadings(): Promise<HTMLElement> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+      funding, positioning, window: '7d', onWindowChange: () => undefined, text
+    })))
+  })
+  const toggle = [...container.querySelectorAll('button')].find(button => button.textContent === text.helpDetailsLabel)
+  await act(async () => { toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   return container
 }
 
@@ -266,12 +281,31 @@ describe('combined readout', () => {
     expect(document.body.textContent).toContain('+0.0121%')
   })
 
-  it('explains the six states in the help popover', async () => {
-    // The help is a paragraph in a popover now: it opens on hover/focus and pins on click, so the
-    // sentence exists only once the reader asks for it.
+  it('keeps the readings out of the bubble and behind their own entry', async () => {
+    // The bubble is a glance: four bullets about what is on screen. The thresholds, the window
+    // folding and the "what is not marked" note are a document, and a document covering half the
+    // chart is the defect this split removes.
     await mountAndOpenHelp()
-    // The overlay mounts in a portal, so the sentence lands on the document, not inside the panel.
-    expect(document.body.textContent).toContain('六档判定')
+    expect(document.body.textContent).not.toContain('六档判定')
+
+    document.body.innerHTML = ''
+    const panel = await mountAndOpenReadings()
+    const region = panel.querySelector('#mi-positioning-help-details')!
+    expect(region.textContent).toContain('六档判定')
+    expect(region.textContent).toContain('只标 15 分钟内的骤降')
+    expect(region.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+  })
+
+  it('gives the bubble four bullets of a glance, not a paragraph each', () => {
+    // The count and the length are the design's acceptance line; a fifth bullet or a long one means
+    // the sentence belongs in the readings region, not in the bubble.
+    expect(text.helpBullets).toHaveLength(4)
+    for (const bullet of text.helpBullets) expect(bullet.length).toBeLessThanOrEqual(60)
+  })
+
+  it('keeps the readings closed until the reader asks for them', () => {
+    // The entry is always there; the region it controls is not. An always-open note is the defect.
+    expect(render()).not.toContain('class="mi-positioning-panel__help-details"')
   })
 })
 
@@ -294,21 +328,21 @@ describe('line-end readings', () => {
   })
 
   it('says in the help that the two lines are scaled to their own ranges', () => {
-    expect(text.helpLines.some(line => line.includes('不能直接比较'))).toBe(true)
+    expect(text.helpBullets.some(line => line.includes('不能直接比'))).toBe(true)
   })
 })
 
 describe('what the mark does not cover', () => {
   it('says that only a 15-minute collapse is marked, not a slow decline', () => {
-    expect(text.helpLines.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
+    expect(text.helpDetails.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
   })
 })
 
 describe('the liquidation multiple', () => {
-  it('names what the multiple measures, in the help the reader can open', async () => {
-    // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the help.
-    await mountAndOpenHelp()
-    expect(document.body.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+  it('names what the multiple measures, in the readings the reader can open', async () => {
+    // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the readings.
+    const panel = await mountAndOpenReadings()
+    expect(panel.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
   })
 })
 

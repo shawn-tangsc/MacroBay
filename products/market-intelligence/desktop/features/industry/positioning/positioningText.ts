@@ -42,6 +42,10 @@ export type PositioningPanelText = Readonly<{
   signalDetailsObservedAt: string
   signalDetailsNote: string
   helpLabel: string
-  helpLines: readonly string[]
+  /** The popover's four one-look bullets; each one is a point, not a paragraph. */
+  helpBullets: readonly string[]
+  /** The entry beside the title that opens the longer notes below the card. */
+  helpDetailsLabel: string
+  helpDetails: readonly string[]
   noRate: string
 }>
