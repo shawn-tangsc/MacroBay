@@ -49,10 +49,12 @@ export function DisabledHint<K extends string = string>({
 
   return (
     <span className="disabled-hint">
+      {/* 控件在 DOM 里在前、原因在后；视觉顺序由 `flex-direction: row-reverse` 反过来。
+          DOM 顺序才是读屏和 Tab 走的那条，视觉顺序只是它的一种排法——两者不能混为一谈。 */}
+      {cloneElement(children, { 'aria-describedby': describedBy })}
       <span className="disabled-hint__reason" id={reasonId}>
         {reason}
       </span>
-      {cloneElement(children, { 'aria-describedby': describedBy })}
     </span>
   )
 }

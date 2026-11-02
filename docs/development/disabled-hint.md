@@ -44,6 +44,10 @@ must have one.
   that nobody navigates to.
 - **The reason sits in the same view as the control**, on its left within one row. The right side is
   the control area and a sentence there gets squeezed.
+- **When the row is too narrow, the reason wraps below the control** — still next to it, never back
+  to the other column, because moving it there would read as "this explains the row", not "this is
+  why the control is off". Visual order comes from `flex-direction: row-reverse`; the DOM keeps the
+  control first, so a screen reader and the tab order see the control before the reason.
 - **Never a hover hint.** A disabled control cannot receive focus, so a tooltip on it would be
   mouse-only. That is why this is a component and not a temporary workaround: "a disabled control
   must not explain itself on hover" does not change with the component.

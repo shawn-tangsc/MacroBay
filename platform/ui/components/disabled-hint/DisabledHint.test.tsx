@@ -92,4 +92,15 @@ describe('DisabledHint', () => {
 
     expect(host.querySelector('.disabled-hint__reason')).toBeNull()
   })
+
+  it('keeps the control first in the DOM and puts the reason after it', async () => {
+    // 视觉上原因在左，但那是 `flex-direction: row-reverse` 排出来的；**DOM 顺序才是读屏和 Tab 走的那条**。
+    // 这条钉住的是“视觉顺序与 DOM 顺序解耦”本身——把它们弄回同一个顺序，窄屏换行就会落到控件上方。
+    const host = await mount()
+    const control = host.querySelector('button')!
+    const reason = host.querySelector<HTMLElement>('.disabled-hint__reason')!
+
+    expect(control.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(control.parentElement).toBe(reason.parentElement)
+  })
 })
