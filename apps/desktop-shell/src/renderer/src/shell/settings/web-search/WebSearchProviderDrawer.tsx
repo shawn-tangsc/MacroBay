@@ -1,5 +1,7 @@
-import { Button, Drawer, Input, Switch } from 'antd'
+import { Button, Input, Switch } from 'antd'
 import { Check } from 'lucide-react'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type {
   SafeWebSearchProviderView,
@@ -27,6 +29,8 @@ type WebSearchProviderDrawerProps = {
  * 顺序按原型：启用开关 → 端点 → API Key（仅 tavily/jina）→ Basic Auth（仅 searxng）→ 检查/保存。
  * 压缩、黑名单、最大结果数、默认能力一律不在抽屉里。
  */
+export const PROVIDER_DRAWER_TITLE_KEY = 'web-search.providerDrawerTitle'
+
 export function WebSearchProviderDrawer({
   labels,
   provider,
@@ -46,23 +50,21 @@ export function WebSearchProviderDrawer({
   return (
     <Drawer
       className="model-drawer web-search-provider-drawer"
-      rootClassName="web-search-provider-drawer-root"
-      width="min(520px, 46vw)"
-      placement="right"
-      mask
-      keyboard
-      maskClosable
+      mode="modal"
+      // 原宽度 `min(520px, 46vw)` → large（640）：常规窗口下 46vw 本就接近 640，档位自带 min(…, 92vw)。
+      size="large"
       open
       onClose={onClose}
-      title={
+      titleKey={PROVIDER_DRAWER_TITLE_KEY}
+      resolveText={(key) => (key === PROVIDER_DRAWER_TITLE_KEY ? labels.drawerTitle(provider.name) : '')}
+      titleExtra={
         <span className="web-search-drawer-title">
-          <strong>{labels.drawerTitle(provider.name)}</strong>
           <span className="web-search-badge" data-web-search-drawer-capabilities>
             {capabilities}
           </span>
+          <span className="web-search-drawer-readonly">{labels.drawerDefaultHint}</span>
         </span>
       }
-      extra={<span className="web-search-drawer-readonly">{labels.drawerDefaultHint}</span>}
       footer={
         <div className="drawer-actions drawer-actions-split">
           <Button

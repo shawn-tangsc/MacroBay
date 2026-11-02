@@ -2128,10 +2128,6 @@ h1 {
   padding: 16px 20px;
 }
 
-.web-search-provider-drawer-root .ant-drawer-mask {
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-}
-
 .web-search-provider-drawer .ant-drawer-footer {
   padding: 12px 14px;
   border-top: 1px solid var(--border);
@@ -2141,12 +2137,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-}
-
-.web-search-drawer-title strong {
-  color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .web-search-drawer-readonly {
