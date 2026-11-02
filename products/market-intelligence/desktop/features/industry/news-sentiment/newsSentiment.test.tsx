@@ -254,8 +254,8 @@ describe('NewsSentimentFeature', () => {
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
     await act(async () => { open?.click() })
     await act(async () => {})
-    const exclude = [...container.querySelectorAll<HTMLElement>('.mi-news-sentiment__neutral-filter label')]
-      .find((label) => label.textContent?.includes(text.neutralFilter.exclude))
+    const exclude = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
+      .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
     await act(async () => { exclude?.click() })
     await act(async () => {})
 
@@ -363,15 +363,16 @@ describe('NewsSentimentFeature', () => {
     expect(body).toContain(text.unavailable)
   })
 
-  it('keeps the neutral filter on the shared radio base, not a pressed-button pair', async () => {
-    // 1a acceptance for the segmented class: role=radiogroup, native radios (one Tab stop per group,
-    // arrow keys move within it), and no hand-written aria-pressed group anywhere on the card.
+  it('keeps the neutral filter on the shared segmented base', async () => {
+    // The segment class is one mutually exclusive value on the platform Segmented: a labelled group,
+    // exactly one Tab stop, arrow keys move focus and Enter/Space select. No second implementation.
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
-    const group = container.querySelector('[role="radiogroup"]')
+    const group = container.querySelector('[role="group"][aria-label]')
     expect(group).toBeTruthy()
-    expect(group?.querySelectorAll('input[type="radio"]')).toHaveLength(2)
-    expect(group?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
-    expect(container.querySelectorAll('[aria-pressed]')).toHaveLength(0)
+    const options = [...(group?.querySelectorAll('button[aria-pressed]') ?? [])]
+    expect(options).toHaveLength(2)
+    expect(options.filter((option) => option.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
+    expect(options.filter((option) => option.tabIndex === 0)).toHaveLength(1)
   })
 
   it('keeps the original/translated toggle on the shared radio base', async () => {
@@ -520,12 +521,12 @@ describe('NewsSentimentFeature', () => {
     const query = vi.fn(async () => ({ ...VIEW, items: [...VIEW.items, neutral] }))
     const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(3)
-    const exclude = [...container.querySelectorAll<HTMLElement>('.mi-news-sentiment__neutral-filter label')]
-      .find((label) => label.textContent?.includes(text.neutralFilter.exclude))
+    const exclude = [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')]
+      .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
     await act(async () => { exclude?.click() })
     await act(async () => {})
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(2)
-    expect(exclude?.querySelector('input')?.checked).toBe(true)
+    expect(exclude?.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('drops the card-wide engine badge and hides the empty footer', async () => {

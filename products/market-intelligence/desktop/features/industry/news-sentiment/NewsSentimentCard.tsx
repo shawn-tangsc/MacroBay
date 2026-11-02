@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Segmented } from 'antd'
+import { Button } from 'antd'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Segmented } from '@platform/ui/components/segmented'
 import { StateView } from '@platform/ui/components/state'
 import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -98,14 +99,13 @@ export function NewsSentimentCard(props: {
         <h2>{text.title}</h2>
         <div className="mi-news-sentiment__header-actions">
           <Segmented
-            aria-label={text.neutralFilter.label}
-            className="mi-news-sentiment__neutral-filter"
-            onChange={(value) => props.onIncludeNeutralChange(value === 'all')}
-            options={[
-              { label: text.neutralFilter.all, value: 'all' },
-              { label: text.neutralFilter.exclude, value: 'exclude' }
+            ariaLabelKey="pages.intelligence.portal.newsSentiment.neutralFilter.label"
+            items={[
+              { labelKey: 'pages.intelligence.portal.newsSentiment.neutralFilter.all', value: 'all' },
+              { labelKey: 'pages.intelligence.portal.newsSentiment.neutralFilter.exclude', value: 'exclude' }
             ]}
-            size="small"
+            onChange={(value) => props.onIncludeNeutralChange(value === 'all')}
+            resolveText={resolveProductText}
             value={includeNeutral ? 'all' : 'exclude'}
           />
           <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
