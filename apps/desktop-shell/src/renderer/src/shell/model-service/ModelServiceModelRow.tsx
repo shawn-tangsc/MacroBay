@@ -19,6 +19,7 @@ import { Tag } from 'antd'
 import type { ModelDetectionResult } from '@platform/ai/providers/modelDetection/types'
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
 import { LoadingSpinner } from '@platform/ui/components/loading'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveModelCapabilities } from '@platform/ai/providers/modelCapabilityInference'
@@ -35,9 +36,15 @@ import { modelProtocolLabel } from './modelProtocolFilter'
 import { buildModelCostTitle, formatModelCost } from './modelPricingDisplay'
 import { ModelServiceProtocolChip } from './ModelServiceProtocolChip'
 
-import { modelAvailabilityLabel, modelAvailabilityTitle } from './modelAvailabilityDisplay'
+import { modelAvailabilityTitle } from './modelAvailabilityDisplay'
 import { isAvailabilityProbeModel, type ModelAvailabilityView } from './modelAvailabilityView'
 import { resolveModelMessagesSupport } from './modelMessagesSupport'
+import {
+  MODEL_STATUS_PILL_KEYS,
+  MODEL_STATUS_PILL_TONES,
+  resolveModelStatusPillText,
+  type ModelStatusWord
+} from './modelStatusPills'
 import type { ModelDetectionModelStatus } from './useModelDetection'
 
 /**
@@ -96,6 +103,14 @@ export function ModelServiceModelRow({
     ? statusText
     : detectionStatusTitle(labels, detectionStatus, detectionResult)
   const protocolSummary = protocolOutcomeSummary(detectionResult)
+  // 可用性结论 → 状态词：档位表只有一份（`modelStatusPills`），这里只回答「是哪个词」。
+  const availabilityWord: ModelStatusWord | undefined = availability === undefined
+    ? undefined
+    : availability.stale
+      ? 'stale'
+      : availability.status === 'ok'
+        ? 'available'
+        : 'unavailable'
   const chips: Array<{ key: string; title: string; icon: React.ReactElement }> = []
   // PLAT-76：**媒体/专长族优先**（rerank > embed > image > video > speech > transcription > ocr），
   // 然后才是推理/视觉/工具，和类型筛选 pill 的顺序保持一致。
@@ -142,12 +157,16 @@ export function ModelServiceModelRow({
         ? labels.detectionProtocolFailedTitle(failedProtocols.map((protocol) => modelProtocolLabel(labels, protocol)).join(' / '))
         : undefined}>
       <span className="model-service-model-name">{model.name}</span>
-      {detectionStatus === undefined && availability !== undefined ? (
+      {detectionStatus === undefined && availability !== undefined && availabilityWord !== undefined ? (
+        // 可用性是一个**状态词**：档位与文案都从 `modelStatusPills` 那一张表取，调用点不判断颜色。
         <span
-          className="model-service-model-availability"
           data-model-availability={availability.stale ? 'stale' : availability.status}
           title={modelAvailabilityTitle(labels, availability, timeZone)}>
-          {modelAvailabilityLabel(labels, availability)}
+          <StatusPill
+            tone={MODEL_STATUS_PILL_TONES[availabilityWord]}
+            labelKey={MODEL_STATUS_PILL_KEYS[availabilityWord]}
+            resolveText={(key) => resolveModelStatusPillText(key, labels)}
+          />
         </span>
       ) : null}
 
@@ -163,8 +182,12 @@ export function ModelServiceModelRow({
         </span>
       ) : null}
       {model.probeReason === 'model_retired' ? (
-        <span className="model-service-model-retired-tag" data-model-retired-tag>
-          {labels.modelRetiredTag}
+        <span data-model-retired-tag>
+          <StatusPill
+            tone={MODEL_STATUS_PILL_TONES.retired}
+            labelKey={MODEL_STATUS_PILL_KEYS.retired}
+            resolveText={(key) => resolveModelStatusPillText(key, labels)}
+          />
         </span>
       ) : null}
       {costLabel !== null ? (
