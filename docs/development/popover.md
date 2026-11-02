@@ -74,9 +74,13 @@ wrapping a picker in an explanation panel is a classification error, not a migra
   injects handlers behind the call site's back — that older shape could not combine with a control
   that already binds its own click, which is how a header "?" ended up opening on neither hover nor
   focus.
-- **A trigger survives an empty sentence.** When the copy resolves to nothing the panel is absent,
-  but the control the caller rendered stays on the page with no behaviour — removing the reader's
-  button would be a change nobody asked for.
+- **Missing copy is a defect, not a state.** In development the component throws when the sentence
+  resolves to empty, so the gap surfaces where it was made instead of shipping a silent blank. In
+  production it renders neither the panel nor the trigger — a button that opens nothing is the fake
+  control this whole pass exists to remove. Fix the copy; do not paper over it with interaction.
+- **A control whose name is its explanation is not "missing copy".** A refresh button with an
+  `ariaLabelKey` and no popover is fine: the question is whether the reader is told something, not
+  whether a `Popover` exists.
 - **Hover and focus both open it.** A reader who tabs in should see it without reaching for the
   mouse; that is the half a tooltip-first design keeps forgetting.
 - **Clicking the trigger pins it.** Hover alone cannot hold a paragraph open while the reader looks

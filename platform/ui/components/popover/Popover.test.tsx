@@ -241,20 +241,14 @@ describe('Popover', () => {
     expect(kept?.textContent).toBe('Coverage {coverage}')
   })
 
-  it('renders nothing when every line resolves to an empty string', async () => {
-    const trigger = await mountLines(['ui.test.missing'], () => '')
-    expect(isOpen(trigger)).toBe(false)
-    expect(document.body.textContent).not.toContain('ui.test.missing')
+  it('throws in development when the copy is missing, because that is a defect', async () => {
+    // 缺文案是缺陷，不是运行态：开发期当场炸，逼人去补句子，而不是让交互把缺陷藏起来。
+    // 生产期走另一条路——触发器与浮层都不渲染（留一个点了没反应的按钮才是假控件）。
+    await expect(mountLines(['ui.test.missing'], () => '')).rejects.toThrow(/has no copy/)
   })
 
-  it('renders nothing when the resolver misses, so no empty frame appears', async () => {
-    const trigger = await mount(() => '')
-    await act(async () => {
-      trigger.focus()
-    })
-    await tick()
-    expect(isOpen(trigger)).toBe(false)
-    expect(document.body.textContent).not.toContain('ui.test.help')
+  it('throws in development when the resolver misses, instead of rendering an empty frame', async () => {
+    await expect(mount(() => '')).rejects.toThrow(/has no copy/)
   })
 
   it('composes with the platform icon button as its trigger', async () => {

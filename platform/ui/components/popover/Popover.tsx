@@ -146,10 +146,17 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [open])
 
-  // 没有句子就没有浮层，但**触发器还在**：调用方给的是一个真实控件（按钮），把按钮一起拿掉
-  // 等于从页面上删掉一个东西——那是它们没要求的事。这里只让触发器什么都不做。
+  // 缺文案是**缺陷**，不是一种运行态（产品经理 + 架构师 2026-11-02 定）。
   if (!resolved) {
-    return props.trigger({ onSelect: () => undefined, onMouseEnter: () => undefined, onMouseLeave: () => undefined, onFocus: () => undefined, onBlur: () => undefined, expanded: false })
+    if (import.meta.env.DEV) {
+      // 开发期当场炸：键不存在、解析成空串、解析器把键名原样吐回来，都算「这句话没写」。
+      // 生产期不抛——顶栏不该因为一句文案崩掉；那时**连触发器一起不渲染**（见下）。
+      throw new Error(
+        'Popover has no copy: the key resolved to an empty sentence. Fix the copy, do not hide the defect with interaction.'
+      )
+    }
+    // 生产期：触发器与浮层都不出现。留一个点了没反应的按钮，正是这些天在清的假控件。
+    return <>{null}</>
   }
 
   const triggerProps: PopoverTriggerProps = {
