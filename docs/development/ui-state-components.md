@@ -224,3 +224,88 @@ platform cannot know — an as-of time, for instance:
 3. **No action placeholder**: `capability-not-wired` without `action` renders no button and no empty row; `permission` always carries one "open system settings", and that handler must really open the system settings — a required action with an empty handler is a dead button moved, not fixed.
 4. **Grayscale**: a filtered screenshot of `disabled` and `permission` must still tell them apart.
 5. **No copy in the component**: grep the component for sentences; it must contain none.
+
+## A read is not a state view
+
+`StateView` expresses **settled** states only: the read finished and produced empty, error, disabled or
+permission. Waiting is not one of them — it belongs to `LoadingState`. Getting this wrong is not a
+style matter; it is the bug the reader reports as “先转圈 → 闪一下读取失败 → 才出数据” in almost every
+module, and it comes in two spellings of the same mistake:
+
+1. **A settled initial value.** A hook whose first state is `error` / `unavailable` / `empty` renders
+   the failure (or an empty window) on mount, before any read has happened, then flips to data.
+2. **Waiting written as “unavailable”.** Setting `unavailable` with a code while the read is still in
+   flight. Any consumer that branches on `state === 'unavailable'` — and most do — draws an error
+   during the wait.
+
+Three rules follow. They are contract, not advice:
+
+1. **First entry shows waiting, never a settled state.** A read starts as `loading`. An initial
+   `error` / `unavailable` / `empty` is a defect even when the data arrives within the same tick.
+2. **Waiting is spelled `loading`.** A failure code may not stand in for “not finished yet”. If a
+   budget or timeout is what ends the wait, it ends it as a failure — not as a waiting state with a
+   failure code.
+3. **A failed refresh keeps the rows.** When a previous success is on screen and a refresh fails, keep
+   the data and mark it stale (`data-stale`, plus the stale marker in the copy). Falling back to the
+   error screen deletes information the reader already had; the “we could not refresh” fact belongs
+   beside the data, not instead of it.
+
+### `AsyncState<T>`: one lifecycle for every read
+
+Fourteen modules each writing their own three-way union is how one bug returns fourteen times. One
+implementation lives in `platform/ui/async/asyncState.ts`:
+
+```ts
+export type AsyncState<T> =
+  | { status: 'loading'; data?: never }
+  | { status: 'ready'; data: T; refreshing?: true; stale?: true }
+  | { status: 'error'; reasonCode: ErrorReasonCode; data?: never }
+```
+
+- `data` exists **only** on `ready`, so “loading, and here is… nothing” cannot be destructured and a
+  first frame that draws an error cannot be written: `error` has no data and `loading` has no data,
+  which means every branch that needs rows must first prove `ready`.
+- `reasonCode` is the closed set from `platform/contracts/queryOutcome`. `AsyncState` is the read's
+  **lifecycle**; `QueryOutcome` is the settled **data-layer** result. One wraps the other, they are
+  not two vocabularies for the same thing.
+- `refreshing` and `stale` are different facts: `refreshing` means a newer read is in flight while the
+  old rows stay; `stale` means the newest attempt failed and the rows on screen are an earlier read.
+  Copy distinguishes them; neither is allowed to blank the data.
+- Start with the factory (`initialAsyncState<T>()`), never with a hand-written literal — the only
+  legal initial value is `loading`.
+- Transition helpers own the rules: `beginRefresh(prev)` keeps `data`, `failRefresh(prev, reason)`
+  keeps `data` and sets `stale`, `settle(prev, data)` clears both flags. A call site that writes its
+  own `setState({ status: 'error' })` on refresh is the bug this type exists to prevent.
+
+### Migrating a read to it
+
+The change is almost always the same shape: the local union and the hand-written setter go away, and
+the three helpers replace them.
+
+```ts
+// Before: a settled state as the initial value — one frame of "could not read" on every mount.
+const [state, setState] = useState<View>('unavailable')
+useEffect(() => { read().then(rows => setState(rows), () => setState('unavailable')) }, [])
+// refresh: setState('unavailable')   ← deletes what the reader was looking at
+
+// After: loading first, and a failed refresh keeps the rows.
+const [state, setState] = useState<AsyncState<Row[]>>(initialAsyncState)
+useEffect(() => {
+  setState(beginRefresh)
+  read().then(rows => setState(prev => settle(prev, rows)), () => setState(prev => failRefresh(prev, 'unreadable')))
+}, [reloadKey])
+// render: loading → <StateView state="loading" />; error → <StateView state="error" reasonCode={state.reasonCode} />
+// ready → <Rows rows={state.data} stale={state.stale === true} refreshing={state.refreshing === true} />
+```
+
+### How to enforce it
+
+- **Mechanically**: `scripts/check-async-initial-state.mts` (wired into `pnpm verify`) fails when a
+  `useState` initial value is a settled state — `{ state: 'error' | 'unavailable' | 'empty' … }` or
+  `{ status: 'error' }` — and when a `useState` initializer is a call to something other than the
+  factory. It carries a **shrinking allowlist** for legacy sites; the allowlist may only lose entries.
+- **By test**: `platform/ui/async/expectWaitingFirst.tsx` renders a surface with a deferred read and
+  asserts, before resolving: `[data-state]` carries no `error` / `empty` / `disabled` / `permission`,
+  and `[data-loading-state]` is present. Every list, card and drawer that reads data gets one such
+  case — it is the only check that catches “loading written as unavailable”, because that spelling is
+  type-correct.

@@ -191,6 +191,45 @@ import { StateView } from '@platform/ui/components/state'
   调用点测试能断言走的是哪一路——落回不许静默，否则缺文案永远没人发现；
 - 标题、图标、播报、动作仍归平台。这里只是一格，不是第二套文案表。
 
+## 读取的生命周期：`AsyncState<T>`
+
+十四个模块各写一个三态联合，就是同一个 bug 回来十四次。唯一实现在
+`platform/ui/async/asyncState.ts`：
+
+```ts
+export type AsyncState<T> =
+  | { status: 'loading'; data?: never }
+  | { status: 'ready'; data: T; refreshing?: true; stale?: true }
+  | { status: 'error'; reasonCode: ErrorReasonCode; data?: never }
+```
+
+- `data` **只挂在 `ready` 上**，所以「首帧画一张错误、再翻成数据」在类型上写不出来；任何要行的分支都得先证明 `ready`。
+- `reasonCode` 取 `platform/contracts/queryOutcome` 的闭集。`AsyncState` 是**读取的生命周期**，`QueryOutcome` 是**数据层的终态结果**，一个包着另一个。
+- `refreshing`（正在刷新）与 `stale`（上次刷新失败）是两件事，文案分开，**两者都不许清空数据**。
+- 初值只有一种写法：`initialAsyncState<T>()`，不写字面量。
+- 规矩落在转移函数里：`beginRefresh` 保留数据、`failRefresh` 保留数据并标 `stale`、`settle` 清两个标记。调用点自己写 `setState({ status: 'error' })` 正是这个类型要防的 bug。
+
+### 把一个读取迁过来
+
+```ts
+// 改前：初值就是终态——每次挂载先闪一帧「读不到」。
+const [state, setState] = useState<View>('unavailable')
+useEffect(() => { read().then(rows => setState(rows), () => setState('unavailable')) }, [])
+// 刷新时：setState('unavailable')   ← 把读者正在看的东西删掉了
+
+// 改后：先 loading，刷新失败保留旧数据。
+const [state, setState] = useState<AsyncState<Row[]>>(initialAsyncState)
+useEffect(() => {
+  setState(beginRefresh)
+  read().then(rows => setState(prev => settle(prev, rows)), () => setState(prev => failRefresh(prev, 'unreadable')))
+}, [reloadKey])
+// 渲染：loading → <StateView state="loading" />；error → <StateView state="error" reasonCode={state.reasonCode} />
+// ready → <Rows rows={state.data} stale={state.stale === true} refreshing={state.refreshing === true} />
+```
+
+**怎么强制**：`scripts/check-async-initial-state.mts`（进 `pnpm verify`）在 `useState` 初值是终态、或初值不是工厂调用时红，带只减不增的白名单；
+`platform/ui/async/expectWaitingFirst.tsx` 在解析前断言「等的是加载态，不是错误/空/禁用/权限」——这是唯一能抓「加载写成 unavailable」的办法，因为那种写法类型正确。
+
 ## 用了它之后怎么验
 
 1. **高度**：在 DevTools 里看 `.state-view` 的 `min-height`，`lg` 必须是 `220px`、`md` 必须是
