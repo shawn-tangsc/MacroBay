@@ -4,6 +4,7 @@ import {
   dedupeWarnings,
   formatBytes,
   formatInspectionStatus,
+  toInspectionDisplayStatus,
   formatRelativeTime,
   formatSensitivity,
   getStorageCacheLabels
@@ -34,6 +35,17 @@ describe('storageCacheDisplay', () => {
     const labels = getStorageCacheLabels('en-US')
 
     expect(formatInspectionStatus(undefined, labels)).toBe(labels.neverInspected)
+    // 四个展示值各有一句，且「还没有数据」与「巡检结果为空」不是同一句。
+    expect(toInspectionDisplayStatus(undefined)).toBe('never-inspected')
+    expect(toInspectionDisplayStatus('empty')).toBe('empty')
+    const displayLabels = [
+      formatInspectionStatus('ready', labels),
+      formatInspectionStatus('empty', labels),
+      formatInspectionStatus('inspection_failed', labels),
+      formatInspectionStatus(undefined, labels)
+    ]
+    expect(displayLabels.every((label) => label.trim().length > 0)).toBe(true)
+    expect(displayLabels[1]).not.toBe(displayLabels[3])
     expect(formatInspectionStatus('inspection_failed', labels)).toBe(labels.statusInspectionFailed)
     expect(formatSensitivity('contains-user-content', labels)).toBe(labels.sensitivityContainsUserContent)
   })

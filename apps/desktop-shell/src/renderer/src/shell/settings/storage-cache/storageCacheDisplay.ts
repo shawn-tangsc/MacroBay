@@ -114,15 +114,29 @@ export function formatBackupPolicy(policy: CacheBackupPolicy, labels: StorageCac
   }
 }
 
+/**
+ * 展示层的第四个值：它表示「还没有这个数据」，不是「某个巡检结果」。
+ *
+ * 领域层不产出它（服务只会给出三种），所以它不能进 `CacheInspectionStatus`——
+ * 那会让缺失值看起来像一个状态值，而「没有」和「拿不到」是两件事。
+ */
+export type CacheInspectionDisplayStatus = CacheInspectionStatus | 'never-inspected'
+
+export function toInspectionDisplayStatus(status: CacheInspectionStatus | undefined): CacheInspectionDisplayStatus {
+  return status ?? 'never-inspected'
+}
+
 export function formatInspectionStatus(status: CacheInspectionStatus | undefined, labels: StorageCacheLabels): string {
-  switch (status) {
+  // 穷举四个展示值、不留 `default`：将来领域层多一种状态时，这里必须编译失败，
+  // 而不是静默落进「尚未巡检」——那正是今天删掉的 `return ''` 换了个位置。
+  switch (toInspectionDisplayStatus(status)) {
     case 'ready':
       return labels.statusReady
     case 'empty':
       return labels.statusEmpty
     case 'inspection_failed':
       return labels.statusInspectionFailed
-    default:
+    case 'never-inspected':
       return labels.neverInspected
   }
 }
