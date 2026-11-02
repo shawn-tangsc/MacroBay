@@ -11,6 +11,8 @@ import { copyTextToClipboard } from '../../clipboard'
 export const EDIT_KEY = 'webSearch.editApiKey'
 export const COPY_KEY = 'webSearch.copyApiKey'
 export const COPY_DONE_KEY = 'webSearch.apiKeyCopied'
+export const EYE_SHOW_KEY = 'webSearch.showApiKey'
+export const EYE_HIDE_KEY = 'webSearch.hideApiKey'
 
 const ALL_MASK = '••••••••'
 export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
@@ -256,15 +258,19 @@ export function WebSearchApiKeyField({
                   size="sm"
                 />
               ) : null}
-              <button
-                type="button"
-                className="web-search-api-key-eye"
-                aria-label={eyeLabel}
-                title={canToggle ? undefined : labels.noApiKeyHint}
-                disabled={!canToggle || disabled || revealing}
-                onClick={toggleEye}>
-                {eyeIcon}
-              </button>
+              {(() => {
+                const eyeDisabled = !canToggle || disabled || revealing
+                const eyeProps = {
+                  ariaLabelKey: eyeLabel === labels.hideApiKey ? EYE_HIDE_KEY : EYE_SHOW_KEY,
+                  icon: revealedKey || revealDraft ? EyeOff : Eye,
+                  onSelect: toggleEye,
+                  resolveText: (key: string) =>
+                    key === EYE_HIDE_KEY ? labels.hideApiKey : key === EYE_SHOW_KEY ? labels.showApiKey : '',
+                  size: 'sm' as const
+                }
+                // `IconButton` 的禁用与提示在类型上是互斥的两支，变量形态的布尔值进不去，所以分两次写。
+                return eyeDisabled ? <IconButton {...eyeProps} disabled /> : <IconButton {...eyeProps} />
+              })()}
             </span>
           }
         />

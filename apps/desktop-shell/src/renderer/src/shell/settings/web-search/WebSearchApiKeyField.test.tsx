@@ -10,6 +10,9 @@ import { platformText } from '../../../i18n/platformText'
 import { API_KEY_REVEAL_TIMEOUT_MS, WebSearchApiKeyField } from './WebSearchApiKeyField'
 
 const labels = platformText['zh-CN'].webSearch
+
+/** 迁移后眼睛不再有私有类名：按读屏名（显示/隐藏密钥）找。 */
+const eyeSelector = `button[aria-label="${labels.showApiKey}"],button[aria-label="${labels.hideApiKey}"]`
 const savedKey = 'tvly-1234567890-HcHz'
 const preview = 'tvly**********HcHz'
 
@@ -121,12 +124,12 @@ describe('PLAT-55 masked API key field', () => {
     const onReveal = vi.fn(async () => savedKey)
     const container = await mount({ onReveal })
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(onReveal).toHaveBeenCalledTimes(1)
     expect(inputOf(container).value).toBe(savedKey)
     expect(container.innerHTML).toContain(savedKey)
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(inputOf(container).value).toBe(preview)
     expect(container.innerHTML).not.toContain(savedKey)
   })
@@ -139,18 +142,18 @@ describe('PLAT-55 masked API key field', () => {
     // 掩码态没有复制：看不到就不该能复制。
     expect(copyButton(container)).toBeNull()
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     await click(container, `[aria-label="${labels.copyApiKey}"]`)
     expect(writeText).toHaveBeenCalledWith(savedKey)
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(copyButton(container)).toBeNull()
   })
 
   it('auto-hides the revealed key after 30 seconds', async () => {
     vi.useFakeTimers()
     const container = await mount()
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(inputOf(container).value).toBe(savedKey)
 
     await act(async () => {
@@ -164,7 +167,7 @@ describe('PLAT-55 masked API key field', () => {
   it('hides the revealed key on blur', async () => {
     const container = await mount()
     const input = inputOf(container)
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(input.value).toBe(savedKey)
 
     await act(async () => {
@@ -178,7 +181,7 @@ describe('PLAT-55 masked API key field', () => {
 
   it('clears a revealed key when switching provider and on unmount', async () => {
     const container = await mount()
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(inputOf(container).value).toBe(savedKey)
 
     await act(async () => {
@@ -207,7 +210,7 @@ describe('PLAT-55 masked API key field', () => {
     const onReveal = vi.fn(async () => savedKey)
     const container = await mount({ onReveal, bridge: false })
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
 
     expect(onReveal).not.toHaveBeenCalled()
     expect(inputOf(container).value).toBe(preview)
@@ -224,7 +227,7 @@ describe('PLAT-55 masked API key field', () => {
       }
     })
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
 
     expect(inputOf(container).value).toBe(preview)
     expect(container.textContent).toContain(labels.revealApiKeyBridgeFailed)
@@ -236,7 +239,7 @@ describe('PLAT-55 masked API key field', () => {
   it('classifies a null result as a missing saved key', async () => {
     const container = await mount({ onReveal: async () => null })
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
 
     expect(inputOf(container).value).toBe(preview)
     expect(container.textContent).toContain(labels.revealApiKeyMissing)
@@ -246,12 +249,12 @@ describe('PLAT-55 masked API key field', () => {
   it('succeeds on the next eye click once the bridge is there (no retry button to click)', async () => {
     const onReveal = vi.fn(async () => savedKey)
     const container = await mount({ onReveal, bridge: false })
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(container.textContent).toContain(labels.revealApiKeyUnavailable)
 
     // 确定性失败没有重试按钮：用户能做的就是让桥回来（重启应用）之后再点一次眼睛。
     installBridge(true)
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
 
     expect(onReveal).toHaveBeenCalledTimes(1)
     expect(inputOf(container).value).toBe(savedKey)
@@ -269,9 +272,9 @@ describe('PLAT-55 masked API key field', () => {
     expect(input.type).toBe('password')
     expect(container.innerHTML).not.toContain(savedKey)
 
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(input.type).toBe('text')
-    await click(container, '.web-search-api-key-eye')
+    await click(container, eyeSelector)
     expect(input.type).toBe('password')
 
     // 失焦取消：回到掩码且不写入草稿。
@@ -302,12 +305,16 @@ describe('PLAT-55 masked API key field', () => {
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
-  it('disables the eye with a tooltip when no key is saved and nothing is typed', async () => {
+  it('disables the eye when no key is saved and nothing is typed', async () => {
     const container = await mount({ hasApiKey: false })
-    const eye = container.querySelector('.web-search-api-key-eye') as HTMLButtonElement
+    const eye = container.querySelector(eyeSelector) as HTMLButtonElement
 
     expect(eye.disabled).toBe(true)
-    expect(eye.getAttribute('title')).toBe(labels.noApiKeyHint)
+    // `IconButton` 在类型上禁止「禁用 + Tooltip」并存：禁用的按钮接不到焦点，
+    // 提示就只剩鼠标能看见，键盘用户只得到一个没有理由的灰按钮。
+    // 迁移后这条理由改由字段自身的占位与提示承担，不再挂在这颗按钮上。
+    expect(eye.getAttribute('title')).toBeNull()
+    expect(inputOf(container).getAttribute('placeholder')).toBe(labels.apiKeyPlaceholder)
   })
 
   it('removes a saved key only after an inline second confirmation', async () => {
