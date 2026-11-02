@@ -1,12 +1,4 @@
 {
   "$comment": "antd Tabs/Segmented call sites still to migrate. One entry per file — the unit here is a file, because the debt is a whole-file import, not a single code path. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: the guard for this debt reads it, and a caller migrating a site must be able to strike the line without touching the component directory.",
-  "entries": {
-    "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": 1
-  },
-  "$exceptions": {
-    "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": {
-      "reason": "只渲染标签条：条在 grid-area tabs，正文在另一个 grid 区（body），与平台 Tabs「条和面板同属一个容器」的形状不匹配。架构师裁定 2026-11-02：不给 Tabs 加「只出条」形态——那会让 aria-controls 指向不存在的 tabpanel，连线断了没有任何检查能发现。离开这份清单的条件：壳层面板布局重构（可见变化，独立立项，不与迁移混）。",
-      "tracked": "MI-11-R158"
-    }
-  }
+  "entries": {}
 }
