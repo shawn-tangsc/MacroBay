@@ -9039,6 +9039,20 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * 分段器应该和它的内容一样宽。
+ *
+ * `.preference-section` 是 grid，子项默认按 `justify-items: stretch` 拉伸，而 `.segmented` 自己写的
+ * `inline-flex` 会被块化——结果就是「两三个短项 + 右边一整条空底色」，看起来像背景被拉长了。
+ * 同一个根因今天已经出过一次：铃铛角标被 `.topbar-actions` 的 flex 默认值拉到 42px 高。
+ *
+ * 只放回这一个子项：给 `.preference-section` 加 `justify-items: start` 会连带把时区下拉和
+ * 代理地址输入框一起缩成短的，那是修一处坏三处。
+ */
+.preference-section > .segmented {
+  justify-self: start;
+}
+
 .preference-heading {
   display: inline-flex;
   align-items: center;
