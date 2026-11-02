@@ -9070,8 +9070,14 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
-/* 侧栏「设置」上的小点：有新版才亮。不做动画——它是提示，不是警报。 */
+/*
+ * 侧栏「设置」上的小点：有新版才亮。不做动画——它是提示，不是警报。
+ *
+ * 用 `<i>` 而不是 `<span>`：侧栏有一条 `.nav-item span { display: none }`（本意藏导航文字），
+ * span 会被它一起藏掉。这里再显式写一次 `display`，让可见性不依赖元素类型的巧合。
+ */
 .settings-update-dot {
+  display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;

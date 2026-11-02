@@ -41,8 +41,15 @@ async function mount(client: UpdateCheckClient): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
+  // 真实结构：小点在侧栏那颗 <button> 里面，信息应挂在按钮的可读名上。
   await act(async () => {
-    root?.render(createElement(SettingsUpdateDot, { language: 'zh-CN', client }))
+    root?.render(
+      createElement(
+        'button',
+        { type: 'button', 'aria-label': '设置' },
+        createElement(SettingsUpdateDot, { language: 'zh-CN', client })
+      )
+    )
   })
   await act(async () => {
     await Promise.resolve()
@@ -61,9 +68,16 @@ describe('the settings update dot', () => {
   it('lights up only when the main process says a newer version exists', async () => {
     const harness = clientFor(available)
     const container = await mount(harness.client)
-    expect(container.querySelector('[data-update-dot]')).not.toBeNull()
-    // 标签是静态的一句，不带版本号——侧栏是导航，名字要稳定。
-    expect(container.querySelector('[data-update-dot]')?.getAttribute('aria-label')).toBe('设置，有新版本可用')
+    const dot = container.querySelector('[data-update-dot]')
+    expect(dot).not.toBeNull()
+    // ① 不能用 <span>：侧栏的 `.nav-item span{display:none}` 会把它一起藏掉。
+    expect(dot?.tagName.toLowerCase()).toBe('i')
+    // ② 读屏名挂在导航按钮上，小点自己是装饰。
+    expect(dot?.getAttribute('aria-hidden')).toBe('true')
+    expect(dot?.getAttribute('aria-label')).toBeNull()
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('设置，有新版本可用')
+    // ③ 计算样式不能是 none（CSS 里显式写了 inline-block；真机尺寸还得靠浏览器量）。
+    expect(getComputedStyle(dot as Element).display).not.toBe('none')
   })
 
   it('never lights up on a failed check', async () => {
@@ -85,6 +99,17 @@ describe('the settings update dot', () => {
 
     await act(async () => harness.emit({ state: 'up-to-date', currentVersion: '0.4.0', latestVersion: '0.4.0', checkedAt: '2026-11-03T09:00:00.000Z' }))
     expect(container.querySelector('[data-update-dot]')).toBeNull()
+  })
+
+  it('restores the nav label when the dot goes away', async () => {
+    const harness = clientFor(available)
+    const container = await mount(harness.client)
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('设置，有新版本可用')
+    await act(async () =>
+      harness.emit({ state: 'up-to-date', currentVersion: '0.4.0', latestVersion: '0.4.0', checkedAt: '2026-11-03T09:00:00.000Z' })
+    )
+    // 灭掉之后把按钮的名字还原成「设置」，别把提示留在上面。
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('设置')
   })
 
   it('unsubscribes on unmount, so a removed dot cannot keep firing', async () => {
