@@ -1,8 +1,11 @@
-import { Button, Input, Modal, Tooltip } from 'antd'
+import { Button, Input, Tooltip } from 'antd'
 import { Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
+import { Modal } from '@platform/ui/components/modal'
 import type { PlatformText } from '../../../i18n/platformText'
+
+const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -45,17 +48,21 @@ export function CreateAssistantDialog({
 
   return (
     <Modal
-      title={labels.createTitle}
+      width="standard"
+      titleKey={CREATE_ASSISTANT_TITLE_KEY}
+      resolveText={(key) => (key === CREATE_ASSISTANT_TITLE_KEY ? labels.createTitle : '')}
       open={open}
-      onCancel={onClose}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          {labels.cancel}
-        </Button>,
-        <Button key="create" type="primary" loading={submitting} disabled={!canCreate} onClick={() => void submit()}>
-          {labels.create}
-        </Button>
-      ]}>
+      onClose={onClose}
+      footer={
+        <>
+          <Button key="cancel" onClick={onClose}>
+            {labels.cancel}
+          </Button>
+          <Button key="create" type="primary" loading={submitting} disabled={!canCreate} onClick={() => void submit()}>
+            {labels.create}
+          </Button>
+        </>
+      }>
       <div className="assistant-create-dialog">
         <label>
           <span>{labels.icon}</span>

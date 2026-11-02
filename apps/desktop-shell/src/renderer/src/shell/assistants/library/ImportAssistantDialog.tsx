@@ -1,8 +1,11 @@
-import { Button, Input, Modal, message } from 'antd'
+import { Button, Input, message } from 'antd'
 import { useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
+import { Modal } from '@platform/ui/components/modal'
 import type { PlatformText } from '../../../i18n/platformText'
 import { parseAssistantImportJson } from './assistantImportTransfer'
+
+const IMPORT_ASSISTANT_TITLE_KEY = 'assistants.library.importTitle'
 
 type ImportAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -52,17 +55,26 @@ export function ImportAssistantDialog({
 
   return (
     <Modal
-      title={labels.importTitle}
+      width="standard"
+      titleKey={IMPORT_ASSISTANT_TITLE_KEY}
+      resolveText={(key) => (key === IMPORT_ASSISTANT_TITLE_KEY ? labels.importTitle : '')}
       open={open}
-      onCancel={onClose}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          {labels.cancel}
-        </Button>,
-        <Button key="import" type="primary" loading={submitting} disabled={!rawJson.trim()} onClick={() => void importJson()}>
-          {labels.importSubmit}
-        </Button>
-      ]}>
+      onClose={onClose}
+      footer={
+        <>
+          <Button key="cancel" onClick={onClose}>
+            {labels.cancel}
+          </Button>
+          <Button
+            key="import"
+            type="primary"
+            loading={submitting}
+            disabled={!rawJson.trim()}
+            onClick={() => void importJson()}>
+            {labels.importSubmit}
+          </Button>
+        </>
+      }>
       <div className="assistant-import-dialog">
         <div className="assistant-import-actions">
           <Button onClick={() => void selectFile()}>{labels.importFile}</Button>
