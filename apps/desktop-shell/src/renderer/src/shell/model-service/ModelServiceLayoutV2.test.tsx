@@ -109,7 +109,8 @@ describe('R1 漏斗按钮折叠/展开两行 pill', () => {
     const toggle = page.container.querySelector<HTMLButtonElement>('[data-models-filter-toggle]')
     expect(toggle).not.toBeNull()
     expect(toggle?.getAttribute('aria-expanded')).toBe('true')
-    expect(toggle?.getAttribute('title')).toBe(zhLabels.hideModelFilters)
+    // 漏斗已换成 `IconButton`：名字走 `aria-label`（并配 Tooltip），不再写原生 `title`。
+    expect(toggle?.getAttribute('aria-label')).toBe(zhLabels.hideModelFilters)
 
     const toolbar = page.container.querySelector('[data-model-service-models] .model-service-section-head')
     const filterContainer = page.container.querySelector('[data-model-filters]')

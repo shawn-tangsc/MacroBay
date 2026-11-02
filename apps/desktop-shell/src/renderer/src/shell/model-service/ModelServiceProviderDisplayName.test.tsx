@@ -55,7 +55,12 @@ describe('PLAT-62 provider display names in model service', () => {
 
     expect(page.container.querySelector('.model-service-title')?.textContent).toBe('基元律动')
     expect(page.container.querySelector('[data-models-count]')?.textContent).toBe('0')
-    expect(page.container.querySelector('.model-service-empty')?.textContent).toBe('还没有模型')
+    // 空态已迁到 `StateView`：容器是 `.state-view--empty`，句子的来源是六态码表，不是旧类名。
+    const empty = page.container.querySelector('.state-view--empty')
+    expect(empty).not.toBeNull()
+    expect(empty?.textContent).toContain('从来没有创建过')
+    // 码选错就没这个动作：这一屏本来有添加入口，必须接到它上面。
+    expect(empty?.querySelector('button')).not.toBeNull()
     expect(page.container.querySelector('[data-models-sync]')?.hasAttribute('disabled')).toBe(false)
     // R3：折叠摘要是「一个只读主 base + 已启用端点小标签」，不再并排多段 URL。
     expect(page.container.querySelector<HTMLInputElement>('[data-endpoint-summary-input]')?.value)
