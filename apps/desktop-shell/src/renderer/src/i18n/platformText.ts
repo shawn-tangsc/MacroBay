@@ -512,6 +512,8 @@ export type PlatformText = {
     customProvider: string
     systemProviderHint: string
     noProviders: string
+    /** 刷新失败、上一次的列表还在（台账 §25 的第 ③ 种处境）。 */
+    providersStaleNotice: string
     apiKey: string
     apiKeyPlaceholder: string
     savedApiKeyPlaceholder: string
@@ -1645,6 +1647,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: '供应商',
+      providersStaleNotice: '没能更新，下面是上一次读到的供应商列表',
       providerDetail: '供应商配置',
       addProvider: '新增供应商',
       searchProvider: '搜索供应商',
@@ -2755,6 +2758,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: 'Providers',
+      providersStaleNotice: 'Could not refresh — these providers are from the last read',
       providerDetail: 'Provider Settings',
       addProvider: 'Add Provider',
       searchProvider: 'Search providers',

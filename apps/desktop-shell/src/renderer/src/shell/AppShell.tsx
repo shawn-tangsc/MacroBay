@@ -15,7 +15,7 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, ConfigProvider, Input, Select } from 'antd'
 
-import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints } from '@platform/ai/providers/modelProviderTypes'
 import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
 import type { LocalizedText } from '@platform/product-manifest'
 
@@ -38,7 +38,8 @@ import { productMenuEntries, productSettingsEntries } from '@products/generated/
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
 import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
-import { firstProviderIdForRail } from './model-service/ModelServiceProviderRail'
+import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
+import { useModelServiceProviders } from './model-service/useModelServiceProviders'
 import { InUseModelRetiredBanner } from './model-service/InUseModelRetiredBanner'
 import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDefaultModelsSection'
 import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
@@ -222,14 +223,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
   const openNotificationTarget = createNotificationDeeplinkHandler({ productMenuEntries, setActiveNavKey, setSettingsPanelKey, setNotificationCenterOpen })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
-  const [bootDataReady, setBootDataReady] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
-  const [providers, setProviders] = useState<SafeModelProvider[]>([])
+  // 供应商列表、选中项与它的读数生命周期收在 hook 里：外壳只拿「现在能不能画」和「重读一次」。
+  const {
+    state: providersState,
+    providers,
+    selectedProviderId,
+    selectProvider,
+    reload: reloadProviders
+  } = useModelServiceProviders()
   // PLAT-75：巡检已挪到主进程的每日任务；界面只读它的全局结论。
   const inUseRetiredModels = useInUseModelPatrol()
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [modelDraft, setModelDraft] = useState<ModelDraft>(createEmptyModelDraft)
@@ -402,9 +408,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     void Promise.all([
       window.platform.app.getInfo().then((value) => { if (!cancelled) setAppInfo(value) }),
       window.platform.app.getProductSummaries().then((value) => { if (!cancelled) setProducts(value) }),
-      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) }),
-      refreshProviders()
-    ]).finally(() => { if (!cancelled) setBootDataReady(true) })
+      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) })
+    ]).catch(() => undefined)
     return () => { cancelled = true }
   }, [])
 
@@ -413,12 +418,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   useEffect(() => {
     const api = window.platform?.modelProviders
     if (!api?.onModelDetectionDone) return undefined
-    // `refreshProviders` 只依赖稳定的 setState 与 IPC，挂载时抓一次即可。
     const unsubscribe = api.onModelDetectionDone(() => {
-      void refreshProviders()
+      void reloadProviders()
     })
     return () => { unsubscribe() }
-  }, [])
+  }, [reloadProviders])
 
   // P1-06h（N2）：语言是「当前设置」的一部分，切换后必须回传给 AppShell 下发给 error-shell/准备期壳。
   useEffect(() => {
@@ -531,16 +535,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     void previewModelSync({ autoApplyWhenOnlyAdded: true, openDrawerWhenDiff: false })
   }, [selectedProvider])
 
-  async function refreshProviders(preferredProviderId?: string): Promise<void> {
-    const nextProviders = (await window.platform.modelProviders.list()) as SafeModelProvider[]
-    setProviders(nextProviders)
-    setSelectedProviderId((current) => {
-      if (preferredProviderId && nextProviders.some((provider) => provider.id === preferredProviderId)) return preferredProviderId
-      if (current && nextProviders.some((provider) => provider.id === current)) return current
-      return firstProviderIdForRail(nextProviders)
-    })
-  }
-
   async function updateNetworkSettings(patch: Partial<NetworkSettings>): Promise<void> {
     await updateSettings({
       network: {
@@ -582,7 +576,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       models: []
     }
     await window.platform.modelProviders.upsert(provider)
-    await refreshProviders(id)
+    await reloadProviders(id)
     setIsAddProviderOpen(false)
   }
 
@@ -594,7 +588,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   async function saveApiKeyDraft(): Promise<void> {
     if (!selectedProvider) return
     await persistSelectedProviderDraft()
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
     // 保存成功后清掉输入草稿 ⇒ 控件回到「已保存掩码」，不会把明文 Key 留在界面上。
     setApiKeyDraft('')
     setConnectionStatus(null)
@@ -627,7 +621,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
       endpoints: [...endpoints]
     })
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /** 图像端点（生成 / 编辑）保存：不是聊天协议，单独一份字段。 */
@@ -644,14 +638,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       ...buildProviderInputFromDraft(selectedProvider, { enabled: providerDraft.enabled, apiKey: apiKeyDraft }),
       ...(Object.keys(next).length > 0 ? { imageEndpoints: next } : { imageEndpoints: undefined })
     })
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /** PLAT-61：右上角唯一启用开关（点一下立即保存）；失败回滚由页面负责。 */
   async function setProviderEnabled(enabled: boolean): Promise<void> {
     if (!selectedProvider) return
     await window.platform.modelProviders.setEnabled(selectedProvider.id, enabled)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   /**
@@ -662,7 +656,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     try {
       await window.platform.modelProviders.setEnabled(selectedProvider.id, true)
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       setProviderDraft((current) => ({ ...current, enabled: true }))
     } catch (error) {
       setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
@@ -683,7 +677,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     const index = providers.findIndex((provider) => provider.id === providerId)
     const adjacent = providers[index + 1] ?? providers[index - 1]
     await window.platform.modelProviders.remove(providerId)
-    await refreshProviders(adjacent?.id)
+    await reloadProviders(adjacent?.id)
   }
 
   async function removeSelectedProvider(): Promise<void> {
@@ -692,7 +686,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   async function setProviderEnabledById(providerId: string, enabled: boolean): Promise<void> {
     await window.platform.modelProviders.setEnabled(providerId, enabled)
-    await refreshProviders(providerId)
+    await reloadProviders(providerId)
   }
 
   function resetModelSyncState(): void {
@@ -793,7 +787,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         })
         return
       }
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       const removed = plan.toRemove.length
       setNotice(t.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
       if (options.closeDrawer !== false) setIsModelSyncOpen(false)
@@ -943,7 +937,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     try {
       setPreserveProviderDraftForId(selectedProvider.id)
       await persistSelectedProviderDraft(options.enabledOverride)
-      await refreshProviders(selectedProvider.id)
+      await reloadProviders(selectedProvider.id)
       const report = (await window.platform.modelProviders.runRuntimeChecks(selectedProvider.id, {
         modelId: selectedModel.id,
         apiKey: selectedApiKeyOption.apiKey,
@@ -988,7 +982,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     setModelDraft(createEmptyModelDraft())
     setIsAddModelOpen(false)
     setEditingModelId(null)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   function openAddModelDrawer(): void {
@@ -1012,7 +1006,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   async function removeModel(modelId: string): Promise<void> {
     if (!selectedProvider) return
     await window.platform.modelProviders.removeModel(selectedProvider.id, modelId)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
     setNotice(t.models.modelRemovedNotice(1))
   }
 
@@ -1031,7 +1025,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       toRemove: modelIds
     })
     if (isProviderModelSyncFailure(outcome)) throw new Error(outcome.reasonCode)
-    await refreshProviders(selectedProvider.id)
+    await reloadProviders(selectedProvider.id)
   }
 
   function toggleModelPinned(modelId: string): void {
@@ -1089,17 +1083,23 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         </aside>
 
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'models' ? (
-          <div className="model-service-with-defaults" data-model-service-with-defaults>
-            <ModelServiceDefaultModelsSection
-              labels={t.models}
-              providers={providers}
-              values={settings.modelDefaults}
-              onChange={(field, value) => {
-                void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
-              }}
-            />
-            {renderModelService()}
-          </div>
+          // 供应商列表是这一页的启动读数：等 / 读不到 / 有数据（刷新失败保留旧表）都由它统一判。
+          <ModelServiceLoadSurface
+            language={settings.language}
+            state={providersState}
+            onRetry={() => void reloadProviders()}>
+            <div className="model-service-with-defaults" data-model-service-with-defaults>
+              <ModelServiceDefaultModelsSection
+                labels={t.models}
+                providers={providers}
+                values={settings.modelDefaults}
+                onChange={(field, value) => {
+                  void updateSettings({ modelDefaults: { ...settings.modelDefaults, [field]: value } })
+                }}
+              />
+              {renderModelService()}
+            </div>
+          </ModelServiceLoadSurface>
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'assistant-library' ? (
           <AssistantLibrarySettingsPage language={settings.language} onManageAssistants={() => setActiveNavKey('assistants')} />
@@ -1134,15 +1134,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * 本函数**只保留接线**：状态来自本组件，写入仍是既有 IPC 包装，抽屉/宿主仍在这里挂载。
    */
   function renderModelService(): React.ReactElement {
-    // The provider list is boot data: until `settings.get()` and `listProviders` settle the page
-    // would claim "no providers" and paint an empty rail. Show the wait instead of a false empty.
-    if (!bootDataReady) {
-      return (
-        <section className="settings-workspace model-service-page" aria-busy="true">
-          <LoadingState label={t.status.loading} fill />
-        </section>
-      )
-    }
     return (
       <ModelServiceProviderPage
         labels={t.models}
@@ -1162,7 +1153,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         notice={notice}
         syncError={modelSyncError}
         onProviderSearchChange={setProviderSearch}
-        onSelectProvider={setSelectedProviderId}
+        onSelectProvider={selectProvider}
         onAddProvider={() => setIsAddProviderOpen(true)}
         onApiKeyDraftChange={handleApiKeyDraftChange}
         onToggleGroup={toggleModelGroup}
@@ -1589,7 +1580,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 providers={providers}
                 pinnedModelIds={pinnedModelIds}
                 defaultAgentModelId={settings.modelDefaults.agentModelId}
-                loadingModelService={!bootDataReady}
+                loadingModelService={providersState.status === 'loading'}
                 onUpdateSettings={updateSettings}
               />
             ),
