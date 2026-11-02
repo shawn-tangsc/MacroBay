@@ -21,21 +21,13 @@ export type NotificationProducerClaimSource = Pick<ProductManifest, 'id' | 'noti
  *  2. 同一个 producerId 不能被两个声明者同时 claim（说不清谁的事）；
  *  3. 非空、去重、去首尾空白。
  *
- * 平台自有任务可以直接给 `platformProducerIds`，表里记成 `platform`——它们不会触发
- * `unclaimed-producer`，也不必让产品去 claim 平台自己的 handler。
- * **平台自有 ID 由装配层从 job runtime 的 handler 列表生成，不写死一张表**：写死的表
- * 会让新加的平台任务在第一次提交时误报未登记。
+ * **平台自有任务不靠白名单判**：producerId 的前缀对不上任何已登记 productId 时，就是平台自有
+ * （包括 `assistant.sessionRetention` 这类无前缀 handler），不记诊断。写死一张表迟早会漏。
  */
 export function createNotificationProducerOwnership(input: {
   manifests: readonly NotificationProducerClaimSource[]
-  platformProducerIds?: readonly string[]
 }): NotificationProducerOwnership {
   const owners: Record<string, NotificationProducerOwner> = {}
-  for (const producerId of input.platformProducerIds ?? []) {
-    const normalized = producerId.trim()
-    if (normalized === '') throw new Error('notification-producer-claim-empty')
-    owners[normalized] = 'platform'
-  }
   for (const manifest of input.manifests) {
     for (const claim of manifest.notificationProducerClaims ?? []) {
       const producerId = claim.trim()

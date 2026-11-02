@@ -1158,7 +1158,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     await replaceAgentState(localizedState)
   }
   // 通知运行时的端口：jobRuntime 已就绪，平台 handlerId 视为已登记。
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), platformProducerIds: () => jobRuntime.listSchedules().filter((definition) => definition.owner === 'platform').map((definition) => definition.handlerId) })
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request) })
   registerIpcHandlers(
     productManifests,
     productIpcRegistry,

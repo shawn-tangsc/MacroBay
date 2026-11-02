@@ -40,7 +40,6 @@ import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
 import { pruneNotificationDailyCounters } from './notificationBreaker'
-import { createLegacySubmit } from './notificationRuntimeLegacy'
 import { decideDailyCap, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
 import { emitBackoffEvent } from './notificationBackoffEvents'
@@ -93,8 +92,8 @@ export type NotificationRuntimeDependencies = {
   diagnostics?: NotificationDiagnosticsSink
   /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
   producerOwnership?: NotificationProducerOwnership
-  /** 平台自有任务的 handlerId：视为已登记，不触发 `unclaimed-producer`。 */
-  platformProducerIds?: () => readonly string[]
+  /** 已登记的产品 productId；producerId 前缀对不上任何产品即视为平台自有。 */
+  productIds?: readonly string[]
   /** 读者语言：正文在投递前解析一次，四个钩子拿同一份 content。 */
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 文案解析端口（契约 §3.3）：平台键/产品键都走它；缺省时退回平台闭集。 */
@@ -137,12 +136,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     await deps.storage.write(state)
   }
 
-  function submit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome>
-  function submit(request: NotificationRequest): Promise<SafeNotificationRecord>
-  function submit(
-    request: NotificationRequest | NotificationSubmitRequest
-  ): Promise<SafeNotificationRecord | NotificationSubmitOutcome> {
-    return 'dedupeVars' in request ? submitEvent(request) : legacySubmit.submitLegacy(request)
+  async function submit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
+    return submitEvent(request)
   }
 
   async function persistWithDiagnostics(state: NotificationStoreState): Promise<void> {
@@ -170,7 +165,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       producerId: request.producerId,
       eventTypeId: request.eventTypeId,
       ownership: deps.producerOwnership,
-      platformProducerIds: deps.platformProducerIds,
+      productIds: deps.productIds,
       diagnostics: deps.diagnostics,
       seenUnclaimedProducers,
       now
@@ -272,14 +267,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     getLanguage: deps.getLanguage,
     copy: deps.copy,
     now: nowIso
-  })
-  const legacySubmit = createLegacySubmit({
-    load,
-    persist,
-    notifyChanged,
-    deps,
-    now: nowIso,
-    delivery
   })
 
   return {

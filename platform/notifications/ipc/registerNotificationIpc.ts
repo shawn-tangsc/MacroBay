@@ -24,7 +24,7 @@ let updateNotificationSettings: ((patch: Partial<NotificationRuntimeSettings>) =
 let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = null
 let notificationPushHook: DeliveryHooks['push'] | null = null
 let notificationProducerOwnership: NotificationProducerOwnership | null = null
-let getPlatformProducerIds: (() => readonly string[]) | null = null
+let notificationProductIds: readonly string[] | null = null
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
@@ -35,7 +35,7 @@ export function configureNotificationRuntime(deps: {
   getPushTargets?: () => Promise<readonly unknown[]>
   push?: DeliveryHooks['push']
   producerOwnership?: NotificationProducerOwnership
-  platformProducerIds?: () => readonly string[]
+  productIds?: readonly string[]
   /** 读者时区与当前时刻。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」（`MI-11-R68`）。 */
   clock: NotificationClock
   /**
@@ -55,7 +55,7 @@ export function configureNotificationRuntime(deps: {
   getNotificationPushTargets = deps.getPushTargets ?? null
   notificationPushHook = deps.push ?? null
   notificationProducerOwnership = deps.producerOwnership ?? null
-  getPlatformProducerIds = deps.platformProducerIds ?? null
+  notificationProductIds = deps.productIds ?? null
 }
 
 /** 记录变化后广播一次：角标与列表订阅它，不轮询。事件只说明「变了」，真值仍由 `list()` 读。 */
@@ -111,7 +111,7 @@ export function getNotificationRuntime() {
       updateSettings: updateNotificationSettings ?? undefined,
       getPushTargets: getNotificationPushTargets ?? undefined,
       producerOwnership: notificationProducerOwnership ?? undefined,
-      platformProducerIds: getPlatformProducerIds ?? undefined,
+      productIds: notificationProductIds ?? undefined,
       deliveryHooks: {
         // 应用内两档直接推给渲染层：句子由渲染层按当前语言解析（记录里只有键与参数）。
         toast: (record, _content: NotificationDeliveryContent) => broadcastNotificationDelivered(record, 'toast'),
@@ -143,5 +143,5 @@ export function resetNotificationRuntimeForTests(): void {
   getNotificationPushTargets = null
   notificationPushHook = null
   notificationProducerOwnership = null
-  getPlatformProducerIds = null
+  notificationProductIds = null
 }

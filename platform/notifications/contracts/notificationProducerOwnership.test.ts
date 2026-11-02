@@ -3,15 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { createNotificationProducerOwnership } from './notificationProducerOwnership'
 
 describe('notification producer ownership', () => {
-  it('maps claims to their product and platform handlers to platform', () => {
+  it('maps claims to their product', () => {
     const ownership = createNotificationProducerOwnership({
       manifests: [
         { id: 'market-intelligence', notificationProducerClaims: ['market-intelligence.dailyBriefing'] }
-      ],
-      platformProducerIds: ['platform.agent-task']
+      ]
     })
     expect(ownership['market-intelligence.dailyBriefing']).toEqual({ productId: 'market-intelligence' })
-    expect(ownership['platform.agent-task']).toBe('platform')
     expect(ownership['unclaimed']).toBeUndefined()
   })
 
