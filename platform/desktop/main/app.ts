@@ -171,13 +171,13 @@ import { registerStorageIpc } from './ipc/storageIpc'
 import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
-import { registerAgentIpc } from './ipc/agentIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { composeNotificationRuntime } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
+import { composeAgentIpc } from './composition/agent'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -1175,15 +1175,14 @@ function registerIpcHandlers(
   registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })
 
   // 智能体会话/运行时 36 个 handler 搬到 ipc/agentIpc.ts。
-  registerAgentIpc(ipcMain, {
+  // 智能体会话/运行时 36 个 handler；广播通道与目标窗口都在 composition/agent.ts 里定。
+  composeAgentIpc(ipcMain, {
     agentIpcHandlers,
     getState: () => agentStore.getState(),
     syncAfterMutation: (previousState) => syncAgentStateAfterMutation(previousState),
-    broadcastStateChanged: (state) => {
-      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    },
     replaceState: (state) => replaceAgentState(state),
-    cancelMessage: (runId) => agentRuntimeService.cancelMessage(runId)
+    cancelMessage: (runId) => agentRuntimeService.cancelMessage(runId),
+    getMainWindow
   })
   // 任务排程的 15 个 handler 仍由它自己的注册函数负责。
   registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {
