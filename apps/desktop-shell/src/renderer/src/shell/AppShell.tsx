@@ -13,7 +13,7 @@ import {
   Sun
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, ConfigProvider, Input, Segmented as AntSegmented, Select } from 'antd'
+import { Button, ConfigProvider, Input, Select } from 'antd'
 
 import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
@@ -88,6 +88,15 @@ const LANGUAGE_LABEL_KEYS: Record<AppLanguage, string> = {
   'zh-CN': 'preferences.chinese',
   'en-US': 'preferences.english'
 }
+
+/** 主题三项同理：键全字面量，加一档主题编译不过。 */
+const THEME_LABEL_KEYS: Record<ThemeMode, string> = {
+  system: 'preferences.system',
+  light: 'preferences.light',
+  dark: 'preferences.dark'
+}
+
+const THEME_SEGMENTED_KEY = 'preferences.displayStyle'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
@@ -1374,22 +1383,16 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <Palette size={18} />
             <span>{t.preferences.displayStyle}</span>
           </div>
-          <AntSegmented<ThemeMode>
-            className="settings-segmented"
+          <Segmented
+            ariaLabelKey={THEME_SEGMENTED_KEY}
+            items={themeOptions.map((option) => ({
+              value: option.value,
+              labelKey: THEME_LABEL_KEYS[option.value],
+              icon: option.icon
+            }))}
             value={settings.themeMode}
-            options={themeOptions.map((option) => {
-              const Icon = option.icon
-              return {
-                value: option.value,
-                label: (
-                  <span className="segmented-icon-label">
-                    <Icon size={15} />
-                    <span>{t.preferences[option.labelKey]}</span>
-                  </span>
-                )
-              }
-            })}
-            onChange={(value) => void updateSettings({ themeMode: value })}
+            onChange={(value) => void updateSettings({ themeMode: value as ThemeMode })}
+            resolveText={resolvePreferencesText}
           />
         </div>
 
