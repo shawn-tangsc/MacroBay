@@ -34,8 +34,18 @@ const METHODS = Object.freeze({
 export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
 export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }>
 
+export type DailyBriefingClockSource = 'settings' | 'system'
+
 export type DailyBriefingClientTodayResult =
-  | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
+  | Readonly<{
+    state: 'available'
+    document: DailyBriefingDocument
+    /**
+     * `system` means the settings zone was empty or invalid and the machine's zone was used; the
+     * page must say so, otherwise the reader cannot tell why the day starts somewhere else.
+     */
+    timeZoneSource?: DailyBriefingClockSource
+  }>
   | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
 
 export type DailyBriefingClientListResult =
@@ -143,7 +153,7 @@ export const dailyBriefingClient: DailyBriefingClient = {
       const value = await invoke(METHODS.getToday, input)
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
-        return { state: 'available', document: value.document }
+        return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       return unavailable()
     } catch {
@@ -182,7 +192,7 @@ export const dailyBriefingClient: DailyBriefingClient = {
     try {
       const value = await invoke(METHODS.regenerate, input)
       if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
-        return { state: 'available', document: value.document }
+        return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       return unavailable()
@@ -227,6 +237,11 @@ function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> 
 }
 
 /** A failed attempt keeps its readable code and, when the service stored it, its stage trace. */
+/** Only `system` changes what the reader must be told; anything else is the ordinary settings case. */
+function readClockSource(value: Record<string, unknown>): DailyBriefingClockSource {
+  return value.timeZoneSource === 'system' ? 'system' : 'settings'
+}
+
 function unavailableWithTrace(value: Record<string, unknown>): Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }> {
   const failureCode = isText(value.failureCode) ? value.failureCode : 'daily-briefing-request-failed'
   const generationTrace = isBriefingGenerationTrace(value.generationTrace) ? value.generationTrace : undefined

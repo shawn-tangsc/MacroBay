@@ -36,7 +36,13 @@ import './dailyBriefingShareCard.css'
 type ViewState =
   | Readonly<{ status: 'loading' }>
   | Readonly<{ status: 'unavailable'; failureCode?: string; generationTrace?: GenerationTrace }>
-  | Readonly<{ status: 'ready'; document: DailyBriefingDocument; kind: 'today' | 'history' }>
+  | Readonly<{
+    status: 'ready'
+    document: DailyBriefingDocument
+    kind: 'today' | 'history'
+    /** `system` means the settings zone was unusable and the machine's zone stood in. */
+    timeZoneSource?: 'settings' | 'system'
+  }>
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -121,7 +127,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         rows = rows.some((row) => row.date === date)
           ? rows.map((row) => row.date === date ? summaryFromDocument(today.document) : row)
           : [summaryFromDocument(today.document), ...rows]
-        setView({ status: 'ready', document: today.document, kind: 'today' })
+        setView({
+          status: 'ready',
+          document: today.document,
+          kind: 'today',
+          ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
+        })
         setRegenerateFailure(null)
       } else {
         const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
@@ -304,7 +315,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <Button className="mi-daily-briefing__regenerate" disabled={regenerating} onClick={() => void regenerate()}>
             {regenerating ? text.regenerating : text.regenerate}
           </Button>
-          {zoneInvalid ? <small className="mi-daily-briefing__manual-utc" role="status">{text.generationSettings.manualUtcNote}</small> : null}
+          {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
+          {/* The settings zone was unusable, so the window was computed in the machine's zone. The
+              reader configured a time and is getting another day boundary; saying nothing would let
+              them read the edition against the wrong one. */}
+          {view.status === 'ready' && view.timeZoneSource === 'system'
+            ? <small className="mi-daily-briefing__clock-note" role="status">{text.timeZoneFromSystem}</small>
+            : null}
         </> : null}
         {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__export" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
           {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}

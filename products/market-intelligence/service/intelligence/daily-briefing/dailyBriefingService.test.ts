@@ -128,27 +128,27 @@ describe('daily briefing service', () => {
     expect(localDate('not-a-time', 'UTC')).toBeUndefined()
     expect(localDate(asOf, 'Not/AZone')).toBe('2026-10-30')
     // 08:30 local is past the 07:00 default cutoff, so it reads the edition closed at 07:00.
-    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24 })
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24, zoneSource: 'settings' })
     // 07:30 local is on the other side of the same cutoff; the day rolls over, the window does not.
-    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24 })
+    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24, zoneSource: 'settings' })
   })
 
   it('moves the cutoff with the configured generation time', () => {
     // 08:30 local is before a 09:30 cutoff, so the open belongs to the previous edition.
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
-      date: '2026-10-29', windowStart: '2026-10-28T01:30:00.000Z', windowEnd: '2026-10-29T01:30:00.000Z', windowHours: 24
+      date: '2026-10-29', windowStart: '2026-10-28T01:30:00.000Z', windowEnd: '2026-10-29T01:30:00.000Z', windowHours: 24, zoneSource: 'settings'
     })
     expect(briefingWindow('2026-10-30T02:00:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
-      date: '2026-10-30', windowStart: '2026-10-29T01:30:00.000Z', windowEnd: '2026-10-30T01:30:00.000Z', windowHours: 24
+      date: '2026-10-30', windowStart: '2026-10-29T01:30:00.000Z', windowEnd: '2026-10-30T01:30:00.000Z', windowHours: 24, zoneSource: 'settings'
     })
   })
 
   it('subtracts the configured window hours from the cutoff', () => {
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 12 })).toEqual({
-      date: '2026-10-30', windowStart: '2026-10-29T11:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 12
+      date: '2026-10-30', windowStart: '2026-10-29T11:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 12, zoneSource: 'settings'
     })
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 48, generationTime: '06:00' })).toEqual({
-      date: '2026-10-30', windowStart: '2026-10-27T22:00:00.000Z', windowEnd: '2026-10-29T22:00:00.000Z', windowHours: 48
+      date: '2026-10-30', windowStart: '2026-10-27T22:00:00.000Z', windowEnd: '2026-10-29T22:00:00.000Z', windowHours: 48, zoneSource: 'settings'
     })
   })
 

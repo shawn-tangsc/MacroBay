@@ -28,7 +28,7 @@ import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } fro
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
-import { briefingWindow, localDate, type DailyBriefingWindow } from './dailyBriefingWindow'
+import { briefingWindow, localDate, type DailyBriefingWindow, type DailyBriefingZoneSource } from './dailyBriefingWindow'
 
 // Kept as the service's public surface: the window arithmetic moved out, the import path did not.
 export { briefingWindow, localDate }
@@ -144,11 +144,28 @@ export type DailyBriefingSource = Readonly<{
   buildPacket: (input: Readonly<{ asOf: string; locale: DailyBriefingLocale; timeZone: string; windowHours?: number }>) => Promise<DailyBriefingFactPacket>
 }>
 
+/** Attaches which zone produced the window, but only where there is an edition to describe. */
+function withTimeZoneSource(
+  result: DailyBriefingTodayResult,
+  zoneSource: DailyBriefingZoneSource
+): DailyBriefingTodayResult {
+  return result.state === 'available' ? { ...result, timeZoneSource: zoneSource } : result
+}
+
 export type DailyBriefingTodayFailureCode =
   | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
 
 export type DailyBriefingTodayResult =
-  | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
+  | Readonly<{
+    state: 'available'
+    document: DailyBriefingDocument
+    /**
+     * Which zone produced this edition's window. `system` means the reader's setting was empty or
+     * invalid and the machine's zone stood in — the caller must say so on screen, because the day may
+     * differ from the one the reader configured.
+     */
+    timeZoneSource?: DailyBriefingZoneSource
+  }>
   | Readonly<{
     state: 'unavailable'
     /**
@@ -286,7 +303,7 @@ export function createDailyBriefingService(deps: Readonly<{
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
       const result = await resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
-      return withStoredAttempt(deps.store, result, window.date, input.locale, periodId)
+      return withTimeZoneSource(await withStoredAttempt(deps.store, result, window.date, input.locale, periodId), window.zoneSource)
     })
   }
 
@@ -297,7 +314,8 @@ export function createDailyBriefingService(deps: Readonly<{
     // reader who presses 重新生成 three times started three concurrent runs, and each of them
     // published its own agent session and its own edition. A second request now joins the run that
     // is already working on that edition instead of starting another one.
-    return runs.join(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale), () => resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true))
+    return runs.join(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale), async () =>
+      withTimeZoneSource(await resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true), window.zoneSource))
   }
 
   async function resolveToday(input: Readonly<{ asOf: string; date: string; periodId: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {

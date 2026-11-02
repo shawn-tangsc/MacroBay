@@ -57,6 +57,7 @@
    is the platform's own spelling so it never becomes a second way to write a zone. */
 .mi-daily-briefing__settings-zone { padding: 1px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: var(--mi-dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Not an error box: the setting can still be saved, and a modal inside a modal would read as a crash. */
+.mi-daily-briefing__clock-note { margin: 0; color: var(--caution); font-size: 10.5px; line-height: 1.45; }
 .mi-daily-briefing__settings-warning { margin: 10px 0 0; padding: 8px 10px; border-left: 2px solid var(--mi-dashboard-caution, var(--mi-dashboard-line)); border-radius: 4px; color: var(--mi-dashboard-text); font-size: 11.5px; line-height: 1.55; }
 .mi-daily-briefing__settings-link { margin: 10px 0 0; }
 .mi-daily-briefing__settings-link button { border: 0; background: transparent; color: var(--mi-dashboard-lime); font-size: 11px; cursor: pointer; padding: 0; }

@@ -360,6 +360,23 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
   })
 
+  it('says when the window was computed in the system zone because the setting was unreadable', async () => {
+    // The reader configured a time; a silent fallback would hand them another day boundary with no
+    // explanation. The note is the only thing on screen that can say which zone produced this window.
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument(), timeZoneSource: 'system' as const }))
+    })
+    const dom = await renderPage(client)
+    const note = dom.querySelector('.mi-daily-briefing__clock-note')
+    expect(note?.textContent).toBe(text.timeZoneFromSystem)
+    expect(note?.getAttribute('role')).toBe('status')
+  })
+
+  it('stays quiet when the settings zone was used', async () => {
+    const dom = await renderPage(fakeClient())
+    expect(dom.querySelector('.mi-daily-briefing__clock-note')).toBeNull()
+  })
+
   it('renders an unreadable read as an error, not as "nothing was made", and retries', async () => {
     const getToday = vi.fn()
       .mockRejectedValueOnce(new Error('down'))

@@ -15,19 +15,50 @@ import { dailyBriefingCutoffMinutes, type DailyBriefingGenerationSettings } from
  * This lives beside the schedule setting rather than inside the service: the arithmetic is pure, and
  * keeping it in the service made the file carry both the run and the calendar.
  */
-export type DailyBriefingWindow = Readonly<{ date: string; windowStart: string; windowEnd: string; windowHours: number }>
+export type DailyBriefingZoneSource = 'settings' | 'system'
+
+export type DailyBriefingWindow = Readonly<{
+  date: string
+  windowStart: string
+  windowEnd: string
+  windowHours: number
+  /**
+   * Which zone produced the wall-clock. `system` means the settings zone was empty or invalid and the
+   * machine's own zone stood in — the caller must surface that, because the reader's day may differ
+   * from the one they configured and nothing else on screen would say so.
+   */
+  zoneSource: DailyBriefingZoneSource
+}>
 
 /** What a caller may override; anything invalid falls back to the policy default. */
 export type DailyBriefingWindowSettings = Partial<Pick<DailyBriefingGenerationSettings, 'generationTime' | 'windowHours'>>
 
+/** What the reader's machine says its zone is; the last resort when the setting itself is unusable. */
+export function systemTimeZone(): string {
+  try {
+    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return resolved !== undefined && isValidTimeZone(resolved) ? resolved : 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
 export function briefingWindow(
   asOf: string,
   timeZone: string,
-  settings: DailyBriefingWindowSettings = {}
+  settings: DailyBriefingWindowSettings = {},
+  /**
+   * The zone to stand in with when the settings zone is unusable. Defaults to the machine's; a caller
+   * only passes it in tests, where the machine's zone is not the one under test.
+   */
+  fallbackTimeZone: string = systemTimeZone()
 ): DailyBriefingWindow | undefined {
   const parsed = Date.parse(asOf)
   if (!Number.isFinite(parsed)) return undefined
-  const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC'
+  // A broken or empty setting must not be read as UTC: that silently moves the reader's day by whole
+  // hours and says nothing. The machine's zone is a closer guess, and `zoneSource` makes it visible.
+  const zoneSource: DailyBriefingZoneSource = isValidTimeZone(timeZone) ? 'settings' : 'system'
+  const zone = zoneSource === 'settings' ? timeZone : (isValidTimeZone(fallbackTimeZone) ? fallbackTimeZone : 'UTC')
   const parts = localParts(parsed, zone)
   if (!parts) return undefined
   const generationTime = isDailyBriefingGenerationTime(settings.generationTime)
@@ -44,7 +75,8 @@ export function briefingWindow(
     date,
     windowEnd,
     windowStart: new Date(Date.parse(windowEnd) - windowHours * 60 * 60 * 1000).toISOString(),
-    windowHours
+    windowHours,
+    zoneSource
   })
 }
 
