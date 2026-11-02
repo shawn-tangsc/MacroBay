@@ -49,8 +49,8 @@ export type AgentText = {
     emptySessions: string
     /** 禁用原因：还没选助手。说处境，不说「按钮点了没用」。 */
     newSessionNeedsAgent: string
-    /** 禁用原因：当前没有筛选结果可清。 */
-    clearFilteredNeedsFilter: string
+    /** 禁用原因：没有可删除的会话（注意按钮的动作是删除，不是清除筛选）。 */
+    deleteFilteredNeedsSessions: string
   }
   sessionItem: {
     rename: string

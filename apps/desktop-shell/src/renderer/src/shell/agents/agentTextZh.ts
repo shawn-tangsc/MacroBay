@@ -37,8 +37,8 @@ export const agentTextZh: AgentText = {
     emptyAgents: '还没有智能体，先创建一个。',
     agentSessionCount: (count) => `${count} 个会话`,
     emptySessions: '还没有会话，先创建一个。',
-    newSessionNeedsAgent: '先选一个助手，才能新建会话',
-    clearFilteredNeedsFilter: '没有需要清除的筛选'
+    newSessionNeedsAgent: '先选一个智能体，才能新建会话',
+    deleteFilteredNeedsSessions: '没有可删除的会话'
   },
   sessionItem: {
     rename: '重命名',
