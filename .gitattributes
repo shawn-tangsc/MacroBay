@@ -2,3 +2,10 @@
 # normalize their line endings, otherwise a fresh clone no longer matches the
 # captured payload bytes/hashes in officialMacroCalendarProvenance.ts.
 products/market-intelligence/service/intelligence/macro-calendar/fixtures/** -text
+
+# The agent capability reference is generated (`pnpm generate:agent-capabilities`) with LF
+# endings and committed that way. Without this rule a Windows checkout with
+# `core.autocrlf=true` writes CRLF, so the next generation pass leaves the file looking
+# modified and `pnpm build:info --require-clean` refuses to package the release.
+products/market-intelligence/agents/skills/**/reference.md text eol=lf
+

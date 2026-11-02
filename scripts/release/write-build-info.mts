@@ -44,13 +44,18 @@ if (!commit) {
 
 // 只有 HEAD 正好被某个 tag 指着才算「从 tag 打的」；拿不到就是 null，不许退而求其次写分支名。
 const exactTag = git(root, ['describe', '--tags', '--exact-match', 'HEAD'])
-const status = git(root, ['status', '--porcelain'])
+// 用内容比较而不是 `git status --porcelain`：Windows 检出时 `core.autocrlf=true` 会把文本写成
+// CRLF，而生成器（如 `generate-agent-capabilities`）写 LF，`status` 于是把一个与 HEAD 内容完全
+// 相同的文件报成 modified，干净门禁会误杀一次真实打包。`git diff HEAD` 走的是归一化后的内容，
+// 行尾差异不算脏；它不包含未跟踪文件，所以再用 `ls-files --others` 单独补上。
+const changed = git(root, ['diff', '--name-only', 'HEAD'])
+const untracked = git(root, ['ls-files', '--others', '--exclude-standard'])
 const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }
 
 const info = createBuildInfo({
   commit,
   tag: exactTag && exactTag.length > 0 ? exactTag : null,
-  dirty: status !== null && status.length > 0,
+  dirty: (changed ?? '').length > 0 || (untracked ?? '').length > 0,
   version,
   builtAt: new Date(),
   platform,
