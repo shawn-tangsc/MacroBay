@@ -4,6 +4,9 @@
     "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": 1
   },
   "$exceptions": {
-    "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": "只渲染标签条：条在 grid-area tabs，正文在另一个 grid 区（body），与平台 Tabs「条和面板同属一个容器」的形状不匹配。架构师裁定 2026-11-02：不给 Tabs 加「只出条」形态——那会让 aria-controls 指向不存在的 tabpanel，连线断了没有任何检查能发现。离开这份清单的条件：壳层面板布局重构（可见变化，独立立项，不与迁移混）。"
+    "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx": {
+      "reason": "只渲染标签条：条在 grid-area tabs，正文在另一个 grid 区（body），与平台 Tabs「条和面板同属一个容器」的形状不匹配。架构师裁定 2026-11-02：不给 Tabs 加「只出条」形态——那会让 aria-controls 指向不存在的 tabpanel，连线断了没有任何检查能发现。离开这份清单的条件：壳层面板布局重构（可见变化，独立立项，不与迁移混）。",
+      "tracked": "MI-11-R158"
+    }
   }
 }
