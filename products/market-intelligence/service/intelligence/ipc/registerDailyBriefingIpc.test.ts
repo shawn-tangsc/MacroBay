@@ -38,6 +38,20 @@ describe('daily briefing IPC', () => {
     expect(service.list).toHaveBeenCalledWith({ locale: 'en-US', timeZone: 'UTC' })
   })
 
+  it('accepts the extra editions as a language patch and rejects a language it cannot write', async () => {
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: ['en-US'] } })
+    expect(settings.save).toHaveBeenCalledWith({ language: { additional: ['en-US'] } })
+
+    // Shape only here: a well-shaped but unsupported language is the settings service's rule to
+    // reject, while a malformed body must never reach it.
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: 'en-US' } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { primary: 'zh-CN' } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: ['ja-JP'] } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+  })
+
   it('reads and saves the editorial settings with a strict patch', async () => {
     await handlers.get(DAILY_BRIEFING_IPC_METHODS.getSettings)!({})
     expect(settings.getView).toHaveBeenCalledTimes(1)

@@ -79,6 +79,7 @@ import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
 import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
+import { createEditionLanguageSettingsService, createEditionLanguageSettingsJsonStorage } from './daily-briefing/dailyBriefingLanguageSettingsService'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import {
   createDailyBriefingGenerationSettingsJsonStorage,
@@ -801,9 +802,14 @@ export function getIntelligenceModule(
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
       onSaved: () => { void dailyBriefingGenerationSettings.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
     })
+    const dailyBriefingLanguageSettings = createEditionLanguageSettingsService({
+      storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')),
+      uiLanguage: getAppLanguage
+    })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
-      generation: dailyBriefingGenerationSettings
+      generation: dailyBriefingGenerationSettings,
+      language: dailyBriefingLanguageSettings
     })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions

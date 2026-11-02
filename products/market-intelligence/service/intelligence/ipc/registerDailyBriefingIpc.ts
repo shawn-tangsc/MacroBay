@@ -49,7 +49,7 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
 function readPatch(payload: unknown): DailyBriefingSettingsPatch {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
   const keys = Object.keys(payload)
-  if (keys.some((key) => !['editorialEnabled', 'providerId', 'modelId', 'webSearchEnabled', 'webSearchAuthorizedAt', 'generation'].includes(key))) throw new Error('daily-briefing-invalid-request')
+  if (keys.some((key) => !['editorialEnabled', 'providerId', 'modelId', 'webSearchEnabled', 'webSearchAuthorizedAt', 'generation', 'language'].includes(key))) throw new Error('daily-briefing-invalid-request')
   if (payload.editorialEnabled !== undefined && typeof payload.editorialEnabled !== 'boolean') throw new Error('daily-briefing-invalid-request')
   for (const key of ['providerId', 'modelId', 'webSearchAuthorizedAt'] as const) {
     const value = payload[key]
@@ -61,8 +61,20 @@ function readPatch(payload: unknown): DailyBriefingSettingsPatch {
     ...(typeof payload.modelId === 'string' ? { modelId: payload.modelId } : {}),
     ...(typeof payload.webSearchEnabled === 'boolean' ? { webSearchEnabled: payload.webSearchEnabled } : {}),
     ...(typeof payload.webSearchAuthorizedAt === 'string' ? { webSearchAuthorizedAt: payload.webSearchAuthorizedAt } : {}),
-    ...(payload.generation !== undefined ? { generation: readGenerationPatch(payload.generation) } : {})
+    ...(payload.generation !== undefined ? { generation: readGenerationPatch(payload.generation) } : {}),
+    ...(payload.language !== undefined ? { language: readLanguagePatch(payload.language) } : {})
   }
+}
+
+/** The global language block: only the extra editions are writable; the primary follows the interface. */
+function readLanguagePatch(value: unknown): Readonly<{ additional?: readonly ('zh-CN' | 'en-US')[] }> {
+  if (!isRecord(value)) throw new Error('daily-briefing-invalid-request')
+  const keys = Object.keys(value)
+  if (keys.length === 0 || keys.some((key) => key !== 'additional')) throw new Error('daily-briefing-invalid-request')
+  if (!Array.isArray(value.additional) || !value.additional.every(isDailyBriefingLocale)) {
+    throw new Error('daily-briefing-invalid-request')
+  }
+  return { additional: value.additional }
 }
 
 function readGenerationPatch(value: unknown): Readonly<{ generationTime?: string; windowHours?: number }> {

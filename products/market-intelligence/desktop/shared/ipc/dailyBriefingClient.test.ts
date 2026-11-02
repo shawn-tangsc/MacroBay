@@ -77,11 +77,18 @@ describe('daily briefing client', () => {
   it('reads and saves the settings view without trusting a malformed resolved state', async () => {
     stubInvoke((method, payload) => {
       if (method === 'intelligence.dailyBriefing.getSettings') {
-        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }, webSearchSupported: false, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+        return {
+          settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
+          generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' },
+          language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
+          webSearchSupported: false,
+          resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
+        }
       }
       return {
         settings: { editorialEnabled: false, providerId: '', modelId: '', webSearchEnabled: false },
         generation: { generationTime: '09:30', windowHours: 48, cronExpression: '30 9 * * *' },
+        language: { settings: { primary: 'follow-ui', additional: ['en-US'] }, plan: { locales: ['zh-CN', 'en-US'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 2 } },
         webSearchSupported: true,
         resolved: { state: 'disabled' },
         patch: payload
@@ -92,12 +99,14 @@ describe('daily briefing client', () => {
     if (settings.state === 'available') {
       expect(settings.view.generation).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
       expect(settings.view.webSearchSupported).toBe(false)
+      expect(settings.view.language.plan.writeCount).toBe(1)
     }
     const saved = await dailyBriefingClient.saveSettings({ generation: { generationTime: '09:30', windowHours: 48 } })
     expect(saved.state).toBe('available')
     if (saved.state === 'available') {
       expect(saved.view.resolved).toEqual({ state: 'disabled' })
       expect(saved.view.generation.windowHours).toBe(48)
+      expect(saved.view.language.plan.writeCount).toBe(2)
     }
 
     stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent' } }))
