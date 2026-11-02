@@ -1,4 +1,4 @@
-import { Button, Switch } from 'antd'
+import { Button, Select, Switch } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
@@ -6,10 +6,12 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 import { LoadingState } from '@platform/ui/components/loading'
 import { Modal } from '@platform/ui/components/modal'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
 import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 
+import { dailyBriefingGenerationPolicy, dailyBriefingGenerationTimes } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
@@ -17,20 +19,41 @@ import type { DailyBriefingText } from './dailyBriefingText'
 
 const MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
 
+type SettingsDraft = Readonly<{
+  generationTime: string
+  windowHours: number
+  editorialEnabled: boolean
+  providerId: string
+  modelId: string
+  webSearchEnabled: boolean
+  webSearchAuthorizedAt?: string
+}>
+
 /**
- * The one writer of the brief's editorial preference. The default stays "follow the platform
- * default"; a custom model is a deliberate choice, and a disabled switch keeps the fact layer.
+ * The one settings panel for the brief: when it runs, how much it covers, and whether a model
+ * writes it.
+ *
+ * These were two dialogs behind two buttons — "generation" and "AI" — and that split forced a
+ * reader to know which of the two owned a setting before opening anything. They describe one
+ * edition and one save applies to the next edition, so they are one panel with two sections.
+ *
+ * A save writes both halves in one call: two separate calls could leave a saved schedule next to a
+ * rejected model choice, and the reader cannot tell which half took effect.
  */
-export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Readonly<{
+export function DailyBriefingSettingsModal({ open, text, client, onClose }: Readonly<{
   open: boolean
   text: DailyBriefingText
   client: Pick<DailyBriefingClient, 'getSettings' | 'saveSettings'>
   onClose: () => void
 }>): React.ReactElement {
   const language = useShellLanguage()
-  const [draft, setDraft] = useState<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } | null>(null)
+  const [draft, setDraft] = useState<SettingsDraft | null>(null)
   const [providers, setProviders] = useState<readonly SafeModelProvider[]>([])
   const [defaultModel, setDefaultModel] = useState<{ providerId: string; modelId: string; providerName: string; modelName: string } | null>(null)
+  // The zone the stored time means, and the value that could not be read. Both come from the save
+  // that wrote them; the panel never guesses a zone of its own.
+  const [zone, setZone] = useState<string | null>(null)
+  const [invalidZone, setInvalidZone] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -57,7 +80,11 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
         setLoadFailed(true)
         return
       }
+      setZone(settings.view.generation.generationTimeZone ?? null)
+      setInvalidZone(settings.view.generation.generationTimeZoneInvalid ?? null)
       setDraft({
+        generationTime: settings.view.generation.generationTime,
+        windowHours: settings.view.generation.windowHours,
         editorialEnabled: settings.view.settings.editorialEnabled,
         providerId: settings.view.settings.providerId,
         modelId: settings.view.settings.modelId,
@@ -101,7 +128,14 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
       return
     }
     try {
-      const result = await client.saveSettings(draft)
+      const result = await client.saveSettings({
+        generation: { generationTime: draft.generationTime, windowHours: draft.windowHours },
+        editorialEnabled: draft.editorialEnabled,
+        providerId: draft.providerId,
+        modelId: draft.modelId,
+        webSearchEnabled: draft.webSearchEnabled,
+        ...(draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: draft.webSearchAuthorizedAt } : {})
+      })
       if (result.state === 'available') onClose()
       else setFailed(true)
     } catch {
@@ -113,19 +147,57 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
 
   return <Modal
     footer={<>
-      <Button onClick={onClose}>{text.aiSettings.cancel}</Button>
+      <Button onClick={onClose}>{text.generationSettings.cancel}</Button>
       <Button disabled={!draft || loadFailed} loading={saving} onClick={() => void save()} type="primary">
-        {saving ? text.aiSettings.saving : text.aiSettings.save}
+        {saving ? text.generationSettings.saving : text.generationSettings.save}
       </Button>
     </>}
     layer="over-drawer"
     onClose={onClose}
     open={open}
     resolveText={resolveProductText}
-    titleKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.title"
+    titleKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.title"
     width="standard"
   >
-    {!draft ? <LoadingState label={text.aiSettings.loading} minHeight={90} /> : <>
+    {!draft ? <LoadingState label={text.generationSettings.loading} minHeight={120} /> : <>
+      <h3 className="mi-daily-briefing__settings-section">{text.settings.generation}</h3>
+      <div className="mi-daily-briefing__settings-row">
+        <div>
+          <strong>{text.generationSettings.generationTime}</strong>
+          <small>{text.generationSettings.generationTimeHint}</small>
+        </div>
+        <div className="mi-daily-briefing__settings-time">
+          <Select
+            aria-label={text.generationSettings.generationTime}
+            value={draft.generationTime}
+            onChange={(generationTime: string) => setDraft((current) => current ? { ...current, generationTime } : current)}
+            options={dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))}
+            style={{ width: 108 }}
+          />
+          {/* The time is only half of the setting: 08:05 means 08:05 in this zone, and saying which
+              zone is what keeps one day from producing two editions. */}
+          {zone ? <span className="mi-daily-briefing__settings-zone" data-time-zone={zone}>{formatShellTimeZoneLabel(zone)}</span> : null}
+        </div>
+      </div>
+      {invalidZone ? <p className="mi-daily-briefing__settings-warning" role="status">{text.generationSettings.invalidTimeZone.replace('{zone}', invalidZone)}</p> : null}
+      <div className="mi-daily-briefing__settings-row">
+        <div>
+          <strong>{text.generationSettings.windowHours}</strong>
+          <small>{text.generationSettings.windowHoursHint}</small>
+        </div>
+        <Select
+          aria-label={text.generationSettings.windowHours}
+          value={draft.windowHours}
+          onChange={(windowHours: number) => setDraft((current) => current ? { ...current, windowHours } : current)}
+          options={dailyBriefingGenerationPolicy.windowHoursOptions.map((hours) => ({
+            value: hours,
+            label: text.generationSettings.windowHoursOption.replace('{hours}', String(hours))
+          }))}
+          style={{ width: 128 }}
+        />
+      </div>
+
+      <h3 className="mi-daily-briefing__settings-section">{text.settings.ai}</h3>
       <div className="mi-daily-briefing__settings-row">
         <div>
           <strong>{text.aiSettings.enabled}</strong>
@@ -170,8 +242,8 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
       <p className="mi-daily-briefing__settings-link">
         <button type="button" onClick={() => { openModelSettings(); onClose() }}>{text.aiSettings.openModelSettings}</button>
       </p>
-      {failed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.failed}</p> : null}
-      {loadFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.failed}</p> : null}
+      <p className="mi-daily-briefing__settings-note">{text.generationSettings.note}</p>
+      {failed || loadFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
     </>}
   </Modal>
 }
