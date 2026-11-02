@@ -1,9 +1,14 @@
 {
   "$comment": "antd Tooltip call sites still to migrate. One entry per file — the debt is a whole-file import, not a single hint. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: the guard reads it, and a caller migrating a site must be able to strike the line without touching the component directory. The human-readable detail (which hints are single-line, which are data, which are nodes) stays in docs-private/05-desktop/ui-audit/tooltip-call-site-mapping-2026-11-02.md — but the machine count cannot live there: that tree is gitignored, so a guard reading it would skip in CI and vanish exactly where it matters. Two kinds of lines, kept apart: `entries` is still owed (to migrate), `decided` was looked at and kept on purpose. Both are read as one allowed set; each line must still name a real antd `Tooltip` import, so a line that outlives its situation fails the guard.",
   "entries": {
-    "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": 1,
     "products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEventRow.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx": 1
   },
-  "decided": {}
+  "decided": {
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "Both hints hang on plain spans with no focus of their own (the session status dot, the channel glyph). The full text is already on screen next to them, so a screen reader loses nothing; making them focusable would add one Tab stop per session row, which costs more than the hover-only hint is worth. Adding a Tab stop per row is the same trade the calendar card's non-focusable text got."
+    }
+  }
 }
