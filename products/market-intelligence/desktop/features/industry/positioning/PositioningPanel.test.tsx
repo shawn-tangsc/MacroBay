@@ -44,27 +44,7 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
 afterEach(() => { document.body.innerHTML = '' })
 
 
-/** Renders the panel and opens the help popover, which carries the four one-look bullets. */
-async function mountAndOpenHelp(): Promise<HTMLElement> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  const root = createRoot(container)
-  await act(async () => {
-    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
-      funding, positioning, window: '7d', onWindowChange: () => undefined, text
-    })))
-  })
-  const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`)!
-  await act(async () => {
-    trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-    trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
-  })
-  // The overlay mounts on the next tick after the trigger reports itself.
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
-  return container
-}
-
-/** Renders the panel and opens the readings region under the card, where the long notes live. */
+/** Renders the panel and opens the readings region under the card, where every note lives. */
 async function mountAndOpenReadings(): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
@@ -281,24 +261,23 @@ describe('combined readout', () => {
     expect(document.body.textContent).toContain('+0.0121%')
   })
 
-  it('keeps the readings out of the bubble and behind their own entry', async () => {
-    // The bubble is a glance: four bullets about what is on screen. The thresholds, the window
-    // folding and the "what is not marked" note are a document, and a document covering half the
-    // chart is the defect this split removes.
-    await mountAndOpenHelp()
-    expect(document.body.textContent).not.toContain('六档判定')
-
-    document.body.innerHTML = ''
+  it('explains the card in one place, not two', async () => {
+    // The card used to carry an icon button opening four bullets and a text entry opening the long
+    // notes: two explanations of one card, and the reader had to pick. The bullets now lead the
+    // notes inside the one region the visible entry opens.
     const panel = await mountAndOpenReadings()
     const region = panel.querySelector('#mi-positioning-help-details')!
+    expect(region.textContent).toContain(text.helpBullets[0])
     expect(region.textContent).toContain('六档判定')
     expect(region.textContent).toContain('只标 15 分钟内的骤降')
     expect(region.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
+    // Nothing else opens an explanation on this card: the icon button is gone, not hidden.
+    expect(panel.querySelector(`button[aria-label="${text.helpLabel}"]`)).toBeNull()
   })
 
-  it('gives the bubble four bullets of a glance, not a paragraph each', () => {
+  it('still keeps the four bullets short enough to be a glance', () => {
     // The count and the length are the design's acceptance line; a fifth bullet or a long one means
-    // the sentence belongs in the readings region, not in the bubble.
+    // the sentence belongs in the readings below them, not in the lead.
     expect(text.helpBullets).toHaveLength(4)
     for (const bullet of text.helpBullets) expect(bullet.length).toBeLessThanOrEqual(60)
   })
@@ -380,11 +359,12 @@ describe('the module rule chip', () => {
     expect(chipText).not.toContain('强平')
   })
 
-  it('names the rule, the window and that the reading is inferred, on hover', () => {
+  it('keeps the rule, the window and the inference out of a title attribute', () => {
+    // A `title` carries a sentence to neither the keyboard nor the touch reader. The same facts
+    // live behind the chip's own expansion, where the reader can actually reach them.
     const markup = render({ positioning: alert() })
-    expect(markup).toContain('oi-liquidation-proxy')
-    expect(markup).toContain('15 分钟')
-    expect(markup).toContain('推断值')
+    expect(markup).not.toContain('title="')
+    expect(markup).not.toContain('oi-liquidation-proxy')
   })
 })
 

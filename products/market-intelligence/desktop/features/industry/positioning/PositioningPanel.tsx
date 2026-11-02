@@ -1,11 +1,8 @@
 import { useRef, useState } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
-import { Info } from 'lucide-react'
 
-import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
-import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
@@ -30,14 +27,14 @@ import type { PositioningPanelText } from './positioningText'
 import './PositioningPanel.css'
 
 /**
- * The popover's four one-look bullets, one literal key per line.
+ * The four one-look bullets that lead the readings region, one literal key per line.
  *
  * Literal on purpose: the guards check that a key exists and is spelled as a dotted path, which a
- * template string hides from them. A table also makes it obvious that the panel's help and the text
+ * template string hides from them. A table also makes it obvious that the bullets and the text
  * table have the same number of lines.
  *
- * Four because the bubble is a glance: a fifth bullet, or a paragraph where a bullet belongs, means
- * the sentence is a reading note and belongs in `positioningHelpDetailKeys` instead.
+ * Four because they are a glance: a fifth bullet, or a paragraph where a bullet belongs, means the
+ * sentence is a reading note and belongs in `positioningHelpDetailKeys` instead.
  */
 export const positioningHelpBulletKeys = Object.freeze([
   'pages.intelligence.portal.dashboard.positioning.helpBullets.0',
@@ -112,10 +109,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             .replace('{asset}', text.assets[chip.asset])
             .replace('{pct}', formatDashboardChange(chip.dropPct))
             .replace('{multiple}', chip.volumeMultiple.toFixed(1))} · ${text.signalDetailsOpen}`}
-          title={text.signalHover
-            .replace('{rule}', chip.ruleId)
-            .replace('{window}', text.window15m)
-            .replace('{kind}', text.signalKindInferred)}
           onClick={() => setDetailsOpen(open => !open)}>
           {text.liquidationChip
             .replace('{asset}', text.assets[chip.asset])
@@ -127,23 +120,9 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
       )) : null}
       {/*
-        The bubble is a glance: four bullets, no paragraphs. Hover/focus opens it, a click pins it,
-        and both behaviours belong to the shared popover. The trigger is the shared icon button, so
-        the 22px size, the focus ring and the accessible name are not re-invented here.
-      */}
-      <Popover
-        lines={positioningHelpBulletKeys.map(labelKey => ({ labelKey }))}
-        resolveText={resolveProductKey}
-        trigger={(triggerProps) => (
-          <IconButton
-            {...triggerProps}
-            ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
-            icon={Info} size="sm" variant="plain" resolveText={resolveProductKey} />
-        )} />
-      {/*
-        The readings behind the numbers open under the card, not in the bubble. A note that needs a
-        paragraph is a note the reader chose to read; covering half the chart to say it was the
-        mistake this button fixes.
+        One entry, not two: the bullets lead the same readings the long notes sit in, so the reader
+        opens one place. The second trigger this card used to carry (an icon button over the four
+        bullets) made the reader choose between two explanations of one card.
       */}
       <button type="button" className="mi-positioning-panel__help-toggle"
         aria-expanded={helpOpen} aria-controls="mi-positioning-help-details"
@@ -181,6 +160,9 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       {helpOpen ? (
         <div id="mi-positioning-help-details" className="mi-positioning-panel__help-details"
           role="region" aria-label={text.helpDetailsLabel}>
+          {positioningHelpBulletKeys.map(labelKey => (
+            <p key={labelKey}>{resolveProductKey(labelKey)}</p>
+          ))}
           {positioningHelpDetailKeys.map(labelKey => (
             <p key={labelKey}>{resolveProductKey(labelKey)}</p>
           ))}
