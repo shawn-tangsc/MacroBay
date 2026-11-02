@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -120,12 +121,9 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
     }>
     {read.status === 'loading' ? <LoadingState label={text.loading} fill />
       : read.status === 'unavailable' ? <div data-drawer-state="unavailable">
-        <Alert
-          action={<Button size="small" onClick={() => void retry()}>{dataText.retry}</Button>}
-          message={dataText.drawerUnavailable}
-          showIcon
-          type="warning"
-        />
+        {/* 读不到不是「没有配置」：走统一状态面，句子由平台给，动作是真重试。 */}
+        <StateView state="error" reasonCode="unreadable"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void retry() }} />
       </div>
       : <>
         {read.sampleFallback ? <div data-sample-marker><Alert message={sampleMarker} showIcon type="info" /></div> : null}
