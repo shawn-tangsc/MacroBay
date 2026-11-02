@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Minimize2 } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { WorkspacePanelResult } from '@platform/workspace/contracts'
 import { platformText } from '../../i18n/platformText'
@@ -19,6 +20,9 @@ import { platformText } from '../../i18n/platformText'
  * 到达）；被拒/失败则回到 idle 并给出可见提示，用户仍可用原生 X 回停靠。
  * 在飞守卫用 ref（同步）而非仅 state：同一帧内的重复点击绝不会发出第二条命令（state 会被 React 批处理）。
  */
+/** 读屏名/提示的键本身；句子仍由 `platformText` 提供。 */
+export const PANEL_WINDOW_REDOCK_KEY = 'workspace.panelWindowRedock'
+
 export type PanelWindowRedockControlProps = {
   language: AppLanguage
   /** 本面板窗唯一承载的面板实例键（`data-redock-panel` 与命令都只带它）。 */
@@ -62,16 +66,17 @@ export function PanelWindowRedockControl(props: PanelWindowRedockControlProps): 
 
   return (
     <>
-      <button
-        type="button"
-        className="workspace-page-redock-button"
-        data-redock-panel={props.panelInstanceKey}
-        aria-label={labels.panelWindowRedock}
-        title={labels.panelWindowRedock}
+      <IconButton
+        ariaLabelKey={PANEL_WINDOW_REDOCK_KEY}
+        className="workspace-redock-control"
+        dataAttributes={{ 'data-redock-panel': props.panelInstanceKey }}
         disabled={phase === 'pending'}
-        onClick={redock}>
-        <Minimize2 size={13} strokeWidth={1.8} />
-      </button>
+        icon={Minimize2}
+        onSelect={redock}
+        resolveText={(key) => (key === PANEL_WINDOW_REDOCK_KEY ? labels.panelWindowRedock : '')}
+        size="sm"
+        variant="overlay"
+      />
       {notice === null ? null : (
         <span role="status" className="workspace-page-redock-notice" data-redock-notice={props.panelInstanceKey}>
           {notice}

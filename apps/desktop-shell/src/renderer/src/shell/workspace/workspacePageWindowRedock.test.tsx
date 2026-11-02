@@ -141,7 +141,9 @@ describe('P2-15：独立页面窗的回停靠悬浮入口', () => {
     // 「不占布局高度」是判据：绝对定位的悬浮控件（P2-14 的填充链因此不受影响）
     expect(button?.style.position).toBe('absolute')
     expect(button?.getAttribute('aria-label')).toBe(labels.pageWindowRedock)
-    expect(button?.getAttribute('title')).toBe(labels.pageWindowRedock)
+    // 原生 `title` 随迁移消失：读屏名走 `aria-label`，鼠标提示走组件的 `tooltipKey`。
+    // 这里断言「不再是原生 title」，因为留着它等于同一个提示有两套实现。
+    expect(button?.getAttribute('title')).toBeNull()
     // 控件挂在页面窗根内部（不是另起一层壳），正文宿主仍是页面窗根的直接子节点（P2-14 判据）
     expect(shell?.contains(button ?? null)).toBe(true)
     expect(view.querySelector('.workspace-window-page > .workspace-page-host')).not.toBeNull()

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Minimize2 } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { WorkspaceTabCommandResult } from '@platform/workspace/contracts'
 import { platformText } from '../../i18n/platformText'
@@ -18,6 +20,9 @@ import { platformText } from '../../i18n/platformText'
  * 判据文案、内联样式、相位语义逐字不变），只为把页面窗根压回 500 行以内；行为契约由
  * `workspacePageWindowRedock.test.tsx`（P2-15）与 `workspacePageWindowLayout.test.tsx`（P2-14）取证。
  */
+
+/** 读屏名/提示的键本身；句子仍由 `platformText` 提供，组件只认键。 */
+export const PAGE_WINDOW_REDOCK_KEY = 'workspace.pageWindowRedock'
 
 export type PageWindowRedockControlProps = {
   language: AppLanguage
@@ -65,17 +70,19 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
 
   return (
     <>
-      <button
-        type="button"
-        className="workspace-page-redock-button"
-        data-redock-tab={props.workspaceInstanceKey}
-        aria-label={labels.pageWindowRedock}
-        title={labels.pageWindowRedock}
+      <IconButton
+        ariaLabelKey={PAGE_WINDOW_REDOCK_KEY}
+        // 外观归组件（`overlay` 档：浮在内容之上的图标按钮），定位与行为钩子归调用方。
+        className="workspace-redock-control"
+        dataAttributes={{ 'data-redock-tab': props.workspaceInstanceKey }}
         disabled={redockPhase === 'pending'}
+        icon={Minimize2}
+        onSelect={redock}
+        resolveText={(key) => (key === PAGE_WINDOW_REDOCK_KEY ? labels.pageWindowRedock : '')}
+        size="sm"
         style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}
-        onClick={redock}>
-        <Minimize2 size={13} strokeWidth={1.8} />
-      </button>
+        variant="overlay"
+      />
       {notice === null ? null : (
         <span
           role="status"
