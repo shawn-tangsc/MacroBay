@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -115,6 +115,28 @@ describe('sourceProfileStore', () => {
 
       const raw = JSON.parse(await readFile(filePath, 'utf8')) as unknown[]
       expect(raw).toHaveLength(1)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('recovers profiles when a crashed write left a fragment after the array', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'intelligence-profiles-'))
+    const filePath = join(dir, 'intelligence-source-profiles.json')
+    const profile = createDefaultSourceProfile(getIntelligenceSourceDefinition('sec-rss')!)
+
+    try {
+      // 真实事故的形态：数组后面粘着上一版内容的尾巴，JSON.parse 在位置 2917 失败。
+      await writeFile(filePath, `${JSON.stringify([profile], null, 2)}\n\n  }\n]\n`, 'utf8')
+
+      const store = createSourceProfileStore(createProfileJsonStorage(filePath))
+      const profiles = await store.listProfiles()
+
+      expect(profiles.map((item) => item.sourceId)).toEqual(['sec-rss'])
+      const rewritten = JSON.parse(await readFile(filePath, 'utf8')) as unknown
+      expect(Array.isArray(rewritten)).toBe(true)
+      const copies = (await readdir(dir)).filter((name) => name.startsWith('intelligence-source-profiles.json.corrupt-'))
+      expect(copies).toHaveLength(1)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
