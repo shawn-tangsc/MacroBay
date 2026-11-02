@@ -702,7 +702,7 @@ button.mi-agent-card__status:focus-visible {
 }
 
 .mi-dashboard-source-drawer__detail p {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 12px;
 }
 

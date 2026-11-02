@@ -854,7 +854,7 @@
 
 .intelligence-catalog-filter.selected {
   color: var(--text-primary);
-  border-color: var(--accent-primary);
+  border-color: var(--accent);
 }
 
 .intelligence-provider-group {
