@@ -1,4 +1,4 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { Copy, RefreshCw, Trash2 } from 'lucide-react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
@@ -7,6 +7,7 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { AgentChatBubble } from '@platform/ui/agent-chat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { copyAgentMessageText, resendAgentMessage } from '../agentMessageActions'
 import { deleteSessionMessage } from '../agentStateActions'
@@ -20,6 +21,7 @@ import { buildAgentRuntimeMessagePartBlocks } from '../agentRuntimeMessageParts'
 import type { AgentText } from '../agentTextTypes'
 import { useAgentLanguage } from '../agentTextProvider'
 import { deleteSessionMessageViaApi } from '../agentSessionDataApi'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 import AgentMessageFileArtifacts from './AgentMessageFileArtifacts'
 import AgentRuntimeMessagePartBlocks from './AgentRuntimeMessagePartBlocks'
 import AgentRuntimeActivityPanel from './AgentRuntimeActivityPanel'
@@ -124,6 +126,13 @@ function AgentSessionMessageUnit({
   onMessageElementRef
 }: AgentSessionMessageUnitProps): React.ReactElement {
   const language = useAgentLanguage()
+  // 键取自闭合联合：写错一处编译就红，不靠评审发现。
+  const tooltipKeys = {
+    copy: 'messages.copy',
+    resend: 'messages.resend',
+    delete: 'messages.delete'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(text, key)
   const runtimeTextOverride =
     message.status === 'pending' && pendingStatusText ? pendingStatusText : undefined
   const replyElapsedMs = assistantReplyElapsedMs(message)
@@ -170,7 +179,7 @@ function AgentSessionMessageUnit({
         </div>
       ) : null}
       <div className="agent-message-actions">
-        <Tooltip title={text.messages.copy}>
+        <Tooltip labelKey={tooltipKeys.copy} resolveText={resolveText}>
           <Button
             type="text"
             size="small"
@@ -180,7 +189,7 @@ function AgentSessionMessageUnit({
           />
         </Tooltip>
         {groupRole === 'user' ? (
-          <Tooltip title={text.messages.resend}>
+          <Tooltip labelKey={tooltipKeys.resend} resolveText={resolveText}>
             <Button
               type="text"
               size="small"
@@ -192,7 +201,7 @@ function AgentSessionMessageUnit({
             />
           </Tooltip>
         ) : null}
-        <Tooltip title={text.messages.delete}>
+        <Tooltip labelKey={tooltipKeys.delete} resolveText={resolveText}>
           <Button
             type="text"
             size="small"

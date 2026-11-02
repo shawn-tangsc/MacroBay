@@ -27,6 +27,9 @@ export type AgentTooltipKey =
   | 'chatNavbar.openInExternalAppMenu'
   | 'sessionItem.deleteShortcut'
   | 'sessionItem.more'
+  | 'messages.copy'
+  | 'messages.resend'
+  | 'messages.delete'
 
 /**
  * 提示文案的点分键解析。
