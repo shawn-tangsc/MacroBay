@@ -81,7 +81,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
         return
       }
       setZone(settings.view.generation.generationTimeZone ?? null)
-      setInvalidZone(settings.view.generation.generationTimeZoneInvalid ?? null)
+      setInvalidZone(settings.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       setDraft({
         generationTime: settings.view.generation.generationTime,
         windowHours: settings.view.generation.windowHours,

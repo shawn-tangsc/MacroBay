@@ -149,7 +149,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     void client.getSettings?.().then((result) => {
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
-      setZoneInvalid(result.view.generation.generationTimeZoneInvalid ?? null)
+      setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
     }).catch(() => undefined)
     return () => { active = false }
   }, [client])

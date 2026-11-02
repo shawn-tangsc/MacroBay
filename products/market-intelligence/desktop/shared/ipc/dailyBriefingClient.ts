@@ -60,12 +60,9 @@ export type DailyBriefingClientGetResult =
 
 export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTime: string
-  /** The zone the time means; null while unknown or unreadable. */
+  /** The zone the first period means; null while unknown or unreadable. */
   generationTimeZone: string | null
-  /** The saved value that is not a usable zone; automatic generation is paused while it is set. */
-  generationTimeZoneInvalid: string | null
   windowHours: number
-  cronExpression: string
   /** Every saved period, projected by the service. Absent from an older main process. */
   periods?: readonly DailyBriefingPeriodView[]
 }>
@@ -276,11 +273,12 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
 function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
   // Both zone fields are nullable on purpose: an older main process answers without them, and that
   // must read as "unknown", not as a failed settings read.
-  return isExact(value, ['generationTime', 'windowHours', 'cronExpression'], ['generationTimeZone', 'generationTimeZoneInvalid', 'periods']) &&
+  // The derived fields (cron, zone verdict) are only accepted inside `periods[]`: a second copy at
+  // this level is how two answers to one question start disagreeing.
+  return isExact(value, ['generationTime', 'windowHours'], ['generationTimeZone', 'periods']) &&
     isText(value.generationTime) && typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
-    isText(value.cronExpression) &&
+
     (value.generationTimeZone === undefined || value.generationTimeZone === null || isText(value.generationTimeZone)) &&
-    (value.generationTimeZoneInvalid === undefined || value.generationTimeZoneInvalid === null || isText(value.generationTimeZoneInvalid)) &&
     (value.periods === undefined || (Array.isArray(value.periods) && value.periods.every(isPeriodView)))
 }
 

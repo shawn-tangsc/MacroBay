@@ -13,8 +13,10 @@ describe('daily briefing generation settings service', () => {
       storage: createInMemoryDailyBriefingGenerationSettingsStorage(),
       now: () => NOW
     })
+    // The derived cron and the zone verdict exist once, inside the period. Nothing at this level
+    // restates them — that is what keeps the page and the schedule reading one answer.
     expect(await service.getView()).toEqual({
-      generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *',
+      generationTime: '08:00', generationTimeZone: null, windowHours: 24,
       periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
     })
   })
@@ -61,7 +63,10 @@ describe('daily briefing generation settings service', () => {
     const write = vi.spyOn(storage, 'write')
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
 
-    expect(await service.getView()).toMatchObject({ generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null })
+    expect(await service.getView()).toMatchObject({
+      generationTimeZone: 'Asia/Shanghai',
+      periods: [{ generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null }]
+    })
     expect(write).not.toHaveBeenCalled()
     expect(await service.getPeriods()).toEqual([{ id: 'default', generationTime: '08:30', windowHours: 24 }])
   })
@@ -71,7 +76,10 @@ describe('daily briefing generation settings service', () => {
       generationTime: '08:30', generationTimeZone: 'UTC', windowHours: 24, updatedAt: NOW
     })
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
-    expect(await service.getView()).toMatchObject({ generationTimeZone: 'UTC', generationTimeZoneInvalid: null })
+    expect(await service.getView()).toMatchObject({
+      generationTimeZone: 'UTC',
+      periods: [{ generationTimeZone: 'UTC', generationTimeZoneInvalid: null }]
+    })
   })
 
   it('reports a zone it cannot read instead of repairing it', async () => {
@@ -81,7 +89,10 @@ describe('daily briefing generation settings service', () => {
     const write = vi.spyOn(storage, 'write')
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
 
-    expect(await service.getView()).toMatchObject({ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' })
+    expect(await service.getView()).toMatchObject({
+      generationTimeZone: null,
+      periods: [{ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }]
+    })
     // A typo is neither replaced by the display zone nor rewritten.
     expect(write).not.toHaveBeenCalled()
   })
@@ -96,7 +107,10 @@ describe('daily briefing generation settings service', () => {
     // The verdict is not stored, but the value the reader typed is still theirs: the page can keep
     // saying "Asia/Shangai is not a zone, automatic generation is paused" instead of quietly
     // switching to the display zone.
-    expect(await service.getView()).toMatchObject({ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' })
+    expect(await service.getView()).toMatchObject({
+      generationTimeZone: null,
+      periods: [{ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }]
+    })
     expect(write).not.toHaveBeenCalled()
   })
 
@@ -171,7 +185,7 @@ describe('daily briefing generation settings service', () => {
     })
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW })
     expect(await service.getView()).toEqual({
-      generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *',
+      generationTime: '09:00', generationTimeZone: null, windowHours: 24,
       periods: [{ id: 'default', generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *' }]
     })
   })

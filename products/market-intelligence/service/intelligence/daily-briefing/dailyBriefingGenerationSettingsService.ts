@@ -28,19 +28,20 @@ export type DailyBriefingPeriodView = Readonly<{
   cronExpression: string
 }>
 
-/** The reader-facing shape. `cronExpression` is derived from the time, never stored. */
+/**
+ * The reader-facing shape.
+ *
+ * Everything that is *derived* — the cron expression and the "is this zone usable" verdict — lives
+ * only inside `periods[]`: one entry per period, one place per fact. The flat fields are the first
+ * period's plain values for callers that need one period and nothing else; a second copy of a
+ * derived value up here is exactly the "one thing, two statements" this shape refuses.
+ */
 export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTime: string
-  /** The zone the time means, or null while it is unknown or unreadable. */
+  /** The zone the first period means, or null while it is unknown or unreadable. */
   generationTimeZone: string | null
-  /** The raw value the reader saved when it is not a usable id; automatic generation is paused. */
-  generationTimeZoneInvalid: string | null
   windowHours: DailyBriefingWindowHours
-  cronExpression: string
-  /**
-   * Every saved period, projected. The page renders this list; the flat fields above stay for the
-   * callers that only need one period (they are this list's first entry).
-   */
+  /** Every saved period, projected, with its own cron and zone verdict. */
   periods: readonly DailyBriefingPeriodView[]
 }>
 
@@ -140,9 +141,7 @@ export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
     return Object.freeze({
       generationTime: first.generationTime,
       generationTimeZone: first.generationTimeZone,
-      generationTimeZoneInvalid: first.generationTimeZoneInvalid,
       windowHours: first.windowHours,
-      cronExpression: first.cronExpression,
       periods
     })
   }
