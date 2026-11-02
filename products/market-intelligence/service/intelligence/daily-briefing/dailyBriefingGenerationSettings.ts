@@ -92,10 +92,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * A time or a window that is not one of the supported values falls back to the policy default — an
  * older file without these keys is simply the default schedule. The zone is **not** repaired and not
  * classified here: its raw text is carried through so the reader can be told which value is wrong.
+ *
+ * An older file kept an unreadable zone in `generationTimeZoneInvalid` and left `generationTimeZone`
+ * empty, so that field holds the reader's only copy of the value. Its **text** is carried over; the
+ * verdict it stood for is not — that is what `generationTimeZoneIssue` decides now.
  */
 function periodFromRecord(record: Record<string, unknown>, id: string): DailyBriefingPeriod {
   const name = trimmed(record.name)
-  const zone = trimmed(record.generationTimeZone)
+  const zone = trimmed(record.generationTimeZone) ?? trimmed(record.generationTimeZoneInvalid)
   return Object.freeze({
     id,
     ...(name ? { name } : {}),
@@ -118,8 +122,10 @@ function periodFromRecord(record: Record<string, unknown>, id: string): DailyBri
  *   as one period with the stable id `default`. Opening settings therefore upgrades nothing on disk;
  *   the file only becomes the new shape when the reader saves.
  *
- * The older `generationTimeZoneInvalid` field is **ignored**: it was a stored verdict about another
- * field, and the verdict now comes from `generationTimeZoneIssue` alone.
+ * The older `generationTimeZoneInvalid` field is no longer read as a verdict — that is asserted here
+ * instead — but its text is the reader's only copy of a value we could not read, so it is carried
+ * into the period's raw zone. Dropping it would silently resume automatic generation in the
+ * reader's zone, which is the guess §6 forbids.
  */
 export function readDailyBriefingPeriodsSettings(
   raw: unknown,

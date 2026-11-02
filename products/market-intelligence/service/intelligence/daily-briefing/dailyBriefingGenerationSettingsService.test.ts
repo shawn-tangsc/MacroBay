@@ -83,15 +83,18 @@ describe('daily briefing generation settings service', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('ignores a verdict an older file stored about its zone', async () => {
+  it('keeps the typo an older file stored instead of resuming silently', async () => {
     const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
       generationTime: '08:30', generationTimeZoneInvalid: 'Asia/Shangai', windowHours: 24, updatedAt: NOW
     })
+    const write = vi.spyOn(storage, 'write')
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
 
-    // The raw value is gone (the old field was not the value), so the period follows the reader;
-    // the stored verdict is not resurrected as a second truth.
-    expect(await service.getView()).toMatchObject({ generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null })
+    // The verdict is not stored, but the value the reader typed is still theirs: the page can keep
+    // saying "Asia/Shangai is not a zone, automatic generation is paused" instead of quietly
+    // switching to the display zone.
+    expect(await service.getView()).toMatchObject({ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' })
+    expect(write).not.toHaveBeenCalled()
   })
 
   it('re-anchors nothing on a display-zone change: a period owns its zone', async () => {

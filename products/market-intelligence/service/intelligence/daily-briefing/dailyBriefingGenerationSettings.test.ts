@@ -70,16 +70,18 @@ describe('daily briefing generation settings', () => {
     })
   })
 
-  it('ignores the old stored verdict about the zone: only the raw value and one judgement exist', () => {
-    // An older file could hold the raw typo in `generationTimeZoneInvalid`. Reading it back as a
-    // verdict would let a second truth outlive the value it described.
+  it('keeps the value an older file stored in its verdict field, without keeping the verdict', () => {
+    // An older file kept an unreadable zone in `generationTimeZoneInvalid` and left the real field
+    // empty, so that is the reader's only copy. Its text is carried; "is it usable" is decided by
+    // `generationTimeZoneIssue`, never stored.
     const read = readDailyBriefingPeriodsSettings({
       generationTime: '08:30',
       generationTimeZoneInvalid: 'Asia/Shangai',
       windowHours: 24,
       updatedAt: NOW
     }, NOW)
-    expect(read.periods).toEqual([{ id: 'default', generationTime: '08:30', windowHours: 24 }])
+    expect(read.periods).toEqual([{ id: 'default', generationTime: '08:30', generationTimeZone: 'Asia/Shangai', windowHours: 24 }])
+    expect(generationTimeZoneIssue(read.periods[0]!.generationTimeZone)).toBe('unparseable')
   })
 
   it('reads the periods shape as written, keeping order, names and per-period zones', () => {
