@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Button, Popconfirm, Popover, Tooltip } from 'antd'
+import { Button, Popconfirm, Popover } from 'antd'
 import { Check, History, Plus, Trash2 } from 'lucide-react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
@@ -80,7 +81,7 @@ export function MarketAnalysisSessionMenu({
 
   return (
     <div className="mi-analysis-chat__session-actions">
-      <Tooltip title={text.newChat}>
+      <Tooltip labelKey="pages.intelligence.portal.analysisWorkspace.newChatAction" resolveText={resolveProductText}>
         <Button
           aria-label={text.newChat}
           data-agent-new-conversation
