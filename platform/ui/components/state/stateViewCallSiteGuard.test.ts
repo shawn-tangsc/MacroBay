@@ -93,9 +93,6 @@ const sites = SCANNED_ROOTS.flatMap((root) => sourceFiles(join(ROOT, root))).fla
  * 与 `danger-color` 基线同一套规矩：**只减不增**。修掉一处必须同笔删掉对应行，否则这条会红——
  * 基线留着过期条目，等于假装还欠着；而新加的违规一条都不许进这里。
  */
-const BASELINE_FILE =
-  'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentCard.tsx'
-
 /** 按「文件 + 码」记，不按行号：那一行随时会被别的线往上挪，行号基线第二天就变成假红。 */
 const BASELINE = new Map<string, number>([
   // 情报线 · 情绪盘：上游 `useDashboardFearGreed` 无重查通路（缺口 MI-1-E1）。
