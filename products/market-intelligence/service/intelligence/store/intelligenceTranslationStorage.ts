@@ -1,7 +1,11 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+﻿import { readFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
 
+import {
+  quarantineCorruptFile,
+  recoverJsonArray,
+  writeJsonFileAtomically
+} from '@platform/storage/jsonFileStorage'
 import type {
   IntelligenceTranslationRecord,
   IntelligenceTranslationSettings
@@ -36,29 +40,6 @@ export function readIntelligenceTranslationRecordsSync(filePath: string): Intell
   }
 }
 
-function recoverJsonArray(raw: string): unknown[] | null {
-  for (let index = raw.lastIndexOf(']'); index >= 0; index = raw.lastIndexOf(']', index - 1)) {
-    try {
-      const parsed = JSON.parse(raw.slice(0, index + 1)) as unknown
-      if (Array.isArray(parsed)) return parsed
-    } catch {
-      // Try an earlier closing bracket: a crashed write can leave a second fragment after the array.
-    }
-  }
-  return null
-}
-
-async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true })
-  const temporaryPath = `${filePath}.${process.pid}.tmp`
-  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
-  await rename(temporaryPath, filePath)
-}
-
-async function quarantine(filePath: string, raw: string): Promise<void> {
-  await writeFile(`${filePath}.corrupt-${Date.now()}`, raw, 'utf8').catch(() => undefined)
-}
-
 export function createIntelligenceTranslationJsonStorage(deps: {
   settingsPath: string
   recordsPath: string
@@ -73,12 +54,12 @@ export function createIntelligenceTranslationJsonStorage(deps: {
       } catch (error) {
         const appLanguage = deps.appLanguage ? await deps.appLanguage() : 'en-US'
         if (isMissingFileError(error)) return createDefaultTranslationSettings(appLanguage)
-        await quarantine(deps.settingsPath, await readFile(deps.settingsPath, 'utf8').catch(() => ''))
+        await quarantineCorruptFile(deps.settingsPath, await readFile(deps.settingsPath, 'utf8').catch(() => ''))
         return createDefaultTranslationSettings(appLanguage)
       }
     },
     async writeSettings(settings) {
-      await writeJsonAtomic(deps.settingsPath, settings)
+      await writeJsonFileAtomically(deps.settingsPath, settings)
     },
     async readRecords() {
       let raw: string
@@ -94,13 +75,13 @@ export function createIntelligenceTranslationJsonStorage(deps: {
       } catch {
         const recovered = recoverJsonArray(raw)
         const records = (recovered ?? []).filter(isTranslationRecord)
-        await quarantine(deps.recordsPath, raw)
-        await writeJsonAtomic(deps.recordsPath, records)
+        await quarantineCorruptFile(deps.recordsPath, raw)
+        await writeJsonFileAtomically(deps.recordsPath, records)
         return records
       }
     },
     async writeRecords(records) {
-      await writeJsonAtomic(deps.recordsPath, records)
+      await writeJsonFileAtomically(deps.recordsPath, records)
     }
   }
 }

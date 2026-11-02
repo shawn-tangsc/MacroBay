@@ -1,6 +1,10 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 
+import {
+  quarantineCorruptFile,
+  recoverJsonArray,
+  writeJsonFileAtomically
+} from '@platform/storage/jsonFileStorage'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import { blocksProductionCollection, createDefaultSourceProfile, hasProductOwnedCollection } from './sourceRuntimeConfig'
@@ -107,17 +111,29 @@ export function createInMemoryProfileStorage(initial: IntelligenceSourceProfile[
 export function createProfileJsonStorage(filePath: string): IntelligenceProfileStorage {
   return {
     async readAll() {
+      let raw: string
       try {
-        const parsed = JSON.parse(await readFile(filePath, 'utf8')) as unknown
-        return Array.isArray(parsed) ? parsed.map(normalizeStoredProfile).filter(Boolean) as IntelligenceSourceProfile[] : []
+        raw = await readFile(filePath, 'utf8')
       } catch (error) {
         if (isMissingFileError(error)) return []
         throw error
       }
+      try {
+        const parsed = JSON.parse(raw) as unknown
+        return Array.isArray(parsed) ? parsed.map(normalizeStoredProfile).filter(Boolean) as IntelligenceSourceProfile[] : []
+      } catch {
+        // 进程在写文件时退出会留下「新内容 + 上一版尾巴」的残片；能取回数组就取回，
+        // 原样留一份 .corrupt-* 作证据，再按取回的结果重写，页面不至于永远“读取失败”。
+        const profiles = (recoverJsonArray(raw) ?? [])
+          .map(normalizeStoredProfile)
+          .filter(Boolean) as IntelligenceSourceProfile[]
+        await quarantineCorruptFile(filePath, raw)
+        await writeJsonFileAtomically(filePath, profiles)
+        return profiles
+      }
     },
     async writeAll(profiles) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(profiles, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, profiles)
     }
   }
 }
