@@ -184,8 +184,15 @@ export type PlatformText = {
     channelCancel: string
     channelRuntimeGeneration: string
     channelRuntimeLifecycle: string
+    /**
+     * 「标签: 值」里的值，小写，例如 `Runtime: not running`。
+     * 与 `channelNotRunning` 的区别是排版位置，不是含义——两个键说的同一个状态，不要合并。
+     */
     channelRuntimeMissing: string
-    /** 药丸里的独立状态词（句首大写）；`channelRuntimeMissing` 是「标签: 值」里的值（小写）。 */
+    /**
+     * 独立成句的状态词（药丸用），句首大写 `Not running`。
+     * 与 `channelRuntimeMissing` 的区别是排版位置，不是含义——两个键说的同一个状态，不要合并。
+     */
     channelNotRunning: string
     channelOperationFailed: string
     channelCatalogStatus: Record<'planned' | 'blocked' | 'supported', string>
@@ -1026,6 +1033,8 @@ export type PlatformText = {
     sendTestSent: string
     sendTestToastOff: string
     sendTestFailed: string
+    sendTestDesktopQueued: string
+    sendTestDesktopFailed: (reason: string) => string
     toastClose: string
     centerRecordedGroup: string
     centerExpand: string
@@ -2112,6 +2121,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestSent: '已发送：右上角会出现一条横幅，六秒后自己消失；点它打开通知中心。',
       sendTestToastOff: '已发送：应用内提示关着，所以右上角不会出现横幅。这条已经进了通知中心，点铃铛可以看到。',
       sendTestFailed: '没发出去：这条通知没有写进记录，请稍后再试一次。',
+      sendTestDesktopQueued: '桌面通知已交给系统；没有弹出横幅，多半是系统静音或没放行。',
+      sendTestDesktopFailed: (reason) => `桌面通知没发出去：${reason}`, 
       toastClose: '关闭这条通知',
       sendTestHint:
         '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现，取决于上面那条系统权限状态——写着「暂时无法确认」时，别把它当成系统拦了。',
