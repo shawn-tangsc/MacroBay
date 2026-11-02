@@ -8,6 +8,8 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { AssistantTopicStreamSnapshot } from '@platform/ai/assistant-platform/schemas/streamSchemas'
 
+import { ToastHost } from '@platform/ui/components/toast'
+
 import { AssistantPage } from './AssistantPage'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -255,12 +257,15 @@ async function renderPage(): Promise<{ container: HTMLDivElement; root: ReturnTy
   document.body.append(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(createElement(AssistantPage, {
-      language: 'en-US',
-      providers,
-      chatSettings: createDefaultAppSettings().chat,
-      pinnedModelIds: []
-    }))
+    // 输入栏的「为什么不能用」走 `useToast`，而它是 fail-closed：没有宿主，渲染直接抛。
+    root.render(
+      createElement(ToastHost, null, createElement(AssistantPage, {
+        language: 'en-US',
+        providers,
+        chatSettings: createDefaultAppSettings().chat,
+        pinnedModelIds: []
+      }))
+    )
     await Promise.resolve()
   })
   return { container, root }
