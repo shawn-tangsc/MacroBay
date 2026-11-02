@@ -1030,6 +1030,7 @@ export type PlatformText = {
     desktopPermissionGranted: string
     desktopPermissionDenied: string
     desktopPermissionUnknown: string
+    desktopPreferenceKept: string
     sendTestHint: string
     sendTestSent: string
     sendTestToastOff: string
@@ -2128,6 +2129,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       desktopPermissionGranted: '系统已放行桌面通知',
       desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
       desktopPermissionUnknown: '暂时无法确认系统是否放行',
+      desktopPreferenceKept: '这里的选择会被保留，系统放行后生效。',
       sendTestHint:
         '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
       centerRecordedGroup: '仅记录',
@@ -3235,6 +3237,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       desktopPermissionGranted: 'The system allows desktop notifications',
       desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
       desktopPermissionUnknown: 'Could not check whether the system allows notifications',
+      desktopPreferenceKept: 'Your choice here is saved and takes effect once the system allows notifications.',
       sendTestHint:
         'This only proves the pipeline works; it describes no real event. Whether the desktop banner appears is up to the system — if you do not see it, allow notifications in System Settings as described above and press the button again.',
       centerRecordedGroup: 'Recorded only',

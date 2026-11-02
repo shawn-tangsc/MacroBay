@@ -167,6 +167,13 @@ export function NotificationSettingsPane(props: {
                     {labels.desktopSystemGateHint}
                   </span>
                 ) : null}
+                {row.channel === 'desktop' && desktopPermission !== 'granted' ? (
+                  // 开关**不禁用**，所以必须说清「选择会保留」：否则用户勾上后看到「去系统设置打开」，
+                  // 会以为勾完就立刻能弹。放行之后这句自动消失。
+                  <span className="notification-channel-state" data-desktop-preference-kept role="note">
+                    {labels.desktopPreferenceKept}
+                  </span>
+                ) : null}
               </span>
               <span className="notification-channel-controls">
                 <Switch

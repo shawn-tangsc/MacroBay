@@ -74,6 +74,30 @@ describe('notification settings availability', () => {
     expect(container.querySelector('[data-desktop-gate-hint]')?.textContent).toBe(labels.desktopSystemGateHint)
   })
 
+  it('未放行时说清「选择会保留、放行后生效」：开关不禁用，这句话必须常驻', async () => {
+    for (const state of ['denied', 'unknown'] as const) {
+      Object.assign(globalThis, {
+        platform: { notifications: { readDesktopPermission: vi.fn(async () => state) } }
+      })
+      const container = await mount()
+      const labels = platformText['zh-CN'].notifications
+      const kept = container.querySelector('[data-desktop-preference-kept]')
+
+      // 开关可点（用户能先把偏好设好）+ 原因与「会保留」都在，才是完整的一句话。
+      const desktopSwitch = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')].at(-1)
+      expect(desktopSwitch?.disabled).toBe(false)
+      expect(kept?.textContent).toBe(labels.desktopPreferenceKept)
+    }
+  })
+
+  it('已放行时不再说「放行后生效」——那句在那时是废话', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'granted') } }
+    })
+    const container = await mount()
+    expect(container.querySelector('[data-desktop-preference-kept]')).toBeNull()
+  })
+
   it('原因与开关关联：读屏走到开关时能听到「为什么」', async () => {
     Object.assign(globalThis, {
       platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
