@@ -1,8 +1,9 @@
 import type { AssistantEntity } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { AssistantTopicEntity } from '@platform/ai/assistant-platform/schemas/topicSchemas'
+import { confirmAction } from '@platform/ui/components/confirm'
 import { LoadingState } from '@platform/ui/components/loading'
 import type { PlatformText } from '../../i18n/platformText'
-import { Button, Dropdown, Modal } from 'antd'
+import { Button, Dropdown } from 'antd'
 import type { MenuProps } from 'antd'
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -51,13 +52,13 @@ export function AssistantSidePanel({
   const deletingTopicIds = useRef(new Set<string>())
 
   function confirmDeleteTopic(topic: AssistantTopicEntity): void {
-    Modal.confirm({
+    confirmAction({
       title: labels.deleteConversation,
-      content: labels.deleteConversationConfirm(topic.name || labels.newTopic),
-      okText: labels.deleteConversation,
-      cancelText: labels.cancel,
-      okButtonProps: { danger: true },
-      onOk: async () => {
+      description: labels.deleteConversationConfirm(topic.name || labels.newTopic),
+      confirmLabel: labels.deleteConversation,
+      cancelLabel: labels.cancel,
+      tone: 'danger',
+      onConfirm: async () => {
         if (!onDeleteTopic || deletingTopicIds.current.has(topic.id)) return
         deletingTopicIds.current.add(topic.id)
         setDeletingTopicId(topic.id)
