@@ -51,6 +51,7 @@ export type AgentText = {
     newSessionNeedsAgent: string
     /** 禁用原因：没有可删除的会话（注意按钮的动作是删除，不是清除筛选）。 */
     deleteFilteredNeedsSessions: string
+    deleteFiltered: string
   }
   sessionItem: {
     rename: string

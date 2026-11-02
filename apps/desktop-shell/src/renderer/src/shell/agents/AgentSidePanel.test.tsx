@@ -1,10 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { AgentWorkspaceEntity } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import { createAgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
+
+// 确认框由 Provider 渲染；静态渲染用例不点删除，只要一个不抛错的实例。
+vi.mock('@platform/ui/components/confirm', () => ({ useConfirm: () => vi.fn() }))
 
 import AgentSidePanel from './AgentSidePanel'
 import { AgentTextProvider } from './agentTextProvider'

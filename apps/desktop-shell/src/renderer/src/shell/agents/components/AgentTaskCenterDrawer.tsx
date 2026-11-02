@@ -5,6 +5,7 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-p
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { JobRunRecord } from '@platform/jobs'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
@@ -65,6 +66,7 @@ export default function AgentTaskCenterDrawer({
   onStateChange
 }: AgentTaskCenterDrawerProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const [loadState, setLoadState] = useState<AgentTaskCenterLoadState>(emptyAgentTaskCenterLoadState)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<AgentTaskDraft>(() => buildDefaultAgentTaskDraft(workspace))
@@ -159,19 +161,28 @@ export default function AgentTaskCenterDrawer({
       setSaving(false)
     }
   }
-  async function deleteTask(task: ScheduledTaskEntity): Promise<void> {
-    if (!window.confirm(t.taskCenter.confirmDelete(task.name))) return
-    setSaving(true)
-    setError(null)
-    try {
-      await deleteTaskViaApi(window.platform, agent.id, task.id, task.revision ?? 1)
-      setDraft(buildDefaultAgentTaskDraft(workspace))
-      await refresh(null)
-    } catch {
-      setError(t.taskCenter.deleteFailed)
-    } finally {
-      setSaving(false)
-    }
+  function deleteTask(task: ScheduledTaskEntity): void {
+    // 确认框由 Provider 渲染（深色主题才跟着界面走）；删掉的动作放进 onConfirm。
+    confirm({
+      title: t.taskCenter.deleteTask,
+      description: t.taskCenter.confirmDelete(task.name),
+      confirmLabel: t.taskCenter.deleteTask,
+      cancelLabel: t.common.cancel,
+      tone: 'danger',
+      onConfirm: async () => {
+        setSaving(true)
+        setError(null)
+        try {
+          await deleteTaskViaApi(window.platform, agent.id, task.id, task.revision ?? 1)
+          setDraft(buildDefaultAgentTaskDraft(workspace))
+          await refresh(null)
+        } catch {
+          setError(t.taskCenter.deleteFailed)
+        } finally {
+          setSaving(false)
+        }
+      }
+    })
   }
   async function runTask(task: ScheduledTaskEntity): Promise<void> {
     setSaving(true)
@@ -316,7 +327,7 @@ export default function AgentTaskCenterDrawer({
               onOpenSession={(sessionId) => void openRunSession(sessionId)}
               onRun={() => void runTask(selectedTask)}
               onCancel={(runLogId) => void cancelRunningTask(runLogId)}
-              onDelete={() => void deleteTask(selectedTask)}
+              onDelete={() => deleteTask(selectedTask)}
               />
               {selectedTask.status === 'paused' ? (
                 <div className="agent-task-state-note">

@@ -13,6 +13,7 @@ import { deleteSessions, selectAgentById, selectSession } from './agentStateActi
 import { deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi } from './agentSessionDataApi'
 import { getSessionChannelTypeBySessionId } from './agentChannelVisuals'
 import { filterSessionsForAgent, getAgentPrimarySessionId } from './agentSessionViewModel'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
@@ -49,6 +50,7 @@ export default function AgentSidePanel({
   focusAgentListTick = 0
 }: AgentSidePanelProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
   const tooltipKeys = { createAgent: 'navbar.createAgent' } as const satisfies Record<string, AgentTooltipKey>
   // 键名跟着**按钮的动作**走：那颗按钮删除筛选后的会话，不是「清除筛选」。
@@ -166,14 +168,21 @@ export default function AgentSidePanel({
                 type="text"
                 size="small"
                 icon={<Trash2 size={15} />}
+                aria-label={t.sidePanel.deleteFiltered}
                 disabled={filteredSessions.length === 0}
                 onClick={() => {
-                  if (!window.confirm(t.sidePanel.confirmDeleteFilteredSessions(filteredSessions.length))) return
-                  void deleteSessionsViaApi(
-                    window.platform,
-                    filteredSessions.map((session) => session.id)
-                  ).catch(() => {
-                    onStateChange((current) => deleteSessions(current, filteredSessions.map((session) => session.id)))
+                  const ids = filteredSessions.map((session) => session.id)
+                  confirm({
+                    title: t.sidePanel.deleteFiltered,
+                    description: t.sidePanel.confirmDeleteFilteredSessions(ids.length),
+                    confirmLabel: t.sidePanel.deleteFiltered,
+                    cancelLabel: t.common.cancel,
+                    tone: 'danger',
+                    onConfirm: () => {
+                      void deleteSessionsViaApi(window.platform, ids).catch(() => {
+                        onStateChange((current) => deleteSessions(current, ids))
+                      })
+                    }
                   })
                 }}
               />

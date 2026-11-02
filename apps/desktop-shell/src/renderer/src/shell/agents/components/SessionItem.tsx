@@ -14,6 +14,7 @@ import { getSessionDeleteClickIntent } from '../agentSessionDeleteInteraction'
 import type { AgentSessionRuntimeStatus } from '../agentSessionViewModel'
 import { getAgentChannelTypeIconUrl } from '../agentChannelVisuals'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../agentTextProvider'
@@ -45,6 +46,7 @@ export default function SessionItem({
   onStateChange
 }: SessionItemProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const tooltipKeys = {
     deleteShortcut: 'sessionItem.deleteShortcut',
     more: 'sessionItem.more'
@@ -100,9 +102,17 @@ export default function SessionItem({
       icon: <Trash2 size={14} />,
       danger: true,
       onClick: () => {
-        if (!window.confirm(t.sessionItem.confirmDeleteSession(session.name))) return
-        void deleteSessionsViaApi(window.platform, [session.id]).catch(() => {
-          onStateChange((current) => deleteSession(current, session.id))
+        confirm({
+          title: t.sessionItem.delete,
+          description: t.sessionItem.confirmDeleteSession(session.name),
+          confirmLabel: t.sessionItem.delete,
+          cancelLabel: t.common.cancel,
+          tone: 'danger',
+          onConfirm: () => {
+            void deleteSessionsViaApi(window.platform, [session.id]).catch(() => {
+              onStateChange((current) => deleteSession(current, session.id))
+            })
+          }
         })
       }
     }
