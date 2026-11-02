@@ -4,7 +4,7 @@
  *
  * 文案与短编号在这里解析一次，四个钩子拿同一份 `content`；端口不再解析、不再拼时刻。
  */
-import { notificationCopyText } from '../../i18n/notificationCopy'
+import { notificationCopyText, resolveNotificationCopyText } from '../../i18n/notificationCopy'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type {
   NotificationPushBackoff,
@@ -17,6 +17,8 @@ import {
   type NotificationClock,
   type NotificationDeliveryContent
 } from './notificationRouting'
+
+export type NotificationPushTransition = { kind: 'paused' | 'resumed'; channelId: string }
 
 export type NotificationDeliveryInput = {
   deliveryHooks?: DeliveryHooks
@@ -41,7 +43,10 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       const resolved = input.copy?.resolve(ref, language)
       if (typeof resolved === 'string' && resolved.length > 0) return resolved
       const text = notificationCopyText(language, key)
-      return typeof text === 'string' && text.length > 0 ? text : fallback
+      if (typeof text !== 'string' || text.length === 0) return fallback
+      // 参数缺失时不许把 `{taskName}` 印到读者面前：回退兜底句。
+      const filled = resolveNotificationCopyText(language, text, params ?? {})
+      return /\{\w+\}/.test(filled) ? fallback : filled
     }
     return {
       title: resolve(record.titleKey, record.titleParams),
@@ -60,7 +65,11 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     record: NotificationRecord,
     settings: NotificationRuntimeSettings,
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
-  ): Promise<{ record: NotificationRecord; pushBackoff: Readonly<Record<string, NotificationPushBackoff>> }> {
+  ): Promise<{
+    record: NotificationRecord
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+    transition?: NotificationPushTransition
+  }> {
     const content = await resolveContent(record)
     const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content)
     const delivery: NotificationRecord['delivery'] = { ...record.delivery }
@@ -78,6 +87,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     }
 
     const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
+    let transition: NotificationPushTransition | undefined
     if (delivery.push?.state === 'queued') {
       const at = input.now()
       const channelId = settings.push.channelId
@@ -90,6 +100,9 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       } else {
         const result = await input.deliveryHooks.push({ ...record, delivery }, content)
         if (result.ok) {
+          if (current?.pausedUntil !== null && current?.pausedUntil !== undefined) {
+            transition = { kind: 'resumed', channelId }
+          }
           nextBackoff[channelId] = { channelId, failures: 0, pausedUntil: null }
           delivery.push = {
             state: 'sent-accepted',
@@ -102,11 +115,14 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
             ? new Date(Date.parse(at) + 30 * 60_000).toISOString()
             : null
           nextBackoff[channelId] = { channelId, failures, pausedUntil }
+          if (pausedUntil !== null && (current?.pausedUntil ?? null) !== pausedUntil) {
+            transition = { kind: 'paused', channelId }
+          }
           delivery.push = { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
         }
       }
     }
-    return { record: { ...record, delivery }, pushBackoff: nextBackoff }
+    return { record: { ...record, delivery }, pushBackoff: nextBackoff, ...(transition === undefined ? {} : { transition }) }
   }
 
   return { resolveContent, deliverNewRecord }

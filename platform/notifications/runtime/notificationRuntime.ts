@@ -202,7 +202,46 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff })
       notifyChanged()
     }
+    if (delivered.transition !== undefined) {
+      await emitBackoffEvent(delivered.transition, settings, now)
+    }
     return plan.outcome
+  }
+
+  /**
+   * 熔断进入 / 解除各发一条平台事件（P6a / P6b）。在**投递落盘之后**发，否则这次提交的
+   * 缓存在外层 persist 时会把 P6 记录覆盖掉。P6a 带「去设置检查」深链，P6b 只进中心。
+   */
+  async function emitBackoffEvent(
+    transition: { kind: 'paused' | 'resumed'; channelId: string },
+    settings: NotificationRuntimeSettings,
+    now: string
+  ): Promise<void> {
+    const channelId = transition.channelId
+    const deeplink = { scope: 'platform' as const, settingsSectionId: 'notifications' }
+    if (transition.kind === 'paused') {
+      await submitEvent({
+        eventTypeId: 'platform.channel.push-suspended',
+        producerId: channelId,
+        dedupeVars: { builder: 'template', vars: { channelId } },
+        actions: [{
+          id: 'open-channel-settings',
+          labelKey: 'notification.channelCheck.action',
+          kind: 'open',
+          deeplink
+        }],
+        deeplink,
+        occurredAt: now
+      })
+      return
+    }
+    await submitEvent({
+      eventTypeId: 'platform.channel.push-resumed',
+      producerId: channelId,
+      dedupeVars: { builder: 'template', vars: { channelId, day: now.slice(0, 10) } },
+      actions: [],
+      occurredAt: now
+    })
   }
 
   const settingsSurface = createNotificationSettingsSurface({
