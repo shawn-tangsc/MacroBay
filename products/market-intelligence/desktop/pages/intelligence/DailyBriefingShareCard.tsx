@@ -352,7 +352,10 @@ function fallbackLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBri
     'series-level': text.staleBasis.seriesLevel,
     published: text.staleBasis.published
   }
-  return <em className="mi-brief-poster__stale" data-basis={basis ?? 'none'}>{basis ? table[basis] : text.staleMarker}</em>
+  // No basis means we cannot say which instant the number is from; saying nothing is better than
+  // inventing a label that reads badly when folded into a sentence.
+  if (!basis) return null
+  return <em className="mi-brief-poster__stale" data-basis={basis}>{table[basis]}</em>
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

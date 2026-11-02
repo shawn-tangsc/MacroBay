@@ -735,11 +735,10 @@ export const productText = {
               groups: { market: '行情', funds: '资金', sentiment: '情绪' },
               tiers: { must: '重点', support: '补充', reference: '参考' },
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
-              // 分享卡上这条读数不是当时精确的 24 小时值，而是回退值；海报不标出来，读者会当成实时读数。
-              staleMarker: '回退值',
-              // 回退值的来源：曲线最后一点不是精确的 24 小时配对，最近收盘也不是当日读数。
-              staleBasis: { curve: '回退值 · 约 24 小时（取自曲线）', lastClose: '回退值 · 最近收盘', snapshot: '回退值 · 快照读数（24 小时，已过新鲜度下限）', seriesReturn: '回退值 · 约 24 小时（日频序列算出）', seriesLevel: '回退值 · 最新水平（当日无 24 小时涨跌）', published: '回退值 · 上一交易日官方收盘' },
-              reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
+              // 分享卡只回答一件事：这个数是哪个时点的。五种口径各不相同，所以逐条写出来，
+              // 不合并成一个读者没见过的词；没有依据时干脆不标，不拿一句话去凑。
+              staleBasis: { curve: '约 24 小时前（取自曲线）', lastClose: '最近一次收盘', snapshot: '约 24 小时前（读数已偏旧）', seriesReturn: '约 24 小时前（按日频数据算出）', seriesLevel: '最新水平（当天没有 24 小时涨跌）', published: '上一交易日的官方收盘' },
+              reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面数据不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
               // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
               changeWindows: { '24h': '24h', '1d': '1d', daily: '1d', '7d': '7d', '30d': '30d', latest: '', 'trading-day': '较上一交易日收盘', 'publication-day': '较上次发布' },
@@ -790,7 +789,7 @@ export const productText = {
                 drawerClose: '关闭明细',
                 groupLabels: {
                   'row-disabled': '来源未启用', 'row-unavailable': '数据不可用', 'row-stale': '数据陈旧', 'row-no-value': '没有可用数值',
-                  'etf-no-history': '08:00 前无可用历史', 'capital-gate': '随资金面快照不可用',
+                  'etf-no-history': '08:00 前无可用历史', 'capital-gate': '随资金面数据不可用',
                   'no-baseline': '变化基线缺失', 'no-baseline-last-release': '变化基线缺失', 'insufficient-window': '比较窗口不足',
                   'news-disabled': '新闻来源未启用', 'news-unavailable': '新闻舆情不可用',
                   'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
@@ -818,7 +817,7 @@ export const productText = {
                   disabled: '{row}：来源未启用，未显示数据',
                   noValue: '{row}：没有可用数值',
                   etfNoHistory: '{row}：08:00 前无可用历史，最近交易日数据尚未返回',
-                  capitalGate: '{row}：随稳定币/资金面快照不可用'
+                  capitalGate: '{row}：随稳定币/资金面数据不可用'
                 },
                 interval: { minutes: '{count} 分钟', hours: '{count} 小时', days: '{count} 天' },
                 macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录' },
@@ -2613,10 +2612,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               tiers: { must: 'Must', support: 'Support', reference: 'Reference' },
               states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
               // This reading is a fallback, not the exact 24h value; unmarked, the poster reads as live.
-              staleMarker: 'Fallback',
               // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
               // last close is not today's reading.
-              staleBasis: { curve: 'Fallback · about 24h (from curve)', lastClose: 'Fallback · last close', snapshot: 'Fallback · snapshot reading (24h, past the freshness floor)', seriesReturn: 'Fallback · about 24h (computed from the daily series)', seriesLevel: 'Fallback · latest level (no 24h move that day)', published: 'Fallback · prior session official close' },
+              staleBasis: { curve: 'About 24 hours ago (from curve)', lastClose: 'Most recent close', snapshot: 'About 24 hours ago (reading is past its freshness window)', seriesReturn: 'About 24 hours ago (computed from daily data)', seriesLevel: 'Latest level (no 24-hour move that day)', published: 'Official close of the prior session' },
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
               // What each change is measured against: a rolling window, a session close, a release.
