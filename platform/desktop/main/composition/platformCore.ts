@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs'
-import { safeStorage } from 'electron'
+import { tmpdir } from 'node:os'
+import { app, safeStorage } from 'electron'
 import { join } from 'node:path'
 
 import { createElectronSecretVault } from '../../../secrets'
@@ -15,6 +16,7 @@ import { createProviderSqliteStorage } from '../../../ai/providers/storage/provi
 import { createTaskIpcScheduleValidationOptions } from '../taskScheduleValidationOptions'
 import { createMainWindowHost } from '../window/mainWindow'
 import { createMainWindow, loadMainWindowRenderer } from '../../window/createMainWindow'
+import { ensureWritableTempDirectory } from '../ensureWritableTempDirectory'
 import { getPanelWorkspaceForDisposal } from './slots'
 
 export type PlatformCorePorts = Readonly<{
@@ -27,6 +29,15 @@ export type PlatformCorePorts = Readonly<{
 export function createPlatformCore(ports: PlatformCorePorts) {
   const { userDataPath, appVersion, platform, workspaceTestFixtures } = ports
 
+// 临时目录必须在任何 SQLite 打开之前确认可写：受限会话里 TEMP/TMP 可能指向 `D:\tmp`
+// 这类建不出来的目录，SQLite 建临时文件会返回 `unable to open database file`，
+// 崩在启动迁移上（见 ensureWritableTempDirectory 的注释）。
+const writableTempDirectory = ensureWritableTempDirectory({
+  osTempDirectory: tmpdir(),
+  fallbackDirectory: join(userDataPath, 'tmp'),
+  environment: process.env,
+  setPath: (name, value) => app.setPath(name, value)
+})
 const platformDataDirectory = join(userDataPath, 'platform')
 mkdirSync(platformDataDirectory, { recursive: true })
 const settingsStore = createSettingsStore(
@@ -50,6 +61,13 @@ const appLog = createAppLog({
   redact: (text) => redactText(text).text
 })
 appLog.log('info', 'app.start', { version: appVersion, platform })
+if (writableTempDirectory.redirected) {
+  // 只在真的换了目录时记一行：正常机器上启动日志不因此变吵，出问题时又能看出换过。
+  appLog.log('warn', 'app.temp.redirected', {
+    directory: writableTempDirectory.directory,
+    osTempError: writableTempDirectory.osTempError
+  })
+}
 const rendererProcessLog = createRendererProcessLog(appLog)
 
 /** 主窗持有者：建窗、窗口事件、两个取窗口函数（加载/挂载时机由它自己掌握）。 */
