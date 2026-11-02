@@ -19,6 +19,18 @@ export function notificationEventReasonKey(eventTypeId: string): string {
   return `notification.event.${eventTypeId}.reason`
 }
 
+/**
+ * 正文键：`notification.event.<event id>.body`；带变体时是 `.body.<variant>`。
+ *
+ * 与标题/理由同源：产品声明一条事件时，四个键都由这里生成，调用点不手拼——
+ * 手写的键在事件改名时不会有人同步，目录解析出来就会落空。
+ */
+export function notificationEventBodyKey(eventTypeId: string, variant?: string): string {
+  const base = `notification.event.${eventTypeId}.body`
+  return variant === undefined ? base : `${base}.${variant}`
+}
+
+
 function declaration(
   id: string,
   input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey'>

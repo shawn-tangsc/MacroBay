@@ -1,10 +1,45 @@
 import type { ProductManifest } from '../../platform/product-manifest'
+import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './service/intelligence/jobs/marketAnalysisJobIds'
+import {
+  notificationEventBodyKey,
+  notificationEventReasonKey,
+  notificationEventTitleKey
+} from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
+
+
+/**
+ * 声明一条通知事件：**键由 id 机械生成**（平台同一处 `notification.event.<id>.*`）。
+ *
+ * 不手写键的理由：事件改名时手写的键不会有人同步，目录解析出来就落空——
+ * 同一个概念两个名字，接线时才发现。
+ */
+function notificationEvent(
+  id: string,
+  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey' | 'bodyKey' | 'bodyKeyByVariant'> & {
+    /** 这条事件有正文句（`…body`）。 */
+    body?: boolean
+    /** 同一事件两种正文时给变体名，键为 `…body.<variant>`。 */
+    bodyVariants?: readonly string[]
+  }
+): NotificationEventDeclaration {
+  const { body, bodyVariants, ...rest } = input
+  return {
+    id,
+    titleKey: notificationEventTitleKey(id),
+    reasonKey: notificationEventReasonKey(id),
+    ...(body ? { bodyKey: notificationEventBodyKey(id) } : {}),
+    ...(bodyVariants
+      ? { bodyKeyByVariant: Object.fromEntries(bodyVariants.map((variant) => [variant, notificationEventBodyKey(id, variant)])) }
+      : {}),
+    ...rest
+  }
+}
 
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
@@ -241,19 +276,13 @@ export const marketIntelligenceProductManifest = {
    * 通知事件声明（契约 §3）。**只声明「这条事件存不存在、能不能发、怎么去重」**，
    * 不声明怎么触发（触发点在运行时，节奏由产品另定）；批准档位在平台批准表里，这里只写申请。
    *
-   * 文案只填键、不填句子（句子归营销）：`notifications.<事件>.<title|body|reason>`。
+   * 文案只填键、不填句子（句子归营销）：`notification.event.<完整事件 id>.<title|body|reason>`，四个键都由平台生成函数产出，这里不手拼。
    * 去重粒度的出处是情报通知目录 §四之一（`intelligence-notification-catalog.md`），
    * 键形状的出处是契约 §7 / §7.1；这里两处都只引用，不重写清单。
    */
   notificationEvents: [
-    {
-      id: 'market-intelligence.briefing.failed',
-      titleKey: 'notifications.briefing.failed.title',
-      bodyKeyByVariant: {
-        failed: 'notifications.briefing.failed.body.failed',
-        'data-only': 'notifications.briefing.failed.body.data-only'
-      },
-      reasonKey: 'notifications.briefing.failed.reason',
+    notificationEvent('market-intelligence.briefing.failed', {
+      bodyVariants: ['failed', 'data-only'],
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
       dedupeKeyTemplate: 'brief-failed:{date}:{period}',
@@ -261,48 +290,36 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.briefing.ready',
-      titleKey: 'notifications.briefing.ready.title',
-      bodyKey: 'notifications.briefing.ready.body',
-      reasonKey: 'notifications.briefing.ready.reason',
+    }),
+    notificationEvent('market-intelligence.briefing.ready', {
+      body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: ['desktop', 'channel'],
       dedupeKeyTemplate: 'brief-done:{date}:{period}',
       dedupeUnit: 'occurrence',
       notifyOnlyIfSubscribed: true,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.signal.triggered',
-      titleKey: 'notifications.signal.triggered.title',
-      bodyKey: 'notifications.signal.triggered.body',
-      reasonKey: 'notifications.signal.triggered.reason',
+    }),
+    notificationEvent('market-intelligence.signal.triggered', {
+      body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: ['desktop', 'channel'],
       dedupeKeyBuilder: 'moduleSignal',
       dedupeUnit: 'occurrence',
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.macro.event-landed',
-      titleKey: 'notifications.macro.event-landed.title',
-      bodyKey: 'notifications.macro.event-landed.body',
-      reasonKey: 'notifications.macro.event-landed.reason',
+    }),
+    notificationEvent('market-intelligence.macro.event-landed', {
+      body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: ['desktop', 'channel'],
       dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
       dedupeUnit: 'occurrence',
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.source.consecutive-failed',
-      titleKey: 'notifications.source.consecutive-failed.title',
-      bodyKey: 'notifications.source.consecutive-failed.body',
-      reasonKey: 'notifications.source.consecutive-failed.reason',
+    }),
+    notificationEvent('market-intelligence.source.consecutive-failed', {
+      body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
       dedupeKeyBuilder: 'sourceIssue',
@@ -310,12 +327,9 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.source.stale',
-      titleKey: 'notifications.source.stale.title',
-      bodyKey: 'notifications.source.stale.body',
-      reasonKey: 'notifications.source.stale.reason',
+    }),
+    notificationEvent('market-intelligence.source.stale', {
+      body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
       dedupeKeyBuilder: 'sourceIssue',
@@ -323,31 +337,25 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.calibration.result',
-      titleKey: 'notifications.calibration.result.title',
-      bodyKey: 'notifications.calibration.result.body',
-      reasonKey: 'notifications.calibration.result.reason',
+    }),
+    notificationEvent('market-intelligence.calibration.result', {
+      body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: [],
       dedupeKeyTemplate: 'calibration:{date}',
       dedupeUnit: 'occurrence',
       notifyOnlyIfSubscribed: true,
       requestedBypassQuietHours: false
-    },
-    {
-      id: 'market-intelligence.timezone.invalid',
-      titleKey: 'notifications.timezone.invalid.title',
-      bodyKey: 'notifications.timezone.invalid.body',
-      reasonKey: 'notifications.timezone.invalid.reason',
+    }),
+    notificationEvent('market-intelligence.timezone.invalid', {
+      body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: [],
       dedupeKeyTemplate: 'timezone-invalid:{date}',
       dedupeUnit: 'occurrence',
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
-    }
+    })
   ],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
