@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import { CalendarClock, Check, X } from 'lucide-react'
 
-import { IconButton } from '@platform/ui/components/icon-button'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 
 import './dailyBriefingGeneratedBanner.css'
@@ -58,7 +56,6 @@ export function DailyBriefingGeneratedBanner({ locale, text, client = dailyBrief
 }>): React.ReactElement | null {
   const timeZone = useShellTimeZone()
   const formatTime = useShellTimeFormat()
-  const resolveProductText = useProductTextKey()
   const [edition, setEdition] = useState<BannerEdition | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
   const today = localDate(timeZone, now())
@@ -105,14 +102,10 @@ export function DailyBriefingGeneratedBanner({ locale, text, client = dailyBrief
           : text.pendingHint}
       </span>
     </div>
-    <IconButton
-      ariaLabelKey="pages.intelligence.portal.dailyBriefingGeneratedBanner.dismiss"
-      className="mi-daily-brief-banner__dismiss"
-      icon={X}
-      onSelect={dismiss}
-      resolveText={resolveProductText}
-      size="sm"
-    />
+    <button className="mi-daily-brief-banner__dismiss" type="button" onClick={dismiss}>
+      <X aria-hidden="true" size={12} />
+      {text.dismiss}
+    </button>
   </div>
 }
 

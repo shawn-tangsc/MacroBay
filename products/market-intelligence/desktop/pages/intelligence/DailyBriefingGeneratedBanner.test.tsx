@@ -106,11 +106,7 @@ describe('daily briefing banner', () => {
     expect(host.textContent).toContain(formatShellInstant(generatedAt, {
       timeZone: 'UTC', locale: 'zh-CN', precision: 'minute'
     }))
-    // The label is now the button's accessible name, not visible text: one icon, one name.
-    const dismissButton = host.querySelector<HTMLButtonElement>('.mi-daily-brief-banner__dismiss')!
-    expect(dismissButton.getAttribute('aria-label')).toBe('关闭简报提示')
-    expect(dismissButton.className).toContain('icon-button')
-    expect(host.textContent).not.toContain('知道了')
+    expect(host.textContent).toContain('知道了')
   })
 
   it('tells the reader today’s briefing is not generated and that opening the brief fills it in', async () => {
