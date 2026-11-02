@@ -75,6 +75,7 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `no-target-selected` | 必填：聚焦选择区 —— `select-target` / `focus-form` | 目标可以挑，但还没选。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现；在这里给按钮就是假动作。 |
 | `empty` | `never-ran` | 必填：现在跑一次 —— `run-now` | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |
+| `empty` | `target-missing` | 必填：回到列表 —— `back-to-list` | 目标本身已被删除：这是「拿不到」，不是「没有」。不许复用 `target-disabled`（那要求去启用）。 |
 | `empty` | `older-than-window` | 必填：查看全部 —— `widen-time-window` | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
 | `empty` | `nothing-in-window` | 可选 —— 有出口时用 `widen-time-window` 或 `open-settings` | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。整月没有事件可以给「打开设置」，确实没有消息就不给动作。 |
 | `error` | `unreadable` | 必填：重试 —— `retry` | 没读出来，不是「没有」。 |

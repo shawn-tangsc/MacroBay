@@ -21,6 +21,8 @@ export type EmptyReasonCode =
   | 'not-yet'
   // 「还没跑过」（正解是现在跑一次）与「这段期间确实没有」是两种处境：前者要动作，后者没有。
   | 'never-ran'
+  // 目标本身已被删除：这是「拿不到」，不是「没有」，也不能复用 `target-disabled`（那要求去启用）。
+  | 'target-missing'
   // 「有数据，但都在窗口之外」与「这段确实没有」是两句话：都不能用 `not-yet`（那是「还没到」）顶替。
   | 'older-than-window'
   | 'nothing-in-window'
@@ -71,6 +73,7 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'empty.no-target-selected': 'required',
   'empty.not-yet': 'forbidden',
   'empty.never-ran': 'required',
+  'empty.target-missing': 'required',
   'empty.older-than-window': 'required',
   'empty.nothing-in-window': 'optional',
   'error.unreadable': 'required',
@@ -109,6 +112,7 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   ],
   'empty.no-target-selected': ['ui.state.action.select-target', 'ui.state.action.focus-form'],
   'empty.never-ran': ['ui.state.action.run-now'],
+  'empty.target-missing': ['ui.state.action.back-to-list'],
   'empty.older-than-window': ['ui.state.action.widen-time-window'],
   // 场景不同，出口也不同：整月无事件是「去设置看范围」，确实没有消息就不给动作。
   'empty.nothing-in-window': ['ui.state.action.widen-time-window', 'ui.state.action.open-settings'],

@@ -35,6 +35,7 @@ export const STATE_VIEW_ACTION_KEYS = {
   refresh: 'ui.state.action.refresh',
   widen_time_window: 'ui.state.action.widen-time-window',
   focus_form: 'ui.state.action.focus-form',
+  back_to_list: 'ui.state.action.back-to-list',
   run_now: 'ui.state.action.run-now'
 } as const
 
@@ -51,6 +52,7 @@ const ZH_CN: StateViewCopy = {
       'ui.state.empty.reason.no-target-selected': '还没有选中一个目标，先选一个',
       'ui.state.empty.reason.not-yet': '还没有发生过；等有数据进来后这里就会出现',
       'ui.state.empty.reason.never-ran': '还没有跑过',
+      'ui.state.empty.reason.target-missing': '要用的目标已经不存在了',
       'ui.state.empty.reason.older-than-window': '有数据，但都在这段时间之外',
       'ui.state.empty.reason.nothing-in-window': '这段时间里确实没有记录',
       'ui.state.error': '读取失败',
@@ -80,6 +82,7 @@ const ZH_CN: StateViewCopy = {
       'ui.state.action.refresh': '刷新',
       'ui.state.action.widen-time-window': '扩大时间范围',
       'ui.state.action.focus-form': '填写表单',
+      'ui.state.action.back-to-list': '回到列表',
       'ui.state.action.run-now': '现在跑一次',
 }
 
@@ -94,6 +97,7 @@ const EN_US: StateViewCopy = {
       'ui.state.empty.reason.no-target-selected': 'No target is selected yet — pick one',
       'ui.state.empty.reason.not-yet': 'This has not happened yet; it appears here once data arrives',
       'ui.state.empty.reason.never-ran': 'It has not run yet',
+      'ui.state.empty.reason.target-missing': 'That target no longer exists',
       'ui.state.empty.reason.older-than-window': 'There is data, but all of it falls outside this time range',
       'ui.state.empty.reason.nothing-in-window': 'There really are no records in this time range',
       'ui.state.error': 'Could not read',
@@ -123,6 +127,7 @@ const EN_US: StateViewCopy = {
       'ui.state.action.refresh': 'Refresh',
       'ui.state.action.widen-time-window': 'Widen the time range',
       'ui.state.action.focus-form': 'Fill in the form',
+      'ui.state.action.back-to-list': 'Back to the list',
       'ui.state.action.run-now': 'Run it now',
 }
 

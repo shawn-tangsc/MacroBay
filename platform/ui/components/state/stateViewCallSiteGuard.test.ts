@@ -147,16 +147,7 @@ const sites = SCANNED_ROOTS.flatMap((root) => sourceFiles(join(ROOT, root))).fla
  */
 /** 按「文件 + 码」记，不按行号：那一行随时会被别的线往上挪，行号基线第二天就变成假红。 */
 const BASELINE = new Map<string, number>([
-  // 情报线 · 情绪盘：上游 `useDashboardFearGreed` 无重查通路（缺口 MI-1-E1）。
-  // 判据：只有上游确实没通路时 `error` 无动作才成立；补了通路就必须给动作，并同笔删掉这一行。
-  [
-    'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx|error.unavailable',
-    1
-  ],
-  [
-    'products/market-intelligence/desktop/features/industry/capital-conditions/CapitalConditionsPanel.tsx|error.unavailable',
-    1
-  ],
+
 ])
 
 /** 三种写法都算条件展开：三元展开、`&&` 展开、`action={cond ? … : undefined}`。 */

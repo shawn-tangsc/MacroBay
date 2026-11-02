@@ -79,6 +79,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `empty` | `no-target-selected` | required: focus the selector — `select-target` / `focus-form` | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
 | `empty` | `never-ran` | required: run it now — `run-now` | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |
+| `empty` | `target-missing` | required: back to the list — `back-to-list` | The target itself was deleted: this is "cannot reach it", not "nothing there". Never `target-disabled`, whose action is to enable. |
 | `empty` | `older-than-window` | required: view all — `widen-time-window` | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
 | `empty` | `nothing-in-window` | optional — `widen-time-window` or `open-settings` when the site has one | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. A month with no events can offer "open settings"; genuinely no news offers nothing. |
 | `error` | `unreadable` | required: retry — `retry` | The data could not be read — this is not "there is none". |
