@@ -3,6 +3,7 @@ import { Button, Popconfirm, Popover } from 'antd'
 import { Check, History, Plus, Trash2 } from 'lucide-react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
@@ -66,6 +67,9 @@ export function MarketAnalysisSessionMenu({
               okText={text.delete}
               cancelText={text.cancel}
               onConfirm={() => onDeleteConversation(session.id)}>
+              {/* Stays an antd button: it is the trigger of a confirmation popover, and the
+                  shared icon button cannot receive the click that popover injects. Swapping it
+                  would delete without asking. */}
               <Button
                 aria-label={text.delete}
                 danger
@@ -82,13 +86,12 @@ export function MarketAnalysisSessionMenu({
   return (
     <div className="mi-analysis-chat__session-actions">
       <Tooltip labelKey="pages.intelligence.portal.analysisWorkspace.newChatAction" resolveText={resolveProductText}>
-        <Button
-          aria-label={text.newChat}
-          data-agent-new-conversation
-          icon={<Plus aria-hidden="true" size={15} />}
-          onClick={startNewConversation}
-          size="small"
-          type="text"
+        <IconButton
+          ariaLabelKey="pages.intelligence.portal.analysisWorkspace.newChatAction"
+          icon={Plus}
+          onSelect={startNewConversation}
+          resolveText={resolveProductText}
+          size="md"
         />
       </Tooltip>
       <Popover content={menu} open={open} onOpenChange={setOpen} placement="bottomRight" trigger="click">
