@@ -7,6 +7,7 @@ import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '
 import type {
   DailyBriefingAttemptEnd,
   DailyBriefingAttemptStart,
+  DailyBriefingPeriodRun,
   DailyBriefingStorageState,
   DailyBriefingStore,
   DailyBriefingStoredEdition
@@ -15,6 +16,7 @@ import {
   DAILY_BRIEFING_STORAGE_VERSION,
   createAttemptsSql,
   createEditionsSql,
+  createPeriodRunsSql,
   migrateDailyBriefingStorage,
   tableColumns,
   type DailyBriefingMigrationOutcome
@@ -43,6 +45,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   let outcome: DailyBriefingMigrationOutcome = migrateDailyBriefingStorage({ db, filePath })
   db.exec(createEditionsSql('daily_briefings'))
   db.exec(createAttemptsSql('daily_briefing_attempts'))
+  db.exec(createPeriodRunsSql('daily_briefing_period_runs'))
 
   const build = () => {
     const editionPeriod = tableColumns(db, 'daily_briefings').includes('period_id')
@@ -67,6 +70,23 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
           schema_version = excluded.schema_version`)
     const prune = db.prepare('delete from daily_briefings where edition_date < ?')
     const pruneAttempts = db.prepare('delete from daily_briefing_attempts where edition_date < ?')
+    const pruneRuns = db.prepare('delete from daily_briefing_period_runs where edition_date < ?')
+    // One row per period: a regeneration replaces that run, because it replaces the editions the
+    // run describes. When both languages are written in one run they share this single record.
+    const insertRun = db.prepare(`insert into daily_briefing_period_runs
+      (edition_date, period_id, expected_locales, primary_requested, primary_used, fallback_reason,
+       snapshot_id, snapshot_hash, content_version, writing_rounds, state, started_at, finished_at)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null)
+      on conflict(edition_date, period_id) do update set
+        expected_locales = excluded.expected_locales, primary_requested = excluded.primary_requested,
+        primary_used = excluded.primary_used, fallback_reason = excluded.fallback_reason,
+        snapshot_id = excluded.snapshot_id, snapshot_hash = excluded.snapshot_hash,
+        content_version = excluded.content_version, writing_rounds = excluded.writing_rounds,
+        state = excluded.state, started_at = excluded.started_at, finished_at = null`)
+    const settleRun = db.prepare(`update daily_briefing_period_runs
+      set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
+      where edition_date = ? and period_id = ?`)
+    const readRun = db.prepare('select * from daily_briefing_period_runs where edition_date = ? and period_id = ?')
 
     const beginAttempt = attemptPeriod
       ? (attempt: DailyBriefingAttemptStart): number => {
@@ -130,9 +150,39 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       prune(beforeDate: string) {
         prune.run(beforeDate)
         pruneAttempts.run(beforeDate)
+        pruneRuns.run(beforeDate)
       },
       beginAttempt,
       finishAttempt,
+      openPeriodRun(run: DailyBriefingPeriodRun) {
+        insertRun.run(
+          run.date, run.periodId, JSON.stringify(run.expectedLocales), run.primaryRequested,
+          run.primaryUsed, run.fallbackReason ?? null, run.snapshotId, run.snapshotHash,
+          run.contentVersion, run.writingRounds, run.state, run.startedAt
+        )
+      },
+      settlePeriodRun(run: Readonly<{ date: string; periodId: string; state: string; finishedAt: string; writingRounds?: number }>) {
+        settleRun.run(run.state, run.finishedAt, run.writingRounds ?? null, run.date, run.periodId)
+      },
+      periodRun(date: string, periodId: string): DailyBriefingPeriodRun | undefined {
+        return parseRun(readRun.get(date, periodId) as RunRow | undefined)
+      },
+      publishEdition(edition: DailyBriefingStoredEdition, periodId: string, attempt?: DailyBriefingAttemptEnd) {
+        if (!isDailyBriefingDocumentWithinBudget(edition.document)) throw new Error('daily-briefing-document-too-large')
+        db.exec('begin immediate')
+        try {
+          if (editionPeriod) {
+            put.run(edition.date, periodId, edition.locale, edition.generatedAt, edition.windowStart, edition.windowEnd, JSON.stringify(edition.document), dailyBriefingStoragePolicy.schemaVersion)
+          } else {
+            put.run(edition.date, edition.locale, edition.generatedAt, edition.windowStart, edition.windowEnd, JSON.stringify(edition.document), dailyBriefingStoragePolicy.schemaVersion)
+          }
+          if (attempt) finishAttempt(attempt)
+          db.exec('commit')
+        } catch (error) {
+          try { db.exec('rollback') } catch { /* the transaction already ended */ }
+          throw error
+        }
+      },
       latestAttempt: (date: string, periodId: string, locale: DailyBriefingLocale) =>
         (attemptPeriod ? latestAttempt.get(date, periodId, locale) : latestAttempt.get(date, locale)) as Row | undefined
     }
@@ -177,6 +227,18 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async prune(beforeDate) {
       statements.prune(beforeDate)
     },
+    async getPeriodRun(date, periodId) {
+      return statements.periodRun(date, periodId ?? DEFAULT_PERIOD_ID)
+    },
+    async openPeriodRun(run) {
+      statements.openPeriodRun(run)
+    },
+    async settlePeriodRun(run) {
+      statements.settlePeriodRun(run)
+    },
+    async publishEdition(edition, attempt) {
+      statements.publishEdition(edition, edition.periodId ?? DEFAULT_PERIOD_ID, attempt)
+    },
     upgradeState,
     async retryUpgrade() {
       outcome = migrateDailyBriefingStorage({ db, filePath })
@@ -197,6 +259,52 @@ type Row = Readonly<{
   schema_version: number
   trace_json?: string | null
 }>
+
+type RunRow = Readonly<{
+  edition_date: string
+  period_id: string
+  expected_locales: string
+  primary_requested: string
+  primary_used: string
+  fallback_reason: string | null
+  snapshot_id: string
+  snapshot_hash: string
+  content_version: number
+  writing_rounds: number
+  state: string
+  started_at: string
+  finished_at: string | null
+}>
+
+const runStates = ['running', 'published', 'partial', 'failed'] as const
+
+function parseRun(row: RunRow | undefined): DailyBriefingPeriodRun | undefined {
+  if (!row) return undefined
+  let locales: unknown
+  try {
+    locales = JSON.parse(row.expected_locales)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(locales) || locales.length === 0 || locales.some((locale) => locale !== 'zh-CN' && locale !== 'en-US')) return undefined
+  const state = runStates.find((value) => value === row.state)
+  if (!state) return undefined
+  return Object.freeze({
+    date: row.edition_date,
+    periodId: row.period_id,
+    expectedLocales: Object.freeze(locales as DailyBriefingLocale[]),
+    primaryRequested: row.primary_requested,
+    primaryUsed: row.primary_used === 'en-US' ? 'en-US' : 'zh-CN',
+    ...(row.fallback_reason ? { fallbackReason: row.fallback_reason } : {}),
+    snapshotId: row.snapshot_id,
+    snapshotHash: row.snapshot_hash,
+    contentVersion: Number(row.content_version),
+    writingRounds: Number(row.writing_rounds),
+    state,
+    startedAt: row.started_at,
+    ...(row.finished_at ? { finishedAt: row.finished_at } : {})
+  })
+}
 
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {
   if (!row) return undefined

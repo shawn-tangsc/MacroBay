@@ -7,6 +7,7 @@ import { createDailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { DailyBriefTurnAbortedError } from './dailyBriefAgentTurn'
 import { createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
+import { createDailyBriefingSqliteStore } from './dailyBriefingStore'
 import {
   briefingWindow,
   createDailyBriefingService,
@@ -720,5 +721,34 @@ describe('daily briefing service', () => {
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(cutoffs).toEqual(['2026-10-30T00:00:00.000Z', '2026-10-31T00:00:00.000Z'])
+  })
+})
+
+
+describe('period run', () => {
+  it('records the frozen facts of the generation and settles it as published', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    const run = await store.getPeriodRun?.('2026-10-30')
+    expect(run).toMatchObject({
+      periodId: 'default',
+      expectedLocales: ['zh-CN'],
+      primaryUsed: 'zh-CN',
+      state: 'published',
+      writingRounds: 1
+    })
+    // The digest is what a later reader compares; a placeholder here would prove nothing.
+    expect(run?.snapshotId).toMatch(/^bs_[0-9a-f]{24}$/)
+    expect(run?.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('records a failed run when the source cannot be read', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const failing: DailyBriefingSource = { async buildPacket() { throw new Error('source-down') } }
+    const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
+    expect((await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).state).toBe('unavailable')
+    expect(await store.getPeriodRun?.('2026-10-30')).toBeUndefined()
   })
 })

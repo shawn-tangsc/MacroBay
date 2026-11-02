@@ -86,6 +86,30 @@ export function createAttemptsIndexSql(table: string): string {
   return `create index if not exists idx_${table}_period on ${table}(edition_date, period_id);`
 }
 
+/**
+ * One row per generated period: what the run expected, which frozen facts it wrote from, and how
+ * far it got. It is created beside the two migrated tables, not by a migration: an empty table
+ * starts clean and old data has nothing to copy into it.
+ */
+export function createPeriodRunsSql(table: string): string {
+  return `create table if not exists ${table} (
+  edition_date text not null,
+  period_id text not null,
+  expected_locales text not null,
+  primary_requested text not null,
+  primary_used text not null,
+  fallback_reason text,
+  snapshot_id text not null,
+  snapshot_hash text not null,
+  content_version integer not null default 1,
+  writing_rounds integer not null default 0,
+  state text not null check(state in ('running','published','partial','failed')),
+  started_at text not null,
+  finished_at text,
+  primary key (edition_date, period_id)
+);`
+}
+
 type MigrationInput = Readonly<{
   db: SqliteDatabase
   /** The database file, so the pre-migration copy can sit beside it. `:memory:` has no file. */

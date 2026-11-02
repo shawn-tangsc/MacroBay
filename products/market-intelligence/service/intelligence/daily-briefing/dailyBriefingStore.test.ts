@@ -167,3 +167,57 @@ describe('writing attempts', () => {
     }
   })
 })
+
+
+describe('period runs', () => {
+  const run = (snapshotId: string, snapshotHash: string) => ({
+    date: '2026-11-02',
+    periodId: 'default',
+    expectedLocales: ['zh-CN' as const],
+    primaryRequested: 'zh-CN',
+    primaryUsed: 'zh-CN' as const,
+    snapshotId,
+    snapshotHash,
+    contentVersion: 1,
+    writingRounds: 0,
+    state: 'running' as const,
+    startedAt: '2026-11-02T00:00:00.000Z'
+  })
+
+  it('replaces the run when the period is regenerated, and settles its state in place', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.openPeriodRun!(run('bs_first', 'hash-first'))
+    // A regeneration replaces the editions, so the run has to describe the batch that produced them.
+    await store.openPeriodRun!(run('bs_second', 'hash-second'))
+
+    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({
+      periodId: 'default', expectedLocales: ['zh-CN'], snapshotId: 'bs_second', snapshotHash: 'hash-second', state: 'running'
+    })
+
+    await store.settlePeriodRun!({ date: '2026-11-02', periodId: 'default', state: 'published', finishedAt: '2026-11-02T00:05:00.000Z', writingRounds: 1 })
+    expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
+  })
+
+  it('writes the edition and its settled attempt in one write', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.beginAttempt!({ date: '2026-11-02', locale: 'zh-CN', startedAt: '2026-11-02T00:00:00.000Z' })
+    await store.publishEdition!(edition('2026-11-02'), {
+      date: '2026-11-02', locale: 'zh-CN', attemptNo: 1, state: 'succeeded', finishedAt: '2026-11-02T00:01:00.000Z'
+    })
+
+    expect((await store.get('2026-11-02', 'zh-CN'))?.document.lede.text).toBe('今日要点。')
+    expect(await store.getAttempt?.('2026-11-02', 'zh-CN')).toBeUndefined()
+  })
+
+  it('writes neither when the attempt cannot be settled', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.beginAttempt!({ date: '2026-11-02', locale: 'zh-CN', startedAt: '2026-11-02T00:00:00.000Z' })
+
+    await expect(store.publishEdition!(edition('2026-11-02'), {
+      date: '2026-11-02', locale: 'zh-CN', attemptNo: 1, state: 'bogus' as never, finishedAt: '2026-11-02T00:01:00.000Z'
+    })).rejects.toThrow()
+
+    // The edition must not exist without the attempt that wrote it.
+    expect(await store.get('2026-11-02', 'zh-CN')).toBeUndefined()
+  })
+})

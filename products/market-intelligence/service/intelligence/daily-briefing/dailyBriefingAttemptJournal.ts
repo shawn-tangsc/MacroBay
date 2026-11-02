@@ -14,6 +14,12 @@ import type { DailyBriefingAttemptEnd, DailyBriefingStore } from './dailyBriefin
  */
 export type DailyBriefingAttemptJournal = Readonly<{
   open: () => Promise<void>
+  /** The settled row, for the call that has to write it together with the edition. */
+  build: (
+    state: 'succeeded' | 'failed',
+    finishedAt: string,
+    extra?: Readonly<{ failureCode?: string; trace?: BriefingGenerationTrace }>
+  ) => DailyBriefingAttemptEnd | undefined
   settle: (
     state: 'succeeded' | 'failed',
     finishedAt: string,
@@ -33,9 +39,9 @@ export function createDailyBriefingAttemptJournal(
 ): DailyBriefingAttemptJournal {
   let attemptNo: number | undefined
 
-  const settle: DailyBriefingAttemptJournal['settle'] = async (state, finishedAt, extra = {}) => {
-    if (attemptNo === undefined) return
-    const attempt: DailyBriefingAttemptEnd = {
+  const build: DailyBriefingAttemptJournal['build'] = (state, finishedAt, extra = {}) => {
+    if (attemptNo === undefined) return undefined
+    return {
       date: input.date,
       periodId: input.periodId,
       locale: input.locale,
@@ -45,6 +51,11 @@ export function createDailyBriefingAttemptJournal(
       ...(extra.failureCode ? { failureCode: extra.failureCode } : {}),
       ...(extra.trace ? { trace: extra.trace } : {})
     }
+  }
+
+  const settle: DailyBriefingAttemptJournal['settle'] = async (state, finishedAt, extra = {}) => {
+    const attempt = build(state, finishedAt, extra)
+    if (!attempt) return
     await store.finishAttempt?.(attempt).catch(() => undefined)
   }
 
@@ -57,6 +68,7 @@ export function createDailyBriefingAttemptJournal(
         startedAt: input.now()
       }).catch(() => undefined)
     },
+    build,
     settle
   })
 }

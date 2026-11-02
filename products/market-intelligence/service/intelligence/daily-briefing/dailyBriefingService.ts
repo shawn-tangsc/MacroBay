@@ -21,6 +21,8 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
+import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
 import { briefingWindow, localDate, type DailyBriefingWindow } from './dailyBriefingWindow'
@@ -71,6 +73,23 @@ export type DailyBriefingAttemptEnd = Readonly<{
   trace?: BriefingGenerationTrace
 }>
 
+/** A period's run: one per day and issue, holding what the editions of that run were written from. */
+export type DailyBriefingPeriodRun = Readonly<{
+  date: string
+  periodId: string
+  expectedLocales: readonly DailyBriefingLocale[]
+  primaryRequested: string
+  primaryUsed: DailyBriefingLocale
+  fallbackReason?: string
+  snapshotId: string
+  snapshotHash: string
+  contentVersion: number
+  writingRounds: number
+  state: 'running' | 'published' | 'partial' | 'failed'
+  startedAt: string
+  finishedAt?: string
+}>
+
 export type DailyBriefingStorageState = Readonly<
   | { state: 'ready' }
   | { state: 'incomplete'; reason: 'backup-failed' | 'migration-failed' }
@@ -96,6 +115,19 @@ export type DailyBriefingStore = Readonly<{
   finishAttempt?: (attempt: DailyBriefingAttemptEnd) => Promise<void>
   /** The newest attempt of that edition, whatever its state; a stored trace when it has one. */
   getAttempt?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<BriefingGenerationTrace | undefined>
+  /** The run of that period, holding the frozen facts every edition of it was written from. */
+  getPeriodRun?: (date: string, periodId?: string) => Promise<DailyBriefingPeriodRun | undefined>
+  /** Writes the first run of a period; a second call for the same period keeps the first facts. */
+  openPeriodRun?: (run: DailyBriefingPeriodRun) => Promise<void>
+  settlePeriodRun?: (run: Readonly<{
+    date: string
+    periodId: string
+    state: 'published' | 'partial' | 'failed'
+    finishedAt: string
+    writingRounds?: number
+  }>) => Promise<void>
+  /** The edition row and the attempt that wrote it, in one transaction: never one without the other. */
+  publishEdition?: (edition: DailyBriefingStoredEdition, attempt?: DailyBriefingAttemptEnd) => Promise<void>
   /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
   upgradeState?: () => DailyBriefingStorageState
   retryUpgrade?: () => Promise<DailyBriefingStorageState>
@@ -292,11 +324,15 @@ export function createDailyBriefingService(deps: Readonly<{
     // Publish the first snapshot before any work starts: a reader that polls between the request
     // and the first stage would otherwise be told nothing is running.
     progress.set(progressKey, recorder.snapshot())
+    // The facts of this period are frozen once, once they exist; every edition of the run is
+    // written from that document.
+    const run = createDailyBriefingPeriodRunJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     let activeStage: BriefingGenerationStageId | undefined
     let failedStage: BriefingGenerationStageId | undefined
     const fail = async (failureCode: DailyBriefingTodayFailureCode): Promise<DailyBriefingTodayResult> => {
       const generationTrace = recorder.complete('failed')
       await attempts.settle('failed', generationTrace.finishedAt, { failureCode, trace: generationTrace })
+      await run.settle('failed', 0)
       return { state: 'unavailable', failureCode, generationTrace }
     }
     const onStage = (event: DailyBriefTurnStageEvent): void => {
@@ -360,6 +396,9 @@ export function createDailyBriefingService(deps: Readonly<{
     } else {
       recorder.skip('field-backfill')
     }
+    // The digest is what lets a later reader check "same batch" instead of trusting that two
+    // generations happened to agree.
+    await run.open(document, packet)
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {
@@ -444,7 +483,7 @@ export function createDailyBriefingService(deps: Readonly<{
       recorder.end('store', 'success')
       const traced = withGenerationTrace(document, recorder.complete('success'))
       try {
-        await deps.store.put({
+        const edition = {
           date: input.date,
           periodId: input.periodId,
           locale: input.locale,
@@ -452,8 +491,17 @@ export function createDailyBriefingService(deps: Readonly<{
           windowStart: traced.edition.windowStart,
           windowEnd: traced.edition.windowEnd,
           document: traced
-        })
-        await attempts.settle('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
+        }
+        const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
+        // The edition row and the attempt that wrote it are one write: a reader never sees one
+        // without the other.
+        if (deps.store.publishEdition) {
+          await deps.store.publishEdition(edition, settled)
+        } else {
+          await deps.store.put(edition)
+          if (settled) await deps.store.finishAttempt?.(settled).catch(() => undefined)
+        }
+        await run.settle('published', 1)
       } catch {
         // Returning the document here would report a stored edition that does not exist; the next
         // read would fall back to a different generation, so surface the write failure instead.
@@ -469,6 +517,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // stage that stopped, while no edition is stored.
     const failedTrace = recorder.complete('failed')
     await attempts.settle('failed', failedTrace.finishedAt, { trace: failedTrace })
+    await run.settle('failed', 0)
     return { state: 'available', document: withGenerationTrace(document, failedTrace) }
   }
 
@@ -556,45 +605,6 @@ function markEditorialFailure(
   })
 }
 
-/**
- * The renderer validates a document against the same two budgets, so the service must never build
- * an edition whose candidate pool is larger than the document can carry. News candidates are the
- * directional rows the builder would select; title duplicates are collapsed during selection but
- * still count against the input budget, so a duplicate flood fails instead of shrinking silently.
- * Macro candidates are the builder's own released/high/actual list, which the document keeps whole
- * in `macroCandidates` so the count here reads the same implementation the writer saw.
- */
-function candidateOverflow(packet: DailyBriefingFactPacket, document: DailyBriefingDocument): boolean {
-  const newsCandidates = packet.news.items.filter((item) =>
-    item.polarity !== 'neutral' && item.strength >= 2 && item.confidence >= 50).length
-  const macroCandidates = document.news.macroCandidates?.length ?? 0
-  return newsCandidates > dailyBriefingPolicy.maximumNewsItems ||
-    macroCandidates > dailyBriefingPolicy.maximumMacroItems
-}
-
-async function withDeadline<T>(read: Promise<T>, milliseconds: number, onTimeout?: () => void): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      read,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => {
-          // The losing turn rejects later: it is being cancelled at this instant. `Promise.race`
-          // already subscribes to its inputs, but observe the loser explicitly here so a future
-          // rewrite of this deadline can never leave a rejection for the main process.
-          void read.catch(() => undefined)
-          // The timeout is a cancellation, not just an abandoned wait: the work behind `read` is
-          // told to stop before the caller is released with a failure.
-          onTimeout?.()
-          reject(new Error('daily-briefing-generation-timeout'))
-        }, milliseconds)
-      })
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
 function isCurrent(document: DailyBriefingDocument): boolean {
   return document.schemaVersion === dailyBriefingPolicy.schemaVersion && document.policyVersion === dailyBriefingPolicy.policyVersion
 }
@@ -634,11 +644,6 @@ function lastDays(today: string, days: number): readonly string[] {
     new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
 }
 
-function cutoffDate(today: string): string {
-  const start = Date.parse(`${today}T00:00:00.000Z`)
-  return new Date(start - (dailyBriefingPolicy.retentionDays - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
-}
-
 /** A failed read without a fresh trace still shows the last persisted attempt for that edition. */
 async function withStoredAttempt(
   store: DailyBriefingStore,
@@ -664,8 +669,3 @@ function withGenerationTrace(document: DailyBriefingDocument, generationTrace: B
   })
 }
 
-/** A model round that ran out of output is a writing failure, not a generic timeout. */
-function isOutputTruncation(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  return /truncat|max[_-]?tokens|stop_reason/i.test(`${error.name} ${error.message}`)
-}
