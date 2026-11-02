@@ -378,15 +378,12 @@ describe('IconButton', () => {
     expect(described).toBe('ui.test.hint')
   })
 
-  it('rejects "disabled with a tooltip" at compile time — keyboard users never reach it', () => {
-    const blocked: IconButtonProps = {
-      ...props(),
-      disabled: true,
-      // @ts-expect-error 禁用的按钮接不到 focus，Tooltip 只对鼠标生效；原因要写成可见说明。
-      tooltipKey: 'ui.test.hint'
-    }
-
-    expect(blocked).toBeDefined()
+  it('refuses a tooltip on a disabled button — keyboard users could never reach it', () => {
+    // 配对约束落在运行时，不在类型上：存量站点传 `disabled={someBoolean}`，`boolean` 收敛不到
+    // 任何字面量分支，做成联合会把无关站点一起弄红。throw 保住规则，又不误伤调用点。
+    expect(() =>
+      renderToStaticMarkup(<IconButton {...props({ disabled: true, tooltipKey: 'ui.test.hint' })} />)
+    ).toThrow(/tooltipKey while disabled/)
   })
 
   it('gives the loading state its own marker and its own colour, never the disabled one', () => {
@@ -472,5 +469,40 @@ describe('IconButton', () => {
       />
     )
     expect(html).not.toContain('aria-haspopup')
+  })
+
+  it('refuses a popup trigger that does not say whether it is open', () => {
+    // 配对约束落在运行时，不在类型上——类型上做会误伤传 `disabled={boolean}` 的存量站点
+    // （`boolean` 收敛不到 `disabled?: false` / `disabled: true`），实测过。
+    expect(() =>
+      renderToStaticMarkup(
+        <IconButton
+          ariaLabelKey="ui.test.moreActions"
+          hasPopup="menu"
+          icon={MoreHorizontal}
+          onSelect={() => undefined}
+          resolveText={(value) => value}
+          size="sm"
+        />
+      )
+    ).toThrow(/hasPopup requires expanded/)
+  })
+
+  it('refuses to be a switch and a popup trigger at the same time', () => {
+    // 读屏会听到两句互相矛盾的话，而界面上完全看不出来。
+    expect(() =>
+      renderToStaticMarkup(
+        <IconButton
+          ariaLabelKey="ui.test.moreActions"
+          expanded
+          hasPopup="menu"
+          icon={MoreHorizontal}
+          onSelect={() => undefined}
+          pressed
+          resolveText={(value) => value}
+          size="sm"
+        />
+      )
+    ).toThrow(/either pressed or hasPopup/)
   })
 })

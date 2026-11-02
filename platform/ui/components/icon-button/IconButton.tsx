@@ -90,21 +90,7 @@ export type IconButtonVariant = 'plain' | 'solid' | 'overlay'
 /** `aria-haspopup` 的合法值。闭集，不收 `string`：写错的值读屏直接忽略。 */
 export type IconButtonHasPopup = 'menu' | 'listbox' | 'dialog' | 'tree' | 'grid'
 
-/**
- * `hasPopup` 与 `expanded` 的配对关系**由类型表达**，不靠文档。
- *
- * 单向依赖，不是二选一：
- * - **只有 `expanded` 是合法的**——它也可以表示「这颗按钮控制的内联面板现在开着」，
- *   那种情况不需要 `aria-haspopup`（`expanded` 的语义是「被控制的东西开没开」，
- *   不要求那东西是弹出层）。把它写成互斥会让筛选面板、行展开这类站点编译不过，
- *   而为了让类型通过去删 `expanded`，等于把「开着还是关着」从读屏里拿掉。
- * - **只有 `hasPopup` 是无意义的**——读屏听得出是弹出按钮，听不出开没开。
- *
- * 代价说明：这个联合必须挂在 props 类型上（见 `IconButtonProps`），否则类型管不住。
- */
-export type IconButtonPopup =
-  | { hasPopup?: never; expanded?: boolean }
-  | { hasPopup: IconButtonHasPopup; expanded: boolean }
+
 
 type IconButtonCommon = {
   /**
@@ -142,6 +128,13 @@ type IconButtonCommon = {
    * 产品不要自己再包一层转圈，那会在同一个位置上出现两个 spinner。
    */
   loading?: boolean
+  /**
+   * 不可点。走原生 `disabled`：离开 Tab 序列、点了不触发。
+   *
+   * 收 `boolean` 而不是 `true | false` 的字面量联合：调用点几乎都是传一个条件
+   * （`disabled={row.busy}`），`boolean` 收敛不到任何一个分支，做成联合只会把无辜站点弄红。
+   */
+  disabled?: boolean
   /** 默认无边框透明底；工具栏用 `solid`。 */
   variant?: IconButtonVariant
   /**
@@ -171,12 +164,18 @@ type IconButtonCommon = {
    * 只影响可访问性：映射到 `aria-haspopup`，取值是闭集——写错的值读屏会忽略，**静默失效**，
    * 所以这里不收 `string`。
    *
-   * **必须与 `expanded` 成对**（类型层面强制，见 `IconButtonPopup`）：只有 `aria-haspopup`
-   * 而没有被展开状态，读屏听到的是「这是个弹出按钮」，但听不出它现在开没开——半套无障碍
-   * 比没有更容易让人误判。
+   * **必须与 `expanded` 成对**：只有 `aria-haspopup` 而没有被展开状态，读屏听到的是
+   * 「这是个弹出按钮」，但听不出它现在开没开——半套无障碍比没有更容易让人误判。
    *
-   * 与 `pressed` **互斥**：一颗按钮要么是开关（按下/未按下），要么是弹出触发器（开着/关着）。
-   * 两个同时给，读屏会得到两句互相矛盾的描述。
+   * **为什么配对约束在运行时、不在类型上**（实测过才这么写）：把它写成
+   * `{ hasPopup?: never; expanded?: boolean } | { hasPopup: …; expanded: boolean }` 这样的联合，
+   * 会让 `hasPopup` 成为可辨识键，而存量的三处调用点传的是 `disabled={someBoolean}`——
+   * **`boolean` 收敛不到 `disabled?: false` / `disabled: true` 任何一个分支**，于是三个
+   * 与本次无关的站点当场报「缺少 hasPopup 与 expanded」。类型能管住这条规则，代价是把
+   * 三个无辜站点弄红；那不是管住，那是误伤。
+   *
+   * 所以：**闭集留在类型上**（写错的值读屏会忽略），**配对关系落成开发期抛错**（见实现），
+   * 并配一条用例。与 `dataAttributes` 同款——类型写对不代表属性出现，所以 DOM 断言也留着。
    */
   hasPopup?: IconButtonHasPopup
   /**
@@ -220,34 +219,17 @@ type IconButtonCommon = {
   resolveText: (key: string) => string
 }
 
-export type IconButtonProps = Omit<IconButtonCommon, 'hasPopup' | 'expanded' | 'pressed'> &
-  IconButtonPopup &
-  (
-    | {
-        /** 纯开关：与弹出触发器互斥，两者同时给读屏会得到矛盾的描述。 */
-        pressed?: boolean
-        hasPopup?: never
-      }
-    | {
-        pressed?: never
-      }
-  ) &
-  (
-    | {
-        disabled?: false
-        /** 需要解释时配可聚焦 Tooltip（不用原生 `title`），文案同样只收键。 */
-        tooltipKey?: string
-      }
-    | {
-        /**
-         * 禁用态不进 Tab 序列、也接不到 focus，于是 Tooltip 的 `focus` 触发器永远不响——
-         * 键盘用户就只剩一个没有理由的灰按钮。所以「禁用 + 提示」这个组合在类型上直接禁掉：
-         * 禁用时把原因写成可见说明，别塞进只有鼠标能看见的 Tooltip。
-         */
-        disabled: true
-        tooltipKey?: never
-      }
-  )
+export type IconButtonProps = IconButtonCommon & {
+  /**
+   * 需要解释时配可聚焦 Tooltip（不用原生 `title`），文案同样只收键。
+   *
+   * **禁用态不许配提示**：禁用的控件接不到焦点，Tooltip 的 `focus` 触发器永远不响，键盘用户
+   * 就只剩一个没有理由的灰按钮。这条与 `hasPopup` / `expanded` 同一个道理，约束落在运行时
+   * （见实现）而不是判别联合上：存量的站点传的是 `disabled={someBoolean}`，`boolean` 收敛不到
+   * `disabled: true` 分支，做成类型会把无关站点一起弄红——那是误伤，不是管住。
+   */
+  tooltipKey?: string
+}
 
 export function IconButton({
   ariaLabelKey,
@@ -273,6 +255,23 @@ export function IconButton({
   onBlur,
   resolveText
 }: IconButtonProps): ReactElement {
+  // 配对关系落在运行时：读屏听到「这是弹出按钮」却听不出开没开，比没写更糟。
+  // 面向实现者的错误，所以用英文（组件里不许出现可见中文，守卫扫源码）。
+  // 同一条道理：禁用态接不到焦点，Tooltip 只剩鼠标能看，键盘用户拿不到那条原因。
+  if (disabled === true && tooltipKey !== undefined) {
+    throw new Error(
+      'IconButton cannot carry tooltipKey while disabled: a disabled control cannot take focus, so the hint would only be reachable with a mouse'
+    )
+  }
+  if (hasPopup !== undefined && expanded === undefined) {
+    throw new Error('IconButton hasPopup requires expanded: a popup trigger must say whether it is open')
+  }
+  // 一颗按钮要么是开关（按下/未按下），要么是弹出触发器（开着/关着）。两个同时给，
+  // 读屏会得到两句互相矛盾的描述——而那种矛盾在界面上完全看不出来。
+  if (hasPopup !== undefined && pressed !== undefined) {
+    throw new Error('IconButton takes either pressed or hasPopup, not both')
+  }
+
   const ariaLabel = fillLabelParams(resolveText(ariaLabelKey), ariaLabelParams)
   const pixels = SIZE_PX[size]
   const tooltipText = tooltipKey === undefined ? undefined : resolveText(tooltipKey)
