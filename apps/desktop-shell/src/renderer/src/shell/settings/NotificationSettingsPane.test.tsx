@@ -50,11 +50,12 @@ describe('notification settings availability', () => {
     const labels = platformText['zh-CN'].notifications
     const switches = [...container.querySelectorAll('.notification-channel-switch')]
 
-    // 接通后：不再出现「为什么不能用」的解释（包括反过来的「现在可以了」），开关可用，建议行回来。
-    expect(container.textContent).not.toContain(labels.unavailableNotice)
+    // 那句「平台还没有产生通知的来源」已经不在任何状态里成立，键和分支都已删除。
+    expect(container.textContent).not.toContain('平台目前还没有产生通知的来源')
     // 通知中心常开、已从设置页移除：只剩三个投递开关。
     expect(switches).toHaveLength(3)
-    expect(switches.every((control) => (control as HTMLButtonElement).disabled)).toBe(false)
+    // 三条可点，弹窗那条不可点（它没有落点）——见下一例的逐渠道断言。
+    expect(switches.filter((control) => (control as HTMLButtonElement).disabled)).toHaveLength(1)
     expect(container.textContent).toContain(labels.scopeNote)
   })
 
@@ -97,16 +98,13 @@ describe('notification settings availability', () => {
     expect(switches[0]?.disabled).toBe(false)
   })
 
-  it('keeps the delivery switches enabled once a producer is wired', async () => {
+  it('does not stamp a generic "not enabled" badge on a channel that simply works', async () => {
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
 
-    // The component reads the constant, so this asserts the wiring shape rather than the value:
-    // an enabled switch must carry no unavailable badge next to it.
-    const badgeCount = [...container.querySelectorAll('.ant-tag')].filter(
-      (tag) => tag.textContent === labels.unavailableBadge
-    ).length
-    expect(badgeCount).toBe(0)
+    // 通用那句「未启用」已经删掉：它会让「有落点但没授权」的桌面渠道和「本版本没有」的弹窗说同一句话。
+    const tags = [...container.querySelectorAll('.ant-tag')].map((tag) => tag.textContent)
+    expect(tags).toEqual([labels.popupUnavailable])
   })
 })
 
@@ -125,6 +123,26 @@ describe('notification settings styles', () => {
     // Match a whole class selector, not a prefix: `.notification-channel-controls-extra` must not
     // satisfy `.notification-channel-controls`.
     expect(used.filter((name) => !new RegExp(`\\.${name}(?![\\w-])`).test(styles))).toEqual([])
+  })
+})
+
+describe('同一屏不许有两种说法', () => {
+  it('测试提示不下结论，把判断交给上面那条权限状态', async () => {
+    const labels = platformText['zh-CN'].notifications
+    const english = platformText['en-US'].notifications
+
+    // 上面一行写着「暂时无法确认」时，下面一行说「多半是系统拦的」，用户会以为结论是确定的。
+    expect(labels.sendTestHint).not.toMatch(/多半是系统/)
+    expect(english.sendTestHint).not.toMatch(/probably blocked/)
+    expect(labels.sendTestHint).toContain('权限状态')
+    expect(english.sendTestHint).toContain('permission status')
+  })
+
+  it('「平台还没有产生通知的来源」那句不再挂在设置页上', () => {
+    // 它已经不成立了：有真实生产者。留着就等于同一屏里同时说「没有来源」和「有开关」。
+    const paneSource = readFileSync(resolve(__dirname, './NotificationSettingsPane.tsx'), 'utf8')
+    expect(paneSource).not.toContain('unavailableNotice')
+    expect(paneSource).not.toContain('unavailableBadge')
   })
 })
 

@@ -61,6 +61,12 @@ export function NotificationSettingsPane(props: {
           : labels.desktopPermissionUnknown
 
   const wired = notificationDeliveryWired
+  // 每条没落点的渠道**被编译器要求**交出自己的原因；不写就编译不过，等于不能靠一句「未启用」糊过去。
+  const unavailableReason: Record<'toast' | 'desktop' | 'popup', 'popupUnavailable' | null> = {
+    toast: null,
+    desktop: null,
+    popup: 'popupUnavailable'
+  }
   const availableChannels = notificationToggleRows.filter((row) => wired[row.channel]).length
   // 点完必须**当场看到结果**：之前没有任何反馈，用户点了以为按钮坏了。
   const [sendResult, setSendResult] = useState<string | null>(null)
@@ -88,7 +94,6 @@ export function NotificationSettingsPane(props: {
           <span>{labels.channelsHeading}</span>
         </div>
         <p>{labels.channelsDescription}</p>
-        {availableChannels === 0 ? <p className="notification-settings-unavailable" role="note">{labels.unavailableNotice}</p> : null}
       </div>
 
       <div className="notification-channel-list">
@@ -96,7 +101,8 @@ export function NotificationSettingsPane(props: {
           // 每条渠道各说各的原因：弹窗还没有形态（本版本没有），不能借用「系统没放行」那句——
           // 那是桌面渠道的原因，混用会把用户送去系统设置里白找一圈。
           const rowWired = wired[row.channel]
-          const reason = row.channel === 'popup' ? labels.popupUnavailable : labels.unavailableBadge
+          const reasonKey = unavailableReason[row.channel]
+          const reason = reasonKey === null ? null : labels[reasonKey]
           return (
             <label key={row.key} className="notification-channel-row">
               <span className="notification-channel-copy">
@@ -109,7 +115,7 @@ export function NotificationSettingsPane(props: {
                 ) : null}
               </span>
               <span className="notification-channel-controls">
-                {rowWired ? null : <Tag>{reason}</Tag>}
+                {rowWired || reason === null ? null : <Tag>{reason}</Tag>}
                 <Switch
                   className="notification-channel-switch"
                   size="small"

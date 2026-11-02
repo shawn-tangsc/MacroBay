@@ -995,8 +995,6 @@ export type PlatformText = {
   notifications: {
     channelsDescription: string
     scopeNote: string
-    unavailableNotice: string
-    unavailableBadge: string
     popupUnavailable: string
     desktopPermissionGranted: string
     desktopPermissionDenied: string
@@ -2082,8 +2080,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
-      unavailableNotice: '通知暂未启用：平台目前还没有产生通知的来源，这些开关不会有任何效果。接到第一个真实来源后重新启用。',
-      unavailableBadge: '未启用',
       popupUnavailable: '这个版本还不会弹出窗口提示',
       desktopPermissionGranted: '系统已放行桌面通知',
       desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
@@ -2112,7 +2108,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestToastOff: '已发送：应用内提示关着，所以右上角不会出现横幅。这条已经进了通知中心，点铃铛可以看到。',
       sendTestFailed: '没发出去：这条通知没有写进记录，请稍后再试一次。',
       toastClose: '关闭这条通知',
-      sendTestHint: '这条只用来验证链路：它不代表任何业务事实。桌面横幅没弹出，多半是系统没放行，不是平台没发出去。',
+      sendTestHint:
+        '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现，取决于上面那条系统权限状态——写着「暂时无法确认」时，别把它当成系统拦了。',
       centerRecordedGroup: '仅记录',
       centerExpand: '展开',
       centerCollapse: '收起',
@@ -3186,9 +3183,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
       scopeNote:
         'Keep at least one lightweight channel enabled. Desktop delivery is useful away from the app, while popups are better for events that need immediate attention.',
-      unavailableNotice:
-        'Notifications are not available yet: nothing in the platform produces one right now, so these switches have no effect. They turn on with the first real source.',
-      unavailableBadge: 'Not available',
       popupUnavailable: 'This version does not show pop-up alerts yet',
       desktopPermissionGranted: 'The system allows desktop notifications',
       desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
@@ -3217,7 +3211,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestToastOff: 'Sent — in-app banners are off, so nothing appears in the top right. It is in the notification centre; open the bell.',
       sendTestFailed: 'Not sent — this notification was not recorded. Try again in a moment.',
       toastClose: 'Dismiss this notification',
-      sendTestHint: 'This only proves the pipeline works; it describes no real event. If no desktop banner appears, the system probably blocked it rather than the platform failing to send.',
+      sendTestHint:
+        'This only proves the pipeline works; it describes no real event. Whether a desktop banner appears depends on the system permission status above — when it says the status could not be checked, do not read that as the system blocked it.',
       centerRecordedGroup: 'Recorded only',
       centerExpand: 'Show more',
       centerCollapse: 'Show less',
