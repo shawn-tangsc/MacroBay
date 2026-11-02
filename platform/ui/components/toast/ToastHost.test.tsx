@@ -25,7 +25,7 @@ afterEach(async () => {
 
 function Probe({ calls }: { calls: Array<() => void> }): null {
   const toast = useToast()
-  calls.push(() => toast.success({ titleKey: 'ui.test.saved' }))
+  calls.push(() => toast.success({ titleKey: 'ui.test.saved', resolveText: key }))
   return null
 }
 
@@ -37,7 +37,7 @@ async function mount(withHost = true): Promise<{ host: HTMLElement; calls: Array
   await act(async () => {
     root!.render(
       withHost ? (
-        <ToastHost resolveText={key}>
+        <ToastHost>
           <Probe calls={calls} />
         </ToastHost>
       ) : (
@@ -71,16 +71,16 @@ describe('ToastHost', () => {
     root = createRoot(host)
     await act(async () => {
       root!.render(
-        <ToastHost resolveText={key}>
+        <ToastHost>
           <Grab />
         </ToastHost>
       )
     })
 
     await act(async () => {
-      api!.success({ titleKey: 'ui.test.one' })
-      api!.success({ titleKey: 'ui.test.two' })
-      api!.success({ titleKey: 'ui.test.three' })
+      api!.success({ titleKey: 'ui.test.one', resolveText: key })
+      api!.success({ titleKey: 'ui.test.two', resolveText: key })
+      api!.success({ titleKey: 'ui.test.three', resolveText: key })
     })
 
     const titles = [...host.querySelectorAll('.toast__title')].map((node) => node.textContent)
@@ -101,14 +101,14 @@ describe('ToastHost', () => {
     root = createRoot(host)
     await act(async () => {
       root!.render(
-        <ToastHost resolveText={key}>
+        <ToastHost>
           <Grab />
         </ToastHost>
       )
     })
 
     await act(async () => {
-      api!.success({ titleKey: 'ui.test.timed' })
+      api!.success({ titleKey: 'ui.test.timed', resolveText: key })
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2900)

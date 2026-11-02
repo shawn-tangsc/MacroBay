@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
-import { ToastItem, type ToastAction, type ToastTone } from './ToastItem'
+import { ToastItem, type ToastTone } from './ToastItem'
 import { TOAST_REGION_KEY, useToastText } from './toastText'
 
 import './toast.css'
@@ -15,10 +15,24 @@ import './toast.css'
  * - **关闭键归组件**，读屏名走 `toastText` 常量。
  */
 
+/**
+ * 文案在**入队时**就用调用方自己的解析器解析成不可变句子（快照）。
+ *
+ * 宿主只负责队列与渲染，不再回查：`mi.*`、`storage.*` 这些键属于各产品自己的文案表，
+ * 壳层没有、也不该有一张全仓扁平表——硬造一个，解析不出来就渲染成键名或空串，
+ * 正是今天一直在修的那个坑。键仍然是键，解析发生在拿得到那张表的调用点。
+ */
+export type ToastAction = {
+  labelKey: string
+  onSelect: () => void
+}
+
 export type ToastInput = {
   titleKey: string
   descKey?: string
   action?: ToastAction
+  /** 图表这句话的解析器，必须是调用方自己那张表。 */
+  resolveText: (key: string) => string
 }
 
 export type ToastApi = {
@@ -28,7 +42,15 @@ export type ToastApi = {
   danger: (input: ToastInput & { action: ToastAction }) => void
 }
 
-type ToastEntry = ToastInput & { id: number; tone: ToastTone }
+/** 入队后只剩句子：宿主不再持有解析器，也不再回查任何键。 */
+type ToastEntry = {
+  id: number
+  tone: ToastTone
+  title: string
+  description?: string
+  actionLabel?: string
+  onAction?: () => void
+}
 
 /** 成功/信息 3s、失败 6s：失败要留够读和做动作的时间。 */
 const DURATION_MS: Record<ToastTone, number> = { success: 3000, info: 3000, danger: 6000 }
@@ -38,20 +60,24 @@ const MAX_VISIBLE = 2
 const ToastContext = createContext<{ push: (tone: ToastTone, input: ToastInput) => void } | null>(null)
 
 export type ToastHostProps = {
-  resolveText: (key: string) => string
   children: ReactNode
 }
 
-export function ToastHost({ resolveText, children }: ToastHostProps): ReactElement {
+export function ToastHost({ children }: ToastHostProps): ReactElement {
   const [entries, setEntries] = useState<ToastEntry[]>([])
   const regionLabel = useToastText()(TOAST_REGION_KEY)
 
   const push = useCallback((tone: ToastTone, input: ToastInput) => {
-    setEntries((current) => {
-      const next = { ...input, id: Date.now() + Math.random(), tone }
-      // 最多两条：第三条挤掉最旧的，不排队。
-      return [...current, next].slice(-MAX_VISIBLE)
-    })
+    // 入队即快照：之后父级换语言或改文案，已经在看的那条不会被改写。
+    const snapshot: Omit<ToastEntry, 'id'> = {
+      tone,
+      title: input.resolveText(input.titleKey),
+      ...(input.descKey === undefined ? {} : { description: input.resolveText(input.descKey) }),
+      ...(input.action === undefined
+        ? {}
+        : { actionLabel: input.resolveText(input.action.labelKey), onAction: input.action.onSelect })
+    }
+    setEntries((current) => [...current, { ...snapshot, id: Date.now() + Math.random() }].slice(-MAX_VISIBLE))
   }, [])
 
   const value = useMemo(() => ({ push }), [push])
@@ -67,7 +93,6 @@ export function ToastHost({ resolveText, children }: ToastHostProps): ReactEleme
             key={entry.id}
             onDismiss={() => setEntries((current) => current.filter((item) => item.id !== entry.id))}
             onExpire={() => setEntries((current) => current.filter((item) => item.id !== entry.id))}
-            resolveText={resolveText}
           />
         ))}
       </div>
@@ -86,14 +111,12 @@ function TimedToast({
   entry,
   durationMs,
   onDismiss,
-  onExpire,
-  resolveText
+  onExpire
 }: {
   entry: ToastEntry
   durationMs: number
   onDismiss: () => void
   onExpire: () => void
-  resolveText: (key: string) => string
 }): ReactElement {
   const [paused, setPaused] = useState(false)
   const remainingRef = useRef(durationMs)
@@ -116,11 +139,10 @@ function TimedToast({
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}>
       <ToastItem
-        action={entry.action}
-        descKey={entry.descKey}
+        action={entry.onAction === undefined ? undefined : { label: entry.actionLabel ?? '', onSelect: entry.onAction }}
+        description={entry.description}
         onDismiss={onDismiss}
-        resolveText={resolveText}
-        titleKey={entry.titleKey}
+        title={entry.title}
         tone={entry.tone}
       />
     </div>

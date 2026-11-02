@@ -6,6 +6,8 @@
 需要读者做决定的用 `Modal`，不是提示。
 
 宿主**每个渲染根挂一次**（主窗与每个分离窗各一次）；没挂宿主的窗口里，提示弹不出来。
+宿主**不收解析器**：`mi.*`、`storage.*` 这些键属于各产品自己的文案表，壳层没有也不该有一张全仓
+扁平表。每次调用自带 `resolveText`，句子在**入队时**解析成快照，宿主只渲染快照。
 
 ### API
 
@@ -17,7 +19,7 @@
 
 | 调用 | 停留 | 说明 |
 | --- | --- | --- |
-| `toast.success({ titleKey, descKey?, action? })` | 3s | |
+| `toast.success({ titleKey, resolveText, descKey?, action? })` | 3s | |
 | `toast.info({ ... })` | 3s | |
 | `toast.danger({ titleKey, action })` | 6s | `action` **类型上必填**：读者只能读到一句"失败了"，等于只说了一半。 |
 

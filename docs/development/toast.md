@@ -6,7 +6,10 @@ A sentence after an action renders through `ToastHost` + `useToast()` from
 `@platform/ui/components/toast`. A message that needs a decision is a `Modal`, not a toast.
 
 Mount the host **once per render root** (main window and each detached window); a toast cannot appear
-in a window that has no host.
+in a window that has no host. The host takes **no resolver**: `mi.*` and `storage.*` keys belong to the
+product's own copy table, and the shell neither has nor should have one flat table for the whole
+repository. Each call brings its own `resolveText`; the sentence is resolved once at enqueue and the
+host only renders the snapshot.
 
 ### API
 
@@ -18,7 +21,7 @@ in a window that has no host.
 
 | Call | Duration | Notes |
 | --- | --- | --- |
-| `toast.success({ titleKey, descKey?, action? })` | 3s | |
+| `toast.success({ titleKey, resolveText, descKey?, action? })` | 3s | |
 | `toast.info({ ... })` | 3s | |
 | `toast.danger({ titleKey, action })` | 6s | `action` is **required by the type**: a failure the reader can only read about is half a message. |
 
