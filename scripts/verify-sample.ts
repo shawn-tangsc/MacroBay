@@ -24,6 +24,29 @@ export function samplePath(): string {
   return join(tmpdir(), 'macrobay-verify-sample.json')
 }
 
+/**
+ * 检查清单**唯一来源**。加一步只改这里：`verify-run` 照着跑，AGENTS 的步骤表与守卫都读它。
+ * 放在这个纯模块里而不是执行器里——执行器被 import 时会真的开始跑验证。
+ */
+export const VERIFY_CHECKS = [
+  'docs:check',
+  'check:file-size',
+  'check:danger-color',
+  'check:hex-color',
+  'check:undefined-token',
+  'check:components-ownership',
+  'check:async-initial-state',
+  'check:state-content-ternary',
+  'typecheck',
+  'test',
+  'build'
+] as const
+
+/** 数未提交路径。抽成纯函数：`-uall` 与折叠目录的差别只能在这一层被测出来。 */
+export function countDirty(porcelain: string): number {
+  return porcelain === '' ? 0 : porcelain.split('\n').filter((line) => line.trim() !== '').length
+}
+
 function git(args: readonly string[]): string {
   return execFileSync('git', [...args], { encoding: 'utf8' }).trimEnd()
 }
@@ -32,39 +55,50 @@ function git(args: readonly string[]): string {
 export function sampleTree(now: () => Date = () => new Date()): TreeSample {
   try {
     const head = git(['rev-parse', '--short', 'HEAD'])
-    const porcelain = git(['status', '--porcelain'])
-    const dirty = porcelain === '' ? 0 : porcelain.split('\n').filter((line) => line.trim() !== '').length
+    // `-uall`：默认会把未跟踪目录折叠成 `?? dir/` 一行，跑中有人往这个目录里再加文件时
+    // 计数不变——漂移就漏了。今天这棵树恰好两种计数一样，是留给下一次的。
+    const porcelain = git(['status', '--porcelain', '-uall'])
+    const dirty = countDirty(porcelain)
     return { head, dirty, at: now().toISOString() }
   } catch {
     return { head: 'no-git', dirty: -1, at: now().toISOString() }
   }
 }
 
-export type Verdict = 'valid' | 'invalid' | 'unknown'
+/**
+ * 四种结论，一个词只表示一件事。
+ *
+ * 之前 `valid` 同时表示「干净可归因」和「稳定但脏」，报告行只打一个词——下一个人只会读那一个词，
+ * 然后拿一次脏树的绿去关账。**这等于把今晚要消灭的习惯换了个位置**。
+ *
+ * - `valid`：首尾都干净且一致——**只有它能关账**；
+ * - `polluted`：首尾一致但脏（与 preflight 同一个词），`attributable=no`，退出 0；
+ * - `invalid`：首尾不一致，非零退出；既不是绿也不是红；
+ * - `unknown`：没有 git（快照/CI tarball），`attributable=no`。
+ */
+export type Verdict = 'valid' | 'polluted' | 'invalid' | 'unknown'
 
-export type Comparison = { verdict: Verdict; reason: string }
+export type Comparison = { verdict: Verdict; attributable: boolean; reason: string }
 
 /**
  * 比较首尾两次采样。
  *
- * 三种结论，不含糊：
- * - `valid`：`head` 与 `dirty` 都一致——这次跑的是同一棵树，红绿可引用；
- * - `invalid`：任一不一致——**既不是绿也不是红**，是有并发编辑，必须重跑；
- * - `unknown`：有一侧不是 git 仓库，无法见证（快照/CI tarball），不当成 valid。
+ * `attributable` 才是「这次结果能不能记在某个提交上」的唯一答案；`valid` 只是它的充分条件之一，
+ * 所以报告行两个都打——只打一个词，就一定有人只读那一个词。
  */
 export function compareSamples(start: TreeSample, end: TreeSample): Comparison {
   if (start.head === 'no-git' || end.head === 'no-git') {
-    return { verdict: 'unknown', reason: 'not a git checkout, so the tree state cannot be attested' }
+    return { verdict: 'unknown', attributable: false, reason: 'not a git checkout, so the tree state cannot be attested' }
   }
   if (start.head !== end.head) {
-    return { verdict: 'invalid', reason: `HEAD moved during the run: ${start.head} → ${end.head}` }
+    return { verdict: 'invalid', attributable: false, reason: `HEAD moved during the run: ${start.head} → ${end.head}` }
   }
   if (start.dirty !== end.dirty) {
-    return { verdict: 'invalid', reason: `the working tree changed during the run: dirty ${start.dirty} → ${end.dirty}` }
+    return { verdict: 'invalid', attributable: false, reason: `the working tree changed during the run: dirty ${start.dirty} → ${end.dirty}` }
   }
   if (start.dirty !== 0) {
-    // 首尾一致但本来就不干净：这是一次**受污染但稳定**的跑，绿也只在「现在没坏」的意义上成立。
-    return { verdict: 'valid', reason: `the tree was already dirty (${start.dirty} path(s)) at both samples` }
+    // 首尾一致但本来就不干净：稳定，但**不能归因到任何提交**。
+    return { verdict: 'polluted', attributable: false, reason: `the tree was already dirty (${start.dirty} path(s)) at both samples` }
   }
-  return { verdict: 'valid', reason: 'same commit, clean tree at both samples' }
+  return { verdict: 'valid', attributable: true, reason: 'same commit, clean tree at both samples' }
 }
