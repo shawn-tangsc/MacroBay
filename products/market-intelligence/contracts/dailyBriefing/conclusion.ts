@@ -125,6 +125,27 @@ export const briefingGenerationStageIds = [
   'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair-1', 'repair-2', 'store'
 ] as const
 
+/**
+ * How those fixed stages are shown as rows, in the order a reader reads them.
+ *
+ * The two repair rounds share one row on purpose: what a reader needs to know is whether the
+ * conclusion was rewritten and how many rounds it took, not that the pipeline splits a rewrite into
+ * two internal steps. The mapping lives here, and only here — a page that folds two stages itself
+ * would be computing the same fact a second time.
+ */
+export const briefingGenerationDisplayRows = [
+  { id: 'source', stages: ['source'] },
+  { id: 'candidates', stages: ['candidates'] },
+  { id: 'selection', stages: ['selection'] },
+  { id: 'field-backfill', stages: ['field-backfill'] },
+  { id: 'writing', stages: ['writing'] },
+  { id: 'validation', stages: ['validation'] },
+  { id: 'repair', stages: ['repair-1', 'repair-2'] },
+  { id: 'store', stages: ['store'] }
+] as const
+
+export type BriefingGenerationDisplayRowId = (typeof briefingGenerationDisplayRows)[number]['id']
+
 export type BriefingGenerationStageId = (typeof briefingGenerationStageIds)[number]
 export type BriefingGenerationStageState = 'success' | 'failed' | 'skipped' | 'pending'
 
@@ -152,5 +173,30 @@ export type BriefingGenerationTrace = Readonly<{
   state: 'success' | 'failed'
   stages: readonly BriefingGenerationStage[]
 }>
+
+/**
+ * A generation attempt that is still running.
+ *
+ * Deliberately not a `BriefingGenerationTrace`: that shape claims a finished attempt (it has
+ * `finishedAt` and a terminal state), and a live one must not say a stage was skipped merely
+ * because it has not begun yet. Unstarted stages stay `pending` here.
+ */
+export type BriefingGenerationProgress = Readonly<{
+  attemptId: string
+  startedAt: string
+  stages: readonly BriefingGenerationStage[]
+}>
+
+/**
+ * What the reader can ask about the attempt that is running right now.
+ *
+ * `idle` also covers "an attempt just finished": once it completes its trace travels with the
+ * result or the stored edition, and the live copy is dropped, so there is never a second version
+ * of the same attempt to disagree with the stored one.
+ */
+export type DailyBriefingProgressResult = Readonly<
+  | { state: 'idle' }
+  | { state: 'running'; progress: BriefingGenerationProgress }
+>
 
 /** One row in the history rail. `missing` rows are gaps, not empty editions. */

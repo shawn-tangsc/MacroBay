@@ -74,7 +74,7 @@ export type {
   BriefingNextItem,
 } from './dailyBriefing/readings'
 // The conclusion and trace shapes live in their own module; re-exported so callers keep one path.
-import { briefingGenerationStageIds } from './dailyBriefing/conclusion'
+import { briefingGenerationDisplayRows, briefingGenerationStageIds } from './dailyBriefing/conclusion'
 import type {
   BriefingCounterEvidence,
   BriefingTopSignal,
@@ -89,9 +89,12 @@ import type {
   BriefingGenerationStageState,
   BriefingGenerationStage,
   BriefingGenerationTrace,
+  BriefingGenerationProgress,
+  BriefingGenerationDisplayRowId,
+  DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'
 
-export { briefingGenerationStageIds }
+export { briefingGenerationDisplayRows, briefingGenerationStageIds }
 export type {
   BriefingCounterEvidence,
   BriefingTopSignal,
@@ -106,6 +109,9 @@ export type {
   BriefingGenerationStageState,
   BriefingGenerationStage,
   BriefingGenerationTrace,
+  BriefingGenerationProgress,
+  BriefingGenerationDisplayRowId,
+  DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'
 export type DailyBriefingDocument = Readonly<{
   schemaVersion: DailyBriefingDocumentSchemaVersion

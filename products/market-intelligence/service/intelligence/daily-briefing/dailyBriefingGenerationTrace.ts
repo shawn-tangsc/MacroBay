@@ -1,5 +1,6 @@
 import {
   briefingGenerationStageIds,
+  type BriefingGenerationProgress,
   type BriefingGenerationStage,
   type BriefingGenerationStageId,
   type BriefingGenerationStageState,
@@ -22,18 +23,24 @@ export type DailyBriefingGenerationRecorder = Readonly<{
     outcome?: Readonly<{ failureCode?: string; failureDetail?: string }>
   ) => void
   skip: (id: BriefingGenerationStageId) => void
+  /** The attempt so far, without pretending unfinished stages were skipped. */
+  snapshot: () => BriefingGenerationProgress
   complete: (state: BriefingGenerationTrace['state']) => BriefingGenerationTrace
 }>
 
 export function createDailyBriefingGenerationRecorder(input: Readonly<{
   attemptId: string
   now: () => string
+  /** Called after every change, so a live reader can publish a fresh snapshot without polling the recorder. */
+  onChange?: () => void
 }>): DailyBriefingGenerationRecorder {
   const startedAt = input.now()
   const stages = new Map<BriefingGenerationStageId, BriefingGenerationStage>()
+  const changed = (): void => input.onChange?.()
   const begin = (id: BriefingGenerationStageId): void => {
     if (stages.has(id)) return
     stages.set(id, { id, state: 'pending', startedAt: input.now() })
+    changed()
   }
   const end: DailyBriefingGenerationRecorder['end'] = (id, state, outcome) => {
     const existing = stages.get(id)
@@ -53,10 +60,12 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
       ...(outcome?.failureCode ? { failureCode: outcome.failureCode } : {}),
       ...(outcome?.failureDetail ? { failureDetail: outcome.failureDetail } : {})
     }))
+    changed()
   }
   const skip = (id: BriefingGenerationStageId): void => {
     if (stages.has(id)) return
     stages.set(id, Object.freeze({ id, state: 'skipped' }))
+    changed()
   }
   const complete = (state: BriefingGenerationTrace['state']): BriefingGenerationTrace => {
     const finishedAt = input.now()
@@ -69,5 +78,12 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
       stages: Object.freeze(ordered)
     })
   }
-  return Object.freeze({ begin, end, skip, complete })
+  const snapshot = (): BriefingGenerationProgress => Object.freeze({
+    attemptId: input.attemptId,
+    startedAt,
+    // Unstarted stages stay `pending` here: `complete` is the only place that may say "skipped",
+    // because only a finished attempt knows a stage was not needed.
+    stages: Object.freeze(briefingGenerationStageIds.map((id) => stages.get(id) ?? Object.freeze({ id, state: 'pending' as const })))
+  })
+  return Object.freeze({ begin, end, skip, snapshot, complete })
 }
