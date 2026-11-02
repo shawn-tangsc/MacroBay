@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { fallbackTimeZone, systemTimeZoneSetting } from '../../settings/schema/appSettings'
 import {
+  formatShellCompactInstant,
   formatShellInstant,
   formatShellTimeZoneLabel,
   formatShellYearMonth,
@@ -56,5 +57,53 @@ describe('formatShellYearMonth', () => {
     expect(formatShellYearMonth(instant, 'UTC')).toBe('2026-11')
     // 东京此刻已是 12 月 1 日。
     expect(formatShellYearMonth(instant, 'Asia/Tokyo')).toBe('2026-12')
+  })
+})
+
+/**
+ * T22（runtime §15）：中心合并条、列表行与手机正文共用的紧凑时刻。
+ * 四条判据：偏移正确 / 跨年不丢日期 / 坏输入原样返回 / 与 `formatShellInstant` 时刻部分逐字相同。
+ */
+describe('formatShellCompactInstant (T22)', () => {
+  it('drops only the year and keeps the offset spelling', () => {
+    expect(formatShellCompactInstant('2026-11-02T14:50:00.000Z', { timeZone: 'Asia/Shanghai' })).toBe(
+      '11-02 22:50 GMT+8'
+    )
+    expect(formatShellCompactInstant('2026-11-02T14:50:00.000Z', { timeZone: 'UTC' })).toBe('11-02 14:50 GMT')
+    // 11 月 2 日美东已过夏令时：偏移是 GMT-5。
+    expect(formatShellCompactInstant('2026-11-02T14:50:00.000Z', { timeZone: 'America/New_York' })).toBe(
+      '11-02 09:50 GMT-5'
+    )
+  })
+
+  it('keeps the date across a year boundary', () => {
+    expect(formatShellCompactInstant('2026-12-31T16:30:00.000Z', { timeZone: 'Asia/Shanghai' })).toBe(
+      '01-01 00:30 GMT+8'
+    )
+  })
+
+  it('returns an unparseable input unchanged instead of inventing an instant', () => {
+    expect(formatShellCompactInstant('not-an-instant', { timeZone: 'Asia/Shanghai' })).toBe('not-an-instant')
+    expect(formatShellCompactInstant('2026-12-31T16:30:00.000Z', { timeZone: 'Mars/Olympus' })).toBe(
+      '2026-12-31T16:30:00.000Z'
+    )
+  })
+
+  it('matches formatShellInstant character for character apart from the year prefix', () => {
+    for (const instant of [
+      '2026-11-02T14:50:00.000Z',
+      '2026-12-31T16:30:00.000Z',
+      '2026-01-01T00:00:00.000Z'
+    ]) {
+      const full = formatShellInstant(instant, { timeZone: 'Asia/Shanghai' })
+      // `YYYY-` 只有 5 个字符：去掉后必须逐字相同，否则两处实现对同一个瞬时给出了两个时刻。
+      expect(formatShellCompactInstant(instant, { timeZone: 'Asia/Shanghai' })).toBe(full.slice(5))
+    }
+  })
+
+  it('uses the numeric offset under a non-Chinese locale too', () => {
+    expect(
+      formatShellCompactInstant('2026-07-15T12:00:00.000Z', { timeZone: 'America/New_York', locale: 'en-US' })
+    ).toBe('07-15 08:00 GMT-4')
   })
 })
