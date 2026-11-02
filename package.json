@@ -32,7 +32,7 @@
     "build:info": "tsx scripts/release/write-build-info.mts",
     "verify:preflight": "tsx scripts/verify-preflight.mts",
     "verify": "pnpm verify:preflight && pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm check:undefined-token && pnpm check:components-ownership && pnpm check:async-initial-state && pnpm check:state-content-ternary && pnpm typecheck && pnpm test && pnpm build",
-    "verify:sole": "tsx scripts/verify-preflight.mts --strict && pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm check:undefined-token && pnpm check:components-ownership && pnpm check:async-initial-state && pnpm typecheck && pnpm test && pnpm build",
+    "verify:sole": "tsx scripts/verify-preflight.mts --strict && pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm check:undefined-token && pnpm check:components-ownership && pnpm check:async-initial-state && pnpm check:state-content-ternary && pnpm typecheck && pnpm test && pnpm build",
     "demo:verify": "tsx scripts/demo/verify-sample.mts",
     "release:bump": "tsx scripts/release/bump-version.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",

@@ -80,6 +80,26 @@ describe('verification entry', () => {
     expect(listed).toEqual(chain)
   })
 
+  it('keeps the release chain from checking less than the daily chain', () => {
+    // 发版那一跑是「更严的那一跑」：它拒绝脏树。要是它还**少查一项**，那么用户定的
+    // 「发布要两次 `pnpm verify:sole` 全绿」就不覆盖那一项——绿了也不代表发出去的这批查过它。
+    // `verify:sole` 曾经就是少了 `check:state-content-ternary`：日常有，发版没有，而没有任何测试比这两条链。
+    const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+    const stepsOf = (name: string): string[] =>
+      (pkg.scripts?.[name] ?? '')
+        .split('&&')
+        .map((step) => step.trim().replace(/^pnpm /u, ''))
+
+    const daily = stepsOf('verify')
+    const release = stepsOf('verify:sole')
+
+    // 第一步不同是设计好的，也是唯一允许的不同：发版用 `--strict` 的 preflight 拒绝脏树。
+    expect(daily[0]).toBe('verify:preflight')
+    expect(release[0]).toContain('verify-preflight.mts --strict')
+    // 其余每一步必须一模一样，顺序也一样。
+    expect(release.slice(1)).toEqual(daily.slice(1))
+  })
+
   it('keeps the private release gates on the same command', () => {
     const releaseProcess = `${ROOT}docs-private/10-development/release-process.md`
     // `docs-private` 被 gitignore，CI 里没有这些文件；本地才有，所以缺席时只验有它的情况。
