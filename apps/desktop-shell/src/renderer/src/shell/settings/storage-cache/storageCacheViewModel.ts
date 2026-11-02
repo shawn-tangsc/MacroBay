@@ -7,6 +7,7 @@ import type {
   SafeCacheView
 } from '@platform/storage/cache-governance/cacheContracts'
 import { platformText } from '../../../i18n/platformText'
+import { formatCacheErrorReason } from './storageCacheDisplay'
 
 export type StorageCacheFilterKey = 'all' | 'platform' | 'ai-runtime' | 'product' | 'derived-data'
 
@@ -119,15 +120,59 @@ export function resolveStorageCacheWarnings(cache: SafeCacheView, language: AppL
   return cache.warnings
 }
 
-export function formatStorageOperationToast(
+export type StorageOperationNoticeTone = 'success' | 'info' | 'danger'
+
+export type StorageOperationNotice = {
+  tone: StorageOperationNoticeTone
+  text: string
+}
+
+/**
+ * 操作结果 → 一条提示。**按 `status` 穷举**。
+ *
+ * 这里原来先判 `skipped`、再按操作类型选句，于是 `failed` 落进了「已清理 / 已压缩」那一支：
+ * 提示还是静默空操作的时候没人看得见，提示真能显示之后就是「失败显示成成功」。
+ * 失败句的原因只走原因码 → 键的映射，运行时原文只进审计与日志。
+ */
+export function formatStorageOperationNotice(
   cache: SafeCacheView,
   result: CacheOperationResult,
   language: AppLanguage
-): string {
+): StorageOperationNotice {
   const labels = platformText[language].storageCache
   const name = resolveStorageCacheText(cache.displayName, cache.displayNameI18n, language)
-  if (result.status === 'skipped') return labels.toastSkipped(name)
-  if (result.operation === 'clear') return labels.toastCleared(name, result.dryRun)
-  if (result.operation === 'compact') return labels.toastCompacted(name, result.dryRun)
-  return labels.operationSuccess
+  switch (result.status) {
+    case 'failed':
+      return {
+        tone: 'danger',
+        text: labels.operationFailedReason(formatCacheErrorReason(result.normalizedErrorCode, labels))
+      }
+    case 'skipped':
+      return { tone: 'info', text: labels.toastSkipped(name) }
+    case 'succeeded':
+      switch (result.operation) {
+        case 'clear':
+          return { tone: 'success', text: labels.toastCleared(name, result.dryRun) }
+        case 'compact':
+          return { tone: 'success', text: labels.toastCompacted(name, result.dryRun) }
+      }
+  }
+}
+
+/**
+ * IPC 层直接抛错时拿不到原因码（模型层还可能把 `ENOENT: ...` 这类原文塞进 `message`）：
+ * 原因句明说「这次没拿到具体原因」，原文一概不上屏。
+ */
+export function formatStorageOperationErrorNotice(
+  operation: CacheOperationType | 'recheck',
+  language: AppLanguage
+): StorageOperationNotice {
+  const labels = platformText[language].storageCache
+  switch (operation) {
+    case 'clear':
+    case 'compact':
+      return { tone: 'danger', text: labels.operationFailedReason(labels.errorReasonUnavailable) }
+    case 'recheck':
+      return { tone: 'danger', text: labels.recheckFailedReason(labels.errorReasonUnavailable) }
+  }
 }

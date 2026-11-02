@@ -1225,7 +1225,7 @@ export type PlatformText = {
     clear: string
     compact: string
     recheck: string
-    recheckFailed: string
+    recheckFailedReason: (reason: string) => string
     flagSensitive: string
     filterEmpty: string
     emptyValue: string
@@ -1255,8 +1255,22 @@ export type PlatformText = {
     fieldSize: string
     fieldWarnings: string
     fieldBackupPolicy: string
-    operationSuccess: string
-    operationFailed: string
+    operationFailedReason: (reason: string) => string
+    /**
+     * 失败原因：九条与 `CACHE_ERROR_CODES` 一一对应，按原因码取句子，不在代码里拼原因。
+     * 运行时原文（`ENOENT: ...`）只进审计与日志，不上屏。
+     */
+    errorReasonNotFound: string
+    errorReasonNotClearable: string
+    errorReasonNotCompactable: string
+    errorReasonInProgress: string
+    errorReasonDenied: string
+    errorReasonProviderFailed: string
+    errorReasonInspectionFailed: string
+    errorReasonRequiresProduct: string
+    errorReasonRuntimeActive: string
+    /** 「拿不到」不是「没有」：没有原因码时明说没拿到，不编一个原因。 */
+    errorReasonUnavailable: string
     /** 刷新失败但旧数据仍在：必须说清是旧数据，否则用户以为缓存没了。 */
     staleDataNotice: string
     confirmClear: (name: string) => string
@@ -2321,7 +2335,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clear: '清理',
       compact: '压缩',
       recheck: '重新检查',
-      recheckFailed: '重新检查失败',
+      recheckFailedReason: (reason) => `重新检查失败：${reason}`,
       flagSensitive: '含用户内容',
       filterEmpty: '此分类下没有缓存',
       emptyValue: '暂无',
@@ -2351,8 +2365,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: '体积',
       fieldWarnings: '影响提示',
       fieldBackupPolicy: '备份策略',
-      operationSuccess: '缓存操作已完成',
-      operationFailed: '缓存操作失败',
+      operationFailedReason: (reason) => `缓存操作失败：${reason}`,
+      errorReasonNotFound: '这个缓存已经不在了',
+      errorReasonNotClearable: '这类缓存不允许清理',
+      errorReasonNotCompactable: '这类缓存不支持压缩',
+      errorReasonInProgress: '上一次操作还没结束',
+      errorReasonDenied: '没有权限执行这个操作',
+      errorReasonProviderFailed: '清理或压缩时缓存自己报错了',
+      errorReasonInspectionFailed: '这次检查没有完成',
+      errorReasonRequiresProduct: '需要先安装对应的模块',
+      errorReasonRuntimeActive: '应用正在使用这块缓存，先停掉再操作',
+      errorReasonUnavailable: '这次没拿到具体原因',
       staleDataNotice: '没能更新，下面是上次读到的数据。',
       confirmClear: (name) => `确认清理缓存“${name}”？`,
       confirmCompact: (name) => `确认压缩缓存“${name}”？`,
@@ -3431,7 +3454,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clear: 'Clear',
       compact: 'Compact',
       recheck: 'Recheck',
-      recheckFailed: 'Recheck failed',
+      recheckFailedReason: (reason) => `Recheck failed: ${reason}`,
       flagSensitive: 'User content',
       filterEmpty: 'No caches in this category',
       emptyValue: 'None',
@@ -3461,8 +3484,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: 'Size',
       fieldWarnings: 'Effects',
       fieldBackupPolicy: 'Backup',
-      operationSuccess: 'Cache operation completed',
-      operationFailed: 'Cache operation failed',
+      operationFailedReason: (reason) => `Cache operation failed: ${reason}`,
+      errorReasonNotFound: 'This cache no longer exists',
+      errorReasonNotClearable: 'This kind of cache cannot be cleared',
+      errorReasonNotCompactable: 'This kind of cache cannot be compacted',
+      errorReasonInProgress: 'The previous operation has not finished yet',
+      errorReasonDenied: 'This operation is not permitted',
+      errorReasonProviderFailed: 'The cache itself failed while clearing or compacting',
+      errorReasonInspectionFailed: 'The check did not finish',
+      errorReasonRequiresProduct: 'Install the owning module first',
+      errorReasonRuntimeActive: 'The app is using this cache; stop it before changing the cache',
+      errorReasonUnavailable: 'The specific reason was not available this time',
       staleDataNotice: 'Could not refresh; the rows below are from the last successful read.',
       confirmClear: (name) => `Clear cache "${name}"?`,
       confirmCompact: (name) => `Compact cache "${name}"?`,

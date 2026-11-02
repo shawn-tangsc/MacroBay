@@ -4,6 +4,7 @@ import type {
   CacheBackupPolicy,
   CacheCategory,
   CacheDurability,
+  CacheErrorCode,
   CacheInspectionStatus,
   CacheKind,
   CacheOperationAuditRecord,
@@ -176,6 +177,50 @@ export function formatOperationStatus(
     case 'skipped':
       return labels.statusSkipped
   }
+}
+
+/**
+ * 原因码 → 文案字段的**字面量表**，不拼键名：多一个原因码就编译不过。
+ *
+ * 这样做的理由和过滤项那张表一样：`'errorReason' + code` 这种拼串在静态守卫眼里看不见形状，
+ * 拼错了界面上就是一句空话；换成表之后，`CACHE_ERROR_CODES` 一增长这里立刻报错。
+ */
+type CacheErrorReasonField =
+  | 'errorReasonNotFound'
+  | 'errorReasonNotClearable'
+  | 'errorReasonNotCompactable'
+  | 'errorReasonInProgress'
+  | 'errorReasonDenied'
+  | 'errorReasonProviderFailed'
+  | 'errorReasonInspectionFailed'
+  | 'errorReasonRequiresProduct'
+  | 'errorReasonRuntimeActive'
+
+const CACHE_ERROR_REASON_FIELDS: Record<CacheErrorCode, CacheErrorReasonField> = {
+  cache_not_found: 'errorReasonNotFound',
+  cache_not_clearable: 'errorReasonNotClearable',
+  cache_not_compactable: 'errorReasonNotCompactable',
+  cache_operation_in_progress: 'errorReasonInProgress',
+  cache_operation_denied: 'errorReasonDenied',
+  cache_provider_failed: 'errorReasonProviderFailed',
+  cache_inspection_failed: 'errorReasonInspectionFailed',
+  cache_requires_product: 'errorReasonRequiresProduct',
+  cache_runtime_active: 'errorReasonRuntimeActive'
+}
+
+/**
+ * 失败原因句。
+ *
+ * `undefined`（服务没留下原因码）与「原因码认不出来」（第三方 provider 送了个闭集外的值）
+ * 都走同一句「这次没拿到具体原因」：这两种都是**没拿到**，不是「确实没有原因」。
+ */
+export function formatCacheErrorReason(
+  code: CacheErrorCode | undefined,
+  labels: StorageCacheLabels
+): string {
+  if (code === undefined) return labels.errorReasonUnavailable
+  const field: CacheErrorReasonField | undefined = CACHE_ERROR_REASON_FIELDS[code]
+  return field === undefined ? labels.errorReasonUnavailable : labels[field]
 }
 
 export function dedupeWarnings(warnings: string[]): string[] {

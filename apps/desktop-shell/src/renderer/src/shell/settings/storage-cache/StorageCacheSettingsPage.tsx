@@ -19,9 +19,11 @@ import {
   buildStorageCacheSummary,
   confirmStorageCacheAction,
   filterCachesByKey,
-  formatStorageOperationToast,
+  formatStorageOperationErrorNotice,
+  formatStorageOperationNotice,
   listStorageCacheFilters,
-  type StorageCacheFilterKey
+  type StorageCacheFilterKey,
+  type StorageOperationNotice
 } from './storageCacheViewModel'
 
 type StorageCacheSettingsPageProps = {
@@ -72,6 +74,18 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     [detailCacheId, state.operations]
   )
 
+  /**
+   * 提示的**唯一出口**。
+   *
+   * 宿主 `ToastHost` 还没挂到渲染根上，而 `useToast` 在没宿主时是 fail-closed 抛错的，
+   * 所以这里暂时仍是 antd 静态提示——但调用方只交 `{ tone, text }`，换出口时只动这一个函数。
+   */
+  function notify(notice: StorageOperationNotice): void {
+    if (notice.tone === 'danger') message.error(notice.text)
+    else if (notice.tone === 'info') message.info(notice.text)
+    else message.success(notice.text)
+  }
+
   async function runClear(cache: SafeCacheView): Promise<void> {
     const confirmed = confirmStorageCacheAction(
       { cache, operation: 'clear', dryRun },
@@ -81,9 +95,10 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     if (!confirmed) return
     try {
       const result = await state.clearCache(cache.cacheId, dryRun)
-      message.success(formatStorageOperationToast(cache, result, language))
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : labels.operationFailed)
+      notify(formatStorageOperationNotice(cache, result, language))
+    } catch {
+      // 原文（可能是 `ENOENT: no such file or directory…`）只该进日志，不上屏。
+      notify(formatStorageOperationErrorNotice('clear', language))
     }
   }
 
@@ -96,17 +111,17 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     if (!confirmed) return
     try {
       const result = await state.compactCache(cache.cacheId, dryRun)
-      message.success(formatStorageOperationToast(cache, result, language))
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : labels.operationFailed)
+      notify(formatStorageOperationNotice(cache, result, language))
+    } catch {
+      notify(formatStorageOperationErrorNotice('compact', language))
     }
   }
 
   async function runRecheck(cache: SafeCacheView): Promise<void> {
     try {
       await state.inspectCache(cache.cacheId)
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : labels.recheckFailed)
+    } catch {
+      notify(formatStorageOperationErrorNotice('recheck', language))
     }
   }
 
