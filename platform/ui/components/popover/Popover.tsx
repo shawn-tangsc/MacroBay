@@ -42,39 +42,53 @@ type TriggerHandlers = {
   onBlur?: (event: ReactMouseEvent<HTMLElement>) => void
 }
 
+/** 一行说明：键 + 这一行自己的参数（已格式化好的字符串）。 */
+export type PopoverLine<K extends string = string> = {
+  labelKey: K
+  params?: Readonly<Record<string, string>>
+}
+
 /**
- * 文案的两种形状：一句话（`labelKey`），或一段分行的说明（`lines`）。
+ * 文案的两种形状（契约 §8）：一句话（`labelKey`），或一段分行的说明（`lines`）。
  *
  * 写成联合而不是「两个都可选」：调用点必须给至少一个，少给是编译错误，
  * 而不是渲染出一个空浮层——空框比没有框更糟，这一点和 `resolveText` 返回空串时整块不渲染是同一条。
+ *
+ * `labelParams` 只在单行分支存在：多行分支把它写成 `never`，因为「整块共用一份参数」和
+ * 「每行自带参数」长期并存，又会变成同一个概念两种写法。多行的参数进 `lines[].params`。
  */
-export type PopoverText<K extends string> =
-  | { labelKey: K; lines?: undefined }
-  | { labelKey?: undefined; lines: readonly K[] }
+export type PopoverText<K extends string = string> =
+  | {
+      labelKey: K
+      /** 要填进模板的数字或名词，**只收已经格式化好的字符串**（`10–2`、`289/289`）。 */
+      labelParams?: Readonly<Record<string, string>>
+      lines?: undefined
+    }
+  | {
+      labelKey?: undefined
+      labelParams?: never
+      lines: readonly PopoverLine<K>[]
+    }
 
 export type PopoverProps<K extends string = string> = PopoverText<K> & {
-  /**
-   * 要填进模板的数字或名词，**只收已经格式化好的字符串**（`10–2`、`289/289`）。
-   * 与 `IconButton.ariaLabelParams` 同一套占位符（`{name}`），也共用同一份填充实现。
-   */
-  labelParams?: Readonly<Record<string, string>>
   /** 调用方的文案解析入口；未知键返回空串时整块浮层不渲染。 */
   resolveText: (key: K) => string
   /** 触发器：必须是可聚焦元素。 */
   children: ReactElement<TriggerHandlers>
 }
 
-export function Popover<K extends string = string>({
-  labelKey,
-  lines,
-  labelParams,
-  resolveText,
-  children
-}: PopoverProps<K>): ReactElement {
+export function Popover<K extends string = string>(props: PopoverProps<K>): ReactElement {
+  const { resolveText, children } = props
   // 多行只来自**键数组**，不来自 `\n` 折行：换行属于排版巧合，翻译会被合并或吃掉，而首行强调只有数组能表达。
-  const sourceKeys: readonly K[] = lines ?? (labelKey === undefined ? [] : [labelKey])
-  const resolvedLines = sourceKeys
-    .map((key) => fillLabelParams(resolveText(key), labelParams))
+  // 逐行解析、逐行填占位符：每行的参数各管各的，空行丢弃（原行为不变）。
+  const entries: ReadonlyArray<{ key: K; params?: Readonly<Record<string, string>> }> =
+    props.lines !== undefined
+      ? props.lines.map((line) => ({ key: line.labelKey, params: line.params }))
+      : props.labelKey === undefined
+        ? []
+        : [{ key: props.labelKey, params: props.labelParams }]
+  const resolvedLines = entries
+    .map((entry) => fillLabelParams(resolveText(entry.key), entry.params))
     .filter((line) => line.trim() !== '')
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)

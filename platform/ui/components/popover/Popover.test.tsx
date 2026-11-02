@@ -35,13 +35,15 @@ async function mount(resolveText: (value: string) => string = key): Promise<HTML
   return trigger
 }
 
-async function mountLines(lines: readonly string[], resolveText: (value: string) => string = key, params?: Record<string, string>) {
+async function mountLines(keys: readonly string[], resolveText: (value: string) => string = key, params?: Record<string, string>) {
+  // 多行的参数进 `lines[].params`（契约 §8）：`labelParams` 只在单行分支存在。
+  const lines = keys.map((labelKey) => (params === undefined ? { labelKey } : { labelKey, params }))
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <Popover lines={lines} labelParams={params} resolveText={resolveText}>
+      <Popover lines={lines} resolveText={resolveText}>
         <button type="button" data-trigger>
           trigger
         </button>
@@ -161,6 +163,35 @@ describe('Popover', () => {
     // 首行是这句说明的主题，其余是细节：丢了这个区分，三行并列读起来就是同一件事。
     expect(rendered[0]?.style.fontWeight).toBe('600')
     expect(rendered[1]?.style.fontWeight).toBe('')
+  })
+
+  it('gives each line its own params, so five facts can share one bubble', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <Popover
+          resolveText={(value) => (value === 'ui.test.a' ? 'A {v}' : value === 'ui.test.b' ? 'B {v}' : '')}
+          lines={[
+            { labelKey: 'ui.test.a', params: { v: '1' } },
+            { labelKey: 'ui.test.b', params: { v: '2' } }
+          ]}>
+          <button type="button" data-trigger>
+            trigger
+          </button>
+        </Popover>
+      )
+    })
+    const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')!
+    await act(async () => {
+      trigger.focus()
+    })
+    await tick()
+
+    // 每行自带参数：共用一份参数会让第二行拿到第一行的值。
+    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
+    expect(rendered.map((node) => node.textContent)).toEqual(['A 1', 'B 2'])
   })
 
   it('fills the template with already-formatted values and leaves no placeholder behind', async () => {

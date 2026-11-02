@@ -26,8 +26,8 @@ import { Popover } from '@platform/ui/components/popover'
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | 二选一 | 说明文案的**单个键**。`K` 从 `resolveText` 推断，解析器绑了键联合时只收联合内的键。 |
-| `lines` | `readonly K[]` | 二选一 | 多行说明，**一行一个键**；代替 `labelKey`。首行是主题，会被强调。 |
-| `labelParams` | `Record<string, string>` | 否 | 填进文案模板 `{name}` 的值，**只收已经格式化好的字符串**（`10–2`、`289/289`）。 |
+| `lines` | `readonly { labelKey, params? }[]` | 二选一 | 多行说明，**每行自带参数**；代替 `labelKey`。首行是主题，会被强调。 |
+| `labelParams` | `Record<string, string>` | 仅单行 | 单行分支里填 `{name}` 的值，**只收已经格式化好的字符串**；多行分支没有这个字段，传了编译不过，参数进 `lines[].params`。 |
 | `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键返回空串。 |
 | `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |
 

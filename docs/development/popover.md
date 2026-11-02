@@ -29,8 +29,8 @@ component adds the open/close model, the width cap and the focus return.
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | one of | A single-sentence explanation, **as a key**. |
-| `lines` | `readonly K[]` | one of | A multi-line explanation, **one key per line**. The first line is the subject and is rendered bold. |
-| `labelParams` | `Readonly<Record<string, string>>` | no | Values to fill `{name}` placeholders. **Already formatted** strings only (`10–2`, `289/289`). |
+| `lines` | `readonly { labelKey, params? }[]` | one of | A multi-line explanation. Each line carries **its own** params; the first line is the subject and is rendered bold. |
+| `labelParams` | `Readonly<Record<string, string>>` | single-line only | Values to fill `{name}` placeholders in the one-line form. **Already formatted** strings only (`10–2`, `289/289`). It does not exist on the multi-line branch: passing it there does not compile. |
 | `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
 
@@ -43,7 +43,14 @@ inferred from `resolveText`, so a resolver typed to a key union locks the allowe
 
 ```tsx
 // Correct: three keys, three lines, the first one carries the emphasis.
-<Popover lines={['…help.summary', '…help.caveat', '…help.howToAdd']} resolveText={t}>
+<Popover
+  lines={[
+    { labelKey: '…help.summary' },
+    { labelKey: '…help.caveat', params: { range: '10–2' } },
+    { labelKey: '…help.howToAdd' }
+  ]}
+  resolveText={t}
+>
 
 // Wrong: one sentence joined with \n and wrapped by CSS.
 <Popover labelKey={t('…help.joined')} resolveText={t}>   // t() returns "a\nb\nc"
@@ -84,6 +91,11 @@ wrapping a picker in an explanation panel is a classification error, not a migra
   lines read as three equal facts.
 
 ## Placeholders
+
+Each line takes its own `params` (contract §8): a page that shows five facts, each with a different
+as-of time, keeps them in one bubble without a shared parameter bag. `labelParams` exists only on the
+single-line branch — passing it with `lines` does not compile, so "one bag for the whole block" and
+"one bag per line" cannot both live here.
 
 `labelParams` takes values that are **already formatted by the caller**: the component formats no
 numbers and no dates, because the same value formatted in two places ends up looking like two
