@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { Bot } from 'lucide-react'
 import { AgentChatSurface } from '@renderer/shell/agents/AgentChatSurface'
 import { LoadingState } from '@platform/ui/components/loading'
@@ -156,10 +156,13 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
           />
         </header>
         <div className="mi-analysis-chat__binding">
+          {/* No hint here: the row wraps (`overflow-wrap: anywhere`), so the whole title is on
+              screen. A tooltip that repeats visible text only added a hover-only duplicate and a
+              Tab stop with nothing to say. */}
           {selectedNews
-            ? <Tooltip title={selectedNews.title} trigger={['hover', 'focus']}><span tabIndex={0}>{t.selectedNews}·{selectedNews.title}</span></Tooltip>
+            ? <span>{t.selectedNews}·{selectedNews.title}</span>
             : selectedContextLabel
-              ? <Tooltip title={selectedContextLabel} trigger={['hover', 'focus']}><span tabIndex={0}>{t.selectedEvent}·{selectedContextLabel}</span></Tooltip>
+              ? <span>{t.selectedEvent}·{selectedContextLabel}</span>
               : selectionBlocked ? <span>{selectionState === 'loading' ? text.analysisTimeline.loading : text.analysisTimeline.unavailable}</span> : binding ? <span>{t.selectedAnalysis}</span> : <span>{t.noSelection}</span>}
           {selectedNews
             ? <Button size="small" type="text" onClick={() => setSelectedNews(undefined)}>{t.clearSelection}</Button>
