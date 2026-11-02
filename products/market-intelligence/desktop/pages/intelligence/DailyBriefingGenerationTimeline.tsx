@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Steps, Tooltip } from 'antd'
+import { Steps } from 'antd'
 import { CircleHelp } from 'lucide-react'
+
+import { Popover } from '@platform/ui/components/popover'
+
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
@@ -98,56 +101,43 @@ function stepStatus(stage: GenerationTraceStage | undefined, skipReason: SkipRea
 }
 
 /**
- * The fixed logic of one stage, behind the question mark. Hover and keyboard focus preview it,
- * a click pins or closes it, and Escape closes it from anywhere. The help is a stage's own copy:
- * when the locale has no line for a stage the icon is not rendered, so no empty tooltip appears.
+ * One literal key per stage: the guard only validates literals it can see, so the keys live here
+ * rather than being built by string interpolation at the call site.
+ */
+const STAGE_HELP_KEYS: Record<GenerationStageId, string> = {
+  source: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.source',
+  candidates: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.candidates',
+  selection: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.selection',
+  'field-backfill': 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.field-backfill',
+  writing: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.writing',
+  validation: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.validation',
+  'repair-1': 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.repair-1',
+  'repair-2': 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.repair-2',
+  store: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.store'
+}
+
+/**
+ * The fixed logic of one stage, behind the question mark: it is a paragraph, so it opens as a
+ * popover — hover and focus preview it, a click pins it, Escape closes it and returns the focus.
+ * The sentence is the stage's own copy, taken by key; a stage the locale has no line for renders no
+ * icon, so an empty bubble cannot appear.
  */
 function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBriefingText }>): React.ReactElement | null {
   const labels = text.generationTrace
-  const help = labels.stageHelp[id]
-  const [pinned, setPinned] = useState(false)
-  const [hovered, setHovered] = useState(false)
-  // A dismiss (click on a pinned icon, or Escape) outranks the pointer still resting on the icon.
-  const [dismissed, setDismissed] = useState(false)
-  const open = (pinned || hovered) && !dismissed
-
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      setPinned(false)
-      setHovered(false)
-      setDismissed(true)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open])
-
-  if (!help?.trim()) return null
-  return <Tooltip open={open} title={help} trigger={[]} placement="top" styles={{ root: { maxWidth: 360 } }}>
+  const resolveProductText = useProductTextKey()
+  if (!labels.stageHelp[id]?.trim()) return null
+  return <Popover
+    labelKey={STAGE_HELP_KEYS[id]}
+    resolveText={resolveProductText}>
     <button
-      className="mi-generation-trace__stage-help"
-      type="button"
-      data-stage-help={id}
       aria-label={labels.stageHelpLabel.replace('{stage}', labels.stages[id])}
-      aria-expanded={open}
-      onMouseEnter={() => { setHovered(true); setDismissed(false) }}
-      onMouseLeave={() => { setHovered(false); setDismissed(false) }}
-      onFocus={() => { setHovered(true); setDismissed(false) }}
-      onBlur={() => { setHovered(false); setPinned(false); setDismissed(false) }}
-      onClick={() => {
-        if (pinned) { setPinned(false); setDismissed(true) } else { setPinned(true); setDismissed(false) }
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return
-        setPinned(false)
-        setHovered(false)
-        setDismissed(true)
-      }}
+      className="mi-generation-trace__stage-help"
+      data-stage-help={id}
+      type="button"
     >
-      <CircleHelp size={10} aria-hidden="true" />
+      <CircleHelp aria-hidden="true" size={10} />
     </button>
-  </Tooltip>
+  </Popover>
 }
 
 function stageResult(
