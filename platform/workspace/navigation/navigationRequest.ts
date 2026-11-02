@@ -14,8 +14,14 @@ export const APP_NAVIGATE_EVENT = 'app-shell:navigate'
  * `panel` 保持 `string`：面板由产品在运行时注册（`resolveAvailableSettingsPanelKey` 动态解析），
  * 平台枚举不出来。这是唯一允许的开区间，理由是对应运行时注册表，不是文案。
  */
+/**
+ * 「打开某个助手的某个话题」。`assistant` 是 `AppShell` 早就支持的 detail 字段，
+ * 但此前没有任何生产派发点用它——所以它一直是「类型支持、没人证明能用」的一块。
+ */
+export type AssistantOpenTarget = Readonly<{ assistantId: string; topicId: string }>
+
 export type NavigationRequest =
-  | { page: 'assistants' }
+  | { page: 'assistants'; assistant?: AssistantOpenTarget }
   | { page: 'agents' }
   | { page: 'settings'; panel: string }
 
@@ -24,7 +30,9 @@ export function navigateTo(request: NavigationRequest): void {
   const detail =
     request.page === 'settings'
       ? { navKey: request.page, settingsPanelKey: request.panel }
-      : { navKey: request.page }
+      : request.page === 'assistants' && request.assistant !== undefined
+        ? { navKey: request.page, assistant: request.assistant }
+        : { navKey: request.page }
   window.dispatchEvent(new CustomEvent(APP_NAVIGATE_EVENT, { detail }))
 }
 

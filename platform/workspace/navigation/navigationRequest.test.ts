@@ -30,6 +30,15 @@ describe('navigateTo', () => {
     })
   })
 
+  it('carries the assistant target when the caller knows which topic to open', () => {
+    const spy = listener()
+    navigateTo({ page: 'assistants', assistant: { assistantId: 'assistant-1', topicId: 'topic-9' } })
+    expect((spy.mock.calls[0]![0] as CustomEvent).detail).toEqual({
+      navKey: 'assistants',
+      assistant: { assistantId: 'assistant-1', topicId: 'topic-9' }
+    })
+  })
+
   it('is the only entry: it does not swallow failures and returns nothing', () => {
     expect(navigateTo({ page: 'assistants' })).toBeUndefined()
   })
