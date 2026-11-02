@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -160,26 +161,26 @@ export function ModelServiceModelsSection({
           <span className="model-service-count" data-models-count>{modelCount}</span>
         </span>
         <span className="model-service-head-tools">
-          <button
-            type="button"
-            className="model-service-head-icon"
-            data-models-filter-toggle
-            title={filterLabel}
-            aria-label={filterLabel}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((current) => !current)}>
-            <Filter size={13} />
-          </button>
-          <button
-            type="button"
-            className="model-service-head-icon"
-            data-models-search-toggle
-            title={labels.modelSearch}
-            aria-label={labels.modelSearch}
-            aria-pressed={searchOpen}
-            onClick={() => setSearchOpen((current) => !current)}>
-            <Search size={13} />
-          </button>
+          <IconButton
+            ariaLabelKey="modelService.filterModels"
+            expanded={filtersOpen}
+            icon={Filter}
+            onSelect={() => setFiltersOpen((current) => !current)}
+            resolveText={(key) => (key === 'modelService.filterModels' ? filterLabel : '')}
+            size="sm"
+            tooltipKey="modelService.filterModels"
+            dataAttributes={{ 'data-models-filter-toggle': 'true' }}
+          />
+          <IconButton
+            ariaLabelKey="modelService.searchModels"
+            icon={Search}
+            onSelect={() => setSearchOpen((current) => !current)}
+            pressed={searchOpen}
+            resolveText={(key) => (key === 'modelService.searchModels' ? labels.modelSearch : '')}
+            size="sm"
+            tooltipKey="modelService.searchModels"
+            dataAttributes={{ 'data-models-search-toggle': 'true' }}
+          />
         </span>
         <span className="model-service-head-actions">
           <ModelServiceDetectControl
