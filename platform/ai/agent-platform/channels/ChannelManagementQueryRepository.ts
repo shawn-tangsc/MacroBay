@@ -140,14 +140,17 @@ export class ChannelManagementQueryRepository {
   }
 
   /**
-   * 每个通道当前启用中的投递目标（只取通道 id 与会话类型，不取会话 id 或名称）。
+   * 每个通道当前**启用且已绑定会话**的投递目标（只取通道 id 与会话类型，不取会话 id 或名称）。
    * 一次查询取全量：通道数量是个位数，逐通道查会把一个只读投影变成 N+1。
+   *
+   * 两个条件缺一不可，并且必须与投递判据同源（通道方案 §2.3）：只数 `enabled` 会让设置行把一条
+   * 没绑会话的历史目标算成「已绑定 / 多目标」，而投递侧判为未绑定——同一个事实两处说法。
    */
   enabledDeliveryTargets(): Array<{ channelId: string; conversationKind: ChannelConversationSafeView['kind'] }> {
     return (this.database.connection.prepare(
       `select t.channel_id as channel_id, c.conversation_kind as conversation_kind
        from channel_delivery_targets t join channel_conversations c on c.id = t.conversation_id
-       where t.enabled = 1 and exists (
+       where t.enabled = 1 and c.agent_session_id is not null and exists (
          select 1 from agent_channels where id = t.channel_id and ${MANAGED_CHANNEL_SQL}
        )
        order by t.channel_id asc, t.updated_at asc, t.id asc`

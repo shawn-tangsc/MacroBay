@@ -1144,12 +1144,13 @@ describe('read-only delivery targets projection', () => {
     database: ReturnType<typeof harness>['database'],
     channelId: string,
     index: number,
-    kind: 'direct' | 'group' | 'channel' = 'direct'
+    kind: 'direct' | 'group' | 'channel' = 'direct',
+    sessionBound = true
   ): void {
     database.connection.prepare(
       `insert into channel_conversations(id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at)
        values(?, ?, x'01', 'ref', 1, ?, ?, ?, '2026-07-19', '2026-07-19')`
-    ).run(`conversation-${index}`, channelId, `hash-${index}`, kind, `session-${index}`)
+    ).run(`conversation-${index}`, channelId, `hash-${index}`, kind, sessionBound ? `session-${index}` : null)
     database.connection.prepare(
       `insert into channel_delivery_targets(id, channel_id, conversation_id, enabled, created_at, updated_at)
        values(?, ?, ?, 1, '2026-07-19', '2026-07-19')`
@@ -1192,6 +1193,32 @@ describe('read-only delivery targets projection', () => {
       deliverable: true,
       reason: null,
       target: { kind: 'ambiguous', count: 2 }
+    })
+  })
+
+  // 与投递判据同源（通道方案 §2.3）：设置行说的「已绑定」必须就是投递会用的那一个。
+  it('counts only targets that are enabled and have a bound session', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+    addTarget(database, id, 2, 'group', false)
+
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: true,
+      reason: null,
+      target: { kind: 'bound', conversationKind: 'direct' }
+    })
+  })
+
+  it('treats an enabled target without a bound session as no target at all', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct', false)
+
+    expect(service.listDeliveryTargets().channels[0]).toEqual({
+      id,
+      name: 'Telegram',
+      deliverable: false,
+      reason: 'no-enabled-target',
+      target: { kind: 'unbound' }
     })
   })
 
