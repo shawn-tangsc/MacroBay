@@ -56,6 +56,15 @@ type AssistantInputbarProps = {
 }
 
 const SETTINGS_TOOLTIP_KEY = 'assistants.assistantSettings'
+const INPUTBAR_TOOL_KEYS = {
+  attachment: 'assistants.inputbarTools.attachment',
+  'new-topic': 'assistants.inputbarTools.new-topic',
+  'clear-topic': 'assistants.inputbarTools.clear-topic',
+  'quick-panel': 'assistants.inputbarTools.quick-panel',
+  'mcp-tools': 'assistants.inputbarTools.mcp-tools',
+  'web-search': 'assistants.inputbarTools.web-search',
+  'context-source': 'assistants.inputbarTools.context-source'
+} as const satisfies Record<AssistantInputbarToolId, string>
 const TOPIC_REQUIRED_KEY = 'assistants.topicRequiredHint'
 
 const TOOL_ICONS: Record<AssistantInputbarToolId, LucideIcon> = {
@@ -122,8 +131,8 @@ export function AssistantInputbar({
             return (
               <Tooltip
                 key={tool.id}
-                labelKey={`assistants.inputbarTools.${tool.labelKey}`}
-                resolveText={(key) => (key === `assistants.inputbarTools.${tool.labelKey}` ? label : '')}>
+                labelKey={INPUTBAR_TOOL_KEYS[tool.id]}
+                resolveText={(key) => (key === INPUTBAR_TOOL_KEYS[tool.id] ? label : '')}>
                 <Button
                   type="text"
                   size="small"
