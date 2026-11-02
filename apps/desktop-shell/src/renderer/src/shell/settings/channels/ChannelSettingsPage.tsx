@@ -31,6 +31,19 @@ const catalogTone: Record<Catalog['status'], StatusPillTone> = {
   blocked: 'bad'
 }
 
+/**
+ * 目录状态 → 文案键：**字面量键只写这一处**。
+ *
+ * 原来这里用 `` `channelCatalogStatus.${entry.status}` `` 拼键，`StatusPill` 的调用点守卫立刻报红——
+ * 它只认看得见的字符串，拼出来的键既校验不到形状，也校验不到存在。拼键换成「数据值 → 字面量键」
+ * 的表，和 `catalogTone` 同一形状：闭集里多一个取值就编译不过，没有兜底。
+ */
+const catalogStatusKey: Record<Catalog['status'], string> = {
+  planned: 'channelCatalogStatus.planned',
+  blocked: 'channelCatalogStatus.blocked',
+  supported: 'channelCatalogStatus.supported'
+}
+
 /** 通道运行态 → 档位：`runtime-ready` 才是在跑，其余都是「还没起来」。 */
 const runtimeTone = (state: Channel['state']): StatusPillTone => (state === 'runtime-ready' ? 'ok' : 'muted')
 
@@ -264,10 +277,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           <p key={entry.type}>
             <StatusPill
               tone={catalogTone[entry.status]}
-              labelKey={`channelCatalogStatus.${entry.status}`}
+              labelKey={catalogStatusKey[entry.status]}
               resolveText={(key) => {
-                const status = key.slice('channelCatalogStatus.'.length) as Catalog['status']
-                return labels.channelCatalogStatus[status] ?? ''
+                const status = (Object.keys(catalogStatusKey) as Array<Catalog['status']>).find(
+                  (candidate) => catalogStatusKey[candidate] === key
+                )
+                return status === undefined ? '' : labels.channelCatalogStatus[status]
               }}
             />
             {entry.type}
