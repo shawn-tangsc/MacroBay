@@ -120,8 +120,6 @@ export function formatInspectionStatus(status: CacheInspectionStatus | undefined
       return labels.statusReady
     case 'empty':
       return labels.statusEmpty
-    case 'active':
-      return labels.statusActive
     case 'inspection_failed':
       return labels.statusInspectionFailed
     default:
