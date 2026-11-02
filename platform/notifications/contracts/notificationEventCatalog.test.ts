@@ -22,21 +22,23 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 16-row table (8 platform + 8 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(16)
+  it('is the signed 15-row table (8 platform + 7 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(15)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
     expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(8)
-    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(8)
+    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(7)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
+    // 事件已按 §28 整条移除，批准表跟着删：批一条不存在的事件，等于给它留了一道静默复活的后门。
+    expect(ids).not.toContain('market-intelligence.briefing.ready')
   })
 
   it('leaves exactly six desktop rows and thirteen channel rows unapproved', () => {
-    // 批准表面：桌面 10 行、通道 3 行（超过这个数的实现就是把「没批」画成了「能开」）。
+    // 批准表面：桌面 9 行、通道 2 行（超过这个数的实现就是把「没批」画成了「能开」）。
     const rows = Object.values(NOTIFICATION_EVENT_POLICY)
-    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('desktop'))).toHaveLength(10)
-    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('channel'))).toHaveLength(3)
-    // 16 - 10 = 6 行未批准桌面；16 - 3 = 13 行未批准通道。
+    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('desktop'))).toHaveLength(9)
+    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('channel'))).toHaveLength(2)
+    // 15 - 9 = 6 行未批准桌面；15 - 2 = 13 行未批准通道（删掉的那行两种都批过，所以两个数都没变）。
   })
 
   it('never approves a bypass and always keeps center', () => {
