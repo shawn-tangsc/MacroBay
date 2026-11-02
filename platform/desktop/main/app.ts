@@ -256,10 +256,15 @@ import { CacheRegistry } from '../../storage/cache-governance/CacheRegistry'
 import { registerPlatformCacheProviders } from '../../storage/cache-governance/platformCacheProviders'
 import { createProductCacheRegistrar } from '../../storage/cache-governance/productCacheRegistrar'
 import { createProductServiceDisposerRegistry } from '../../product-registry/productServiceDisposerRegistry'
+import { getAgentTaskExecutionCoordinator, getAgentTaskExecutionCoordinatorOrNull, getAgentTaskRunController, getDisposeChannelMaintenanceJobs, getDisposeJobRunRetention, getDisposeTaskAutomationMaintenance, getInstalledProductManifestIds, getJobRuntimeForDisposal, getPanelWorkspaceForDisposal, getProductIpcRegistryForDisposal, setAgentTaskExecutionCoordinator, setAgentTaskRunController, setDisposeChannelMaintenanceJobs, setDisposeJobRunRetention, setDisposeTaskAutomationMaintenance, setInstalledProductManifestIds, setJobRuntimeForDisposal, setPanelWorkspaceForDisposal, setProductIpcRegistryForDisposal } from './composition/slots'
+import { bindReplaceAgentState } from './composition/agentStateBridge'
+
+// 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
+bindReplaceAgentState(replaceAgentState)
+
 
 let tray: Tray | null = null
 let agentTaskJobBridge: ReturnType<typeof createAgentTaskJobBridge> | null = null
-let agentTaskExecutionCoordinator: AgentTaskExecutionCoordinator | null = null
 let agentStateCoordinator: ReturnType<typeof createAgentStateCoordinator> | null = null
 // `app.getPath('userData')` below is derived from the application name. Set the stable name
 // before the first path read so development runs do not fall back to a shared Chromium profile.
@@ -328,7 +333,7 @@ const mainWindowHost = createMainWindowHost({
   createWindow: () => createMainWindow(),
   loadRenderer: (window) => loadMainWindowRenderer(window),
   logRendererEvent: (event) => rendererProcessLog.write(event),
-  getWorkspace: () => panelWorkspaceForDisposal
+  getWorkspace: () => getPanelWorkspaceForDisposal()
 })
 
 const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
@@ -510,13 +515,12 @@ const agentSystemWorkspacesRoot = join(app.getPath('userData'), 'platform', 'age
 const runtimeDriverRegistry = new RuntimeDriverRegistry()
 const toolApprovalRegistry = new ToolApprovalRegistry()
 const toolRegistry = new ToolRegistry()
-let installedProductManifestIds: string[] = []
 const productAgentToolRegistry = new ProductAgentToolRegistry()
 const productAgentToolRuntimeService = new ProductAgentToolRuntimeService({
   registry: productAgentToolRegistry,
   toolRegistry,
   traceRepository: createSqliteProductAgentToolTraceRepository(agentDatabase),
-  installedProductIds: () => installedProductManifestIds
+  installedProductIds: () => getInstalledProductManifestIds()
 })
 function registerProductAgentToolHandler(registration: ProductAgentToolHandlerRegistration): void {
   productAgentToolRegistry.registerHandler(registration)
@@ -551,7 +555,7 @@ const skillsRuntimeService = new SkillsRuntimeService({
 const taskManagementToolRuntimeService = new TaskManagementToolRuntimeService({
   store: agentStore,
   commands: agentServices.taskCommands,
-  runTask: (input) => agentTaskExecutionCoordinator!.enqueueManualRun(input)
+  runTask: (input) => getAgentTaskExecutionCoordinator().enqueueManualRun(input)
     .then((runLog) => ({ taskId: input.taskId, runLogId: runLog.id }))
 })
 const agentRuntimeCompositionService = new AgentRuntimeCompositionService({
@@ -580,12 +584,11 @@ let platformRuntimesDisposed = false
  * `before-quit` 置标记、挂起本轮退出、有界清理后放行一次 `app.quit()`。
  * 派生窗工厂据此在退出期**不再** preventDefault（否则 Electron 的退出关窗相位被取消 ⇒ 进程残留）。
  */
-let jobRuntimeForDisposal: JobRuntime | null = null
 
 /** 供应商的启用/凭据/增删都会改变「有没有可探目标」，调度要跟着走。 */
 function syncInUseModelPatrolScheduleFromState(): void {
-  if (!jobRuntimeForDisposal) return
-  const runtime = jobRuntimeForDisposal
+  const runtime = getJobRuntimeForDisposal()
+  if (!runtime) return
   void syncInUseModelPatrolSchedule(runtime, {
     isReady: async () => {
       const providers = (await providerStore.getState()).providers
@@ -597,42 +600,39 @@ function syncInUseModelPatrolScheduleFromState(): void {
  * 退出清理开始后 product IPC 只回答结构化 unavailable（见 `productIpcInvoker`）。
  * 这里持有同一实例，保证「清理已开始」先于任何产品 DB 关闭被登记。
  */
-let productIpcRegistryForDisposal: ReturnType<typeof createProductIpcRegistry> | null = null
 /** workspace 组合体：只在产品注册 seal 之后建立，用于退出时的有界布局 flush。 */
-let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null
-let disposeTaskAutomationMaintenance: (() => void) | null = null
-let disposeJobRunRetention: (() => void) | null = null
-let disposeChannelMaintenanceJobs: (() => void) | null = null
 /**
  * P1-06m：退出第一件事 —— 把 debounce（250ms）窗口内的待写布局**有界落盘**并记录结果。
  * 放在所有其它清理之前：后续清理可能很慢甚至挂住，绝不让它吃掉退出前最后一次布局变更。
  * 组合体尚未建立（禁用态/启动早期）时直接跳过：没有工作区就没有待写可谈。
  */
 async function flushPanelWorkspaceLayoutForExit(): Promise<void> {
-  if (panelWorkspaceForDisposal === null) return
+  const workspace = getPanelWorkspaceForDisposal()
+  if (workspace === null) return
   // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
-  reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })
+  reportPanelWorkspaceFlush({ report: await workspace.flushLayout() })
 }
 /** 退出清理的唯一实现（顺序由 lifecycle/quit.ts 决定）；这里只提供端口。 */
 const runtimeDisposer = createRuntimeDisposer({
-  markProductIpcClosed: () => productIpcRegistryForDisposal?.markClosed(),
+  markProductIpcClosed: () => getProductIpcRegistryForDisposal()?.markClosed(),
   flushPanelWorkspaceLayout: async () => {
     // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
-    if (panelWorkspaceForDisposal === null) return
-    reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })
+    const workspace = getPanelWorkspaceForDisposal()
+    if (workspace === null) return
+    reportPanelWorkspaceFlush({ report: await workspace.flushLayout() })
   },
   disposeMaintenanceTimers: [
     () => {
-      disposeTaskAutomationMaintenance?.()
-      disposeTaskAutomationMaintenance = null
+      getDisposeTaskAutomationMaintenance()?.()
+      setDisposeTaskAutomationMaintenance(null)
     },
     () => {
-      disposeJobRunRetention?.()
-      disposeJobRunRetention = null
+      getDisposeJobRunRetention()?.()
+      setDisposeJobRunRetention(null)
     },
     () => {
-      disposeChannelMaintenanceJobs?.()
-      disposeChannelMaintenanceJobs = null
+      getDisposeChannelMaintenanceJobs()?.()
+      setDisposeChannelMaintenanceJobs(null)
     }
   ],
   // Abort every adapter lifetime before the shared SQLite fence closes all owners.
@@ -646,10 +646,10 @@ const runtimeDisposer = createRuntimeDisposer({
   ],
   fenceChannels: () => channelManagementRepository.fenceAllForQuit(new Date().toISOString()),
   stopTaskScheduler: () => agentTaskSchedulerRuntimeService.stop(),
-  stopJobs: () => jobRuntimeForDisposal?.stopAll(),
+  stopJobs: () => getJobRuntimeForDisposal()?.stopAll(),
   disposeProductServices: () => productServiceDisposerRegistry.disposeAll(),
   disposeAgentRuntimes: [() => agentRuntimeService.dispose(), () => mcpRuntimeService.dispose()],
-  disposeWorkspace: async () => panelWorkspaceForDisposal?.dispose(),
+  disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose(),
   reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report }),
   closeJobRunStore: () => jobRunStore.close()
 })
@@ -864,13 +864,13 @@ const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
   startupAt: new Date().toISOString(),
   getAgentState: () => agentStore.getState(),
   enqueueDueTask: async (task) => {
-    await agentTaskExecutionCoordinator?.enqueueDueTask(task.taskId)
+    await getAgentTaskExecutionCoordinatorOrNull()?.enqueueDueTask(task.taskId)
   }
 })
-agentTaskExecutionCoordinator = new AgentTaskExecutionCoordinator({
+setAgentTaskExecutionCoordinator(new AgentTaskExecutionCoordinator({
   services: agentServices,
   dispatchQueuedRun: (input) => agentTaskDispatchService.dispatchQueuedRun(input)
-})
+}))
 agentStateCoordinator = createAgentStateCoordinator({
   getState: () => agentStore.getState(),
   replaceState: (state) => agentStore.replace(state),
@@ -949,7 +949,6 @@ const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies(
   snapshotStore: agentRuntimeProbeSnapshotStore,
   systemWorkspaceRoot: agentSystemWorkspacesRoot
 })
-let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
 const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
   const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
   const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
@@ -991,7 +990,7 @@ const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     runtime: taskManagementToolRuntimeService,
     commands: agentServices.taskCommands,
     getAgentState: () => agentStore.getState(),
-    getTaskRunController: () => agentTaskRunController
+    getTaskRunController: () => getAgentTaskRunController()
   }
 })
 const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
@@ -1051,7 +1050,7 @@ const agentIpcHandlers = createAgentIpcHandlers(
   agentRuntimeService,
   {
     runTask: (agentId: string, taskId: string, expectedRevision: number) =>
-      agentTaskExecutionCoordinator!.enqueueManualRun({
+      getAgentTaskExecutionCoordinator().enqueueManualRun({
         agentId,
         taskId,
         expectedRevision,
@@ -1061,10 +1060,11 @@ const agentIpcHandlers = createAgentIpcHandlers(
   },
   {
     cancelTaskRun: (runLogId: string) => {
-      if (!agentTaskRunController) {
+      const controller = getAgentTaskRunController()
+      if (!controller) {
         throw new Error('Agent task run controller is not available.')
       }
-      return agentTaskRunController.cancelTaskRun(runLogId)
+      return controller.cancelTaskRun(runLogId)
     }
   },
   {
@@ -1074,13 +1074,13 @@ const agentIpcHandlers = createAgentIpcHandlers(
   {
     listProductToolPackages: async (agentId: string) => {
       const state = await agentStore.getState()
-      return productAgentToolRegistry.listPackages(installedProductManifestIds).map((pkg) =>
+      return productAgentToolRegistry.listPackages(getInstalledProductManifestIds()).map((pkg) =>
         buildProductAgentToolPackageEditorView({
           package: pkg,
           binding: (state.agentProductToolPackages ?? []).find(
             (item) => item.agentId === agentId && item.productId === pkg.productId
           ),
-          installedProductIds: installedProductManifestIds
+          installedProductIds: getInstalledProductManifestIds()
         })
       )
     },
@@ -1359,7 +1359,7 @@ function registerIpcHandlers(
     ensureDefaultAssistantSeed,
     refreshBuiltinSeedCopy,
     refreshShellTimeZone: () => shellTimeZone.refresh(),
-    notifyPreferencesChanged: () => panelWorkspaceForDisposal?.notifyPreferencesChanged()
+    notifyPreferencesChanged: () => getPanelWorkspaceForDisposal()?.notifyPreferencesChanged()
   })
   // 渠道管理 / 入站两个服务共 25 个 handler 搬到 ipc/channelIpc.ts；
   // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。
@@ -1502,7 +1502,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled),
     workspaceTestFixtures.productManifests
   )
-  installedProductManifestIds = productManifests.map((manifest) => manifest.id)
+  setInstalledProductManifestIds(productManifests.map((manifest) => manifest.id))
   assistantTemplateRegistry.clear()
   assistantTemplateRegistry.registerMany(platformAssistantTemplates)
   assistantTemplateRegistry.registerMany(createAssistantTemplateRegistrationsFromManifests(productManifests))
@@ -1518,7 +1518,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     safeSendToMainWindow(getMainWindow, IpcChannels.productIpcEvent, { productId, event, data })
   })
   const productIpcRegistry = createProductIpcRegistry()
-  productIpcRegistryForDisposal = productIpcRegistry
+  setProductIpcRegistryForDisposal(productIpcRegistry)
   // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
   const onRunTerminal = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
@@ -1526,15 +1526,15 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant))
   })
   const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
-  jobRuntimeForDisposal = jobRuntime
+  setJobRuntimeForDisposal(jobRuntime)
   jobRuntime.recover()
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })
-  agentTaskRunController = createAgentTaskRunController({
+  setAgentTaskRunController(createAgentTaskRunController({
     jobs: jobRunQueryService,
     jobRuntime
-  })
+  }))
   /**
    * 内置 Agent / 会话文案的语言解析入口。
    *
@@ -1718,14 +1718,14 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   }
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
-  panelWorkspaceForDisposal = panelWorkspace
+  setPanelWorkspaceForDisposal(panelWorkspace)
   /**
    * PLAT-32/S1（PM 裁决②）：OS 外观变化与「设置写入」走**同一条显式通知**。`themeMode==='system'` 时
    * `context.theme` 由 `nativeTheme.shouldUseDarkColors` 解析，用户在系统里切深浅色必须让已分离的页窗/面板窗
    * 跟随（旧实现只是在下一次任意窗口成功读取时顺带转发 ⇒ 读带副作用的副产物）；这里显式通知一次，
    * 通知本身不承载值、绝不 reject，且与设置写入共用同一对账入口（有界、主窗 0 条、无自持环）。
    */
-  nativeTheme.on('updated', () => { void panelWorkspaceForDisposal?.notifyPreferencesChanged() })
+  nativeTheme.on('updated', () => { void getPanelWorkspaceForDisposal()?.notifyPreferencesChanged() })
   // 主窗登记要早于 renderer 加载：首个 getHostContext 不能因为未登记而被拒
   const workspaceMainWindow = getMainWindow()
   if (workspaceMainWindow) {
@@ -1746,7 +1746,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       localizeBuiltinSeedCopy(seededState, language, buildBuiltinSeedVariants(providers))
     )
   )
-  await agentTaskExecutionCoordinator?.recoverAfterRestart()
+  await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   for (const { channelId, generation, token } of channelManagementRepository.activeRuntimeChannels(new Date().toISOString())) {
     const type = channelManagementRepository.channelType(channelId)
@@ -1780,8 +1780,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   }
   await channelManagementService.resumeRequested()
   taskAutomationMaintenance.recoverAfterRestart()
-  disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
-  disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
+  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
+  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
   await syncInUseModelPatrolSchedule(jobRuntime, {
     isReady: async () => {
@@ -1803,7 +1803,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     }
   }
   registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)
-  disposeChannelMaintenanceJobs = scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps)
+  setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps))
   syncProductToolsRuntimeFromState(await agentStore.getState())
   mcpRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())

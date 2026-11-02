@@ -95,8 +95,8 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
     expect(appSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
     expect(appSource).toContain('taskManagementToolBridge: {')
-    expect(appSource).toContain('getTaskRunController: () => agentTaskRunController')
-    expect(appSource).toContain('await agentTaskExecutionCoordinator?.recoverAfterRestart()')
+    expect(appSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
+    expect(appSource).toContain('await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()')
     expect(appSource).toContain('taskAutomationMaintenance.recoverAfterRestart()')
     expect(appSource).toContain('scheduleTaskAutomationMaintenance(taskAutomationMaintenance)')
     // Channel maintenance no longer owns timers: it is registered as platform jobs and removed by
@@ -112,8 +112,8 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('discord: () => discordRuntimeMaintenance.runOnce()')
     expect(appSource).toContain('wechat: () => wechatRuntimeMaintenance.runOnce()')
     expect(appSource).toContain('registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)')
-    expect(appSource).toContain('disposeChannelMaintenanceJobs = scheduleChannelMaintenanceJobs(')
-    expect(appSource).toContain('disposeChannelMaintenanceJobs?.()')
+    expect(appSource).toContain('setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(')
+    expect(appSource).toContain('getDisposeChannelMaintenanceJobs()?.()')
     expect(appSource).toContain('ChannelManagementService')
     // 25 个渠道 handler 已搬到 ipc/channelIpc.ts：断言看模块，退出链接线仍看 app.ts。
     expect(appSource).toContain('registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })')
@@ -142,7 +142,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("else if (type === 'telegram') telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-evidence-missing')")
     expect(appSource).toContain("// Lark's audit gate is intentionally active-generation-only")
     expect(appSource).not.toContain('agentServices.channels.create')
-    expect(appSource).toContain('disposeTaskAutomationMaintenance?.()')
+    expect(appSource).toContain('getDisposeTaskAutomationMaintenance()?.()')
     expect(appSource).toContain('agent: {\n          taskAutomation: { policyPreset }')
     expect(appSource).not.toContain('...settings.agent,\n          taskAutomation: { policyPreset }')
     expect(appSource).toContain("import { registerAgentTaskIpcHandlers } from './registerAgentTaskIpcHandlers'")
@@ -417,10 +417,10 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('isRuntimeClosed: () => platformRuntimesDisposed')
     expect(appSource).toContain('invokeProductIpc(productId, method, payload)')
     // 关闭登记与 renderer 入口共用同一 registry 实例。
-    expect(appSource).toContain('productIpcRegistryForDisposal = productIpcRegistry')
-    expect(appSource).toContain('productIpcRegistryForDisposal?.markClosed()')
+    expect(appSource).toContain('setProductIpcRegistryForDisposal(productIpcRegistry)')
+    expect(appSource).toContain('getProductIpcRegistryForDisposal()?.markClosed()')
     // 登记关闭必须早于产品服务/DB 拆除。
-    expect(appSource.indexOf('productIpcRegistryForDisposal?.markClosed()')).toBeLessThan(
+    expect(appSource.indexOf('getProductIpcRegistryForDisposal()?.markClosed()')).toBeLessThan(
       appSource.indexOf('productServiceDisposerRegistry.disposeAll()')
     )
   })
@@ -457,8 +457,8 @@ describe('desktop main IPC surface', () => {
     expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     // 退出走 workspace 有界 flush
     // 退出链搬到 lifecycle/quit.ts 后，dispose 决策由编排器驱动；app.ts 只提供端口。
-    expect(appSource).toContain('disposeWorkspace: async () => panelWorkspaceForDisposal?.dispose()')
-    expect(appSource).toContain('let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null')
+    expect(appSource).toContain('disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose()')
+    expect(appSource).toContain('getPanelWorkspaceForDisposal()')
 
     // 5 条通道常量与 preload 命名空间一一对应，且不引入任意 channel/URL 入口
     for (const channel of [

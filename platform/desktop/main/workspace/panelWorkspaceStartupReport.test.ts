@@ -284,7 +284,7 @@ describe('P1-06m 退出 flush / dispose 报告：字段齐全、可注入 log、
   it('app.ts 接线护栏：退出 flush 与 dispose 结果都必须真的落日志（绝不丢弃返回值）', () => {
     // 退出链搬到 lifecycle/quit.ts 后，flush/dispose 的落日志由 app.ts 的端口实现负责。
     const appSource = readFileSync(resolve(__dirname, '../app.ts'), 'utf8')
-    expect(appSource).toContain('reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })')
+    expect(appSource).toContain('reportPanelWorkspaceFlush({ report: await workspace.flushLayout() })')
     expect(appSource).toContain('reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report })')
     expect(appSource).not.toMatch(/^\s*await panelWorkspaceForDisposal\?\.dispose\(\)\s*$/mu)
   })

@@ -15,7 +15,7 @@ import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
  *
  * 现状把偏好对账**挂在受控读取上**（`getHostContext` 成功即 `reconcile`）⇒ **读带副作用**。
  * S1 把它改成**显式通知**：`app.ts` 的 `settingsUpdate` 成功路径加一行
- * `panelWorkspaceForDisposal?.notifyPreferencesChanged()`，对账/定向投递仍由 PLAT-30 抽出的
+ * `getPanelWorkspaceForDisposal()?.notifyPreferencesChanged()`，对账/定向投递仍由 PLAT-30 抽出的
  * `workspacePreferenceChangePublisher` 负责。
  *
  * 本文件固定两条判据（**语义与 PLAT-10/PLAT-28 逐字一致，判据绝不放宽**）：
@@ -278,7 +278,7 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
 
   it('app.ts 把 OS 外观变化接到同一对账入口（nativeTheme 复用既有 import，不新增通道）', () => {
     expect(appSource).toContain(
-      "nativeTheme.on('updated', () => { void panelWorkspaceForDisposal?.notifyPreferencesChanged() })"
+      "nativeTheme.on('updated', () => { void getPanelWorkspaceForDisposal()?.notifyPreferencesChanged() })"
     )
     // 既有 import 风格：nativeTheme 来自 electron 的那一条 import（不新增依赖、不新增通道/preload
     // 方法）。成员列表会随功能增减（例如 Windows 菜单条引入的 Menu），所以只断言这条 import 里有
