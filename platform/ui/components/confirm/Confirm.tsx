@@ -26,8 +26,17 @@ export type ConfirmProps = {
   onCancel?: () => void
 }
 
+/**
+ * 平台缺口的一行补丁：antd 的 `ModalFuncProps` 没有声明 `isSilent`，但运行时认它。
+ *
+ * 显式写出这个形状，而不是 `as any`——`as any` 会在下一次「清理类型」时被安静删掉，
+ * 然后 `onOk` 的拒绝又变成未处理拒绝、测试开始偶发红，而没人知道为什么。
+ */
+type ConfirmOptionsWithSilent = Parameters<typeof Modal.confirm>[0] & { isSilent?: () => boolean }
+
 export function confirmAction(props: ConfirmProps): void {
-  Modal.confirm({
+  const options: ConfirmOptionsWithSilent = {
+    isSilent: () => true,
     title: props.title,
     content: props.description,
     okText: props.confirmLabel,
@@ -39,8 +48,8 @@ export function confirmAction(props: ConfirmProps): void {
     // 失败时对话框要留在屏幕上（读者得能改完再提交）。antd 的 ActionButton 在 `onOk` 拒绝后
     // 会再抛一次，于是出现未处理拒绝；`isSilent` 让 antd 吞掉那一次重抛，**关闭时机仍由我们自己
     // 的 `onOk` 决定**——这是一处平台缺口的一行补丁，不是「让测试变绿」的开关。
-    isSilent: () => true,
     onOk: () => props.onConfirm(),
     onCancel: () => props.onCancel?.()
-  })
+  }
+  Modal.confirm(options)
 }
