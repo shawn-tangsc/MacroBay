@@ -2250,12 +2250,10 @@ h1 {
 
 .storage-cache-settings {
   padding: 0;
-  --storage-cache-ok: hsl(152 45% 62%);
   --storage-cache-warn: hsl(38 92% 58%);
 }
 
 :root[data-theme='light'] .storage-cache-settings {
-  --storage-cache-ok: hsl(152 55% 34%);
   --storage-cache-warn: hsl(32 90% 38%);
 }
 
@@ -2484,30 +2482,6 @@ h1 {
 
 .storage-cache-col-actions {
   width: 150px;
-}
-
-.storage-cache-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-
-.storage-cache-status i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.storage-cache-status[data-status='ready'] i,
-.storage-cache-status[data-status='active'] i {
-  background: var(--storage-cache-ok);
-}
-
-.storage-cache-status[data-status='inspection_failed'] i {
-  background: var(--danger);
 }
 
 .storage-cache-updated {

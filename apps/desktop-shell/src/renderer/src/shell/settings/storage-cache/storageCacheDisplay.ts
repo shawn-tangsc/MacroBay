@@ -1,4 +1,5 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import type { StatusPillTone } from '@platform/ui/components/status-pill'
 import type {
   CacheBackupPolicy,
   CacheCategory,
@@ -126,10 +127,32 @@ export function toInspectionDisplayStatus(status: CacheInspectionStatus | undefi
   return status ?? 'never-inspected'
 }
 
-export function formatInspectionStatus(status: CacheInspectionStatus | undefined, labels: StorageCacheLabels): string {
+/**
+ * 档位与文案都按**展示值**穷举：多一个状态就编译不过，不允许静默落回某一档。
+ * 档位是闭集（`StatusPillTone`），没有“自定义颜色”这一档。
+ */
+export const CACHE_INSPECTION_TONES: Record<CacheInspectionDisplayStatus, StatusPillTone> = {
+  ready: 'ok',
+  empty: 'muted',
+  inspection_failed: 'bad',
+  'never-inspected': 'muted'
+}
+
+export const INSPECTION_STATUS_KEY_PREFIX = 'storageCacheStatus.'
+
+/** `StatusPill` 只收键：把键还原成展示值，再走同一张穷举表取文案。 */
+export function resolveInspectionStatusLabel(key: string, labels: StorageCacheLabels): string {
+  const display = key.slice(INSPECTION_STATUS_KEY_PREFIX.length) as CacheInspectionDisplayStatus
+  return formatInspectionStatus(display, labels)
+}
+
+export function formatInspectionStatus(
+  status: CacheInspectionStatus | CacheInspectionDisplayStatus | undefined,
+  labels: StorageCacheLabels
+): string {
   // 穷举四个展示值、不留 `default`：将来领域层多一种状态时，这里必须编译失败，
   // 而不是静默落进「尚未巡检」——那正是今天删掉的 `return ''` 换了个位置。
-  switch (toInspectionDisplayStatus(status)) {
+  switch (toInspectionDisplayStatus(status as CacheInspectionStatus | undefined)) {
     case 'ready':
       return labels.statusReady
     case 'empty':
