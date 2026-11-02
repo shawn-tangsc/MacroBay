@@ -1,6 +1,6 @@
 import { Button } from 'antd'
-import { Popover } from '@platform/ui/components/popover'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
@@ -78,6 +78,8 @@ function lastActionOf(reading: PolicyPathReading, settlement: PolicyPathSettleme
  * The shape of the dot (ring for `warn`, filled for `bad`) is what keeps them apart in greyscale —
  * the component owns it, the card only names the tone.
  */
+const VOTE_HINT_KEY = 'pages.intelligence.portal.dashboard.policyPath.voteHint'
+
 const STALENESS_TONE = { live: 'ok', delayed: 'warn', stale: 'warn', unavailable: 'bad' } as const
 const STALENESS_KEY = {
   live: 'pages.intelligence.portal.dashboard.policyPath.live',
@@ -232,9 +234,11 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     <dl className="mi-policy-card__facts">
       {facts.map((row) => <div key={row.label}>
         <dt>{row.label}</dt>
+        {/* The hint rides the accessible name, not a focus stop: a `dd` is not a control, so giving
+            it focus put a stop in the Tab order where pressing anything does nothing. The numbers
+            still come from the template through the shared filler. */}
         {row.hintParams
-          ? <Popover labelKey="pages.intelligence.portal.dashboard.policyPath.voteHint"
-              labelParams={row.hintParams} resolveText={resolveKey}><dd tabIndex={0}>{row.value}</dd></Popover>
+          ? <dd aria-label={fillLabelParams(resolveKey(VOTE_HINT_KEY), row.hintParams)}>{row.value}</dd>
           : <dd>{row.value}</dd>}
       </div>)}
     </dl>

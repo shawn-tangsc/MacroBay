@@ -68,13 +68,16 @@ describe('policy path card', () => {
     expect(rendered.textContent).toContain(text.live)
   })
 
-  it('carries the vote hint on a focusable fact, not on a title attribute', async () => {
+  it('carries the vote hint in the accessible name, without adding a focus stop', async () => {
     const rendered = await render(reading)
-    // `title` is not a hint channel: keyboard and screen readers get nothing from it.
+    // A `dd` is not a control: `title` hides the hint from keyboard users, and `tabIndex` puts a
+    // stop in the Tab order where nothing happens. The hint belongs to the accessible name.
     expect(rendered.querySelector('dd[title]')).toBeNull()
-    const hinted = rendered.querySelector('dd[tabindex="0"]')
+    expect(rendered.querySelector('dd[tabindex]')).toBeNull()
+    const hinted = rendered.querySelector('dd[aria-label]')
     expect(hinted).not.toBeNull()
-    expect(hinted?.textContent).toContain('10–2')
+    expect(hinted?.getAttribute('aria-label')).toContain('10')
+    expect(hinted?.getAttribute('aria-label')).not.toContain('{')
   })
 
   it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
