@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import { X } from 'lucide-react'
 
@@ -31,7 +31,11 @@ export function MiSideDrawer({ title, meta, closeLabel, onClose, children }: Rea
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  const resolveText = useDrawerText()
+  const closeName = useDrawerText()
+  // `IconButton` asks its resolver with `(key: string)`, while the drawer's own table owns exactly one
+  // key. Every key therefore resolves to that sentence: an unknown key must never blank the button's
+  // only name — the same rule the drawer text table states for its own callers.
+  const resolveText = useCallback((_key: string) => closeName(), [closeName])
   return <aside className="mi-analysis-drawer" role="complementary" aria-label={title}>
     <header className="mi-analysis-drawer__header">
       <div>
