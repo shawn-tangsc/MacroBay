@@ -1379,7 +1379,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
       deliveryHealth: '投递健康', healthUpdated: (time) => `最近更新 ${time}`,
-      healthEmpty: '暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。',
+      healthEmpty: '任务开始运行后，这里会显示成功、失败与跳过计数。',
       scheduledTaskDelivery: '我的定时任务投递',
       resourceJobRuns: '资源任务最近一次运行',
       resourceJobRunsEmpty: '当前没有已注册的资源任务。',
@@ -2470,7 +2470,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
       deliveryHealth: 'Delivery health', healthUpdated: (time) => `Updated ${time}`,
-      healthEmpty: 'No deliveries yet. Success, failure and skipped counts appear here once a task runs.',
+      healthEmpty: 'Success, failure and skipped counts appear here once a task runs.',
       scheduledTaskDelivery: 'Scheduled task delivery',
       resourceJobRuns: 'Latest product job runs',
       resourceJobRunsEmpty: 'No registered product jobs.',

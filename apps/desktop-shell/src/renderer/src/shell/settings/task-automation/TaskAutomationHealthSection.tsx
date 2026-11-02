@@ -57,7 +57,12 @@ export function TaskAutomationHealthSection(props: {
               {/* Dependents stay silent while the thing they depend on is empty: with zero tasks the
                   counters are zero by construction, and 「还没有定时任务」 already said it once. */}
               {!props.loading && isEmpty && props.hasTasks ? (
-                <p className="task-automation-note">{labels.healthEmpty}</p>
+                <>
+                  {/* 还没投递过 = `empty/not-yet`：不带动作（读者此刻没事可做），
+                      它在等的是「任务开始运行」这个外部事件，所以通用句下面必须补一句场景说明。 */}
+                  <StateView state="empty" reasonCode="not-yet" size="md" />
+                  <p className="task-automation-note">{labels.healthEmpty}</p>
+                </>
               ) : null}
             </>
           )}

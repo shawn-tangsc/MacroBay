@@ -26,7 +26,7 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).toContain('投递健康')
     // With zero tasks the counters are zero by construction, so this block does not explain it:
     // 「还没有定时任务」 below already said the one true thing.
-    expect(markup).not.toContain('暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。')
+    expect(markup).not.toContain('任务开始运行后，这里会显示成功、失败与跳过计数。')
     expect(markup).toContain('我的定时任务')
     expect(markup).toContain('还没有定时任务')
     expect(markup).toContain('平台与产品资源任务')
@@ -123,8 +123,12 @@ describe('TaskAutomationSettingsPage', () => {
 
     const markup = renderPage()
 
-    // Tasks exist, nothing has been delivered yet: now the explanation is the reader's fact.
-    expect(markup).toContain('暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。')
+    // Tasks exist, nothing has been delivered yet: the fact is the reader's now.
+    // 状态与句子分开：`StateView` 给「还没有发生过」这个判断（不带动作），
+    // 场景说明紧贴在它下面，说清等的是「任务开始运行」。
+    expect(markup).toContain('这里还没有内容')
+    expect(markup).toContain('还没有发生过；等有数据进来后这里就会出现')
+    expect(markup).toContain('任务开始运行后，这里会显示成功、失败与跳过计数。')
   })
 
   it('keeps the delivery health block visible with zeros instead of collapsing it when there is no task', () => {
