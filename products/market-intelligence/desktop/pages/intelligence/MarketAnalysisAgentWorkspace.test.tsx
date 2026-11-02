@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { productText } from '../../shared/i18n/productText'
 import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 
@@ -178,13 +179,16 @@ async function renderPanel(props: Record<string, unknown> = {}, openPanel = true
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
+    // The embedded conversation's delete flows go through `useConfirm()`, which renders inside the
+    // tree so the dialog follows the current theme — without the provider it throws by design.
     root?.render(
-      createElement(MarketAnalysisAgentWorkspace, {
-        text,
-        floatingText,
-        card: createElement('p', { 'data-card': true }, '接下来要看的'),
-        ...props
-      } as never)
+      createElement(ConfirmProvider, null,
+        createElement(MarketAnalysisAgentWorkspace, {
+          text,
+          floatingText,
+          card: createElement('p', { 'data-card': true }, '接下来要看的'),
+          ...props
+        } as never))
     )
   })
   if (openPanel) {
