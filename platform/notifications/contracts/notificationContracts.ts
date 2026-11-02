@@ -1,4 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationApprovedLevel } from './notificationEventCatalog'
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
@@ -54,6 +55,9 @@ export type NotificationRecord = {
   titleParams?: Record<string, string>
   bodyKey?: NotificationCopyKey
   bodyParams?: Record<string, string>
+  /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
+  reasonKey?: NotificationCopyKey
+  reasonParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
@@ -90,6 +94,9 @@ export type NotificationRequest = {
   titleParams?: Record<string, string>
   bodyKey?: NotificationCopyKey
   bodyParams?: Record<string, string>
+  /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
+  reasonKey?: NotificationCopyKey
+  reasonParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   requestedChannels: NotificationChannel[]
@@ -230,3 +237,60 @@ export const PRIORITY_RANK: Record<NotificationPriority, number> = {
   high: 2,
   urgent: 3
 }
+
+/** 去重键的输入（契约 §3.2）：判别联合，不是自由字符串表。 */
+export type NotificationDedupeVars =
+  | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
+      observedAt: string; cadence: 'intraday'; bucketMs: number }
+  | { builder: 'moduleSignal'; moduleId: string; ruleId: string; asset: string | null
+      observedAt: string; cadence: 'trading-day' }
+  | { builder: 'sourceIssue'; sourceId: string }
+  | { builder: 'template'; vars: Readonly<Record<string, string>> }
+
+/** 提交请求（契约 §3.2）：记录里存键与参数，不存句子。 */
+export type NotificationSubmitRequest = {
+  eventTypeId: string
+  producerId?: string
+  dedupeVars: NotificationDedupeVars
+  titleParams?: Readonly<Record<string, string>>
+  bodyParams?: Readonly<Record<string, string>>
+  bodyVariant?: string
+  reasonParams?: Readonly<Record<string, string>>
+  actions: readonly NotificationAction[]
+  deeplink?: NotificationDeeplink
+  correlationId?: string
+  occurredAt: string
+}
+
+/** 给产品的回执（契约 §6.1 封闭集合）；不向用户抛异常。 */
+export type NotificationSubmitOutcome =
+  | { kind: 'accepted'; recordId: string; levels: readonly NotificationApprovedLevel[] }
+  | { kind: 'merged'; recordId: string; occurrenceCount: number; mergedEventTypes: string[] }
+  | { kind: 'collapsed'; aggregateRecordId: string; collapsedCount: number }
+  | { kind: 'suppressed'; reason: 'not-subscribed'; eventTypeId: string }
+  | {
+      kind: 'rejected'
+      reason:
+        | 'unknown-event-type'
+        | 'cross-product-key'
+        | 'missing-dedupe-key'
+        | 'invalid-dedupe-vars'
+        | 'unknown-body-variant'
+        | 'missing-action'
+        | 'scope-mismatch'
+      message: string
+    }
+
+/** 诊断出口：五类「没人看就会变成黑箱」的事实（runtime §2）。 */
+export type NotificationDiagnosticsEntry = {
+  code:
+    | 'delegated'
+    | 'unclaimed-producer'
+    | 'claim-never-registered'
+    | 'copy-unresolved'
+    | 'persist-failed'
+  eventTypeId?: string
+  producerId?: string
+  at: string
+}
+export type NotificationDiagnosticsSink = (entry: NotificationDiagnosticsEntry) => void

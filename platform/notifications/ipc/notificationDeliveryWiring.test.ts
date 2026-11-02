@@ -23,8 +23,9 @@ const preload = read('platform/desktop/preload/namespaces/notifications.ts')
 describe('应用内投递的接线', () => {
   it('运行时把 toast 与 popup 两个钩子都接上', () => {
     // 两个都要：只接 toast 的话，弹窗那档仍然是「勾了没反应」。
-    expect(runtime).toContain('toast: (record) =>')
-    expect(runtime).toContain('popup: (record) =>')
+    // 通道方案 §2.2：两个钩子都收 (record, content)，且 content 由运行时解析一次。
+    expect(runtime).toContain('toast: (record, _content: NotificationDeliveryContent) =>')
+    expect(runtime).toContain('popup: (record, _content: NotificationDeliveryContent) =>')
     expect(runtime).toContain('broadcastNotificationDelivered')
   })
 

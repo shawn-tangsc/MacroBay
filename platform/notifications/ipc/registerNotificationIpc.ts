@@ -3,12 +3,12 @@ import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
 
 import { IpcChannels } from '../../desktop/ipc/channels'
-import { resolveNotificationCopyText, notificationCopyText, type NotificationCopyLanguage } from '../../i18n/notificationCopy'
+import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
 import { createDesktopNotificationAdapter } from '../desktop/desktopNotificationAdapter'
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationRecord, NotificationRuntimeSettings } from '../contracts/notificationContracts'
-import type { NotificationClock } from '../runtime/notificationRouting'
+import type { NotificationClock, NotificationDeliveryContent } from '../runtime/notificationRouting'
 
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
 let getNotificationSettings: (() => Promise<NotificationRuntimeSettings>) | null = null
@@ -77,25 +77,17 @@ export function getNotificationRuntime() {
           defaultSnoozeMinutes: 60
         }),
       clock: notificationClock,
+      getLanguage: () => getLanguage?.() ?? Promise.resolve('zh-CN'),
       deliveryHooks: {
         // 应用内两档直接推给渲染层：句子由渲染层按当前语言解析（记录里只有键与参数）。
-        toast: (record) => broadcastNotificationDelivered(record, 'toast'),
-        popup: (record) => broadcastNotificationDelivered(record, 'popup'),
-        // 记录只存键与参数，句子在这里按**当前语言**解析：切语言后历史通知也跟着变。
-        desktop: async (record) => {
-          // 每次读设置：切语言后**历史通知**也按新语言解析（记录里只有键）。
-          const language = (await getLanguage?.()) ?? 'zh-CN'
-          const template = notificationCopyText(language, record.titleKey)
-          const bodyTemplate = record.bodyKey === undefined
-            ? undefined
-            : notificationCopyText(language, record.bodyKey)
-          return desktopAdapter.show({
-            title: resolveNotificationCopyText(language, template, record.titleParams),
-            ...(bodyTemplate === undefined
-              ? {}
-              : { body: resolveNotificationCopyText(language, bodyTemplate, record.bodyParams) })
+        toast: (record, _content: NotificationDeliveryContent) => broadcastNotificationDelivered(record, 'toast'),
+        popup: (record, _content: NotificationDeliveryContent) => broadcastNotificationDelivered(record, 'popup'),
+        // 四个钩子拿运行时解析好的**同一份** content（通道方案 §2.2）：端口不再解析一遍。
+        desktop: async (_record, content: NotificationDeliveryContent) =>
+          desktopAdapter.show({
+            title: content.title,
+            ...(content.body.length === 0 ? {} : { body: content.body })
           })
-        }
       },
       readDesktopPermission: () => desktopAdapter.readPermission(),
       onChanged: broadcastNotificationChanged
