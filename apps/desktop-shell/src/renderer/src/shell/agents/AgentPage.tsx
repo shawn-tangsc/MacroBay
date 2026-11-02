@@ -202,6 +202,7 @@ export function AgentPage({
             />
           ) : null}
         <AgentChat
+          onCreateAgent={() => setEditorMode({ type: 'create' })}
           state={state}
           runtimeSnapshot={runtimeSnapshot}
           channelRuntimeSnapshot={channelRuntimeSnapshot}

@@ -9,6 +9,7 @@ import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/ru
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { Bot, Link2Off } from 'lucide-react'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { Button } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -49,6 +50,8 @@ type AgentChatProps = {
   onRuntimeSnapshotChange: (snapshot: AgentSessionRuntimeSnapshot) => void
   onChannelRuntimeSnapshotChange: (snapshot: AgentChannelRuntimeSnapshot) => void
   onEditAgent: (agentId: string) => void
+  /** 从「还没有智能体」的空态直接去新建——空态不给死路。 */
+  onCreateAgent: () => void
 }
 
 export default function AgentChat({
@@ -66,7 +69,8 @@ export default function AgentChat({
   onStateChange,
   onRuntimeSnapshotChange,
   onChannelRuntimeSnapshotChange,
-  onEditAgent
+  onEditAgent,
+  onCreateAgent
 }: AgentChatProps): React.ReactElement {
   const t = useAgentText()
   const activeAgent = getActiveAgent(state)
@@ -226,10 +230,11 @@ export default function AgentChat({
   if (pageStatus.type === 'no-agents') {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noAgentTitle}
-          description={t.chat.noAgentDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onCreateAgent }}
         />
       </main>
     )
@@ -263,13 +268,15 @@ export default function AgentChat({
     )
   }
 
+  // 兜底与 no-agents 是同一个处境（没有任何智能体可选），共用同一个空态。
   if (!activeAgent || !activeSession) {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noAgentTitle}
-          description={t.chat.noAgentDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: onCreateAgent }}
         />
       </main>
     )
