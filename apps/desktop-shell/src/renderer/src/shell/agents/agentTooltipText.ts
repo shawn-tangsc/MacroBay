@@ -11,6 +11,12 @@ export type AgentTooltipKey =
   | 'messages.navigatePrevious'
   | 'messages.navigateNext'
   | 'messages.navigateBottom'
+  | 'navbar.hideSidebar'
+  | 'navbar.showSidebar'
+  | 'navbar.openSessions'
+  | 'navbar.search'
+  | 'messageNavigation.none'
+  | 'settingsDrawer.narrowMode'
 
 /**
  * 提示文案的点分键解析。
