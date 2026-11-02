@@ -282,6 +282,20 @@ export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
     ((crossAssetContractPolicy.coveragePoints[range] - 1) / (crossAssetContractPolicy.points[range] - 1))
 }
 
+/**
+ * The renderer's one door for a snapshot, and it is **strict on purpose**: only the listed fields are
+ * accepted, so a snapshot carrying a retired key (or missing a new one) is refused as a whole.
+ *
+ * Why not tolerate unknown keys: the local app is normally version-consistent. A payload that no
+ * longer matches this contract means the main process is running a different build — silently
+ * accepting it would let a half-understood snapshot drive the panel. Refusing it makes the mismatch
+ * sayable: the client marks the rejection `contract` (not `query`) and the panel tells the reader
+ * to restart, instead of offering a retry that can only fail the same way.
+ *
+ * The cost is real and known: during development, whoever edits this contract sees the panel fail
+ * until the main process is restarted with the same code. That is a restart, not data loss, and it is
+ * the same reason the error text names the version rather than the source.
+ */
 export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | undefined {
   const policy = crossAssetContractPolicy
   try {

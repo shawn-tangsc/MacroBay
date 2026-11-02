@@ -10,8 +10,18 @@ describe('cross-asset renderer product client', () => {
     expect(await client.acquire()).toMatchObject({ state: 'active', leaseId: 'opaque-id' })
     expect(invoke).toHaveBeenCalledWith('market-intelligence', crossAssetMethods.acquire, {})
     invoke.mockClear()
-    expect(await client.query({ range: '24h', url: 'forbidden' } as never)).toEqual({ state: 'unavailable' })
+    expect(await client.query({ range: '24h', url: 'forbidden' } as never)).toEqual({ state: 'unavailable', cause: 'query' })
     expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('names an unreadable snapshot as a contract mismatch, not as a failed query', async () => {
+    // A main process from before the contract change still sends the retired `observationKey`.
+    // The renderer cannot parse it, and that must not read like "the source did not answer": the
+    // reader would retry forever. The outcome says which side is out of step.
+    const invoke = vi.fn(async () => ({ state: 'unavailable', observationKey: { indexBtc: 'up', ethBtc: 'flat' } }))
+    const client = createCrossAssetObservationClient(invoke)
+    expect(await client.query({ range: '24h' })).toEqual({ state: 'unavailable', cause: 'contract' })
+    expect(invoke).toHaveBeenCalledTimes(1)
   })
 
   it('does not forward extended command objects, raw errors or unknown states', async () => {

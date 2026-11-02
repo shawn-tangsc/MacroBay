@@ -8,6 +8,8 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
   const [range, setRange] = useState<CrossAssetRange>('24h')
   const [snapshot, setSnapshot] = useState<CrossAssetSnapshot>()
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+  /** Why it is unavailable: an unreadable contract needs a restart, a failed query needs a retry. */
+  const [failure, setFailure] = useState<'query' | 'contract'>()
   const [refreshing, setRefreshing] = useState(false)
   const rangeRef = useRef(range)
   rangeRef.current = range
@@ -22,7 +24,8 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
     let renewTimer: ReturnType<typeof setTimeout> | undefined
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     const current = (epoch: number) => active && mounted.current && epoch === generation
-    const unavailable = () => {
+    const unavailable = (cause: 'query' | 'contract' = 'query') => {
+      setFailure(cause)
       setState('unavailable')
       setSnapshot(previous => previous?.mode !== 'current' ? previous : {
         ...previous, sourceState: 'unavailable', forming: { index: null, btc: null, eth: null },
@@ -49,8 +52,8 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
         try {
           const result = await client.query({ range: requestedRange })
           if (current(epoch) && requestedRange === rangeRef.current) {
-            if ('schemaVersion' in result) { setSnapshot(result); setState('ready') }
-            else unavailable()
+            if ('schemaVersion' in result) { setSnapshot(result); setState('ready'); setFailure(undefined) }
+            else unavailable(result.cause ?? 'query')
           }
         } catch { if (current(epoch)) unavailable() }
         finally { queryBusy.current = false }
@@ -90,5 +93,5 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
     try { await client.refresh(leaseId) } catch { if (mounted.current) setState('unavailable') }
     finally { if (mounted.current) setRefreshing(false) }
   }
-  return { range, setRange, snapshot: snapshot?.range === range ? snapshot : undefined, state, refreshing, refresh }
+  return { range, setRange, snapshot: snapshot?.range === range ? snapshot : undefined, state, failure, refreshing, refresh }
 }
