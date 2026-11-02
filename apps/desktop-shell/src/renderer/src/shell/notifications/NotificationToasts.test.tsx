@@ -12,6 +12,7 @@ import { NotificationToasts, TOAST_VISIBLE_MS, type DeliveredNotification } from
 const labels = platformText['zh-CN'].notifications
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 beforeEach(() => {
   vi.useFakeTimers()

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import { CollectionPolicySection } from './CollectionPolicySection'
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const labels = {
   title: 'Collection policy',

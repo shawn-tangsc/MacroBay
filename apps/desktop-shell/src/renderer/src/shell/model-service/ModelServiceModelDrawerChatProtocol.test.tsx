@@ -17,6 +17,7 @@ import { ModelServiceModelDrawer } from './ModelServiceModelDrawer'
 const labels = platformText['en-US'].models
 const draft: ModelDraft = { id: 'acme-chat', name: 'Acme Chat', capabilities: { chat: true } }
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => undefined } })
 let root: Root | undefined
 

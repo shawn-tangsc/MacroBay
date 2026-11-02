@@ -16,6 +16,7 @@ import { AppMenuBar } from './AppMenuBar'
  *  · 菜单读不到/没有 preload 时只留空菜单条，绝不伪造命令。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined

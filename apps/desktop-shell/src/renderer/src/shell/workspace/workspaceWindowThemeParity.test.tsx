@@ -21,6 +21,7 @@ import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceW
  * （`PLAT-39-分离窗颜色风格` / `PLAT-39-分离窗 antd 面一致`）。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const WINDOW_ID = 'window-panel-plat39'
 const HOST_EPOCH = 3

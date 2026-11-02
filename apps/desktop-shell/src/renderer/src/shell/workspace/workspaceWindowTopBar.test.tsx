@@ -19,6 +19,7 @@ import { resolveWindowPageChrome } from './workspaceWindowTopBar'
  * 本文件在单测层锁定修复后的结构：顶栏存在、承载本地化名字、拖拽区与 no-drag 动作、原生标题被设置。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const WINDOW_ID = 'window-plat39-title'
 const HOST_EPOCH = 5

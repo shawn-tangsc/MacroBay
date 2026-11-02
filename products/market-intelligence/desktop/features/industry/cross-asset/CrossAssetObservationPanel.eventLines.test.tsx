@@ -15,6 +15,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
  * 点击把「哪条线 + 它是从哪个月读到的」交给页面。第三条是本文件与页面接线的契约，
  * 所以断言月份来自**取回它的那个月份页**，而不是从发布时间反推。
  */
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const crossAssetText = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 const ScopedPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
   createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))

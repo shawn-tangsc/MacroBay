@@ -25,6 +25,7 @@ import {
  * 只把平台桥替换为记录型桩，**不替换草稿状态本身**。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 afterEach(async () => {

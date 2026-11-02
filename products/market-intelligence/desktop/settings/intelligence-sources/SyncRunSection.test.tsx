@@ -11,6 +11,7 @@ import { SyncRunSection } from './SyncRunSection'
 const text = productText['zh-CN'].settings.intelligenceSources.syncRun
 let root: Root | undefined
 let host: HTMLDivElement | undefined
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 beforeEach(() => {
   vi.spyOn(syncRunClient, 'list').mockResolvedValue({

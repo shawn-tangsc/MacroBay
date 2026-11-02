@@ -19,6 +19,7 @@ import { WindowControls } from './WindowControls'
  *  · 文案成对本地化（zh-CN / en-US）。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined

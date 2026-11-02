@@ -7,6 +7,7 @@ import { capitalConditionsReadRetryDelaysMs, useCapitalConditions } from './useC
 
 const asOf = '2026-08-18T08:00:00.000Z'
 let root: Root | undefined
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren() })
 

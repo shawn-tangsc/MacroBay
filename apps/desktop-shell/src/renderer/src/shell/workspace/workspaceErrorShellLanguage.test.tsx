@@ -23,6 +23,7 @@ import { ERROR_SHELL_LANGUAGE_REFRESH_MS } from './workspaceWindowSurfaces'
  * 本文件取证：中/英各一次、语言切换后跟随、有界性、白名单、读失败/无桥的降级。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const en = platformText['en-US'].workspace
 const zh = platformText['zh-CN'].workspace

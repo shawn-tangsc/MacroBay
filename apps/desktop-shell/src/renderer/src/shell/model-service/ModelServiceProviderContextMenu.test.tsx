@@ -9,6 +9,7 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
 const confirmSpy = vi.hoisted(() => vi.fn())
 vi.mock('@platform/ui/components/confirm', () => ({ confirmAction: confirmSpy }))
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].models
 
 afterEach(() => {

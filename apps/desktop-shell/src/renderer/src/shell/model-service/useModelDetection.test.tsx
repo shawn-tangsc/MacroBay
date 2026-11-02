@@ -19,6 +19,7 @@ import {
 } from './modelDetectionController'
 import { useModelDetection } from './useModelDetection'
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 type Deferred = { runId: string; resolve: (acceptance: { accepted: boolean; total: number }) => void }
 

@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 it('updates on the single local interval and focus, then cleans up on unmount', async () => {
   const { useCalendarStatusClock } = await import('./useCalendarStatusClock')
   vi.useFakeTimers()

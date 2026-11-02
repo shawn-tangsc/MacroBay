@@ -7,6 +7,7 @@ import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/ses
 
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let root: ReturnType<typeof createRoot> | undefined
 

@@ -8,6 +8,7 @@ import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 const asOf = '2026-08-05T00:00:00.000Z'
 let root: Root | undefined
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

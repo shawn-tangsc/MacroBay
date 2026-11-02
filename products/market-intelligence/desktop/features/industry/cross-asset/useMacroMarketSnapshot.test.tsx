@@ -15,6 +15,7 @@ const fixture = ({ live = false } = {}): MacroMarketSnapshotView => Object.freez
   })]
 })
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren(); vi.useRealTimers() })
 

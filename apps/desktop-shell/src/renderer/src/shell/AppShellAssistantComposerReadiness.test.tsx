@@ -10,6 +10,7 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
 import { AppShell } from './AppShell'
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const deepSeekProviderSecretRef = 'provider:646565707365656b'
 

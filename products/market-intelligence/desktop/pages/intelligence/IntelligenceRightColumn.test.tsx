@@ -5,6 +5,7 @@ import { expect, it } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { IntelligenceRightColumn } from './IntelligenceRightColumn'
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const text = productText['zh-CN'].pages.intelligence.portal.calendarCard
 
 /** A stand-in agent that keeps internal state, so unmounting it would be visible. */

@@ -26,6 +26,7 @@ import { AppShell } from '../AppShell'
 
 const apiKeyFixture = 'fixture-provider-key-1234567890'
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

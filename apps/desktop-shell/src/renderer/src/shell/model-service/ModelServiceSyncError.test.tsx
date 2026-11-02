@@ -14,6 +14,7 @@ import {
  *  - renderer：即使仍收到原始 Error，也先洗掉 `Error invoking remote method …` / `platform:`，
  *    只显示「获取模型列表失败：{原因}」+ 重试。
  */
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

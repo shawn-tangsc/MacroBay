@@ -22,6 +22,7 @@ import { parseMacroMarketSnapshot } from '../../../../contracts/macro/macroMarke
  * fresh. That is the regression these fixtures pin — the payload below is the real one, verbatim from
  * `macro-market.sqlite` on 2026-10-14T15:24Z, including the `4h` key the running main process emits.
  */
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
 
 const asOf = '2026-10-14T15:24:10.637Z'

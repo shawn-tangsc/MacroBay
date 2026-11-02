@@ -13,6 +13,7 @@ import {
   type GenerationTraceStage
 } from './dailyBriefingGenerationTrace'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing

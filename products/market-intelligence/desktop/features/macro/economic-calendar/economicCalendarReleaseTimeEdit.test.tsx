@@ -24,6 +24,7 @@ vi.mock('antd', async () => {
 
 // React 18 warns — and silently skips — `act` work when this flag is missing; the reopened-editor
 // assertion depends on the update actually flushing.
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const asOf = '2026-08-12T00:00:00.000Z'
 const queryAsOf = new Date(asOf).toISOString()

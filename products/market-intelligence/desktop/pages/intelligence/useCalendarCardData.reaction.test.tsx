@@ -12,6 +12,7 @@ import type { CalendarCardReaction } from './calendarCardReaction'
  * 这一条测的是**胶水**：读回来的反应要贴到对应的行上，读失败不能让卡片少一行别的数据，也不该把
  * 「没读到」画成 0。反应本身的算法在 `calendarCardReaction.test.ts` 里单独测。
  */
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const asOf = '2026-10-14T12:00:00.000Z'
 const eventAt = '2026-10-14T01:30:00.000Z'
 let root: ReturnType<typeof createRoot> | undefined

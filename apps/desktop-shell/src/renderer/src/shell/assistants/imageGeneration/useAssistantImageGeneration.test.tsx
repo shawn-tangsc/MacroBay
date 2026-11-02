@@ -17,6 +17,7 @@ import { useAssistantImageGeneration } from './useAssistantImageGeneration'
 const labels = platformText['en-US'].assistants
 const models = platformText['en-US'].models
 const failureLabels = { image: labels, reason: models }
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 
 const imageProvider = {

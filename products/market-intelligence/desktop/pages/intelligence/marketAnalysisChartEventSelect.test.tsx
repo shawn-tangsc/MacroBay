@@ -29,6 +29,7 @@ const calendarEvent = {
   eventType: 'economic-indicator', lifecycleState: 'released', publishedAt: eventAt, scheduledDate: '2026-10-13'
 }
 let root: Root | undefined
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

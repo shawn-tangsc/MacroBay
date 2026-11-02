@@ -23,6 +23,7 @@ import { WorkspacePageHost, workspaceTabElementIds } from './WorkspacePageHost'
  * 空工作区不死锁、未注册页 fail closed 但**绝不隐藏 Tab**。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 afterEach(async () => { await act(async () => { root?.unmount() }); root = undefined; document.body.replaceChildren() })

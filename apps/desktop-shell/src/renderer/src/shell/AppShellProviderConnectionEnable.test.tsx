@@ -70,6 +70,7 @@ let api: {
   runRuntimeChecks: ReturnType<typeof vi.fn>
 }
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

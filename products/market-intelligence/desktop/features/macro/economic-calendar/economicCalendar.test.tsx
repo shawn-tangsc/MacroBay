@@ -49,6 +49,7 @@ let root: Root | null = null
 let restorePlatform: (() => void) | undefined
 let confirmSpy: ReturnType<typeof vi.spyOn> | undefined
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

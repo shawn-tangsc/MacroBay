@@ -65,6 +65,7 @@ const groups: ModelGroup[] = [
 ]
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

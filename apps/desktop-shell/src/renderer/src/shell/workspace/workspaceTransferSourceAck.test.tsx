@@ -17,6 +17,7 @@ import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceW
 import type { WorkspaceBridge } from './workspaceClient'
 import type { WorkspaceContentAdapter } from './workspaceHostAdapter'
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const FLUSH_TURNS = 16
 const WORKSPACE_KEY = 'ws-1'

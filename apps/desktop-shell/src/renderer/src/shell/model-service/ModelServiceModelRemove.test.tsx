@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { renderModelServiceSettings } from './modelServicePageHarness'
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()

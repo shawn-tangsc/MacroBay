@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import type { EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const host = document.createElement('div')
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.useRealTimers() })

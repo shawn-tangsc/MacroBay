@@ -27,6 +27,7 @@ import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceW
  * 源码护栏共同取证；真机跨进程可见文案跟随未在本包运行（见回交的「是否需要真机」）。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const HOST_WINDOW_ID = 'window-page-1'
 const HOST_EPOCH = 1

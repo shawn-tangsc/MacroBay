@@ -11,6 +11,7 @@ import type { ProviderView } from '../../../service/intelligence/application/sou
 const settingsText = productText['zh-CN'].settings.intelligenceSources
 
 let root: Root | null = null
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

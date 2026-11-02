@@ -24,6 +24,7 @@ const text = portal.calendar
 const selection = { eventKey: 'US.CORE_CPI.RELEASE.2026-M09', month: '2026-10', label: portal.analysisWorkspace.readableNames.eventName['core-cpi'] }
 let root: Root | undefined
 let host: HTMLDivElement | undefined
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

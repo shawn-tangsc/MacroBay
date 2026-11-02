@@ -11,6 +11,7 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
  * - 模型计数不含它、列表不渲染它（探测候选因此也不含它）；
  * - 模型计数旁给一行 11px muted 提示，告诉用户可在「获取模型列表」里清理。
  */
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].models
 
 afterEach(() => {

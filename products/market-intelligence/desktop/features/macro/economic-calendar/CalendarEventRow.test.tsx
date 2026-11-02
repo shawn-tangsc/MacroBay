@@ -5,6 +5,7 @@ import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { productText } from '../../../shared/i18n/productText'
 import type { CalendarDayItem } from './economicCalendarDayModel'
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 // These cases mount the real row component (and read the stylesheet) instead of asserting data
 // shapes, so each one costs real React work. Six of them pass in under three seconds on an idle

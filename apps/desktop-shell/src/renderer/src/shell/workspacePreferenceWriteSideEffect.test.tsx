@@ -26,6 +26,7 @@ import { AppShell } from './AppShell'
  *  ③ 跟随语义仍由 Main 的显式通知承担（见上面引用的两份取证），渲染侧不再自建第二个触发点。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const en = platformText['en-US']
 
 let root: Root | undefined

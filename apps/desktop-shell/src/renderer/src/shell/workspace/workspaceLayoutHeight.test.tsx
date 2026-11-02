@@ -50,6 +50,7 @@ function declaration(block: string, property: string): string | null {
 }
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(async () => {
   await act(async () => {
     root?.unmount()

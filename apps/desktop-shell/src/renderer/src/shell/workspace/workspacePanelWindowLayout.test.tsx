@@ -60,6 +60,7 @@ const PAGE_WINDOW_ROOT = '.workspace-window-page'
 const EXPECTED_ROWS = `var(${WorkspaceWindowChromePolicy.topBarHeightVar}) minmax(0, 1fr)`
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(async () => {
   await act(async () => { root?.unmount() })
   root = undefined

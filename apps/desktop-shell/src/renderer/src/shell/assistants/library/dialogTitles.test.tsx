@@ -20,6 +20,7 @@ import { ImportAssistantDialog } from './ImportAssistantDialog'
 const labels = platformText['zh-CN'].assistants.library
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

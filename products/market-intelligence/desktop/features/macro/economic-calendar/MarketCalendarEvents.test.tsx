@@ -9,6 +9,7 @@ import { productText } from '../../../shared/i18n/productText'
 
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 /** 显示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const scoped = (node: React.ReactElement): React.ReactElement => <ShellTimeZoneProvider timeZone="UTC">{node}</ShellTimeZoneProvider>
 it('renders provider-only economic values and unknown country without numerical fields for other events', async () => {

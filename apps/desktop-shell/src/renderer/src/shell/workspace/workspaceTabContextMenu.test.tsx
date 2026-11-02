@@ -26,6 +26,7 @@ import {
  * 本文件只用既有 `WorkspaceTabMenu` 的呈现与键盘语义取证，不引入第二套菜单。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 afterEach(async () => { await act(async () => { root?.unmount() }); root = undefined; document.body.replaceChildren() })

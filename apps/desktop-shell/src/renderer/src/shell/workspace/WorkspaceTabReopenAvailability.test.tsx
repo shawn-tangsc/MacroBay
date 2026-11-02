@@ -36,6 +36,7 @@ import { createWorkspaceTabClient, type WorkspaceTabsBridge } from './workspaceC
  * 投影的作用域/身份判据由 `platform/desktop/main/workspace/tabWorkspaceIpcHandlers.test.ts` 断言。
  */
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 afterEach(async () => { await act(async () => { root?.unmount() }); root = undefined; document.body.replaceChildren() })

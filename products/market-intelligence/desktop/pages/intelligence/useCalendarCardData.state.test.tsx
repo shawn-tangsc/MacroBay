@@ -12,6 +12,7 @@ import { useCalendarCardData, type CalendarCardDataState } from './useCalendarCa
  * These are the three acceptance criteria of the field bug: the card opened on «读取失败 + 重试»
  * before its first answer, then flipped to data.
  */
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const asOf = '2026-10-14T12:00:00.000Z'
 const eventAt = '2026-10-14T01:30:00.000Z'
 let root: ReturnType<typeof createRoot> | undefined

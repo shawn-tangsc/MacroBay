@@ -17,6 +17,7 @@ const savedKey = 'tvly-1234567890-HcHz'
 const preview = 'tvly**********HcHz'
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

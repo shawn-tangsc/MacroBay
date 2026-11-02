@@ -20,6 +20,7 @@ const timelineText = portal.analysisTimeline
 const workspaceText = portal.analysisWorkspace
 const completeConclusion = `${'宏观数据已发布，资本流向与价格反应需要结合后续证据判断。'.repeat(12)}结论仍需观察。`
 let root: Root | undefined
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(async () => {
   await act(async () => root?.unmount())

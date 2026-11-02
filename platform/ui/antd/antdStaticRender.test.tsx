@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { installAntdStaticRender, isAntdStaticRenderInstalled } from './antdStaticRender'
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()

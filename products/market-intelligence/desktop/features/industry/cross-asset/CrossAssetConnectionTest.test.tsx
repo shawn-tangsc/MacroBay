@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { CrossAssetConnectionTest } from './CrossAssetConnectionTest'
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const text = { market: '跨市场行情', pending: '测试中', passed: '通过', partial: '部分通过', failed: '失败', busy: '忙碌', limited: '受限', unavailable: '不可用', rest: '历史', ws: '实时', assets: { index: '纳斯达克 100', btc: 'BTC', eth: 'ETH' }, visibility: '行情在看板可见时实时更新' }
 
 describe('cross-asset capability connection result', () => {

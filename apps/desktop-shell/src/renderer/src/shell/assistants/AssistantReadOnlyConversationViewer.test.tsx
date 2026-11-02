@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { platformText } from '../../i18n/platformText'
 import { AssistantReadOnlyConversationViewer } from './AssistantReadOnlyConversationViewer'
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

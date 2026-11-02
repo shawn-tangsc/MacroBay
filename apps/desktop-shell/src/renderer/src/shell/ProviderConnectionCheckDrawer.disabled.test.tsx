@@ -62,6 +62,7 @@ const report: ProviderRuntimeCheckReport = {
 const result: ProviderConnectionCheckResult = { ok: false, message: retired, report }
 
 let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useCrossAssetObservation } from './useCrossAssetObservation'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.replaceChildren(); vi.useRealTimers() })
 const client = () => ({
