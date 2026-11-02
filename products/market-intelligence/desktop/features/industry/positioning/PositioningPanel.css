@@ -120,12 +120,13 @@
 .mi-positioning-panel__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
 .mi-positioning-panel__signal-detail p { flex-basis: 100%; margin: 0; }
 
-/* The entry to the readings behind the numbers: a word, not a chip. Hover brightens the word and
+/* The entry to the readings behind the numbers: a word, not a chip. Body-level type (11.5px), not
+   the 10px footnote size it inherited from the chip row beside it; hover brightens the word and
    draws nothing — a block behind a two-character entry reads as a second button ring. */
 .mi-positioning-panel__help-toggle {
   padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit; font-size: 10px;
-  line-height: 16px; white-space: nowrap; cursor: pointer;
+  color: var(--mi-dashboard-muted); font: inherit; font-size: 11.5px;
+  line-height: 1.6; white-space: nowrap; cursor: pointer;
 }
 .mi-positioning-panel__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-positioning-panel__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
