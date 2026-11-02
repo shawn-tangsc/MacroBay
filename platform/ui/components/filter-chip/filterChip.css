@@ -1,0 +1,74 @@
+/*
+ * 筛选胶囊的外观。规格三条（界面设计 2026-11-02）：
+ * 高 24、计数在文字右侧、选中态只由 `aria-pressed` 驱动。
+ *
+ * 为什么选中态不写 `.on` / `data-active`：那两种写法会让「样式」与「读屏」变成两份事实，
+ * 改一处漏一处就会出现「看着选中、读屏说没选」。属性选择器只有一个来源。
+ *
+ * 为什么 `opacity` 只出现在 `:disabled` 里：`opacity:.4` 表示「不可用」，不是「未选中」；
+ * 把没选画成灰的，读者会以为那些条件点不了。
+ */
+.filter-chip.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.filter-chip.ant-btn:not(:disabled):hover {
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.filter-chip.ant-btn[aria-pressed='true'] {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.filter-chip.ant-btn[aria-pressed='true']:not(:disabled):hover {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+/* 禁用只有一个灰：整颗降透明，旁边由调用点给看得见的说明。 */
+.filter-chip.ant-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.filter-chip__count {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-chip.ant-btn[aria-pressed='true'] .filter-chip__count {
+  color: var(--text);
+}
+
+.filter-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-chip.ant-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
