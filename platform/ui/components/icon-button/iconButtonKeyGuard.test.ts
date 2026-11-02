@@ -76,6 +76,8 @@ describe('IconButton key guard', () => {
     expect(looksLikeTextKey('portal.calendarCard.openCalendar')).toBe(true)
     expect(looksLikeTextKey('ui.state.action.focus-form')).toBe(true)
     expect(looksLikeTextKey('打开日历')).toBe(false)
+    // 点分但含中文：只有真按「无中文」判才拦得住，只判「有没有点」会放它过去。
+    expect(looksLikeTextKey('ui.state.刷新')).toBe(false)
     expect(looksLikeTextKey('Open the calendar')).toBe(false)
     expect(looksLikeTextKey('nokeydothere')).toBe(false)
   })

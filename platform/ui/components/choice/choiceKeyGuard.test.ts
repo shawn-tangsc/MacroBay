@@ -63,6 +63,8 @@ describe('Choice component keys', () => {
     expect(looksLikeTextKey('settings.intelligenceSources.viewRuns')).toBe(true)
     expect(looksLikeTextKey('pages.intelligence.portal.analysisWorkspace.newChatAction')).toBe(true)
     expect(looksLikeTextKey('设置')).toBe(false)
+    // 点分但含中文：这是「三处守卫同一套判据」的反向实测，光有一处验过不算。
+    expect(looksLikeTextKey('ui.state.刷新')).toBe(false)
     expect(looksLikeTextKey('Tab label with spaces')).toBe(false)
     expect(looksLikeTextKey('.leadingDot')).toBe(false)
     expect(looksLikeTextKey('noDot')).toBe(false)
