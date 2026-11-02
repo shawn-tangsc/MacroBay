@@ -3,6 +3,8 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { looksLikeTextKey } from '../textKeyShape'
+
 /**
  * `Tooltip` 的两条调用点守卫（契约 §6）。
  *
@@ -17,7 +19,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(__dirname, '../../../..')
 const SCANNED_ROOTS = ['apps', 'platform', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
-const KEY_SHAPE = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/
 
 type Finding = { file: string; line: number; detail: string }
 
@@ -67,7 +68,8 @@ describe('Tooltip call sites', () => {
       for (const site of callSitesIn(file)) {
         const literal = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(site.source)?.[1]
         // 传变量/常量的调用点由定义处判，守卫只判字面量。
-        if (literal === undefined || KEY_SHAPE.test(literal)) continue
+        // 键的形状与 `IconButton`、`StatusPill` 共用一份（`../textKeyShape`）：点分、无空白、无中文，**允许驼峰**。
+        if (literal === undefined || looksLikeTextKey(literal)) continue
         offenders.push({ file: relative(ROOT, file), line: site.line, detail: literal })
       }
       void text
@@ -92,8 +94,15 @@ describe('Tooltip call sites', () => {
   })
 
   it('catches both shapes, so neither guard passes vacuously', () => {
-    const badKey = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec("labelKey='刷新数据'")?.[1] ?? ''
-    expect(KEY_SHAPE.test(badKey)).toBe(false)
+    const keyOf = (line: string): string => /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(line)?.[1] ?? ''
+    // 反向实测（Chief 2026-11-02 要求）：**故意写一个中文键，必须被拒**。
+    // 注意这一条比「没写点」严格：`ui.state.刷新` 是点分键，只有真按「无中文」判才会红。
+    expect(looksLikeTextKey(keyOf("labelKey='ui.state.刷新'"))).toBe(false)
+    expect(looksLikeTextKey(keyOf("labelKey='刷新数据'"))).toBe(false)
+    expect(looksLikeTextKey(keyOf("labelKey='ui.state.saved '"))).toBe(false)
+    // 放开驼峰不能把「一句话」也放进来，这是这条守卫存在的理由。
+    expect(looksLikeTextKey(keyOf("labelKey='pages.intelligence.portal.analysisWorkspace.newChatAction'"))).toBe(true)
+    expect(looksLikeTextKey(keyOf("labelKey='crossAsset.subtitle'"))).toBe(true)
     expect(/<Button[^>]*\sdisabled(?:[=\s/>]|$)/.test('<Button disabled>go</Button>')).toBe(true)
     expect(/<Button[^>]*\sdisabled(?:[=\s/>]|$)/.test('<Button disabled={true}>go</Button>')).toBe(true)
     expect(/<Button[^>]*\sdisabled(?:[=\s/>]|$)/.test('<Button>go</Button>')).toBe(false)

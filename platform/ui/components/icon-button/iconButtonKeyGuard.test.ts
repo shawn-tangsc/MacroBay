@@ -3,6 +3,8 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { looksLikeTextKey } from '../textKeyShape'
+
 /**
  * `IconButton` 的读屏名与提示只收 i18n 键，但为了不逼产品绕过组件，类型是开区间 `string`
  * （见 `IconButton.tsx` 里那段说明）。开区间就得有一条守卫替类型把关：
@@ -17,10 +19,10 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git',
  * 键的形状：点分，**允许驼峰**（产品文案键就是 `portal.calendarCard.openCalendar` 这种），
  * 但不许空白、不许中文——那才是「一句话被当成键」的样子。
  *
+ * 判据只有这一份（`../textKeyShape`）：`StatusPill`、`Tooltip` 用同一个函数，不留第二套标准。
  * 这里只判「像不像键」，不判「键在不在表里」：产品自有 i18n 表是合法来源，键在不在那张表里
  * 由各产品自己的用例保证，组件侧无法枚举。
  */
-const KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+(-[A-Za-z0-9]+)*)+$/
 
 type Offender = { file: string; line: number; prop: string; value: string }
 
@@ -46,7 +48,7 @@ function offendersIn(file: string): Offender[] {
   const pattern = /(?:ariaLabelKey|tooltipKey)\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/g
   for (const match of text.matchAll(pattern)) {
     const value = match[1] ?? ''
-    if (KEY_SHAPE.test(value)) continue
+    if (looksLikeTextKey(value)) continue
     const line = text.slice(0, match.index ?? 0).split('\n').length
     offenders.push({ file, line, prop: match[0].split(/[:=]/)[0]!.trim(), value })
   }
@@ -65,17 +67,17 @@ describe('IconButton key guard', () => {
   it('catches a sentence and a CJK label, so the guard cannot pass vacuously', () => {
     const bad = ["ariaLabelKey: 'Close the panel'", "tooltipKey: '关闭面板'", "ariaLabelKey = 'ui.icon.close '"]
       .map((line) => [...line.matchAll(/(?:ariaLabelKey|tooltipKey)\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/g)][0]?.[1] ?? '')
-      .filter((value) => !KEY_SHAPE.test(value))
+      .filter((value) => !looksLikeTextKey(value))
 
     expect(bad).toHaveLength(3)
   })
   it('尺度收紧的方向：句子和带空白的值仍然被拒', () => {
     // 放开驼峰不能顺手把「一句话」也放进来——这才是这条守卫存在的理由。
-    expect(KEY_SHAPE.test('portal.calendarCard.openCalendar')).toBe(true)
-    expect(KEY_SHAPE.test('ui.state.action.focus-form')).toBe(true)
-    expect(KEY_SHAPE.test('打开日历')).toBe(false)
-    expect(KEY_SHAPE.test('Open the calendar')).toBe(false)
-    expect(KEY_SHAPE.test('nokeydothere')).toBe(false)
+    expect(looksLikeTextKey('portal.calendarCard.openCalendar')).toBe(true)
+    expect(looksLikeTextKey('ui.state.action.focus-form')).toBe(true)
+    expect(looksLikeTextKey('打开日历')).toBe(false)
+    expect(looksLikeTextKey('Open the calendar')).toBe(false)
+    expect(looksLikeTextKey('nokeydothere')).toBe(false)
   })
 
 })

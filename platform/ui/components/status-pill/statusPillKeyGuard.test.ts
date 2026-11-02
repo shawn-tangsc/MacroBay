@@ -3,6 +3,8 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { looksLikeTextKey } from '../textKeyShape'
+
 /**
  * `StatusPill` 的两条守卫（架构师 2026-11-02 定的门槛）：
  *
@@ -18,8 +20,10 @@ const SCANNED_ROOTS = ['apps', 'platform', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 const PLATFORM_ROOT = join(ROOT, 'platform')
 
-/** 单元测试里用 `ui.test.*` 这类假键，形状与真键一致，不需要例外。 */
-const KEY_SHAPE = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/
+/**
+ * 单元测试里用 `ui.test.*` 这类假键，形状与真键一致，不需要例外。
+ * 判据与 `IconButton`、`Tooltip` 共用一份（`../textKeyShape`）：点分、无空白、无中文，允许驼峰。
+ */
 
 const LABEL_KEY = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/
 /** 只在 `<StatusPill …>` 的调用点里看 `labelKey`：全仓别的组件也有叫 `labelKey` 的字段。 */
@@ -65,7 +69,7 @@ describe('StatusPill guards', () => {
         const window = text.slice(call.index ?? 0, (call.index ?? 0) + CALL_WINDOW)
         const literal = LABEL_KEY.exec(window)?.[1]
         // 传的是变量/常量时这里看不到值，交给类型与评审；守卫只判字面量。
-        if (literal === undefined || KEY_SHAPE.test(literal)) return []
+        if (literal === undefined || looksLikeTextKey(literal)) return []
         const line = text.slice(0, call.index ?? 0).split('\n').length
         return [{ file: relative(ROOT, file), line, value: literal }]
       })
@@ -88,7 +92,7 @@ describe('StatusPill guards', () => {
     const keyOf = (line: string): string => LABEL_KEY.exec(line)?.[1] ?? ''
     const badKeys = ["labelKey: '已启用'", "labelKey: 'status saved'", "labelKey = 'ui.status.saved '"]
       .map(keyOf)
-      .filter((value) => !KEY_SHAPE.test(value))
+      .filter((value) => !looksLikeTextKey(value))
     const redeclaration = ["function StatusPill(props: X)", 'const StatusPill = 1']
       .map((line) => [...line.matchAll(LOCAL_NAME)].length)
       .reduce((sum, count) => sum + count, 0)
