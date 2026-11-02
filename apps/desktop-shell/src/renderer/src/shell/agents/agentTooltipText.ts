@@ -25,6 +25,8 @@ export type AgentTooltipKey =
   | 'chatNavbar.taskCenter'
   | 'chatNavbar.chatSettings'
   | 'chatNavbar.openInExternalAppMenu'
+  | 'sessionItem.deleteShortcut'
+  | 'sessionItem.more'
 
 /**
  * 提示文案的点分键解析。

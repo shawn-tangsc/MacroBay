@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Dropdown, Input, Tooltip } from 'antd'
+import { Button, Dropdown, Input, Tooltip as AntTooltip } from 'antd'
 import type { MenuProps } from 'antd'
 import { Edit3, MoreHorizontal, Pin, PinOff, Trash2, X } from 'lucide-react'
 
@@ -13,7 +13,10 @@ import { deleteSessionsViaApi, switchSessionPinStateViaApi, updateSessionViaApi 
 import { getSessionDeleteClickIntent } from '../agentSessionDeleteInteraction'
 import type { AgentSessionRuntimeStatus } from '../agentSessionViewModel'
 import { getAgentChannelTypeIconUrl } from '../agentChannelVisuals'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentText } from '../agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 
 type SessionItemProps = {
   session: AgentSessionEntity
@@ -55,6 +58,11 @@ export default function SessionItem({
   onStateChange
 }: SessionItemProps): React.ReactElement {
   const t = useAgentText()
+  const tooltipKeys = {
+    deleteShortcut: 'sessionItem.deleteShortcut',
+    more: 'sessionItem.more'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
   const [editing, setEditing] = useState(false)
   const [draftName, setDraftName] = useState(session.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -215,7 +223,7 @@ export default function SessionItem({
                 <strong>{session.name}</strong>
               </span>
               <span className="agent-session-actions">
-                <Tooltip title={t.sessionItem.deleteShortcut}>
+                <Tooltip labelKey={tooltipKeys.deleteShortcut} resolveText={resolveText}>
                   <Button
                     className={confirmingDelete ? 'agent-session-delete confirming' : 'agent-session-delete'}
                     type="text"
@@ -226,7 +234,7 @@ export default function SessionItem({
                   />
                 </Tooltip>
                 <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-                  <Tooltip title={t.sessionItem.more}>
+                  <Tooltip labelKey={tooltipKeys.more} resolveText={resolveText}>
                     <Button
                       className="agent-session-more"
                       type="text"
@@ -257,9 +265,9 @@ function SessionStatusIndicator({
   if (status === 'idle' || active) return null
 
   return (
-    <Tooltip title={t.sessionItem.status[status]}>
+    <AntTooltip title={t.sessionItem.status[status]}>
       <span className={`agent-session-status ${status}`} aria-label={t.sessionItem.status[status]} />
-    </Tooltip>
+    </AntTooltip>
   )
 }
 
@@ -284,9 +292,9 @@ function SessionChannelIcon({
   }
 
   return (
-    <Tooltip title={<ChannelRuntimeTooltip badge={channelRuntime} />}>
+    <AntTooltip title={<ChannelRuntimeTooltip badge={channelRuntime} />}>
       {icon}
-    </Tooltip>
+    </AntTooltip>
   )
 }
 
