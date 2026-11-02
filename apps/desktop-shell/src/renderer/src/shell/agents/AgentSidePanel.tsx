@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Tooltip as AntTooltip } from 'antd'
+import { Button, Input } from 'antd'
 import { Bot, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 
 import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
