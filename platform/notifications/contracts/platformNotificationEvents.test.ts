@@ -41,16 +41,7 @@ describe('platform notification event declarations', () => {
 
   it('derives the copy keys from the event id instead of hand-writing them', () => {
     const titles = new Set<string>()
-    // P1 是唯一例外：迁移期保留旧路径的标题/正文键，行为不变；Wave 3 切语义时再改。
-    const legacyCopy = new Set(['platform.job.failed-terminal'])
     for (const event of PLATFORM_NOTIFICATION_EVENTS) {
-      if (legacyCopy.has(event.id)) {
-        expect(event.titleKey).toBe('notification.taskFailed.title')
-        expect(event.bodyKey).toBe('notification.taskFailed.body')
-        expect(event.reasonKey).toBe(notificationEventReasonKey(event.id))
-        titles.add(event.titleKey)
-        continue
-      }
       expect(event.titleKey).toBe(`notification.event.${event.id}.title`)
       expect(event.reasonKey).toBe(`notification.event.${event.id}.reason`)
       expect(event.titleKey).toBe(notificationEventTitleKey(event.id))

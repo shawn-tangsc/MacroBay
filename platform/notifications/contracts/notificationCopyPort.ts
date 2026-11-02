@@ -29,7 +29,9 @@ export function createNotificationCopyPort(input: {
         : input.products?.[ref.productId]?.[language]) as Readonly<Record<string, string>> | undefined
       const template = table?.[ref.key]
       if (typeof template !== 'string' || template.trim().length === 0) return null
-      return interpolate(template, ref.params)
+      const text = interpolate(template, ref.params)
+      // 参数缺失时不许把 `{taskName}` 印到读者面前：回退句由调用方给。
+      return /\{\w+\}/.test(text) ? null : text
     }
   }
 }

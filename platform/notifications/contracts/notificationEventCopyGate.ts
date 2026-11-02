@@ -26,12 +26,24 @@ const LANGUAGES: readonly NotificationEventCopyLanguage[] = ['zh-CN', 'en-US']
  * 和缺键一样看不见原因。
  */
 export function findMissingNotificationEventCopy(
-  events: readonly { id: string; titleKey: string; reasonKey: string }[],
+  events: readonly {
+    id: string
+    titleKey: string
+    bodyKey?: string
+    bodyKeyByVariant?: Readonly<Record<string, string>>
+    reasonKey: string
+  }[],
   lookup: NotificationEventCopyLookup
 ): NotificationEventCopyGap[] {
   const gaps: NotificationEventCopyGap[] = []
   for (const event of events) {
-    for (const key of [event.titleKey, event.reasonKey]) {
+    const keys = [
+      event.titleKey,
+      ...(event.bodyKey === undefined ? [] : [event.bodyKey]),
+      ...Object.values(event.bodyKeyByVariant ?? {}),
+      event.reasonKey
+    ]
+    for (const key of keys) {
       for (const language of LANGUAGES) {
         const text = lookup(language, key)
         if (typeof text !== 'string' || text.trim() === '') {
@@ -45,7 +57,13 @@ export function findMissingNotificationEventCopy(
 
 /** 门禁形态：缺一条就抛，消息里带事件 id、键与语言——红的时候唯一被读的就是这句话。 */
 export function assertNotificationEventCopy(
-  events: readonly { id: string; titleKey: string; reasonKey: string }[],
+  events: readonly {
+    id: string
+    titleKey: string
+    bodyKey?: string
+    bodyKeyByVariant?: Readonly<Record<string, string>>
+    reasonKey: string
+  }[],
   lookup: NotificationEventCopyLookup
 ): void {
   const gaps = findMissingNotificationEventCopy(events, lookup)
