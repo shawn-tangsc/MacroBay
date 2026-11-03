@@ -6,6 +6,7 @@ import type {
   DailyBriefingDocument
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { formattedClock, unavailableRowCopy } from './dailyBriefingUnavailableRow'
 
 /**
  * What limited this edition, derived from the document that was actually generated.
@@ -79,11 +80,6 @@ const categoryRank: Readonly<Record<BriefingIssueCategory, number>> = {
 }
 
 /** Deterministic, grouped reading order: severity first, then the kind of limitation. */
-/** The clock part of a formatted instant; absent when the formatter produced no time. */
-function hhmm(value: string): string | undefined {
-  return /\b(\d{2}:\d{2})\b/.exec(value)?.[1]
-}
-
 export function briefingIssues(input: BriefingIssueInput): readonly BriefingIssue[] {
   const issues = new Map<string, BriefingIssue>()
   const fallbackAt = input.document.edition.generatedAt
@@ -194,20 +190,13 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
       continue
     }
     if (row.state === 'unavailable') {
-      const etf = row.id === 'etf-btc' || row.id === 'etf-eth'
-      const gated = etf && row.reason === 'capital-gate'
-      // The cutoff belongs to this edition: changing the setting later must not rewrite yesterday's
-      // sentence. Without a readable cutoff the sentence simply does not print a time.
-      const cutoff = hhmm(input.formatTime(input.document.edition.windowEnd, 'minute'))
+      const copy = unavailableRowCopy({
+        text, label, rowId: row.id, ...(row.reason ? { reason: row.reason } : {}),
+        cutoff: formattedClock(input.formatTime(input.document.edition.windowEnd, 'minute'))
+      })
       add({
         id: `data:${row.id}:unavailable`, severity: 'warning', category: 'data', source, at,
-        template: etf ? gated ? 'capital-gate' : 'etf-no-history' : 'row-unavailable',
-        title: etf
-          ? fill(gated ? text.limits.row.capitalGate : cutoff ? text.limits.row.etfNoHistory : text.limits.row.etfNoHistoryNoTime, { row: label, ...(cutoff ? { time: cutoff } : {}) })
-          : fill(text.limits.row.unavailable, { row: label }),
-        advice: etf
-          ? gated ? text.limits.advice.restoreCapital : cutoff ? fill(text.limits.advice.etfAfterOpen, { time: cutoff }) : text.limits.advice.etfAfterOpenNoTime
-          : row.reason === 'not-collected' ? text.limits.advice.waitCollection : text.limits.advice.checkSource
+        template: copy.template, title: copy.title, advice: copy.advice
       })
       continue
     }
