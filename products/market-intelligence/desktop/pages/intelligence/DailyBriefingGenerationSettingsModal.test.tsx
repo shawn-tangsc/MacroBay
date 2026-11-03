@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
+import { DailyBriefingPage } from './DailyBriefingPage'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const view: DailyBriefingSettingsView = {
@@ -176,5 +177,34 @@ describe('daily briefing generation settings modal', () => {
     // A screen reader gets the whole sentence from the name, without opening anything.
     await act(async () => { question!.click(); await Promise.resolve(); await Promise.resolve() })
     expect(document.body.textContent).toContain(sentence)
+
+    // The page shows the same sentence in the open: same key, two positions. Comparing the two
+    // rendered strings (not just "each has a sentence") is what fails if someone copies the copy.
+    const pageHost = document.createElement('div')
+    document.body.append(pageHost)
+    const pageRoot = createRoot(pageHost)
+    const pageClient = {
+      getToday: async () => ({ state: 'available' as const, document: { edition: { date: '2026-10-30', locale: 'zh-CN' as const }, status: { readingsAvailable: 4 }, data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' as const } } }, news: { items: [], macro: [], notes: {} }, next: { items: [] }, conclusion: null, citations: [], provenance: {}, schemaVersion: 1, policyVersion: 'v1', lede: { text: '', source: 'template' as const, generatedAt: '2026-10-30T00:00:00.000Z' } } }),
+      list: async () => ({ state: 'available' as const, result: { editions: [] } }),
+      get: async () => ({ state: 'available' as const, document: {} }),
+      regenerate: async () => ({ state: 'unavailable' as const, failureCode: 'x' }),
+      getSettings: async () => ({ state: 'available' as const, view }),
+      saveSettings: async () => ({ state: 'available' as const, view }),
+      getProgress: async () => ({ state: 'idle' as const })
+    }
+    await act(async () => {
+      pageRoot.render(createElement(DailyBriefingPage, {
+        locale: 'zh-CN', text, onBack: () => undefined, onConfigureSources: () => undefined,
+        client: {
+          ...pageClient,
+          getSettings: async () => ({ state: 'available' as const, view: { ...view, language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } } } })
+        } as never
+      }))
+    })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    const pageLine = [...pageHost.querySelectorAll('[role="status"]')].find((node) => node.textContent === sentence)
+    expect(pageLine, 'the page renders the same sentence').toBeDefined()
+    act(() => pageRoot.unmount())
+    pageHost.remove()
   })
 })
