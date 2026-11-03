@@ -209,7 +209,11 @@
    gone from this column on purpose: seven fragments between 7px and 10.5px read as "uneven". */
 [data-briefing-detail] { font-size: 12px; line-height: 1.5; }
 [data-briefing-detail] h2, [data-briefing-detail] h3 { margin: 0; color: var(--mi-dashboard-muted); font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 18px; }
-[data-briefing-detail] > section + section, [data-briefing-detail] > [data-briefing-gaps] { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
+/* One gap between every pair of blocks in this column. Naming the blocks instead of counting
+   elements is what keeps the spacing equal now that the middle one is a wrapper and the last one
+   is a details: a sibling rule silently gave the first gap the treatment and the second none. */
+[data-briefing-detail] > [data-briefing-gaps],
+[data-briefing-detail] > [data-briefing-attempts] { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
 [data-briefing-detail] .mi-generation-trace { margin: 0; padding-bottom: 0; border-bottom: 0; }
 [data-briefing-detail] .mi-generation-trace__head > span,
 [data-briefing-detail] .mi-generation-trace__summary,
