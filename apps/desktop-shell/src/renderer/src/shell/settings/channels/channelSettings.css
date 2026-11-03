@@ -128,15 +128,17 @@
   font-size: 13px;
 }
 
-/* 「＋ 添加」：强调色底 + 对比色字，高 30（与规范一致）。 */
-.channel-add-button {
+/* 「＋ 添加」：强调色底 + 对比色字，高 30（与规范一致）。用组合选择器压过 antd 的 primary。 */
+.channel-add-button,
+.channel-add-button.ant-btn-primary {
   height: 30px;
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
 }
 
-.channel-add-button:hover {
+.channel-add-button:hover,
+.channel-add-button.ant-btn-primary:hover {
   background: var(--accent);
   color: var(--accent-contrast);
 }
@@ -203,13 +205,21 @@
   align-items: center;
   gap: 2px;
   margin-left: auto;
-  /* 平时弱化，hover/focus 时明显：动作在同一行里，不该和名称抢注意力。 */
-  opacity: 0.6;
+  /* 四个动作**常显**：原型里它们一直在，hover 只是加强图标底色。
+     收成 60% 透明等于让读者看不见有这些操作。 */
 }
 
-.channel-row:hover .channel-row-actions,
-.channel-row-actions:focus-within {
-  opacity: 1;
+.channel-row-actions .ant-btn:hover {
+  background: var(--surface-2);
+}
+
+/* 开关用强调色（原型是实心强调色开关），不是默认灰。 */
+.channel-row .ant-switch.ant-switch-checked {
+  background: var(--accent);
+}
+
+.channel-row .ant-switch.ant-switch-checked .ant-switch-handle::before {
+  background: var(--accent-contrast);
 }
 
 /* 允许的会话 ID：空列表时的当前状态与风险。整块可见，不是小字；左侧用 --caution 提醒，
@@ -291,4 +301,12 @@
   margin: 4px 0 10px;
   color: var(--muted);
   font-size: 12.5px;
+}
+
+/* 中列标题：跟左导航分组标题同级的「频道」，不是页面大标题。 */
+.channel-platform-heading {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
 }

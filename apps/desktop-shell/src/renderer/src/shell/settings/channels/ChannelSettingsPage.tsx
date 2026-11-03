@@ -191,6 +191,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   return (
     <section className="channel-settings-page">
       <nav aria-label={labels.channels} className="channel-platform-list">
+        {/* 原型里中列最上方有一行「频道」，与左导航的分组标题同一级：小号、次要色。 */}
+        <p className="channel-platform-heading">{labels.channels}</p>
         {PLATFORM_ORDER.map((type) => (
           <button
             aria-current={type === selectedType}
