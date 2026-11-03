@@ -166,7 +166,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current, generate: false }), 15_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
-      if (listed?.state === 'available' && typeof listed.result.today === 'string') setCurrentPeriodDate(listed.result.today)
+      // The issue day this load is about: the service's, when the list answered.
+      const periodDate = listed?.state === 'available' && typeof listed.result.today === 'string' ? listed.result.today : todayDate
+      setCurrentPeriodDate(periodDate)
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
@@ -215,9 +217,18 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         })
         setRegenerateFailure(null)
       } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday) {
-        // The page opened as a read and nothing is written for this issue yet: the ordinary
-        // "not generated" state, with the one button that starts a run.
-        setView({ status: 'no-edition', date: todayDate, failed: false })
+        // Nothing is written in this language. Whether that means "the issue has no content" or
+        // "this issue has the other language" is the list's answer, not this branch's guess.
+        const row = rows.find((edition) => edition.date === periodDate)
+        const other = (row?.availableLocales ?? []).find((candidate) => candidate !== localeForLoad)
+        if (other) {
+          if (skipGenerate) {
+            setContentLocale(other)
+            openEditionRef.current(periodDate, other, row)
+          } else {
+            setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
+          }
+        } else setView({ status: 'no-edition', date: periodDate, failed: false })
       } else if (skipGenerate && !keptCachedToday) {
         // Nothing is left for that day. It is the ordinary "nothing generated yet" state, not a
         // special one: what the reader did is said by the one-time delete note, not by the pane.
@@ -420,7 +431,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
-        deleteLocale={selectedLocale ?? effectiveLocale}
         onDeletePeriod={(target) => {
           // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
           void deletePeriod(target)
@@ -437,7 +447,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'unavailable' && !failure
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
-        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
+        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
         {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}

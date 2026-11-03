@@ -46,6 +46,8 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
       : scheduledTime
         ? labels.notRunPlanned.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
         : labels.notRunUnknownPlanned}</p>
-    {backfill}
+    {/* The current issue's action is the header's, named once. A second, disabled button here
+        would be a second name for the same thing — and a disabled one at that. */}
+    {currentIssue ? null : backfill}
   </div>
 }

@@ -1845,6 +1845,27 @@ it('takes the current issue from the service, not from the wall clock', async ()
   expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
 })
 
+it('selects the current issue as soon as the page opens, with no button of its own', async () => {
+  // A fresh open had no row selected and the pane said "this day was never generated" instead of
+  // "this issue". The current issue is the default selection, and its action is the header's.
+  const period = [0, 1, 2].map((back) => {
+    const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - back * 86_400_000).toISOString().slice(0, 10)
+    return { date, periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }
+  })
+  const dom = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-10-30' } }))
+  }))
+
+  const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+  expect(first.getAttribute('aria-current')).toBe('true')
+  const pane = dom.querySelector('[data-briefing-no-edition="2026-10-30"]')!
+  expect(pane.getAttribute('data-current-period')).toBe('true')
+  // The header owns the action for the current issue; the pane does not offer a second, disabled one.
+  expect(pane.querySelector('button')).toBeNull()
+  expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
+})
+
 it('never starts a run just because the page was opened', async () => {
   // An open that silently spends a model run looks like a hang, and the run is the reader's to
   // start. The open is a read: `getToday` is asked for the stored edition only.
