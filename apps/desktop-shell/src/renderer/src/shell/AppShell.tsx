@@ -1461,7 +1461,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         title={t.settings.notifications}
         notice={notice}
         language={settings.language}
-        onOpenChannelPage={() => setSettingsPanelKey('channels')}
         onOpenSystemSettings={() => void window.platform.app.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')}
       />
     )

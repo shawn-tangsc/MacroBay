@@ -46,8 +46,7 @@ async function mount(client: NotificationSettingsClient): Promise<HTMLElement> {
         children: createElement(NotificationSettingsScreen, {
           title: '通知',
           language: 'zh-CN',
-          client,
-          onOpenChannelPage: () => undefined
+          client
         })
       })
     )
@@ -82,7 +81,18 @@ describe('notification settings screen', () => {
 
   it('draws the three cell forms: fixed label, unapproved dash, and a real checkbox', async () => {
     const container = await mount({
-      listEventCatalog: () => Promise.resolve([entry(), entry({ id: 'market-intelligence.briefing.analyzed', titleKey: 'notification.briefing.analyzed', productId: 'market-intelligence', notifyOnlyIfSubscribed: true })]),
+      listEventCatalog: () =>
+        Promise.resolve([
+          entry(),
+          entry({
+            id: 'market-intelligence.briefing.analyzed',
+            titleKey: 'notification.briefing.analyzed',
+            productId: 'market-intelligence',
+            notifyOnlyIfSubscribed: true,
+            // 只批了中心：桌面列是未批准 —— 这一格必须是灰色「—」，不是禁用的勾。
+            approvedDisruptionLevels: ['center']
+          })
+        ]),
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
       readDesktopPermission: () => Promise.resolve('granted' as const)
@@ -90,14 +100,14 @@ describe('notification settings screen', () => {
 
     // 无条件记录的事件：标签，不是控件。
     expect(container.querySelectorAll('.notification-subs-fixed').length).toBeGreaterThan(1)
-    // 通道未批准 / 未接入：只出现「—」，绝不出现禁用的复选框以外的控件形态。
+    // 未批准的格子只出现「—」：它是文字，不是任何形态的控件。
     expect(container.querySelectorAll('.notification-subs-dash').length).toBeGreaterThan(0)
     // 结果类事件的记录格是可勾的。
     const recordBoxes = container.querySelectorAll('input[type="checkbox"][aria-label*="记录"]')
     expect(recordBoxes.length).toBe(1)
   })
 
-  it('keeps the four delivery rows and shows no selector when no channel is available', async () => {
+  it('keeps four delivery rows and shows nothing about phones or channels', async () => {
     const container = await mount({
       listEventCatalog: () => Promise.resolve([]),
       getSubscriptions: () => Promise.resolve({}),
@@ -109,9 +119,10 @@ describe('notification settings screen', () => {
     expect(container.querySelector('[data-row="toast"]')).not.toBeNull()
     expect(container.querySelector('[data-row="desktop"]')).not.toBeNull()
     expect(container.querySelector('[data-row="popup"]')).not.toBeNull()
-    expect(container.querySelector('[data-row="channel"]')?.getAttribute('data-channel-state')).toBe('none')
-    // 空下拉会让人以为列表没加载出来。
+    // 没有任何「发到手机 / 通道绑定」的东西：这个能力还不存在，画出来就是一句现在为假的话。
+    expect(container.querySelector('[data-row="channel"]')).toBeNull()
     expect(container.querySelector('select')).toBeNull()
+    expect(container.textContent).not.toContain('通道')
   })
 
   it('tells an empty catalog apart from a failed read', async () => {

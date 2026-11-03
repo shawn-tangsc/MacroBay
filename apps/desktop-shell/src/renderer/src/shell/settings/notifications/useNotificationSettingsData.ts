@@ -6,7 +6,6 @@ import type {
   NotificationSubscriptionTable
 } from '@platform/notifications/contracts/notificationSubscriptions'
 
-import { decodePushChannels, type PushChannelOption } from './pushChannels'
 
 /**
  * 这一屏需要的四份事实：目录、订阅表、投递设置、桌面权限。
@@ -18,24 +17,15 @@ export type NotificationSettingsData = {
   catalog: readonly NotificationEventCatalogEntry[]
   subscriptions: NotificationSubscriptionTable
   toastEnabled: boolean
-  channelId: string | null
-  channels: readonly PushChannelOption[]
-  lastPushFailureAt: string | null
   desktopPermission: 'granted' | 'denied' | 'unknown'
 }
 
 export type NotificationSettingsClient = {
   listEventCatalog?: () => Promise<readonly NotificationEventCatalogEntry[]>
   getSubscriptions?: () => Promise<NotificationSubscriptionTable>
-  getDeliverySettings?: () => Promise<{
-    toastEnabled?: boolean
-    channelId?: string | null
-    channels?: readonly unknown[]
-    lastPushFailureAt?: string | null
-  }>
+  getDeliverySettings?: () => Promise<{ toastEnabled?: boolean }>
   setSubscription?: (id: string, patch: Record<string, unknown>) => Promise<unknown>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
-  setPushChannel?: (channelId: string | null) => Promise<unknown>
   readDesktopPermission?: () => Promise<'granted' | 'denied' | 'unknown'>
   sendTest?: () => Promise<unknown>
 }
@@ -50,7 +40,6 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
   reload: () => void
   setSubscription: (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => Promise<void>
   setToast: (next: boolean) => Promise<void>
-  setChannel: (id: string) => Promise<void>
   permission: 'granted' | 'denied' | 'unknown'
 } {
   const [state, setState] = useState<NotificationSettingsState>({ status: 'loading' })
@@ -62,12 +51,7 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
     const read = (): void => {
       // 四份事实一起读；**任何一份失败都整屏算「没读出来」**——半屏数据会让人把「没读到」
       // 当成「本来就没有」，而这个屏幕上「没有」是一个必须被相信的结论。
-      type DeliveryShape = {
-        toastEnabled?: boolean
-        channelId?: string | null
-        channels?: readonly unknown[]
-        lastPushFailureAt?: string | null
-      }
+      type DeliveryShape = { toastEnabled?: boolean }
       const readAll: Promise<
         [
           readonly NotificationEventCatalogEntry[],
@@ -91,9 +75,6 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
               catalog,
               subscriptions,
               toastEnabled: delivery.toastEnabled === true,
-              channelId: delivery.channelId ?? null,
-              channels: decodePushChannels(delivery.channels ?? []),
-              lastPushFailureAt: delivery.lastPushFailureAt ?? null,
               desktopPermission
             }
           })
@@ -151,15 +132,5 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
     [client]
   )
 
-  const setChannel = useCallback(
-    async (id: string) => {
-      await client.setPushChannel?.(id)
-      setState((current) =>
-        current.status === 'ready' ? { status: 'ready', data: { ...current.data, channelId: id } } : current
-      )
-    },
-    [client]
-  )
-
-  return { state, reload, setSubscription, setToast, setChannel, permission }
+  return { state, reload, setSubscription, setToast, permission }
 }

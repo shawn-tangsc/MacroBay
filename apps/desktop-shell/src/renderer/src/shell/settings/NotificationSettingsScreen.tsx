@@ -3,12 +3,10 @@ import { useState } from 'react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
-import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellCompactInstant } from '@platform/ui/time/shellTimeFormat'
 import { Button } from 'antd'
 
 import './notifications/notificationSettings.css'
-import { DeliveryRows, channelRowState } from './notifications/DeliveryRows'
+import { DeliveryRows } from './notifications/DeliveryRows'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
 import { SubscriptionMatrixView } from './notifications/SubscriptionMatrixView'
 import { buildSubscriptionRows } from './notifications/subscriptionMatrix'
@@ -28,13 +26,11 @@ export function NotificationSettingsScreen(props: {
   language: AppLanguage
   client?: NotificationSettingsClient
   /** 页面窗里没有设置页导航，此时不传——**不画一个点了没反应的动作**。 */
-  onOpenChannelPage?: () => void
   onOpenSystemSettings?: () => void
 }): React.ReactElement {
   const text = notificationSettingsText[props.language]
-  const timeZone = useShellTimeZone()
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
-  const { state, reload, setSubscription, setToast, setChannel, permission } = useNotificationSettingsData(client)
+  const { state, reload, setSubscription, setToast, permission } = useNotificationSettingsData(client)
   const [receipt, setReceipt] = useState<string | null>(null)
 
   return (
@@ -64,17 +60,6 @@ export function NotificationSettingsScreen(props: {
             onToastChange={(next) => void setToast(next)}
             desktopPermission={permission}
             onOpenSystemSettings={props.onOpenSystemSettings}
-            channels={state.data.channels}
-            channelId={state.data.channelId}
-            onSelectChannel={(id) => void setChannel(id)}
-            onOpenChannelPage={props.onOpenChannelPage}
-            channel={channelRowState({
-              channelId: state.data.channelId,
-              channels: state.data.channels,
-              lastPushFailureAt: state.data.lastPushFailureAt,
-              lastPushFailureReason: null,
-              formatInstant: (iso) => formatShellCompactInstant(iso, { timeZone })
-            })}
           />
 
           <div className="notification-settings-test">
@@ -101,12 +86,10 @@ export function NotificationSettingsScreen(props: {
               <SubscriptionMatrixView
                 rows={buildSubscriptionRows({
                   entries: state.data.catalog,
-                  subscriptions: state.data.subscriptions,
-                  channelAvailable: state.data.channels.length > 0
+                  subscriptions: state.data.subscriptions
                 })}
                 text={text}
                 language={props.language}
-                channelAvailable={state.data.channels.length > 0}
                 onToggle={(id, level, next) => void setSubscription(id, level, next)}
               />
             )}
@@ -125,10 +108,8 @@ async function sendTest(
   setReceipt: (value: string) => void
 ): Promise<void> {
   try {
-    const result = (await client.sendTest?.()) as
-      | { delivery?: readonly TestDeliveryAttempt[]; push?: { state: string; reason?: string; messageId?: string } }
-      | undefined
-    setReceipt(describeTestReceipt({ delivery: result?.delivery ?? [], push: result?.push, toastEnabled, text }))
+    const result = (await client.sendTest?.()) as { delivery?: readonly TestDeliveryAttempt[] } | undefined
+    setReceipt(describeTestReceipt({ delivery: result?.delivery ?? [], toastEnabled, text }))
   } catch {
     // 抛出来连「交给系统了」都没拿到：只能说失败，并如实写「原因不明」。
     setReceipt(text.desktopFailed(text.reasonUnknown))

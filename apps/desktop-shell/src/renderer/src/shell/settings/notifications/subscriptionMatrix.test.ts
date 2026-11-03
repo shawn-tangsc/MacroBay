@@ -20,8 +20,8 @@ function entry(overrides: Partial<NotificationEventCatalogEntry> = {}): Notifica
   }
 }
 
-const build = (entries: readonly NotificationEventCatalogEntry[], subscriptions = {}, channelAvailable = false) =>
-  buildSubscriptionRows({ entries, subscriptions, channelAvailable })
+const build = (entries: readonly NotificationEventCatalogEntry[], subscriptions = {}) =>
+  buildSubscriptionRows({ entries, subscriptions })
 
 describe('subscription matrix', () => {
   it('gives an unconditionally recorded event the fixed label instead of a control', () => {
@@ -52,21 +52,11 @@ describe('subscription matrix', () => {
     const [row] = build([entry({ approvedDisruptionLevels: ['center'] })])
     // 禁用复选框等于承诺「以后能开」；批准表是本版上限，所以只有「不会有这一格」。
     expect(row!.desktop).toEqual({ kind: 'not-approved' })
-    expect(row!.channel).toEqual({ kind: 'not-approved' })
-  })
-
-  it('disables the channel column when no channel can deliver, and leaves desktop alone', () => {
-    const [row] = build([entry({ approvedDisruptionLevels: ['center', 'desktop', 'channel'] })], {}, false)
-    expect(row!.channel).toMatchObject({ kind: 'checkbox', disabled: true })
-    // 桌面没放行不禁用：选择要留住。
-    expect(row!.desktop).toMatchObject({ kind: 'checkbox', disabled: false })
   })
 
   it('says why the record column is filled, so the reader hears the reason not just the state', () => {
     const target = entry({ notifyOnlyIfSubscribed: true })
     expect(recordedViaDeliveryReason(target, { [target.id]: { desktop: true } })).toBe('desktop')
-    expect(recordedViaDeliveryReason(target, { [target.id]: { channel: true } })).toBe('channel')
-    expect(recordedViaDeliveryReason(target, { [target.id]: { desktop: true, channel: true } })).toBe('both')
     expect(recordedViaDeliveryReason(target, {})).toBeNull()
   })
 
