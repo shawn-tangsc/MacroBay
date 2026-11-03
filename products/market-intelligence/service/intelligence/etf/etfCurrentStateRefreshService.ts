@@ -49,7 +49,10 @@ export function createEtfCurrentStateRefreshService(deps: {
         if (!built) return unavailable()
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
-        if (replaced.state === 'updated') void notifySignals(deps.submitSignal, built, fetchedAt)
+        // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
+        // made "did it go out?" depend on scheduling — the one thing a refresh result should not
+        // depend on. The notifier swallows a failed submit, so this cannot turn into a failed read.
+        if (replaced.state === 'updated') await notifySignals(deps.submitSignal, built, fetchedAt)
         return replaced
       } catch {
         return unavailable()

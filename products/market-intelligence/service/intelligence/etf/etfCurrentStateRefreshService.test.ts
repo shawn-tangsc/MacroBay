@@ -81,7 +81,7 @@ describe('ETF current-state refresh service', () => {
     })
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
-    await vi.waitFor(() => expect(submitSignal).toHaveBeenCalledTimes(1))
+    expect(submitSignal).toHaveBeenCalledTimes(1)
     expect(submitSignal.mock.calls[0]![0]).toMatchObject({
       eventTypeId: 'market-intelligence.signal.triggered',
       dedupeVars: { builder: 'moduleSignal', moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc' }
