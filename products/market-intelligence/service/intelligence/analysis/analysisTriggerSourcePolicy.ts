@@ -26,12 +26,13 @@ export const analysisTriggerSourcePolicy = Object.freeze({
   gateEligibleTriggerKeys: ['calendar.refresh', ...analysisSessionSlots.map(triggerKeyForSlot)] as readonly string[],
   /**
    * Module signals are one key per rule (`signal.<moduleId>.<ruleId>`), so they are registered by
-   * prefix instead of by listing rules that do not exist yet. Two registrations read this one
-   * constant: the gate judges the key, and the budget line spends the event line — a signal that
-   * skipped the gate would spend a model call without a decision, and one left on the default line
-   * would eat the calendar's nine a day.
+   * the shape of the key instead of by listing rules that do not exist yet. Two registrations read
+   * this one pattern: the gate judges the key, and the budget line spends the event line — a signal
+   * that skipped the gate would spend a model call without a decision, and one left on the default
+   * line would eat the calendar's nine a day.
    */
-  signalTriggerKeyPrefix: 'signal.' as const,
+  /** `signal.<moduleId>.<ruleId>`, both kebab tokens: exactly two segments, no third. */
+  signalTriggerKeyPattern: /^signal\.[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/,
   gateExemptTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[],
   itemTriggerKeys: ['macro.actual.first-confirmed', 'market-reaction.15m'] as readonly string[],
   correctionPhase: 'correction' as AnalysisPhase,
@@ -72,13 +73,17 @@ export function isGateEligible(triggerKey: string): boolean {
 /**
  * One key per module rule: `signal.<moduleId>.<ruleId>`.
  *
- * Prefix rather than an enumerated list, because the rule set is the module's own policy and this
- * file must not grow a copy of it. The pattern is narrow on purpose — a key such as
- * `signals.foo` or a bare `signal` stays unregistered instead of silently spending the event line.
+ * Shape rather than an enumerated list, because the rule set is the module's own policy and this
+ * file must not grow a copy of it. The pattern is narrow on purpose — `signal.debug` (no rule),
+ * `signal.open-interest` (no rule), `signal.a.b.c` (a third segment) and a bare `signal` all stay
+ * unregistered instead of silently spending the event line.
  */
 export function isSignalTriggerKey(triggerKey: string): boolean {
-  const prefix = analysisTriggerSourcePolicy.signalTriggerKeyPrefix
-  return triggerKey.startsWith(prefix) && triggerKey.length > prefix.length && !triggerKey.slice(prefix.length).startsWith('.')
+  // Two segments, one key per rule: `signal.<moduleId>.<ruleId>`. A key such as `signal.debug` is a
+  // typo, not a registration: letting it through spends the event line on a rule that does not
+  // exist, and nothing in the panel would say where it went. Both segments are kebab tokens, so a
+  // third segment (`signal.a.b.c`) fails too instead of being read as "some rule under some module".
+  return analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(triggerKey)
 }
 
 /**

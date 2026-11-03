@@ -63,7 +63,9 @@ it('judges every module signal by its prefix, and nothing that only looks like o
     expect(isSignalTriggerKey(key)).toBe(true)
   }
   // A near miss stays unregistered: the prefix is the registration, not "anything signal-ish".
-  for (const key of ['signal', 'signal.', 'signal..rule', 'signals.open-interest.rule', 'signalx.rule']) {
+  // A key must name both halves: `signal.debug` is a typo that would spend the event line on a rule
+  // that does not exist, and a third segment is not "some rule under some module".
+  for (const key of ['signal', 'signal.', 'signal..rule', 'signal.debug', 'signal.open-interest', 'signal.open-interest.oi-liquidation-proxy.extra', 'signals.open-interest.rule', 'signalx.rule']) {
     expect(isSignalTriggerKey(key)).toBe(false)
     expect(isGateEligible(key)).toBe(false)
   }
