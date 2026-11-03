@@ -689,7 +689,18 @@ mi: miText['zh-CN'],
               flowNoDays: '这 7 天没有可用的资金流数据。',
               a11yAmountYi: '{value} 亿美元', a11yAmountWan: '{value} 万', a11yNoFlow: '没有净流入', a11yLabel: '{direction} {amount}', a11yCell: '{amount}，{scope}',
               flowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
-              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。', staleRead: '这次刷新没读出来，下面是上一次的读数。'
+              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。', staleRead: '这次刷新没读出来，下面是上一次的读数。',
+              /* 现货牌子的三种状态与详情。规则名与窗口一律用白话，详情里不出现内部标识。 */
+              signalChip: '三日净流出 {amount}', signalInsufficient: '数据不齐',
+              signalInsufficientReason: '数据不齐：三日累计拿不到',
+              signalTooltip: '{rule}｜窗口 {window}｜{kind}', signalRuleName: 'ETF 净流出', signalRuleWindow: '3 个交易日', signalKindObserved: '来源报告的事实',
+              signalAriaAlert: '{chip}，{asset}',
+              signalDetailTitle: 'ETF 三日净流出', signalDetailRule: '规则', signalDetailWindow: '窗口',
+              signalDetailCumulative: '三日累计', signalDetailCoverage: '覆盖', signalCoverage: '{covered}/{required} 个交易日',
+              signalDetailTradingDay: '数据所属交易日（UTC）', signalDetailObservedAt: '观测时间',
+              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。',
+              signalDetailInsufficient: '数据不齐：三日累计还拿不到。',
+              signalInsufficientNote: '最近 3 个交易日还没凑齐，或这一路这次没读到；够了才会出牌子，在那之前不给数字。'
             },
             sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
@@ -1953,7 +1964,17 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               flowNoDays: 'No usable flow data for these 7 days.',
               a11yAmountMillion: '{value} million US dollars', a11yNoFlow: 'No net inflow', a11yLabel: '{direction} {amount}', a11yCell: '{amount}, {scope}',
               flowDirections: { inflow: 'Net inflow', outflow: 'Net outflow', zero: 'Flat' },
-              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.', staleRead: 'This refresh did not read; these are the previous readings.'
+              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.', staleRead: 'This refresh did not read; these are the previous readings.',
+              signalChip: 'Three-day net outflow {amount}', signalInsufficient: 'Insufficient data',
+              signalInsufficientReason: 'Insufficient data: the three-day total is not available',
+              signalTooltip: '{rule} | window {window} | {kind}', signalRuleName: 'ETF net outflow', signalRuleWindow: '3 trading days', signalKindObserved: 'fact reported by the source',
+              signalAriaAlert: '{chip}, {asset}',
+              signalDetailTitle: 'ETF three-day net outflow', signalDetailRule: 'Rule', signalDetailWindow: 'Window',
+              signalDetailCumulative: 'Three-day total', signalDetailCoverage: 'Coverage', signalCoverage: '{covered}/{required} trading days',
+              signalDetailTradingDay: 'Trading day (UTC)', signalDetailObservedAt: 'Observed at',
+              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.',
+              signalDetailInsufficient: 'Insufficient data: the three-day total is not available yet.',
+              signalInsufficientNote: 'Fewer than 3 trading days are covered, or this feed did not read this time. The chip appears once the window is complete; no number is shown before that.'
             },
             sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {

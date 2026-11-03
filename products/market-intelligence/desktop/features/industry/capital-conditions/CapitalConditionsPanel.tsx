@@ -16,6 +16,7 @@ import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
+import { EtfOutflowSignal, type EtfSignalText } from './EtfOutflowSignal'
 
 type Text = {
   title: string
@@ -65,7 +66,7 @@ type Text = {
   refreshFailed: string
   /** The last readings that did read, kept after a failed re-read. */
   staleRead: string
-} & ({ a11yAmountYi: string; a11yAmountWan: string } | { a11yAmountMillion: string })
+} & ({ a11yAmountYi: string; a11yAmountWan: string } | { a11yAmountMillion: string }) & EtfSignalText
 
 type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
@@ -100,6 +101,12 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band">
           <h2>{text.title}</h2>
+          {/* The module rule's chip sits beside the title, at most one per card. It is drawn only
+              when the rule had something to say; a quiet card renders no element at all. */}
+          {state.etfSignal && state.etfSignal.state !== 'hidden'
+            ? <EtfOutflowSignal chip={state.etfSignal} text={text}
+                verifiedAt={state.etf === 'unavailable' ? undefined : state.etf.verifiedAt} />
+            : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
         {/* These are the last numbers that read successfully. Saying so is the difference between

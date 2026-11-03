@@ -184,17 +184,27 @@ describe('useCapitalConditions', () => {
   })
 })
 
-async function renderHook(client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }, now: () => Date) {
+async function renderHook(
+  client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> },
+  now: () => Date,
+  signalClient?: { query: (input: { asOf: string }) => Promise<readonly never[]> }
+) {
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
-  await act(async () => localRoot.render(createElement(Harness, { client, now })))
-  return { root: localRoot, container, state: () => container.querySelector('output')?.getAttribute('data-state') ?? '', stale: () => container.querySelector('output')?.getAttribute('data-stale') ?? '' }
+  await act(async () => localRoot.render(createElement(Harness, { client, now, ...(signalClient ? { signalClient } : {}) })))
+  return {
+    root: localRoot, container,
+    state: () => container.querySelector('output')?.getAttribute('data-state') ?? '',
+    stale: () => container.querySelector('output')?.getAttribute('data-stale') ?? '',
+    chip: () => container.querySelector('output')?.getAttribute('data-chip') ?? ''
+  }
 }
 
-function Harness({ client, now, reloadKey, retryKey }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number }) {
-  const state = useCapitalConditions({ client: client as never, now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
+function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number; retryKey?: number; signalClient?: { query: (input: { asOf: string }) => Promise<readonly never[]> } }) {
+  const state = useCapitalConditions({ client: client as never, ...(signalClient ? { signalClient: signalClient as never } : {}), now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
   const stale = state.state === 'available' && state.stale ? 'true' : 'false'
-  return createElement('output', { 'data-state': state.state, 'data-stale': stale }, state.state === 'available' ? state.currentUsd : state.state)
+  const chip = state.state === 'available' && state.etfSignal ? state.etfSignal.state : ''
+  return createElement('output', { 'data-state': state.state, 'data-stale': stale, 'data-chip': chip }, state.state === 'available' ? state.currentUsd : state.state)
 }
 
 function available() {
@@ -205,3 +215,39 @@ function available() {
 }
 
 async function flush(): Promise<void> { await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() }) }
+
+describe('useCapitalConditions · ETF signal chip', () => {
+  const signal = {
+    version: '1', moduleId: 'etf-flows' as const, ruleId: 'etf-outflow-3d', asset: 'btc' as const,
+    severity: 'medium' as const, observedAt: '2026-08-28T00:00:00.000Z', cadence: { kind: 'trading-day' as const },
+    values: { cumulativeNetFlowUsd: -150_000_000, coveredDays: 3, requiredDays: 3 },
+    dedupeKey: 'etf-flows:etf-outflow-3d:btc:2026-08-28', readiness: 'available' as const, triggerOwner: 'module-signal'
+  }
+
+  it('asks the module signal read for the same instant as the snapshot, and draws its chip', async () => {
+    const query = vi.fn(async () => [signal] as never)
+    const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
+    await flush()
+
+    expect(query).toHaveBeenCalledWith({ asOf })
+    expect(page.chip()).toBe('alert')
+  })
+
+  // 读不到 ≠ 没事：信号读失败要出灰牌，不能悄悄消失成「今天没有」。
+  it('marks a failed signal read as insufficient data instead of a quiet card', async () => {
+    const query = vi.fn(async () => { throw new Error('bridge down') })
+    const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
+    await flush()
+
+    expect(page.state()).toBe('available')
+    expect(page.chip()).toBe('insufficient')
+  })
+
+  it('draws no chip when the rule has nothing to say', async () => {
+    const query = vi.fn(async () => [] as never)
+    const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
+    await flush()
+
+    expect(page.chip()).toBe('hidden')
+  })
+})

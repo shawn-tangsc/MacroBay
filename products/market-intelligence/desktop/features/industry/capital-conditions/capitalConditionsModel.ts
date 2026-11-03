@@ -1,4 +1,5 @@
-import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../../contracts/etfFlows'
+import { computeEtfCumulativeFlow, etfFlowPolicy, etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../../contracts/etfFlows'
+import type { ModuleSignal, SignalSeverity } from '../../../../contracts/moduleSignal'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -34,7 +35,30 @@ export type DashboardEtfCumulativeWindow = { windowDays: number; coveredDays: nu
 export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; cumulative: readonly DashboardEtfCumulativeWindow[]; rows: readonly DashboardEtfFlowRow[] }
 /** BTC/ETH rows are date-aligned by contract, so the table header can state one coverage per window. */
 export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
-type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
+type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[]; verifiedAt: string }
+/**
+ * The chip the capital-conditions card may draw beside its title.
+ *
+ * Only one per card, and only from the module's own rule: the amount is read out of the signal's
+ * `values`, never summed here. A rule that could not judge (window not complete, or the read
+ * failed) is `insufficient` — a grey chip with no number, because a missing reading must not be
+ * dressed as a small one. `hidden` is the normal state: nothing happened, so nothing is drawn.
+ */
+export type DashboardEtfSignalChip =
+  | Readonly<{ state: 'hidden' }>
+  | Readonly<{ state: 'insufficient' }>
+  | Readonly<{
+      state: 'alert'
+      asset: 'btc' | 'eth'
+      /** The three-day outflow, as an unsigned amount: the chip's own word already says which way. */
+      amountUsd: string
+      /** The same sum signed, for the detail: `-$488.7M`, never a second total. */
+      cumulativeUsd: string
+      coveredDays: number
+      requiredDays: number
+      /** The trading day the flows belong to, not the instant this was read. */
+      observedAt: string
+    }>
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
 /**
  * "No chart today" has two meanings and they must not read the same: the sources did not answer
@@ -57,6 +81,8 @@ export type DashboardCapitalConditionsState =
       stale?: true
       conclusion: 'partial' | 'unavailable'
       etf: DashboardEtfFlow | 'unavailable'
+      /** Absent when the card could not read at all; `hidden` when the rule had nothing to say. */
+      etfSignal?: DashboardEtfSignalChip
       flowHistory?: DashboardFlowHistory
       observedAt: string
       currentUsd: string
@@ -130,7 +156,7 @@ function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailab
   const eth = projectEtfAsset(value.eth)
   if (!btc || !eth) return dashboardCapitalConditionsPresentationPolicy.etfState
   const coverage = projectEtfCoverage(btc, eth)
-  return coverage ? { state: 'available', btc, eth, coverage } : dashboardCapitalConditionsPresentationPolicy.etfState
+  return coverage ? { state: 'available', btc, eth, coverage, verifiedAt: value.verifiedAt } : dashboardCapitalConditionsPresentationPolicy.etfState
 }
 
 function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAsset): readonly DashboardEtfCumulativeCoverage[] | undefined {
@@ -197,6 +223,46 @@ function projectEtfCumulativeWindows(value: EtfPublicAssetSnapshot): readonly Da
     projected.push({ windowDays: window.windowDays, coveredDays: window.coveredDays, netFlowUsd, complete: window.complete })
   }
   return projected
+}
+
+const signalSeverityRank: Readonly<Record<SignalSeverity, number>> = Object.freeze({ high: 3, medium: 2, low: 1 })
+
+/**
+ * Picks the one chip this card may draw, from the module's own rule.
+ *
+ * The rule already decided everything: which asset, how much, over how many complete trading days.
+ * This projection only formats what it was handed — a three-day sum computed here would be a second
+ * implementation of the threshold, and the card would start disagreeing with the notification.
+ *
+ * The panel switch is the master switch: while it is closed nothing is drawn, not even the grey
+ * chip, because there is no outlet yet. A signal that could not judge is `insufficient` and carries
+ * no number: "we could not look" is not "a small outflow".
+ */
+export function projectEtfOutflowChip(
+  signals: readonly ModuleSignal[] | undefined,
+  switchState: EtfOutflowOutletSwitch = etfOutflowOutletPolicy
+): DashboardEtfSignalChip {
+  if (!isEtfOutflowOutletOpen(switchState, 'panel')) return { state: 'hidden' }
+  // `undefined` is a failed signal read; `[]` is a rule with nothing to say. Only the second one
+  // is allowed to draw nothing.
+  if (signals === undefined) return { state: 'insufficient' }
+  const mine = signals.filter(signal => signal.moduleId === 'etf-flows')
+  if (mine.length === 0) return { state: 'hidden' }
+  // One chip per card: the loudest speaks, the rest stay in its detail. Two chips side by side
+  // invite a comparison the product says is meaningless.
+  const loudest = mine.reduce((best, signal) => signalSeverityRank[signal.severity] > signalSeverityRank[best.severity] ? signal : best)
+  if (loudest.readiness !== 'available' || loudest.asset === null) return { state: 'insufficient' }
+  const netFlowUsd = loudest.values.cumulativeNetFlowUsd
+  const coveredDays = loudest.values.coveredDays
+  const requiredDays = loudest.values.requiredDays
+  // An outflow is negative; a zero or positive reading is not this rule's event, and a window
+  // without its denominator cannot be read. Either way: no number on the chip.
+  if (typeof netFlowUsd !== 'number' || !Number.isFinite(netFlowUsd) || netFlowUsd >= 0) return { state: 'insufficient' }
+  if (!Number.isInteger(coveredDays) || !Number.isInteger(requiredDays) || coveredDays < 1 || requiredDays < 1 || coveredDays > requiredDays) return { state: 'insufficient' }
+  const amountUsd = formatUsd(-netFlowUsd, false)
+  const cumulativeUsd = formatUsd(netFlowUsd, true)
+  if (!amountUsd || !cumulativeUsd) return { state: 'insufficient' }
+  return { state: 'alert', asset: loudest.asset, amountUsd, cumulativeUsd, coveredDays, requiredDays, observedAt: loudest.observedAt }
 }
 
 function isDisplayNumber(value: unknown): value is number {

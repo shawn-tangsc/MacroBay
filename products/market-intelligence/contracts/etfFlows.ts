@@ -39,9 +39,9 @@ export const etfFlowPolicy = Object.freeze({
  */
 export const etfOutflowOutletPolicy = Object.freeze({
   /** 资金面卡片标题旁的牌子。总闸：它关着，其他出口一律关。 */
-  panel: false,
-  /** 通知中心。牌子落地前不许单独打开。 */
-  notification: false
+  panel: true,
+  /** 通知中心。与牌子同开同关：牌子在，通知才发。 */
+  notification: true
 } as const)
 
 export type EtfOutflowOutlet = keyof typeof etfOutflowOutletPolicy

@@ -322,6 +322,63 @@ describe('CapitalConditionsPanel', () => {
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
+  it('puts the module rule\u2019s chip beside the title and never draws a number when data is missing', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } }
+    }))
+
+    const button = markup.match(/<button[^>]*mi-capital-conditions__signal[^>]*>.*?<\/button>/)?.[0] ?? ''
+    expect(button).toContain('data-state="insufficient"')
+    expect(button).toContain(text.signalInsufficient)
+    // 数据不齐时一个数字都不许出现：拿不到不许被画成「很小」。
+    expect(button).not.toMatch(/\d/)
+    // 牌子在标题之后、观测时间之前，且正常态不渲染任何元素。
+    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><button[^>]*mi-capital-conditions__signal`))
+    expect(markup).toContain('aria-label="' + text.signalInsufficientReason + '"')
+  })
+
+  it('draws no chip at all while the rule had nothing to say', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
+    expect(markup).not.toContain('mi-capital-conditions__signal')
+  })
+
+  it('opens the readings behind the chip, in plain words and without an internal id', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const state = {
+      ...fullState(),
+      etfSignal: {
+        state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M',
+        coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z'
+      }
+    }
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state })))
+    const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+    expect(chip.textContent).toBe('Three-day net outflow $488.7M')
+    expect(chip.getAttribute('aria-label')).toBe('Three-day net outflow $488.7M, BTC')
+
+    await act(async () => chip.click())
+
+    // 抽屉走 portal，不在卡片容器里。
+    const drawer = document.body.querySelector<HTMLElement>('.drawer__body') ?? document.body
+    const content = drawer.textContent ?? ''
+    expect(content).toContain(text.signalDetailRule)
+    expect(content).toContain(text.signalRuleName)
+    expect(content).toContain(text.signalRuleWindow)
+    expect(content).toContain('-$488.7M')
+    expect(content).toContain('3/3')
+    expect(content).toContain('2026-10-30')
+    expect(content).toContain(text.signalDetailNote)
+    // 读者看得见的只有白话：规则名、模块名、原始码都不出现。
+    expect(content).not.toContain('etf-outflow-3d')
+    expect(content).not.toContain('etf-flows')
+  })
+
   it('keeps the initial loading state short and free of diagnostic data', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' } }))
@@ -420,7 +477,7 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     flowHistory: { state: 'available' as const, rows },
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [] }
     }
@@ -435,7 +492,7 @@ function fullState() {
     flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
     }
@@ -453,7 +510,7 @@ function streakState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: btcRows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: ethRows }
     }
