@@ -23,6 +23,7 @@ import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
+import { notifyMacroReleases } from '../signals/macroReleaseNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
@@ -402,6 +403,28 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(), ...(attemptLedgerId ? { attemptLedgerId } : {}) }
   }
 
+  /**
+   * Calendar releases that landed as surprises, as notifications.
+   *
+   * One submission per release; the platform owns the key (`calendar:{eventId}:{releaseAt}`) and the
+   * occurrence dedupe, so a release already reported is merged rather than pushed again. A release
+   * with no schedule instant is skipped: without it the key would fall back to the read time and the
+   * same release would look like a new one on every run.
+   */
+  async function notifyCalendarReleases(
+    gate: Readonly<{ signals: readonly SignificanceSignal[]; route: Readonly<{ provider: readonly Readonly<{ eventKey: string; scheduledAt?: string; detectedAt: string }>[] }> | null }>,
+    occurredAt: string
+  ): Promise<void> {
+    const surprises = gate.signals.filter(signal => signal.kind === 'provider-surprise')
+    if (surprises.length === 0 || !gate.route) return
+    const releaseAtOf = new Map(gate.route.provider.map(row => [row.eventKey, row.scheduledAt ?? row.detectedAt]))
+    const releases = surprises
+      .map(signal => ({ eventId: signal.eventKey, releaseAt: releaseAtOf.get(signal.eventKey) }))
+      .filter((release): release is { eventId: string; releaseAt: string } => typeof release.releaseAt === 'string' && release.releaseAt !== '')
+    if (releases.length === 0) return
+    await notifyMacroReleases(input.submitNotification, releases, occurredAt)
+  }
+
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
     const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
@@ -411,6 +434,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       ...(value.attemptLedgerId ? { attemptLedgerId: value.attemptLedgerId } : {})
     })
     if (gate.decision === 'skipped') return { eventGroupId: value.eventGroupId }
+    // A release that actually landed, far enough from consensus to explain, is the one calendar
+    // notification worth sending. The threshold is not re-judged here: the gate's `provider-surprise`
+    // signals come from `providerReleaseSurprises`, the single place that decides what counts.
+    // `releaseAt` is the instant the data describes (the row's own schedule), so a release that
+    // arrives late still dedupes against its own occurrence.
+    if (value.triggerKey === 'calendar.refresh') await notifyCalendarReleases(gate, value.asOf)
     const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,
       { triggeredEventKeys: gate.triggeredEventKeys })
     if (context.state !== 'available') throw new Error(context.errorCode)
