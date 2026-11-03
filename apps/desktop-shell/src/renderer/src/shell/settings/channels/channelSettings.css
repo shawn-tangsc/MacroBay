@@ -76,7 +76,27 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* 内容容器：固定上限、左对齐（居中会让切页时内容基线随窗口宽度漂移）。 */
+  justify-self: start;
+  width: 100%;
+  max-width: 960px;
   min-width: 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* 说明句再窄一档；行（频道行 / 日志行）撑满容器，不再各自限宽。 */
+.channel-detail-purpose {
+  max-width: 620px;
+}
+
+/* 窄窗：内边距收一档；说明句允许换行到两行，绝不省略号截断（截断会吃掉关键信息）。 */
+@media (max-width: 1280px) {
+  .channel-detail {
+    padding: 16px;
+  }
 }
 
 .channel-detail-header {
