@@ -59,6 +59,8 @@ export type NotificationSettingsText = {
   /** 药丸只收状态词；这三句是词，不是句子。 */
   pillNotWired: string
   pillPushFailed: string
+  /** 「交出去了、没拿到回执」那一档的状态词：既不是失败也不是成功，落 `muted`。 */
+  pillPushUnconfirmed: string
   /** 药丸键解析不到时的那一句：宁可说「读不出来」，也不回显键名。 */
   pillUnavailable: string
   subsColChannel: string
@@ -142,6 +144,7 @@ const zh: NotificationSettingsText = {
   goCheck: '去检查',
   pillNotWired: '未接入',
   pillPushFailed: '推送失败',
+  pillPushUnconfirmed: '不确定',
   pillUnavailable: '状态读不出来',
   subsColChannel: '通道',
   notApprovedChannel: '这条不会到手机',
@@ -232,6 +235,7 @@ const en: NotificationSettingsText = {
   goCheck: 'Check',
   pillNotWired: 'Not connected',
   pillPushFailed: 'Push failed',
+  pillPushUnconfirmed: 'Unconfirmed',
   pillUnavailable: 'Status cannot be read',
   subsColChannel: 'Channel',
   notApprovedChannel: 'This never goes to the phone',

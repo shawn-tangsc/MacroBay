@@ -8,6 +8,7 @@ import type { NotificationEventCatalogEntry } from '@platform/notifications/cont
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { NotificationSettingsScreen } from './NotificationSettingsScreen'
+import { notificationSettingsText } from './notifications/notificationSettingsText'
 import type { NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
 let root: Root | undefined
@@ -328,11 +329,21 @@ describe('the send-to-channel row', () => {
     })
 
     const row = container.querySelector('[data-row="channel"]')!
-    // 交出去了、没拿到回执：既不能写「没发出去」，也不能给「失败」药丸。
+    // 交出去了、没拿到回执：既不能写「没发出去」，也不能借「推送失败」那档药丸。
     expect(row.textContent).toContain('不确定有没有发到手机')
     expect(row.textContent).toContain('没有拿到确认')
     expect(row.textContent).not.toContain('没发出去')
-    expect(row.querySelector('.status-pill')).toBeNull()
+    // 药丸要有，但只能是「不确定」那一档；状态词给不出来就是又一个假状态。
+    const pill = row.querySelector('.status-pill')
+    expect(pill?.textContent).toBe('不确定')
+    expect(pill?.classList.contains('status-pill--muted')).toBe(true)
+    expect(row.textContent).not.toContain('推送失败')
+    // 「拿不到」不许写成「看到了」：这一档一个「已送达」都不许出现。
+    expect(row.textContent).not.toContain('已送达')
+    // 码本身不进原因映射表：否则以后又会被别的路径拼回「没发出去」的模板。
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      expect(Object.keys(notificationSettingsText[language].pushFailureReason)).not.toContain('unknown-after-send')
+    }
     // 时刻照样带时区。
     expect(row.textContent).toContain('11-02 21:37 GMT+8')
   })

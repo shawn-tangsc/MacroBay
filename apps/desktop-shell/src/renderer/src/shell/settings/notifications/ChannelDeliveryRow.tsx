@@ -76,9 +76,15 @@ function ChannelStatusLine(props: {
     // 「已交给通道」打架，而手机很可能真的收到了。只出中性句，不给「失败」药丸：
     // 药丸是状态结论，这里既不是成功也不是失败。
     if (state.failedReason === 'unknown-after-send') {
+      // 药丸用 `muted`「不确定」：这一档既不是失败也不是成功，不能借「推送失败」那档。
       return (
-        <span className="notification-row-state" role="note" data-channel-state data-push-unknown>
-          {text.channelPushUnknown(at)}
+        <span className="notification-row-state-row" role="note" data-channel-state data-push-unknown>
+          <StatusPill
+            tone="muted"
+            labelKey="notificationSettings.channelPushUnconfirmedPill"
+            resolveText={pillResolver(text)}
+          />
+          <span>{text.channelPushUnknown(at)}</span>
         </span>
       )
     }
@@ -178,6 +184,7 @@ function pillResolver(text: NotificationSettingsText): (key: string) => string {
   return (key) => {
     if (key === 'notificationSettings.channelNotWiredPill') return text.pillNotWired
     if (key === 'notificationSettings.channelPushFailedPill') return text.pillPushFailed
+    if (key === 'notificationSettings.channelPushUnconfirmedPill') return text.pillPushUnconfirmed
     return text.pillUnavailable
   }
 }
