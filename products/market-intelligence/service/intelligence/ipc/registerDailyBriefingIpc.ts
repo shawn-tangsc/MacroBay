@@ -16,11 +16,21 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings',
   getStorageState: 'intelligence.dailyBriefing.getStorageState',
-  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade'
+  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade',
+  deletePeriod: 'intelligence.dailyBriefing.deletePeriod'
 })
 
 /** Read-only: one generation per (day, locale) on first open, then the stored edition. */
-export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService): void {
+/** The cross-database delete, supplied by the module because it owns both stores. */
+export type DailyBriefingDeletePeriod = (input: Readonly<{ date: string; periodId: string }>) => Promise<Readonly<{
+  editions: number
+  attempts: number
+  periodRuns: number
+  sessionLinks: number
+  allDone: boolean
+}>>
+
+export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService, deletePeriod?: DailyBriefingDeletePeriod): void {
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getToday, async (payload) =>
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>
@@ -46,6 +56,21 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   // Read-only and cheap: the answer is which table shape the brief is running on right now.
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getStorageState, async () => service.getStorageState())
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.retryUpgrade, async () => service.retryUpgrade())
+  // Destructive and user-initiated: it removes one issue from both databases.
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.deletePeriod, async (payload) => {
+    if (!deletePeriod) throw new Error('daily-briefing-delete-unavailable')
+    return deletePeriod(readDeleteQuery(payload))
+  })
+}
+
+/** Both fields are required and validated: a missing period would delete another issue's rows. */
+function readDeleteQuery(payload: unknown): Readonly<{ date: string; periodId: string }> {
+  if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
+  const date = payload.date
+  const periodId = payload.periodId
+  if (typeof date !== 'string' || !isDailyBriefingEditionDate(date)) throw new Error('daily-briefing-invalid-request')
+  if (typeof periodId !== 'string' || periodId.trim().length === 0 || periodId.length > 64) throw new Error('daily-briefing-invalid-request')
+  return { date, periodId }
 }
 
 /** Shape only. The allowed times and window lengths are the settings service's rule. */

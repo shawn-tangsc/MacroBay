@@ -122,6 +122,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.saveSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.getStorageState': excluded('internal-view'),
   'intelligence.dailyBriefing.retryUpgrade': excluded('internal-view'),
+  'intelligence.dailyBriefing.deletePeriod': excluded('user-private-data'),
   'intelligence.queryRelatedEvents': exposed('query_related_events'),
   'intelligence.querySentimentSeries': exposed('query_sentiment_series'),
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),

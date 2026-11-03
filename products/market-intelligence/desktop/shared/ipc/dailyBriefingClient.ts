@@ -30,7 +30,8 @@ const METHODS = Object.freeze({
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings',
   getStorageState: 'intelligence.dailyBriefing.getStorageState',
-  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade'
+  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade',
+  deletePeriod: 'intelligence.dailyBriefing.deletePeriod'
 })
 
 export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
@@ -149,6 +150,14 @@ export type DailyBriefingClient = Readonly<{
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
   getStorageState: () => Promise<DailyBriefingStorageStateResult>
   retryUpgrade: () => Promise<DailyBriefingStorageStateResult>
+  /** Deletes one issue across both databases; `allDone` is false when the links could not be removed. */
+  deletePeriod: (input: Readonly<{ date: string; periodId: string }>) => Promise<Readonly<{
+    editions: number
+    attempts: number
+    periodRuns: number
+    sessionLinks: number
+    allDone: boolean
+  }>>
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
@@ -212,6 +221,15 @@ export const dailyBriefingClient: DailyBriefingClient = {
   },
   async getStorageState() {
     return readStorageState(() => invoke(METHODS.getStorageState, {}))
+  },
+  async deletePeriod(input) {
+    const result = await invoke(METHODS.deletePeriod, input)
+    const record = result as Record<string, unknown> | null
+    // A partial reply must not be read as a full one: every count and the allDone flag are checked.
+    if (record === null || typeof record !== 'object'
+      || !['editions', 'attempts', 'periodRuns', 'sessionLinks'].every((key) => typeof record[key] === 'number')
+      || typeof record.allDone !== 'boolean') throw new Error('daily-briefing-delete-invalid-result')
+    return result as Readonly<{ editions: number; attempts: number; periodRuns: number; sessionLinks: number; allDone: boolean }>
   },
   async retryUpgrade() {
     return readStorageState(() => invoke(METHODS.retryUpgrade, {}))

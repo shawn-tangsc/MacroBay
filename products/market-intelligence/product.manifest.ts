@@ -145,6 +145,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dailyBriefing.saveSettings' },
     { method: 'intelligence.dailyBriefing.getStorageState' },
     { method: 'intelligence.dailyBriefing.retryUpgrade' },
+    { method: 'intelligence.dailyBriefing.deletePeriod' },
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },

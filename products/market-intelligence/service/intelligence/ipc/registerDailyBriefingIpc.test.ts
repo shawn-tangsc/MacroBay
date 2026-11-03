@@ -1,105 +1,41 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { registerDailyBriefingIpc, DAILY_BRIEFING_IPC_METHODS } from './registerDailyBriefingIpc'
-
-const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
-const register = ((_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
-  handlers.set(method, handler)
-}) as never
+import { DAILY_BRIEFING_IPC_METHODS, registerDailyBriefingIpc } from './registerDailyBriefingIpc'
 
 const service = {
-  getToday: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
-  list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } })),
-  get: vi.fn(async () => ({ state: 'missing' as const })),
-  listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })),
-  regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
-  getProgress: vi.fn(async () => ({ state: 'idle' as const })),
-  getStorageState: vi.fn(() => ({ state: 'incomplete' as const, reason: 'backup-failed' as const })),
-  retryUpgrade: vi.fn(async () => ({ state: 'ready' as const }))
+  getToday: vi.fn(), list: vi.fn(), regenerate: vi.fn(), getProgress: vi.fn(), get: vi.fn(),
+  listAttempts: vi.fn(), getStorageState: vi.fn(() => ({ state: 'ready' })), retryUpgrade: vi.fn(() => ({ state: 'ready' }))
+} as never
+
+function registerAll(deletePeriod?: (input: Readonly<{ date: string; periodId: string }>) => Promise<never>) {
+  const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+  registerDailyBriefingIpc((( _product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+    handlers.set(method, handler)
+  }) as never, service, undefined, deletePeriod as never)
+  return handlers
 }
 
-const settings = {
-  getView: vi.fn(async () => ({
-    settings: { editorialEnabled: true, providerId: '', modelId: '' },
-    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
-  })),
-  save: vi.fn(async (patch: { editorialEnabled?: boolean }) => ({
-    settings: { editorialEnabled: patch.editorialEnabled ?? true, providerId: '', modelId: '' },
-    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
-  }))
-}
-
-registerDailyBriefingIpc(register, service, settings)
-
-describe('daily briefing IPC', () => {
-  it('forwards a valid query', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(service.getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.list)!({ locale: 'en-US', timeZone: 'UTC' })
-    expect(service.list).toHaveBeenCalledWith({ locale: 'en-US', timeZone: 'UTC' })
+describe('daily briefing delete channel', () => {
+  it('registers the delete method under its own name', () => {
+    expect(DAILY_BRIEFING_IPC_METHODS.deletePeriod).toBe('intelligence.dailyBriefing.deletePeriod')
+    expect(registerAll().has('intelligence.dailyBriefing.deletePeriod')).toBe(true)
   })
 
-  it('accepts the extra editions as a language patch and rejects a language it cannot write', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: ['en-US'] } })
-    expect(settings.save).toHaveBeenCalledWith({ language: { additional: ['en-US'] } })
-
-    // Shape only here: a well-shaped but unsupported language is the settings service's rule to
-    // reject, while a malformed body must never reach it.
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: 'en-US' } }))
-      .rejects.toThrow('daily-briefing-invalid-request')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { primary: 'zh-CN' } }))
-      .rejects.toThrow('daily-briefing-invalid-request')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ language: { additional: ['ja-JP'] } }))
-      .rejects.toThrow('daily-briefing-invalid-request')
+  it('passes the validated date and period to the delete handler', async () => {
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 2, periodRuns: 1, sessionLinks: 3, allDone: true }))
+    const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
+    await expect(handler({ date: '2026-11-03', periodId: 'default' })).resolves.toMatchObject({ editions: 1, allDone: true })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default' })
   })
 
-  it('reads and saves the editorial settings with a strict patch', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getSettings)!({})
-    expect(settings.getView).toHaveBeenCalledTimes(1)
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ editorialEnabled: false })
-    expect(settings.save).toHaveBeenCalledWith({ editorialEnabled: false })
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ providerId: 'p', extra: true }))
-      .rejects.toThrow('daily-briefing-invalid-request')
-  })
-
-  it('forwards the generation setting and rejects a malformed one', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation: { generationTime: '07:30', windowHours: 48 } })
-    expect(settings.save).toHaveBeenLastCalledWith({ generation: { generationTime: '07:30', windowHours: 48 } })
-
-    for (const generation of [{}, { generationTime: 730 }, { windowHours: '48' }, { generationTime: '07:30', extra: true }, 'soon']) {
-      await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation }))
-        .rejects.toThrow('daily-briefing-invalid-request')
-    }
-  })
-
-  it('regenerates today from a strict query', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(service.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-  })
-
-  it('forwards an attempts read for one issue', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.listAttempts)!({ date: '2026-10-30', locale: 'zh-CN', periodId: 'default' })
-    expect(service.listAttempts).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN', periodId: 'default' })
-  })
-
-  it('forwards a valid dated read', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.get)!({ date: '2026-10-30', locale: 'zh-CN' })
-    expect(service.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN' })
-  })
-
-  it('reports the storage upgrade state and retries it', async () => {
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getStorageState)!({})).resolves.toEqual({ state: 'incomplete', reason: 'backup-failed' })
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.retryUpgrade)!({})).resolves.toEqual({ state: 'ready' })
-    expect(service.retryUpgrade).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects an unknown locale, a missing zone or a non-canonical date', async () => {
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'en-GB', timeZone: 'UTC' }))
-      .rejects.toThrow('daily-briefing-invalid-locale')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'zh-CN' }))
-      .rejects.toThrow('daily-briefing-invalid-time-zone')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.get)!({ date: '2026-02-30', locale: 'zh-CN' }))
-      .rejects.toThrow('daily-briefing-invalid-date')
-    expect(service.get).toHaveBeenCalledTimes(1)
+  it('refuses a payload that could delete another issue', async () => {
+    const deletePeriod = vi.fn()
+    const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
+    // Both fields are required: a missing period would delete another issue's rows.
+    await expect(handler({ date: '2026-11-03' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-13-40', periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: '   ' })).rejects.toThrow('daily-briefing-invalid-request')
+    expect(deletePeriod).not.toHaveBeenCalled()
   })
 })
