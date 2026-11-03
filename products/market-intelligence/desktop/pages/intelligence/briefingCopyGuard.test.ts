@@ -3,11 +3,15 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { productText } from '../../shared/i18n/productText'
+import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
+import { DailyBriefingPage } from './DailyBriefingPage'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 
 /**
@@ -130,4 +134,46 @@ describe('briefing copy guard', () => {
     }))
     expect(bannedBriefingCopy([html.replace(/<[^>]+>/g, ' ')])).toEqual([])
   })
+  it('renders the whole brief page — banner included — without a banned word', async () => {
+    const zh = productText['zh-CN'].pages.intelligence.portal.dashboard
+    const bannerText = productText['zh-CN'].pages.intelligence.portal.dailyBriefingGeneratedBanner
+    const edition = guardDocument()
+    const client = {
+      getToday: async () => ({ state: 'available' as const, document: edition }),
+      list: async () => ({
+        state: 'available' as const,
+        result: { editions: [{
+          date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const,
+          availableLocales: ['zh-CN' as const], state: 'generated' as const,
+          generatedAt: '2026-10-30T00:30:00.000Z', readingsAvailable: 4, windowEnd: '2026-10-30T00:30:00.000Z'
+        }] }
+      }),
+      get: async () => ({ state: 'available' as const, document: edition }),
+      regenerate: async () => ({ state: 'available' as const, document: edition }),
+      getProgress: async () => ({ state: 'idle' as const })
+    }
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    // Effects have to run for the page to paint: a static render would assert on an empty shell,
+    // which is the "forever green net" this case exists to avoid.
+    await act(async () => {
+      root.render(createElement('div', null,
+        createElement(DailyBriefingPage, {
+          locale: 'zh-CN',
+          text: zh.dailyBriefing,
+          onBack: () => undefined,
+          onConfigureSources: () => undefined,
+          client: client as never
+        }),
+        createElement(DailyBriefingGeneratedBanner, { locale: 'zh-CN', text: bannerText, client: client as never, now: () => new Date('2026-10-30T04:00:00.000Z') })
+      ))
+    })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    const text = host.textContent ?? ''
+    root.unmount()
+    // The banner's own copy tree is what this net exists for: prove the text is really on screen.
+    expect(text).toContain(bannerText.title)
+    expect(bannedBriefingCopy([text])).toEqual([])
+  })
+
 })
