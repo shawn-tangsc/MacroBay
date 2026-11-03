@@ -947,7 +947,7 @@ describe('daily briefing page', () => {
       generate.click()
       await Promise.resolve(); await Promise.resolve()
     })
-    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String), generate: false })
   })
 
   it('ignores a stored English choice while English editions are switched off', async () => {
@@ -959,7 +959,7 @@ describe('daily briefing page', () => {
     // No switch, so no way back: the page must not open in a language it cannot leave — and it must
     // not fetch once in English and then again in Chinese, which is the flash the reader complained about.
     expect(client.getToday).toHaveBeenCalledTimes(1)
-    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), generate: false })
     // The stored preference stays put for when the switch comes back.
     expect(window.localStorage.getItem(CONTENT_LOCALE_STORAGE_KEY)).toBe('en-US')
     expect(dom.textContent).not.toContain(englishText.history.title)
@@ -971,7 +971,7 @@ describe('daily briefing page', () => {
     await renderPage(client)
 
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String), generate: false })
   })
 
   it('re-reads settings when the window comes back, so a change takes effect without a reload', async () => {
@@ -1843,6 +1843,23 @@ it('takes the current issue from the service, not from the wall clock', async ()
   const backfill = dom.querySelector<HTMLButtonElement>('[data-briefing-no-edition="2026-10-28"] button')!
   expect(backfill.disabled).toBe(true)
   expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+})
+
+it('never starts a run just because the page was opened', async () => {
+  // An open that silently spends a model run looks like a hang, and the run is the reader's to
+  // start. The open is a read: `getToday` is asked for the stored edition only.
+  const client = fakeClient()
+  const dom = await renderPage(client)
+
+  expect(client.getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), generate: false })
+  expect(client.regenerate).not.toHaveBeenCalled()
+
+  // The click is what runs it, once.
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  })
+  expect(client.regenerate).toHaveBeenCalledTimes(1)
 })
 
 it('labels the header action by whether today already has an edition', async () => {

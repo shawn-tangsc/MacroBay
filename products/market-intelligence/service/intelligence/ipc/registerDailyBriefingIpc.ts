@@ -111,7 +111,7 @@ function readGenerationPatch(value: unknown): Readonly<{ generationTime?: string
   }
 }
 
-function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }> {
+function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string; generate?: boolean }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
   const locale = payload.locale
   const timeZone = payload.timeZone
@@ -119,7 +119,8 @@ function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; time
   if (typeof timeZone !== 'string' || timeZone.length === 0 || timeZone.length > 64) {
     throw new Error('daily-briefing-invalid-time-zone')
   }
-  return { locale, timeZone }
+  // Only `false` is meaningful: a read-the-stored-edition open. Anything else keeps the old shape.
+  return payload.generate === false ? { locale, timeZone, generate: false } : { locale, timeZone }
 }
 
 function readAttemptsQuery(payload: unknown): Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }> {

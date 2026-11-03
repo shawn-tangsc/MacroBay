@@ -34,7 +34,12 @@ const METHODS = Object.freeze({
   deletePeriod: 'intelligence.dailyBriefing.deletePeriod'
 })
 
-export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
+export type DailyBriefingClientInput = Readonly<{
+  locale: 'zh-CN' | 'en-US'
+  timeZone: string
+  /** `false` opens the page as a read: the stored edition, or "nothing written yet". No run. */
+  generate?: boolean
+}>
 export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }>
 
 export type DailyBriefingClockSource = 'settings' | 'system'

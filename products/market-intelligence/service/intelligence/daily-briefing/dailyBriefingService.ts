@@ -189,6 +189,8 @@ function withTimeZoneSource(
 
 export type DailyBriefingTodayFailureCode =
   | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
+  /** Not a failure: a read-only open found nothing written for this issue yet. */
+  | 'not-generated'
 
 export type DailyBriefingTodayResult =
   | Readonly<{
@@ -344,10 +346,18 @@ export function createDailyBriefingService(deps: Readonly<{
    * `generation` is that period's own time and window, so a period never borrows another one's
    * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
    */
-  async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>): Promise<DailyBriefingTodayResult> {
+  async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration; generate?: boolean }>): Promise<DailyBriefingTodayResult> {
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
+    // Opening the page is a read. A caller that passes `generate: false` gets what is stored, or a
+    // code that says nothing was written yet — never a model run the reader did not ask for.
+    if (input.generate === false) {
+      const stored = await deps.store.get(window.date, input.locale, periodId).catch(() => undefined)
+      return stored && isCurrent(stored.document)
+        ? withTimeZoneSource({ state: 'available', document: stored.document }, window.zoneSource)
+        : { state: 'unavailable', failureCode: 'not-generated' }
+    }
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
       const result = await resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
       return withTimeZoneSource(await withStoredAttempt(deps.store, result, window.date, input.locale, periodId), window.zoneSource)

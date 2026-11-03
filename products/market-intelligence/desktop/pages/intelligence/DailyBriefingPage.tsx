@@ -81,7 +81,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const timeZoneRef = useRef(timeZone)
   timeZoneRef.current = timeZone
   const requestRef = useRef(0)
-  const emptyGenerateRef = useRef(false)
   // The one read path, reachable from effects that must not re-implement it (the delete fallback).
   const openEditionRef = useRef<(date: string, locale: 'zh-CN' | 'en-US', row?: { state: string; attemptCount?: number }) => void>(() => undefined)
   // The language this component last loaded for; a change means the stored edition language arrived.
@@ -164,7 +163,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       loadedLocaleRef.current = localeForLoad
       const todayPromise = skipGenerate
         ? Promise.resolve(undefined)
-        : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+        : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current, generate: false }), 15_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       if (listed?.state === 'available' && typeof listed.result.today === 'string') setCurrentPeriodDate(listed.result.today)
@@ -215,6 +214,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
+      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday) {
+        // The page opened as a read and nothing is written for this issue yet: the ordinary
+        // "not generated" state, with the one button that starts a run.
+        setView({ status: 'no-edition', date: todayDate, failed: false })
       } else if (skipGenerate && !keptCachedToday) {
         // Nothing is left for that day. It is the ordinary "nothing generated yet" state, not a
         // special one: what the reader did is said by the one-time delete note, not by the pane.
@@ -239,14 +242,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
           ...(generationTrace ? { generationTrace } : {})
         })
-        if (emptyGenerateRef.current) {
-          setRegenerateFailure({
-            ...(today?.state === 'unavailable' ? { code: today.failureCode } : {}),
-            ...(generationTrace ? { generationTrace } : {})
-          })
-        }
       }
-      emptyGenerateRef.current = false
       setEditions(rows.slice(0, 14))
       setRegenerating(false)
     })()
@@ -361,11 +357,24 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt
+  // The one action that spends a run, and only after a click. It writes this issue, then the list is
+  // read again (a read) so the row shows what just landed.
   const generateNow = (): void => {
-    emptyGenerateRef.current = true
     setRegenerateFailure(null)
     setRegenerating(true)
-    setReloadKey((key) => key + 1)
+    void runBriefingRegenerate({ client, locale, timeZone: zoneInvalid ? 'UTC' : timeZone })
+      .then((outcome) => {
+        if (outcome.kind === 'available') {
+          setView({ status: 'ready', document: outcome.document, kind: 'today' })
+          setCurrentPeriodDate(outcome.document.edition.date)
+        } else {
+          setRegenerateFailure(outcome.failure)
+        }
+      })
+      .finally(() => {
+        setRegenerating(false)
+        setReloadKey((key) => key + 1)
+      })
   }
   // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
   const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime

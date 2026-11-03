@@ -21,6 +21,21 @@ describe('daily briefing delete channel', () => {
     expect(registerAll().has('intelligence.dailyBriefing.deletePeriod')).toBe(true)
   })
 
+  it('forwards "read only, do not generate" and nothing else', async () => {
+    const getToday = vi.fn(async () => ({ state: 'unavailable' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), getToday } as never)
+    const handler = handlers.get('intelligence.dailyBriefing.getToday')!
+
+    await handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', generate: false })
+    expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', generate: false })
+    // An ordinary open keeps the old shape: the flag exists only to suppress a run.
+    await handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+  })
+
   it('passes the validated date, period and edition language to the delete handler', async () => {
     const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 3, allDone: true }))
     const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
