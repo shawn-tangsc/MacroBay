@@ -35,6 +35,13 @@ describe('the chart carries its own box', () => {
     expect(chartSource).toContain("import './capitalFlowChart.css'")
   })
 
+  it('colours direction values inside the dialog, whose root is not the card root', () => {
+    // The dialog deliberately avoids `.mi-capital-conditions` (that class brings the card's grid),
+    // so a rule scoped only to the card left the dialog's numbers in the default colour.
+    expect(pageCss).toContain(":is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='inflow']")
+    expect(pageCss).toContain(":is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='outflow']")
+  })
+
   it('renders its plot and tick line outside any dashboard scope', () => {
     const markup = renderToStaticMarkup(createElement(CapitalFlowChart, { rows, text }))
     expect(markup).toContain('class="mi-capital-conditions__chart"')

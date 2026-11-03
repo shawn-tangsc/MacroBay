@@ -140,8 +140,10 @@
 .mi-capital-conditions__stable-table tbody td { padding-top: 7px; padding-bottom: 6px; }
 .mi-capital-conditions__stable-supply { color: var(--mi-dashboard-text); font-size: 13px; font-weight: 600; }
 .mi-capital-conditions__pct { margin-left: 4px; font-size: 9px; font-weight: 400; }
-.mi-capital-conditions [data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
-.mi-capital-conditions [data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
+/* The dialog carries its own root class, not the card's: adding `.mi-capital-conditions` there
+   would drag the card's grid layout in with it. Both scopes get the same direction colours. */
+:is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
+:is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
 .mi-capital-conditions__etf-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .mi-capital-conditions__etf-col-asset { width: 26%; }
 .mi-capital-conditions__etf-col-streak { width: 20%; }
