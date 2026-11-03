@@ -43,7 +43,8 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: var(--surface-2);
+  /* 凹下去一档：--surface-2 在深色下与 hover 同色，徽标会看着像被悬停。 */
+  background: var(--bg);
   color: var(--muted-strong);
   font-size: 11px;
   font-weight: 600;
@@ -116,7 +117,7 @@
 
 .channel-row-error {
   /* 正文不用红色：红只落在点、边框、图标上；失败这个结论由状态点表达。 */
-  color: var(--text-primary);
+  color: var(--muted-strong);
   font-size: 12px;
 }
 
