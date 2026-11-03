@@ -10,6 +10,7 @@ import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingPage } from './DailyBriefingPage'
+import { CONTENT_LOCALE_STORAGE_KEY } from './useBriefingContentLocale'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -499,6 +500,40 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
+  it('ignores a stored English choice while English editions are switched off', async () => {
+    window.localStorage.setItem(CONTENT_LOCALE_STORAGE_KEY, 'en-US')
+    const client = fakeClient()
+    const dom = await renderPage(client)
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    // No switch, so no way back: the page must not open in a language it cannot leave.
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    expect(dom.textContent).not.toContain(englishText.history.title)
+  })
+
+  it('keeps the stored English choice when English editions are enabled', async () => {
+    window.localStorage.setItem(CONTENT_LOCALE_STORAGE_KEY, 'en-US')
+    const client = fakeClient({ getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })) })
+    await renderPage(client)
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
+  })
+
+  it('re-reads settings when the window comes back, so a change takes effect without a reload', async () => {
+    const getSettings = vi.fn()
+      .mockResolvedValueOnce({ state: 'available' as const, view: settingsView })
+      .mockResolvedValue({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })
+    const dom = await renderPage(fakeClient({ getSettings }))
+
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(0)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
   })
 
   it('renders no language tab at all when English editions are not enabled', async () => {

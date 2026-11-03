@@ -98,6 +98,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
   // The switch only exists when the brief may have more than one edition language at all.
   const [englishEditionsEnabled, setEnglishEditionsEnabled] = useState(false)
+  // Until the settings answer arrives we do not know whether an English edition is even possible.
+  const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
+  // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
+  const [settingsReloadKey, setSettingsReloadKey] = useState(0)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -115,6 +119,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
   // Follows the run only while one is in flight: the hook stops and forgets on its own.
   const generating = view.status === 'loading' || regenerating
+  // With English editions off there is no switch, so a stored choice must not trap the reader in it:
+  // the page falls back to the interface language instead of showing an edition it cannot leave.
+  useEffect(() => {
+    if (!languageSettingsKnown || englishEditionsEnabled || contentLocale === locale) return
+    setContentLocale(locale)
+  }, [languageSettingsKnown, englishEditionsEnabled, contentLocale, locale, setContentLocale])
   const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
@@ -185,15 +195,32 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
 
   useEffect(() => {
     let active = true
-    void client.getSettings?.().then((result) => {
+    if (!client.getSettings) {
+      // No settings reader at all: there is no English edition to switch to.
+      setLanguageSettingsKnown(true)
+      return undefined
+    }
+    void client.getSettings().then((result) => {
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
       setEnglishEditionsEnabled(result.view.language.settings.additional.includes('en-US'))
+      setLanguageSettingsKnown(true)
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
-    }).catch(() => undefined)
+    }).catch(() => { if (active) setLanguageSettingsKnown(true) })
     return () => { active = false }
-  }, [client])
+  }, [client, settingsReloadKey])
+
+  // A setting changed in the drawer (or in another window) takes effect without a reload.
+  useEffect(() => {
+    const bump = (): void => setSettingsReloadKey((key) => key + 1)
+    window.addEventListener('focus', bump)
+    document.addEventListener('visibilitychange', bump)
+    return () => {
+      window.removeEventListener('focus', bump)
+      document.removeEventListener('visibilitychange', bump)
+    }
+  }, [])
 
   useEffect(() => () => {
     if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
@@ -464,8 +491,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       onOpenModelSettings={openModelService}
       onClose={() => {
         setSettingsSection(null)
-        // The banner follows the saved value, so a save inside the drawer has to be re-read.
-        void client.getSettings().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
+        // Saving may have added or removed the English edition: read the settings again.
+        setSettingsReloadKey((key) => key + 1)
       }} /> : null}
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
