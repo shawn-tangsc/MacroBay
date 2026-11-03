@@ -368,7 +368,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedLocale={selectedLocale} todayDate={todayDate}
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
-        locale={locale} text={text} formatTime={formatTime} resolveText={resolveProductText} onSelect={selectEdition}
+        locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         onLoadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} />
       <section className="mi-daily-briefing-page__content">
         <DailyBriefingLanguageFallback requested={languageFallback} text={text} />

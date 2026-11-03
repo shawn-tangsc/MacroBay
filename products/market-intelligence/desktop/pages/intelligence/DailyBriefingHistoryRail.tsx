@@ -21,7 +21,7 @@ type AttemptsState =
  * and when a row is expanded it asks for that issue's attempts; a failed read is stated, not drawn
  * as "no attempts".
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, selectedLocale, todayDate, locale, text, formatTime, generatingStage, resolveText, onSelect, onLoadAttempts }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, selectedLocale, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onLoadAttempts }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -34,7 +34,8 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   todayDate: string
   locale: DailyBriefingLocale
   text: DailyBriefingText
-  formatTime?: (value: string, precision?: 'minute' | 'second') => string
+  /** The reader's display zone; the row shows only HH:mm, so the date and the offset stay out. */
+  timeZone: string
   /** Set while today's edition is being generated, so the rail never says "not generated" then. */
   generatingStage?: string
   /** Product text resolver for the status pill's key; absent means no pill. */
@@ -114,7 +115,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable ?? 0} {text.readingsUnit}</span>
                 {edition.generatedAt ? <>
                   <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
-                  <span className="mi-daily-briefing__rail-fact">{formatTime ? formatTime(edition.generatedAt, 'minute') : edition.generatedAt.slice(11, 16)}</span>
+                  <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>
                 </> : null}
               </small>
             </>}
@@ -150,6 +151,15 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
       })}
     </div>
   </aside>
+}
+
+/** `HH:mm` in the reader's zone: the row's date is on the line above, the offset is the setting's. */
+export function railClock(instant: string, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(instant))
+  } catch {
+    return instant.slice(11, 16)
+  }
 }
 
 export function formatRailDate(date: string, locale: DailyBriefingLocale): string {

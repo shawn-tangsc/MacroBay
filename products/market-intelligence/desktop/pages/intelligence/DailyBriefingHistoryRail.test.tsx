@@ -49,6 +49,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
       todayDate="2026-11-02"
       locale="zh-CN"
       text={text}
+      timeZone="Asia/Shanghai"
       onSelect={() => undefined}
       {...props}
     />)
@@ -63,6 +64,11 @@ describe('daily briefing history rail', () => {
     // "/4" and the word "生成" are the two things this row no longer says.
     expect(meta?.textContent).not.toContain('/4')
     expect(meta?.textContent).not.toContain('生成')
+    // Only the count and the clock: the date is already on the row's first line, the offset belongs
+    // to the settings page — repeating them here is what made the row read as crowded.
+    expect(meta?.textContent).not.toContain('2026-11-02')
+    expect(meta?.textContent).not.toContain('GMT')
+    expect(meta?.textContent).toContain('08:00')
     expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe('2 次')
   })
 
