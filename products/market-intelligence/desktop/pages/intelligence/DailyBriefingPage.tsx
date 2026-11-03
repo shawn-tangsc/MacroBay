@@ -20,6 +20,7 @@ import { openModelSettings, openWebSearchSettings } from '../../shared/navigatio
 import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
+import { useBriefingShareActions } from './useBriefingShareActions'
 import { runBriefingRegenerate } from './runBriefingRegenerate'
 import { useDailyBriefingIssueDeletion } from './useDailyBriefingIssueDeletion'
 import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
@@ -93,7 +94,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [editionsFailed, setEditionsFailed] = useState(false)
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
   // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
   const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
@@ -114,14 +114,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [zoneInvalid, setZoneInvalid] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
-  const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
   // Open by default: the reader asked to see the groups without a click; the counts stay on the
   // summary line either way.
   const [issuesOpen, setIssuesOpen] = useState(true)
   const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
-  const exportTimer = useRef<number | undefined>(undefined)
-  const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
   // Follows the run only while one is in flight: the hook stops and forgets on its own.
   const generating = view.status === 'loading' || regenerating
@@ -226,11 +223,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     }
   }, [])
 
-  useEffect(() => () => {
-    if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
-    if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
-  }, [])
-
   const selectEdition = (date: string): void => {
     const target = effectiveLocale
     const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
@@ -261,46 +253,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setRegenerating(false)
   }
 
-  const exportImage = async (): Promise<void> => {
-    if (view.status !== 'ready' || !shareRef.current) return
-    setExportState('exporting')
-    try {
-      // The poster paints its own paper; the export reads that colour back instead of keeping a
-      // second copy here, so a palette change cannot leave the downloaded image on the old paper.
-      const poster = shareRef.current.querySelector<HTMLElement>('.mi-brief-poster') ?? shareRef.current
-      const paper = posterExportBackground(poster)
-      const dataUrl = await toPng(poster, { pixelRatio: 2, ...(paper ? { backgroundColor: paper } : {}), width: 1080, cacheBust: true })
-      const link = document.createElement('a')
-      link.download = briefingExportFileName(view.document)
-      link.href = dataUrl
-      link.click()
-      setExportState('done')
-    } catch {
-      setExportState('failed')
-    }
-    if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
-    exportTimer.current = window.setTimeout(() => setExportState('idle'), 2_500)
-  }
-
-  const copy = async (): Promise<void> => {
-    if (view.status !== 'ready') return
-    try {
-      const markdown = dailyBriefingToMarkdown(view.document, {
-        labels: withWindowHours(view.document.edition.locale === locale ? text : briefingTextForLocale(view.document.edition.locale), view.document.edition.windowHours ?? 24),
-        locale: view.document.edition.locale,
-        direction: (term) => localizedDirectionTerm(term, view.document.edition.locale),
-        ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),
-        formatTime: (value) => formatTime(value, 'minute')
-      })
-      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable')
-      await navigator.clipboard.writeText(markdown)
-      setCopyState('copied')
-    } catch {
-      setCopyState('failed')
-    }
-    if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
-    copyTimer.current = window.setTimeout(() => setCopyState('idle'), 2_000)
-  }
+  const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
+    document: view.status === 'ready' ? view.document : undefined,
+    locale, text, ...(eventTitles ? { eventTitles } : {}), shareRef
+  })
 
   const editorialFailureCode = view.status === 'ready' ? view.document.provenance.editorialFailure : undefined
   const editorialBlocked = Boolean(editorialFailureCode && editorialFailureCode !== 'editorial-disabled')
