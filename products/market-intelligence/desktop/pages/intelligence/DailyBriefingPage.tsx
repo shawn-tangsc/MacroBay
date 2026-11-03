@@ -59,6 +59,7 @@ import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPag
 import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { openBriefingEdition } from './openBriefingEdition'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
+import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
@@ -139,16 +140,20 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [currentPeriodDate, setCurrentPeriodDate] = useState<string | undefined>(undefined)
   const todayDate = currentPeriodDate ?? wallClockToday
   // A run this page started, or one it is loading for. The service's own answer joins below.
-  const busyLocally = view.status === 'loading' || regenerating
+  const readyDocument = briefingDocument(view)
+  const loading = isBriefingLoading(view)
+  const busyLocally = loading || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
   const effectiveLocaleRef = useRef(effectiveLocale)
   effectiveLocaleRef.current = effectiveLocale
   useEffect(() => {
-    if (view.status === 'ready') lastReadyRef.current = view.document
+    const ready = briefingDocument(view)
+    if (ready) lastReadyRef.current = ready
   }, [view])
-  const progress = useDailyBriefingProgress({ client, running: busyLocally, locale, timeZone })
+  // Always polling: the run that matters may have been started by the schedule, not by this page.
+  const progress = useDailyBriefingProgress({ client, running: true, locale, timeZone, intervalMs: 1_500 })
   // One question, every source: what this page started, what it is loading for, and what the service
   // says is running right now (a scheduled run, or one started in another window).
   const generating = busyLocally || progress?.state === 'running'
@@ -209,19 +214,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         }
         if (!keptCachedToday) setView({ status: 'no-edition', date: periodDate, failed: false })
         keptCachedToday = true
-      } else if (periodRow && view.status === 'loading') {
+      } else if (periodRow && loading) {
         const cached = await client.get({ date: periodDate, locale: localeForLoad }).catch(() => undefined)
         if (active && cached?.state === 'available') {
           setView({ status: 'ready', document: cached.document, kind: periodDate === todayDate ? 'today' : 'history' })
           keptCachedToday = true
         }
-      }
-      // Before saying "nothing was generated", ask whether something is being generated right now.
-      // The 07:00 scheduled run (or one started in another window) is invisible to local state, and
-      // its nine steps must be on screen while it works.
-      const serviceRunInFlight = async (): Promise<boolean> => {
-        const live = await client.getProgress({ locale: localeForLoad, timeZone: timeZoneRef.current }).catch(() => undefined)
-        return live?.state === 'running'
       }
       const today = await todayPromise
       if (!active) return
@@ -267,8 +265,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           } else {
             setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
           }
-        } else if (await serviceRunInFlight()) setView({ status: 'loading' })
-        else setView({ status: 'no-edition', date: periodDate, failed: false })
+        } else setView({ status: 'no-edition', date: periodDate, failed: false })
       } else if (skipGenerate && !keptCachedToday) {
         // Nothing is left for that day — same sentence as any day that never generated.
         setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
@@ -359,7 +356,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
-    document: view.status === 'ready' ? view.document : undefined,
+    document: readyDocument,
     locale, text, ...(eventTitles ? { eventTitles } : {}), shareRef
   })
 
@@ -368,13 +365,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
-  const selectedDate = view.status === 'ready' ? view.document.edition.date : (pinnedDate ?? todayDate)
-  const selectedLocale = view.status === 'ready' ? view.document.edition.locale : undefined
+  const selectedDate = readyDocument ? readyDocument.edition.date : (pinnedDate ?? todayDate)
+  const selectedLocale = readyDocument?.edition.locale
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
-  const issues = view.status === 'ready' && !contentBlocked
+  const issues = readyDocument && !contentBlocked
     ? briefingIssues({
-        document: view.document,
+        document: readyDocument,
         text,
         formatTime,
         ...(eventTitles ? { eventTitles } : {}),
@@ -386,8 +383,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const activeGroup = openGroup ? groups.find((group) => group.key === openGroup.key) : undefined
   // A successful edition keeps its stage trace for auditing; a failed attempt carries the same
   // shape in the result, so the timeline survives a refresh once the service returns it.
-  const generationTrace = view.status === 'ready'
-    ? readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
+  const generationTrace = readyDocument
+    ? readGenerationTrace((readyDocument.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     : undefined
   // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
   // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
@@ -395,10 +392,19 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // its trace and gaps even when today has never been generated.
   // The column is always there, and the language switch lives at its top: the two must not be
   // able to take each other away. Its audit blocks render only when the issue has an edition.
-  const hasArchive = !contentBlocked && view.status === 'ready'
+  const hasArchive = !contentBlocked && readyDocument !== undefined
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const { lastGeneratedAt, scheduledTime, todayMissing, hasTodayEdition } = briefingListFacts(editions, todayDate)
+  // One answer for the whole page: the row says which issue state this is, the pane says what it
+  // holds, and the mode combines them. Branches read this, not the pieces.
+  const modeRow = editions.find((edition) => edition.date === todayDate)
+  const mode = resolveBriefingMode({
+    rowState: briefingRowState(modeRow, generating),
+    viewStatus: briefingViewStatus(view),
+    hasEdition: hasTodayEdition,
+    localeAvailable: modeRow ? modeRow.availableLocales.includes(effectiveLocale) : true
+  })
   // The one action that spends a run, and only after a click. It writes this issue, then the list is
   // read again (a read) so the row shows what just landed.
   // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
@@ -407,10 +413,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // body does not jump sideways when an edition appears or disappears.
   const bodyClass = 'mi-daily-briefing-page__body mi-daily-briefing-page__body--with-appendix'
   // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
-  const poster = posterProps({ document: view.status === 'ready' ? view.document : undefined, editions, fallbackText: text })
+  const poster = posterProps({ document: readyDocument, editions, fallbackText: text })
   // Content follows the edition, chrome follows the interface: the rail, buttons and counts stay.
-  const editionText = view.status === 'ready' ? briefingTextForLocale(view.document.edition.locale) : text
-  const editionLocale = view.status === 'ready' ? view.document.edition.locale : locale
+  const editionText = readyDocument ? briefingTextForLocale(readyDocument.edition.locale) : text
+  const editionLocale = readyDocument?.edition.locale ?? locale
 
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
@@ -421,15 +427,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         text={text}
         resolveText={resolveProductText}
         progress={liveProgress}
-        loading={view.status === 'loading'}
+        loading={loading}
         generating={generating}
         regenerating={regenerating}
-        todayReady={view.status === 'ready' && view.kind === 'today'}
+        todayReady={readyDocument !== undefined && readyKind(view) === 'today'}
         hasTodayEdition={hasTodayEdition}
         targetDate={todayDate}
         zoneInvalid={zoneInvalid !== null}
-        systemZone={view.status === 'ready' && view.timeZoneSource === 'system'}
-        exportable={view.status === 'ready' && !contentBlocked}
+        systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
+        exportable={readyDocument !== undefined && !contentBlocked}
         exportState={exportState}
         copyState={copyState}
         onExport={() => void exportImage()}
@@ -453,7 +459,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           void deletePeriod(target)
         }} />
       <DailyBriefingContent {...{
-        text, view, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
+        text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
@@ -477,9 +483,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // Saving may have added or removed the English edition: read the settings again.
         setSettingsReloadKey((key) => key + 1)
       }} /> : null}
-    {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
+    {readyDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-      <div ref={shareRef}><DailyBriefingShareCard document={view.document} text={poster.text} locale={poster.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
+      <div ref={shareRef}><DailyBriefingShareCard document={readyDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} omitFallbackReadings {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
     </div> : null}
   </main>
 }

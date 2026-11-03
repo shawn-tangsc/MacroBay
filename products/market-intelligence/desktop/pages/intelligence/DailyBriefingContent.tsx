@@ -5,6 +5,7 @@ import { StateView } from '@platform/ui/components/state'
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { BriefingDeleteOutcome } from './useDailyBriefingIssueDeletion'
+import type { DailyBriefingMode } from './dailyBriefingMode'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
@@ -26,9 +27,11 @@ import { resolveBriefingStateReason } from './dailyBriefingText'
  * nothing generated, a missing language, a failure, an edition. The page decides which state it is
  * in; this file decides how each one looks.
  */
-export function DailyBriefingContent({ text, view, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, onGenerate, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
+export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, onGenerate, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
+  /** The page's one answer; the generating pane reads it, and it must include service-side runs. */
+  mode: DailyBriefingMode
   generating: boolean
   failure: BriefFailure | null
   regenerating: boolean
@@ -65,7 +68,7 @@ export function DailyBriefingContent({ text, view, generating, failure, regenera
     </div> : null}
     {/* A run in flight owns the pane, whatever local state says: the scheduled run and a run
         started elsewhere land here too, and the nine steps must be visible while it works. */}
-    {view.status === 'loading' || (generating && view.status !== 'ready')
+    {mode === 'generating'
       ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
       : null}
     {view.status === 'unavailable' && !failure && !generating
