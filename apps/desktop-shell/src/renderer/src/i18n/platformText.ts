@@ -1065,6 +1065,10 @@ export type PlatformText = {
     /** 更新块里那颗唯一动作按钮（有新版时写「立即更新」）——它不属于链接块，键就挂在 action 下。 */
     action: {
       update: string
+      /** 顶栏那颗动作按钮的读屏名：动作不变，失败时也不改。 */
+      updateAvailable: string
+      /** 点开失败时的播报（视觉隐藏的 role=status）：读屏听不到颜色变化。 */
+      openFailedNote: string
     }
     links: {
       title: string
@@ -2244,7 +2248,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
       settingsWithUpdate: '设置，有新版本可用',
       action: {
-        update: '立即更新'
+        update: '立即更新',
+        updateAvailable: '有新版本可用，打开下载页',
+        openFailedNote: '没能打开浏览器，可再点一次重试'
       },
       links: {
         title: '链接',
@@ -3429,7 +3435,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: 'A local-first AI workspace: platform plus removable modules',
       settingsWithUpdate: 'Settings, an update is available',
       action: {
-        update: 'Update now'
+        update: 'Update now',
+        updateAvailable: 'An update is available; open the download page',
+        openFailedNote: 'The browser did not open. Click again to retry'
       },
       links: {
         title: 'Links',

@@ -38,6 +38,8 @@ export default {
       '@platform': resolve(__dirname, 'platform'),
       '@products': resolve(__dirname, 'products'),
       '@renderer': resolve(__dirname, 'apps/desktop-shell/src/renderer/src'),
+      // 与 electron.vite.config 的 `@resources` 保持一致：渲染层直接引打包用的那张图，不复制。
+      '@resources': resolve(__dirname, 'resources'),
       antd: resolve(__dirname, 'apps/desktop-shell/node_modules/antd'),
       dayjs: resolve(__dirname, 'apps/desktop-shell/node_modules/dayjs')
     }

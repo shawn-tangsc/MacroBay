@@ -128,9 +128,11 @@ export function parseReleaseNotes(markdown: string): ReleaseNotesParseResult | n
       continue
     }
 
+    // 普通行：**不在这里收段**，先攒着。真本的正文是硬换行的（长句被手动折行），
+    // 一行一段会把一句话拆成好几段；空行、标题、列表才结束段落。
     flushList()
+    if (paragraph.length > 0) paragraph.push({ text: '', bold: false })
     paragraph.push(...parseRuns(trimmed))
-    flushParagraph()
   }
   flushAll()
 

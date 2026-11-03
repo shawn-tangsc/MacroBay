@@ -51,6 +51,21 @@ describe('parsing a Markdown release note', () => {
     expect(nodes?.[0]).not.toHaveProperty('items')
   })
 
+  it('joins hard-wrapped lines into one paragraph, instead of one paragraph per line', () => {
+    // 真本的正文是手动折行的：一行一段会把一句话拆碎（真数据才暴露的问题）。
+    const nodes = nodesOf('### 通知第一次能用\n设置里的通知不再是四个灰色开关。任务失败、\n日报生成失败这类事情，现在会进通知中心。')
+    expect(nodes).toHaveLength(2)
+    expect(nodes?.[1]).toMatchObject({ kind: 'paragraph' })
+    expect(nodesToPlainText(nodes ?? [])).toContain('四个灰色开关。任务失败、')
+  })
+
+  it('keeps list items separate: a newline between bullets never merges them', () => {
+    const nodes = nodesOf('- 第一条\n- 第二条\n- 第三条')
+    expect(nodes).toHaveLength(1)
+    expect(nodes?.[0]).toMatchObject({ kind: 'list' })
+    expect((nodes?.[0] as unknown as { items: unknown[] }).items).toHaveLength(3)
+  })
+
   it('turns inline code into a code run and drops the backticks', () => {
     expect(nodesOf('跑 `pnpm verify` 一次')).toEqual([
       {

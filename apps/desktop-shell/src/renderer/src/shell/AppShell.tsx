@@ -36,7 +36,7 @@ import { AppMenuBar } from './window/AppMenuBar'
 import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
-import { SettingsUpdateDot } from './navigation/SettingsUpdateDot'
+import { UpdateActionButton } from './updates/UpdateActionButton'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
 import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
 import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
@@ -1729,6 +1729,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         <div className="topbar-actions">
           {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
               等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
+          <UpdateActionButton language={settings.language} />
           <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
         </div>
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
@@ -1792,7 +1793,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>
-                <SettingsUpdateDot language={settings.language} />
               </button>
             )
           })}
