@@ -1,8 +1,9 @@
 .channel-settings-page {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 216px minmax(0, 1fr);
+  gap: 20px;
   min-height: 0;
+  padding: 24px;
 }
 
 .channel-platform-list {
@@ -17,7 +18,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  height: 36px;
+  padding: 0 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -36,18 +38,33 @@
   font-weight: 600;
 }
 
-.channel-platform-badge {
+.channel-platform-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  /* 凹下去一档：--surface-2 在深色下与 hover 同色，徽标会看着像被悬停。 */
-  background: var(--bg);
-  color: var(--muted-strong);
-  font-size: 11px;
-  font-weight: 600;
+  background: var(--surface-2);
+  /* 未接入的平台：图标走次级文字色（不靠降低不透明度——那会灰到看不清）。 */
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.channel-platform-logo svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* 已接入：图标用主文字色；选中行再把块底浮起一层。 */
+.channel-platform-item[data-implemented='true'] .channel-platform-logo {
+  color: var(--text-strong);
+}
+
+.channel-platform-item[aria-current='true'] .channel-platform-logo {
+  background: var(--surface-raised);
+  color: var(--text-strong);
 }
 
 .channel-detail {
@@ -66,26 +83,52 @@
 
 .channel-detail-title {
   margin: 0;
-  font-size: 15px;
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .channel-detail-purpose {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
+}
+
+.channel-detail-reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 「＋ 添加」：强调色底 + 对比色字，高 30（与规范一致）。 */
+.channel-add-button {
+  height: 30px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.channel-add-button:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .channel-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 12px;
   border-top: 1px solid var(--border-subtle);
 }
 
+.channel-row:hover {
+  background: var(--surface-2);
+}
+
 .channel-row-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex: none;
 }
@@ -103,12 +146,13 @@
 }
 
 .channel-row-name {
+  color: var(--text-strong);
   font-weight: 600;
   min-width: 120px;
 }
 
 .channel-row-mask {
-  color: var(--muted-strong);
+  color: var(--muted);
   letter-spacing: 1px;
   /* 等宽字体栈与壳层其余 8 处一致；不为它新造 token（收敛成 token 是另一笔）。 */
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -126,4 +170,11 @@
   align-items: center;
   gap: 2px;
   margin-left: auto;
+  /* 平时弱化，hover/focus 时明显：动作在同一行里，不该和名称抢注意力。 */
+  opacity: 0.6;
+}
+
+.channel-row:hover .channel-row-actions,
+.channel-row-actions:focus-within {
+  opacity: 1;
 }

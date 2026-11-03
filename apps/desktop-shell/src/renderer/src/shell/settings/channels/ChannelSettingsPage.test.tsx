@@ -99,6 +99,19 @@ describe('reading the channel list', () => {
 })
 
 describe('a channel row', () => {
+  it('gives the three icon actions three different screen-reader names', async () => {
+    installPlatform()
+    const container = await mount()
+
+    const names = [...container.querySelectorAll('[data-channel-id="channel-1"] button')]
+      .map((node) => node.getAttribute('aria-label') ?? '')
+      .filter((name) => name.length > 0)
+    expect(names).toContain(labels.channelLogs)
+    expect(names).toContain(labels.channelEdit)
+    expect(names).toContain(labels.channelDelete)
+    expect(new Set(names).size).toBe(names.length)
+  })
+
   it('shows the name, an all-star token and the four row actions — with no way to reveal or copy it', async () => {
     installPlatform()
     const container = await mount()
@@ -184,16 +197,27 @@ describe('the platform list follows the approved layout', () => {
     expect(container.textContent).not.toContain(labels.channelPlatformPurpose.telegram)
   })
 
-  it('leaves a platform that cannot be connected with only its name, one sentence and no empty block', async () => {
+  it('leaves a platform that cannot be connected with its name, what it is for, why not, and no empty block', async () => {
     installPlatform()
     const container = await mount()
 
     const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
     await act(async () => (slack as HTMLButtonElement).click())
 
+    // 三样都要：名字在标题，用途与原因各一句——缺用途时读者不知道这个平台是干什么的。
+    expect(container.querySelector('.channel-detail-title')?.textContent).toBe('Slack')
+    expect(container.textContent).toContain(labels.channelPlatformPurpose.slack)
     expect(container.textContent).toContain(labels.channelUnsupportedPane)
     expect(container.querySelector('[data-state="empty"]')).toBeNull()
     expect([...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)).toBeUndefined()
+  })
+
+  it('gives every platform a mark, and never brightens the ones that cannot be connected', async () => {
+    installPlatform()
+    const container = await mount()
+
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(6)
+    expect(container.querySelector('.channel-platform-logo[data-platform-logo="telegram"]')).not.toBeNull()
   })
 })
 

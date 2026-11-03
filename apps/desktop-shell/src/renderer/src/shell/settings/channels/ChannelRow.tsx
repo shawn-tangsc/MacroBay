@@ -25,13 +25,15 @@ export function ChannelRow(props: {
   onLogs: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
-  // 读屏名收的是**键**（点分路径），不是词：键形状守卫只认这两种之一。
-  const resolveText = (key: string): string => {
-    if (key === 'settings.channels.logs') return labels.channelLogs
-    if (key === 'settings.channels.edit') return labels.channelEdit
-    if (key === 'settings.channels.delete') return labels.channelDelete
-    return labels.channelEnableSwitch
+  // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
+  // 查不到就返回空串：没键要立刻暴露，不能让一个不相干的兜底句替它发言（上一版三个按钮
+  // 因此全念成「启用这个频道」）。
+  const rowActionText: Readonly<Record<string, string>> = {
+    'settings.channels.logs': labels.channelLogs,
+    'settings.channels.edit': labels.channelEdit,
+    'settings.channels.delete': labels.channelDelete
   }
+  const resolveText = (key: string): string => rowActionText[key] ?? ''
   // 凭据取不到是「这条频道现在不能用」，红点 + 行内原因；其余状态只用点色区分，不写句子。
   const failure = channel.credential.status === 'unavailable' ? labels.channelCredentialUnavailable : null
   const dot = failure !== null ? 'bad' : channel.state === 'runtime-ready' ? 'ok' : 'muted'

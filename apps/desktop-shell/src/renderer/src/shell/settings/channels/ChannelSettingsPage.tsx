@@ -11,6 +11,7 @@ import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import { ChannelEditDialog } from './ChannelEditDialog'
 import { ChannelRow } from './ChannelRow'
+import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
 import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
@@ -155,12 +156,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           <button
             aria-current={type === selectedType}
             className="channel-platform-item"
+            data-implemented={catalog.find((entry) => entry.type === type)?.implemented === true}
             key={type}
             onClick={() => setSelectedType(type)}
             type="button"
           >
-            <span aria-hidden="true" className="channel-platform-badge">
-              {labels.channelPlatformName[type].slice(0, 1)}
+            <span aria-hidden="true" className="channel-platform-logo" data-platform-logo={type}>
+              {CHANNEL_PLATFORM_LOGOS[type]()}
             </span>
             <span>{labels.channelPlatformName[type]}</span>
           </button>
@@ -186,16 +188,22 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             <header className="channel-detail-header">
               <div>
                 <h2 className="channel-detail-title">{labels.channelPlatformName[selectedType]}</h2>
-                <p className="channel-detail-purpose">
-                  {supported
-                    ? labels.channelPlatformPurpose[selectedType]
-                    : planned
-                      ? labels.channelNeedsEvidence
-                      : labels.channelUnsupportedPane}
-                </p>
+                {/* 三样都要：名字、一句用途、以及「为什么现在不能用」——缺用途那版只剩一句原因，
+                    读者不知道这个平台是干什么的。 */}
+                <p className="channel-detail-purpose">{labels.channelPlatformPurpose[selectedType]}</p>
+                {supported ? null : (
+                  <p className="channel-detail-reason">
+                    {planned ? labels.channelNeedsEvidence : labels.channelUnsupportedPane}
+                  </p>
+                )}
               </div>
               {supported ? (
-                <Button icon={<Plus size={14} />} onClick={() => setEditor({ mode: 'create' })} type="primary">
+                <Button
+                  className="channel-add-button"
+                  icon={<Plus size={14} />}
+                  onClick={() => setEditor({ mode: 'create' })}
+                  type="primary"
+                >
                   {labels.channelAdd}
                 </Button>
               ) : null}
