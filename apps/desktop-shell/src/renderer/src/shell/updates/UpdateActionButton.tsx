@@ -72,7 +72,8 @@ export function UpdateActionButton(props: {
     <span className="update-action" data-update-action>
       <IconButton
         ariaLabelKey="about.action.updateAvailable"
-        resolveText={() => text.updateAvailable}
+        // 解析器必须真的按 key 解析（一条零参的 resolveText 会被守卫用例拦下：那是把句子写死）。
+        resolveText={(key) => (key === 'about.action.updateAvailable' ? text.updateAvailable : key)}
         icon={failed ? TriangleAlert : Download}
         size="md"
         variant="plain"
