@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, readJsonFileRecoveringSync, writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import type { RuntimeStateRecord } from '@platform/jobs'
 
@@ -10,12 +8,8 @@ export type IntelligenceRuntimeStateHistoryStorage = {
 }
 
 export function readIntelligenceRuntimeStateHistorySync(filePath: string): RuntimeStateRecord[] {
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-    return Array.isArray(parsed) ? parsed.filter(isRuntimeStateRecord) : []
-  } catch {
-    return []
-  }
+  const parsed = readJsonFileRecoveringSync(filePath)
+  return Array.isArray(parsed) ? parsed.filter(isRuntimeStateRecord) : []
 }
 
 export function createIntelligenceRuntimeStateHistoryJsonStorage(
@@ -23,17 +17,11 @@ export function createIntelligenceRuntimeStateHistoryJsonStorage(
 ): IntelligenceRuntimeStateHistoryStorage {
   return {
     async readAll() {
-      try {
-        const parsed = JSON.parse(await readFile(filePath, 'utf8')) as unknown
-        return Array.isArray(parsed) ? parsed.filter(isRuntimeStateRecord) : []
-      } catch (error) {
-        if (isMissingFileError(error)) return []
-        throw error
-      }
+      const parsed = await readJsonFileRecovering(filePath)
+      return Array.isArray(parsed) ? parsed.filter(isRuntimeStateRecord) : []
     },
     async writeAll(records) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, records)
     }
   }
 }

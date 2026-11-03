@@ -1,6 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
 import type { IntelligenceAssessment } from '../schema/intelligenceAssessment'
 import type { IntelligenceImpact } from '../schema/intelligenceImpact'
@@ -63,29 +61,18 @@ export function createInMemoryIntelligencePipelineStateStorage(
 export function createIntelligencePipelineJsonStorage(filePath: string): IntelligencePipelineStateStorage {
   return {
     async read() {
-      try {
-        const parsed = JSON.parse(await readFile(filePath, 'utf8')) as unknown
-        return normalizeIntelligencePipelineSnapshot(parsed)
-      } catch (error) {
-        if (isMissingFileError(error)) return createEmptyIntelligencePipelineSnapshot()
-        throw error
-      }
+      const parsed = await readJsonFileRecovering(filePath)
+      return parsed === undefined ? createEmptyIntelligencePipelineSnapshot() : normalizeIntelligencePipelineSnapshot(parsed)
     },
     async write(snapshot) {
-      mkdirSync(dirname(filePath), { recursive: true })
-      writeFileSync(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+      writeJsonFileAtomicallySync(filePath, snapshot)
     }
   }
 }
 
 export function readIntelligencePipelineSnapshotSync(filePath: string): IntelligencePipelineSnapshot {
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-    return normalizeIntelligencePipelineSnapshot(parsed)
-  } catch (error) {
-    if (isMissingFileError(error)) return createEmptyIntelligencePipelineSnapshot()
-    throw error
-  }
+  const parsed = readJsonFileRecoveringSync(filePath)
+  return parsed === undefined ? createEmptyIntelligencePipelineSnapshot() : normalizeIntelligencePipelineSnapshot(parsed)
 }
 
 export function normalizeIntelligencePipelineSnapshot(value: unknown): IntelligencePipelineSnapshot {

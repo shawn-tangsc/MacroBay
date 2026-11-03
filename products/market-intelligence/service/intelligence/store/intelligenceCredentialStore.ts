@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 export type IntelligenceCredentialRecord = {
   credentialRef: string
@@ -124,16 +123,10 @@ export function buildSafeCredentialView(
 export function createIntelligenceCredentialJsonStorage(filePath: string): IntelligenceCredentialStorage {
   return {
     async read() {
-      try {
-        return JSON.parse(await readFile(filePath, 'utf8')) as IntelligenceCredentialState
-      } catch (error) {
-        if (isMissingFileError(error)) return null
-        throw error
-      }
+      return ((await readJsonFileRecovering(filePath)) as IntelligenceCredentialState | undefined) ?? null
     },
     async write(value) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, value)
     }
   }
 }
