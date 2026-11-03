@@ -1062,8 +1062,9 @@ export type PlatformText = {
     /**
      * 更新块里那颗唯一动作按钮——它不属于链接块，键就挂在 action 下。
      *
-     * 名字说的是**点下去真的会发生的事**：打开下载页。原来写「立即更新 / Update now」，
-     * 而 dmg 不会自己装——那是文案比能力跑得快，读者会以为已经装上了。
+     * 文案是**用户拍过的字面**（2026-11-03）：有新版叫「立即更新」、顶栏那颗叫「更新到 {版本}」。
+     * 外部有人以「点下去只是打开下载页」为理由改成「打开下载页」——那说法不算离谱，但改这几个字
+     * 要走用户确认，不许直接改：改文案的人通常连用例里的期望值一起改，测试仍然是绿的。
      */
     action: {
       update: string
@@ -2252,11 +2253,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
       settingsWithUpdate: '设置，有新版本可用',
       action: {
-        update: '打开下载页',
+        update: '立即更新',
         updateAvailable: '有新版本可用，打开下载页',
-        updateToVersion: (version) => `下载 ${version}`,
+        updateToVersion: (version) => `更新到 ${version}`,
         updateNoVersion: '有新版本',
-        updateToVersionLabel: (version) => `下载 ${version}，打开下载页`,
+        updateToVersionLabel: (version) => `更新到 ${version}，打开下载页`,
         openFailedNote: '没能打开浏览器，可再点一次重试'
       },
       links: {
@@ -3436,11 +3437,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: 'A local-first AI workspace: platform plus removable modules',
       settingsWithUpdate: 'Settings, an update is available',
       action: {
-        update: 'Open the download page',
+        update: 'Update now',
         updateAvailable: 'An update is available; open the download page',
-        updateToVersion: (version) => `Download ${version}`,
+        updateToVersion: (version) => `Update to ${version}`,
         updateNoVersion: 'Update available',
-        updateToVersionLabel: (version) => `Download ${version}; open the download page`,
+        updateToVersionLabel: (version) => `Update to ${version}; open the download page`,
         openFailedNote: 'The browser did not open. Click again to retry'
       },
       links: {
