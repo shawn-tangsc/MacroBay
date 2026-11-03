@@ -1145,6 +1145,7 @@ export type PlatformText = {
     centerEmptyHint: string
     centerStaleNotice: string
     centerReload: string
+    centerUnknownHint: string
     channelsHeading: string
   }
   webSearch: {
@@ -2326,7 +2327,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。',
       centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
-      centerReload: '重新加载'
+      centerReload: '重新加载',
+      centerUnknownHint: '批量操作先不可用：通知现在读不到。'
     },
     webSearch: {
       title: '网页搜索',
@@ -3514,7 +3516,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.',
       centerStaleNotice: 'Could not refresh — showing what was read last time.',
-      centerReload: 'Reload'
+      centerReload: 'Reload',
+      centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.'
     },
     webSearch: {
       title: 'Web Search',

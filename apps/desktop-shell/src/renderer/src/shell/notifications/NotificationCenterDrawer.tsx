@@ -29,7 +29,11 @@ type NotificationCenterDrawerProps = {
   source?: NotificationCenterSource
 }
 
-type LoadState = 'loading' | 'ready' | 'error'
+/**
+ * 四态。`error` 是「读失败、知道要重试」；`unknown` 是「连读失败还是本来就为空都判不出来」——
+ * 后者必须走 `notification-unknown`，不能退成空态（那是在说「没有」）、也不能推到权限态。
+ */
+type LoadState = 'loading' | 'ready' | 'error' | 'unknown'
 
 /**
  * 通知中心抽屉。
@@ -58,6 +62,12 @@ export function NotificationCenterDrawer({
     const centre = source ?? createNotificationCenterSource()
     try {
       const page = await centre.list()
+      // 回了对象但 `items` 不是数组：这既不是成功，也不是一个能说出原因的错误。
+      // 归到 `unknown` 而不是 `error`，因为 `error` 承诺「可以重试就好了」，这里没人能保证。
+      if (!isNotificationPage(page)) {
+        setState('unknown')
+        return
+      }
       setItems(page.items)
       setState('ready')
     } catch {
@@ -168,7 +178,21 @@ export function NotificationCenterDrawer({
           />
         </>
       ) : state === 'error' ? (
+        // 「读取失败」：知道要重试。原因码与未知态**必须不同**，两屏只靠原因句区分。
         <StateView state="error" reasonCode="unreadable" size="md" action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }} />
+      ) : state === 'unknown' ? (
+        <>
+          <StateView
+            state="error"
+            reasonCode="notification-unknown"
+            size="md"
+            action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }}
+          />
+          {/* 底部两个批量动作这时是禁用的，原因写在这里一次：否则读者只看到两个灰按钮。 */}
+          <p className="notification-center-empty-hint" role="note" data-center-unknown-hint>
+            {labels.centerUnknownHint}
+          </p>
+        </>
       ) : (
         <>
           <StateView state="empty" reasonCode="not-yet" size="md" />
@@ -357,4 +381,9 @@ function NotificationActionButton(props: {
       {label}
     </Button>
   )
+}
+
+/** 只认「有 items 数组」这一种成功形态：其余一律当作判不出来，不是「没有」。 */
+function isNotificationPage(value: unknown): value is { items: SafeNotificationRecord[] } {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)
 }

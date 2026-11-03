@@ -163,6 +163,35 @@ describe('通知中心的分组与空态', () => {
     expect(attempts).toBe(2)
     expect(rows()).toHaveLength(1)
   })
+
+  it('回了个不是列表的东西时说「原因没查清」，不说「没有通知」', async () => {
+    // 既没成功、也没给出可判定的错误：这既不是空，也不该承诺「重试就好」。
+    const source = fakeSource({ list: async () => ({ nope: true }) as never })
+    await mount(source)
+
+    const view = document.body.querySelector('[data-state="error"]')
+    expect(view).not.toBeNull()
+    // 两态靠原因码与原因句区分，标题共用「读取失败」是允许的。
+    expect(document.body.textContent).toContain('这不代表没有通知')
+    expect(document.body.textContent).not.toContain('没有需要你处理的事')
+    // 批量动作这时禁用，原因写在面板里一次。
+    expect(document.body.querySelector('[data-center-unknown-hint]')).not.toBeNull()
+  })
+
+  it('读取失败与原因不明用两个原因码，句子也不同', async () => {
+    const failing = fakeSource({ list: async () => Promise.reject(new Error('bridge gone')) })
+    await mount(failing)
+    const failureText = document.body.textContent
+
+    document.body.innerHTML = ''
+    const unknown = fakeSource({ list: async () => ({ nope: true }) as never })
+    await mount(unknown)
+    const unknownText = document.body.textContent
+
+    // 同一句就说明两个态没分开。
+    expect(failureText).not.toBe(unknownText)
+    expect(unknownText).toContain('这不代表没有通知')
+  })
 })
 
 describe('清空与删除是两件事', () => {
