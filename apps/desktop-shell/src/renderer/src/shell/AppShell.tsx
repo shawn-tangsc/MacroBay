@@ -432,6 +432,17 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     props.onLanguageChange?.(settings.language)
   }, [props.onLanguageChange, settings.language])
 
+  /**
+   * `<html lang>` 跟着界面语言走：**一处设置，壳层根上写一次**。
+   *
+   * 为什么必须有：`index.html` 里写死了 `zh-CN`，切到英文界面后内容变英文、这个属性却没人改，
+   * 读屏就会拿中文语音念英文句子，断行与拼写检查也跟着错。属性说一种语言、内容说另一种，
+   * 验收时还会把人引到错误的结论上（曾经据此误判「中文界面出了英文文案」）。
+   */
+  useEffect(() => {
+    document.documentElement.lang = settings.language
+  }, [settings.language])
+
   // 导航后的焦点交接收在 hook 里（契约 §14）：导航成功后调一次，effect 在渲染后执行。
   const scheduleNavFocusHandoff = useNavigationFocusHandoff()
   useEffect(() => {
