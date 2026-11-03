@@ -269,10 +269,55 @@ describe('daily briefing page', () => {
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
     expect(dom.querySelector('[data-date="2026-10-30"]')?.textContent).toContain(text.history.today)
-    expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(true)
+    expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(false)
 
     act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__back')!.click())
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('separates the two nothing-states of a day the reader selects', async () => {
+    // A day with no edition still has something to say: it either never ran or it failed. The rail
+    // carries one word; the pane carries the difference, and selecting never spends a run.
+    const failed = { date: '2026-10-20', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, attemptCount: 2 }
+    const list = vi.fn(async () => ({
+      state: 'available' as const,
+      // Inside the 14-day window the page renders: a fifteenth row would never reach the rail.
+      result: { editions: editions.map((edition, index) => index === 10 ? failed : edition) }
+    }))
+    const client = fakeClient({ list, get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'model-unavailable' })) })
+    const dom = await renderPage(client)
+    const getTodayCalls = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+
+    // 1. A day that never ran: the pane names it, gives the schedule, and offers no false action.
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    const never = dom.querySelector('[data-briefing-no-edition="2026-10-28"]')
+    expect(never?.textContent).toContain(text.history.notRunTitle)
+    // The schedule when the list carries one, otherwise the honest "no attempt recorded".
+    const scheduleSentence = text.history.notRunPlanned.split('{')[0]!
+    expect([scheduleSentence, text.history.notRunUnknownPlanned].some((sentence) => never?.textContent?.includes(sentence))).toBe(true)
+    const backfill = never?.querySelector<HTMLButtonElement>('button')!
+    // The one thing this version cannot do is disabled, and its accessible name says why.
+    expect(backfill.disabled).toBe(true)
+    expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+    expect(dom.querySelector('[data-date="2026-10-28"]')?.getAttribute('aria-current')).toBe('true')
+
+    // 2. A day that failed: the reason and the nine steps, not just one word in the rail.
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-20"]')!.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    const panel = dom.querySelector('[data-daily-brief-failure]')!
+    expect(panel.getAttribute('data-failure-code')).toBe('model-unavailable')
+    expect(panel.querySelectorAll('[data-stage]')).toHaveLength(9)
+    expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable']!)
+    const retry = panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!
+    expect(retry.disabled).toBe(true)
+    expect(retry.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+
+    // 3. Selecting wrote nothing and started nothing: no open, no run, no attempt.
+    expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
+    expect(client.regenerate).not.toHaveBeenCalled()
+    // 4. The header keeps today as its target, so the two entries cannot be confused.
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.headerGenerate)
   })
 
   it('loads a historical edition read-only and leaves a missing day disabled', async () => {

@@ -20,11 +20,16 @@ export type BriefFailure = Readonly<{
  * Kept out of the page for the same reason the live steps are: the page decides which run to
  * display and what its actions do, not how a failure is laid out.
  */
-export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, onRetry, onOpenSettings }: Readonly<{
+export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, retryBlockedReason, onRetry, onOpenSettings }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   regenerating: boolean
+  /**
+   * Retrying would write today's edition where a past one should be, so the action is disabled and
+   * this sentence becomes its accessible name. Absent means retry is a real action.
+   */
+  retryBlockedReason?: string
   onRetry: () => void
   onOpenSettings: () => void
 }>): React.ReactElement {
@@ -41,7 +46,9 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
     <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
     <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
     <div className="mi-daily-briefing-page__failure-actions">
-      <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
+      <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating || retryBlockedReason !== undefined}
+        {...(retryBlockedReason !== undefined ? { 'aria-label': retryBlockedReason, title: retryBlockedReason } : {})}
+        onClick={onRetry}>
         {regenerating ? text.regenerating : text.regenerate}
       </Button>
       {/* Two actions only: retry here, or the same settings drawer the header opens. The advice

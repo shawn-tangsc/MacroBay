@@ -19,6 +19,11 @@ export type DailyBriefingPageViewState =
   }>
   /** The language tab is a read: this day had no edition written in the language asked for. */
   | Readonly<{ status: 'locale-missing'; locale: 'zh-CN' | 'en-US' }>
+  /**
+   * The reader selected a day that has no edition. `failed` separates "the run failed" from "the
+   * run never happened": both have nothing to read, and only one of them has a reason to show.
+   */
+  | Readonly<{ status: 'no-edition'; date: string; failed: boolean; failureCode?: string; generationTrace?: GenerationTrace }>
   | Readonly<{
     status: 'ready'
     document: DailyBriefingDocument

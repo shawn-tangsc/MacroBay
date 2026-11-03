@@ -1,7 +1,10 @@
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 
 import type { DailyBriefingClient, DailyBriefingClientTodayResult } from '../../shared/ipc/dailyBriefingClient'
+import type { BriefFailure } from './DailyBriefingFailurePanel'
+import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { type GenerationTrace, readGenerationTrace } from './dailyBriefingGenerationTrace'
 
 /**
  * The page's pure derivations, kept out of it.
@@ -76,4 +79,53 @@ export function issueCountsText(
     .filter((severity) => counts[severity] > 0)
     .map((severity) => text.limits.counts[severity].replace('{count}', String(counts[severity])))
     .join(' · ')
+}
+
+/**
+ * Which failure, if any, the page is showing — and whether the stored edition may still be read.
+ *
+ * Three sources in one order: a retry this page started, the editorial gate recorded inside a
+ * stored edition, and a failed open. Kept out of the page: the branches are the whole answer, and
+ * a wrong order here shows a retry failure as a successful edition.
+ */
+export function briefingFailure(input: Readonly<{
+  view: DailyBriefingPageViewState
+  regenerateFailure: Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null
+}>): Readonly<{ failure: BriefFailure | null; editorialBlocked: boolean }> {
+  const { view, regenerateFailure } = input
+  const editorialFailureCode = view.status === 'ready' ? view.document.provenance.editorialFailure : undefined
+  const editorialBlocked = Boolean(editorialFailureCode && editorialFailureCode !== 'editorial-disabled')
+  if (regenerateFailure) {
+    return {
+      editorialBlocked,
+      failure: {
+        kind: 'generation',
+        ...(regenerateFailure.code ? { code: regenerateFailure.code } : {}),
+        ...(regenerateFailure.generationTrace ? { generationTrace: regenerateFailure.generationTrace } : {})
+      }
+    }
+  }
+  if (editorialBlocked && view.status === 'ready' && editorialFailureCode) {
+    const editorialTrace = readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
+    return {
+      editorialBlocked,
+      failure: {
+        kind: 'editorial',
+        code: editorialFailureCode,
+        ...(view.document.provenance.editorialFailureDetail ? { detail: view.document.provenance.editorialFailureDetail } : {}),
+        ...(editorialTrace ? { generationTrace: editorialTrace } : {})
+      }
+    }
+  }
+  if (view.status === 'unavailable' && view.failureCode) {
+    return {
+      editorialBlocked,
+      failure: {
+        kind: 'generation',
+        code: view.failureCode,
+        ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
+      }
+    }
+  }
+  return { failure: null, editorialBlocked }
 }

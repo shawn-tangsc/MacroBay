@@ -74,7 +74,9 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         const selected = edition.date === selectedDate
         const key = `${edition.date}:${edition.periodId}:${edition.locale}`
         return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
-          <button type="button" disabled={missing}
+          {/* A day with no edition can still be selected: the pane then says whether it never ran
+              or failed, which is exactly what the rail's one word cannot carry. */}
+          <button type="button"
             aria-current={selected ? 'true' : undefined}
             data-date={edition.date} data-state={edition.state}
             className="mi-daily-briefing__rail-row"

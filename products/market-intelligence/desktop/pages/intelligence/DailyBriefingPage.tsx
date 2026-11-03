@@ -51,12 +51,14 @@ import {
   issueCountsText,
   localDate,
   readExistingEdition,
+  briefingFailure,
   summaryFromDocument,
   withDeadline
 } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
+import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -265,20 +267,31 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const selectEdition = (date: string): void => {
     const target = effectiveLocale
     const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
-    if (!row || row.state === 'missing') return
+    if (!row) return
     if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return
     setPinnedDate(date)
     const request = ++requestRef.current
     setRegenerateFailure(null)
-    setView({ status: 'loading' })
+    // A day with no edition is still a day the reader may look into: it says which of the two
+    // nothing-states it is. Selecting never generates, so this branch reads nothing at all.
+    if (row.state === 'missing') {
+      setView({ status: 'no-edition', date, failed: Boolean(row.attemptCount) })
+      if (!row.attemptCount) return
+    }
+    setView((current) => current.status === 'no-edition' ? current : { status: 'loading' })
     void client.get({ date, locale: target })
       .then((result) => {
         if (request !== requestRef.current) return
-        setView(result.state === 'available'
-          ? { status: 'ready', document: result.document, kind: date === todayDate ? 'today' : 'history' }
-          : { status: 'unavailable' })
+        if (result.state === 'available') setView({ status: 'ready', document: result.document, kind: date === todayDate ? 'today' : 'history' })
+        else if (row.state === 'missing') setView({
+          status: 'no-edition',
+          date,
+          failed: result.state === 'unavailable',
+          ...(result.state === 'unavailable' ? { failureCode: result.failureCode } : {})
+        })
+        else setView({ status: 'unavailable' })
       })
-      .catch(() => { if (request === requestRef.current) setView({ status: 'unavailable' }) })
+      .catch(() => { if (request === requestRef.current) setView({ status: 'no-edition', date, failed: row.state === 'missing' }) })
   }
   const regenerate = async (): Promise<void> => {
     setRegenerating(true)
@@ -298,30 +311,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     locale, text, ...(eventTitles ? { eventTitles } : {}), shareRef
   })
 
-  const editorialFailureCode = view.status === 'ready' ? view.document.provenance.editorialFailure : undefined
-  const editorialBlocked = Boolean(editorialFailureCode && editorialFailureCode !== 'editorial-disabled')
-  let failure: BriefFailure | null = null
-  if (regenerateFailure) {
-    failure = {
-      kind: 'generation',
-      ...(regenerateFailure.code ? { code: regenerateFailure.code } : {}),
-      ...(regenerateFailure.generationTrace ? { generationTrace: regenerateFailure.generationTrace } : {})
-    }
-  } else if (editorialBlocked && view.status === 'ready' && editorialFailureCode) {
-    const editorialTrace = readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
-    failure = {
-      kind: 'editorial',
-      code: editorialFailureCode,
-      ...(view.document.provenance.editorialFailureDetail ? { detail: view.document.provenance.editorialFailureDetail } : {}),
-      ...(editorialTrace ? { generationTrace: editorialTrace } : {})
-    }
-  } else if (view.status === 'unavailable' && view.failureCode) {
-    failure = {
-      kind: 'generation',
-      code: view.failureCode,
-      ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
-    }
-  }
+  const { failure, editorialBlocked } = briefingFailure({ view, regenerateFailure })
   // A stored edition under a failure notice is content, not a blocked state.
   const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
@@ -422,6 +412,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} deleted={view.readSkipped === true} />
           : null}
         {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} text={text} onGenerate={generateNow} /> : null}
+        {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
