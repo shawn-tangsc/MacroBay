@@ -156,6 +156,7 @@ export type DailyBriefingClient = Readonly<{
     attempts: number
     periodRuns: number
     sessionLinks: number
+    remaining: number | null
     allDone: boolean
   }>>
 }>
@@ -228,8 +229,9 @@ export const dailyBriefingClient: DailyBriefingClient = {
     // A partial reply must not be read as a full one: every count and the allDone flag are checked.
     if (record === null || typeof record !== 'object'
       || !['editions', 'attempts', 'periodRuns', 'sessionLinks'].every((key) => typeof record[key] === 'number')
+      || !(typeof record.remaining === 'number' || record.remaining === null)
       || typeof record.allDone !== 'boolean') throw new Error('daily-briefing-delete-invalid-result')
-    return result as Readonly<{ editions: number; attempts: number; periodRuns: number; sessionLinks: number; allDone: boolean }>
+    return result as Readonly<{ editions: number; attempts: number; periodRuns: number; sessionLinks: number; remaining: number | null; allDone: boolean }>
   },
   async retryUpgrade() {
     return readStorageState(() => invoke(METHODS.retryUpgrade, {}))
