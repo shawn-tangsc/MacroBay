@@ -78,6 +78,9 @@
   gap: 12px;
   /* 内容容器：固定上限、左对齐（居中会让切页时内容基线随窗口宽度漂移）。 */
   justify-self: start;
+  /* 卡片高度跟着内容走：只有一行时下面不该拖出一大片空白。 */
+  align-self: start;
+  height: fit-content;
   width: 100%;
   max-width: 960px;
   min-width: 0;
@@ -144,7 +147,12 @@
   gap: 12px;
   min-height: 56px;
   padding: 0 12px;
-  border-top: 1px solid var(--border-subtle);
+  /* 一行一条分隔线，横跨卡片的可用宽度；最后一行不画，避免底部多出一条悬空的线。 */
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.channel-row:last-child {
+  border-bottom: none;
 }
 
 .channel-row:hover {
