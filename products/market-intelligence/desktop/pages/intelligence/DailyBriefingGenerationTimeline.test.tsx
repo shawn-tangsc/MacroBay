@@ -82,7 +82,7 @@ afterEach(() => {
   for (const tip of document.querySelectorAll('.ant-tooltip, .ant-popover')) tip.remove()
 })
 
-function render(value: GenerationTrace | undefined, english = false, copy: typeof text = english ? englishText : text): HTMLDivElement {
+function render(value: GenerationTrace | undefined, english = false, copy: typeof text = (english ? englishText : text) as typeof text): HTMLDivElement {
   act(() => {
     root!.render(<DailyBriefingGenerationTimeline
       trace={value}
@@ -358,10 +358,13 @@ describe('generation stage timeline', () => {
     expect(resultOf(dom, 'writing').textContent).toContain('00:00:05 → 00:00:06')
   })
 
-  it('says the timeline was not recorded instead of guessing when the edition has no trace', () => {
+  it('still lists all nine stages when no trace was recorded, as never reached', () => {
+    // Contract: a failure without a trace keeps the stage list, so the reader sees that nothing ran.
     const dom = render(undefined)
     expect(dom.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
-    expect(dom.querySelectorAll('.ant-steps-item')).toHaveLength(0)
+    const items = stepItems(dom)
+    expect(items).toHaveLength(9)
+    expect(items.map((entry) => entry.querySelector('[data-stage]')?.getAttribute('data-stage-state'))).toEqual(new Array(9).fill('pending'))
     expect(dom.textContent).not.toContain(text.generationTrace.failed)
   })
 

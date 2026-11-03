@@ -47,6 +47,15 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
   const steps = generationStageIds.length
   const notStarted = trace ? trace.stages.filter((stage) => !stage.startedAt).length : steps
   const durationLabel = duration !== undefined ? formatDuration(duration, text) : ''
+  // A failure without a trace still has stages: they are shown as never reached instead of a blank.
+  const emptyTrace: GenerationTrace = {
+    attemptId: '',
+    startedAt: '',
+    finishedAt: '',
+    state: 'success',
+    stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
+  }
+  const rendered = trace ?? emptyTrace
   const summaryLine = running
     ? text.generationProgress.running
     : trace
@@ -61,12 +70,14 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
       <h3>{labels.title}</h3>
       <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-stage-summary="true">{summaryLine}</span>
     </summary>
-    {trace ? <>
-      <p className="mi-generation-trace__summary">
+    {trace
+      ? <p className="mi-generation-trace__summary">
         {labels.attempt} · {running ? formatTime(trace.startedAt) : formatRange(trace.startedAt, trace.finishedAt, formatTime)}
         {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
-      {trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
+      : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
+    <>
+      {trace && trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}
       </p> : null}
       <Steps
@@ -74,7 +85,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
         direction="vertical"
         size="small"
         items={generationStageIds.map((id) => {
-          const stage = trace.stages.find((entry) => entry.id === id)
+          const stage = rendered.stages.find((entry) => entry.id === id)
           const state = stage?.state ?? 'pending'
           const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
           const failure = failed?.id === id ? stage : undefined
@@ -94,7 +105,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
           }
         })}
       />
-    </> : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
+    </>
   </details>
 }
 

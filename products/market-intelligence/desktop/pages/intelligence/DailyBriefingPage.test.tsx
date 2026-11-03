@@ -640,9 +640,12 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
-    // The header keeps a generate action in every state (a later requirement); the panel's retry is
-    // still the one the reason leads into.
-    expect(dom.querySelector('[data-toolbar-action="regenerate"]')).not.toBeNull()
+    // The header keeps the action's place but is disabled here: the panel's retry is the only one
+    // the reader can click while a failure is shown.
+    const headerAction = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+    expect(headerAction).not.toBeNull()
+    expect(headerAction.disabled).toBe(true)
+    expect(headerAction.getAttribute('aria-label')).toBe(text.regenerateInPanel)
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     await act(async () => {
