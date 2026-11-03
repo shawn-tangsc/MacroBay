@@ -224,7 +224,7 @@ export const dailyBriefingText = {
       sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
       saveFailed: '保存失败：{sections}',
       discardTitle: '有改动没保存，要丢掉吗？',
-      discardBody: '关掉之后这两节的改动都不保留。',
+      discardBody: '关掉之后没保存的改动都不保留。',
       discardConfirm: '丢掉改动',
       discardCancel: '继续编辑'
     },
@@ -463,7 +463,7 @@ export const dailyBriefingText = {
       sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },
       saveFailed: 'Save failed: {sections}',
       discardTitle: 'You have unsaved changes. Discard them?',
-      discardBody: 'Closing now keeps none of the edits in either section.',
+      discardBody: 'Closing now keeps none of the unsaved edits.',
       discardConfirm: 'Discard changes',
       discardCancel: 'Keep editing'
     },
