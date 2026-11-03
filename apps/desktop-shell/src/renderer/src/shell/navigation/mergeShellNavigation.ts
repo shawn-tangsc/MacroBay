@@ -1,11 +1,18 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+
+import { platformText } from '../../i18n/platformText'
 import type { GeneratedProductMenuEntry, GeneratedProductSettingsEntry } from '@platform/product-registry/types'
 import { resolveMenuPageWorkspaceCapability } from '@platform/workspace/registry/workspacePageRegistry'
 import type { LucideIcon } from 'lucide-react'
 
 import { resolveLocalizedTitle, resolveShellIcon } from './shellIconRegistry'
 import type { BuiltInNavItem, BuiltInSettingsPanel } from './builtInNavEntries'
-import { createBuiltInNavItems, createBuiltInSettingsPanels } from './builtInNavEntries'
+import {
+  BUILT_IN_SETTINGS_GROUP_ORDER,
+  createBuiltInNavItems,
+  createBuiltInSettingsPanels,
+  type BuiltInSettingsGroup
+} from './builtInNavEntries'
 
 /**
  * P2-01：一级菜单项同时是统一注册（workspace 页）的一条记录。
@@ -90,17 +97,29 @@ export function groupShellSettingsPanels(
   language: AppLanguage,
   productSettingsEntries: readonly GeneratedProductSettingsEntry[]
 ): ShellSettingsNavGroup[] {
-  const platformGroup: ShellSettingsNavGroup = {
-    id: 'platform',
-    title: null,
-    kind: 'platform',
-    panels: createBuiltInSettingsPanels(language).map<ShellSettingsPanelItem>((panel: BuiltInSettingsPanel) => ({
-      key: panel.id,
-      label: panel.label,
-      icon: panel.icon,
-      kind: 'built-in'
-    }))
+  const t = platformText[language]
+  // 平台设置按原型分成四组，组标题与左导航其他分组标题同级；顺序固定，不按字母排。
+  // 分组是**导航的呈现口径**，不改任何页面的 id 或可访问性（页面本身仍按 id 路由）。
+  const platformPanels = createBuiltInSettingsPanels(language)
+  const groupTitles: Record<BuiltInSettingsGroup, string> = {
+    models: t.settings.settingsNavGroupModels,
+    system: t.settings.settingsNavGroupSystem,
+    notify: t.settings.settingsNavGroupNotify,
+    other: t.settings.settingsNavGroupOther
   }
+  const platformGroups: ShellSettingsNavGroup[] = BUILT_IN_SETTINGS_GROUP_ORDER.map((group) => ({
+    id: `platform-${group}`,
+    title: groupTitles[group],
+    kind: 'platform' as const,
+    panels: platformPanels
+      .filter((panel: BuiltInSettingsPanel) => panel.group === group)
+      .map<ShellSettingsPanelItem>((panel: BuiltInSettingsPanel) => ({
+        key: panel.id,
+        label: panel.label,
+        icon: panel.icon,
+        kind: 'built-in'
+      }))
+  })).filter((group) => group.panels.length > 0)
 
   const productGroups = new Map<string, ShellSettingsNavGroup>()
   for (const entry of [...productSettingsEntries].sort((left, right) => left.order - right.order)) {
@@ -129,7 +148,7 @@ export function groupShellSettingsPanels(
   }
 
   return [
-    platformGroup,
+    ...platformGroups,
     ...Array.from(productGroups.values()).sort((left, right) => (left.title ?? '').localeCompare(right.title ?? ''))
   ]
 }

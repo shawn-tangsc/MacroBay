@@ -1,0 +1,11 @@
+/* 左侧设置导航的选中态：浅底 + 左侧 2px 强调竖条（原型）。 */
+.settings-nav-item.active {
+  /* 用 inset 阴影画竖条：不占布局位置，切换时文字不会左右跳 2px。 */
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* 分组标题：小号、次要色，与项的左内边距对齐。 */
+.settings-nav-group-title {
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -251,6 +251,11 @@ export type PlatformText = {
     channelAllowedChatsPolicies: string
     /** 判不出来：写「未知」，不许默认成其中一种。 */
     channelAllowedChatsUnknown: string
+    /** 左侧设置导航的分组标题（模型与助手 / 系统与数据 / 通知与频道 / 其他）。 */
+    settingsNavGroupModels: string
+    settingsNavGroupSystem: string
+    settingsNavGroupNotify: string
+    settingsNavGroupOther: string
     /** 日志面板：一条记录的三种类别，正文必须带前缀，读者一眼能分。 */
     channelLogsTitle: string
     channelLogsCopy: string
@@ -1594,6 +1599,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
       channelAllowedChatsPolicies: '这个频道已有显式放行名单：留空不会放开所有人。',
       channelAllowedChatsUnknown: '无法确认这个频道是否已有放行名单，留空的作用未知。',
+      settingsNavGroupModels: '模型与助手',
+      settingsNavGroupSystem: '系统与数据',
+      settingsNavGroupNotify: '通知与频道',
+      settingsNavGroupOther: '其他',
       channelLogsTitle: '{name} — 日志',
       channelLogsCopy: '复制',
       channelLogsRetry: '重试',
@@ -2840,6 +2849,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
       channelAllowedChatsPolicies: 'This channel already has an explicit allow list, so an empty box does not open it up.',
       channelAllowedChatsUnknown: 'Cannot tell whether this channel already has an allow list, so what an empty box does is unknown.',
+      settingsNavGroupModels: 'Models and assistants',
+      settingsNavGroupSystem: 'System and data',
+      settingsNavGroupNotify: 'Notifications and channels',
+      settingsNavGroupOther: 'Other',
       channelLogsTitle: '{name} — Logs',
       channelLogsCopy: 'Copy',
       channelLogsRetry: 'Retry',

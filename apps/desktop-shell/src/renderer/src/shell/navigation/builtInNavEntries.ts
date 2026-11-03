@@ -67,26 +67,32 @@ export type BuiltInSettingsPanelId =
   | 'channels'
   | 'about'
 
+/** 左侧设置导航的分组；顺序即展示顺序（原型：模型与助手 → 系统与数据 → 通知与频道 → 其他）。 */
+export type BuiltInSettingsGroup = 'models' | 'system' | 'notify' | 'other'
+
+export const BUILT_IN_SETTINGS_GROUP_ORDER: readonly BuiltInSettingsGroup[] = ['models', 'system', 'notify', 'other']
+
 export interface BuiltInSettingsPanel {
   id: BuiltInSettingsPanelId
   label: string
   icon: LucideIcon
+  group: BuiltInSettingsGroup
 }
 
 /** Settings 的**二级**面板：只出现在 Settings 分组内，绝不升级为一级菜单页（技术设计 §3.3）。 */
 export function createBuiltInSettingsPanels(language: AppLanguage): BuiltInSettingsPanel[] {
   const t = platformText[language]
   return [
-    { id: 'models', label: t.settings.modelService, icon: KeyRound },
-    { id: 'assistant-library', label: t.settings.assistantLibrary, icon: Bot },
-    { id: 'web-search', label: t.settings.webSearch, icon: Globe2 },
-    { id: 'storage-cache', label: t.settings.storageAndCache, icon: Database },
-    { id: 'task-automation', label: t.settings.taskAutomation, icon: ListChecks },
-    { id: 'preferences', label: t.settings.basicSettings, icon: Languages },
-    { id: 'notifications', label: t.settings.notifications, icon: Bell },
-    { id: 'channels', label: t.settings.channels, icon: MessagesSquare },
+    { id: 'models', label: t.settings.modelService, icon: KeyRound, group: 'models' },
+    { id: 'assistant-library', label: t.settings.assistantLibrary, icon: Bot, group: 'models' },
+    { id: 'web-search', label: t.settings.webSearch, icon: Globe2, group: 'system' },
+    { id: 'storage-cache', label: t.settings.storageAndCache, icon: Database, group: 'system' },
+    { id: 'task-automation', label: t.settings.taskAutomation, icon: ListChecks, group: 'system' },
+    { id: 'preferences', label: t.settings.basicSettings, icon: Languages, group: 'other' },
+    { id: 'notifications', label: t.settings.notifications, icon: Bell, group: 'notify' },
+    { id: 'channels', label: t.settings.channels, icon: MessagesSquare, group: 'notify' },
     // 「关于我们」放在最后：它是最不像「设置」的一页，放前面会把配置区切碎。
-    { id: 'about', label: t.about.title, icon: Info }
+    { id: 'about', label: t.about.title, icon: Info, group: 'other' }
   ]
 }
 

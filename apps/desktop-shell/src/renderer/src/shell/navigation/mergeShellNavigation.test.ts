@@ -76,8 +76,15 @@ describe('mergeShellNavigation', () => {
 
     const groups = groupShellSettingsPanels('en-US', productSettingsEntries)
 
-    expect(groups[0]).toMatchObject({ kind: 'platform', title: null })
-    expect(groups.slice(1).map((group) => group.title)).toEqual(['Other Product', 'Sample Product'])
+    // 平台设置按原型分四组：组标题与产品分组同级，顺序固定。
+    expect(groups.slice(0, 4).map((group) => group.title)).toEqual([
+      'Models and assistants',
+      'System and data',
+      'Notifications and channels',
+      'Other'
+    ])
+    expect(groups.every((group) => group.kind === 'platform' || group.kind === 'product')).toBe(true)
+    expect(groups.slice(4).map((group) => group.title)).toEqual(['Other Product', 'Sample Product'])
     expect(groups.find((group) => group.id === 'sample-product')?.panels[0]?.label).toBe('Risk Profile')
 
     const chineseGroups = groupShellSettingsPanels('zh-CN', productSettingsEntries)
@@ -158,8 +165,14 @@ describe('mergeShellNavigation', () => {
 
     expect(settingsPanelIds.filter((id) => topLevelKeys.has(id))).toEqual([])
     expect(items.filter((item) => item.key === 'settings')).toHaveLength(1)
-    // 二级面板仍只出现在 Settings 分组里，能力并未丢失
-    expect(groupShellSettingsPanels('zh-CN', [])[0]?.panels.map((panel) => panel.key)).toEqual(settingsPanelIds)
+    // 二级面板仍只出现在 Settings 分组里，能力并未丢失（分组后要跨组展开再比）
+    // 分组后顺序变了（按组展示），但每个二级面板都还在、一个不少、没有多出来的。
+    const groupedKeys = groupShellSettingsPanels('zh-CN', []).flatMap((group) => group.panels.map((panel) => panel.key))
+    expect([...groupedKeys].sort()).toEqual([...settingsPanelIds].sort())
+    // 原型的分组归属：通知与频道同组，偏好与关于同组。
+    const byId = new Map(groupShellSettingsPanels('zh-CN', []).map((group) => [group.id, group.panels.map((panel) => panel.key)]))
+    expect(byId.get('platform-notify')).toEqual(['notifications', 'channels'])
+    expect(byId.get('platform-other')).toEqual(['preferences', 'about'])
   })
 
   // 侧栏是纯图标导航（`.nav-item span` 不可见），一级菜单共用图标即无法辨认；
