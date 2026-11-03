@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+
+import { writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import {
   isCanonicalDailyBriefBackfillTime,
@@ -86,8 +87,7 @@ export function createDailyBriefFactEnsureJsonCache(filePath: string): DailyBrie
       version: dailyBriefFactEnsureCachePolicy.version,
       entries: Object.fromEntries(entries)
     }
-    await mkdir(dirname(filePath), { recursive: true })
-    await writeFile(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+    await writeJsonFileAtomically(filePath, snapshot)
   }
 
   async function enqueueWrite(entries: Map<string, DailyBriefFactEnsureEntry>): Promise<void> {

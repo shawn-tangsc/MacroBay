@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+
+import { writeJsonFileAtomically } from '../../storage/jsonFileStorage'
 
 
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
@@ -74,8 +75,7 @@ export function createNotificationJsonStorage(filePath: string): NotificationSto
       }
     },
     async write(value) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, value)
     }
   }
 }

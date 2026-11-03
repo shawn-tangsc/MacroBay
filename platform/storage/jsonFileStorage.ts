@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 export type JsonFileStorage<T> = {
@@ -26,28 +27,108 @@ export function createJsonFileStorage<T>(filePath: string, fallback: T): JsonFil
  * 先写同目录的临时文件、再 rename 覆盖目标：进程在写入中途退出时，原文件要么是旧的、
  * 要么是完整的新的。直接写目标文件会留下“新内容 + 上一版尾巴”的残片，之后每次读取都
  * 会在 `JSON.parse` 上失败（典型表现是页面一直显示“读取失败”）。
+ *
+ * 只要写入的是“会被再次读回的完整文档”，就该走这里，而不是直接 `writeFile`。
  */
-export async function writeJsonFileAtomically(filePath: string, value: unknown): Promise<void> {
+export async function writeFileAtomically(
+  filePath: string,
+  data: string | Uint8Array,
+  encoding: BufferEncoding = 'utf8'
+): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
   const temporaryPath = `${filePath}.${process.pid}.tmp`
-  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+  if (typeof data === 'string') await writeFile(temporaryPath, data, encoding)
+  else await writeFile(temporaryPath, data)
   await rename(temporaryPath, filePath)
 }
 
+/** 同步版本，供只读快照/同步写入的存储使用；语义与 `writeFileAtomically` 相同。 */
+export function writeFileAtomicallySync(filePath: string, data: string, encoding: BufferEncoding = 'utf8'): void {
+  mkdirSync(dirname(filePath), { recursive: true })
+  const temporaryPath = `${filePath}.${process.pid}.tmp`
+  writeFileSync(temporaryPath, data, encoding)
+  renameSync(temporaryPath, filePath)
+}
+
+export async function writeJsonFileAtomically(filePath: string, value: unknown): Promise<void> {
+  await writeFileAtomically(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+export function writeJsonFileAtomicallySync(filePath: string, value: unknown): void {
+  writeFileAtomicallySync(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
 /**
- * 从一段可能粘着上一版残片的数组文本里取回数组：从最后一个 `]` 往前试，
- * 第一个能解析成数组的前缀就是答案。取不回来时返回 null，交给调用方决定怎么处理。
+ * 从一段可能粘着上一版残片的 JSON 文本里取回文档：从后往前试能构成完整值的
+ * `}` / `]` 位置，第一个能解析的前缀就是答案。取不回来时返回 undefined。
+ *
+ * 只看最后 50 个闭合符，避免在超大文件上做 O(n²) 的重复解析；真实事故的残片
+ * 只有几个字符，这个上限足够。
  */
-export function recoverJsonArray(raw: string): unknown[] | null {
-  for (let index = raw.lastIndexOf(']'); index >= 0; index = raw.lastIndexOf(']', index - 1)) {
+export function recoverJsonValue(raw: string): unknown | undefined {
+  const text = raw.trimEnd()
+  const candidates: number[] = []
+  for (let index = text.length - 1; index >= 0 && candidates.length < 50; index -= 1) {
+    const char = text[index]
+    if (char === '}' || char === ']') candidates.push(index)
+  }
+  for (const index of candidates) {
     try {
-      const parsed = JSON.parse(raw.slice(0, index + 1)) as unknown
-      if (Array.isArray(parsed)) return parsed
+      return JSON.parse(text.slice(0, index + 1)) as unknown
     } catch {
-      // 这个 `]` 不是数组结尾，换更早的再试。
+      // 这个闭合符不是文档结尾，换更早的再试。
     }
   }
-  return null
+  return undefined
+}
+
+/** 数组版本的取回：不是数组就返回 null。 */
+export function recoverJsonArray(raw: string): unknown[] | null {
+  const value = recoverJsonValue(raw)
+  return Array.isArray(value) ? value : null
+}
+
+/**
+ * 读回一个 JSON 文档。文件被写坏时取回最长可解析前缀，把原样留一份 `.corrupt-*`，
+ * 并把取回的内容写回，让下一次读取恢复正常；文件不存在或完全无法取回时返回 undefined。
+ */
+export async function readJsonFileRecovering(filePath: string): Promise<unknown | undefined> {
+  let raw: string
+  try {
+    raw = await readFile(filePath, 'utf8')
+  } catch (error) {
+    if (isMissingFileError(error)) return undefined
+    throw error
+  }
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    const recovered = recoverJsonValue(raw)
+    await quarantineCorruptFile(filePath, raw)
+    if (recovered === undefined) return undefined
+    await writeJsonFileAtomically(filePath, recovered)
+    return recovered
+  }
+}
+
+/** `readJsonFileRecovering` 的同步版本，供同步读取的存储使用。 */
+export function readJsonFileRecoveringSync(filePath: string): unknown | undefined {
+  let raw: string
+  try {
+    raw = readFileSync(filePath, 'utf8')
+  } catch (error) {
+    if (isMissingFileError(error)) return undefined
+    throw error
+  }
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    const recovered = recoverJsonValue(raw)
+    void quarantineCorruptFile(filePath, raw)
+    if (recovered === undefined) return undefined
+    writeJsonFileAtomicallySync(filePath, recovered)
+    return recovered
+  }
 }
 
 /** 把坏文件按时间戳留一份，便于事后追查；留档失败不阻断恢复。 */
