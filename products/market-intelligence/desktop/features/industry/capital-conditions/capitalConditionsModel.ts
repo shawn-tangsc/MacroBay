@@ -36,7 +36,13 @@ export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: st
 export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
 type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
-type DashboardFlowHistory = { state: 'available'; rows: readonly FlowChartRow[] }
+/**
+ * "No chart today" has two meanings and they must not read the same: the sources did not answer
+ * (`unavailable`), or they answered with too few aligned days (`not-yet`, with the count).
+ */
+export type DashboardFlowHistory =
+  | { state: 'available'; rows: readonly FlowChartRow[] }
+  | { state: 'not-yet'; availableDays: number }
 
 export type DashboardCapitalConditionsState =
   | { state: 'loading' }
@@ -154,9 +160,9 @@ function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[
     const ether = eth.get(btc.tradingDate)
     return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
   })
-  return rows.length >= capitalConditionsDailyFlowPolicy.minimumRows
-    ? { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
-    : 'unavailable'
+  if (rows.length === 0) return { state: 'not-yet', availableDays: 0 }
+  if (rows.length < capitalConditionsDailyFlowPolicy.minimumRows) return { state: 'not-yet', availableDays: rows.length }
+  return { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
 }
 
 function projectEtfAsset(value: EtfPublicAssetSnapshot): DashboardEtfFlowAsset | undefined {

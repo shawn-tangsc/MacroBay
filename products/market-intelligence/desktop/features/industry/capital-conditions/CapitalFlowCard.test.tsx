@@ -64,6 +64,19 @@ function state(rows: readonly FlowChartRow[]) {
   }
 }
 
+
+/** Same card, but with the flow history forced into one of its non-chart states. */
+function mountWithFlow(flowHistory: unknown, rows: readonly FlowChartRow[]): HTMLElement {
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  const value = { ...state(rows), flowHistory }
+  act(() => root?.render(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+    createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' },
+      createElement(CapitalConditionsPanel, { text: cardText(), state: value as never, onRefresh: () => undefined })))))
+  return container
+}
+
 function mount(text = cardText(), rows: readonly FlowChartRow[] = plainRows) {
   const container = document.createElement('div')
   document.body.append(container)
@@ -202,10 +215,25 @@ describe('daily table', () => {
     expect(button.closest('header')).not.toBeNull()
   })
 
-  it('gives no button when there is nothing to show', () => {
-    const container = mount(cardText(), [])
+  it('says how many days are missing instead of calling it a failure', () => {
+    const container = mountWithFlow({ state: 'not-yet', availableDays: 3 }, [])
     expect(container.querySelector('.mi-capital-conditions__daily-button')).toBeNull()
-    expect(container.querySelector('.mi-capital-conditions__daily-empty')?.textContent).toBe(zhText.dailyEmpty)
+    expect(container.querySelector('.mi-capital-conditions__daily-not-yet')?.textContent)
+      .toBe('最近 7 天里只有 3 天有数据。')
+    expect(container.textContent).not.toContain('不可用</') // not the retry surface
+  })
+
+  it('says there is no usable data when no day lines up', () => {
+    const container = mountWithFlow({ state: 'not-yet', availableDays: 0 }, [])
+    expect(container.querySelector('.mi-capital-conditions__daily-button')).toBeNull()
+    expect(container.querySelector('.mi-capital-conditions__daily-not-yet')?.textContent).toBe(zhText.flowNoDays)
+  })
+
+  it('keeps the retry surface for undelivered sources', () => {
+    const container = mountWithFlow(undefined, [])
+    expect(container.querySelector('.mi-capital-conditions__daily-button')).toBeNull()
+    expect(container.querySelector('[data-etf-flow="unavailable"]')).not.toBeNull()
+    expect(container.querySelector('.mi-capital-conditions__daily-not-yet')).toBeNull()
   })
 })
 

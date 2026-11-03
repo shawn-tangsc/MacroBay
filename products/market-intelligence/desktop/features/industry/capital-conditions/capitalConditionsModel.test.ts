@@ -103,18 +103,44 @@ describe('dashboard capital conditions model', () => {
     expect(result.flowHistory?.rows).toHaveLength(7)
   })
 
-  it('does not fabricate chart dates when persisted daily capital history is missing or does not share five dates', () => {
-    const snapshot = etfSnapshot()
+  it('reports too few aligned days as "not yet" instead of "the sources failed"', () => {
+    // Valid stablecoin history, but the ETF window only overlaps its last three days.
     const result = projectDashboardCapitalConditionsSnapshot({
-      state: 'available', asOf, conclusion: 'partial', etf: snapshot,
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-08-15', 5),
       coreStablecoins: {
         observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
         change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
-        dailyFlows: stablecoinRows().slice(0, 4)
+        dailyFlows: stablecoinRows()
       }
     }, asOf)
 
-    expect(result).toMatchObject({ state: 'available', etf: { state: 'available' } })
+    if (result.state !== 'available') throw new Error('expected safe state')
+    expect(result.flowHistory).toEqual({ state: 'not-yet', availableDays: 3 })
+  })
+
+  it('reports zero aligned days as "not yet" with a zero count', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-06-01', 5),
+      coreStablecoins: {
+        observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
+        change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
+        dailyFlows: stablecoinRows()
+      }
+    }, asOf)
+
+    if (result.state !== 'available') throw new Error('expected safe state')
+    expect(result.flowHistory).toEqual({ state: 'not-yet', availableDays: 0 })
+  })
+
+  it('keeps the flow unknown when the stablecoin daily history is missing altogether', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(),
+      coreStablecoins: {
+        observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
+        change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0
+      }
+    }, asOf)
+
     if (result.state !== 'available') throw new Error('expected safe state')
     expect(result.flowHistory).toBeUndefined()
   })
@@ -209,4 +235,14 @@ function etfSnapshot(length = 30) {
 function stablecoinRows() {
   const dates = Array.from({ length: 30 }, (_, index) => new Date(Date.parse('2026-07-19T00:00:00.000Z') + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
   return dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: index === 0 ? 100 : -index }))
+}
+
+function etfSnapshotStartingAt(start: string, length: number) {
+  const dates = Array.from({ length }, (_, index) => new Date(Date.parse(`${start}T00:00:00.000Z`) + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
+  const observedAt = '2026-08-18T07:00:00.000Z'
+  return {
+    state: 'available' as const, schemaVersion: 1, sourceId: '0xrouter' as const, windowEnd: dates.at(-1)!, verifiedAt: observedAt,
+    btc: { asset: 'BTC' as const, rows: dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: index + 1, observedAt })) },
+    eth: { asset: 'ETH' as const, rows: dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: -(index + 1), observedAt })) }
+  }
 }

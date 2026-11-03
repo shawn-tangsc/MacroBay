@@ -45,7 +45,7 @@ export type AnchoredPanelTriggerProps = {
   controls?: string
 }
 
-type AnchorTarget = HTMLElement | RefObject<HTMLElement | null> | null | undefined
+type AnchorTarget = HTMLElement | RefObject<HTMLElement | null>
 
 export type AnchoredPanelProps = {
   trigger: (props: AnchoredPanelTriggerProps) => ReactElement
@@ -53,15 +53,18 @@ export type AnchoredPanelProps = {
   labelKey: string
   resolveText: (key: string) => string
   children: ReactNode
-  /** 位置锚。不传就锚在触发器上；传了就把位置与触发器拆开。 */
-  anchor?: AnchorTarget
+  /**
+   * 位置锚，**必填**：这个组件的唯一用法是「按钮在标题、面板从图表下方出来」，位置与触发器
+   * 是两回事。默认锚在触发器上那一档（贴着触发器翻转、指针离开就收）没有消费点，留着只会
+   * 让下一个人以为有两种模式。
+   */
+  anchor: AnchorTarget
 }
 
 type Placement = { left: number; top: number; width: number; maxHeight: number; visible: boolean }
 
 const GAP = 4
 const VIEWPORT_INSET = 8
-const POINTER_LEAVE_DELAY = 120
 const MAX_HEIGHT = 320
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
@@ -73,9 +76,8 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
   const [placement, setPlacement] = useState<Placement>(hiddenPlacement)
   const triggerRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** 锚点与触发器分开时，行为按分离那一档走。 */
-  const separated = anchor !== undefined
+  /** 锚点出现过没有：从有到 null 说明 React 卸载了锚，面板不能跳到触发器上继续开着。 */
+  const anchorWasPresent = useRef(false)
 
   const close = useCallback((returnFocus: boolean): void => {
     setOpen(false)
@@ -84,7 +86,6 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
   }, [])
 
   const anchorElement = useCallback((): HTMLElement | null => {
-    if (anchor === undefined || anchor === null) return triggerRef.current
     return anchor instanceof HTMLElement ? anchor : anchor.current
   }, [anchor])
 
@@ -93,10 +94,17 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
     if (!open) return undefined
     const measure = (): void => {
       const panel = panelRef.current
-      const target = anchorElement() ?? triggerRef.current
       if (!panel) return
+      const anchorNode = anchorElement()
+      if (anchorNode) anchorWasPresent.current = true
+      if (!anchorNode && anchorWasPresent.current) {
+        // React 把 ref 置成 null 就是卸载：面板不能跳到触发器上继续开着。
+        setOpen(false)
+        setPlacement(hiddenPlacement)
+        return
+      }
+      const target = anchorNode ?? triggerRef.current
       if (!target || !target.isConnected) {
-        // 锚点连同图一起卸载了：面板不能停在旧坐标。
         setOpen(false)
         setPlacement(hiddenPlacement)
         return
@@ -104,7 +112,7 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
       const rect = target.getBoundingClientRect()
       const fallback = triggerRef.current
       const box = rect.width === 0 && rect.height === 0 && fallback ? fallback.getBoundingClientRect() : rect
-      const width = Math.min(panel.scrollWidth, window.innerWidth - VIEWPORT_INSET * 2)
+      const width = Math.min(panel.getBoundingClientRect().width, window.innerWidth - VIEWPORT_INSET * 2)
       const top = box.bottom + GAP
       const available = window.innerHeight - top - VIEWPORT_INSET
       const maxHeight = Math.max(80, Math.min(MAX_HEIGHT, available))
@@ -146,15 +154,9 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
     }
   }, [close, open])
 
-  useEffect(() => () => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current)
-  }, [])
-
-  const focusFirstInPanel = (): void => {
-    const panel = panelRef.current
-    if (!panel) return
-    const first = panel.querySelector<HTMLElement>(FOCUSABLE)
-    ;(first ?? panel).focus()
+  /** Focus the panel itself first: the reader hears its name before the table's own announcement. */
+  const focusPanel = (): void => {
+    panelRef.current?.focus()
   }
 
   /** 焦点离开面板与触发器时关闭；在面板内写代码“移出去”不算离开。 */
@@ -183,18 +185,6 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
     }
   }
 
-  const cancelLeave = (): void => {
-    if (leaveTimer.current) {
-      clearTimeout(leaveTimer.current)
-      leaveTimer.current = null
-    }
-  }
-
-  const scheduleLeave = (): void => {
-    if (separated) return
-    cancelLeave()
-    leaveTimer.current = setTimeout(() => close(false), POINTER_LEAVE_DELAY)
-  }
 
   const triggerProps: AnchoredPanelTriggerProps = {
     ref: (node) => { triggerRef.current = node },
@@ -205,12 +195,12 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
         return
       }
       setOpen(true)
-      if (keyboard) requestAnimationFrame(focusFirstInPanel)
+      if (keyboard) requestAnimationFrame(focusPanel)
     },
     onKeyDown: (event) => {
       if (event.key === 'Tab' && open && !event.shiftKey) {
         event.preventDefault()
-        focusFirstInPanel()
+        focusPanel()
       }
     },
     expanded: open,
@@ -231,8 +221,6 @@ export function AnchoredPanel({ trigger, labelKey, resolveText, children, anchor
         tabIndex={-1}
         onKeyDown={onPanelKeyDown}
         onBlur={onPanelBlur}
-        onMouseEnter={cancelLeave}
-        onMouseLeave={scheduleLeave}
         style={{
           left: placement.left,
           top: placement.top,

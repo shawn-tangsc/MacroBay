@@ -54,7 +54,8 @@ type Text = {
   collapseDaily: string
   dailyCaption: string
   dateColumn: string
-  dailyEmpty: string
+  flowNotEnoughDays: string
+  flowNoDays: string
   a11yNoFlow: string
   a11yLabel: string
   a11yCell: string
@@ -202,9 +203,18 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
 }): React.ReactElement {
   const sectionRef = useRef<HTMLElement>(null)
   const resolveText = useProductTextKey()
+  // "The sources did not answer" stays an error with a retry; "they answered with too few days"
+  // is a not-yet with the count, so the two never share a sentence.
   if (etf === 'unavailable' || !flowHistory) {
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
       <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />
+    </section>
+  }
+  if (flowHistory.state === 'not-yet') {
+    return <section className="mi-capital-conditions__etf-flow" data-etf-flow="not-yet"><h3>{text.etfFlow}</h3>
+      <p className="mi-capital-conditions__daily-not-yet">
+        {flowHistory.availableDays === 0 ? text.flowNoDays : format(text.flowNotEnoughDays, { days: flowHistory.availableDays })}
+      </p>
     </section>
   }
   const rows = flowHistory.rows
@@ -225,8 +235,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
         trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
           icon={Info} size="sm" resolveText={resolveText} />} />
       <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
-      {rows.length > 0
-        ? <AnchoredPanel anchor={sectionRef} labelKey={key('dailyPanelTitle')} resolveText={resolveText}
+      <AnchoredPanel anchor={sectionRef} labelKey={key('dailyPanelTitle')} resolveText={resolveText}
             trigger={(triggerProps) => <Button className="mi-capital-conditions__daily-button" size="small"
               ref={(node) => { triggerProps.ref(node ?? null) }}
               onClick={triggerProps.onSelect} onKeyDown={triggerProps.onKeyDown}
@@ -234,9 +243,8 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
               {...(triggerProps.controls === undefined ? {} : { 'aria-controls': triggerProps.controls })}>
               {triggerProps.expanded ? text.collapseDaily : text.expandDaily}
             </Button>}>
-            <CapitalFlowDailyTable rows={rows} text={text} />
-          </AnchoredPanel>
-        : <p className="mi-capital-conditions__daily-empty">{text.dailyEmpty}</p>}
+        <CapitalFlowDailyTable rows={rows} text={text} />
+      </AnchoredPanel>
     </header>
     <div className="mi-capital-conditions__chart-legend">
       <span><i data-series="funds" />{text.fundsColumn}</span>

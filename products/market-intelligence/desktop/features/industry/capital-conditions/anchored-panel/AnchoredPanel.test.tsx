@@ -18,12 +18,12 @@ function rect(left: number, top: number, bottom: number, height = bottom - top):
 }
 
 /** A host with an anchor element and a trigger, the shape the flow card uses. */
-function Harness({ withAnchor = true, onClose }: { withAnchor?: boolean; onClose?: () => void } = {}): ReactElement {
+function Harness({ mountAnchor = true }: { mountAnchor?: boolean } = {}): ReactElement {
   const anchor = useRef<HTMLDivElement>(null)
   return createElement('div', { id: 'host' },
-    createElement('div', { ref: anchor, id: 'anchor' }),
+    mountAnchor ? createElement('div', { ref: anchor, id: 'anchor' }) : null,
     createElement(AnchoredPanel, {
-      anchor: withAnchor ? anchor : undefined,
+      anchor,
       labelKey: 'panel.label',
       resolveText: (key: string) => (key === 'panel.label' ? '逐日数据' : ''),
       // Same mapping the card uses: aria attributes are explicit, the panel's props are not spread raw.
@@ -128,6 +128,19 @@ describe('AnchoredPanel', () => {
     expect(panel()!.style.maxHeight).not.toBe('')
   })
 
+  it('closes itself when React unmounts its anchor', async () => {
+    // Re-render the same panel with the anchor element gone: the ref becomes null, which is the
+    // branch a `document.removeChild` does not reach.
+    await mount(createElement(Harness, { mountAnchor: true }))
+    await act(async () => mouseClick(trigger()))
+    expect(panel()).not.toBeNull()
+    await act(async () => root?.render(createElement(Harness, { mountAnchor: false })))
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(panel()).toBeNull()
+  })
+
   it('closes itself when the anchor node goes away', async () => {
     await mount()
     await act(async () => mouseClick(trigger()))
@@ -147,7 +160,10 @@ describe('AnchoredPanel', () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }))
     })
     await act(async () => new Promise((resolve) => requestAnimationFrame(() => resolve(null))))
-    expect(panel()!.contains(document.activeElement)).toBe(true)
+    // The panel itself, not the table: its name is announced before the table's shape.
+    expect(document.activeElement).toBe(panel())
+    expect(panel()!.getAttribute('role')).toBe('dialog')
+    expect(panel()!.getAttribute('aria-label')).toBe('逐日数据')
   })
 
   it('bridges Tab from the trigger into the panel so the table is reachable', async () => {
@@ -159,7 +175,7 @@ describe('AnchoredPanel', () => {
     await act(async () => {
       button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
     })
-    expect(panel()!.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).toBe(panel())
   })
 
   it('leaves the host markup unchanged apart from the trigger state', async () => {
