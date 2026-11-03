@@ -135,9 +135,6 @@ export function ModelServiceDefaultModelsSection({
           <div className="model-service-default-row-scroll">{moreDefaultModelFields.map(renderRow)}</div>
         </div>
       ) : null}
-      <p className="status-line model-service-default-consumer-hint" data-default-models-consumer-hint>
-        {labels.defaultModelsConsumerHint}
-      </p>
     </section>
   )
 }
