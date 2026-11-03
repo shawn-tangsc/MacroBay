@@ -270,7 +270,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         return
       }
       // 空串＝不修改旧 Token；非空＝整串替换（旧值全程不可读，走同一套加密交接）。
-      let tokenWrite: { ok?: boolean } | undefined
+      let tokenWrite: ChannelManagementResult | undefined
       if (tokenProvided) {
         const begin = await window.platform.channels.beginCredential({ id: editor.channel.id })
         const handoff = await encryptChannelHandoff(
@@ -285,9 +285,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           handoff
         })
       }
+      // 写接口明确失败：**按它的码说人话**（频道不在了、凭据格式不对、状态没写进去……），
+      // 不要用「没存上，请重试」盖掉唯一能说明原因的东西。这条也是回读之前必须判的：
+      // 这时回读仍会读到**旧**凭据，只靠回读会被骗成「已配置」。
+      if (tokenProvided && tokenWrite !== undefined && tokenWrite.ok !== true) {
+        setSaveError(mutationFailureSentence(tokenWrite, labels))
+        await reload()
+        return
+      }
       // 回读确认后再关弹层：没存上就不许显示「保存成功」。
-      // 写接口返回 `ok: false` 也算没写成——回读这时仍会读到**旧**凭据，只看回读会被骗。
-      const stored = tokenWrite?.ok === false ? false : await readCredentialConfigured(editor.channel.id)
+      const stored = await readCredentialConfigured(editor.channel.id)
       if (stored !== true) {
         // 填了还没存上 → 没存上；没填且库里本来就没有 → 先告诉他「需要填一个」；
         // 读不到 → 说读不到，但不许说成「没存」。

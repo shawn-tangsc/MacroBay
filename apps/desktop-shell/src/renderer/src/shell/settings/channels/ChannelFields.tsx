@@ -1,4 +1,8 @@
 import { Input, Select } from 'antd'
+import { Eye, EyeOff } from 'lucide-react'
+import { useState } from 'react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
@@ -51,6 +55,8 @@ export function ChannelFields(props: {
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
+  // 输入中的新 Token 临时可见；旧值永远不经过这个开关（接口里就没有旧值）。
+  const [tokenVisible, setTokenVisible] = useState(false)
 
   const workspaceOptions = [
     { value: 'system', label: labels.channelWorkspaceDefault },
@@ -108,14 +114,32 @@ export function ChannelFields(props: {
           // 编辑时**可以替换**，但旧值不可读：输入框永远空着，留空＝不改。
           // 不用 Input.Password（它带「眼睛」＝查看入口），也不回显、不复制旧值。
           <>
-            <Input
-              aria-label={labels.channelCredential}
-              autoComplete="off"
-              onChange={(event) => props.onChange({ token: event.target.value })}
-              placeholder={labels.channelTokenReplaceHint}
-              type="password"
-              value={values.token}
-            />
+            <div className="channel-field-with-toggle">
+              <Input
+                aria-label={labels.channelCredential}
+                autoComplete="off"
+                onChange={(event) => props.onChange({ token: event.target.value })}
+                placeholder={labels.channelTokenReplaceHint}
+                type={tokenVisible ? 'text' : 'password'}
+                value={values.token}
+              />
+              {/* 只让**正在输入的新值**可以被看一眼：旧值没有回显路径，也没有复制入口。
+                  读屏名保持恒定（`pressed` 表达状态），否则读屏会听到「隐藏…，已按下」。 */}
+              <IconButton
+                ariaLabelKey="settings.channels.tokenVisibility"
+                icon={tokenVisible ? EyeOff : Eye}
+                onSelect={() => setTokenVisible((current) => !current)}
+                pressed={tokenVisible}
+                resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
+                size="sm"
+                tooltipKey="settings.channels.tokenVisibility"
+              />
+            </div>
+            {tokenVisible ? (
+              <small className="channel-field-hint" data-token-visible-hint>
+                {labels.channelTokenVisibleHint}
+              </small>
+            ) : null}
             <small className="channel-field-hint">
               {/* 本来就一个 Token 都没有时，「留空＝不修改」是句假话：留空保存什么也存不上。 */}
               {props.tokenStored === false ? labels.channelTokenEnterHint : labels.channelTokenReadOnly}

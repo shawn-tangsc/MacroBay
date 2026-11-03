@@ -336,3 +336,10 @@
   color: var(--muted-strong);
   font-size: 12.5px;
 }
+
+/* Token 输入框 + 显示切换：按钮在框右侧同一行，不挤掉输入宽度。 */
+.channel-field-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

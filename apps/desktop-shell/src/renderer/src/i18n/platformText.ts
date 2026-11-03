@@ -241,6 +241,9 @@ export type PlatformText = {
     channelTokenCurrentNone: string
     /** 还没有凭据时输入框下面的提示：「留空＝不修改」在这里是假话。 */
     channelTokenEnterHint: string
+    /** 正在输入的新 Token 可以临时看一眼（旧值永不可见、不可复制）。 */
+    channelTokenVisibility: string
+    channelTokenVisibleHint: string
     /** 日志面板在没有数据源时的唯一一句话。 */
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
@@ -1641,6 +1644,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenNone: '还没有 Token',
       channelTokenCurrentNone: '这个频道还没有存 Token',
       channelTokenEnterHint: '这个频道还没有 Token：填一个再保存，留空保存不会存上任何东西。',
+      channelTokenVisibility: '显示或隐藏刚输入的 Token',
+      channelTokenVisibleHint: '仅本机显示：关掉这个眼睛就恢复点号，旧值始终不可见。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
       channelFieldWorkspace: '工作目录',
@@ -2943,6 +2948,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenNone: 'no token yet',
       channelTokenCurrentNone: 'this channel has no token stored yet',
       channelTokenEnterHint: 'this channel has no token yet: enter one and save; leaving it empty stores nothing.',
+      channelTokenVisibility: 'Show or hide the token you are typing',
+      channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it goes back to dots. A stored token is never shown.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
       channelFieldWorkspace: 'Working folder',

@@ -37,7 +37,7 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     listPolicies: vi.fn(async () => []),
     beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
     submitCredential: vi.fn(async () => ({})),
-    rotateCredential: vi.fn(async () => ({})),
+    rotateCredential: vi.fn(async () => ({ ok: true, code: 'configuration-ready' })),
     ...overrides
   }
   Object.assign(globalThis, {
@@ -627,7 +627,10 @@ describe('saving a credential has to prove itself', () => {
     await act(async () => typeInto(field, '123:new-token'))
     await clickByText(labels.channelUpdate)
 
-    expect(document.body.querySelector('[data-channel-save-error]')?.textContent).toContain(labels.channelCredentialSaveFailed)
+    // 写接口带码失败：说这个码的人话，不用「没存上，请重试」盖掉原因。
+    expect(document.body.querySelector('[data-channel-save-error]')?.textContent).toContain(
+      labels.channelFailureReason['channel-credential-invalid']
+    )
     expect(document.body.querySelector('[data-current-token]')).not.toBeNull()
   })
 
@@ -822,5 +825,47 @@ describe('creating a channel reads the real result', () => {
 
     expect(channels.remove).toHaveBeenCalled()
     expect(container.textContent).toContain(labels.channelFailureReason['channel-not-found'])
+  })
+})
+
+/**
+ * 正在输入的新 Token 必须能被核对（用户原话：「看不了我设置了啥」）。
+ *
+ * 只有**输进去的那个值**可以临时看一眼；已存的旧值没有回显路径，也没有复制入口——
+ * 那个开关不碰旧值，接口里也没有旧值可碰。
+ */
+describe('the token you are typing can be checked', () => {
+  async function openEditDialog(container: HTMLElement): Promise<void> {
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+  }
+
+  it('switches between dots and readable text, with a reminder while it is readable', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        { ...channel, allowedChatIds: [], credential: { status: 'configured', hasCredential: true, revision: 1 } }
+      ])
+    })
+    const container = await mount()
+    await openEditDialog(container)
+
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    expect(field.getAttribute('type')).toBe('password')
+    expect(document.body.querySelector('[data-token-visible-hint]')).toBeNull()
+
+    const toggle = [...document.body.querySelectorAll('button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelTokenVisibility
+    ) as HTMLButtonElement
+    await act(async () => toggle.click())
+    expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('text')
+    expect(document.body.querySelector('[data-token-visible-hint]')?.textContent).toBe(labels.channelTokenVisibleHint)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => toggle.click())
+    expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('password')
+    expect(document.body.querySelector('[data-token-visible-hint]')).toBeNull()
   })
 })
