@@ -366,6 +366,61 @@ describe('the allowed chat IDs field', () => {
   }
 })
 
+describe('enabling a channel runs a live check', () => {
+  it('reports the check failure in the row, in plain words, and leaves the switch off', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, state: 'disabled', allowedChatIds: [] }]),
+      requestEnable: vi.fn(async () => ({ ok: false, code: 'channel-smoke-failed', reason: 'telegram-conflict' }))
+    })
+    const container = await mount()
+    const toggle = container.querySelector('[role="switch"]') as HTMLButtonElement
+    await act(async () => toggle.click())
+    await act(async () => {})
+
+    expect(channels.requestEnable).toHaveBeenCalledWith({ id: 'channel-1', actorId: 'settings-user' })
+    const failure = container.querySelector('[data-enable-failure]')
+    expect(failure?.textContent).toContain('另一个程序也在用这个机器人')
+    // 不出现内部码，也不让开关假装打开。
+    expect(container.textContent).not.toContain('channel-smoke-failed')
+    expect(container.textContent).not.toContain('telegram-conflict')
+  })
+
+  it('clears the failure sentence once a later enable passes', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, state: 'disabled', allowedChatIds: [] }]),
+      requestEnable: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, code: 'channel-smoke-failed', reason: 'telegram-network-unavailable' })
+        .mockResolvedValue({ ok: true, code: 'runtime-ready' })
+    })
+    const container = await mount()
+    const toggle = container.querySelector('[role="switch"]') as HTMLButtonElement
+    await act(async () => toggle.click())
+    await act(async () => {})
+    expect(container.querySelector('[data-enable-failure]')).not.toBeNull()
+
+    channels.list.mockResolvedValue([{ ...channel, state: 'disabled', allowedChatIds: [] }])
+    await act(async () => (container.querySelector('[role="switch"]') as HTMLButtonElement).click())
+    await act(async () => {})
+
+    expect(container.querySelector('[data-enable-failure]')).toBeNull()
+  })
+
+  it('does not require an acceptance record before the platform can be used', async () => {
+    installPlatform({
+      catalog: vi.fn(async () => [
+        { type: 'telegram', status: 'planned', reason: 'release-a-pending', implemented: true, credentialFields: ['bot_token'] }
+      ]),
+      list: vi.fn(async () => [{ ...channel, state: 'disabled', allowedChatIds: [] }])
+    })
+    const container = await mount()
+
+    // planned（还没有真机验收）仍然能看到「＋ 添加」与频道行，不再被证据门槛挡住。
+    expect([...container.querySelectorAll('button')].some((node) => node.textContent?.trim() === labels.channelAdd)).toBe(true)
+    expect(container.querySelector('[data-channel-id="channel-1"]')).not.toBeNull()
+  })
+})
+
 describe('platforms that are not implemented', () => {
   it('says only that this version cannot connect it, with no add button and no red copy', async () => {
     installPlatform()

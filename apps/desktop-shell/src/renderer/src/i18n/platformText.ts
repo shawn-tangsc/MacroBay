@@ -222,6 +222,11 @@ export type PlatformText = {
     channelUnsupportedPane: string
     /** 适配器在、但还没通过真机验收：说清缺什么，不画添加按钮。 */
     channelNeedsEvidence: string
+    /** 启用不再要求先交验收记录：点一下，应用现场检查连接。 */
+    channelEnableSelfCheckHint: string
+    /** 现场检查没过时的 5 个原因 + 兜底，都是大白话，不出现内部码。 */
+    channelSmokeReason: Readonly<Record<string, string>>
+    channelSmokeReasonUnknown: string
     /** 行内四个动作的读屏名与提示。 */
     channelLogs: string
     channelEdit: string
@@ -1592,7 +1597,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         slack: '通过 Slack 机器人接收和回复消息。'
       },
       channelUnsupportedPane: '这一版还接不了，先把 Telegram 接上。',
-      channelNeedsEvidence: '还需要一条真机验证记录才能启用；先按接入页的步骤跑一遍。',
+      channelNeedsEvidence: '这个平台还没有通过真机验收；不影响你启用，应用会现场检查一次连接。',
+      channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
+      channelSmokeReason: Object.freeze({
+        'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
+        'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
+        'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
+        'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
+        'telegram-rate-limited': '请求太频繁被限流，等一会儿再试'
+      }),
+      channelSmokeReasonUnknown: '启用没有通过检查，但原因没有上报',
       channelLogs: '日志',
       channelEdit: '编辑',
       channelTokenMask: '********',
@@ -2866,7 +2880,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         slack: 'Receive and reply through a Slack bot.'
       },
       channelUnsupportedPane: 'This version cannot connect it yet — start with Telegram.',
-      channelNeedsEvidence: 'A real-device verification record is still required before it can be enabled.',
+      channelNeedsEvidence: 'This platform has no real-device acceptance record yet; that does not block you — the app checks the connection when you enable it.',
+      channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
+      channelSmokeReason: Object.freeze({
+        'telegram-credential-missing': 'no token is stored yet; add one in Edit',
+        'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
+        'telegram-conflict': 'another program is using the same bot; stop that one first',
+        'telegram-network-unavailable': 'the network or proxy cannot be reached; check the proxy and retry',
+        'telegram-rate-limited': 'too many requests right now; wait a moment and retry'
+      }),
+      channelSmokeReasonUnknown: 'the enable check failed and the reason was not reported',
       channelLogs: 'Logs',
       channelEdit: 'Edit',
       channelTokenMask: '********',

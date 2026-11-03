@@ -43,6 +43,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  /** 现场检查没过时按频道就地显示原因（开关回弹，不把用户赶去别的页面）。 */
+  const [enableFailures, setEnableFailures] = useState<Readonly<Record<string, string>>>({})
   const [editor, setEditor] = useState<{ mode: 'create' } | { mode: 'edit'; channel: Channel } | null>(null)
   // 编辑弹层里「空列表」到底是不是「允许所有」，取决于这个频道有没有显式放行名单。
   const [policyPresence, setPolicyPresence] = useState<ChannelPolicyPresence>('unknown')
@@ -82,7 +84,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const planned = platform?.status === 'planned'
   // 「还没接」= 没有适配器，或被挡在验收证据之外：这一类的右侧只留三样（名字、一句用途、一句原因），
   // 不画加号、不画频道行、也不画空态块——空态会被读成「这里本来可以有频道」。
-  const notConnectable = platform === undefined || platform.status === 'blocked' || !platform.implemented
+  // 只要能实现（有适配器）就允许添加与管理；「有没有真机验收记录」不再挡用户使用。
+  const notConnectable = platform === undefined || !platform.implemented
   const rows = channels.filter((channel) => channel.type === selectedType)
 
 
@@ -100,11 +103,41 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   const toggle = (channel: Channel, next: boolean): void => {
-    void runAction(channel, () =>
-      next
-        ? window.platform.channels.requestEnable({ id: channel.id, actorId: 'settings-user' })
-        : window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' })
-    )
+    if (!next) {
+      void runAction(channel, () => window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' }))
+      return
+    }
+    void enableWithSelfCheck(channel)
+  }
+
+  /**
+   * 点启用 → 主进程用已存凭据现场检查 → 通过就开。
+   * 失败时后台已经写过审计行，**界面不再重复写**；只在行内说一句人话，开关回弹。
+   */
+  const enableWithSelfCheck = async (channel: Channel): Promise<void> => {
+    setBusyId(channel.id)
+    setError(null)
+    setEnableFailures((current) => {
+      const next = { ...current }
+      delete next[channel.id]
+      return next
+    })
+    try {
+      const result = (await window.platform.channels.requestEnable({
+        id: channel.id,
+        actorId: 'settings-user'
+      })) as { ok?: boolean; code?: string; reason?: string } | undefined
+      if (result?.ok === false) {
+        const reason = typeof result.reason === 'string' ? result.reason : ''
+        const sentence = labels.channelSmokeReason[reason] ?? labels.channelSmokeReasonUnknown
+        setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
+      }
+      await reload()
+    } catch {
+      setError(labels.channelOperationFailed)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const workspacePayload = (workspaceId: string | null): { type: 'system' } | { type: 'user'; workspaceId: string } =>
@@ -255,7 +288,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                   </p>
                 )}
               </div>
-              {supported ? (
+              {notConnectable ? null : (
                 <Button
                   className="channel-add-button"
                   icon={<Plus size={14} />}
@@ -264,7 +297,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 >
                   {labels.channelAdd}
                 </Button>
-              ) : null}
+              )}
             </header>
 
             {!notConnectable && stale ? (
@@ -290,6 +323,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                   <ChannelRow
                     busy={busyId === channel.id}
                     channel={channel}
+                    enableFailure={enableFailures[channel.id] ?? null}
                     key={channel.id}
                     labels={labels}
                     onDelete={setDeleting}

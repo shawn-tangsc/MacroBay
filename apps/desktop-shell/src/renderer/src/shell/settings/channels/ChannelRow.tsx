@@ -23,6 +23,8 @@ export function ChannelRow(props: {
   onEdit: (channel: Channel) => void
   onDelete: (channel: Channel) => void
   onLogs: (channel: Channel) => void
+  /** 现场检查没过的原因：就地一行，开关已回弹。 */
+  enableFailure?: string | null
 }): React.ReactElement {
   const { channel, labels } = props
   // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
@@ -49,6 +51,11 @@ export function ChannelRow(props: {
       {failure === null ? null : (
         <span className="channel-row-error" role="note">
           {failure}
+        </span>
+      )}
+      {props.enableFailure === null || props.enableFailure === undefined ? null : (
+        <span className="channel-row-error" data-enable-failure role="note">
+          {props.enableFailure}
         </span>
       )}
       <span className="channel-row-actions">
