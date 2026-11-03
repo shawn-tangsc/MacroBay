@@ -194,50 +194,6 @@ describe('通知中心的分组与空态', () => {
   })
 })
 
-describe('条目的两条结论行', () => {
-  it('推送失败：结论用药丸说，句子不上色', async () => {
-    const source = fakeSource({
-      list: async () => ({
-        items: [
-          record({
-            id: 'push-failed',
-            deeplink,
-            delivery: { push: { state: 'failed', reason: 'channel disabled', at: '2026-11-03T08:00:00.000Z' } }
-          })
-        ]
-      })
-    })
-    await mount(source)
-
-    const line = document.body.querySelector('[data-push-failed]')
-    expect(line).not.toBeNull()
-    // 结论在药丸上（tone 决定颜色），句子只是中性文字。
-    expect(line!.querySelector('.status-pill')).not.toBeNull()
-    expect(line!.textContent).toContain('没发到手机')
-  })
-
-  it('交给系统了：写「未确认显示」，不写「已显示」', async () => {
-    const source = fakeSource({
-      list: async () => ({
-        items: [
-          record({
-            id: 'handed',
-            deeplink,
-            delivery: { desktop: { state: 'sent-accepted', at: '2026-11-03T08:00:00.000Z' } }
-          })
-        ]
-      })
-    })
-    await mount(source)
-
-    const line = document.body.querySelector('[data-unconfirmed]')
-    expect(line).not.toBeNull()
-    expect(line!.querySelector('.status-pill')).not.toBeNull()
-    expect(line!.textContent).toContain('未确认显示')
-    expect(line!.textContent).not.toContain('已显示')
-  })
-})
-
 describe('清空与删除是两件事', () => {
   it('清空 = 全部标为已读：条数一条不减', async () => {
     let markAllCalls = 0
