@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
+import { channelCredentialRecovery } from './migrations/channelCredentialRecovery'
 
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
@@ -1510,7 +1511,8 @@ const migrations: AgentPlatformMigration[] = [
       drop table if exists agent_session_messages_fts;
     `
   },
-  ...channelSettingsOverrides
+  ...channelSettingsOverrides,
+  ...channelCredentialRecovery
 ]
 
 export type AgentPlatformDatabase = {

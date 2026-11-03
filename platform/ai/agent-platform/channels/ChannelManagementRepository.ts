@@ -6,7 +6,16 @@ import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
 import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
-import { insertManagedChannel, updateManagedChannelRow, type ManagedChannelCreateInput, type ManagedChannelUpdateInput } from './channelManagementRepositoryWrites'
+import {
+  insertManagedChannel,
+  listManagedCredentialRows,
+  recordCredentialRecoveryFailure,
+  setManagedCredentialHealth,
+  settleReservedCredentialMetadata,
+  updateManagedChannelRow,
+  type ManagedChannelCreateInput,
+  type ManagedChannelUpdateInput
+} from './channelManagementRepositoryWrites'
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
@@ -398,6 +407,18 @@ export class ChannelManagementRepository {
          stable_error_code = 'channel-mutation-revoked-cleaned', updated_at = ?
        where id = ? and state in ('external-inflight', 'revoked-cleanup', 'revoked-inflight')`
     ).run(now, id).changes === 1
+  }
+
+  /** 把「预留记录已经落定」写进元数据：只推进 revision 与健康度，不碰启用意图与生命周期。 */
+  settleReservedCredentialMetadata(input: {
+    channelId: string; ref: string; expectedRevision: number | null; observedRevision: number; now: string
+  }): boolean {
+    return settleReservedCredentialMetadata(this.database, input)
+  }
+
+  /** 记一次恢复失败并返回累计次数：给「永远好不了的操作」一个上限，而不是无限重试。 */
+  recordRecoveryFailure(id: string): number {
+    return recordCredentialRecoveryFailure(this.database, id)
   }
 
   /** An observed rotate revision without this journal's Vault receipt is never adopted. */
@@ -889,22 +910,11 @@ export class ChannelManagementRepository {
 
 
   managedCredentialRows(): Array<{ channelId: string; ref: string; revision: number }> {
-    return this.database.connection.prepare(
-      `select id, credential_ref, credential_revision from agent_channels
-       where ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and credential_ref is not null and credential_revision is not null
-         and lifecycle_state not in ('deleting')`
-    ).all().map((row) => ({
-      channelId: (row as { id: string }).id,
-      ref: (row as { credential_ref: string }).credential_ref,
-      revision: (row as { credential_revision: number }).credential_revision
-    }))
+    return listManagedCredentialRows(this.database)
   }
 
   setCredentialHealth(channelId: string, health: 'configured' | 'missing' | 'unavailable', now: string): void {
-    this.database.connection.prepare(
-      `update agent_channels set credential_health = ?, updated_at = ?
-       where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
-    ).run(health, now, channelId)
+    setManagedCredentialHealth(this.database, channelId, health, now)
   }
 
   audit(channelId: string, actorId: string, action: string, code: string | null, now: string): void {

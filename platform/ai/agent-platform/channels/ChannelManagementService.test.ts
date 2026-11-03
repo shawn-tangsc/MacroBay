@@ -191,7 +191,15 @@ describe('ChannelManagementService', () => {
     expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
     database.connection.prepare("update agent_channels set credential_ref='channel-migration:channel-enable-mutation:ref',credential_revision=1,credential_health='configured',lifecycle_state='ready' where id=?").run(id)
     let resolveInspect!: (value: ChannelCredentialSafeView | null) => void
-    vault.inspectSafe = async () => new Promise<ChannelCredentialSafeView | null>((resolve) => { resolveInspect = resolve })
+    // 只挡住**第一次** inspect（启用那笔的凭据核对）：轮换现在也要先读一次凭据形态，
+    // 若把每一次都挡住，轮换自己会等一个测试最后才 resolve 的 promise，用例就死锁了。
+    const inspectGate = new Promise<ChannelCredentialSafeView | null>((resolve) => { resolveInspect = resolve })
+    const baseInspect = vault.inspectSafe.bind(vault)
+    let gatePending = true
+    vault.inspectSafe = async (ref: string) => {
+      if (gatePending) { gatePending = false; return inspectGate }
+      return baseInspect(ref)
+    }
     const start = vi.fn(async () => true)
     const service = new ChannelManagementService({ repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff(), runtime: { start, stop: () => {} } })
     const pending = Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))
@@ -313,8 +321,9 @@ describe('ChannelManagementService', () => {
     await expect(first).resolves.toMatchObject({ ok: false, code: 'channel-management-metadata-failed' })
     await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     expect(vault.putReservedCalls).toBe(1)
+    // 落定（settle）后 revision 是 2：预留记录 1 → 普通记录 2，元数据必须跟着写 2。
     expect(database.connection.prepare('select credential_ref,credential_revision,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
-      credential_ref: 'reserved-ref', credential_revision: 1, lifecycle_state: 'ready'
+      credential_ref: 'reserved-ref', credential_revision: 2, lifecycle_state: 'ready'
     })
     expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state='completed'").get(id)).toEqual({ count: 1 })
   })
@@ -452,7 +461,8 @@ describe('ChannelManagementService', () => {
     await expect(A).resolves.toMatchObject({ ok: false })
     await expect(B).resolves.toMatchObject({ ok: false })
 
-    // B's journal survives the failed CAS until restart recovery. It must not adopt A's receipt.
+    // 轮换失败当场收尾（不再留到重启），所以 B 的日志是 abandoned/`mutation-incomplete`；
+    // 关键在于重启恢复**不许**把 A 写成的 revision 记到 B 头上。
     await service.recover()
     expect(database.connection.prepare('select credential_revision,credential_health,lifecycle_state,requested_enabled from agent_channels where id=?').get(id)).toEqual({
       credential_revision: 1, credential_health: 'unavailable', lifecycle_state: 'disabled', requested_enabled: 0
@@ -460,8 +470,9 @@ describe('ChannelManagementService', () => {
     expect(await vault.inspectSafe('known-ref')).toMatchObject({ revision: 2 })
     expect(await vault.inspectMutationReceipt('known-ref')).toMatchObject({ mutationEpoch: 1, revision: 2 })
     expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state in ('external-inflight','revoked-inflight','revoked-cleanup')").get(id)).toEqual({ count: 0 })
-    expect(database.connection.prepare("select stable_error_code from channel_management_operations where channel_id=? order by updated_at desc limit 1").get(id)).toEqual({
-      stable_error_code: 'channel-credential-mutation-unattributed'
+    // 按插入顺序取最后一条（B 那笔）：两笔可能落在同一毫秒，`updated_at desc` 会随机挑一条。
+    expect(database.connection.prepare("select stable_error_code from channel_management_operations where channel_id=? order by rowid desc limit 1").get(id)).toEqual({
+      stable_error_code: 'channel-credential-mutation-incomplete'
     })
   })
 
@@ -595,7 +606,7 @@ describe('ChannelManagementService', () => {
     await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     await expect(first).resolves.toMatchObject({ ok: false })
     expect(database.connection.prepare('select credential_ref,credential_revision,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
-      credential_ref: 'reserved-ref', credential_revision: 1, lifecycle_state: 'ready'
+      credential_ref: 'reserved-ref', credential_revision: 2, lifecycle_state: 'ready'
     })
     // Provision is serialized per channel: the stale reservation is cleaned before the winner writes.
     expect(vault.reservedDeletes).toBe(1)
@@ -620,7 +631,7 @@ describe('ChannelManagementService', () => {
     const winner = service.provision({ id, actorId: 'user-b', senderId: 7, handoff: await credentialHandoff(service, id, 'same-token') })
     await expect(winner).resolves.toMatchObject({ ok: true })
     await expect(first).resolves.toMatchObject({ ok: false })
-    expect(database.connection.prepare('select credential_ref,credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_ref: 'reserved-ref', credential_revision: 1 })
+    expect(database.connection.prepare('select credential_ref,credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_ref: 'reserved-ref', credential_revision: 2 })
   })
 
   it('keeps deleting and both known journals when revoked cleanup fails, then settles on recovery', async () => {
@@ -754,7 +765,9 @@ describe('ChannelManagementService', () => {
     database.connection.exec('drop trigger management_stale_metadata')
     await service.recover()
     expect(database.connection.prepare('select credential_revision,requested_enabled from agent_channels where id=?').get(id)).toEqual({ credential_revision: 2, requested_enabled: 0 })
-    expect(vault.inspectRefs).toEqual(['known-ref', 'known-ref'])
+    // 轮换前先读一次形态（判 reserved / configured / stale），恢复与健康度各再读一次；关键在「只读 known-ref」。
+    expect(vault.inspectRefs.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(vault.inspectRefs)).toEqual(new Set(['known-ref']))
   })
 
   it('abandons a rotate intent when Vault failed before write and never pretends the old revision completed', async () => {
@@ -763,9 +776,11 @@ describe('ChannelManagementService', () => {
     database.connection.prepare("update agent_channels set credential_ref='known-ref',credential_revision=1,lifecycle_state='ready',credential_health='configured' where id=?").run(id)
 
     await expect(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff: await credentialHandoff(service, id, 'token-a') })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
+    // 失败当场收尾：以前这条会留在 external-inflight，重启时被打成「恢复中」并把 health 打成 unavailable。
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
     await service.recover()
     expect(database.connection.prepare('select credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_revision: 1 })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'revoked-cleanup' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
   })
 
   it('fails closed when a recovered rotate observes a jumped revision instead of adopting it', async () => {
@@ -809,7 +824,8 @@ describe('ChannelManagementService', () => {
     const handoff = await credentialHandoff(service, id, 'token-a')
 
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'external-inflight' })
+    // put 失败也可能已经落了记录：当场登记清理意图并清掉，不再留 external-inflight 让下次启动算成「恢复中」。
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     await service.recover()
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     vault.failPutReserved = false
@@ -1062,12 +1078,20 @@ class FakeVault implements ChannelCredentialVault {
     return { credentialRef: 'reserved-ref', revision: 1, maskedFields: { bot_token: '********' } }
   }
   async inspectReserved(): Promise<ChannelCredentialSafeView | null> {
-    return this.failPutReserved ? null : { credentialRef: 'reserved-ref', revision: 1, maskedFields: { bot_token: '********' } }
+    return this.failPutReserved ? null : { credentialRef: 'reserved-ref', revision: this.revision, maskedFields: { bot_token: '********' } }
+  }
+  settledRefs: string[] = []
+  async settleReserved(input: { credentialRef: string; expectedRevision: number }): Promise<ChannelCredentialSafeView> {
+    // 与真实现一致：只有预留记录能落定，而且必须用 settle 之前的 revision 判。
+    if (this.failPutReserved || input.credentialRef !== 'reserved-ref') throw new Error('unavailable')
+    if (input.expectedRevision !== this.revision) throw new Error('unavailable')
+    this.settledRefs.push(input.credentialRef)
+    this.revision += 1
+    return { credentialRef: input.credentialRef, revision: this.revision, maskedFields: { bot_token: '********' } }
   }
   async deleteReservedIfRevision() { this.reservedDeletes += 1; if (this.failReservedDelete) throw new Error('unavailable'); return true }
   async claimReservedCleanup() { this.cleanupClaim = `claim-${this.reservedDeletes}`; return { revision: 1, cleanupToken: this.cleanupClaim } }
   async deleteReservedIfCleanupClaim(input: { cleanupToken: string }) {
-    console.log('CLEANUP', new Error().stack)
     this.reservedDeletes += 1
     if (this.failReservedDelete) throw new Error('unavailable')
     return input.cleanupToken === this.cleanupClaim

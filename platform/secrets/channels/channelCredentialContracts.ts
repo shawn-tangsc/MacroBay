@@ -62,6 +62,17 @@ export type ChannelCredentialReservedDelete = ChannelCredentialReservedInspectio
   expectedRevision: number
 }
 
+/**
+ * 把一条预留记录落定成普通记录。
+ *
+ * 预留记录只能由持 permit 的 `inspectReserved` 读、`rotateIfRevision` 明确拒绝——而「新建频道写进来」
+ * 就是预留记录。写完之后不落定，它永远不会变成可用凭据：读不出来、换不了、启用也过不了。
+ * 这里用 settle 之前的 revision 判定（预留记录不可能被 rotate 写过，所以它必等于写入时的 revision）。
+ */
+export type ChannelCredentialReservedSettlement = ChannelCredentialReservedInspection & {
+  expectedRevision: number
+}
+
 export type ChannelCredentialReservedCleanupClaim = {
   revision: number
   cleanupToken: string
@@ -88,6 +99,8 @@ export type ChannelCredentialVault = {
   inspectReserved: (input: ChannelCredentialReservedInspection) => Promise<ChannelCredentialSafeView | null>
   /** Claims a reserved ref for cleanup; a same-value later put atomically adopts and revokes the claim. */
   claimReservedCleanup?: (input: ChannelCredentialReservedInspection) => Promise<ChannelCredentialReservedCleanupClaim | null>
+  /** Turns a permit-bound reserved record into a normal record (revision + 1) in place. */
+  settleReserved: (input: ChannelCredentialReservedSettlement) => Promise<ChannelCredentialSafeView>
   /** Removes only a still-claimed reserved ref, preventing a stale cleanup from deleting a later adoption. */
   deleteReservedIfCleanupClaim?: (input: ChannelCredentialReservedDelete & { cleanupToken: string }) => Promise<boolean>
   /** Deletes only the exact permit-bound reserved value at the observed revision. */

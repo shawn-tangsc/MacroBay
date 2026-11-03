@@ -89,3 +89,61 @@ export function updateManagedChannelRow(
       return changed === 1
     })
 }
+
+/**
+ * 凭据恢复写入的两处（体积基线只减不增，所以从仓储里抽在这里）。
+ *
+ * `settleReservedCredentialMetadata` 只推进 revision 与健康度，**不碰启用意图与生命周期**——
+ * 恢复一个用户明确停用的频道时，不能替他把状态改成「已启用」。
+ */
+export function settleReservedCredentialMetadata(
+  database: AgentPlatformDatabase,
+  input: { channelId: string; ref: string; expectedRevision: number | null; observedRevision: number; now: string }
+): boolean {
+  return database.connection.prepare(
+    `update agent_channels set credential_revision = ?, credential_health = 'configured',
+       migration_error_code = null, updated_at = ?
+     where id = ? and ${managedChannelSql()} and credential_ref = ? and lifecycle_state not in ('deleting')
+       and ((? is null and credential_revision is null) or credential_revision = ?)`
+  ).run(input.observedRevision, input.now, input.channelId, input.ref,
+    input.expectedRevision, input.expectedRevision).changes === 1
+}
+
+/** 记一次恢复失败并返回累计次数：给「永远好不了的操作」一个上限，而不是无限重试。 */
+export function recordCredentialRecoveryFailure(database: AgentPlatformDatabase, id: string): number {
+  database.connection.prepare(
+    'update channel_management_operations set recovery_attempts = recovery_attempts + 1 where id = ?'
+  ).run(id)
+  const row = database.connection.prepare(
+    'select recovery_attempts from channel_management_operations where id = ?'
+  ).get(id) as { recovery_attempts: number } | undefined
+  return row?.recovery_attempts ?? 0
+}
+
+/** 启动恢复要核对健康度的那些行（有凭据、非微信、不在删除中）。 */
+export function listManagedCredentialRows(
+  database: AgentPlatformDatabase
+): Array<{ channelId: string; ref: string; revision: number }> {
+  return database.connection.prepare(
+    `select id, credential_ref, credential_revision from agent_channels
+     where ${managedChannelSql()} and adapter_key <> 'wechat' and credential_ref is not null and credential_revision is not null
+       and lifecycle_state not in ('deleting')`
+  ).all().map((row) => ({
+    channelId: (row as { id: string }).id,
+    ref: (row as { credential_ref: string }).credential_ref,
+    revision: (row as { credential_revision: number }).credential_revision
+  }))
+}
+
+/** 只改健康度这一格；已删除的行不再回写。 */
+export function setManagedCredentialHealth(
+  database: AgentPlatformDatabase,
+  channelId: string,
+  health: 'configured' | 'missing' | 'unavailable',
+  now: string
+): void {
+  database.connection.prepare(
+    `update agent_channels set credential_health = ?, updated_at = ?
+     where id = ? and ${managedChannelSql()} and lifecycle_state not in ('deleting')`
+  ).run(health, now, channelId)
+}

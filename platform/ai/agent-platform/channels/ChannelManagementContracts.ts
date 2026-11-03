@@ -154,6 +154,8 @@ export type ChannelManagementCode =
   | 'channel-agent-missing'
   | 'channel-credential-invalid'
   | 'channel-credential-missing'
+  /** 上次更换没走完：库里的 revision 已经不是这次读到的那一版，重新打开编辑保存一次即可继续。 */
+  | 'channel-credential-mutation-incomplete'
   | 'channel-credential-unavailable'
   /** 用户点启用时现场自检没通过：凭据/网络/限流/被别人占用，`reason` 给具体码。 */
   | 'channel-smoke-failed'
