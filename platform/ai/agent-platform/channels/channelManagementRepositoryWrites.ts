@@ -176,3 +176,24 @@ export function abandonCredentialOperation(
     ).run(row.channel_id, row.lifecycle_owner_token)
   })
 }
+
+/**
+ * 一条凭据操作收口（completed / abandoned）之后，把它自己的生命周期 owner 行一并清掉。
+ *
+ * 为什么不能只靠 `abandonOperation`：恢复里还有 `completeRevokedOperation` /
+ * `completeUnattributedRotation` 等收口路径，它们都不经过 abandon。留着 owner 行的后果是一样的——
+ * `beginLifecycleOwner` 要求这个频道没有任何 owner 行，用户下一次启用/保存会直接被挡。
+ * 这里用一条幂等的 SQL 收口：只删「这条操作自己的 token 且操作已终结」的那一行。
+ */
+export function releaseSettledOperationOwner(database: AgentPlatformDatabase, operationId: string): void {
+  database.connection.prepare(
+    `delete from channel_telegram_lifecycle_operations
+     where channel_id = (select channel_id from channel_management_operations where id = ?)
+       and owner_token = (select lifecycle_owner_token from channel_management_operations where id = ?)
+       and owner_token is not null and purpose = 'mutation' and generation is null
+       and exists (
+         select 1 from channel_management_operations
+         where id = ? and state in ('completed', 'abandoned')
+       )`
+  ).run(operationId, operationId, operationId)
+}

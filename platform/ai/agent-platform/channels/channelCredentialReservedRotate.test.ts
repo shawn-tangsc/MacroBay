@@ -353,6 +353,77 @@ describe('credential writes settle the reserved record', () => {
     expect(repository.credentialReferences(id, oldReservation.credentialRef)).toBe(false)
   })
 
+  it('recovers all nine stuck operations on the same ref in one pass', async () => {
+    const { database, repository, service, vault } = createHarness({ withRuntime: true })
+    const id = service.create({ type: 'telegram', name: 'test', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    const value = { bot_token: '111:first' }
+    const reservation = await vault.prepareMigration({ channelId: id, value })
+    await vault.putReserved({ channelId: id, type: 'telegram', value, ...reservation })
+    database.connection.prepare(
+      "update agent_channels set credential_ref = ?, credential_revision = 1, credential_health = 'unavailable', lifecycle_state = 'disabled' where id = ?"
+    ).run(reservation.credentialRef, id)
+    // 用户库的真实形态：同一个 ref 上 7 条 revoked-cleanup + 2 条 external-inflight（其中一条还握着 owner 行）。
+    const now = '2026-11-04T03:00:00.000Z'
+    for (let index = 0; index < 9; index += 1) {
+      const operationId = `9f4c9a52-6d5b-4f2a-9d0e-3b7c1a2e4f${String(index).padStart(2, '0')}`
+      repository.reserveOperation({
+        id: operationId, channelId: id, purpose: 'rotate', ref: reservation.credentialRef,
+        expectedRevision: 1, now
+      })
+      database.connection.prepare("update channel_management_operations set state = ?, lifecycle_owner_token = ?, updated_at = ? where id = ?").run(
+        index < 7 ? 'revoked-cleanup' : 'external-inflight',
+        index < 8 ? null : 'owner-last',
+        `2026-11-04T03:00:0${index}.000Z`,
+        operationId
+      )
+    }
+    database.connection.exec(`insert into channel_telegram_lifecycle_operations(channel_id, owner_token, purpose, generation, created_at, updated_at)
+      values('${id}', 'owner-last', 'mutation', null, '${now}', '${now}')`)
+
+    await service.recover()
+
+    expect(vault.reservedRefs()).toEqual([])
+    expect(database.connection.prepare('select credential_revision, credential_health from agent_channels where id = ?').get(id)).toEqual({
+      credential_revision: 2,
+      credential_health: 'configured'
+    })
+    expect(database.connection.prepare(
+      "select count(*) as count from channel_management_operations where channel_id = ? and state in ('reserved','needs-recovery','external-inflight','revoked-cleanup','revoked-inflight')"
+    ).get(id)).toEqual({ count: 0 })
+    expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id = ?').get(id)).toEqual({ count: 0 })
+    const enabled = await Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))
+    expect(enabled.code).not.toBe('channel-credential-unavailable')
+    // 原频道还能继续保存：这一次走真的轮换。
+    const rotated = await Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff: await handoffOf(service, id, '222:after-nine') }))
+    expect(rotated).toMatchObject({ ok: true })
+  })
+
+  it('does not downgrade a readable credential just because one stuck operation gave up', async () => {
+    const { database, repository, service, vault } = createHarness()
+    const id = service.create({ type: 'telegram', name: 'test', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    // 凭据本身是好的：普通记录、revision 与元数据一致。
+    const value = { bot_token: '111:first' }
+    const reservation = await vault.prepareMigration({ channelId: id, value })
+    const reserved = await vault.putReserved({ channelId: id, type: 'telegram', value, ...reservation })
+    await vault.settleReserved({ credentialRef: reserved.credentialRef, expectedRevision: reserved.revision })
+    database.connection.prepare(
+      "update agent_channels set credential_ref = ?, credential_revision = 2, credential_health = 'configured', lifecycle_state = 'ready' where id = ?"
+    ).run(reservation.credentialRef, id)
+    // 另一条永远收不了口的操作（rotate 缺 expected_revision）。
+    const operationId = '1d2a3b4c-5d6e-4f70-8a9b-0c1d2e3f4a5c'
+    repository.reserveOperation({ id: operationId, channelId: id, purpose: 'rotate', ref: reservation.credentialRef, now: '2026-11-04T03:00:00.000Z' })
+    database.connection.prepare("update channel_management_operations set state = 'revoked-cleanup' where id = ?").run(operationId)
+
+    await service.recover()
+    await service.recover()
+    await service.recover()
+
+    expect(database.connection.prepare('select state from channel_management_operations where id = ?').get(operationId)).toEqual({ state: 'abandoned' })
+    // 凭据读得出来，就不许被这条无关的卡死操作打成 unavailable。
+    expect(database.connection.prepare('select credential_health from agent_channels where id = ?').get(id)).toEqual({ credential_health: 'configured' })
+    expect(service.get(id)?.credential.status).toBe('configured')
+  })
+
   it('gives up on an operation that can never recover, with bounded retries and an audit row', async () => {
     const { database, repository, service } = createHarness()
     const id = service.create({ type: 'telegram', name: 'test', agentId: 'agent-a', actorId: 'user-a' }).channel!.id

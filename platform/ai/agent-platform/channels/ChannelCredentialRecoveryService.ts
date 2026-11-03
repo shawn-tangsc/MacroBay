@@ -55,6 +55,7 @@ export class ChannelCredentialRecoveryService {
           continue
         }
         await this.recoverOperation(operation)
+        this.deps.repository.releaseSettledOperationOwner(operation.id)
       } catch {
         if (operation.purpose === 'delete') {
           this.deps.repository.deferOperation(operation.id, 'channel-delete-pending', this.deps.now())
@@ -66,7 +67,12 @@ export class ChannelCredentialRecoveryService {
         if (this.deps.repository.recordRecoveryFailure(operation.id) < MAX_CREDENTIAL_RECOVERY_ATTEMPTS) continue
         const now = this.deps.now()
         this.deps.repository.abandonOperation(operation.id, 'channel-credential-recovery-exhausted', now)
-        this.deps.repository.setCredentialHealth(operation.channelId, 'unavailable', now)
+        this.deps.repository.releaseSettledOperationOwner(operation.id)
+        // 一条卡死操作的放弃**不许**替凭据下结论：凭据自己好好的（读得出来、revision 对得上），
+        // 把它打成 unavailable 就是恢复动作自己制造「读不出来」那个谎。只有真读不出来才降级。
+        if (!(await this.credentialReadable(operation.channelId))) {
+          this.deps.repository.setCredentialHealth(operation.channelId, 'unavailable', now)
+        }
         this.deps.repository.audit(
           operation.channelId,
           'channel-recovery',
@@ -253,6 +259,18 @@ export class ChannelCredentialRecoveryService {
     const reserved = await this.tryInspectReserved(operation.channelId, type, recomputed)
     if (reserved) return { kind: 'reserved', safe: reserved, reservation: recomputed }
     return reserved === null ? { kind: 'missing' } : { kind: 'unreadable' }
+  }
+
+  /** 这条频道的凭据现在读得出来吗？恢复动作只能据此决定要不要降级，不能凭一条卡死操作下结论。 */
+  private async credentialReadable(channelId: string): Promise<boolean> {
+    const metadata = this.deps.repository.credentialMetadata(channelId)
+    if (!metadata) return false
+    try {
+      const safe = await this.deps.vault.inspectSafe?.(metadata.ref)
+      return Boolean(safe && safe.revision === metadata.revision)
+    } catch {
+      return false
+    }
   }
 
   private journalReservation(operation: ChannelManagementOperation): ChannelCredentialMigrationReservation | null {

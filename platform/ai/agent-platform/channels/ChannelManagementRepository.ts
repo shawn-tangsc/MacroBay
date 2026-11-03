@@ -11,6 +11,7 @@ import {
   insertManagedChannel,
   listManagedCredentialRows,
   recordCredentialRecoveryFailure,
+  releaseSettledOperationOwner,
   setManagedCredentialHealth,
   settleReservedCredentialMetadata,
   updateManagedChannelRow,
@@ -420,6 +421,11 @@ export class ChannelManagementRepository {
   /** 记一次恢复失败并返回累计次数：给「永远好不了的操作」一个上限，而不是无限重试。 */
   recordRecoveryFailure(id: string): number {
     return recordCredentialRecoveryFailure(this.database, id)
+  }
+
+  /** 操作收口后放掉它自己的生命周期 owner 行（幂等）；留着会把用户锁在「不能启用」外面。 */
+  releaseSettledOperationOwner(id: string): void {
+    releaseSettledOperationOwner(this.database, id)
   }
 
   /** An observed rotate revision without this journal's Vault receipt is never adopted. */
