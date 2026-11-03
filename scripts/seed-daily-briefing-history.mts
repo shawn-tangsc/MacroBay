@@ -111,23 +111,35 @@ const insertRun = briefings.prepare(`insert into daily_briefing_period_runs
    snapshot_id, snapshot_hash, content_version, writing_rounds, direction, edition_rows, state, started_at, finished_at)
   values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
+const LOCALES = ['zh-CN', 'en-US'] as const
+
+// Both languages are written for each day, because the acceptance row has to show the in-row
+// language switch working on the same period, not two unrelated rows.
 for (const date of [cleanedEdition, liveEdition]) {
-  insertEdition.run(date, PERIOD_ID, 'zh-CN', `${date}T00:30:00.000Z`, `${date}T00:00:00.000Z`, `${date}T00:30:00.000Z`, JSON.stringify(document(date)), STORAGE_VERSION)
-  insertRun.run(date, PERIOD_ID, JSON.stringify(['zh-CN']), 'zh-CN', 'zh-CN', null,
-    `seed-${date}`, `seed-${date}`, 1, 1, 'undecided', JSON.stringify(editionRowIds), 'published',
+  for (const locale of LOCALES) {
+    insertEdition.run(date, PERIOD_ID, locale, `${date}T00:30:00.000Z`, `${date}T00:00:00.000Z`, `${date}T00:30:00.000Z`, JSON.stringify(document(date, locale)), STORAGE_VERSION)
+  }
+  insertRun.run(date, PERIOD_ID, JSON.stringify([...LOCALES]), 'zh-CN', 'zh-CN', null,
+    `seed-${date}`, `seed-${date}`, 1, 2, 'undecided', JSON.stringify(editionRowIds), 'published',
     `${date}T00:00:00.000Z`, `${date}T00:30:00.000Z`)
 }
 
-// First attempt of the ten-day-old edition: the writing round failed. Its trace is still there, so
-// the rail can expand it and show what stopped.
+// First attempt of the ten-day-old edition (Chinese): the writing round failed. Its trace is still
+// there, so the rail can expand it and show what stopped.
 insertAttempt.run(cleanedEdition, PERIOD_ID, 'zh-CN', 1, 'failed', 'agent-timeout',
   `${cleanedEdition}T00:05:00.000Z`, `${cleanedEdition}T00:12:00.000Z`, JSON.stringify(trace(cleanedEdition, 'failed')), null)
-// Second attempt succeeded and its session was cleaned on day seven: row kept, trace emptied,
-// `cleaned_at` set. This is the state the acceptance screenshot has to show.
+// Second Chinese attempt succeeded and its session was cleaned on day seven: row kept, trace
+// emptied, `cleaned_at` set. This is the state the acceptance screenshot has to show.
 insertAttempt.run(cleanedEdition, PERIOD_ID, 'zh-CN', 2, 'succeeded', null,
   `${cleanedEdition}T00:20:00.000Z`, `${cleanedEdition}T00:30:00.000Z`, null, `${shift(cleanedEdition, 7)}T08:10:00.000Z`)
+// The English edition of the same day keeps its single attempt and its trace, so switching the row's
+// language shows a different attempt list of the same period.
+insertAttempt.run(cleanedEdition, PERIOD_ID, 'en-US', 1, 'succeeded', null,
+  `${cleanedEdition}T00:20:00.000Z`, `${cleanedEdition}T00:30:00.000Z`, JSON.stringify(trace(cleanedEdition, 'success')), null)
 // The live day keeps its attempt and its session, so the two cases sit side by side.
 insertAttempt.run(liveEdition, PERIOD_ID, 'zh-CN', 1, 'succeeded', null,
+  `${liveEdition}T00:20:00.000Z`, `${liveEdition}T00:30:00.000Z`, JSON.stringify(trace(liveEdition, 'success')), null)
+insertAttempt.run(liveEdition, PERIOD_ID, 'en-US', 1, 'succeeded', null,
   `${liveEdition}T00:20:00.000Z`, `${liveEdition}T00:30:00.000Z`, JSON.stringify(trace(liveEdition, 'success')), null)
 briefings.close()
 
@@ -153,6 +165,12 @@ sessions.prepare(`insert into daily_brief_session_links
   (session_id, edition_date, period_id, locale, attempt_no, state, created_at, updated_at)
   values (?, ?, ?, ?, ?, ?, ?, ?)`)
   .run(`seed-live-${liveEdition}`, liveEdition, PERIOD_ID, 'zh-CN', 1, 'accepted', `${liveEdition}T00:20:00.000Z`, `${liveEdition}T00:30:00.000Z`)
+// The English attempt of the cleaned day was not cleaned: its session is still there, which is why
+// the row's language switch shows a live attempt beside a cleaned one.
+sessions.prepare(`insert into daily_brief_session_links
+  (session_id, edition_date, period_id, locale, attempt_no, state, created_at, updated_at)
+  values (?, ?, ?, ?, ?, ?, ?, ?)`)
+  .run(`seed-en-${cleanedEdition}`, cleanedEdition, PERIOD_ID, 'en-US', 1, 'accepted', `${cleanedEdition}T00:20:00.000Z`, `${cleanedEdition}T00:30:00.000Z`)
 sessions.close()
 
 console.log(`seeded ${productDir}`)
@@ -187,19 +205,19 @@ function trace(date: string, state: 'success' | 'failed'): unknown {
   }
 }
 
-function document(date: string): unknown {
+function document(date: string, locale: 'zh-CN' | 'en-US'): unknown {
   return {
     schemaVersion: 1,
     policyVersion: 'daily-briefing.v1',
     edition: {
-      date, locale: 'zh-CN', generatedAt: `${date}T00:30:00.000Z`,
+      date, locale, generatedAt: `${date}T00:30:00.000Z`,
       windowStart: `${date}T00:00:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, timeZone: 'Asia/Shanghai'
     },
     status: {
       readings: editionRowIds.map((id) => ({ id, state: 'available' })),
       readingsAvailable: editionRowIds.length, readingsTotal: editionRowIds.length
     },
-    lede: { source: 'template', text: '种子数据：用于验收「那一次已清理」。', generatedAt: `${date}T00:30:00.000Z` },
+    lede: { source: 'template', text: locale === 'zh-CN' ? '种子数据：用于验收「那一次已清理」。' : 'Seeded data for the cleaned-attempt acceptance shot.', generatedAt: `${date}T00:30:00.000Z` },
     news: { items: [], macro: [], notes: {} },
     data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' } } },
     conclusion: null,
