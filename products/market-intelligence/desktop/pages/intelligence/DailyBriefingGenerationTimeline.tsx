@@ -42,11 +42,23 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
   const failedLabel = failed ? labels.stages[failed.id] : labels.notRecorded
   const duration = trace ? traceDurationMs(trace) : undefined
   const failedIndex = failed ? generationStageIds.indexOf(failed.id) : -1
-  return <section className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'}>
-    <header className="mi-generation-trace__head">
+  // Collapsed it is one line that still answers "did it finish, where did it fail"; only the detail
+  // folds away. Default: open while running or after a failure, closed once it succeeded.
+  const steps = generationStageIds.length
+  const notStarted = trace ? trace.stages.filter((stage) => !stage.startedAt).length : steps
+  const durationLabel = duration !== undefined ? formatDuration(duration, text) : ''
+  const summaryLine = running
+    ? text.generationProgress.running
+    : trace
+      ? trace.state === 'failed'
+        ? `${labels.failedAt.replace('{stage}', failedLabel)} · ${labels.notExecutedCount.replace('{count}', String(notStarted))}`
+        : `${labels.stepsCount.replace('{count}', String(steps))} · ${durationLabel} · ${labels.allCompleted}`
+      : labels.notRecorded
+  return <details className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'} open={running || trace?.state === 'failed'}>
+    <summary className="mi-generation-trace__head">
       <h3>{labels.title}</h3>
-      <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'}>{running ? text.generationProgress.running : trace ? trace.state === 'failed' ? labels.failed : labels.completed : labels.notRecorded}</span>
-    </header>
+      <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-stage-summary="true">{summaryLine}</span>
+    </summary>
     {trace ? <>
       <p className="mi-generation-trace__summary">
         {labels.attempt} · {running ? formatTime(trace.startedAt) : formatRange(trace.startedAt, trace.finishedAt, formatTime)}
@@ -81,7 +93,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
         })}
       />
     </> : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
-  </section>
+  </details>
 }
 
 type SkipReason = 'not-needed' | 'blocked'

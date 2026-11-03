@@ -137,17 +137,20 @@ async function settle(): Promise<void> {
 }
 
 describe('generation stage timeline', () => {
-  it('shows every stage as a vertical stepper by default, with its timing and the whole-attempt duration', () => {
+  it('folds a finished run to one line, and that line still carries the step count and duration', () => {
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     const steps = stepItems(dom)
-    // Success and failure both show every step: the reader asked for the stages, not a fold.
+    const details = dom.querySelector<HTMLDetailsElement>('.mi-generation-trace')!
+    // Contract: a completed run defaults to collapsed; the summary is the only visible line.
+    expect(details.tagName).toBe('DETAILS')
+    expect(details.open).toBe(false)
+    expect(details.querySelector('summary')!.textContent).toMatch(/生成阶段9 步 · .+ · 全部完成/)
     expect(dom.querySelector('.ant-steps-vertical')).not.toBeNull()
-    expect(dom.querySelector('.mi-generation-trace__toggle')).toBeNull()
     expect(steps).toHaveLength(9)
     expect(steps.map((entry) => entry.querySelector('[data-stage]')?.getAttribute('data-stage'))).toEqual(allSucceeded)
     expect(steps.every((entry) => entry.classList.contains('ant-steps-item-finish'))).toBe(true)
     expect(dom.textContent).toContain(text.generationTrace.title)
-    expect(dom.textContent).toContain(text.generationTrace.completed)
+    expect(dom.textContent).toContain(text.generationTrace.allCompleted)
     // Same-day attempts print only the clock; the date is noise inside one edition.
     expect(dom.textContent).toContain('本次尝试 · 00:00:00 → 00:01:00')
     expect(dom.textContent).toContain('耗时 1 分 0 秒')
@@ -155,6 +158,8 @@ describe('generation stage timeline', () => {
     expect(resultOf(dom, 'source').textContent).toContain('00:00:05 → 00:00:06')
     expect(resultOf(dom, 'source').textContent).toContain('1 秒')
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
+    // The count in the summary is the number of rows the detail renders, not a literal.
+    expect(steps).toHaveLength(9)
   })
 
   it('prints one instant when a run starts and ends in the same second', () => {

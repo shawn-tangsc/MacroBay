@@ -1082,12 +1082,15 @@ describe('daily briefing page', () => {
 
     expect(trace).not.toBeNull()
     expect(trace.textContent).toContain(text.generationTrace.title)
-    expect(trace.textContent).toContain(text.generationTrace.completed)
-    // The successful stages are a vertical stepper that starts fully visible; there is no fold.
-    expect(trace.querySelectorAll('.ant-steps-item')).toHaveLength(9)
-    expect(trace.querySelectorAll('[data-stage]')).toHaveLength(9)
+    expect(trace.textContent).toContain(text.generationTrace.allCompleted)
+    // Contract change: a finished run is collapsed by default; the summary still says it finished.
+    const details = trace as HTMLDetailsElement
+    expect(details.tagName).toBe('DETAILS')
+    expect(details.open).toBe(false)
+    expect(details.querySelector('summary')!.textContent).toMatch(/9 步 · .+ · 全部完成/)
+    expect(details.querySelectorAll('.ant-steps-item')).toHaveLength(9)
+    expect(details.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(trace.textContent).toContain('耗时 30 秒')
-    expect(trace.querySelector('.mi-generation-trace__toggle')).toBeNull()
     expect(dom.querySelector('[data-briefing-issues] [data-briefing-stages] .mi-generation-trace')).not.toBeNull()
   })
 
@@ -1189,6 +1192,8 @@ it('shows the generating state with one status word and the stage list in the de
   // Same stepper the failed state uses: a run in flight is not a second visual language.
   expect(column.querySelector('[data-briefing-stages] .mi-generation-trace[data-generation-trace-state="running"]')).not.toBeNull()
   expect(column.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
+  // Running: the stepper is open and its summary is the live word.
+  expect(column.querySelector('details.mi-generation-trace[open]')).not.toBeNull()
   // One phrase, one row state, no missing-language claim while the run is in flight.
   expect(dom.textContent.match(/正在生成今天的日报/g)).toHaveLength(1)
   const todayRow = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
