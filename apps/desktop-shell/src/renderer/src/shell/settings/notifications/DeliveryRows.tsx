@@ -25,7 +25,6 @@ export function DeliveryRows(props: {
   onToastChange: (next: boolean) => void
   desktopPermission: 'granted' | 'denied' | 'unknown' | null
   onOpenSystemSettings?: () => void
-  onOpenChannelPage?: () => void
 }): React.ReactElement {
   const { text, desktopPermission } = props
 
