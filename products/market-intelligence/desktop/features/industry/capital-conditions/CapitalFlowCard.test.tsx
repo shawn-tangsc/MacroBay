@@ -234,6 +234,20 @@ describe('daily values dialog', () => {
     expect(dateCell.getAttribute('data-trading-date')).toBe('2026-10-26')
   })
 
+  it('leaves the card markup alone while the dialog is open', async () => {
+    const container = mount()
+    const card = container.querySelector('.mi-capital-conditions')!
+    const before = card.outerHTML
+    const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
+
+    await act(async () => clickLikeMouse(button))
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    // The dialog is portalled, so opening it changes nothing inside the card itself — which is
+    // also why the card's height cannot move. Escape and returning focus belong to the platform
+    // Modal (its own suite asserts both); the real-window pass confirmed them here.
+    expect(card.outerHTML).toBe(before)
+  })
+
   it('draws the trigger as its own bordered button, not a text link', () => {
     const container = mount()
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
