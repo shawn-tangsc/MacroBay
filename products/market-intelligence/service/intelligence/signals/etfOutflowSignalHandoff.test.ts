@@ -104,8 +104,17 @@ describe('ETF signal → the analysis entry, end to end', () => {
       isEnabled: async () => true
     })
 
-    await etfOutflowSignalHandoff(undefined, () => analyze).handOffSignals([outflowSignals()[0]!])
+    // 接收端对每条请求的答复记下来：台账空着时，红的那一句要能说出「哪道门拒了」，
+    // 而不是只说「0 行」——`disabled`、`in-flight`、`duplicate` 三种拒绝长得一模一样。
+    const answers: string[] = []
+    const recorded = async (request: Parameters<typeof analyze>[0]) => {
+      const result = await analyze(request)
+      answers.push(result.state)
+      return result
+    }
+    await etfOutflowSignalHandoff(undefined, () => recorded).handOffSignals([outflowSignals()[0]!])
 
+    expect(answers).toEqual(['queued'])
     expect(ledger).toHaveLength(1)
     expect(ledger[0]).toMatchObject({
       triggerKey: 'signal.etf-flows.etf-outflow-3d',
