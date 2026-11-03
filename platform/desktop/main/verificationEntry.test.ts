@@ -24,15 +24,34 @@ const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePa
  */
 const RUNNER = 'tsx scripts/verify-run.mts'
 
-/** `ci.yml` 里所有单行 `run:` 的值。安装步不算检查，单独排掉。 */
-function ciRunSteps(): string[] {
+/**
+ * `ci.yml` 里**每个作业**的单行 `run:` 值（`run: |` 这种块式写法不在此列）。
+ *
+ * 按作业分组而不是全文件收集：加了「Windows 敏感性」作业之后，全文件收集会把它的定向用例
+ * 也算进 `verify` 的步骤里，于是要么误报、要么被人放宽成 `toContain`——两种都会让这条守卫失效。
+ */
+function ciRunStepsByJob(): Map<string, string[]> {
   const ci = read('.github/workflows/ci.yml')
-  const steps: string[] = []
+  const byJob = new Map<string, string[]>()
+  let current: string | null = null
+  let inJobs = false
   for (const line of ci.split('\n')) {
-    const match = line.match(/^\s*run:\s*(\S.*)$/u)
-    if (match) steps.push(match[1].trim())
+    if (/^jobs:\s*$/u.test(line)) {
+      inJobs = true
+      continue
+    }
+    if (!inJobs) continue
+    if (/^\S/u.test(line)) break
+    const job = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/u)
+    if (job) {
+      current = job[1]
+      if (!byJob.has(current)) byJob.set(current, [])
+      continue
+    }
+    const run = line.match(/^\s+run:\s*(\S.*)$/u)
+    if (run && current !== null) byJob.get(current)!.push(run[1].trim())
   }
-  return steps
+  return byJob
 }
 
 /** 取某个二级标题到下一个二级标题之间的正文。 */
@@ -66,9 +85,20 @@ describe('verification entry', () => {
   })
 
   it('lets CI run that script instead of listing the checks itself', () => {
-    const checks = ciRunSteps().filter((step) => step !== 'pnpm install --frozen-lockfile')
-    // 一处且只有一处调 `pnpm verify`：CI 不得再各列一份检查清单。
-    expect(checks).toEqual(['pnpm verify'])
+    // 按**作业**取步骤：`verify` 作业只能有一处调 `pnpm verify`，别的作业（macOS 之外平台的
+    // 敏感性作业）可以跑定向用例，但**不许自己再跑一遍全链**——那等于第二份清单。
+    const byJob = ciRunStepsByJob()
+    const verifySteps = (byJob.get('verify') ?? []).filter((step) => step !== 'pnpm install --frozen-lockfile')
+    expect(verifySteps).toEqual(['pnpm verify'])
+
+    const otherJobsRunningTheChain = [...byJob.entries()]
+      .filter(([job]) => job !== 'verify')
+      .filter(([, steps]) => steps.some((step) => step.includes('pnpm verify') || step.includes('verify-run')))
+      .map(([job]) => job)
+    expect(
+      otherJobsRunningTheChain,
+      `这些作业自己跑了一遍全链，等于第二份清单：\n${otherJobsRunningTheChain.join('\n')}`
+    ).toEqual([])
   })
 
   it('keeps AGENTS.md pointing at the script and free of a second list', () => {

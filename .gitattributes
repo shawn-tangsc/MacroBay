@@ -1,3 +1,9 @@
+# 默认：文本一律 LF，且按文本归一化。
+# Windows 上 `core.autocrlf=true` 会在检出时写 CRLF，`pnpm build:info --require-clean` 便认为
+# 工作区不干净、拒绝打包；同时按行比较的门禁会误报。这条必须在仓库里声明，不能靠各人本地配置。
+# 下面的具体规则（二进制 fixture 的 `-text`、生成文件的 `eol=lf`）逐条覆盖它。
+* text=auto eol=lf
+
 # Raw calendar fixtures are byte-exact provenance artifacts. Git must not
 # normalize their line endings, otherwise a fresh clone no longer matches the
 # captured payload bytes/hashes in officialMacroCalendarProvenance.ts.

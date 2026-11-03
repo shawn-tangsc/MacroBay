@@ -40,3 +40,40 @@ jobs:
       # 加一步只改那一处，AGENTS.md 与 release-process.md 指向同一命令，三处漂移由守卫测试挡住。
       - name: Verify
         run: pnpm verify
+
+  # Windows 上从来没有跑过测试：`verify` 在 macos-latest，release 的 Windows 作业只有
+  # typecheck + build + 打包。结果是平台特有代码第一次真正运行发生在用户机器上——门票、
+  # 临时目录、路径分隔符这三个 bug 都是这么漏的。这里只跑平台敏感的那几批，不搬全量
+  # （Windows runner 慢且贵）；全量仍然只有 `verify` 一处。
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # 启动、存储、路径、脚本这四类是最容易带平台假设的，先只跑它们。
+      - name: Platform-sensitive suites
+        run: pnpm exec vitest run platform/storage platform/desktop/main platform/desktop/ipc
+
+      # 三个按路径查基线的门禁：它们的键一旦没归一化，在 Windows 上会整片假红，
+      # 而在 macOS/Linux 上永远绿——必须在这台机器上真跑一次。
+      - name: Baseline gates whose keys are paths
+        run: node scripts/check-file-size.mjs && pnpm exec tsx scripts/check-hex-color.mts && pnpm exec tsx scripts/check-danger-color.mts
