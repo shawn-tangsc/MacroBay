@@ -43,6 +43,14 @@
   --mi-dashboard-caution: #e5ae43;
   --mi-dashboard-negative: #f16d73;
   /*
+   * Chart series colours. They live with the rest of the portal palette because the dialog portals
+   * to <body>: a value declared on the dashboard page never reaches it, and the bars came out with
+   * a transparent background — present in the DOM, invisible on screen.
+   */
+  --mi-dashboard-etf-funds: #63c9ff;
+  --mi-dashboard-etf-btc: #e5ae43;
+  --mi-dashboard-etf-eth: #b994ff;
+  /*
    * 页面根必须把宿主给出的确定高度继续往下传。
    *
    * 约束链（见 `workspaceLayout.css`）：`.workspace-page-body (100%)` → `.settings-contribution-host (100%)`

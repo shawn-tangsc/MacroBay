@@ -59,8 +59,11 @@ describe('portal palette in the light theme', () => {
 
   it('gives every chart series a colour, and remaps the one that differs by theme', () => {
     // Funds and ETH read the same in both themes; BTC changes, so it needs a light value.
+    // The dialog portals to <body>, so these must live on the palette class the dialog carries —
+    // a value on the dashboard page would leave the bars transparent in the dialog.
     for (const series of ['--mi-dashboard-etf-funds', '--mi-dashboard-etf-btc', '--mi-dashboard-etf-eth']) {
-      expect(dashboardCss, `${series} is not defined`).toContain(`${series}:`)
+      expect(portalCss, `${series} is not defined by the portal palette`).toContain(`${series}:`)
+      expect(dashboardCss, `${series} must not be defined by the page scope`).not.toContain(`${series}:`)
     }
     expect(lightBlock).toContain('--mi-dashboard-etf-btc:')
   })

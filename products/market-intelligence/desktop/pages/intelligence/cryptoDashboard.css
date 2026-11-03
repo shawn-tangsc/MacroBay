@@ -37,9 +37,6 @@
   --mi-reading-note-size: 11.5px;
   --mi-reading-note-line-height: 1.6;
   --mi-reading-note-max-height: 320px;
-  --mi-dashboard-etf-funds: #63c9ff;
-  --mi-dashboard-etf-btc: #e5ae43;
-  --mi-dashboard-etf-eth: #b994ff;
   /*
     同起点收益率那张图的五条线：这一份是**唯一 owner**（面板只命名它们，不就地写颜色）。
     五条线必须两两分得清，`crossAssetChartPalette.test.ts` 按色相/明度/饱和度断言——BTC 是饱和的
