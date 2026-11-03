@@ -93,6 +93,17 @@ describe('daily briefing history rail', () => {
     expect(host.textContent).not.toContain(text.history.noConclusion)
   })
 
+  it('says a failed run on the row, without a count and without the reason', () => {
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })] })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+
+    expect(row.textContent).toContain(`${text.history.generationFailed} · 08:00`)
+    // No item count (there is no edition) and no reason (its length would break the row height).
+    expect(row.textContent).not.toMatch(/\d+\s*项/)
+    expect(row.textContent).not.toContain(text.aiSettings.failure['model-unavailable'])
+    expect(row.textContent).not.toContain(text.history.missingRun)
+  })
+
   it('shows one row per issue and switches language in place', () => {
     const onSelect = vi.fn()
     render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })], onSelect })

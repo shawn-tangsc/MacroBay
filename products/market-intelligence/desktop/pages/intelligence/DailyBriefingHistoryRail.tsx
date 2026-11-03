@@ -72,9 +72,13 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 : null}
             </span>
             {missing ? <small className="mi-daily-briefing__rail-missing">{
+              // Four states, one line each: a run in flight names its stage; a run that failed says
+              // so (its reason lives in the attempt list); a day that did not run says only that.
               edition.date === todayDate && generatingStage
-                ? text.generationProgress.railRunning + ' · ' + generatingStage
-                : `${text.history.missingRun}${edition.date === todayDate && edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
+                ? `${text.generationProgress.railRunning} · ${generatingStage}`
+                : edition.attemptCount
+                  ? `${text.history.generationFailed}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
+                  : `${text.history.missingRun}${edition.date === todayDate && edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
             }</small> : <>
               {edition.direction
                 // A direction, when present, is the row's word; when absent the dot alone carries

@@ -8,6 +8,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
@@ -28,6 +29,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
+import { DailyBriefingGeneratingAside, DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -325,6 +327,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setRegenerating(true)
     setReloadKey((key) => key + 1)
   }
+  // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
+  const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime
+  const todayMissing = editions.some((edition) => edition.date === todayDate && edition.state === 'missing')
   const openModelService = onOpenModelSettings ?? openModelSettings
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
@@ -339,6 +344,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
       <div className="mi-daily-briefing-page__actions">
+        {view.status === 'loading' ? <DailyBriefingGeneratingStatus progress={liveProgress} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
           <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={regenerating} onClick={() => void regenerate()}>
             {regenerating ? text.regenerating : text.regenerate}
@@ -375,38 +381,30 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
         </div> : null}
-        {view.status === 'loading' ? <div className="mi-daily-briefing__state">
-          <div className="mi-daily-briefing-page__loading-head">
-            <LoadingState label={text.generating} minHeight={220} />
-            <Popover
-              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generateHint"
-              resolveText={resolveProductText}
-              trigger={(triggerProps) => <IconButton
-                {...triggerProps}
-                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.generation"
-                dataAttributes={{ 'data-generate-help': 'true' }}
-                icon={CircleHelp}
-                resolveText={resolveProductText}
-                size="sm"
-                variant="plain"
-              />}
-            />
-          </div>
-          {/* The one spinner stays; the rows say which step it is on. */}
-          {liveProgress ? <DailyBriefingLiveSteps nowMs={Date.now()} progress={liveProgress} text={text} resolveText={resolveProductText} /> : null}
-          {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
-        </div> : null}
+        {view.status === 'loading' ? <DailyBriefingGeneratingView progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
           ? <StateView
               state="empty"
               reasonCode="never-created"
               size="lg"
               productReason={{
-                key: 'mi.dailyBriefing.noBrief',
+                key: scheduledTime ? 'mi.dailyBriefing.noBriefAt' : 'mi.dailyBriefing.noBrief',
+                ...(scheduledTime ? { params: { time: scheduledTime, zone: formatShellTimeZoneLabel(timeZone) } } : {}),
                 resolve: (key, params) => resolveBriefingStateReason(text, key, params)
               }}
               action={{ labelKey: 'ui.state.action.create', onSelect: generateNow }}
             />
+          : todayMissing
+            ? <StateView
+                state="empty"
+                reasonCode="never-created"
+                size="lg"
+                productReason={{
+                  key: 'mi.dailyBriefing.todayNotRun',
+                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+                }}
+                action={{ labelKey: 'ui.state.action.create', onSelect: generateNow }}
+              />
           : lastGeneratedAt
             ? <StateView
                 state="error"
@@ -451,6 +449,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
+      {view.status === 'loading' ? <DailyBriefingGeneratingAside formatTime={formatTime} progress={liveProgress} text={text} /> : null}
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         <section data-briefing-gaps="true">

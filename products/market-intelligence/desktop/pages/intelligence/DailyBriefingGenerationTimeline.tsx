@@ -30,25 +30,27 @@ type StepStatus = 'finish' | 'error' | 'wait' | 'process'
  * instead of a paragraph, while the recorded result — timing, failure code and detail — stays in
  * the step's description.
  */
-export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Readonly<{
+export function DailyBriefingGenerationTimeline({ trace, text, formatTime, running = false }: Readonly<{
   trace: GenerationTrace | undefined
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
+  /** The run is still in flight: the same list, with a running word instead of a verdict. */
+  running?: boolean
 }>): React.ReactElement {
   const labels = text.generationTrace
   const failed = trace ? failedStage(trace) : undefined
   const failedLabel = failed ? labels.stages[failed.id] : labels.notRecorded
   const duration = trace ? traceDurationMs(trace) : undefined
   const failedIndex = failed ? generationStageIds.indexOf(failed.id) : -1
-  return <section className="mi-generation-trace" data-generation-trace-state={trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'}>
+  return <section className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'}>
     <header className="mi-generation-trace__head">
       <h3>{labels.title}</h3>
-      <span data-trace-state={trace?.state ?? 'missing'}>{trace ? trace.state === 'failed' ? labels.failed : labels.completed : labels.notRecorded}</span>
+      <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'}>{running ? text.generationProgress.running : trace ? trace.state === 'failed' ? labels.failed : labels.completed : labels.notRecorded}</span>
     </header>
     {trace ? <>
       <p className="mi-generation-trace__summary">
-        {labels.attempt} · {formatRange(trace.startedAt, trace.finishedAt, formatTime)}
-        {duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
+        {labels.attempt} · {running ? formatTime(trace.startedAt) : formatRange(trace.startedAt, trace.finishedAt, formatTime)}
+        {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
       {trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}

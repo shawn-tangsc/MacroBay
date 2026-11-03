@@ -1160,6 +1160,57 @@ it('shows only a loading state before the first read resolves', async () => {
   expect(dom.querySelector('[data-state="error"]')).toBeNull()
 })
 
+it('shows the generating state with one status word and the stage list in the detail column', async () => {
+  const progress = {
+    attemptId: 'attempt-1',
+    startedAt: '2026-10-30T04:00:00.000Z',
+    state: 'running',
+    stages: traceStageIds.map((id, index) => ({
+      id,
+      state: index === 0 ? 'success' : 'pending',
+      startedAt: index === 1 ? '2026-10-30T04:00:05.000Z' : index === 0 ? '2026-10-30T04:00:00.000Z' : null,
+      finishedAt: index === 0 ? '2026-10-30T04:00:01.000Z' : null,
+      durationMs: index === 0 ? 1_000 : 0
+    }))
+  }
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    getProgress: vi.fn(async () => ({ state: 'running' as const, progress }))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  // One status word in the header, no settled state, one whole loading block in the body.
+  expect(dom.querySelectorAll('.status-pill')).toHaveLength(1)
+  expect(dom.querySelectorAll('.state-view')).toHaveLength(0)
+  expect(dom.querySelectorAll('.mi-daily-briefing-page__content [data-loading-state]')).toHaveLength(1)
+  // The stage list is in the detail column while the run is in flight, not nowhere.
+  const column = dom.querySelector<HTMLElement>('[data-briefing-detail="true"]')!
+  // Same stepper the failed state uses: a run in flight is not a second visual language.
+  expect(column.querySelector('[data-briefing-stages] .mi-generation-trace[data-generation-trace-state="running"]')).not.toBeNull()
+  expect(column.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
+  expect(column.querySelector('[data-briefing-attempts]')).toBeNull()
+  // The action is disabled and says why; there is no invented stop control.
+  const generating = dom.querySelector<HTMLButtonElement>(`[aria-label="${text.generationProgress.workingHint}"]`)!
+  expect(generating.disabled).toBe(true)
+  expect(dom.textContent).not.toContain(text.failurePanel.editorialTitle)
+})
+
+it('shows one empty reason and no detail column when no edition exists', async () => {
+  const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } }))
+  })
+  const dom = await renderPage(client)
+
+  // An empty page has nothing to put in a detail column; a shell there would look broken.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  expect(dom.querySelectorAll('.state-view')).toHaveLength(1)
+  expect(dom.querySelectorAll('.state-view__action')).toHaveLength(1)
+  expect(dom.querySelectorAll('[data-locale]')).toHaveLength(0)
+})
+
 it('offers a retry when the read itself fails', async () => {
   // A read that did not finish is a failure, and a failure without a retry leaves the reader nowhere.
   const client = fakeClient({ getToday: vi.fn(async () => { throw new Error('down') }) })

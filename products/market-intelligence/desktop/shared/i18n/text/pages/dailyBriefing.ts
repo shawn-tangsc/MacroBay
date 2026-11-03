@@ -45,9 +45,11 @@ export const dailyBriefingText = {
     flow: { in: '净流入', out: '净流出' },
     horizons: { short: '短期', medium: '中期', long: '长期' },
     visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', scale: '刻度 ±{max}', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
-    history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', missing: '缺口', missingRun: '未运行', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次', languages: { 'zh-CN': '中文', 'en-US': '英文' }, attempts: { show: '生成记录', hide: '收起生成记录', title: '生成记录', times: '次', nth: '第 {n} 次', succeeded: '成功', failed: '失败', running: '进行中', cleaned: '那一次已清理', none: '还没有生成记录', unreadable: '生成记录读不到' } },
+    history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', missing: '缺口', missingRun: '未运行', generationFailed: '生成失败', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次', languages: { 'zh-CN': '中文', 'en-US': '英文' }, attempts: { show: '生成记录', hide: '收起生成记录', title: '生成记录', times: '次', nth: '第 {n} 次', succeeded: '成功', failed: '失败', running: '进行中', cleaned: '那一次已清理', none: '还没有生成记录', unreadable: '生成记录读不到' } },
     stateReasons: {
       noBrief: '简报只读取已启用的来源和已发布的结论。打开需要的来源并完成一次采集后，今天的消息、数据和结论会出现在这里。',
+      noBriefAt: '还没有生成过日报。生成时间每天 {time}（{zone}）；也可以点「立即生成」马上生成。',
+      todayNotRun: '今天这期还没运行，原因未知。可以点「立即生成」补上。',
       unreadable: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
       unreadableSince: '这次读取没有完成；上次成功生成于 {moment}。',
       nothingEnabled: '四块数据都没有接通。先检查情报源，再打开今天。',
@@ -158,6 +160,7 @@ export const dailyBriefingText = {
     generationProgress: {
       title: '生成阶段',
       running: '进行中',
+      workingHint: '正在生成，完成后自动显示',
       waiting: '等待',
       elapsed: '已用 {duration}',
       repair: '修正',
@@ -285,9 +288,11 @@ export const dailyBriefingText = {
     flow: { in: 'Net inflow', out: 'Net outflow' },
     horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
     visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', scale: 'Scale ±{max}', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
-    history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', missing: 'Missing', missingRun: 'Not run', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet', languages: { 'zh-CN': 'Chinese', 'en-US': 'English' }, attempts: { show: 'Attempts', hide: 'Hide attempts', title: 'Generation attempts', times: 'attempts', nth: 'Attempt {n}', succeeded: 'Succeeded', failed: 'Failed', running: 'Running', cleaned: 'That attempt was cleaned up', none: 'No attempts yet', unreadable: 'Attempts could not be read' } },
+    history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', missing: 'Missing', missingRun: 'Not run', generationFailed: 'Generation failed', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet', languages: { 'zh-CN': 'Chinese', 'en-US': 'English' }, attempts: { show: 'Attempts', hide: 'Hide attempts', title: 'Generation attempts', times: 'attempts', nth: 'Attempt {n}', succeeded: 'Succeeded', failed: 'Failed', running: 'Running', cleaned: 'That attempt was cleaned up', none: 'No attempts yet', unreadable: 'Attempts could not be read' } },
     stateReasons: {
       noBrief: 'The brief reads only enabled sources and published conclusions. Open the sources you need and let one collection finish; today’s messages, numbers and conclusion will appear here.',
+      noBriefAt: 'No brief has been generated yet. It runs daily at {time} ({zone}); or use “Generate now” to make today’s edition immediately.',
+      todayNotRun: 'Today’s edition has not run yet, and the reason is unknown. Use “Generate now” to make it.',
       unreadable: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
       unreadableSince: 'This read did not finish; it last generated at {moment}.',
       nothingEnabled: 'All four data points are disconnected. Check the sources, then open today again.',
@@ -398,6 +403,7 @@ export const dailyBriefingText = {
     generationProgress: {
       title: 'Generation steps',
       running: 'Running',
+      workingHint: 'Generating — it appears when the run finishes',
       waiting: 'Waiting',
       elapsed: 'Elapsed {duration}',
       repair: 'Revision',
