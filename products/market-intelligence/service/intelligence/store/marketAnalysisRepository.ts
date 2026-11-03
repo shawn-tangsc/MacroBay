@@ -16,6 +16,7 @@ import { PREDICTION_LEDGER_SHAPE_POLICY } from '../../../contracts/marketAnalysi
 import {
   mostSevereSkippedEvidence, parseSignalEvidence, signalEvidenceJson, type SignalEvidence
 } from '../../../contracts/moduleSignalEvidence'
+import { SignalLedgerError, signalLedgerErrorCodes } from '../../../contracts/signalLedgerErrors'
 import { buildAnalysisSnapshotHash, canonicalizeMarketAnalysisJson, snapshotHashInput } from '../analysis/analysisHash'
 import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
 import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
@@ -313,11 +314,11 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
      * reading, and leaving it there under `queued` would read back as null.
      */
     rewriteSignalTrigger(rowId: string, value: Readonly<{ decision: 'queued'; reasonCode: string; evidence: SignalEvidence }>): void {
-      if (value.decision !== 'queued') throw new Error('signal-trigger-rewrite-refused')
+      if (value.decision !== 'queued') throw new SignalLedgerError(signalLedgerErrorCodes.rewriteRefused)
       const evidenceJson = signalEvidenceJson('queued', value.evidence)
       const rewritten = sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=?, evidence_json=? where id=? and decision=? and reason_code=?')
         .run('queued', value.reasonCode, evidenceJson, rowId, signalTriggerRetryPolicy.decision, signalTriggerRetryPolicy.reasonCode)
-      if (Number(rewritten.changes) !== 1) throw new Error('signal-trigger-rewrite-refused')
+      if (Number(rewritten.changes) !== 1) throw new SignalLedgerError(signalLedgerErrorCodes.rewriteRefused)
     },
     /**
      * Rewrites one attempt as skipped, restating its reading in the shape that decision reads.

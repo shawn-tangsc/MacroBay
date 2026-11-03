@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { moduleSignalPolicy, signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { parseSignalEvidence, queuedSignalEvidence, skippedSignalEvidence } from '../../../contracts/moduleSignalEvidence'
+import { isSignalLedgerError, signalLedgerErrorCodes } from '../../../contracts/signalLedgerErrors'
 import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 import { createMarketAnalysisRepository } from './marketAnalysisRepository'
 
@@ -287,4 +288,34 @@ it('keeps the attempt claimed across a receiver restart', () => {
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+it('gives each retry refusal its own code, so a bug cannot look like a duplicate', () => {
+  const repo = repository()
+  const queuedRow = repo.appendSignalTrigger(attempt()).id
+  let refused: unknown
+  try {
+    repo.rewriteSignalTrigger(queuedRow, {
+      decision: 'queued', reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())])
+    })
+  } catch (error) {
+    refused = error
+  }
+  expect(isSignalLedgerError(refused, signalLedgerErrorCodes.rewriteRefused)).toBe(true)
+  expect(isSignalLedgerError(refused, signalLedgerErrorCodes.shapeMismatch)).toBe(false)
+
+  // The other refusal is a caller bug and carries a different code: the receiver must rethrow it.
+  const retryableRow = repo.appendTriggerLedger(ledger({
+    id: 'mi-tl-retry', changeHash: 'hash-retry', decision: 'skipped', reasonCode: 'signal-freeze-unavailable'
+  }))
+  let mismatched: unknown
+  try {
+    repo.rewriteSignalTrigger(retryableRow, {
+      decision: 'queued', reasonCode: 'signal-high-triggered', evidence: skippedSignalEvidence(withWindow(signal()))
+    })
+  } catch (error) {
+    mismatched = error
+  }
+  expect(isSignalLedgerError(mismatched, signalLedgerErrorCodes.shapeMismatch)).toBe(true)
+  expect(isSignalLedgerError(mismatched, signalLedgerErrorCodes.rewriteRefused)).toBe(false)
 })

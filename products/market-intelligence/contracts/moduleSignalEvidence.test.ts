@@ -5,6 +5,7 @@ import {
   moduleSignalEvidencePolicy, mostSevereSkippedEvidence, parseSignalEvidence, queuedSignalEvidence, signalEvidenceJson,
   skippedSignalEvidence, type QueuedSignalEvidence, type SignalWithWindow
 } from './moduleSignalEvidence'
+import { isSignalLedgerError, signalLedgerErrorCodes } from './signalLedgerErrors'
 
 const intraday: SignalCadence = { kind: 'intraday', bucketMs: 15 * 60_000 }
 
@@ -149,4 +150,18 @@ it('keeps the most severe signal when a batch has to become one reading', () => 
   // Exactly the four keys a skipped row reads: the batch-only identifiers do not survive the change.
   expect(Object.keys(kept).sort()).toEqual([...moduleSignalEvidencePolicy.skippedKeys].sort())
   expect(() => mostSevereSkippedEvidence(queuedSignalEvidence([]))).toThrowError('signal-evidence-shape-mismatch')
+})
+
+it('marks a shape refusal with a stable code, not just a message', () => {
+  const skipped = skippedSignalEvidence(withWindow(signal()))
+  let caught: unknown
+  try {
+    signalEvidenceJson('queued', skipped)
+  } catch (error) {
+    caught = error
+  }
+  // The receiver branches on this: a shape bug must stay loud and never be read as "another caller
+  // won the retry", which is the same kind of error from the outside.
+  expect(isSignalLedgerError(caught, signalLedgerErrorCodes.shapeMismatch)).toBe(true)
+  expect(isSignalLedgerError(caught, signalLedgerErrorCodes.rewriteRefused)).toBe(false)
 })

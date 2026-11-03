@@ -1,4 +1,5 @@
 import { isCanonicalSignalTime, moduleSignalPolicy, type ModuleSignal, type SignalSeverity, type SignalWindow } from './moduleSignal'
+import { SignalLedgerError, signalLedgerErrorCodes } from './signalLedgerErrors'
 
 /**
  * What a signal decision leaves behind, so a reader can ask "why was this not analysed".
@@ -96,7 +97,7 @@ export function mostSevereSkippedEvidence(queued: QueuedSignalEvidence): Skipped
   const [first] = [...queued.signals].sort((left, right) =>
     moduleSignalEvidencePolicy.severityOrder[left.severity] - moduleSignalEvidencePolicy.severityOrder[right.severity] ||
     left.observedAt.localeCompare(right.observedAt))
-  if (!first) throw new Error('signal-evidence-shape-mismatch')
+  if (!first) throw new SignalLedgerError(signalLedgerErrorCodes.shapeMismatch)
   return Object.freeze({ severity: first.severity, observedAt: first.observedAt, window: first.window, values: first.values })
 }
 
@@ -113,16 +114,16 @@ export function signalEvidenceJson(decision: string, evidence: SignalEvidence | 
   if (evidence === null || evidence === undefined) return null
   const { decisions } = moduleSignalEvidencePolicy
   if (decision === decisions.skipped) {
-    if (!isSkippedShape(evidence)) throw new Error('signal-evidence-shape-mismatch')
+    if (!isSkippedShape(evidence)) throw new SignalLedgerError(signalLedgerErrorCodes.shapeMismatch)
     return JSON.stringify(evidence)
   }
   if (decision === decisions.queued) {
-    if (!isQueuedShape(evidence)) throw new Error('signal-evidence-shape-mismatch')
+    if (!isQueuedShape(evidence)) throw new SignalLedgerError(signalLedgerErrorCodes.shapeMismatch)
     return JSON.stringify(evidence)
   }
   // `recorded` is usage, not a signal, and any older decision predates the column: neither may
   // carry a reading, because a reader would then translate it as "this analysed something".
-  throw new Error('signal-evidence-shape-mismatch')
+  throw new SignalLedgerError(signalLedgerErrorCodes.shapeMismatch)
 }
 
 /**
