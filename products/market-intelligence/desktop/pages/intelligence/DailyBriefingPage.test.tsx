@@ -527,6 +527,12 @@ describe('daily briefing page', () => {
     // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
     // the marker, so a control added outside them would show up as unscoped.
     expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
+    // Adding a period is a group-level action: it sits on the "Generation" heading row, not as a
+    // field of its own, so the drawer never looks like it lost the control.
+    const generationHead = document.querySelector('[data-settings-section="generation"] .mi-briefing-settings__group-head')!
+    expect(generationHead.querySelector('h3')?.textContent).toBe(text.settingsDrawer.sections.generation)
+    expect(generationHead.textContent).toContain(text.settings.periods.add)
+    expect(generationHead.querySelector('button[disabled]')?.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
     // The form-wide note lives in the block now, so the drawer shows it too — it used to exist only
     // in the dialog shell, which meant this surface silently lost it.
     expect(document.querySelector('[data-settings-section="generation"]')?.textContent)

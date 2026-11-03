@@ -9,7 +9,11 @@ import { Popover } from '@platform/ui/components/popover'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { DailyBriefingAiSettingsSection, useDailyBriefingAiSettings } from './DailyBriefingAiSettingsSection'
-import { DailyBriefingGenerationSettingsSection, useDailyBriefingGenerationSettings } from './DailyBriefingGenerationSettingsSection'
+import {
+  DailyBriefingAddPeriodAction,
+  DailyBriefingGenerationSettingsSection,
+  useDailyBriefingGenerationSettings
+} from './DailyBriefingGenerationSettingsSection'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 import './dailyBriefingSettingsDrawer.css'
@@ -109,7 +113,12 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
     size="narrow"
     titleKey="pages.intelligence.portal.dashboard.dailyBriefing.settingsDrawer.title">
     <section className="mi-briefing-settings__section" data-settings-section="generation" aria-labelledby={SECTION_IDS.generation}>
-      <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.generation}>{text.settingsDrawer.sections.generation}</h3>
+      {/* The block owns the fields; adding a period is a group-level action, so it sits on this
+          group's heading row, right-aligned with the value column. */}
+      <div className="mi-briefing-settings__group-head">
+        <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.generation}>{text.settingsDrawer.sections.generation}</h3>
+        <DailyBriefingAddPeriodAction text={text} />
+      </div>
       <DailyBriefingGenerationSettingsSection {...generation} text={text} />
     </section>
     <section className="mi-briefing-settings__section" data-settings-section="ai" ref={aiSection} aria-labelledby={SECTION_IDS.ai}>
