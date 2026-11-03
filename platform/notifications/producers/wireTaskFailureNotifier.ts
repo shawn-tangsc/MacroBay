@@ -37,9 +37,15 @@ export function wireTaskFailureNotifier(deps: {
     listDefinitionRuns: deps.listDefinitionRuns,
     dayToken: deps.dayToken
   })
-  // 钩子是同步 void：一次通知失败不能让调度停摆。两条各自独立，一条失败不影响另一条。
+  // 钩子是同步 void：一次通知失败不能让调度停摆，也不能让调度等两次落库。
+  //
+  // **必须串行**：第 3 次连续失败时 P1 与 P2 会在同一次钩子里各提交一条，而 runtime 的
+  // `submitEvent` 是「读整份 state → 改 → 整份写回」，没有写串行化。两条同时进去会读到同一份
+  // 基线，后写的把先写的记录覆盖掉——S3 要的「两条」会只剩一条。这里等前一条落库后再提后一条。
   return (input) => {
-    void notify(input).catch(() => undefined)
-    void notifyRepeated(input).catch(() => undefined)
+    void notify(input)
+      .catch(() => undefined)
+      .then(() => notifyRepeated(input))
+      .catch(() => undefined)
   }
 }
