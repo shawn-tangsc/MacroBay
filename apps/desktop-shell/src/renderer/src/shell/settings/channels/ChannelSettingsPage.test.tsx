@@ -163,7 +163,7 @@ describe('the two fields that became saveable', () => {
     const container = await mount()
 
     const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
-      (node) => node.getAttribute('aria-label') === labels.channelEdit
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
     )
     await act(async () => edit?.click())
     await act(async () => {})
@@ -179,12 +179,14 @@ describe('the two fields that became saveable', () => {
     const container = await mount()
 
     const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
-      (node) => node.getAttribute('aria-label') === labels.channelEdit
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
     )
     await act(async () => edit?.click())
     await act(async () => {})
 
-    const save = [...document.body.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelUpdate)
+    const save = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelUpdate
+    )
     await act(async () => save?.click())
     await act(async () => {})
 
