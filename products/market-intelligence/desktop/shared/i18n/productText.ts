@@ -657,7 +657,9 @@ mi: miText['zh-CN'],
             },
             capitalConditions: {
               title: '资金面', loading: '正在加载资金面…', empty: '暂时没有可用的资金面数据。',
-              stablecoin: '稳定币（USDT + USDC）', asset: '资产', totalSupply: '总供给',
+              /* The row name is drawn as two lines; the scope keeps its own brackets (and, in
+                 English, the space before them), so the spoken name is the plain concatenation. */
+              stablecoin: '稳定币', stablecoinScope: '（USDT + USDC）', asset: '资产', totalSupply: '总供给',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: '最新', windowDays: '{days} 日', coverage: '仅 {days} 天', streakColumn: '连续',
               streak: '{flow} · {count} 日', streakSingle: '{flow} · 1 日',
@@ -1908,7 +1910,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             capitalConditions: {
               title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'Capital-conditions data is not available yet.',
-              stablecoin: 'Stablecoins (USDT + USDC)', asset: 'Asset', totalSupply: 'Total supply',
+              stablecoin: 'Stablecoins', stablecoinScope: ' (USDT + USDC)', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',
               streak: '{flow} · {count} days', streakSingle: '{flow} · 1 day',

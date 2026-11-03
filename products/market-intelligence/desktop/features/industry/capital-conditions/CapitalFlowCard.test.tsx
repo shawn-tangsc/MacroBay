@@ -130,10 +130,13 @@ describe('the stablecoin row name', () => {
     expect(css).toMatch(/\.mi-capital-conditions__etf-table tbody td \{[^}]*white-space: nowrap/)
   })
 
-  it('keeps the full scoped name in the card', () => {
+  it('draws the scope on its own line, one size down, and still speaks the full name', () => {
     const container = mount()
-    const rowName = container.querySelector('.mi-capital-conditions__stable-table tbody th')
-    expect(rowName?.textContent).toBe('稳定币（USDT + USDC）')
+    const rowName = container.querySelector('.mi-capital-conditions__stable-table tbody th')!
+    // Two lines, but one spoken name: the concatenation is what a screen reader reads.
+    expect(rowName.textContent).toBe('稳定币（USDT + USDC）')
+    expect(rowName.querySelector('.mi-capital-conditions__asset-name')?.textContent).toBe('稳定币')
+    expect(rowName.querySelector('.mi-capital-conditions__asset-scope')?.textContent).toBe('（USDT + USDC）')
   })
 })
 
@@ -157,6 +160,32 @@ describe('accessible names', () => {
     const container = mount(cardText(), flat)
     expect(container.querySelector<HTMLElement>('[data-flow-label="1"]')?.getAttribute('aria-label'))
       .toBe('没有净流入，全部美元稳定币')
+  })
+})
+
+describe('the labels on the user-reported card', () => {
+  // Exactly the window the reader sent: the largest outflow is also the largest magnitude, so the
+  // axis prints the same number it labels. Three labels, not four.
+  const reported: FlowChartRow[] = [
+    row('2026-10-16', -314_500_000, -82_400_000, -69_700_000),
+    row('2026-10-19', -31_200_000, 526_700_000, -103_300_000),
+    row('2026-10-20', -883_700_000, 23_200_000, -26_100_000),
+    row('2026-10-21', -199_500_000, 524_800_000, 14_900_000),
+    row('2026-10-22', 149_100_000, -635_600_000, -110_600_000),
+    row('2026-10-23', -438_700_000, -137_900_000, 4_400_000),
+    row('2026-10-26', -317_400_000, 110_300_000, -88_600_000)
+  ]
+
+  it('labels three readings, and the repeated number is the axis, not a second label', () => {
+    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+      createElement(CapitalConditionsPanel, { text: cardText(), state: state(reported) as never, onRefresh: () => undefined })))
+    const labels = [...markup.matchAll(/data-flow-label="\d+"[^>]*>([^<]+)</g)].map((match) => match[1])
+    expect(labels).toHaveLength(3)
+    expect(labels).toContain('-$883.7M') // largest outflow
+    expect(labels).toContain('+$149.1M') // largest inflow
+    expect(labels).toContain('-$317.4M') // last day
+    // The second `-$883.7M` on screen is the axis floor: the axis scales to the largest magnitude.
+    expect(markup).toContain('<span>-$883.7M</span>')
   })
 })
 

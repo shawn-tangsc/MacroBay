@@ -136,6 +136,10 @@
    width. The ETF table below keeps the fixed layout: its row names are two words. */
 .mi-capital-conditions__stable-table { table-layout: auto; }
 .mi-capital-conditions__stable-table tbody th { white-space: normal; line-height: 1.25; }
+/* The scope reads as a footnote under the asset name: one size down, muted, and never broken
+   across the brackets — each line stays whole so the numbers keep their column. */
+.mi-capital-conditions__asset-name { display: block; white-space: nowrap; }
+.mi-capital-conditions__asset-scope { display: block; color: var(--mi-dashboard-muted); font-size: 10px; font-weight: 400; white-space: nowrap; }
 .mi-capital-conditions__stable-table thead th,
 .mi-capital-conditions__stable-table tbody th,
 .mi-capital-conditions__stable-table tbody td { padding-top: 7px; padding-bottom: 6px; }

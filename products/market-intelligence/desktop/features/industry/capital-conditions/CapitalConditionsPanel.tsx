@@ -22,6 +22,7 @@ type Text = {
   /** The card's own empty sentence, rendered through the platform reason slot (contract §17). */
   empty: string
   stablecoin: string
+  stablecoinScope: string
   asset: string
   totalSupply: string
   change1d: string
@@ -128,7 +129,10 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
       <th scope="col">{text.totalSupply}</th>
     </tr></thead>
     <tbody><tr>
-      <th scope="row">{text.stablecoin}</th>
+      <th scope="row">
+        <span className="mi-capital-conditions__asset-name">{text.stablecoin}</span>
+        <span className="mi-capital-conditions__asset-scope">{text.stablecoinScope}</span>
+      </th>
       <td data-flow-direction={flowDirection(state.change1dUsd)}>{state.change1dUsd}</td>
       <td data-flow-direction={flowDirection(state.change7dUsd)}>{state.change7dUsd}</td>
       <td data-flow-direction={flowDirection(state.change30dUsd)}>{state.change30dUsd}</td>
@@ -228,7 +232,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
         lines={[
           { labelKey: key('chartScopeNoteMain') },
           { labelKey: key('chartScopeNoteEtf') },
-          { labelKey: key('notComparable'), params: { row: text.stablecoin } },
+          { labelKey: key('notComparable'), params: { row: `${text.stablecoin}${text.stablecoinScope}` } },
           { labelKey: key('columnScopeNote') }
         ]}
         resolveText={resolveText}
