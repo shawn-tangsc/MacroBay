@@ -135,6 +135,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
       wechat: wechatDeliveryTransport
     })
   })
+  // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
+  channelManagementService.setDelivery(channelDeliveryService)
   const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
   const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
     inbound: channelInboundRepository,

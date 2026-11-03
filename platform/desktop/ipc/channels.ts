@@ -74,6 +74,11 @@ export const IpcChannels = {
    * 面板不新增第二份存储——数据就是运行审计表本身，随频道删除级联。
    */
   channelsListRuntimeAudits: 'platform:channels-list-runtime-audits',
+  /**
+   * 真发一条测试消息到该频道当前绑定的会话。回执三态：受理 / 已交给通道但未确认 / 失败给平台词。
+   * **没有「已送达」**——我们能证明的只是通道接受了。
+   */
+  channelsSendTestMessage: 'platform:channels-send-test-message',
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',

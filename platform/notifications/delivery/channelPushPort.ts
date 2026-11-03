@@ -14,6 +14,7 @@ import type {
   ChannelDeliveryTargetView,
   ChannelManagementSafeView
 } from '../../ai/agent-platform/channels/ChannelManagementContracts'
+import { resolveDeliveryTarget } from '../../ai/agent-platform/channels/channelDeliveryTargetResolution'
 import type { ChannelDeliveryRequest, ChannelDeliveryResult } from '../../ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeliveryContent } from '../runtime/notificationRouting'
@@ -55,9 +56,6 @@ export type ChannelPushPortDeps = {
   settings: { pushChannelId(): Promise<string | null> }
 }
 
-/** 一次取全绑定目标：通道上的会话是个位数，不需要分页。 */
-const CONVERSATION_PAGE = 100
-
 /** 正文末尾的短编号与中心那一条是同一串（契约 §8、S13 逐字相等）。 */
 export function formatPushText(content: NotificationDeliveryContent): string {
   const lines: string[] = []
@@ -95,32 +93,6 @@ export function mapChannelDeliveryResult(result: ChannelDeliveryResult): Channel
   }
 }
 
-/**
- * 通道不可投递时用哪一码。
- *
- * 目标为空是**目标问题**，读者要去做的是「去绑定」；其余三档（适配器不支持、缺凭据、
- * 没启用）都是**通道问题**，读者要去做的是「去检查通道」，所以归 `channel-rejected`。
- */
-function reasonForUnavailable(target: ChannelDeliveryTargetView | undefined): ChannelPushReason {
-  if (target?.reason === 'no-enabled-target') return 'delivery-no-target-bound'
-  return 'channel-rejected'
-}
-
-/**
- * 唯一目标 = `targetEnabled && hasBoundSession`（通道方案 §2.3）。
- *
- * 不收停用、也不收没绑会话的历史会话行——否则一个通道会因为一条废弃绑定永远不发。
- * 多于一个不发、不猜：替读者挑收件人等于把「绑定目标」这件事搬到通知页。
- */
-function resolveSingleTarget(
-  conversations: readonly ChannelConversationSafeView[]
-): { conversationId: string } | ChannelPushReason {
-  const targets = conversations.filter((conversation) => conversation.targetEnabled && conversation.hasBoundSession)
-  if (targets.length === 0) return 'delivery-no-target-bound'
-  if (targets.length > 1) return 'delivery-ambiguous-target'
-  return { conversationId: targets[0].id }
-}
-
 export function createChannelPushPort(deps: ChannelPushPortDeps) {
   /**
    * `record` 只用来取幂等键（记录 id）与短编号的兜底；正文一律取自 `content`，
@@ -134,18 +106,21 @@ export function createChannelPushPort(deps: ChannelPushPortDeps) {
       const channelId = await deps.settings.pushChannelId()
       if (channelId === null) return { ok: false, reason: 'push-unavailable' }
 
-      const channel = deps.channels.list().find((entry) => entry.id === channelId)
-      if (channel === undefined) return { ok: false, reason: 'channel-rejected' }
-
-      const target = deps.channels.listDeliveryTargets().channels.find((entry) => entry.id === channelId)
-      if (target === undefined || !target.deliverable) return { ok: false, reason: reasonForUnavailable(target) }
-
-      const resolved = resolveSingleTarget(deps.channels.listConversations({ id: channelId, limit: CONVERSATION_PAGE }))
-      if (typeof resolved === 'string') return { ok: false, reason: resolved }
+      // 目标判定是**唯一实现**（`resolveDeliveryTarget`）：设置页、测试消息和这条推送都读它，
+      // 免得两个功能在「一个说已绑定、另一个说没绑定」上各说各话。
+      const resolved = resolveDeliveryTarget(deps.channels, channelId)
+      if (!resolved.ok) {
+        return {
+          ok: false,
+          reason: resolved.reason === 'no-target'
+            ? 'delivery-no-target-bound'
+            : resolved.reason === 'ambiguous' ? 'delivery-ambiguous-target' : 'channel-rejected'
+        }
+      }
 
       const result = await deps.deliver({
-        channelId,
-        agentId: channel.agentId,
+        channelId: resolved.channelId,
+        agentId: resolved.agentId,
         conversationId: resolved.conversationId,
         source: 'notification',
         // 幂等键 = 记录 id：同一条记录重发不会在通道侧变成两次（通道方案 §2.2）。

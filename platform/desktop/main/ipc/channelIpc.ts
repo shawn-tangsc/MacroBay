@@ -79,6 +79,10 @@ export function registerChannelIpc(
     const value = asChannelInput(input)
     return channelManagementService.listRuntimeAudits({ id: value.id, limit: value.limit, cursor: value.cursor })
   })
+  ipcMain.handle(IpcChannels.channelsSendTestMessage, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelManagementService.sendTestMessage({ id: value.id, text: value.text })
+  })
   ipcMain.handle(IpcChannels.channelsListPolicies, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     return channelManagementService.listPolicies({ id: value.id, limit: value.limit })

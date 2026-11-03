@@ -97,6 +97,12 @@ describe('desktop main IPC surface', () => {
     // 只读面：这条投影不许长出现在时之外的写入入口。
     expect(preloadSource).not.toContain('channelsListDeliveryTargets, write')
   })
+  it('keeps the channel test message wired on both halves of the seam', () => {
+    // 「发一条测试消息」必须真的走一次投递：只留 preload 方法或只留 handler，就是假按钮。
+    expect(channelIpcSource).toContain('IpcChannels.channelsSendTestMessage')
+    expect(channelIpcSource).toContain('channelManagementService.sendTestMessage(')
+    expect(preloadSource).toContain('sendTestMessage: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input)')
+  })
   it('keeps the read-only runtime-audit page wired on both halves of the seam', () => {
     // 设置页日志面板的「运行异常」全靠这一条；两半缺一条，面板只会诚实地说「没读出来」。
     expect(channelIpcSource).toContain('IpcChannels.channelsListRuntimeAudits')

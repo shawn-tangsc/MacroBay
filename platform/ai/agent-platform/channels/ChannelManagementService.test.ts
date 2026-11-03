@@ -1315,3 +1315,21 @@ describe('channel runtime audits', () => {
     expect(service.listRuntimeAudits({ id, limit: 200 }).rows).toHaveLength(200)
   })
 })
+
+describe('channel test message through the management service', () => {
+  it('reports not-ready when no delivery service is installed, instead of pretending it sent', async () => {
+    const { service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    await expect(service.sendTestMessage({ id, text: '测试消息' })).resolves.toEqual({ state: 'failed', reason: 'not-ready' })
+  })
+
+  it('rejects an empty or oversized text at the service boundary', async () => {
+    const { service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    service.setDelivery({ deliver: async () => ({ status: 'delivered', attemptId: 'a', errorCode: null }) })
+    await expect(service.sendTestMessage({ id, text: '   ' })).rejects.toThrow('channel-input-invalid')
+    await expect(service.sendTestMessage({ id, text: 'x'.repeat(501) })).rejects.toThrow('channel-input-invalid')
+    // 频道不存在是同步校验，直接抛，不是 promise rejection。
+    expect(() => service.sendTestMessage({ id: 'missing-channel', text: 'ok' })).toThrow('channel-not-found')
+  })
+})

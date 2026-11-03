@@ -114,6 +114,8 @@ const api = {
     listDeliveryAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input),
     /** 运行审计一页（只读）：`{ id, limit?, cursor? }`；游标形状 `{ createdAt, id }`。 */
     listRuntimeAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input),
+    /** 真发一条测试消息：`{ id, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
+    sendTestMessage: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input),
     listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input),
     deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input),

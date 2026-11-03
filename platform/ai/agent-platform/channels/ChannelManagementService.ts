@@ -13,6 +13,8 @@ import {
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
+import { projectChannelCatalog } from './channelCatalogProjection'
+import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { clampAuditLimit, readAuditCursor } from './channelRuntimeAuditPage'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
@@ -26,6 +28,8 @@ type ManagementDependencies = {
   registry: ChannelAdapterAcceptanceRegistry
   acceptance?: { isSupported: (adapterType: AgentChannelType) => boolean }
   handoff: ChannelSecureHandoff
+  /** 出站投递（『发一条测试消息』用）；组合根装上才有，没装则回执 `not-ready`。 */
+  delivery?: { deliver(request: import('./ChannelDeliveryContracts').ChannelDeliveryRequest): Promise<import('./ChannelDeliveryContracts').ChannelDeliveryResult> }
   runtime?: {
     start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean>
     stop: (channelId: string, ownerToken?: string) => void
@@ -37,9 +41,11 @@ type MutationInput = { id: unknown; actorId: unknown }
 
 export class ChannelManagementService {
   private readonly credentials: ChannelManagementCredentialService
+  private readonly testMessage: ReturnType<typeof createChannelTestMessageSender>
   private readonly channelMutations = new Map<string, Promise<void>>()
 
   constructor(private readonly deps: ManagementDependencies) {
+    this.testMessage = createChannelTestMessageSender({ channels: () => this, deliver: () => this.deps.delivery, now: () => this.now() })
     this.credentials = new ChannelManagementCredentialService({
       repository: deps.repository,
       vault: deps.vault,
@@ -49,22 +55,18 @@ export class ChannelManagementService {
     })
   }
 
+  setDelivery(delivery: NonNullable<ManagementDependencies['delivery']>): void {
+    this.deps.delivery = delivery
+  }
+
   setRuntime(runtime: NonNullable<ManagementDependencies['runtime']>): void {
     this.deps.runtime = runtime
   }
 
   catalog(): ChannelManagementCatalogEntry[] {
-    return this.deps.registry.list().map((entry) => {
-      const descriptor = channelAdapterDescriptor(channelAdapterKeyForType(entry.adapterType))
-      return {
-        type: entry.adapterType,
-        status: entry.status === 'supported' ? 'supported' : entry.status === 'planned' ? 'planned' : 'blocked',
-        reason: entry.status === 'supported' ? 'evidence-complete' : entry.status === 'planned' ? 'release-a-pending' : 'adapter-blocked',
-        implemented: descriptor.implemented,
-        credentialFields: descriptor.credentialFields
-      }
-    })
+    return projectChannelCatalog(this.deps.registry.list())
   }
+
 
   list() {
     return this.deps.repository.query.list()
@@ -133,17 +135,16 @@ export class ChannelManagementService {
     )
   }
 
-  /**
-   * 设置页日志面板的「运行异常」：只读、按频道、keyset 分页。
-   *
-   * `limit` 由**服务端**夹到 200 以内（不是只靠界面传小值）：这里是给渲染层用的只读面，
-   * 一旦有人传个 10 万，读的就是整张表。非法值不抛错、退回默认 50——分页器一旦抛错，
-   * 面板只剩一句「没读出来」，而它本来只是想翻页。
-   */
+  /** 设置页日志面板的「运行异常」：只读、keyset 分页；`limit` 由服务端夹到 200（见 `channelRuntimeAuditPage`）。 */
   listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) {
     const id = this.requireChannel(input.id)
     if (this.deps.repository.channelType(id) === 'wechat') return { rows: [], nextCursor: null }
     return this.deps.repository.query.runtimeAudits(id, clampAuditLimit(input.limit), readAuditCursor(input.cursor))
+  }
+
+  /** 真发一条测试消息，回执只有三种：受理 / 已交给通道但没拿到确认 / 失败给平台词。 */
+  sendTestMessage(input: { id: unknown; text: unknown }): Promise<ChannelTestMessageReceipt> {
+    return this.testMessage({ channelId: this.requireChannel(input.id), text: input.text })
   }
 
   get(id: unknown) {
