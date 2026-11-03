@@ -3,6 +3,7 @@ import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import { Drawer } from '@platform/ui/components/drawer'
 import { notificationCopy, type NotificationCopyKey, type NotificationCopyLanguage } from '@platform/i18n/notificationCopy'
 import type {
@@ -34,6 +35,10 @@ type NotificationCenterDrawerProps = {
  * 后者必须走 `notification-unknown`，不能退成空态（那是在说「没有」）、也不能推到权限态。
  */
 type LoadState = 'loading' | 'ready' | 'error' | 'unknown'
+
+/** 药丸标签的键：写死在常量里（守卫用例要求键是字面量，不能拼）。 */
+const PUSH_FAILED_PILL_KEY = 'notifications.center.pushFailedPill'
+const UNCONFIRMED_PILL_KEY = 'notifications.center.unconfirmedPill'
 
 /**
  * 通知中心抽屉。
@@ -326,15 +331,26 @@ function NotificationRow(props: {
           </span>
         ) : null}
         {item.delivery?.push?.state === 'failed' ? (
-          // 通道失败**不新增条目**：在原条目 meta 里加一句，用危险色；成功则什么都不加。
+          // 通道失败**不新增条目**：结论由药丸说（红只落在圆点与边框），句子保持中性色。
+          // 整句上色在深色底读不清，而且「红一行字」比一个标签更像报错。
           <span className="notification-center-push-failed" role="note" data-push-failed>
-            {labels.centerPushFailed(item.delivery?.push?.reason ?? '')}
+            <StatusPill
+              tone="bad"
+              labelKey={PUSH_FAILED_PILL_KEY}
+              resolveText={(key) => (key === PUSH_FAILED_PILL_KEY ? labels.centerPushFailedPill : key)}
+            />
+            <span className="notification-center-meta-text">{labels.centerPushFailed(item.delivery?.push?.reason ?? '')}</span>
           </span>
         ) : null}
         {item.delivery?.desktop?.state === 'sent-accepted' ? (
           // 交给系统了不等于读者看到了：只写「未确认显示」，不写「已显示」。
           <span className="notification-center-unconfirmed" data-unconfirmed>
-            {labels.centerUnconfirmed}
+            <StatusPill
+              tone="muted"
+              labelKey={UNCONFIRMED_PILL_KEY}
+              resolveText={(key) => (key === UNCONFIRMED_PILL_KEY ? labels.centerUnconfirmedPill : key)}
+            />
+            <span className="notification-center-meta-text">{labels.centerUnconfirmed}</span>
           </span>
         ) : null}
         {longBody ? (

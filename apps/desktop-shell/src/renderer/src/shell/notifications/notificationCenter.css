@@ -6,3 +6,23 @@
   color: var(--muted);
   text-align: center;
 }
+
+/*
+ * 条目 meta 的两条结论行（规范 v2.5.2）：
+ * 结论由 `StatusPill` 说（红只落在圆点与边框），句子保持中性色——
+ * 这里**只写布局**，不写 `color`，尤其不写 `--danger`，否则 `check:danger-color` 立刻红。
+ */
+.notification-center-push-failed,
+.notification-center-unconfirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  max-width: 100%;
+}
+
+.notification-center-meta-text {
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
