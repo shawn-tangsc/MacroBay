@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
+import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
+import { notifyEtfOutflowSignals, type SignalNoticeSubmit } from '../signals/etfOutflowNotifier'
 import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
@@ -24,6 +26,11 @@ export function createEtfCurrentStateRefreshService(deps: {
   requestWindow: () => Promise<EtfWindowRequestResult>
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
+  /**
+   * 通知入口。只在**这一轮真的写入了新流水**（`updated`）之后才问信号，且不 await：
+   * 一条通知发不出去不该把已经落库的行情判成失败，也不该让采集任务等它。
+   */
+  submitSignal?: SignalNoticeSubmit
 }) {
   return {
     async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
@@ -39,12 +46,34 @@ export function createEtfCurrentStateRefreshService(deps: {
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
         const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate })
-        return built ? deps.store.replace({ window: built, verifiedAt: fetchedAt }) : unavailable()
+        if (!built) return unavailable()
+        // `replace` is async: the write's own verdict decides whether this round produced news.
+        const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
+        if (replaced.state === 'updated') void notifySignals(deps.submitSignal, built, fetchedAt)
+        return replaced
       } catch {
         return unavailable()
       }
     }
   }
+}
+
+/**
+ * 两个资产各自的信号，读的是刚写进 store 的同一份窗口。
+ *
+ * 只有完整窗口才会被 `buildEtfOutflowSignal` 判成 `available`；不足三日的信息是
+ * `unavailable`（还没轮到它说话），通知层会把它挡掉，这里不另判一次。
+ */
+function notifySignals(
+  submit: SignalNoticeSubmit | undefined,
+  window: Readonly<{ btc: readonly EtfDailyFlow[]; eth: readonly EtfDailyFlow[] }>,
+  asOf: string
+): Promise<void> {
+  const signals = (['btc', 'eth'] as const).flatMap((asset) => {
+    const signal = buildEtfOutflowSignal({ asset, rows: window[asset], asOf })
+    return signal ? [signal] : []
+  })
+  return notifyEtfOutflowSignals(submit, signals)
 }
 
 async function enabled(read: () => Promise<boolean>): Promise<boolean> {
