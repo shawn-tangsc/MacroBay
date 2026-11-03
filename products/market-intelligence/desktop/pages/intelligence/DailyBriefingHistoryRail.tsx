@@ -83,7 +83,10 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
     <div role="list" className="mi-daily-briefing__rail-list">
       {editions.map((edition) => {
         const missing = edition.state === 'missing'
-        const selected = edition.date === selectedDate && (selectedLocale ?? locale) === edition.locale
+        // One row is one issue, whatever language of it is on screen: the row stays current when the
+        // reader switches language in place, and the pressed language follows what is shown.
+        const selected = edition.date === selectedDate
+        const shownLocale = selected ? (selectedLocale ?? edition.locale) : edition.locale
         const key = `${edition.date}:${edition.periodId}:${edition.locale}`
         const open = expanded === key
         const shown = attempts[key]
@@ -122,7 +125,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
           </button>
           <div className="mi-daily-briefing__rail-side">
             {!missing && edition.availableLocales.length > 1 ? edition.availableLocales.map((available) =>
-              <button key={available} type="button" aria-pressed={available === edition.locale}
+              <button key={available} type="button" aria-pressed={available === shownLocale}
                 className="mi-daily-briefing__rail-lang" data-locale={available}
                 onClick={() => onSelect(edition.date, available)}>
                 {text.history.languages[available]}

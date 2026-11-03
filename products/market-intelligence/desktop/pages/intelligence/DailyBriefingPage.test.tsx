@@ -286,6 +286,33 @@ describe('daily briefing page', () => {
     expect(client.get).toHaveBeenCalledTimes(2)
   })
 
+  it('moves the pressed language with the edition it loads in place', async () => {
+    // The row summary carries the issue's primary language (Chinese). Reading the English version
+    // of the same issue must move the pressed button, or the reader sees English text under a
+    // Chinese button.
+    const chinese = briefingDocument('2026-10-30')
+    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const } }
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: [{ ...editions[0], availableLocales: ['zh-CN', 'en-US'] as const }] }
+      })),
+      get: vi.fn(async ({ locale }: { locale: string }) =>
+        ({ state: 'available' as const, document: locale === 'en-US' ? english : chinese }))
+    })
+    const dom = await renderPage(client)
+    const englishButton = dom.querySelector<HTMLButtonElement>('[data-locale="en-US"]')!
+    expect(englishButton.getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => { englishButton.click() })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
+    expect(dom.querySelector('[data-locale="en-US"]')?.getAttribute('aria-pressed')).toBe('true')
+    expect(dom.querySelector('[data-locale="zh-CN"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
+  })
+
   it('copies the current edition as text and reports success', async () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
