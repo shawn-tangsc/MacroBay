@@ -1,7 +1,7 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
-import { signalTriggerKey, type ModuleSignal } from '../../../contracts/moduleSignal'
+import { signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import type { SignalAnalysisRequest, SignalAnalysisOutcome } from '../jobs/requestSignalAnalysis'
 import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
@@ -94,18 +94,17 @@ export function analysisRequestFor(signal: ModuleSignal): SignalAnalysisRequest 
   // "Nothing was read" is not "the rule fired"; a low-severity mark is the chip's business only.
   if (signal.readiness !== 'available' || signal.asset === null) return undefined
   if (signal.severity !== 'medium' && signal.severity !== 'high') return undefined
-  const triggerKey = signalTriggerKey(signal.moduleId, signal.ruleId)
-  if (triggerKey === undefined) return undefined
+  // This rule judges one closed bucket, not a 24-hour window: the window belongs to the rule, not
+  // to the reader and not to the receiver.
+  const window = signalWindow(signal.cadence, 1)
+  if (window === undefined) return undefined
   return {
-    triggerKey,
-    moduleId: signal.moduleId,
-    ruleId: signal.ruleId,
+    // Hand over the signal itself: key, asset, severity, instant and dedupe key all come from it,
+    // so the entry cannot be told two different things about one reading.
+    signal,
+    window,
     // The open-interest board is the funding one; reusing the existing group type, not a new one.
-    groupType: 'funding',
-    severity: signal.severity,
-    observedAt: signal.observedAt,
-    // The bucket key the signal was deduplicated on: module, rule, asset and the same bucket.
-    changeHash: signal.dedupeKey
+    groupType: 'funding'
   }
 }
 

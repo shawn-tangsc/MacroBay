@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { signalTriggerKey } from '../../../contracts/moduleSignal'
 import {
   createOpenInterestSignalNotifier,
   createSignalledOpenInterestRefresh,
@@ -155,7 +156,7 @@ describe('signals follow a successful collection', () => {
 describe('handing a fired signal to the analysis entry', () => {
   const queued = { state: 'queued' as const, groupId: 'group-1', attemptLedgerId: 'ledger-1', jobRunId: 'job-1' }
 
-  it('hands the registered key and the bucket the signal belongs to', async () => {
+  it('hands the signal itself, with the rule\'s own one-bucket window', async () => {
     const requestAnalysis = vi.fn(async () => queued)
     const wrapped = createSignalledOpenInterestRefresh({
       refresh: async () => ({ state: 'updated' as const }),
@@ -165,17 +166,24 @@ describe('handing a fired signal to the analysis entry', () => {
     })
     await wrapped.refresh()
     expect(requestAnalysis).toHaveBeenCalledTimes(1)
-    // Exactly what the receiver consumes: the key the budget recognises, the board, the reading's
-    // own instant, and the bucket key so two assets are two changes of one trigger.
-    expect(requestAnalysis.mock.calls[0]![0]).toEqual({
-      triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+    // One object, no scalar copies: the reading, its asset, its bucket and its severity all travel
+    // together, so the entry cannot be told two different things about one signal.
+    const request = requestAnalysis.mock.calls[0]![0]
+    expect(request.groupType).toBe('funding')
+    expect(request.signal).toMatchObject({
       moduleId: 'open-interest',
       ruleId: 'oi-liquidation-proxy',
-      groupType: 'funding',
+      asset: 'btc',
       severity: 'high',
       observedAt: bucketAt,
-      changeHash: 'open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z'
+      readiness: 'available',
+      values: { dropPct: -2.7, volumeMultiple: 3.4, notionalUsd: 7.4e9 }
     })
+    expect(request.signal.dedupeKey).toBe('open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z')
+    // The chip says "15 minutes": one closed bucket, never a 24-hour window borrowed from another rule.
+    expect(request.window).toEqual({ unit: 'buckets', amount: 1, bucketMs, upperBoundMs: bucketMs })
+    // The key the budget recognises is built by the contract, not by this call site.
+    expect(signalTriggerKey(request.signal.moduleId, request.signal.ruleId)).toBe('signal.open-interest.oi-liquidation-proxy')
   })
 
   it('binds after construction, because the runtime is assembled later', async () => {
