@@ -1,20 +1,27 @@
 import { Switch } from 'antd'
 
+import { ChannelDeliveryRow } from './ChannelDeliveryRow'
+import type { ChannelRowState } from './channelRow'
 import type { NotificationSettingsText } from './notificationSettingsText'
 
 /**
- * 四个本机落点，一行一个控件（规范 §2）。
+ * 四个本机落点 + 一条出站通道，一行一件事（规范 §2）。
  *
- * 「发送到通道」那一行不在这里：发到手机的能力还没被批准，也没有数据源。
- * 画出来就是一句现在为假的话——按「渲染写好了、数据源不存在 = 没做」整块摘掉。
+ * 通道那一行曾经被整块摘掉，理由写的是「发到手机的能力还没被批准」——CLI 真机证据一落库、
+ * 通道可以启用以后，这句话就不成立了：不画这一行，读者在界面里**根本选不到**已经可用的通道。
+ * 现在按 §2.1 的四个处境画，形态在 `channelRow.ts` 里算。
  *
  * 这一块的硬规矩：**一件事只有一个控件**。曾经这里是「行开关 + 逐条勾选」两套，
  * 于是取消订阅后行开关还亮着、清单里那个勾也还亮着，读者无法判断哪个算数。
+ * 通道行同理：它没有开关，开关是清单里的「通道」列。
  */
 export function DeliveryRows(props: {
   text: NotificationSettingsText
   toastEnabled: boolean
   onToastChange: (next: boolean) => void
+  channel: ChannelRowState
+  channelTimeZone: string
+  onSelectChannel: (channelId: string) => void
 }): React.ReactElement {
   const { text } = props
 
@@ -66,6 +73,14 @@ export function DeliveryRows(props: {
           </span>
         </span>
       </div>
+
+      {/* 发送到通道：选择器 + 目标（只读）+ 状态行 + 一个动作，**没有开关**。 */}
+      <ChannelDeliveryRow
+        text={text}
+        state={props.channel}
+        timeZone={props.channelTimeZone}
+        onSelectChannel={props.onSelectChannel}
+      />
 
     </div>
   )

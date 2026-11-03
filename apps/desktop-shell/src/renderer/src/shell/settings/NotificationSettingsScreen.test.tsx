@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { ChannelDeliveryTargetView } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { NotificationEventCatalogEntry } from '@platform/notifications/contracts/notificationEventCatalog'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
@@ -165,7 +166,7 @@ describe('notification settings screen', () => {
     expect(recordBoxes.length).toBe(1)
   })
 
-  it('keeps four delivery rows and shows nothing about phones or channels', async () => {
+  it('keeps the four on-device rows and adds the outbound channel row', async () => {
     const container = await mount({
       listEventCatalog: () => Promise.resolve([]),
       getSubscriptions: () => Promise.resolve({}),
@@ -176,10 +177,7 @@ describe('notification settings screen', () => {
     expect(container.querySelector('[data-row="toast"]')).not.toBeNull()
     expect(container.querySelector('[data-row="desktop"]')).not.toBeNull()
     expect(container.querySelector('[data-row="popup"]')).not.toBeNull()
-    // 没有任何「发到手机 / 通道绑定」的东西：这个能力还不存在，画出来就是一句现在为假的话。
-    expect(container.querySelector('[data-row="channel"]')).toBeNull()
-    expect(container.querySelector('select')).toBeNull()
-    expect(container.textContent).not.toContain('通道')
+    expect(container.querySelector('[data-row="channel"]')).not.toBeNull()
   })
 
   it('tells an empty catalog apart from a failed read', async () => {
@@ -192,5 +190,176 @@ describe('notification settings screen', () => {
     expect(container.querySelector('[data-subs-empty]')).not.toBeNull()
     // 空不等于错：这里不该出现错误视图。
     expect(container.querySelector('[data-state="error"]')).toBeNull()
+  })
+})
+
+function channelTarget(overrides: Partial<ChannelDeliveryTargetView> = {}): ChannelDeliveryTargetView {
+  return {
+    id: 'telegram-1',
+    name: 'Telegram · 观潮播报',
+    deliverable: true,
+    reason: null,
+    target: { kind: 'bound', conversationKind: 'direct' },
+    ...overrides
+  }
+}
+
+/**
+ * 「发送到通道」这一行（U3 / U10）：没有通道时只给原因与「去接入」，有通道时给选择器、
+ * 目标（只读）和状态；两种情况都不许出现行开关——开关在下面清单的通道列里。
+ */
+describe('the send-to-channel row', () => {
+  it('offers no selector and one way forward when nothing can deliver', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')
+    // 空下拉会把「没有」说成「挑一个」。
+    expect(row?.querySelector('select')).toBeNull()
+    expect(row?.textContent).toContain('还没有可用通道')
+    expect(row?.textContent).toContain('需要一条真机验证记录才能启用')
+    expect(row?.querySelector('.status-pill')?.textContent).toBe('未接入')
+    expect([...row!.querySelectorAll('button')].map((node) => node.textContent)).toEqual(['去接入'])
+    // 这一行永远没有开关：推送由清单的通道列决定。
+    expect(row?.querySelector('[role="switch"], input[type="checkbox"]')).toBeNull()
+  })
+
+  it('sends the reader to the channel page from its one action, instead of a dead button', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+    const navigations: unknown[] = []
+    const listener = (event: Event): void => navigations.push((event as CustomEvent).detail)
+    window.addEventListener('app-shell:navigate', listener)
+
+    const button = container.querySelector('[data-row="channel"] button')
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    window.removeEventListener('app-shell:navigate', listener)
+
+    // 通道页是唯一能接入/绑目标的地方：按钮必须真的把人送过去。
+    expect(navigations).toEqual([{ navKey: 'settings', settingsPanelKey: 'channels' }])
+  })
+
+  it('lists only the channels that can deliver, and says pushing is off until one is picked', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [
+            channelTarget(),
+            channelTarget({ id: 'slack-1', name: 'Slack · 实验室', deliverable: false, reason: 'not-enabled' })
+          ],
+          channelId: null,
+          toastEnabled: false
+        })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    const options = [...row.querySelectorAll('select option')].map((node) => node.textContent)
+    // U10：只有接得上的那一条出现在这里，没验证过的不出现、也不留灰格。
+    expect(options).toContain('Telegram · 观潮播报')
+    expect(options).not.toContain('Slack · 实验室')
+    // 有通道但没选 ≠ 未接入。
+    expect(row.textContent).toContain('还没有选通道')
+    expect(row.textContent).not.toContain('还没有可用通道')
+  })
+
+  it('shows the bound target read-only and stays quiet when the channel is ready', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({ channels: [channelTarget()], channelId: 'telegram-1', toastEnabled: false })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    expect(row.querySelector('[data-channel-target]')?.textContent).toBe('目标私聊')
+    // 成功不打标：没有药丸、没有句子。
+    expect(row.querySelector('.status-pill')).toBeNull()
+    expect(row.querySelector('[data-channel-state]')).toBeNull()
+  })
+
+  it('writes the last failure with the reader time zone and never claims it arrived', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [channelTarget()],
+          channelId: 'telegram-1',
+          lastPushFailureAt: '2026-11-02T13:37:00.000Z',
+          toastEnabled: false
+        })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    expect(row.querySelector('.status-pill')?.textContent).toBe('推送失败')
+    // 时刻带时区（GMT+8），不是原始 ISO。
+    expect(row.textContent).toContain('11-02 21:37 GMT+8')
+    expect(row.textContent).not.toContain('2026-11-02T13:37')
+    expect(row.textContent).not.toContain('已送达')
+  })
+
+  it('goes to the channel page for a target that is missing or ambiguous', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [channelTarget({ target: { kind: 'ambiguous', count: 2 } })],
+          channelId: 'telegram-1',
+          toastEnabled: false
+        })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    expect(row.textContent).toContain('绑了多个会话')
+    expect([...row.querySelectorAll('button')].map((node) => node.textContent)).toEqual(['去检查'])
+  })
+})
+
+/**
+ * 订阅清单的第三列（U3/U10 的另一半）：就绪前整列不出现，就绪后批准含 channel 的才是勾，
+ * 其余是灰色「—」，不是置灰的勾。
+ */
+describe('the channel column', () => {
+  it('is absent while the channel is not ready', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([entry()]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+
+    expect(container.querySelector('[data-channel-column]')?.getAttribute('data-channel-column')).toBe('hidden')
+    expect(container.textContent).not.toContain('这条不会到手机')
+  })
+
+  it('appears with a real tick for approved events and a dash for the rest', async () => {
+    const container = await mount({
+      listEventCatalog: () =>
+        Promise.resolve([
+          entry({ id: 'platform.signal', approvedDisruptionLevels: ['center', 'desktop', 'channel'] }),
+          entry({ id: 'platform.other', approvedDisruptionLevels: ['center', 'desktop'] })
+        ]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({ channels: [channelTarget()], channelId: 'telegram-1', toastEnabled: false }),
+      setSubscription: () => Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-channel-column]')?.getAttribute('data-channel-column')).toBe('shown')
+    const channelBoxes = container.querySelectorAll('input[type="checkbox"][aria-label*="通道"]')
+    // 只有批准含 channel 的那一行是控件；另一行是灰色「—」。
+    expect(channelBoxes.length).toBe(1)
+    expect(container.querySelectorAll('.notification-subs-dash').length).toBeGreaterThan(0)
+    expect(container.textContent).toContain('这条不会到手机')
   })
 })

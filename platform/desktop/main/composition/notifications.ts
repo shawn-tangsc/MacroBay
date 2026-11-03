@@ -38,6 +38,13 @@ export type NotificationCompositionPorts = Readonly<{
   diagnostics?: NotificationDiagnosticsSink
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
+  /**
+   * 通知设置页「发送到通道」那一行读的只读投影：可选通道 + 目标绑定。
+   *
+   * 不传的话运行时会把它当成「没有任何可投递通道」，界面就永远说「还没有可用通道」——
+   * 明明能发、界面却说没有，这是最坏的一种谎：读者以为功能不存在。
+   */
+  getPushTargets?: () => Promise<readonly unknown[]>
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -70,7 +77,8 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),
-    ...(ports.push === undefined ? {} : { push: ports.push })
+    ...(ports.push === undefined ? {} : { push: ports.push }),
+    ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })
   })
 }
 
@@ -106,6 +114,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     timeZone: ports.timeZone,
     manifests: ports.manifests,
     push,
+    getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     updateSettings: async (patch) => {
       const current = await ports.settingsStore.get()
       await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })

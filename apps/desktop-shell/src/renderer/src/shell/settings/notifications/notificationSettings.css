@@ -72,6 +72,21 @@
   flex: none;
 }
 
+.notification-channel-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.notification-channel-target b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* 可选宽度不写死：通道名长短由数据决定，写死就会截断成两条不同的通道。 */
 .notification-channel-select {
   min-width: 186px;
   height: 28px;
@@ -83,7 +98,7 @@
   border-radius: 6px;
 }
 
-/* 订阅清单：三列固定宽，清单名字吃掉剩余宽度。 */
+/* 订阅清单：三列固定宽，清单名字吃掉剩余宽度；通道就绪时才多出第四列（`.notification-subs--channel`）。 */
 .notification-subs {
   display: grid;
   gap: 0;
@@ -95,10 +110,16 @@
 .notification-subs-head,
 .notification-subs-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px 84px 84px;
+  grid-template-columns: minmax(0, 1fr) 64px 84px;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
+}
+
+/* 通道就绪时才有的那一次列宽变化；列不在时不留下一条空轨道。 */
+.notification-subs--channel .notification-subs-head,
+.notification-subs--channel .notification-subs-row {
+  grid-template-columns: minmax(0, 1fr) 64px 84px 84px;
 }
 
 .notification-subs-head {

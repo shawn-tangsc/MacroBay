@@ -19,6 +19,7 @@ const runtime = read('platform/notifications/ipc/registerNotificationIpc.ts')
 const channels = read('platform/desktop/ipc/channels.ts')
 // 桥面按命名空间拆分后，通知这一段住在这里；读错文件会让这条守卫永远绿（等于没守）。
 const preload = read('platform/desktop/preload/namespaces/notifications.ts')
+const composition = read('platform/desktop/main/composition/notifications.ts')
 
 describe('应用内投递的接线', () => {
   it('运行时把 toast 与 popup 两个钩子都接上', () => {
@@ -33,6 +34,13 @@ describe('应用内投递的接线', () => {
     // 混用会让渲染层分不清「有新通知要弹」与「某条记录改了状态」，横幅会在标已读时也弹一次。
     expect(channels).toContain("notificationsDelivered: 'platform:notifications-delivered'")
     expect(channels).toContain("notificationsChanged: 'platform:notifications-changed'")
+  })
+
+  it('把可投递通道的投影接进运行时，否则设置页永远说「还没有可用通道」', () => {
+    // 这一处断掉时不会有任何单测红：通道能发、CLI 证据也在，但 `getPushTargets` 缺席，
+    // 运行时按「没有任何可投递通道」返回，界面把「能发」说成「没有」——最坏的一种谎。
+    expect(composition).toContain('getPushTargets: async () => ports.channels.listDeliveryTargets().channels')
+    expect(composition).toContain('...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets })')
   })
 
   it('preload 暴露订阅并返回退订函数', () => {

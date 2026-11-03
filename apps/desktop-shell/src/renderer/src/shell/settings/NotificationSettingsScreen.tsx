@@ -3,9 +3,11 @@ import { useState } from 'react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { Button } from 'antd'
 
 import './notifications/notificationSettings.css'
+import { buildChannelRowState, channelColumnReady } from './notifications/channelRow'
 import { DeliveryRows } from './notifications/DeliveryRows'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
 import { SubscriptionMatrixView } from './notifications/SubscriptionMatrixView'
@@ -28,8 +30,19 @@ export function NotificationSettingsScreen(props: {
 }): React.ReactElement {
   const text = notificationSettingsText[props.language]
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
-  const { state, reload, setSubscription, setToast } = useNotificationSettingsData(client)
+  const { state, reload, setSubscription, setToast, setPushChannel } = useNotificationSettingsData(client)
   const [receipt, setReceipt] = useState<string | null>(null)
+  // 失败时刻按**读者的设置时区**写：这是给人看的时间，不是记账。
+  const timeZone = useShellTimeZone()
+
+  const channelRow =
+    state.status === 'ready'
+      ? buildChannelRowState({
+        channels: state.data.channels,
+        channelId: state.data.channelId,
+        lastPushFailureAt: state.data.lastPushFailureAt
+      })
+      : ({ kind: 'not-wired' } as const)
 
   return (
     <section className="settings-detail-pane preferences-pane notification-settings-pane">
@@ -56,6 +69,9 @@ export function NotificationSettingsScreen(props: {
             text={text}
             toastEnabled={state.data.toastEnabled}
             onToastChange={(next) => void setToast(next)}
+            channel={channelRow}
+            channelTimeZone={timeZone}
+            onSelectChannel={(channelId) => void setPushChannel(channelId)}
           />
 
           <div className="notification-settings-test">
@@ -82,7 +98,9 @@ export function NotificationSettingsScreen(props: {
               <SubscriptionMatrixView
                 rows={buildSubscriptionRows({
                   entries: state.data.catalog,
-                  subscriptions: state.data.subscriptions
+                  subscriptions: state.data.subscriptions,
+                  // 通道列只在「已接入 + 已选 + 目标已绑定」时出现；否则整列不画（规范 §2.2）。
+                  channelReady: channelColumnReady(channelRow)
                 })}
                 text={text}
                 onToggle={(id, level, next) => void setSubscription(id, level, next)}

@@ -24,6 +24,36 @@ export type NotificationSettingsText = {
   desktopCannotRead: string
   popupRow: string
   popupDisabled: string
+  channelRow: string
+  channelDesc: string
+  /**
+   * 没有可投递通道时的那句结论。**不画选择器**：空下拉会把「没有」说成「挑一个」，
+   * 而这一行真正能给的只有一个动作——去通道页接入。
+   */
+  channelNone: string
+  channelNeedsEvidence: string
+  /** 有通道但还没选：这是「推送关着」，不是「没有通道」，两句话不能混。 */
+  channelUnselected: string
+  channelUnbound: string
+  channelAmbiguous: string
+  /** 失败句：时刻由 `formatShellCompactInstant` 产出，调用点只把它放进模板。 */
+  channelPushFailed: (at: string) => string
+  channelTargetLabel: string
+  channelTargetDirect: string
+  channelTargetGroup: string
+  channelTargetChannel: string
+  channelChoosePlaceholder: string
+  goConnect: string
+  goCheck: string
+  /** 药丸只收状态词；这三句是词，不是句子。 */
+  pillNotWired: string
+  pillPushFailed: string
+  /** 药丸键解析不到时的那一句：宁可说「读不出来」，也不回显键名。 */
+  pillUnavailable: string
+  subsColChannel: string
+  notApprovedChannel: string
+  /** 「已记录（因勾了桌面、通道）」的连接词：两种语言的分隔规则不同，不能在这里写死。 */
+  surfaceJoin: string
   /** 失败这个**结论**用 StatusPill 说：红只落在圆点与边框上，不落在句子上（见下方说明）。 */
   subsHeading: string
   subsColRecord: string
@@ -68,6 +98,27 @@ const zh: NotificationSettingsText = {
     '横幅由系统弹出，我们读不到系统里的通知开关。没看到横幅，就去「系统设置 › 通知 › MacroBay」打开允许通知，再点一次「发送测试通知」。',
   popupRow: '高优先级弹窗',
   popupDisabled: '这个版本还没有实现弹窗；需要立刻叫醒你的事，现在走横幅，位置先留着。',
+  channelRow: '发送到通道',
+  channelDesc: '推送哪些事件在下方清单的通道列勾；这一行只选通道和看状态，没有开关。',
+  channelNone: '还没有可用通道',
+  channelNeedsEvidence: '需要一条真机验证记录才能启用；状态在通道接入页',
+  channelUnselected: '还没有选通道：推送现在是关着的，选一条才会发到手机',
+  channelUnbound: '目标未绑定：还看不出会发到哪个会话',
+  channelAmbiguous: '这个通道绑了多个会话，请到通道页只保留一个；现在不发，也不替你挑',
+  channelPushFailed: (at) => `最近一次推送没发出去 · ${at}`,
+  channelTargetLabel: '目标',
+  channelTargetDirect: '私聊',
+  channelTargetGroup: '群聊',
+  channelTargetChannel: '频道',
+  channelChoosePlaceholder: '选择通道',
+  goConnect: '去接入',
+  goCheck: '去检查',
+  pillNotWired: '未接入',
+  pillPushFailed: '推送失败',
+  pillUnavailable: '状态读不出来',
+  subsColChannel: '通道',
+  notApprovedChannel: '这条不会到手机',
+  surfaceJoin: '、',
   // 「失败」是结论，交给 StatusPill；句子本身用中性文字——`--danger` 在深色底上只有 3.25–3.94，
   // 一整句红字读不清，那不是风格问题而是可读性问题。
   subsHeading: '订阅清单',
@@ -123,6 +174,30 @@ const en: NotificationSettingsText = {
   popupRow: 'High-priority popup',
   popupDisabled:
     'This version does not implement popups. Anything that must wake you now goes through the banner, and the place is kept for it.',
+  channelRow: 'Send to channel',
+  channelDesc:
+    'Which events get pushed is decided by the channel column below; this row only picks the channel and shows its state, with no switch.',
+  channelNone: 'No channel is available yet',
+  channelNeedsEvidence:
+    'One real-device verification record is required to enable it; the status is on the Channels page',
+  channelUnselected: 'No channel selected yet: pushing is off, and it reaches your phone once you pick one',
+  channelUnbound: 'No target bound: it is not clear which conversation it would post to',
+  channelAmbiguous:
+    'This channel has several conversations bound; keep only one on the Channels page. Nothing is sent, and we do not pick for you.',
+  channelPushFailed: (at) => `The last push did not go out · ${at}`,
+  channelTargetLabel: 'Target',
+  channelTargetDirect: 'Direct message',
+  channelTargetGroup: 'Group chat',
+  channelTargetChannel: 'Channel',
+  channelChoosePlaceholder: 'Choose a channel',
+  goConnect: 'Connect',
+  goCheck: 'Check',
+  pillNotWired: 'Not connected',
+  pillPushFailed: 'Push failed',
+  pillUnavailable: 'Status cannot be read',
+  subsColChannel: 'Channel',
+  notApprovedChannel: 'This never goes to the phone',
+  surfaceJoin: ' and ',
   subsHeading: 'Subscriptions',
   subsColRecord: 'Record',
   subsColDesktop: 'Desktop',
