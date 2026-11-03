@@ -9,6 +9,9 @@ The component wraps antd `Drawer` — focus trap, scroll lock, portal, mask, Esc
 its job, not ours — and fixes the three things that had drifted across 16 call sites: the width, the
 header, and the close control.
 
+If closing the drawer can discard what the reader typed, the close behaviour is a matrix, not a
+sentence: see [Closing a container that holds unsaved input](unsaved-changes.md).
+
 ## The component
 
 | Export | Use it for |
