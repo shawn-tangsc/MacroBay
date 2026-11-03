@@ -49,6 +49,17 @@ export function bucketsInSpan(spanMs: number, bucketMs: number): number {
   return Math.round(spanMs / bucketMs)
 }
 
+/**
+ * How many requests a span needs at a per-request cap.
+ *
+ * Newest first, one request per batch: the batch count is the coverage, so a finer bucket widens
+ * the plan instead of quietly growing a single request past the endpoint's limit.
+ */
+export function batchesForSpan(spanMs: number, perRequestCap: number, bucketMs: number): number {
+  if (!(perRequestCap > 0)) return Number.POSITIVE_INFINITY
+  return Math.ceil(bucketsInSpan(spanMs, bucketMs) / perRequestCap)
+}
+
 /** The provider's period label for a bucket width (`15m`, `5m`), derived rather than spelled twice. */
 export function bucketPeriodLabel(bucketMs: number): string {
   return `${Math.round(bucketMs / 60_000)}m`
@@ -73,12 +84,17 @@ export const openInterestHistoryPolicy = Object.freeze({
   klinesEndpoint: 'https://fapi.binance.com/fapi/v1/klines',
   /** `openInterestHist` rejects limit > 500, so a cold start is always two requests. */
   /**
-   * `openInterestHist` rejects limit > 500, so a cold start is always two requests. The kline
-   * allowance is the 7-day window in buckets — derived, so a finer bucket widens it instead of
-   * quietly shortening the backfill. A finer bucket may need to respect the endpoint's own cap
-   * when it lands; that is a request-shape question for the step that changes the bucket width.
+   * Per-request caps, not a coverage.
+   *
+   * `openInterestHist` refuses limit > 500; the kline endpoint accepts more than we ever ask, so
+   * 1000 is the conservative ceiling. How much history a round covers is a count of batches
+   * (`batchesForSpan`), deliberately not a bigger number here: one field serving both "how many
+   * per request" and "how far back" is what turned a 7-day backfill into a single oversized
+   * request the moment the bucket got finer.
    */
-  requestLimit: Object.freeze({ openInterest: 500, klines: bucketsInSpan(7 * 86_400_000, openInterestBucketPolicy.storageBucketMs) }),
+  requestLimit: Object.freeze({ openInterest: 500, klines: 1000 }),
+  /** A guard, not a plan: beyond this many batches a round is asking the wrong question. */
+  maximumBatchesPerEndpoint: 6,
   timeoutMs: 15_000,
   maximumResponseBytes: 256 * 1024,
   unavailableFailureCode: 'open-interest-history-query-unavailable' as const,

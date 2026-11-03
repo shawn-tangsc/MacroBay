@@ -49,11 +49,39 @@ describe('open interest refresh', () => {
     const calls = (c.requestOpenInterest as unknown as { mock: { calls: Array<[{ limit: number; endTime?: number }]> } }).mock.calls
     expect(calls[0]![0].limit).toBe(500)
     expect(calls[0]![0].endTime).toBeUndefined()
-    expect(calls[1]![0].limit).toBe(172)
+    // The second page asks for a full page again, not for the remainder: coverage is the page
+    // count, and a per-request cap is not a budget to spend down.
+    expect(calls[1]![0].limit).toBe(500)
     expect(calls[1]![0].endTime).toBe(bucket(15) - 1)
     // Two assets, so four requests in total.
     expect(calls).toHaveLength(4)
     expect(s.upsert).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps the pages it already wrote when a later page fails, and says so in the log', async () => {
+    // Page 2 of open interest fails. What page 1 wrote must stay, the round must not be reported
+    // as a failed read, and the missing page must be explainable from the log — a short round that
+    // reads like a quiet one is how a gap goes unnoticed.
+    let page = 0
+    const c = client()
+    c.requestOpenInterest = vi.fn(async () => {
+      page += 1
+      // One page per asset: btc pages 1-2, eth pages 3-4. Fail every second page.
+      if (page % 2 === 0) return undefined
+      return [{ asset: 'btc' as const, observedMs: bucket(15) - page * 15 * 60_000, notionalUsd: 8e9 }]
+    }) as never
+    const s = store(undefined)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const result = await service({ client: c, store: s }).refresh()
+      expect(result).toEqual({ state: 'updated' })
+      // The successful page of each asset was written; the failed page was not.
+      expect(s.upsert).toHaveBeenCalledTimes(2)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('page=2/2'))
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('endpoint=open-interest'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('asks only for the gap on the steady state', async () => {

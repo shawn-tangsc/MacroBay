@@ -1,4 +1,4 @@
-import { openInterestBucketPolicy, openInterestHistoryPolicy } from '../../../contracts/openInterestHistory'
+import { batchesForSpan, openInterestBucketPolicy, openInterestHistoryPolicy } from '../../../contracts/openInterestHistory'
 import type { OpenInterestClient } from './binanceOpenInterestClient'
 import type { PerpetualPositioningStore, PositioningRow, PositioningVolumeRow } from '../store/perpetualPositioningStore'
 
@@ -18,17 +18,19 @@ export type OpenInterestRefreshDeps = Readonly<{
 }>
 
 /**
- * Collects the 15-minute perpetual positioning series.
+ * Collects the perpetual positioning series.
  *
- * Two rules here are not obvious:
+ * Three rules here are not obvious:
  *
- * 1. `limit` is derived from how far the store has fallen behind, not from a fixed window.
- *    Polling every 15 minutes with `limit=2` fetches one new bucket; after an outage the same
- *    formula asks for the whole gap, so there is no separate backfill path.
- * 2. A cold start cannot ask for 7 days in one request: `openInterestHist` rejects limit > 500.
- *    It asks for 500, then for the 172 before them. A failed second segment is not a failed
- *    round — the next tick closes the gap by itself — which is why the write is per segment
- *    rather than per round.
+ * 1. `limit` on an incremental read is derived from how far the store has fallen behind, not from
+ *    a fixed window. Polling at the bucket width with `limit=2` fetches one new bucket; after an
+ *    outage the same formula asks for the gap, so there is no separate backfill path.
+ * 2. A cold start pages **backwards**: each request asks for the newest page not yet seen and
+ *    passes the previous page's oldest instant as `endTime`. Newest data decides whether a
+ *    reading can be judged at all, and a late arrival fills the recent edge first.
+ * 3. A failed page is not a failed round. Whatever was written stays written, the state stays
+ *    `updated`/`unchanged`, and the next tick closes the gap from `readNewestMs`. The failure is
+ *    logged with its page number so "one segment short" never passes for "nothing happened".
  */
 export function createOpenInterestRefreshService(deps: OpenInterestRefreshDeps) {
   return {
@@ -72,20 +74,46 @@ export function createOpenInterestRefreshService(deps: OpenInterestRefreshDeps) 
 
 type SegmentWrite = Readonly<{ openInterest: readonly (readonly PositioningRow[])[]; klines?: readonly PositioningVolumeRow[] }>
 
+const COLD_START_SPAN_MS = 7 * 86_400_000
+
 async function coldStart(client: OpenInterestRefreshDeps['client'], target: { asset: 'btc' | 'eth'; symbol: string }, collectedAt: string): Promise<SegmentWrite | undefined> {
-  const newest = await client.requestOpenInterest({ asset: target.asset, symbol: target.symbol, limit: openInterestHistoryPolicy.requestLimit.openInterest })
-  if (!newest || newest.length === 0) return undefined
-  const segments: PositioningRow[][] = [newest.map(toOpenInterestRow)]
-  const oldest = newest[0]!.observedMs
-  const older = await client.requestOpenInterest({
-    asset: target.asset,
-    symbol: target.symbol,
-    limit: openInterestHistoryPolicy.requestLimit.klines - openInterestHistoryPolicy.requestLimit.openInterest,
-    endTime: oldest - 1
-  })
-  if (older && older.length > 0) segments.push(older.map(toOpenInterestRow))
-  const klines = await client.requestKlines({ asset: target.asset, symbol: target.symbol, limit: openInterestHistoryPolicy.requestLimit.klines, nowMs: Date.parse(collectedAt) })
-  return { openInterest: segments, klines: klines?.map(toKlineRow) }
+  const caps = openInterestHistoryPolicy.requestLimit
+  const bucketMs = openInterestCollectionPolicy.bucketMs
+  const openInterestPages = Math.min(openInterestHistoryPolicy.maximumBatchesPerEndpoint, batchesForSpan(COLD_START_SPAN_MS, caps.openInterest, bucketMs))
+  const klinePages = Math.min(openInterestHistoryPolicy.maximumBatchesPerEndpoint, batchesForSpan(COLD_START_SPAN_MS, caps.klines, bucketMs))
+  const segments: PositioningRow[][] = []
+  let openInterestEnd: number | undefined
+  for (let page = 0; page < openInterestPages; page += 1) {
+    const rows = await client.requestOpenInterest({
+      asset: target.asset, symbol: target.symbol, limit: caps.openInterest,
+      ...(openInterestEnd === undefined ? {} : { endTime: openInterestEnd })
+    })
+    // A failed page stops this asset's remaining pages: the endpoint already refused one request,
+    // and hammering it for older data is how a rate limit becomes an outage.
+    if (!rows || rows.length === 0) { logFailedSegment(target.asset, 'open-interest', page, openInterestPages); break }
+    segments.push(rows.map(toOpenInterestRow))
+    openInterestEnd = rows[0]!.observedMs - 1
+  }
+  // Not one usable page: this asset has nothing to write, and the caller counts it as failed.
+  if (segments.length === 0) return undefined
+
+  const klines: PositioningVolumeRow[] = []
+  let klineEnd: number | undefined
+  for (let page = 0; page < klinePages; page += 1) {
+    const rows = await client.requestKlines({
+      asset: target.asset, symbol: target.symbol, limit: caps.klines, nowMs: Date.parse(collectedAt),
+      ...(klineEnd === undefined ? {} : { endTime: klineEnd })
+    })
+    if (!rows || rows.length === 0) { logFailedSegment(target.asset, 'klines', page, klinePages); break }
+    klines.push(...rows.map(toKlineRow))
+    klineEnd = rows[0]!.observedMs - 1
+  }
+  return { openInterest: segments, klines }
+}
+
+/** One line per failed page, with its position: a short round must be explainable from logs. */
+function logFailedSegment(asset: string, endpoint: 'open-interest' | 'klines', page: number, pages: number): void {
+  console.warn(`[open-interest] refresh segment failed: asset=${asset} endpoint=${endpoint} page=${page + 1}/${pages}`)
 }
 
 async function appendTail(client: OpenInterestRefreshDeps['client'], target: { asset: 'btc' | 'eth'; symbol: string }, limit: number, collectedAt: string, nowMs: number): Promise<SegmentWrite | undefined> {
