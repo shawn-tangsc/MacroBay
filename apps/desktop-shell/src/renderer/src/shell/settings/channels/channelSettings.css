@@ -270,16 +270,11 @@
 }
 
 .channel-log-level {
+  /* 三档统一中性色 + 600：级别词本身读得出来，颜色只做辅助；
+     正文红字在深色下对比度 3.25–3.94 低于 4.5，所以红不上字。 */
   color: var(--muted-strong);
+  font-weight: 600;
   flex: none;
-}
-
-.channel-log-level[data-log-level='WARN'] {
-  color: var(--caution);
-}
-
-.channel-log-level[data-log-level='ERROR'] {
-  color: var(--danger);
 }
 
 .channel-log-text {
