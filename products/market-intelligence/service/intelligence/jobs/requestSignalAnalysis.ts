@@ -3,7 +3,7 @@ import type { AnalysisRun, EventGroup, EventGroupType } from '../../../contracts
 import { queuedSignalEvidence, type SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import { signalTriggerKey, type ModuleSignal, type SignalWindow } from '../../../contracts/moduleSignal'
 import { eventGroupPolicy } from '../analysis/eventGroupService'
-import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
+import { signalTriggerRetryPolicy, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
 /**
@@ -57,8 +57,8 @@ export const signalAnalysisPolicy = Object.freeze({
   version: 'marketAnalysisSignalEntry.v1',
   /** 与条目组同一个复盘窗口：信号组只当锚，不参与条目路径的关闭/继任。 */
   mergeKeyPrefix: 'signal' as const,
-  /** 入队失败写进那一行的原因码（已登记，时间轴会把它说成「分析没能排上」）。 */
-  freezeUnavailableReasonCode: 'signal-freeze-unavailable' as const,
+  /** 入队失败写进那一行的原因码——与仓库的「可重试」判定同一份常量，不另抄一遍。 */
+  freezeUnavailableReasonCode: signalTriggerRetryPolicy.reasonCode,
   /** 账本行先写的「允许」原因码，按严重度二选一。 */
   queuedReasonCodes: Object.freeze({ medium: 'signal-medium-triggered', high: 'signal-high-triggered' })
 })
@@ -76,15 +76,8 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     if (!await deps.isEnabled()) return { state: 'disabled' }
     const group = findOrCreateGroup(request)
     const triggerKey = requestTriggerKey(request)
-    // 同桶只叫一次分析：账本里已有这个 (triggerKey, changeHash) 的行，就只有一种情况还能重试——
-    // 上次是**入队失败**（那一行没花出去）。被预算/门拒绝的、已经排过队的，一律不再入队。
-    // 这一步必须在写行之前：写行之后唯一键只会把同一行改写一遍，看起来像成功。
-    const existing = deps.repository.listTriggerLedger(group.id)
-      .find(row => row.triggerKey === triggerKey && row.changeHash === request.signal.dedupeKey)
-    const retryable = existing?.decision === 'skipped' && existing.reasonCode === signalAnalysisPolicy.freezeUnavailableReasonCode
-    if (existing && !retryable) return { state: 'duplicate', groupId: group.id, attemptLedgerId: existing.id }
-    // 单飞：同一组已有在跑的 freeze 或 run，就不重复入队。信号每次采样都会重算一次，
-    // 没有这道，同一个桶会进两次。
+    // 单飞必须在「抢行」之前：先抢到行再被判在飞退出，那一行会永远算作已花额度却没入队。
+    // 信号每次采样都会重算一次，没有这道，同一个桶会进两次。
     const activeFreeze = deps.jobRuntime.listRuns({
       handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
       statuses: ['queued', 'running'],
@@ -94,20 +87,32 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     const inFlightRun = deps.repository.listRuns().some((run: AnalysisRun) =>
       run.eventGroupId === group.id && (run.status === 'queued' || run.status === 'running'))
     if (activeFreeze.length > 0 || inFlightRun) return { state: 'in-flight', groupId: group.id }
-    const attemptLedgerId = deps.repository.appendTriggerLedger({
+    // 一次动作同时判「新建还是已存在」：唯一键是判据，先查再写会在两步之间留下并发窗口。
+    const evidence = queuedSignalEvidence([{ signal: request.signal, window: request.window } as SignalWithWindow])
+    const reasonCode = signalAnalysisPolicy.queuedReasonCodes[request.signal.severity as 'medium' | 'high']
+    const claimed = deps.repository.appendSignalTrigger({
       id: `mi-ledger-${deps.idFactory()}`,
       eventGroupId: group.id,
       triggerKey,
       changeHash: request.signal.dedupeKey,
-      decision: 'queued',
-      // 读数跟着行一起存：阈值会改，读的时候再算就是拿今天的答案印在昨天的行上。横条的
-      // 「装了几条」读 `signalCount`，详情的读数读 `signals[]`——两样都只有这一列能提供。
-      reasonCode: signalAnalysisPolicy.queuedReasonCodes[request.signal.severity as 'medium' | 'high'],
-      evidence: queuedSignalEvidence([{ signal: request.signal, window: request.window } as SignalWithWindow]),
-      snapshotHash: null,
-      analysisRunId: null,
+      reasonCode,
+      evidence,
       createdAt: deps.now()
     })
+    if (!claimed.created) {
+      // 已存在时只有一种情况还能再叫一次分析：上次是**入队失败**（那行没花出去）。
+      // `previous === null` 是「行在写与读之间被删了」的竞态，按未抢到处理，fail closed。
+      const retryable = claimed.previous?.decision === signalTriggerRetryPolicy.decision &&
+        claimed.previous?.reasonCode === signalTriggerRetryPolicy.reasonCode
+      if (!retryable) return { state: 'duplicate', groupId: group.id, attemptLedgerId: claimed.id }
+      try {
+        deps.repository.rewriteSignalTrigger(claimed.id, { decision: 'queued', reasonCode, evidence })
+      } catch {
+        // 守卫拒绝 = 另一个调用方已经抢到这次重试（CAS），这一次按重复处理。
+        return { state: 'duplicate', groupId: group.id, attemptLedgerId: claimed.id }
+      }
+    }
+    const attemptLedgerId = claimed.id
     try {
       const job = await deps.jobRuntime.enqueueDefinition({
         id: `market-analysis:signal-freeze:${group.id}`,

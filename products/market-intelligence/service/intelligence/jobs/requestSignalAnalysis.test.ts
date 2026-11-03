@@ -34,7 +34,20 @@ function fakeRepository() {
         const row = ledger.find(entry => entry.id === rowId)
         if (row) Object.assign(row, { decision, reasonCode })
       },
-      listTriggerLedger: (eventGroupId: string) => ledger.filter(row => row.eventGroupId === eventGroupId)
+      listTriggerLedger: (eventGroupId: string) => ledger.filter(row => row.eventGroupId === eventGroupId),
+      // The two signal entry points, with the same semantics as the store: insert-if-absent, and a
+      // rewrite only allowed on the one row a failed enqueue left behind.
+      appendSignalTrigger: (value: Readonly<{ id: string; eventGroupId: string; triggerKey: string; changeHash: string; reasonCode: string; evidence?: unknown; createdAt: string }>) => {
+        const existing = ledger.find(row => row.eventGroupId === value.eventGroupId && row.triggerKey === value.triggerKey && row.changeHash === value.changeHash)
+        if (existing) return { id: existing.id, created: false, previous: { decision: existing.decision, reasonCode: existing.reasonCode } }
+        ledger.push({ ...value, decision: 'queued', snapshotHash: null, analysisRunId: null })
+        return { id: value.id, created: true, previous: null }
+      },
+      rewriteSignalTrigger: (rowId: string, value: Readonly<{ decision: string; reasonCode: string; evidence: unknown }>) => {
+        const row = ledger.find(entry => entry.id === rowId)
+        if (!row || row.decision !== 'skipped' || row.reasonCode !== 'signal-freeze-unavailable') throw new Error('signal-trigger-rewrite-refused')
+        Object.assign(row, { decision: value.decision, reasonCode: value.reasonCode, evidence: value.evidence })
+      }
     }
   }
 }
@@ -212,7 +225,35 @@ it('retries only the attempt that never reached the queue, reusing its row', asy
   expect(ledger).toHaveLength(1)
   expect(ledger[0]!.id).toBe(attemptLedgerId)
   expect(ledger[0]!.decision).toBe('queued')
+  // The reading goes back to the batch shape: a `queued` row holding the four-key skipped reading
+  // would parse to null and the detail would show a run with no numbers.
+  expect(ledger[0]!.evidence).toMatchObject({ signalCount: 1 })
   expect(enqueued).toHaveLength(2)
+})
+
+it('leaves an existing row exactly as it was when the bucket repeats', async () => {
+  const { service, ledger } = entry()
+  await service(request())
+  const before = JSON.stringify(ledger[0])
+
+  expect((await service(request())).state).toBe('duplicate')
+  // A duplicate must not rewrite a decision, a reason or a reading: the row is a spent attempt.
+  expect(JSON.stringify(ledger[0])).toBe(before)
+})
+
+it('treats a row that vanished between writing and reading as not claimed', async () => {
+  const { repository, ledger, groups } = fakeRepository()
+  const service = createSignalAnalysisRequest({
+    repository: { ...repository, appendSignalTrigger: () => ({ id: 'mi-ledger-gone', created: false, previous: null }) } as never,
+    jobRuntime: fakeJobs().jobRuntime as never,
+    now: () => asOf,
+    idFactory: () => '9',
+    isEnabled: async () => true
+  })
+
+  expect(await service(request())).toEqual({ state: 'duplicate', groupId: expect.any(String), attemptLedgerId: 'mi-ledger-gone' })
+  expect(ledger).toHaveLength(0)
+  expect(groups.size).toBe(1)
 })
 
 /**
