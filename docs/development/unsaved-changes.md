@@ -7,10 +7,9 @@ form — must publish an **entry × state matrix** before it is implemented, and
 close path changes. The matrix is the artifact; this page is the rule that demands it.
 
 Why a matrix and not a sentence: the failure mode is never "we forgot to ask". It is **"we asked on
-one path and not the other"** — the briefing settings drawer was built specifically to stop silent
-loss on close, and still dropped the edits in one state, because only the "loaded and edited" row
-was considered. A judgement that is written correctly, with one state missing from the case list,
-is how that survives review.
+one path and not the other"** — a container can be built specifically to stop silent loss on close
+and still drop the edits in one state, because only the obvious row was considered. A judgement that
+is written correctly, with one state missing from the case list, is how that survives review.
 
 ## The two hard rules
 
@@ -22,9 +21,8 @@ dirty = there is a draft AND it differs from what was read
 
 Never `state === 'ready' && draftChanged`. Gating on "loaded successfully" is exactly how
 **save-failed** escaped: the save failed, the draft was still in memory, but the state was no longer
-`ready`, so `dirty` read false and the close that followed threw the edits away — in the very change
-that existed to prevent that. If there is a draft, it is dirty. Only "no draft at all" (for example a
-failed initial read) is clean.
+`ready`, so `dirty` read false and the close that followed threw the edits away. If there is a draft,
+it is dirty. Only "no draft at all" (for example a failed initial read) is clean.
 
 **2. After fixing one path, walk the whole table again.**
 
@@ -84,15 +82,16 @@ claim the code does not support.
 
 ## Worked example
 
-The briefing settings drawer (`DailyBriefingSettingsDrawer.tsx`) — one `dirty` across two sections,
-four close entries funnelled through one `requestClose`, and the save-failed row that was missing:
+A container with one `dirty` across two sections and every close entry funnelled through a single
+`requestClose` — the shape most containers end up with:
 
 | Entry | clean | draft | save failed |
 | --- | --- | --- | --- |
-| Cancel / Esc / backdrop / header X | close | ask | must ask (was: closed silently) |
+| Cancel / Esc / backdrop / header X | close | ask | ask |
 | Successful save | close | close | — |
 
-`dirty` must therefore be `generation.dirty || ai.dirty`, where each section computes it from
+`dirty` must therefore be the union of the sections that can hold a draft
+(`generation.dirty || ai.dirty` for a two-section container), where each section computes it from
 "draft differs from what was read" — not from `state === 'ready'`.
 
 ## How to verify
