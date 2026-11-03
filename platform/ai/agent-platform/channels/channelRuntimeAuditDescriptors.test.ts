@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { channelInboundAuditCodes } from './channelRuntimeAuditCodes'
-import { channelRuntimeAuditDescriptors, describeChannelRuntimeAudit } from './channelRuntimeAuditDescriptors'
+import {
+  channelRuntimeAuditDescriptors,
+  channelTelegramFailureDescriptors,
+  describeChannelRuntimeAudit
+} from './channelRuntimeAuditDescriptors'
+import { channelRuntimeFailureMirrorCodes } from './channelRuntimeFailureMirror'
 
 describe('channel runtime audit descriptors', () => {
   it('covers every code in the closed set, and nothing outside it', () => {
@@ -20,6 +25,17 @@ describe('channel runtime audit descriptors', () => {
       'channel-receipt-without-work-item',
       'channel-work-capacity-exhausted'
     ])
+  })
+
+  it('covers every mirrored Telegram failure code, exactly once', () => {
+    expect(Object.keys(channelTelegramFailureDescriptors).sort()).toEqual([...channelRuntimeFailureMirrorCodes].sort())
+  })
+
+  it('calls a taken bot or a rejected credential an error, but a retrying poll a warning', () => {
+    expect(channelTelegramFailureDescriptors['telegram-conflict'].level).toBe('ERROR')
+    expect(channelTelegramFailureDescriptors['telegram-provider-rejected'].level).toBe('ERROR')
+    expect(channelTelegramFailureDescriptors['telegram-rate-limited'].level).toBe('WARN')
+    expect(channelTelegramFailureDescriptors['telegram-poll-failed'].level).toBe('WARN')
   })
 
   it('keeps ordinary rule-based skips at warn level, and answers nothing for an unknown code', () => {

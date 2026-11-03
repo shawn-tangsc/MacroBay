@@ -3,7 +3,8 @@ import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type {
   ChannelRuntimeAuditCopyKey,
-  ChannelRuntimeLifecycleCopyKey
+  ChannelRuntimeLifecycleCopyKey,
+  ChannelTelegramFailureCopyKey
 } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { ChannelManagementAuditCopyKey } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
@@ -286,6 +287,8 @@ export type PlatformText = {
     channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
     channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
     channelLogLifecycleText: Readonly<Record<ChannelRuntimeLifecycleCopyKey, string>>
+    /** 镜像来的 Telegram 运行失败：九条以内，全部可读，不出现平台术语。 */
+    channelLogTelegramFailureText: Readonly<Record<ChannelTelegramFailureCopyKey, string>>
     channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
   taskAutomation: {
@@ -1656,6 +1659,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeStarted: '连接已启动',
         runtimeStopped: '连接已停止'
       }),
+      channelLogTelegramFailureText: Object.freeze({
+        telegramConflict: '另一个程序也在用这个机器人，收消息被中断',
+        telegramProviderRejected: '机器人凭据被平台拒绝，需要重新填 Token',
+        telegramNetworkUnavailable: '网络或代理连不上，收消息中断',
+        telegramRuntimeStartFailed: '连接启动失败，收消息没起来',
+        telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
+        telegramRateLimited: '请求太频繁，被平台限流，稍后会自动重试',
+        telegramPollFailed: '这一次取消息失败，稍后会自动重试',
+        telegramUpdateInvalid: '收到一条看不懂的消息，已跳过'
+      }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': '这一次没有发出去',
         'delivery-send-lease-expired': '发送没有回音，按未确认处理',
@@ -2917,6 +2930,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: 'connection started',
         runtimeStopped: 'connection stopped'
+      }),
+      channelLogTelegramFailureText: Object.freeze({
+        telegramConflict: 'another program is using the same bot, so receiving was interrupted',
+        telegramProviderRejected: 'the platform rejected the bot credential; enter the token again',
+        telegramNetworkUnavailable: 'the network or proxy cannot be reached, so receiving stopped',
+        telegramRuntimeStartFailed: 'the connection failed to start, so nothing is being received',
+        telegramRuntimeEvidenceMissing: 'no real-device verification record, so it did not start',
+        telegramRateLimited: 'too many requests; the platform is rate limiting, retrying shortly',
+        telegramPollFailed: 'this fetch failed; it will retry shortly',
+        telegramUpdateInvalid: 'an incoming update could not be understood and was skipped'
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': 'this one was not sent',

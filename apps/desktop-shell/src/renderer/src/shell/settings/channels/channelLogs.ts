@@ -1,7 +1,8 @@
 import { describeChannelManagementAudit } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import {
   describeChannelRuntimeAudit,
-  describeChannelRuntimeLifecycle
+  describeChannelRuntimeLifecycle,
+  describeChannelTelegramFailure
 } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
@@ -57,6 +58,17 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
         at: entry.createdAt,
         level: 'INFO',
         text: `${labels.channelLogLifecyclePrefix}${labels.channelLogLifecycleText[lifecycle.copyKey]}`
+      })
+      continue
+    }
+    // 镜像来的 Telegram 运行失败：先查这张表，否则会落到「没有更多说明」。
+    const telegramFailure = describeChannelTelegramFailure(entry.code)
+    if (telegramFailure !== undefined) {
+      rows.push({
+        id: `run-${entry.id}`,
+        at: entry.createdAt,
+        level: telegramFailure.level,
+        text: `${labels.channelLogRuntimePrefix}${labels.channelLogTelegramFailureText[telegramFailure.copyKey]}`
       })
       continue
     }

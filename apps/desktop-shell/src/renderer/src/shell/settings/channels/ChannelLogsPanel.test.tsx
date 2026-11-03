@@ -78,6 +78,27 @@ describe('the channel log panel', () => {
     expect(container.querySelector('.channel-log-row')?.textContent).not.toContain('GMT')
   })
 
+  it('explains a mirrored Telegram failure instead of saying "no further explanation"', async () => {
+    const container = await mount({
+      ...ok,
+      listRuntimeAudits: vi.fn(async () => ({
+        rows: [
+          { id: 't1', code: 'telegram-conflict', createdAt: '2026-11-03T06:00:00.000Z' },
+          { id: 't2', code: 'telegram-rate-limited', createdAt: '2026-11-03T05:00:00.000Z' }
+        ],
+        nextCursor: null
+      }))
+    })
+
+    const rows = [...container.querySelectorAll('.channel-log-row')]
+    const conflict = rows.find((node) => node.textContent?.includes('另一个程序也在用这个机器人'))
+    const limited = rows.find((node) => node.textContent?.includes('被平台限流'))
+    expect(conflict?.getAttribute('data-log-level')).toBe('ERROR')
+    expect(limited?.getAttribute('data-log-level')).toBe('WARN')
+    expect(container.textContent).not.toContain(labels.channelLogsUnknownCode)
+    expect(container.textContent).not.toContain('telegram-conflict')
+  })
+
   it('shows connection start and stop as INFO under the runtime prefix, not as errors', async () => {
     const container = await mount({
       ...ok,
