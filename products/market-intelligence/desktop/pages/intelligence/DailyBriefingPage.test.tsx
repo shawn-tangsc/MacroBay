@@ -250,7 +250,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onBack={onBack}
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
-      client={client}
+      client={client as never}
     /></ConfirmProvider></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
@@ -379,7 +379,7 @@ describe('daily briefing page', () => {
     const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(writeText).toHaveBeenCalledTimes(1)
-    const markdown = writeText.mock.calls[0]?.[0] as string
+    const markdown = (writeText.mock.calls[0] as unknown[] | undefined)?.[0] as string
     expect(markdown).toContain(`# ${text.title}`)
     expect(markdown).toContain('CPI 超预期')
     expect(dom.textContent).toContain(text.copied)
@@ -397,7 +397,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client, { locale: 'zh-CN' })
     const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
-    const markdown = writeText.mock.calls[0]?.[0] as string
+    const markdown = (writeText.mock.calls[0] as unknown[] | undefined)?.[0] as string
     // Same rule as the file name and the exported image: the edition decides its own language.
     expect(markdown).toContain(`# ${englishText.title}`)
     expect(markdown).not.toContain(`# ${text.title}`)
@@ -414,7 +414,7 @@ describe('daily briefing page', () => {
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(dom.textContent).toContain(text.copyFailed)
     // 这一句是夹具文档自己的正文（`briefingDocument(..., '历史版次')`），不是文案表里的句子。
-    expect(writeText.mock.calls[0]?.[0]).toContain('历史版次')
+    expect((writeText.mock.calls[0] as unknown[] | undefined)?.[0]).toContain('历史版次')
   })
 
   it('guides a clean install through the platform state with the product sentence', async () => {
@@ -533,7 +533,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
       list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
-    }), { text: blank })
+    }), { text: blank as unknown as typeof text })
     const reason = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"] [data-reason-source]')!
     expect(reason.getAttribute('data-reason-source')).toBe('platform')
   })
@@ -1331,7 +1331,7 @@ it('shows the generating state as the same centred panel a failure uses', async 
   // One status word in the header; the attempt panel lives in the body, exactly where a failure's lives.
   expect(dom.querySelectorAll('.status-pill')).toHaveLength(1)
   expect(dom.querySelectorAll('.state-view')).toHaveLength(0)
-  const panel = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content [data-daily-brief-generating="true"]')!
+  const panel = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')!
   expect(panel.querySelectorAll('[data-loading-state]')).toHaveLength(1)
   expect(panel.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
   // No third layout: the right-hand column is absent while generating, like after a failure.
@@ -1354,7 +1354,26 @@ it('leaves the archive out while generating a day that never produced one', asyn
 
   // No edition to keep: no archive column, and the run's panel is still in the body.
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
-  expect(dom.querySelector('[data-daily-brief-generating="true"]')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+})
+
+it('shows a past edition\'s archive while today has never been generated', async () => {
+  const missing = editions.map((edition) => edition.date === '2026-10-30'
+    ? { ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }
+    : edition)
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } })),
+    get: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }))
+  })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click()
+    await Promise.resolve(); await Promise.resolve()
+  })
+
+  // The archive follows the edition on screen (a past one here), not whether today was generated.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {
@@ -1406,7 +1425,7 @@ describe('the exported image follows the edition, not the interface', () => {
       : edition)
     const container = await renderPage(
       fakeClient({ list: vi.fn(async () => ({ state: 'available' as const, result: { editions: partial } })) }),
-      { locale: 'en-US', text: englishText }
+      { locale: 'en-US', text: englishText as unknown as typeof text }
     )
     const poster = container.querySelector('.mi-daily-briefing-share-host .mi-brief-poster')
     expect(poster).not.toBeNull()

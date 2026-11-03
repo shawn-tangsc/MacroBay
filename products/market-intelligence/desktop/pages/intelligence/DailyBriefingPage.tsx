@@ -318,7 +318,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
   // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
   const hasTodayEdition = editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
-  const showAppendix = hasTodayEdition && !contentBlocked
+  // The archive belongs to the edition on screen, not to "today": reading a past edition must show
+  // its trace and gaps even when today has never been generated.
+  const showAppendix = !contentBlocked && (view.status === 'ready' || hasTodayEdition)
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt

@@ -33,7 +33,7 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
   return <div className="mi-daily-briefing-page__failure" role="alert"
-    data-daily-brief-failure="true" data-failure-kind={failure.kind} data-failure-advice={advice}
+    data-briefing-stage-panel="true" data-state="failed" data-daily-brief-failure="true" data-failure-kind={failure.kind} data-failure-advice={advice}
     {...(failure.code ? { 'data-failure-code': failure.code } : {})}>
     <h2>{failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}</h2>
     <p data-failure-code-label>{text.failurePanel.codeLabel}{separator}{codeLabel}</p>

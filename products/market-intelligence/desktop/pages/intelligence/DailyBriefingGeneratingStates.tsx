@@ -42,7 +42,7 @@ export function DailyBriefingGeneratingView({ text, progress, progressUnreadable
   resolveText: (key: string) => string
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
-  return <div className="mi-daily-briefing-page__failure" data-daily-brief-generating="true">
+  return <div className="mi-daily-briefing-page__failure" data-briefing-stage-panel="true" data-state="generating">
     <div className="mi-daily-briefing-page__loading-head">
       <LoadingState label={text.generating} minHeight={120} />
       <Popover
