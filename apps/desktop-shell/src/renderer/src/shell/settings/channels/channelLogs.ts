@@ -27,12 +27,17 @@ export type ChannelLogRow = {
 
 type Labels = PlatformText['settings']
 
+/** 管理审计一行：启用失败时带 `code`（原因码），成功时没有。 */
+export type ChannelLogOperationInput = { id: string; action: string; code?: string | null; createdAt: string }
+/** 运行审计与投递审计一行：两者都必带一个码。 */
+export type ChannelLogCodeInput = { id: string; code: string; createdAt: string }
+
 export type ChannelLogSources = {
   /** 管理审计：`code` 在这一类里只在「启用失败」时有值（写的是原因码）。 */
-  operations?: readonly { id: string; action: string; code?: string | null; createdAt: string }[]
-  runtime?: readonly { id: string; code: string; createdAt: string }[]
+  operations?: readonly ChannelLogOperationInput[]
+  runtime?: readonly ChannelLogCodeInput[]
   /** 发送失败的来源是**投递审计**（不是投递尝试）：一条审计一行，code 是闭集。 */
-  deliveries?: readonly { id: string; code: string; createdAt: string }[]
+  deliveries?: readonly ChannelLogCodeInput[]
 }
 
 const MAX_ROWS = 50

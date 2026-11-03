@@ -3,6 +3,7 @@ import { Button } from 'antd'
 import { Modal } from '@platform/ui/components/modal'
 import { useEffect, useState } from 'react'
 
+import type { ChannelManagementResult } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { PlatformText } from '../../../i18n/platformText'
 
 import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues } from './ChannelFields'
@@ -98,7 +99,7 @@ export function ChannelCreateDialog(props: {
 export async function submitNewChannelCredential(
   channelId: string,
   token: string
-): Promise<{ ok?: boolean; code?: string } | undefined> {
+): Promise<ChannelManagementResult> {
   const begin = await window.platform.channels.beginCredential({ id: channelId })
   const handoff = await encryptChannelHandoff(
     begin as Parameters<typeof encryptChannelHandoff>[0],
@@ -106,9 +107,5 @@ export async function submitNewChannelCredential(
     'credential',
     { bot_token: token }
   )
-  return (await window.platform.channels.submitCredential({
-    id: channelId,
-    actorId: 'settings-user',
-    handoff
-  })) as { ok?: boolean; code?: string } | undefined
+  return window.platform.channels.submitCredential({ id: channelId, actorId: 'settings-user', handoff })
 }

@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import type { ChannelManagementResult } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -15,7 +16,7 @@ import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import { enableFailureSentence, mutationFailureSentence } from './channelSettingsPresentation'
+import { enableFailureSentence, mutationFailureSentence, readAgents, toCatalog, toChannel } from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
@@ -62,9 +63,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         window.platform.channels.list(),
         window.platform.agents.listAgents({})
       ])
-      setCatalog(nextCatalog as Catalog[])
-      setChannels(nextChannels as Channel[])
-      setAgents((agentState as { agents?: Agent[] }).agents ?? [])
+      setCatalog(nextCatalog.map(toCatalog))
+      setChannels(nextChannels.map(toChannel))
+      setAgents(readAgents(agentState))
       setReadError(false)
       setStale(false)
     } catch {
@@ -92,14 +93,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const rows = channels.filter((channel) => channel.type === selectedType)
 
 
-  const runAction = async (channel: Channel, action: () => Promise<unknown>): Promise<void> => {
+  const runAction = async (channel: Channel, action: () => Promise<ChannelManagementResult>): Promise<void> => {
     setBusyId(channel.id)
     setError(null)
     try {
       // 这些接口失败时**正常返回** `{ ok:false, code }`，不抛错：不看 `ok` 就会把「没停成」
       // 显示成成功。删除也一样——用户现在库里有一堆重复频道，正靠这一步逐条删。
-      const result = (await action()) as { ok?: boolean; code?: string } | undefined
-      if (result !== undefined && result?.ok !== true) setError(mutationFailureSentence(result, labels))
+      const result = await action()
+      if (result.ok !== true) setError(mutationFailureSentence(result, labels))
       await reload()
     } catch {
       setError(labels.channelOperationFailed)
@@ -129,10 +130,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       return next
     })
     try {
-      const result = (await window.platform.channels.requestEnable({
+      const result = await window.platform.channels.requestEnable({
         id: channel.id,
         actorId: 'settings-user'
-      })) as { ok?: boolean; code?: string; reason?: string } | undefined
+      })
       const sentence = enableFailureSentence(result, labels)
       if (sentence !== null) {
         setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
@@ -154,7 +155,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setEditor({ mode: 'edit', channel })
     setPolicyPresence('unknown')
     try {
-      const policies = (await window.platform.channels.listPolicies({ id: channel.id, limit: 1 })) as unknown[]
+      const policies = await window.platform.channels.listPolicies({ id: channel.id, limit: 1 })
       setPolicyPresence(policies.length > 0 ? 'present' : 'none')
     } catch {
       setPolicyPresence('unknown')
@@ -170,11 +171,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
    */
   const readCredentialConfigured = async (channelId: string): Promise<boolean | null> => {
     try {
-      const view = (await window.platform.channels.get(channelId)) as
-        | { credential?: { status?: string; hasCredential?: boolean } }
-        | null
-        | undefined
-      return view?.credential?.hasCredential === true && view.credential.status === 'configured'
+      const view = await window.platform.channels.get(channelId)
+      return view?.credential.hasCredential === true && view.credential.status === 'configured'
     } catch {
       return null
     }
@@ -204,8 +202,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
-      })) as { ok?: boolean; code?: string; channel?: { id?: string } } | undefined
-      const createdIdValue = created?.ok === true ? created.channel?.id : undefined
+      }))
+      const createdIdValue = created.ok === true ? created.channel?.id : undefined
       if (typeof createdIdValue !== 'string') {
         // 失败码要说人话（助手不在了、凭据不对……），不许一律「操作失败，请重试」。
         setSaveError(mutationFailureSentence(created, labels))
@@ -256,7 +254,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setSaveError(null)
     const tokenProvided = input.token.trim().length > 0
     try {
-      const updated = (await window.platform.channels.update({
+      const updated = await window.platform.channels.update({
         id: editor.channel.id,
         name: input.name,
         agentId: input.agentId,
@@ -264,9 +262,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
-      })) as { ok?: boolean; code?: string } | undefined
+      })
       // 改都没改成（频道不在了、助手不在了）：就地报错，别继续往下写凭据。
-      if (updated?.ok !== true) {
+      if (updated.ok !== true) {
         setSaveError(mutationFailureSentence(updated, labels))
         await reload()
         return
@@ -281,11 +279,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           'credential',
           { bot_token: input.token }
         )
-        tokenWrite = (await window.platform.channels.rotateCredential({
+        tokenWrite = await window.platform.channels.rotateCredential({
           id: editor.channel.id,
           actorId: 'settings-user',
           handoff
-        })) as { ok?: boolean } | undefined
+        })
       }
       // 回读确认后再关弹层：没存上就不许显示「保存成功」。
       // 写接口返回 `ok: false` 也算没写成——回读这时仍会读到**旧**凭据，只看回读会被骗。
@@ -478,7 +476,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       {logsFor === null ? null : (
         <ChannelLogsPanel
           channelId={logsFor.id}
-          client={window.platform.channels}
+          client={{
+            // 日志面板只认一种形状（`{ rows }`）：三个读口在这里收窄一次，
+            // 面板里就不需要「数组或 { rows}」的兼容层，上游漂移也不会被它掩盖。
+            listAudits: async (input) => ({ rows: await window.platform.channels.listAudits(input) }),
+            listDeliveryAudits: async (input) => ({ rows: await window.platform.channels.listDeliveryAudits(input) }),
+            listRuntimeAudits: (input) => window.platform.channels.listRuntimeAudits(input)
+          }}
           labels={labels}
           onClose={() => setLogsFor(null)}
           platformName={labels.channelPlatformName[selectedType]}

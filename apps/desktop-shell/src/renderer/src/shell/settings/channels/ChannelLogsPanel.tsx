@@ -9,7 +9,13 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock, formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import type { PlatformText } from '../../../i18n/platformText'
 
-import { buildChannelLogRows, type ChannelLogRow, type ChannelLogSources } from './channelLogs'
+import {
+  buildChannelLogRows,
+  type ChannelLogCodeInput,
+  type ChannelLogOperationInput,
+  type ChannelLogRow,
+  type ChannelLogSources
+} from './channelLogs'
 
 const COPY_KEY = 'settings.channels.logs.copy'
 
@@ -26,10 +32,14 @@ export function ChannelLogsPanel(props: {
   channelId: string
   platformName: string
   labels: PlatformText['settings']
+  /**
+   * 三个读口**只返回 `{ rows }`**：形状收敛在页面的调用点（那里有类型），面板只认一种，
+   * 不再写「数组或 { rows }」的兼容层——上游漂移就该在类型上红，不该在界面里被兼容掉。
+   */
   client: {
-    listAudits?: (input: unknown) => Promise<unknown>
-    listRuntimeAudits?: (input: unknown) => Promise<unknown>
-    listDeliveryAudits?: (input: unknown) => Promise<unknown>
+    listAudits?: (input: { id: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogOperationInput[] }>
+    listRuntimeAudits?: (input: { id: string; limit: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
+    listDeliveryAudits?: (input: { id: string; limit: number; offset: number }) => Promise<{ rows: readonly ChannelLogCodeInput[] }>
   }
   onClose: () => void
 }): React.ReactElement {
@@ -44,14 +54,14 @@ export function ChannelLogsPanel(props: {
     setState({ status: 'loading' })
     try {
       const [operations, runtime, deliveries] = await Promise.all([
-        props.client.listAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? Promise.resolve([]),
-        props.client.listRuntimeAudits?.({ id: props.channelId, limit: 50 }) ?? Promise.resolve([]),
-        props.client.listDeliveryAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? Promise.resolve([])
+        props.client.listAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] },
+        props.client.listRuntimeAudits?.({ id: props.channelId, limit: 50 }) ?? { rows: [] },
+        props.client.listDeliveryAudits?.({ id: props.channelId, limit: 50, offset: 0 }) ?? { rows: [] }
       ])
       const sources: ChannelLogSources = {
-        operations: asArray(operations),
-        runtime: asArray(runtime),
-        deliveries: asArray(deliveries)
+        operations: operations.rows,
+        runtime: runtime.rows,
+        deliveries: deliveries.rows
       }
       setState({ status: 'ready', rows: buildChannelLogRows(sources, labels) })
     } catch {
@@ -157,13 +167,4 @@ export function ChannelLogsPanel(props: {
       {renderBody()}
     </Modal>
   )
-}
-
-function asArray<T>(value: unknown): T[] {
-  // 主进程返回的是分页对象（`{ rows }`）或空值：只取能认出来的那一层，其余当没有。
-  if (Array.isArray(value)) return value as T[]
-  if (value !== null && typeof value === 'object' && Array.isArray((value as { rows?: unknown }).rows)) {
-    return (value as { rows: T[] }).rows
-  }
-  return []
 }

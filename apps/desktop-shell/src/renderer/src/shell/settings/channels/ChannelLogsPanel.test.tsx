@@ -43,12 +43,16 @@ async function mount(client: Parameters<typeof ChannelLogsPanel>[0]['client']): 
 }
 
 const ok = {
-  listAudits: vi.fn(async () => [{ id: 'a1', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T01:00:00.000Z' }]),
+  listAudits: vi.fn(async () => ({
+    rows: [{ id: 'a1', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T01:00:00.000Z' }]
+  })),
   listRuntimeAudits: vi.fn(async () => ({
     rows: [{ id: 'r1', code: 'channel-inbound-failed', createdAt: '2026-11-03T02:00:00.000Z' }],
     nextCursor: null
   })),
-  listDeliveryAudits: vi.fn(async () => [{ id: 'd1', attemptId: 'x', code: 'channel-rejected', createdAt: '2026-11-03T03:00:00.000Z' }])
+  listDeliveryAudits: vi.fn(async () => ({
+    rows: [{ id: 'd1', attemptId: 'x', code: 'channel-rejected', createdAt: '2026-11-03T03:00:00.000Z' }]
+  }))
 }
 
 describe('the channel log panel', () => {
@@ -124,9 +128,9 @@ describe('the channel log panel', () => {
   it('names common management actions instead of leaving the fallback sentence', async () => {
     const container = await mount({
       ...ok,
-      listAudits: vi.fn(async () => [
-        { id: 'a9', action: 'update', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }
-      ])
+      listAudits: vi.fn(async () => ({
+        rows: [{ id: 'a9', action: 'update', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }]
+      }))
     })
 
     const row = container.querySelector('.channel-log-row')
@@ -173,10 +177,12 @@ describe('the channel log panel', () => {
   it('writes why an enable attempt failed on the same line, not just that it happened', async () => {
     const container = await mount({
       ...ok,
-      listAudits: vi.fn(async () => [
-        { id: 'f1', action: 'request-enable', actorId: 'me', code: 'telegram-conflict', createdAt: '2026-11-03T04:30:00.000Z' },
-        { id: 'f2', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }
-      ])
+      listAudits: vi.fn(async () => ({
+        rows: [
+          { id: 'f1', action: 'request-enable', actorId: 'me', code: 'telegram-conflict', createdAt: '2026-11-03T04:30:00.000Z' },
+          { id: 'f2', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }
+        ]
+      }))
     })
 
     const rows = [...container.querySelectorAll('.channel-log-row')]
@@ -195,9 +201,9 @@ describe('the channel log panel', () => {
   it('keeps an unknown enable-failure code off the screen and says why it cannot be more specific', async () => {
     const container = await mount({
       ...ok,
-      listAudits: vi.fn(async () => [
-        { id: 'f3', action: 'request-enable', actorId: 'me', code: 'some-new-code', createdAt: '2026-11-03T04:30:00.000Z' }
-      ])
+      listAudits: vi.fn(async () => ({
+        rows: [{ id: 'f3', action: 'request-enable', actorId: 'me', code: 'some-new-code', createdAt: '2026-11-03T04:30:00.000Z' }]
+      }))
     })
 
     const row = container.querySelector('.channel-log-row')
@@ -209,7 +215,9 @@ describe('the channel log panel', () => {
   it('does not file an unconfirmed send under failures', async () => {
     const container = await mount({
       ...ok,
-      listDeliveryAudits: vi.fn(async () => [{ id: 'd2', attemptId: 'x', code: 'unknown-after-send', createdAt: '2026-11-03T03:00:00.000Z' }])
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd2', attemptId: 'x', code: 'unknown-after-send', createdAt: '2026-11-03T03:00:00.000Z' }]
+      }))
     })
 
     const text = container.textContent ?? ''
@@ -220,9 +228,9 @@ describe('the channel log panel', () => {
 
   it('says there are no records yet, without offering a copy action', async () => {
     const container = await mount({
-      listAudits: vi.fn(async () => []),
+      listAudits: vi.fn(async () => ({ rows: [] })),
       listRuntimeAudits: vi.fn(async () => ({ rows: [], nextCursor: null })),
-      listDeliveryAudits: vi.fn(async () => [])
+      listDeliveryAudits: vi.fn(async () => ({ rows: [] }))
     })
 
     expect(container.textContent).toContain(labels.channelLogsEmptyTitle)
@@ -234,7 +242,7 @@ describe('the channel log panel', () => {
     const container = await mount({
       listAudits: vi.fn(async () => { throw new Error('ipc') }),
       listRuntimeAudits: vi.fn(async () => ({ rows: [], nextCursor: null })),
-      listDeliveryAudits: vi.fn(async () => [])
+      listDeliveryAudits: vi.fn(async () => ({ rows: [] }))
     })
 
     expect(container.textContent).toContain(labels.channelLogsReadFailed)

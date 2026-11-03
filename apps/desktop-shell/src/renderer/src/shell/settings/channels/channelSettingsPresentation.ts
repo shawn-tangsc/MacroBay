@@ -1,3 +1,7 @@
+import type {
+  ChannelManagementCatalogEntry,
+  ChannelManagementSafeView
+} from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { platformText } from '../../../i18n/platformText'
@@ -168,4 +172,59 @@ export function mutationFailureSentence(
 ): string | null {
   if (result?.ok === true) return null
   return channelFailureReason(result?.code, labels) ?? labels.channelOperationFailedUnknown
+}
+
+/**
+ * 主进程的安全视图 → 这一屏的形状。**不做 `as` 转换**：范围相反的 `as` 编译器不拦
+ * （`ChannelManagementSafeView` 多出的字段被 `as` 直接抹掉，少一个字段也没人红），
+ * 而逐字段映射时，字段改名或消失都会在编译期报出来。
+ */
+export function toChannel(view: ChannelManagementSafeView): Channel {
+  return {
+    id: view.id,
+    type: view.type,
+    name: view.name,
+    agentId: view.agentId,
+    state: view.state,
+    credential: {
+      status: view.credential.status,
+      hasCredential: view.credential.hasCredential,
+      maskedFields: view.credential.maskedFields,
+      revision: view.credential.revision
+    },
+    workspace: view.workspace,
+    permissionMode: view.permissionMode,
+    allowedChatIds: view.allowedChatIds
+  }
+}
+
+/** 目录项 → 这一屏的目录形状（同上：逐字段，不 `as`）。 */
+export function toCatalog(entry: ChannelManagementCatalogEntry): Catalog {
+  return {
+    type: entry.type,
+    status: entry.status,
+    reason: entry.reason,
+    implemented: entry.implemented
+  }
+}
+
+/**
+ * `agents.listAgents` 的返回值收窄。这个口子还没被标上类型，所以这里**逐字段验**而不是
+ * `as`——`as` 会把「字段没了」变成运行时的 `undefined`，编译期一声不响（那次重复频道的根因）。
+ * 读不出代理列表时返回空数组，让「没有可选助手」如实显示，而不是把形状不明的数据画出来。
+ */
+export function readAgents(value: unknown): Agent[] {
+  if (typeof value !== 'object' || value === null) return []
+  // 只把 `unknown` 变成可按下标读的桶，再逐个字段验类型：这不是给返回值「宣布形状」，
+  // 恰恰相反——少一个字段就在这一步被丢掉，而不是变成运行时的 undefined。
+  const bucket = value as Record<string, unknown>
+  const agents = bucket.agents
+  if (!Array.isArray(agents)) return []
+  return agents.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const fields = entry as Record<string, unknown>
+    const id = fields.id
+    const name = fields.name
+    return typeof id === 'string' && typeof name === 'string' ? [{ id, name }] : []
+  })
 }
