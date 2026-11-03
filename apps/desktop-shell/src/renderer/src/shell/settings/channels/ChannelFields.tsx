@@ -46,6 +46,8 @@ export function ChannelFields(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
   policyPresence: ChannelPolicyPresence
+  /** 编辑时这个频道**有没有已经存下的 Token**：决定输入框下面那句提示是「留空＝不改」还是「填一个」。 */
+  tokenStored?: boolean
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
@@ -114,7 +116,10 @@ export function ChannelFields(props: {
               type="password"
               value={values.token}
             />
-            <small className="channel-field-hint">{labels.channelTokenReadOnly}</small>
+            <small className="channel-field-hint">
+              {/* 本来就一个 Token 都没有时，「留空＝不修改」是句假话：留空保存什么也存不上。 */}
+              {props.tokenStored === false ? labels.channelTokenEnterHint : labels.channelTokenReadOnly}
+            </small>
           </>
         )}
       </FieldShell>

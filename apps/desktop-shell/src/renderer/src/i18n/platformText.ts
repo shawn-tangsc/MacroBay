@@ -232,6 +232,12 @@ export type PlatformText = {
     channelEdit: string
     /** Token 占位：整个字段只有星号，不露任何真值字符。 */
     channelTokenMask: string
+    /** **没有凭据时不许写星号**：星号会被读成「有值但看不见」，那是在替空值发言。 */
+    channelTokenNone: string
+    /** 编辑弹层顶部：还没有凭据时的那一句（不是「当前已存」）。 */
+    channelTokenCurrentNone: string
+    /** 还没有凭据时输入框下面的提示：「留空＝不修改」在这里是假话。 */
+    channelTokenEnterHint: string
     /** 日志面板在没有数据源时的唯一一句话。 */
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
@@ -1623,6 +1629,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogs: '日志',
       channelEdit: '编辑',
       channelTokenMask: '********',
+      channelTokenNone: '还没有 Token',
+      channelTokenCurrentNone: '这个频道还没有存 Token',
+      channelTokenEnterHint: '这个频道还没有 Token：填一个再保存，留空保存不会存上任何东西。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
       channelFieldWorkspace: '工作目录',
@@ -2916,6 +2925,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogs: 'Logs',
       channelEdit: 'Edit',
       channelTokenMask: '********',
+      channelTokenNone: 'no token yet',
+      channelTokenCurrentNone: 'this channel has no token stored yet',
+      channelTokenEnterHint: 'this channel has no token yet: enter one and save; leaving it empty stores nothing.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
       channelFieldWorkspace: 'Working folder',

@@ -31,7 +31,6 @@ export type NotificationSettingsText = {
    * 而这一行真正能给的只有一个动作——去频道页接入。
    */
   channelNone: string
-  channelNeedsEvidence: string
   /** 有频道但还没选：这是「推送关着」，不是「没有频道」，两句话不能混。 */
   channelUnselected: string
   channelUnbound: string
@@ -119,7 +118,6 @@ const zh: NotificationSettingsText = {
   channelRow: '发送到频道',
   channelDesc: '推送哪些事件在下方清单的频道列勾；这一行只选频道和看状态，没有开关。',
   channelNone: '还没有可用频道',
-  channelNeedsEvidence: '需要一条真机验证记录才能启用；状态在频道接入页',
   channelUnselected: '还没有选频道：推送现在是关着的，选一条才会发到手机',
   channelUnbound: '目标未绑定：还看不出会发到哪个会话',
   channelAmbiguous: '这个频道绑了多个会话，请到频道页只保留一个；现在不发，也不替你挑',
@@ -209,8 +207,6 @@ const en: NotificationSettingsText = {
   channelDesc:
     'Which events get pushed is decided by the channel column below; this row only picks the channel and shows its state, with no switch.',
   channelNone: 'No channel is available yet',
-  channelNeedsEvidence:
-    'One real-device verification record is required to enable it; the status is on the Channels page',
   channelUnselected: 'No channel selected yet: pushing is off, and it reaches your phone once you pick one',
   channelUnbound: 'No target bound: it is not clear which conversation it would post to',
   channelAmbiguous:

@@ -311,6 +311,45 @@ describe('showing which token is stored', () => {
   })
 })
 
+describe('an empty credential is said out loud, never dressed as a mask', () => {
+  it('writes "no token yet" on the row instead of stars that read like a stored value', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        { ...channel, allowedChatIds: [], credential: { status: 'missing', hasCredential: false } }
+      ])
+    })
+    const container = await mount()
+
+    const row = container.querySelector('[data-channel-id="channel-1"]')
+    expect(row?.textContent).toContain(labels.channelTokenNone)
+    // 星号会被读成「有值但看不见」——用户正是看到它才以为「我明明设了」。
+    expect(row?.querySelector('.channel-row-mask')?.textContent).not.toContain(labels.channelTokenMask.trim())
+  })
+
+  it('does not say "currently stored" in the dialog when nothing is stored, and asks for a token', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        { ...channel, allowedChatIds: [], credential: { status: 'missing', hasCredential: false } }
+      ])
+    })
+    const container = await mount()
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    const current = document.body.querySelector('[data-current-token]')
+    expect(current?.textContent).toContain(labels.channelTokenCurrentNone)
+    expect(current?.textContent).not.toContain('当前已存')
+    // 「留空＝不修改」在这里是假话：本来就没有可改的值。
+    expect(document.body.textContent).toContain(labels.channelTokenEnterHint)
+    expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
+    // 也没有「第 N 次保存」：从没保存过凭据。
+    expect(current?.textContent).not.toContain('次保存')
+  })
+})
+
 describe('the allowed chat IDs field', () => {
   it('says the bot is open to everyone when the list is empty and no policy exists', async () => {
     installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })

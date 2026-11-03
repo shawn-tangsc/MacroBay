@@ -221,7 +221,9 @@ describe('the send-to-channel row', () => {
     // 空下拉会把「没有」说成「挑一个」。
     expect(row?.querySelector('select')).toBeNull()
     expect(row?.textContent).toContain('还没有可用频道')
-    expect(row?.textContent).toContain('需要一条真机验证记录才能启用')
+    // 启用改成现场自检之后，「需要一条真机验证记录才能启用」是句假话（设置页规范 v2.17），
+    // 这一行也不许把人往「去别处跑步骤」引。
+    expect(row?.textContent).not.toContain('真机验证记录')
     expect(row?.querySelector('.status-pill')?.textContent).toBe('未接入')
     expect([...row!.querySelectorAll('button')].map((node) => node.textContent)).toEqual(['去接入'])
     // 这一行永远没有开关：推送由清单的频道列决定。

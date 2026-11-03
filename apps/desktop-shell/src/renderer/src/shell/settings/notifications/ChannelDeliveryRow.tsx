@@ -56,16 +56,14 @@ function ChannelStatusLine(props: {
   const { text, state } = props
 
   if (state.kind === 'not-wired') {
+    // 只留「还没有可用频道」+「去接入」：未接入时**不再写「需要真机验证记录才能启用」**。
+    // 启用改成现场自检之后那句话与事实不符，而它正是把用户往「去别处跑步骤」引的那句
+    // （界面规范设置页 v2.17）。指南针只指向他真能做的下一步，所以这一行不附任何指引句。
     return (
-      <>
-        <span className="notification-row-state-row" role="note" data-channel-state>
-          <StatusPill tone="warn" labelKey="notificationSettings.channelNotWiredPill" resolveText={pillResolver(text)} />
-          <span>{text.channelNone}</span>
-        </span>
-        <span className="notification-row-hint" role="note">
-          {text.channelNeedsEvidence}
-        </span>
-      </>
+      <span className="notification-row-state-row" role="note" data-channel-state>
+        <StatusPill tone="warn" labelKey="notificationSettings.channelNotWiredPill" resolveText={pillResolver(text)} />
+        <span>{text.channelNone}</span>
+      </span>
     )
   }
 
