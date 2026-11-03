@@ -479,6 +479,25 @@ describe('daily briefing page', () => {
     expect(reason.getAttribute('data-reason-source')).toBe('platform')
   })
 
+  it('switches the content language from the top tab, with one selected tab', async () => {
+    const client = fakeClient()
+    const dom = await renderPage(client)
+    const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+
+    expect(tabs).toHaveLength(2)
+    expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+
+    // The selection comes from the one content-locale state: switching asks for that edition next.
+    await act(async () => {
+      tabs[1].click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+    expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
   it('keeps the toolbar regenerate on the normal path', async () => {
     const dom = await renderPage(fakeClient())
     expect(dom.querySelector('[data-toolbar-action="regenerate"]')).not.toBeNull()

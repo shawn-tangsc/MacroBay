@@ -4,6 +4,7 @@ import { ArrowLeft, CircleHelp, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Tabs } from '@platform/ui/components/tabs'
 import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -29,6 +30,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
+import { useBriefingContentLocale } from './useBriefingContentLocale'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingAside, DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
@@ -92,6 +94,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
   // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
   const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
+  // Content language: one hook owns it; the tab's selection state derives from it.
+  const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -123,8 +127,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setEditionsFailed(false)
     setRegenerateFailure(null)
     void (async () => {
-      const todayPromise = withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
+      const todayPromise = withDeadline(client.getToday({ locale: contentLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale: contentLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
@@ -133,7 +137,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setEditionsFailed(listed?.state !== 'available')
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
       if (cachedRow) {
-        const cached = await client.get({ date: cachedRow.date, locale }).catch(() => undefined)
+        const cached = await client.get({ date: cachedRow.date, locale: contentLocale }).catch(() => undefined)
         if (active && cached?.state === 'available' && view.status === 'loading') {
           setView({ status: 'ready', document: cached.document, kind: 'today' })
         }
@@ -175,7 +179,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setRegenerating(false)
     })()
     return () => { active = false }
-  }, [locale, client, reloadKey])
+  }, [contentLocale, client, reloadKey])
 
   useEffect(() => {
     let active = true
@@ -345,6 +349,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
       <div className="mi-daily-briefing-page__actions">
+        <div className="mi-daily-briefing-page__lang-tabs" data-content-language-tabs="true">
+          <Tabs
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.label"
+            items={[{ value: 'zh-CN', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.zh-CN' }, { value: 'en-US', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.en-US' }]}
+            onChange={(value) => setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN')}
+            panels={{ 'zh-CN': null, 'en-US': null }}
+            resolveText={resolveProductText}
+            value={contentLocale}
+          />
+        </div>
         {view.status === 'loading' ? <DailyBriefingGeneratingStatus progress={liveProgress} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
           <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={regenerating} onClick={() => void regenerate()}>
