@@ -320,7 +320,7 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
   })
 
-  it('loads a historical edition read-only and leaves a missing day disabled', async () => {
+  it('loads a historical edition read-only and never re-reads a cached one', async () => {
     const client = fakeClient()
     const dom = await renderPage(client)
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
@@ -330,8 +330,14 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain(text.history.readOnly)
     expect(dom.querySelector('[data-date="2026-10-29"]')?.getAttribute('aria-current')).toBe('true')
 
+    // Back to the day already read: the cache answers, no second request for the same edition.
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(client.get).toHaveBeenCalledTimes(1)
+
+    // A day with no edition still reads nothing: the list already answered for it.
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
-    expect(client.get).toHaveBeenCalledTimes(2)
+    expect(client.get).toHaveBeenCalledTimes(1)
   })
 
   it('loads the chosen edition language from the top tab, keeping the row current', async () => {
@@ -1991,6 +1997,72 @@ it('derives the row tag, the switch and the pane from one list of languages', as
   expect(missing).not.toBeNull()
   // Not the 'nothing generated' pane: the issue has an English edition, only Chinese is missing.
   expect(englishOnly.querySelector('[data-briefing-no-edition]')).toBeNull()
+})
+
+it('comes back to the same edition, word for word, when the switch moves away and back', async () => {
+  // The reported bug: switch language, switch back, and the pane had lost the edition. Reading is
+  // one entry with a per-date-and-language cache, so coming back is a render, not a second read.
+  const chinese = briefingDocument('2026-11-03')
+  const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English body for the switch test' } }
+  const client = fakeClient({
+    getSettings: enSettings,
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [rowOf(['zh-CN', 'en-US'])], today: '2026-11-03' } })),
+    get: vi.fn(async ({ locale }: { locale: string }) => locale === 'en-US'
+      ? { state: 'available' as const, document: english }
+      : { state: 'available' as const, document: chinese })
+  })
+  const dom = await renderPage(client)
+  const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('.mi-daily-briefing-page__paper')) break
+  }
+  const firstChinese = dom.querySelector('.mi-daily-briefing-page__paper')!.textContent
+
+  await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+  await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('.mi-daily-briefing-page__paper')) break
+  }
+
+  // Word for word, and no extra read or run on the way back.
+  const after = dom.querySelector('.mi-daily-briefing-page__paper')!.textContent
+  expect(after).toBe(firstChinese)
+  expect((client.get as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(2)
+  expect(client.regenerate).not.toHaveBeenCalled()
+  expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+})
+
+it('returns to the edition it had after visiting a language that has none', async () => {
+  // B has no edition, A does: going A -> B -> A must end on A's body, not on B's missing sentence.
+  const chinese = briefingDocument('2026-11-03')
+  const client = fakeClient({
+    getSettings: enSettings,
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [rowOf(['zh-CN'])], today: '2026-11-03' } })),
+    get: vi.fn(async ({ locale }: { locale: string }) => locale === 'zh-CN'
+      ? { state: 'available' as const, document: chinese }
+      : { state: 'missing' as const })
+  })
+  const dom = await renderPage(client)
+  const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('.mi-daily-briefing-page__paper')) break
+  }
+  const firstChinese = dom.querySelector('.mi-daily-briefing-page__paper')!.textContent
+
+  await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+  await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('.mi-daily-briefing-page__paper')) break
+  }
+
+  expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).toBe(firstChinese)
 })
 
 it('never lets the first read contradict the list about which languages exist', async () => {

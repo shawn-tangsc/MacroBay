@@ -59,6 +59,7 @@ import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPag
 import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { openBriefingEdition } from './openBriefingEdition'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
+import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingRunActions } from './useBriefingRunActions'
@@ -87,7 +88,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   timeZoneRef.current = timeZone
   const requestRef = useRef(0)
   // The one read path, reachable from effects that must not re-implement it (the delete fallback).
-  const openEditionRef = useRef<(date: string, locale: 'zh-CN' | 'en-US', row?: { state: string; attemptCount?: number }) => void>(() => undefined)
+  // One edition, one cache entry: `${date}:${locale}`. Switching language back and forth must hit
+  // this instead of re-reading, and a read must never overwrite a language it did not ask for.
+  const editionCacheRef = useRef(new Map<string, DailyBriefingDocument>())
+  // The issue day the list reported, readable from the reader without waiting for a render: the
+  // "today or history" decision must not depend on whether the list answer had landed yet.
+  const periodDateRef = useRef<string | null>(null)
+  const openEditionRef = useRef<(date: string, locale: 'zh-CN' | 'en-US', row?: DailyBriefingEditionSummary) => void>(() => undefined)
   // The language to read after a delete: decided from the row as it was before the delete, and
   // consumed by the reload. Choosing it here keeps "which language to show" ahead of "read it",
   // so the pane and the switch cannot disagree.
@@ -188,6 +195,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       // The issue day this load is about: the service's, when the list answered.
       const periodDate = listed?.state === 'available' && typeof listed.result.today === 'string' ? listed.result.today : todayDate
       setCurrentPeriodDate(periodDate)
+      periodDateRef.current = periodDate
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
@@ -197,29 +205,20 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       // `todayDate` here is what made a delete reload look at a day the list does not contain, find
       // nothing, and report the whole issue as empty.
       const periodRow = rows.find((row) => row.date === periodDate)
-      let keptCachedToday = false
       if (skipGenerate) {
-        // A delete reload reads the edition that is left, in the language that is left, and puts it
-        // on screen. Only an issue with no language at all may land on "nothing generated".
+        // A delete reload reads the edition that is left, in the language that is left. The language
+        // is decided before the read, so the switch and the pane cannot disagree; the deleted entry
+        // is dropped from the cache so the read cannot answer with what was just removed.
         const available = periodRow?.availableLocales ?? []
         const wanted = available.includes(localeForLoad) ? localeForLoad : available.find((candidate) => candidate !== localeForLoad)
         if (wanted) {
           if (wanted !== localeForLoad) setContentLocale(wanted)
-          const read = await client.get({ date: periodDate, locale: wanted }).catch(() => undefined)
+          const read = await readEdition(periodDate, wanted, { fresh: true })
           if (!active) return
-          if (read?.state === 'available') {
-            setView({ status: 'ready', document: read.document, kind: periodDate === todayDate ? 'today' : 'history' })
-            keptCachedToday = true
-          }
+          if (read.kind === 'available') return
         }
-        if (!keptCachedToday) setView({ status: 'no-edition', date: periodDate, failed: false })
-        keptCachedToday = true
-      } else if (periodRow && loading) {
-        const cached = await client.get({ date: periodDate, locale: localeForLoad }).catch(() => undefined)
-        if (active && cached?.state === 'available') {
-          setView({ status: 'ready', document: cached.document, kind: periodDate === todayDate ? 'today' : 'history' })
-          keptCachedToday = true
-        }
+        setView({ status: 'no-edition', date: periodDate, failed: false })
+        return
       }
       const today = await todayPromise
       if (!active) return
@@ -240,20 +239,19 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
-      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday
+      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated'
         && rows.some((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))) {
         // The list says this language exists, so the answer "nothing written" is the read's miss, not
         // the truth. Read that edition by its date and put the answer on screen here — handing it to
         // the row path made the result depend on state that was still settling after a delete.
-        const again = await client.get({ date: periodDate, locale: localeForLoad }).catch(() => undefined)
+        const recovered = await readEdition(periodDate, localeForLoad, { fresh: true })
         if (!active) return
-        if (again?.state === 'available') {
-          setView({ status: 'ready', document: again.document, kind: periodDate === todayDate ? 'today' : 'history' })
+        if (recovered.kind === 'available') {
           setRegenerateFailure(null)
-        } else {
-          setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
+          return
         }
-      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday) {
+        setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
+      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated') {
         // Nothing is written in this language. Whether that means "the issue has no content" or
         // "this issue has the other language" is the list's answer, not this branch's guess.
         const row = rows.find((edition) => edition.date === periodDate)
@@ -266,10 +264,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
             setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
           }
         } else setView({ status: 'no-edition', date: periodDate, failed: false })
-      } else if (skipGenerate && !keptCachedToday) {
+      } else if (false) {
         // Nothing is left for that day — same sentence as any day that never generated.
         setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
-      } else if (!keptCachedToday) {
+      } else {
         // A read that failed still says so. The delete reload is the opposite case: today was never
         // read, so it must not be reported as unreadable — the row the list already returned stands.
         const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
@@ -337,16 +335,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
 
   /**
    * The one way an edition is read: a row click and a language switch both land here, with the
-   * date the reader is on and the language they asked for. It never generates.
+   * date the reader is on and the language they asked for. It never generates, and the answer is
+   * cached per `${date}:${locale}` so switching back is a render, not another read.
    */
-  const openEdition = (date: string, target: 'zh-CN' | 'en-US', rowHint?: { state: string; attemptCount?: number }): void =>
-    openBriefingEdition({
-      client, date, locale: target, rows: editions, todayDate, current: view, request: requestRef,
-      onStart: setPinnedDate,
-      onFailureCleared: () => setRegenerateFailure(null),
-      setView,
-      ...(rowHint ? { row: rowHint } : {})
-    })
+  const { readEdition, openEdition } = useBriefingEditionReader({
+    client, editions, todayDate, readyDocument, requestRef,
+    cache: editionCacheRef, periodDate: periodDateRef,
+    setView, setPinnedDate, setRegenerateFailure
+  })
   openEditionRef.current = openEdition
   const selectEdition = (date: string): void => openEdition(date, effectiveLocaleRef.current)
   const { regenerate, generateNow } = useBriefingRunActions({
