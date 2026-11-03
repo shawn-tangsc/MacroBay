@@ -350,6 +350,63 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  it('shows a deleted day as empty, keeps the rail where the reader was, and still offers a generate', async () => {
+    // One delete action, three promises to the reader: the rail does not jump, the pane says
+    // "nothing here" instead of "the read failed", and the header control keeps working.
+    // A read was never attempted on this reload, so calling it unreadable would accuse it.
+    let listCalls = 0
+    // The service still lists every day of the window; a deleted day comes back as "not run",
+    // which is what the rail has to show while keeping the reader's place.
+    const list = vi.fn(async () => {
+      listCalls += 1
+      return {
+        state: 'available' as const,
+        result: {
+          editions: listCalls === 1
+            ? editions
+            : editions.map((edition) => edition.date === '2026-10-30'
+              ? { date: edition.date, periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const }
+              : edition)
+        }
+      }
+    })
+    const client = fakeClient({
+      list,
+      deletePeriod: vi.fn(async () => ({ editions: 1, attempts: 1, periodRuns: 1, sessionLinks: 1, remaining: 0, allDone: true })),
+      get: vi.fn(async ({ date }: { date: string }) => ({ state: 'available' as const, document: briefingDocument(date) }))
+    })
+    const dom = await renderPage(client)
+    const railRow = (): HTMLElement => dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!
+
+    expect(railRow().getAttribute('aria-current')).toBe('true')
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
+
+    act(() => { railRow().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    act(() => { item.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    await act(async () => { confirm.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+    // 1. The rail stayed put: the same day is still selected, and it now reads "not run".
+    expect(railRow().getAttribute('aria-current')).toBe('true')
+    expect(railRow().hasAttribute('data-missing') || railRow().textContent).toBeTruthy()
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
+    // 2. The pane is empty, not broken: the delete sentence, and no unreadable sentence at all.
+    expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')?.getAttribute('data-state')).toBe('empty')
+    expect(dom.textContent).toContain(text.stateReasons.deletedEdition)
+    expect(dom.textContent).not.toContain(text.stateReasons.unreadable)
+    expect(dom.textContent).not.toContain(text.stateReasons.unreadableSince.split('{')[0]!)
+    // 3. The generate control is still there and still usable.
+    const regenerate = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+    expect(regenerate).not.toBeNull()
+    expect(regenerate.disabled).toBe(false)
+    // And the delete did not start a run of its own.
+    expect(client.getToday).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps a stored Chinese headline out of an English edition, and keeps it in the Chinese one', async () => {
     const base = briefingDocument()
     const stored = {

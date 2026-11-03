@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from 'antd'
-import { ArrowLeft, CircleHelp, Settings2 } from 'lucide-react'
+import { ArrowLeft, CircleHelp } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -36,7 +36,8 @@ import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFai
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { useBriefingContentLocale } from './useBriefingContentLocale'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
-import { DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
+import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
+import { DailyBriefingPageActions } from './DailyBriefingPageActions'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -92,6 +93,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // A list we could not read is not an empty list: the rail says so and offers the same read again.
   const [editionsFailed, setEditionsFailed] = useState(false)
   const [view, setView] = useState<ViewState>({ status: 'loading' })
+  // The rail keeps its place when the pane empties: where the reader was is about the reader, not
+  // about whether this issue still has content.
+  const [pinnedDate, setPinnedDate] = useState<string | undefined>(undefined)
   const [reloadKey, setReloadKey] = useState(0)
   // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
   // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
@@ -208,6 +212,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         }
         setView({
           status: 'unavailable',
+          // A delete reload attempts no read, so an empty pane is a result of the delete, not a
+          // failed read. The pane must not accuse the read that never happened.
+          ...(skipGenerate ? { readSkipped: true } : {}),
           ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
           ...(generationTrace ? { generationTrace } : {})
         })
@@ -260,6 +267,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
     if (!row || row.state === 'missing') return
     if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return
+    setPinnedDate(date)
     const request = ++requestRef.current
     setRegenerateFailure(null)
     setView({ status: 'loading' })
@@ -316,7 +324,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
   // A stored edition under a failure notice is content, not a blocked state.
   const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
-  const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
+  // A ready pane always knows its own date; an emptied one falls back to where the reader was,
+  // so a delete never makes the rail jump to today.
+  const selectedDate = view.status === 'ready' ? view.document.edition.date : (pinnedDate ?? todayDate)
   const selectedLocale = view.status === 'ready' ? view.document.edition.locale : undefined
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
@@ -370,36 +380,26 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
-      <div className="mi-daily-briefing-page__actions">
-        {view.status === 'loading' ? <DailyBriefingGeneratingStatus progress={liveProgress} resolveText={resolveProductText} text={text} /> : null}
-        {/* The generate action is always in the header: an empty or failed page must not force the
-            reader to hunt for it somewhere else. It is disabled only while a run is in flight. */}
-        <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating || failure !== null}
-          {...(failure !== null ? { 'aria-label': text.regenerateInPanel, title: text.regenerateInPanel } : generating ? { 'aria-label': text.generationProgress.workingHint } : {})}
-          onClick={() => { if (view.status === 'ready' && view.kind === 'today') void regenerate(); else generateNow() }}>
-          {regenerating ? text.regenerating : text.regenerate}
-        </Button>
-        {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
-          {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
-          {/* The settings zone was unusable, so the window was computed in the machine's zone. The
-              reader configured a time and is getting another day boundary; saying nothing would let
-              them read the edition against the wrong one. */}
-          {view.status === 'ready' && view.timeZoneSource === 'system'
-            ? <small className="mi-daily-briefing__clock-note" role="status">{text.timeZoneFromSystem}</small>
-            : null}
-        </> : null}
-        {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__export" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
-          {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
-        </Button> : null}
-        {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__copy" onClick={() => void copy()} aria-live="polite">
-          {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
-        </Button> : null}
-        {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
-            beside it opened a second dialog for half of the same form. */}
-        <Button className="mi-daily-briefing__settings-entry" data-briefing-settings-open="true" onClick={() => setSettingsSection('generation')}>
-          <Settings2 aria-hidden="true" size={14} />{text.settingsDrawer.open}
-        </Button>
-      </div>
+      <DailyBriefingPageActions
+        text={text}
+        resolveText={resolveProductText}
+        progress={liveProgress}
+        loading={view.status === 'loading'}
+        generating={generating}
+        regenerating={regenerating}
+        todayReady={view.status === 'ready' && view.kind === 'today'}
+        failureActive={failure !== null}
+        zoneInvalid={zoneInvalid !== null}
+        systemZone={view.status === 'ready' && view.timeZoneSource === 'system'}
+        exportable={view.status === 'ready' && !contentBlocked}
+        exportState={exportState}
+        copyState={copyState}
+        onExport={() => void exportImage()}
+        onCopy={() => void copy()}
+        onOpenSettings={() => setSettingsSection('generation')}
+        onGenerate={generateNow}
+        onRegenerate={regenerate}
+      />
     </header>
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
@@ -419,7 +419,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </div> : null}
         {view.status === 'loading' ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'unavailable' && !failure
-          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
+          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} deleted={view.readSkipped === true} />
           : null}
         {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} text={text} onGenerate={generateNow} /> : null}
         {failure ? <DailyBriefingFailurePanel

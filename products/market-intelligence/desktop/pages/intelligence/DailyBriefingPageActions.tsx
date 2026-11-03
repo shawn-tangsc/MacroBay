@@ -1,0 +1,64 @@
+import { Button } from 'antd'
+import { Settings2 } from 'lucide-react'
+
+import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
+import { DailyBriefingGeneratingStatus } from './DailyBriefingGeneratingStates'
+import type { DailyBriefingText } from './dailyBriefingText'
+import type { BriefingCopyState, BriefingExportState } from './useBriefingShareActions'
+
+/**
+ * The page's one action row.
+ *
+ * The generate action is always here — an empty or failed page must not force the reader to hunt
+ * for it somewhere else — and it is disabled only while a run is in flight or while the failure
+ * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
+ * not layout, and the page is a layout.
+ */
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, failureActive, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+  text: DailyBriefingText
+  resolveText: (key: string) => string
+  progress: BriefingGenerationProgress | undefined
+  loading: boolean
+  generating: boolean
+  regenerating: boolean
+  todayReady: boolean
+  failureActive: boolean
+  zoneInvalid: boolean
+  systemZone: boolean
+  exportable: boolean
+  exportState: BriefingExportState
+  copyState: BriefingCopyState
+  onExport: () => void
+  onCopy: () => void
+  onOpenSettings: () => void
+  onGenerate: () => void
+  onRegenerate: () => void | Promise<void>
+}>): React.ReactElement {
+  return <div className="mi-daily-briefing-page__actions">
+    {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
+    {/* One generate control, one reason when it cannot run: the failure panel owns the retry. */}
+    <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating || failureActive}
+      {...(failureActive ? { 'aria-label': text.regenerateInPanel, title: text.regenerateInPanel } : generating ? { 'aria-label': text.generationProgress.workingHint } : {})}
+      onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
+      {regenerating ? text.regenerating : text.regenerate}
+    </Button>
+    {todayReady && !failureActive ? <>
+      {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
+      {/* The settings zone was unusable, so the window was computed in the machine's zone. The
+          reader configured a time and is getting another day boundary; saying nothing would let
+          them read the edition against the wrong one. */}
+      {systemZone ? <small className="mi-daily-briefing__clock-note" role="status">{text.timeZoneFromSystem}</small> : null}
+    </> : null}
+    {exportable ? <Button className="mi-daily-briefing__export" disabled={exportState === 'exporting'} onClick={onExport} aria-live="polite">
+      {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
+    </Button> : null}
+    {exportable ? <Button className="mi-daily-briefing__copy" onClick={onCopy} aria-live="polite">
+      {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
+    </Button> : null}
+    {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
+        beside it opened a second dialog for half of the same form. */}
+    <Button className="mi-daily-briefing__settings-entry" data-briefing-settings-open="true" onClick={onOpenSettings}>
+      <Settings2 aria-hidden="true" size={14} />{text.settingsDrawer.open}
+    </Button>
+  </div>
+}
