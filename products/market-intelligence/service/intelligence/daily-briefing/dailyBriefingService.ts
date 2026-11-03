@@ -158,6 +158,12 @@ export type DailyBriefingStore = Readonly<{
   }>) => Promise<void>
   /** The edition row and the attempt that wrote it, in one transaction: never one without the other. */
   publishEdition?: (edition: DailyBriefingStoredEdition, attempt?: DailyBriefingAttemptEnd) => Promise<void>
+  /**
+   * Deletes one issue of one day: every language's edition, every attempt, and the period run — the
+   * three tables of this database, in one transaction. Returns the row count of each; a date that
+   * was already deleted returns zeros instead of throwing, so the caller can simply retry.
+   */
+  deletePeriod?: (date: string, periodId: string) => Promise<Readonly<{ editions: number; attempts: number; periodRuns: number }>>
   /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
   upgradeState?: () => DailyBriefingStorageState
   retryUpgrade?: () => Promise<DailyBriefingStorageState>

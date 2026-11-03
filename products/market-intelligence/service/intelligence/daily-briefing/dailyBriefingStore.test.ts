@@ -54,6 +54,27 @@ describe('daily briefing store', () => {
     expect(await store.get('2026-10-01', 'zh-CN')).toBeUndefined()
   })
 
+  it('deletes every language of one issue in one transaction, leaving other days alone', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.put(edition('2026-10-30'))
+    const englishDocument = document('2026-10-30')
+    await store.put({
+      ...edition('2026-10-30'),
+      locale: 'en-US',
+      document: { ...englishDocument, edition: { ...englishDocument.edition, locale: 'en-US' } }
+    })
+    await store.put(edition('2026-10-29'))
+    await store.beginAttempt!({ date: '2026-10-30', locale: 'zh-CN', startedAt: '2026-10-30T00:00:00.000Z' })
+
+    const removed = await store.deletePeriod!('2026-10-30', 'default')
+    expect(removed.editions).toBe(2)
+    expect(removed.attempts).toBe(1)
+    // The other day is untouched, and a repeat delete returns zeros instead of throwing.
+    expect(await store.get('2026-10-29', 'zh-CN')).toBeDefined()
+    expect(await store.get('2026-10-30', 'en-US')).toBeUndefined()
+    expect(await store.deletePeriod!('2026-10-30', 'default')).toEqual({ editions: 0, attempts: 0, periodRuns: 0 })
+  })
+
   it('replaces the same day rather than stacking editions', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.put(edition('2026-10-30', 'first'))
