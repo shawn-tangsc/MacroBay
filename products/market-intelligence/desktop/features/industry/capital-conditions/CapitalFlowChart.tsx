@@ -6,6 +6,8 @@ import { formatFlowUsd } from './capitalFlowFormat'
 import { pickFlowLabelIndexes, placeFlowLabels, type FlowLabelAnchor, type FlowLabelBox } from './capitalFlowLabels'
 import { shortFlowDate, type FlowChartRow } from './capitalFlowRows'
 
+import './capitalFlowChart.css'
+
 type ChartText = FlowAccessibleText & {
   etfFlow: string
   chartWindow: string

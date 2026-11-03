@@ -25,8 +25,6 @@
   --mi-dashboard-capital-header-column-gap: 16px;
   --mi-dashboard-capital-content-row-gap: 14px;
   --mi-dashboard-etf-flow-block-gap: 8px;
-  --mi-dashboard-etf-flow-chart-height: 108px;
-  --mi-dashboard-etf-flow-axis-width: 42px;
   --mi-dashboard-etf-flow-tooltip-width: 176px;
   /*
     「口径说明」这类内联说明的排版口径：**这份文件是唯一 owner**，卡片只引用、不再抄数。
