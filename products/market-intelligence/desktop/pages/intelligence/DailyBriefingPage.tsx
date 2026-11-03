@@ -83,6 +83,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const requestRef = useRef(0)
   // The one read path, reachable from effects that must not re-implement it (the delete fallback).
   const openEditionRef = useRef<(date: string, locale: 'zh-CN' | 'en-US', row?: { state: string; attemptCount?: number }) => void>(() => undefined)
+  // The language to read after a delete: decided from the row as it was before the delete, and
+  // consumed by the reload. Choosing it here keeps "which language to show" ahead of "read it",
+  // so the pane and the switch cannot disagree.
+  const afterDeleteLocaleRef = useRef<'zh-CN' | 'en-US' | null>(null)
   // The language this component last loaded for; a change means the stored edition language arrived.
   const loadedLocaleRef = useRef<'zh-CN' | 'en-US' | null>(null)
   // The last readable edition, kept so a failed retry keeps the content under the failure notice.
@@ -159,7 +163,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const skipGenerate = takeSkipGenerate()
       // Opening the page may generate today's edition; everything else is a read. The language tab
       // therefore never comes through here — it calls the same read path a row click does.
-      const localeForLoad = effectiveLocaleRef.current
+      const afterDeleteLocale = afterDeleteLocaleRef.current
+      afterDeleteLocaleRef.current = null
+      const localeForLoad = afterDeleteLocale ?? effectiveLocaleRef.current
+      if (afterDeleteLocale && afterDeleteLocale !== effectiveLocaleRef.current) setContentLocale(afterDeleteLocale)
       loadedLocaleRef.current = localeForLoad
       const todayPromise = skipGenerate
         ? Promise.resolve(undefined)
@@ -216,6 +223,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
+      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday
+        && rows.some((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))) {
+        // The list says this language exists, so the answer "nothing written" is the read's miss, not
+        // the truth. Read that edition by its date before telling the reader anything.
+        openEditionRef.current(periodDate, localeForLoad, rows.find((edition) => edition.date === periodDate))
       } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday) {
         // Nothing is written in this language. Whether that means "the issue has no content" or
         // "this issue has the other language" is the list's answer, not this branch's guess.
@@ -432,6 +444,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         onDeletePeriod={(target) => {
+          // Decide what to show next before the delete runs: the other language of this issue, if
+          // there is one. The reload consumes it, so the switch and the pane move together.
+          const row = editions.find((edition) => edition.date === target.date)
+          const other = (row?.availableLocales ?? []).find((language) => language !== target.locale)
+          afterDeleteLocaleRef.current = other ?? null
           // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
           void deletePeriod(target)
         }} />

@@ -234,7 +234,7 @@ export type DailyBriefingAttemptsResult = Readonly<
 
 export type DailyBriefingService = Readonly<{
   /** One named period's edition when the scheduler says which fired; unscheduled callers mean `default`. */
-  getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>) => Promise<DailyBriefingTodayResult>
+  getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration; /** `false` opens the page as a read; no run. */ generate?: boolean }>) => Promise<DailyBriefingTodayResult>
   regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
