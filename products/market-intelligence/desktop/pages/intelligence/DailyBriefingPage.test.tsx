@@ -314,6 +314,42 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  it('reloads after a delete without starting a generation', async () => {
+    // Deleting an issue is the reader saying "this one should not exist". Reloading the page must
+    // read what is left, not call getToday, which generates a missing edition — otherwise the delete
+    // is undone by the very refresh that follows it. The day that was not deleted must stay on
+    // screen, because the list already carries it.
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }))
+    const client = fakeClient({
+      deletePeriod,
+      get: vi.fn(async ({ date }: { date: string }) => date === '2026-10-29'
+        ? { state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }
+        : date === '2026-10-30'
+          ? { state: 'available' as const, document: briefingDocument('2026-10-30') }
+          : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    expect(client.getToday).toHaveBeenCalledTimes(1)
+
+    const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    act(() => { item.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    await act(async () => { confirm.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default' })
+    // The list is read again (the row that survived must still be on screen), but no new run starts.
+    expect(client.list).toHaveBeenCalledTimes(2)
+    expect(client.getToday).toHaveBeenCalledTimes(1)
+    // Deleting a past issue must not blank today's edition: the reload reads it from the list.
+    expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
+    expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
+  })
+
   it('copies the current edition as text and reports success', async () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })

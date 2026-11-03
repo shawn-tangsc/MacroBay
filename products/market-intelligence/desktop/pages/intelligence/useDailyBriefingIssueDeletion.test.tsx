@@ -40,6 +40,10 @@ describe('briefing issue deletion', () => {
     expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default' }, remaining: 3 })
     // The list is read again either way: a row that survived the delete must still be on screen.
     expect(onSettled).toHaveBeenCalledTimes(1)
+    // Half of it went through, so the reload must not generate either.
+    expect(deletion().takeSkipGenerate()).toBe(true)
+    // One-shot: the next ordinary read generates again.
+    expect(deletion().takeSkipGenerate()).toBe(false)
   })
 
   it('says the count is unknown, not zero, when the call itself fails', async () => {
@@ -49,6 +53,8 @@ describe('briefing issue deletion', () => {
     await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default' }) })
 
     expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default' }, remaining: null })
+    // Nothing was deleted: the reload behaves like any other reload.
+    expect(deletion().takeSkipGenerate()).toBe(false)
   })
 
   it('clears the note when everything was deleted, and does nothing without a port', async () => {
@@ -56,9 +62,11 @@ describe('briefing issue deletion', () => {
     const withPort = render({ deletePeriod: done }, vi.fn())
     await act(async () => { await withPort().deletePeriod({ date: '2026-11-02', periodId: 'default' }) })
     expect(withPort().outcome).toBeNull()
+    expect(withPort().takeSkipGenerate()).toBe(true)
 
     const noPort = render({}, vi.fn())
     await act(async () => { await noPort().deletePeriod({ date: '2026-11-02', periodId: 'default' }) })
     expect(noPort().outcome).toBeNull()
+    expect(noPort().takeSkipGenerate()).toBe(false)
   })
 })

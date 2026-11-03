@@ -105,7 +105,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
   const [settingsReloadKey, setSettingsReloadKey] = useState(0)
-  const { outcome: deleteOutcome, deletePeriod } = useDailyBriefingIssueDeletion({ client, onSettled: () => setReloadKey((key) => key + 1) })
+  const { outcome: deleteOutcome, deletePeriod, takeSkipGenerate } = useDailyBriefingIssueDeletion({ client, onSettled: () => setReloadKey((key) => key + 1) })
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -139,7 +139,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setEditionsFailed(false)
     setRegenerateFailure(null)
     void (async () => {
-      const todayPromise = withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      // One-shot: only the reload a delete asked for skips the generation; the next ordinary open
+      // must be able to generate today again.
+      const skipGenerate = takeSkipGenerate()
+      const todayPromise = skipGenerate
+        ? Promise.resolve(undefined)
+        : withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
@@ -148,10 +153,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setEditionsLoading(false)
       setEditionsFailed(listed?.state !== 'available')
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
+      let keptCachedToday = false
       if (cachedRow) {
         const cached = await client.get({ date: cachedRow.date, locale: effectiveLocale }).catch(() => undefined)
-        if (active && cached?.state === 'available' && view.status === 'loading') {
+        // On the delete reload the captured `view` is the one from before (still ready), and no
+        // getToday answer follows to fill the screen: the list's row is what must stand.
+        if (active && cached?.state === 'available' && (view.status === 'loading' || skipGenerate)) {
           setView({ status: 'ready', document: cached.document, kind: 'today' })
+          keptCachedToday = true
         }
       }
       const today = await todayPromise
@@ -172,7 +181,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
-      } else {
+      } else if (!skipGenerate || !keptCachedToday) {
+        // A read that failed still says so. The delete reload is the opposite case: today was never
+        // read, so it must not be reported as unreadable — the row the list already returned stands.
         const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
         setView({
           status: 'unavailable',
