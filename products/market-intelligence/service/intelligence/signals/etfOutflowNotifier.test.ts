@@ -7,6 +7,9 @@ import { buildEtfOutflowSignalRequest, notifyEtfOutflowSignals } from './etfOutf
 
 const asOf = '2026-09-01T12:00:00.000Z'
 
+/** 生产默认是同一张表；用例显式传一份「开着」的表，免得以后总闸一关把发送用例也一起关掉。 */
+const OPEN = { panel: true, notification: true } as const
+
 function rows(netFlows: readonly number[]) {
   return netFlows.map((netFlowUsd, index) => ({
     tradingDate: `2026-08-${String(25 + index).padStart(2, '0')}`,
@@ -61,9 +64,23 @@ describe('ETF outflow signal notification', () => {
     const submit = vi.fn(async () => { throw new Error('notification store is down') })
     const signal = outflowSignal()
 
-    await expect(notifyEtfOutflowSignals(submit, [signal])).resolves.toBeUndefined()
+    await expect(notifyEtfOutflowSignals(submit, [signal], OPEN)).resolves.toBeUndefined()
     expect(submit).toHaveBeenCalledTimes(1)
 
-    await expect(notifyEtfOutflowSignals(undefined, [signal])).resolves.toBeUndefined()
+    await expect(notifyEtfOutflowSignals(undefined, [signal], OPEN)).resolves.toBeUndefined()
+  })
+
+  // 一个事实一个开关：牌子还没上时，通知即使自己写着「开」也不许发。这是这次空档的直接教训——
+  // 两条路各上了各的，读者收到一条打开看板找不到的通知。
+  it('sends nothing while the panel outlet is closed, even when the notification outlet says open', async () => {
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: false, notification: true })
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing when the notification outlet itself is closed', async () => {
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: true, notification: false })
+    expect(submit).not.toHaveBeenCalled()
   })
 })

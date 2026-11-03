@@ -5,6 +5,7 @@ import type {
 import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
 
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import { etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../contracts/etfFlows'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
 /**
@@ -78,12 +79,17 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
  * 提交；一条通知发不出去不能把已经落库的行情判成失败，所以吞掉提交异常。
  *
  * 没有提交入口（例如未接通知的运行环境）时静默跳过——刷新本身照常完成。
+ *
+ * 出口开关在这里挡的是**发送**，不是读取与写回：牌子还没落地时通知先关，行情照常采集，
+ * 开关一开就补上，不用重做这一笔。判断委托给 `isEtfOutflowOutletOpen`，牌子关着时这里
+ * 即使写着 `true` 也不发——两条路共用一个开关，不给第二个入口留自己的总闸。
  */
 export async function notifyEtfOutflowSignals(
   submit: SignalNoticeSubmit | undefined,
-  signals: readonly ModuleSignal[]
+  signals: readonly ModuleSignal[],
+  outlets: EtfOutflowOutletSwitch = etfOutflowOutletPolicy
 ): Promise<void> {
-  if (!submit) return
+  if (!submit || !isEtfOutflowOutletOpen(outlets, 'notification')) return
   const requests = signals.map(buildEtfOutflowSignalRequest).filter((request): request is NotificationSubmitRequest => request !== undefined)
   for (const request of requests) {
     try {

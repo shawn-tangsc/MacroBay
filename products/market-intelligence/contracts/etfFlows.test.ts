@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeEtfCumulativeFlow, etfFlowPolicy, latestCompleteWindow } from './etfFlows'
+import { computeEtfCumulativeFlow, etfFlowPolicy, isEtfOutflowOutletOpen, latestCompleteWindow } from './etfFlows'
 
 /** The two windows the panel and the analysis snapshot read. */
 const WINDOWS = etfFlowPolicy.cumulativeWindows
@@ -136,6 +136,21 @@ describe('reading one window back', () => {
   it('does not answer for a window that was never computed', () => {
     expect(latestCompleteWindow(computeEtfCumulativeFlow(rows([1, 2, 3]), SIGNAL), 5)).toBeUndefined()
     expect(latestCompleteWindow(undefined, 3)).toBeUndefined()
+  })
+})
+
+describe('one switch for every outlet', () => {
+  // 这次空档的根子：通知先上、牌子后上，读者收到一条打开看板找不到的通知。开关收成一张表，
+  // 牌子是总闸；任何出口都不许在它关着时自己开。
+  it('closes every outlet while the panel switch is closed', () => {
+    expect(isEtfOutflowOutletOpen({ panel: false, notification: true }, 'notification')).toBe(false)
+    expect(isEtfOutflowOutletOpen({ panel: false, notification: false }, 'notification')).toBe(false)
+  })
+
+  it('opens an outlet only when both the panel and that outlet are open', () => {
+    expect(isEtfOutflowOutletOpen({ panel: true, notification: true }, 'notification')).toBe(true)
+    expect(isEtfOutflowOutletOpen({ panel: true, notification: true }, 'panel')).toBe(true)
+    expect(isEtfOutflowOutletOpen({ panel: true, notification: false }, 'notification')).toBe(false)
   })
 })
 

@@ -30,6 +30,30 @@ export const etfFlowPolicy = Object.freeze({
   tradingDatePattern: /^\d{4}-\d{2}-\d{2}$/
 } as const)
 
+/**
+ * 这条读数允许从哪里到达读者。
+ *
+ * **一个事实一个开关，不是每个出口一个开关。** 资金面卡片上的牌子是它的正身，通知是另一个
+ * 出口：牌子还没上、通知先到，读者打开看板找不到它，第一反应是通知坏了——通知的可信度只有
+ * 一次。所以牌子的开关是总闸，任何新出口（日报、推送）都读这里，不许各自再开一个。
+ */
+export const etfOutflowOutletPolicy = Object.freeze({
+  /** 资金面卡片标题旁的牌子。总闸：它关着，其他出口一律关。 */
+  panel: false,
+  /** 通知中心。牌子落地前不许单独打开。 */
+  notification: false
+} as const)
+
+export type EtfOutflowOutlet = keyof typeof etfOutflowOutletPolicy
+
+/** 开关的取值表。生产读 {@link etfOutflowOutletPolicy}，用例传自己的表来钉住每种组合。 */
+export type EtfOutflowOutletSwitch = Readonly<Record<EtfOutflowOutlet, boolean>>
+
+/** 出口是否开着：总闸（牌子）关着时，单个出口写了 `true` 也不算开。 */
+export function isEtfOutflowOutletOpen(switchState: EtfOutflowOutletSwitch, outlet: EtfOutflowOutlet): boolean {
+  return switchState.panel && switchState[outlet]
+}
+
 export type EtfCumulativeFlowWindow = Readonly<{
   windowDays: number
   coveredDays: number
