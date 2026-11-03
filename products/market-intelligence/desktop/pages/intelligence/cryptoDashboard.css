@@ -205,22 +205,16 @@
 .mi-capital-conditions__chart-label:focus-visible,
 .mi-capital-conditions__daily-table:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 .mi-capital-conditions__chart-label { position: absolute; height: 14px; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, var(--mi-dashboard-surface) 86%, transparent); color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 14px; white-space: nowrap; }
-.mi-capital-conditions__chart-scope,
-.mi-capital-conditions__not-comparable { margin: 0; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.45; }
-.mi-capital-conditions__daily { display: grid; gap: 6px; min-width: 0; }
-.mi-capital-conditions__daily-toggle { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 /* The trigger sits at the right end of the title row; the window line keeps its place. */
 .mi-capital-conditions__daily-button { margin-left: auto; padding: 0; white-space: nowrap; }
-.mi-capital-conditions__daily-source { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__daily-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.mi-capital-conditions__daily-table caption { padding: 0 0 4px; color: var(--mi-dashboard-muted); font-size: 10px; text-align: left; }
+.mi-capital-conditions__daily-table caption { padding: 0 0 6px; color: var(--mi-dashboard-muted); font-size: 10px; text-align: left; }
+.mi-capital-conditions__daily-units { display: block; padding-top: 2px; font-size: 9px; }
 .mi-capital-conditions__daily-table thead th { padding: 0 8px 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); font-size: 10px; font-weight: 400; text-align: right; white-space: nowrap; }
 .mi-capital-conditions__daily-table thead th:first-child,
 .mi-capital-conditions__daily-table tbody th { text-align: left; }
 .mi-capital-conditions__daily-table tbody th { padding: 5px 8px 5px 0; color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 400; white-space: nowrap; }
 .mi-capital-conditions__daily-table tbody td { padding: 5px 0 5px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
-.mi-capital-conditions__daily-scope { display: block; color: var(--mi-dashboard-muted); font-size: 9px; font-weight: 400; }
-.mi-capital-conditions__daily-note { margin: 0; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.45; }
 .mi-capital-conditions__daily-empty { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
