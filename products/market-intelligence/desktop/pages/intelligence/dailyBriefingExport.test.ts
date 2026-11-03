@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
-import { posterExportBackground } from './dailyBriefingExport'
+import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 
 describe('posterExportBackground', () => {
   it('reads the paper colour the poster is painted in', () => {
@@ -20,5 +20,16 @@ describe('posterExportBackground', () => {
 
     expect(posterExportBackground(bare)).toBeUndefined()
     expect(posterExportBackground(null)).toBeUndefined()
+  })
+})
+
+describe('briefingExportFileName', () => {
+  it('names the file after the edition language, not the interface language', () => {
+    // The interface may be Chinese while the reader exports the English edition; a `-zh-CN.png`
+    // name would tell them the picture is in a language it is not.
+    expect(briefingExportFileName({ edition: { date: '2026-11-03', locale: 'en-US' } }))
+      .toBe('mi-daily-brief-2026-11-03-en-US.png')
+    expect(briefingExportFileName({ edition: { date: '2026-11-03', locale: 'zh-CN' } }))
+      .toBe('mi-daily-brief-2026-11-03-zh-CN.png')
   })
 })

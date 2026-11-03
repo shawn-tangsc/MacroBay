@@ -15,3 +15,15 @@ export function posterExportBackground(poster: Element | null): string | undefin
   if (!painted || painted === 'transparent' || painted === 'rgba(0, 0, 0, 0)') return undefined
   return painted
 }
+
+/**
+ * The downloaded image's file name: the edition it contains decides the language tag.
+ *
+ * It used to take the interface language, so exporting an English edition from a Chinese interface
+ * produced a `-zh-CN.png` file — the reader then has no way to tell which language the picture is in.
+ */
+export function briefingExportFileName(document: Readonly<{
+  edition: Readonly<{ date: string; locale: string }>
+}>): string {
+  return `mi-daily-brief-${document.edition.date}-${document.edition.locale}.png`
+}

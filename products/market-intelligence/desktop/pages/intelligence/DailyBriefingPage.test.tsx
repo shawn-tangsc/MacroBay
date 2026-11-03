@@ -326,6 +326,24 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain(text.copied)
   })
 
+  it('copies an English edition in English, whatever the interface language is', async () => {
+    const writeText = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({
+        state: 'available' as const,
+        document: { ...briefingDocument(), edition: { ...briefingDocument().edition, locale: 'en-US' as const } }
+      }))
+    })
+    const dom = await renderPage(client, { locale: 'zh-CN' })
+    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
+    const markdown = writeText.mock.calls[0]?.[0] as string
+    // Same rule as the file name and the exported image: the edition decides its own language.
+    expect(markdown).toContain(`# ${englishText.title}`)
+    expect(markdown).not.toContain(`# ${text.title}`)
+  })
+
   it('reports a clipboard failure and copies the historical edition that is on screen', async () => {
     const writeText = vi.fn(async () => { throw new Error('denied') })
     vi.stubGlobal('navigator', { clipboard: { writeText } })

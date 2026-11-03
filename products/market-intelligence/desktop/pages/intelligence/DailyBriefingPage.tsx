@@ -21,7 +21,7 @@ import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './Dai
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
-import { posterExportBackground } from './dailyBriefingExport'
+import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
@@ -237,7 +237,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const paper = posterExportBackground(poster)
       const dataUrl = await toPng(poster, { pixelRatio: 2, ...(paper ? { backgroundColor: paper } : {}), width: 1080, cacheBust: true })
       const link = document.createElement('a')
-      link.download = `mi-daily-brief-${view.document.edition.date}-${locale}.png`
+      link.download = briefingExportFileName(view.document)
       link.href = dataUrl
       link.click()
       setExportState('done')
@@ -252,9 +252,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (view.status !== 'ready') return
     try {
       const markdown = dailyBriefingToMarkdown(view.document, {
-        labels: withWindowHours(text, view.document.edition.windowHours ?? 24),
-        locale,
-        direction: (term) => localizedDirectionTerm(term, locale),
+        labels: withWindowHours(view.document.edition.locale === locale ? text : briefingTextForLocale(view.document.edition.locale), view.document.edition.windowHours ?? 24),
+        locale: view.document.edition.locale,
+        direction: (term) => localizedDirectionTerm(term, view.document.edition.locale),
         ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),
         formatTime: (value) => formatTime(value, 'minute')
       })
