@@ -1,8 +1,9 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
-import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import { signalTriggerKey, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import type { SignalAnalysisRequest, SignalAnalysisOutcome } from '../jobs/requestSignalAnalysis'
 import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
 
 /**
@@ -81,10 +82,42 @@ function submitRequestFor(signal: ModuleSignal): NotificationSubmitRequest | und
   }
 }
 
+/**
+ * The one place a fired open-interest signal becomes an analysis request.
+ *
+ * The receiver (`jobs/requestSignalAnalysis`) owns the group, the ledger row and the queue; this
+ * function only fills the fields it cannot know: the rule's own key, the board the signal belongs
+ * to, and the bucket it happened in. Building the trigger key here instead of at the call site is
+ * what keeps a typo out of the budget: the contract accepts exactly `signal.<module>.<rule>`.
+ */
+export function analysisRequestFor(signal: ModuleSignal): SignalAnalysisRequest | undefined {
+  // "Nothing was read" is not "the rule fired"; a low-severity mark is the chip's business only.
+  if (signal.readiness !== 'available' || signal.asset === null) return undefined
+  if (signal.severity !== 'medium' && signal.severity !== 'high') return undefined
+  const triggerKey = signalTriggerKey(signal.moduleId, signal.ruleId)
+  if (triggerKey === undefined) return undefined
+  return {
+    triggerKey,
+    moduleId: signal.moduleId,
+    ruleId: signal.ruleId,
+    // The open-interest board is the funding one; reusing the existing group type, not a new one.
+    groupType: 'funding',
+    severity: signal.severity,
+    observedAt: signal.observedAt,
+    // The bucket key the signal was deduplicated on: module, rule, asset and the same bucket.
+    changeHash: signal.dedupeKey
+  }
+}
+
 export function createOpenInterestSignalNotifier(deps: Readonly<{
-  submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  submit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   readHistory: (input: Readonly<{ asOf: string; window: '24h' }>) => Promise<OpenInterestHistoryResult>
   now?: () => string
+  /**
+   * The analysis entry, when one is wired. Absent leaves behaviour exactly as it was: the rule
+   * still produces its chip and its notification, it just cannot ask for a run.
+   */
+  requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
 }>) {
   return async function notifyOpenInterestSignals(): Promise<readonly NotificationSubmitOutcome[]> {
     const asOf = (deps.now ?? (() => new Date().toISOString()))()
@@ -93,8 +126,15 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
     const outcomes: NotificationSubmitOutcome[] = []
     for (const signal of candidates) {
       const request = submitRequestFor(signal)
-      if (request === undefined) continue
-      outcomes.push(await deps.submit(request))
+      if (request !== undefined && deps.submit !== undefined) outcomes.push(await deps.submit(request))
+      const analysis = analysisRequestFor(signal)
+      if (analysis === undefined || deps.requestAnalysis === undefined) continue
+      try {
+        await deps.requestAnalysis(analysis)
+      } catch {
+        // One hand-off failing must not turn a stored bucket into a failed collection, and must
+        // not stop the next signal from being offered.
+      }
     }
     return Object.freeze(outcomes)
   }
@@ -112,20 +152,36 @@ export function createSignalledOpenInterestRefresh<T extends { state?: string }>
   readHistory: (input: Readonly<{ asOf: string; window: '24h' }>) => Promise<OpenInterestHistoryResult>
   submit?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   now?: () => string
-}>): { refresh: () => Promise<T> } {
-  const notify = input.submit === undefined
-    ? undefined
-    : createOpenInterestSignalNotifier({ submit: input.submit, readHistory: input.readHistory, ...(input.now === undefined ? {} : { now: input.now }) })
+  requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
+}>): {
+  refresh: () => Promise<T>
+  /**
+   * Late binding, not a constructor argument: the analysis runtime is assembled after this refresh
+   * service, and the module that wires both is a file-size baseline that may not grow. Until it is
+   * called the refresh behaves exactly as before.
+   */
+  bindSignalAnalysis: (service: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>) => void
+} {
+  let requestAnalysis = input.requestAnalysis
   return {
     async refresh(): Promise<T> {
       const result = await input.refresh()
-      if (notify === undefined || result.state === 'unavailable') return result
+      if (result.state === 'unavailable') return result
+      // Nothing is wired: keep the collection path free of a read it would only throw away.
+      if (input.submit === undefined && requestAnalysis === undefined) return result
+      const notify = createOpenInterestSignalNotifier({
+        ...(input.submit === undefined ? {} : { submit: input.submit }),
+        readHistory: input.readHistory,
+        ...(input.now === undefined ? {} : { now: input.now }),
+        ...(requestAnalysis === undefined ? {} : { requestAnalysis })
+      })
       try {
         await notify()
       } catch {
         // 采集结果已经落盘；一条通知发不出去不该让这次采集看起来失败。
       }
       return result
-    }
+    },
+    bindSignalAnalysis(service) { requestAnalysis = service }
   }
 }

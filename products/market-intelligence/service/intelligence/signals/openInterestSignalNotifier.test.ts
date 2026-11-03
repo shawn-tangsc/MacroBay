@@ -151,3 +151,66 @@ describe('signals follow a successful collection', () => {
     expect(await wrapped.refresh()).toEqual({ state: 'updated' })
   })
 })
+
+describe('handing a fired signal to the analysis entry', () => {
+  const queued = { state: 'queued' as const, groupId: 'group-1', attemptLedgerId: 'ledger-1', jobRunId: 'job-1' }
+
+  it('hands the registered key and the bucket the signal belongs to', async () => {
+    const requestAnalysis = vi.fn(async () => queued)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      requestAnalysis,
+      now: () => asOf
+    })
+    await wrapped.refresh()
+    expect(requestAnalysis).toHaveBeenCalledTimes(1)
+    // Exactly what the receiver consumes: the key the budget recognises, the board, the reading's
+    // own instant, and the bucket key so two assets are two changes of one trigger.
+    expect(requestAnalysis.mock.calls[0]![0]).toEqual({
+      triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+      moduleId: 'open-interest',
+      ruleId: 'oi-liquidation-proxy',
+      groupType: 'funding',
+      severity: 'high',
+      observedAt: bucketAt,
+      changeHash: 'open-interest:oi-liquidation-proxy:btc:2026-11-03T10:15:00.000Z'
+    })
+  })
+
+  it('binds after construction, because the runtime is assembled later', async () => {
+    const requestAnalysis = vi.fn(async () => queued)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      now: () => asOf
+    })
+    wrapped.bindSignalAnalysis(requestAnalysis)
+    await wrapped.refresh()
+    expect(requestAnalysis).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not hand anything when the source was switched off', async () => {
+    const requestAnalysis = vi.fn(async () => queued)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'unavailable' as const }),
+      readHistory: async () => reading(),
+      requestAnalysis,
+      now: () => asOf
+    })
+    await wrapped.refresh()
+    expect(requestAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('keeps the collection result when the analysis entry refuses the hand-off', async () => {
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      requestAnalysis: async () => { throw new Error('analysis runtime missing') },
+      now: () => asOf
+    })
+    // The bucket is stored and the chip still draws; a run that could not be asked for is not a
+    // failed collection.
+    expect(await wrapped.refresh()).toEqual({ state: 'updated' })
+  })
+})
