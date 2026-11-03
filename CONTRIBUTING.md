@@ -51,6 +51,16 @@ git switch -c feat/short-description
 4. Update the public documentation when a user-facing behavior changes.
 5. Do not add captured market data, provider responses, or credentials to the repository.
 
+### Pre-commit check
+
+- Installed once per machine: `git config core.hooksPath .githooks`. The hook runs the whole-project
+  `typecheck` and the four component guards, but fails **only on errors in the files this commit contains**;
+  another session's in-flight files are printed and do not block, because this checkout is shared. It never
+  runs `verify` or the test suite, and it gives up rather than block when the budget runs out.
+- Skip one commit with `SKIP_PRE_COMMIT=1 git commit …` (emergency only), then run `pnpm typecheck` yourself.
+- It covers only what a scoped test run cannot see. It is not a substitute for `pnpm typecheck`, and never for
+  the runner's full gate.
+
 Use **Squash and merge**, delete the branch after merge, and follow the
 [Git workflow](./docs/development/git-workflow.md) for branch names, tags, and releases.
 
