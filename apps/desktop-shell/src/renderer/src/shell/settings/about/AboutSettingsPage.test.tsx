@@ -82,7 +82,9 @@ describe('the about page', () => {
 
     expect(container.textContent).toContain('MacroBay')
     expect(container.textContent).toContain(text.tagline)
-    expect(container.querySelectorAll('.preference-section .preference-heading')).toHaveLength(1)
+    // 页面上**没有**那一行装饰性的标题（ⓘ + 「版本」）：下面紧接着就是「当前版本 / 最新版本」。
+    // 这一条守的是「别再把它加回来」——那个图标暗示「点开有解释」，而它什么也不做。
+    expect(container.querySelectorAll('.preference-heading')).toHaveLength(0)
     // 更新块是同一个组件，文案与药丸沿用已签过的那一版。
     expect(container.textContent).toContain(versionText.pill.available)
     expect(container.textContent).toContain('0.4.0')

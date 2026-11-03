@@ -38,7 +38,8 @@ describe('the version row', () => {
       pillTone: 'info',
       latestVersion: '0.4.0',
       action: 'update',
-      notice: 'available'
+      // 有新版本时不配提示句（那句话已被删）。
+      notice: null
     })
     expect(describeVersionCheck({ ...base, state: upToDate })).toMatchObject({
       pill: 'upToDate',
@@ -68,8 +69,8 @@ describe('the version row', () => {
     expect(view.pill).toBe('available')
     expect(view.latestVersion).toBe('0.4.0')
     expect(view.action).toBe('update')
-    // 结论那一句还在，失败句是**加在下面**的一句，不是替换。
-    expect(view.notice).toBe('available')
+    // 「有新版本」本身不配描述句（那句已删）；失败句是**加在下面**的一句，不是替换结论。
+    expect(view.notice).toBeNull()
     expect(view.showOpenFailed).toBe(true)
   })
 
@@ -92,7 +93,7 @@ describe('the version row', () => {
       latestVersion: '0.4.0',
       showAutoToggle: true,
       action: 'update',
-      notice: 'available',
+      notice: null,
       // 描述位只放一句：结论句优先于「开关关着」，不再叠第二句。
       showAutoOffHint: false
     })

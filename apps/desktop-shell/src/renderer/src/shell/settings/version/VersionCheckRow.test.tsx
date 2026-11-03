@@ -212,9 +212,9 @@ describe('the version row in the settings page', () => {
     const download = buttonWithText(container, actionText.update)
     expect(download).not.toBeNull()
     expect(download?.className).toContain('ant-primary-button')
-    // 描述位只放一句：结论句在，「未开启自动检查」不再叠第二句（叠起来就是最高的一档）。
-    expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
-    expect(container.querySelector('.version-notice')?.textContent).toBe(text.availableLine('0.4.0'))
+    // 「有新版本」不再配描述句（用户 11-03 删掉那句）：药丸说结论、版本行给号、按钮写着目标版本，
+    // 已经三处齐了。所以这里断言的是**一句都没有**，「未开启自动检查」也不许补一句填满。
+    expect(container.querySelectorAll('.version-notice')).toHaveLength(0)
     expect(container.querySelector('.version-auto-off-hint')).toBeNull()
 
     await act(async () => {

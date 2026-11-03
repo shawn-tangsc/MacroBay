@@ -1031,7 +1031,6 @@ export type PlatformText = {
      * 版本号、时刻都不进键：数字由数据填，时刻由 `formatShellInstant` 按读者时区格式化后传入。
      */
     version: {
-      title: string
       current: string
       latest: string
       unknown: string
@@ -1040,7 +1039,6 @@ export type PlatformText = {
       autoCheck: string
       autoHint: string
       autoOffLine: string
-      availableLine: (version: string) => string
       unavailableLine: string
       lastCheckedAt: (time: string) => string
       pill: {
@@ -1076,7 +1074,6 @@ export type PlatformText = {
       openFailedNote: string
     }
     links: {
-      title: string
       changelog: string
       docs: string
       site: string
@@ -2220,7 +2217,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       light: '浅色',
       dark: '深色',
       version: {
-        title: '版本',
         current: '当前版本',
         latest: '最新版本',
         unknown: '未知',
@@ -2229,7 +2225,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         autoCheck: '启动时检查更新',
         autoHint: '同一个 UTC 自然日最多查一次；应用不会自己下载或安装。',
         autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
-        availableLine: (version) => `有新版本 ${version} 可以下载。`,
         // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
         // 与「上次检查：{时刻}」合成一行（时间在前、`·` 连接）：药丸已经说了「暂时查不到」，
         // 这句要补的是「这不代表没有新版本」——丢了它就是把「拿不到」说成「没有」。
@@ -2258,7 +2253,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         openFailedNote: '没能打开浏览器，可再点一次重试'
       },
       links: {
-        title: '链接',
         changelog: '更新日志',
         docs: '帮助文档',
         site: '官网',
@@ -3410,7 +3404,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       light: 'Light',
       dark: 'Dark',
       version: {
-        title: 'Version',
         current: 'Current version',
         latest: 'Latest version',
         unknown: 'Unknown',
@@ -3419,7 +3412,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         autoCheck: 'Check for updates at startup',
         autoHint: 'At most once per UTC day; the app never downloads or installs anything on its own.',
         autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
-        availableLine: (version) => `Version ${version} is available to download.`,
         unavailableLine: 'this does not mean there is no newer version.',
         lastCheckedAt: (time) => `Last checked: ${time}`,
         pill: {
@@ -3445,7 +3437,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         openFailedNote: 'The browser did not open. Click again to retry'
       },
       links: {
-        title: 'Links',
         changelog: 'Release notes',
         docs: 'Documentation',
         site: 'Website',

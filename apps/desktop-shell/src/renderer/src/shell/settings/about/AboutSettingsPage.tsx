@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import appIconUrl from '@resources/icon.png?url'
+import { FileTextOutlined, GlobalOutlined, MessageOutlined, ReadOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 
 import type { AppSettings, AppSettingsPatch } from '@platform/settings/schema/appSettings'
@@ -68,6 +69,13 @@ export function AboutSettingsPage(props: {
   }, [client])
 
   // 「打开下载页」由更新块渲染；链接块固定四颗，download 不在这里重复（两颗按钮开同一地址就是缺陷）。
+  /**
+   * 四个去处各配一个图标：**用现成的一套**（`@ant-design/icons`），不为这一块自绘。
+   * 图标只是扫读时的锚点，`aria-hidden`——真正读出来的信息是后面的名字。
+   */
+  const linkIcon = (id: UpdateLinkId): typeof FileTextOutlined =>
+    id === 'changelog' ? FileTextOutlined : id === 'docs' ? ReadOutlined : id === 'site' ? GlobalOutlined : MessageOutlined
+
   const linkRows: { id: UpdateLinkId; label: string; action: string }[] = [
     { id: 'changelog', label: text.links.changelog, action: text.links.actionView },
     { id: 'docs', label: text.links.docs, action: text.links.actionView },
@@ -133,17 +141,25 @@ export function AboutSettingsPage(props: {
         </div>
       ) : null}
 
+      {/*
+        链接块：**一行一项**（图标 + 名称 + 右侧动作词，行间一条细线），不再有「链接」这个小标题——
+        下面四行自己说明是什么，标题只是把同义信息再说一遍（用户 11-03 删掉了它）。
+        图标用 `@ant-design/icons`（现成的一套），不为这一块自绘；`aria-hidden`，名字才是可读信息。
+      */}
       <div className="preference-section">
-        <h3 className="about-section-title">{text.links.title}</h3>
         <ul className="about-links">
-          {linkRows.map((row) => (
-            <li key={row.id} className="about-link-row">
-              <span className="about-link-label">{row.label}</span>
-              <Button className="ant-secondary-button" size="small" onClick={() => void openLink(row.id)}>
-                {row.action}
-              </Button>
-            </li>
-          ))}
+          {linkRows.map((row) => {
+            const Icon = linkIcon(row.id)
+            return (
+              <li key={row.id} className="about-link-row">
+                <Icon className="about-link-icon" aria-hidden="true" />
+                <span className="about-link-label">{row.label}</span>
+                <Button className="ant-secondary-button about-link-action" size="small" onClick={() => void openLink(row.id)}>
+                  {row.action}
+                </Button>
+              </li>
+            )
+          })}
         </ul>
         {openFailed === null ? null : (
           <p className="preference-hint about-link-failed" role="status">

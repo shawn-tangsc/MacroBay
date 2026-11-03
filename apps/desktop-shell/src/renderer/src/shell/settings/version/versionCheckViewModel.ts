@@ -11,8 +11,14 @@ import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCh
 
 export type VersionCheckPill = 'upToDate' | 'available' | 'unavailable' | 'checking' | 'notChecked' | 'autoOff'
 
-/** 结论那一句提示；同一时刻最多一句。 */
-export type VersionCheckNotice = 'available' | 'unavailable' | 'autoOff'
+/**
+ * 结论那一句提示；同一时刻最多一句。
+ *
+ * 「有新版本」**没有提示句**：药丸说了结论、版本行给了号、按钮写着「更新到 {版本}」，
+ * 再补一句「有新版本 X 可以下载」就是同一件事说第四遍（用户 11-03 删掉了那句）。
+ * 空着是对的，不要为了「不空着」把它加回来。
+ */
+export type VersionCheckNotice = 'unavailable' | 'autoOff'
 
 export type VersionCheckView = {
   pill: VersionCheckPill | null
@@ -123,8 +129,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         currentVersion: state.currentVersion,
         latestVersion: state.latestVersion,
         action: 'update',
-        // 打开失败时版本结论不动（仍是「有新版本」），只在下面补一句。
-        notice: 'available',
+        // 有新版本时不配提示句（见 `VersionCheckNotice` 的说明）；打开失败仍另起一行。
+        notice: null,
         showOpenFailed: openFailed,
         // 描述位只放一句：这句的解释权高于「开关关着」，两句叠起来就把整段做回最高的一档。
         showAutoOffHint: false

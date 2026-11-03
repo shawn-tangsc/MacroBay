@@ -96,6 +96,9 @@ importers:
 
   apps/desktop-shell:
     dependencies:
+      '@ant-design/icons':
+        specifier: ^5.6.1
+        version: 5.6.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@electron-toolkit/utils':
         specifier: ^3.0.0
         version: 3.0.0(electron@41.9.2)

@@ -1,4 +1,3 @@
-import { Info } from 'lucide-react'
 import { Button, Switch } from 'antd'
 
 import type { AppLanguage, AppSettings, AppSettingsPatch, TimeZoneSetting } from '@platform/settings/schema/appSettings'
@@ -80,8 +79,6 @@ export function VersionCheckRow(props: {
 
   const notice = (() => {
     switch (view.notice) {
-      case 'available':
-        return text.availableLine(view.latestVersion ?? text.unknown)
       case 'unavailable':
         return text.unavailableLine
       case 'autoOff':
@@ -93,11 +90,6 @@ export function VersionCheckRow(props: {
 
   return (
     <div className="preference-section version-section">
-      <div className="preference-heading">
-        <Info size={18} />
-        <span>{text.title}</span>
-      </div>
-
       <div className="version-line">
         <span className="version-key">{text.current}</span>
         <b className={valueClass(view.currentVersion)}>{view.currentVersion ?? text.unknown}</b>

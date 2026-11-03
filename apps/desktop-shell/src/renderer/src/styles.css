@@ -9233,21 +9233,42 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
+/*
+ * 链接块：**一行一项**（图标 / 名称 / 右侧动作词），行间一条细线。
+ *
+ * 为什么不是表格：这里是一串同类去处，不是数据；给了表头或列宽就会读成表格，而它没有第二列语义。
+ * 三条细节：**最后一行不画线**（线是分隔，不是边框）；图标只是扫读锚点；动作词右对齐。
+ */
 .about-links {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 2px;
   max-width: 480px;
 }
 
 .about-link-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* 线是分隔不是边框：最后一行没有下一条要分开，就不画。 */
+.about-link-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.about-link-row:first-child {
+  padding-top: 0;
+}
+
+.about-link-icon {
+  font-size: 15px;
+  color: var(--muted);
 }
 
 .about-link-label {
