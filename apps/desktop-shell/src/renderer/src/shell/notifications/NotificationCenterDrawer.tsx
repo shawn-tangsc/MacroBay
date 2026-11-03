@@ -325,6 +325,18 @@ function NotificationRow(props: {
             {text.body}
           </span>
         ) : null}
+        {item.delivery.push?.state === 'failed' ? (
+          // 通道失败**不新增条目**：在原条目 meta 里加一句，用危险色；成功则什么都不加。
+          <span className="notification-center-push-failed" role="note" data-push-failed>
+            {labels.centerPushFailed(item.delivery.push.reason ?? '')}
+          </span>
+        ) : null}
+        {item.delivery.desktop?.state === 'sent-accepted' ? (
+          // 交给系统了不等于读者看到了：只写「未确认显示」，不写「已显示」。
+          <span className="notification-center-unconfirmed" data-unconfirmed>
+            {labels.centerUnconfirmed}
+          </span>
+        ) : null}
         {longBody ? (
           <button
             type="button"

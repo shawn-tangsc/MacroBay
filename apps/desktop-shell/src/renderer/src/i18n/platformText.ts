@@ -1146,6 +1146,8 @@ export type PlatformText = {
     centerStaleNotice: string
     centerReload: string
     centerUnknownHint: string
+    centerPushFailed: (reason: string) => string
+    centerUnconfirmed: string
     channelsHeading: string
   }
   webSearch: {
@@ -2328,7 +2330,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。',
       centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
       centerReload: '重新加载',
-      centerUnknownHint: '批量操作先不可用：通知现在读不到。'
+      centerUnknownHint: '批量操作先不可用：通知现在读不到。',
+      centerPushFailed: (reason) => `没发到手机：${reason}`,
+      centerUnconfirmed: '已推送到系统，未确认显示'
     },
     webSearch: {
       title: '网页搜索',
@@ -3517,7 +3521,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.',
       centerStaleNotice: 'Could not refresh — showing what was read last time.',
       centerReload: 'Reload',
-      centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.'
+      centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
+      centerPushFailed: (reason) => `Did not reach your phone: ${reason}`,
+      centerUnconfirmed: 'Handed to the system; display unconfirmed'
     },
     webSearch: {
       title: 'Web Search',
