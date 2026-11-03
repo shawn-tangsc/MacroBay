@@ -577,6 +577,13 @@ function createComposition(overrides: {
   layoutFilePath?: string
   panelLayoutStore?: ReturnType<typeof createPanelLayoutStore>
   ipcMain?: { handle: (channel: string, listener: unknown) => void }
+  /**
+   * 有界 flush 的预算。默认对齐生产（`releaseTimeoutMs = 2_000`）：
+   * 写成功那条用例要的是「真的等它写完」，预算不能比一次 fsync 还短。
+   * 演习超时路径的用例要的是**快**，自己显式传一个小值——别让一条用例的预算
+   * 顺手决定另一条的行为。
+   */
+  disposeTimeoutMs?: number
 } = {}) {
   const recorder = createIpcRecorder()
   const delivered: Array<{ webContentsId: number; event: WorkspaceEvent }> = []
@@ -587,10 +594,7 @@ function createComposition(overrides: {
     panelLayoutStore: overrides.panelLayoutStore,
     sendToHost: (webContentsId, event) => { delivered.push({ webContentsId, event }); return true },
     preferences: { getLanguage: async () => 'zh-CN', getTheme: () => 'light' , getTimeZone: async () => 'UTC'},
-    // 30ms 比一次 fsync 还短：全量并行时写盘超过它，flushLayout() 会合法地返回 `timeout`，
-    // 而底层 drain 仍在写——那一刻 persistenceState() 还是 `pending`。这不是丢数据，是预算太紧。
-    // 生产用 `releaseTimeoutMs = 2_000`（platform/workspace/policies.ts），这里对齐它。
-    disposeTimeoutMs: 2_000
+    disposeTimeoutMs: overrides.disposeTimeoutMs ?? 2_000
   })
   if (composition.status !== 'ready') throw new Error(`composition disabled: ${composition.reason}`)
   return { composition, ipcMain: recorder, delivered }
@@ -753,7 +757,9 @@ describe('composePanelWorkspace', () => {
       storage: { read: async () => storedDocument(), write: () => new Promise<void>(() => undefined) },
       timers: { schedule: () => () => undefined }
     })
-    const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore })
+    // 永不完结的写：耗时必然等于**预算**而不是写盘时间，所以这里必须给一个小预算，
+    // 否则这条用例从「快速演习超时」变成「等 2 秒」——它就不再证明响应性了。
+    const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore, disposeTimeoutMs: 30 })
     await composition.start()
     composition.registerMainWindow({ webContentsId: 13 })
     const event: WorkspaceIpcSenderEvent = { senderFrame: { parent: null }, sender: { id: 13, isDestroyed: () => false } }
