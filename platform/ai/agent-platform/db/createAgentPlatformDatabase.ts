@@ -1507,6 +1507,18 @@ const migrations: AgentPlatformMigration[] = [
       -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
       drop table if exists agent_session_messages_fts;
     `
+  },
+  {
+    id: '0048_channel_settings_overrides',
+    up: `
+      -- 频道级三项覆盖（需求 v7）：工作目录、允许的会话 ID、权限模式。
+      -- 0004 那版读模型表曾有这三列，0011 换成正典表时丢了；现在补回同一张表，
+      -- 管理服务写、旧读模型读同一行——不另开第二处存储。
+      -- 允许列表为空存 null（＝允许所有）；权限模式 null＝继承助手，不是 'default'。
+      alter table agent_channels add column workspace_json text;
+      alter table agent_channels add column active_chat_ids_json text;
+      alter table agent_channels add column permission_mode text;
+    `
   }
 ]
 

@@ -1607,10 +1607,11 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         .prepare(
           `select
              id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type,
-             name, agent_id, null as session_id, '{"type":"system"}' as workspace_json,
+             name, agent_id, null as session_id,
+             coalesce(workspace_json, '{"type":"system"}') as workspace_json,
              public_config_json as config_json,
              case when lifecycle_state = 'enabled' then 1 else 0 end as is_active,
-             null as active_chat_ids_json, null as permission_mode, created_at, updated_at
+             active_chat_ids_json, permission_mode, created_at, updated_at
            from agent_channels
            where lifecycle_state = 'enabled'
            order by updated_at desc, id asc`
@@ -1633,10 +1634,11 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         .prepare(
           `select
              id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type,
-             name, agent_id, null as session_id, '{"type":"system"}' as workspace_json,
+             name, agent_id, null as session_id,
+             coalesce(workspace_json, '{"type":"system"}') as workspace_json,
              public_config_json as config_json,
              case when lifecycle_state = 'enabled' then 1 else 0 end as is_active,
-             null as active_chat_ids_json, null as permission_mode, created_at, updated_at
+             active_chat_ids_json, permission_mode, created_at, updated_at
            from agent_channels
            ${where.length > 0 ? `where ${where.join(' and ')} and lifecycle_state = 'enabled'` : "where lifecycle_state = 'enabled'"}
            order by updated_at desc, id asc`

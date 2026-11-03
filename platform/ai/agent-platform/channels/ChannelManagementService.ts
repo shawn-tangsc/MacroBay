@@ -15,6 +15,8 @@ import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
 import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
+import { createManagedChannel, updateManagedChannel } from './channelSettingsMutations'
+import { assertManagedChannelType } from './channelSettingsInputs'
 import { clampAuditLimit, readAuditCursor } from './channelRuntimeAuditPage'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
@@ -151,32 +153,28 @@ export class ChannelManagementService {
     return this.deps.repository.query.get(assertIdentifier(id))
   }
 
-  create(input: { type?: unknown; name: unknown; agentId: unknown; actorId: unknown }): ChannelManagementResult {
-    if (Object.hasOwn(input, 'id')) throw new Error('channel-input-invalid')
-    const id = randomUUID()
-    const type = assertManagedChannelType(input.type)
-    const agentId = assertIdentifier(input.agentId)
-    const actorId = assertIdentifier(input.actorId)
-    if (!this.deps.repository.agentExists(agentId)) return { ok: false, code: 'channel-agent-missing' }
-
-    const now = this.now()
-    if (!this.deps.repository.create({ id, type, name: assertIdentifier(input.name, 120), agentId, now })) {
-      return { ok: false, code: 'channel-not-found' }
-    }
-    this.deps.repository.audit(id, actorId, 'create', null, now)
-    return { ok: true, code: 'configuration-ready', channel: this.deps.repository.query.get(id) ?? undefined }
+  create(input: Parameters<typeof createManagedChannel>[1]): ChannelManagementResult {
+    return createManagedChannel(
+      {
+        repository: this.deps.repository,
+        now: () => this.now(),
+        stopRuntime: (id) => this.deps.runtime?.stop(id),
+        requireMutableChannel: (id) => this.requireMutableChannel(id)
+      },
+      input
+    )
   }
 
-  update(input: { id: unknown; name: unknown; agentId: unknown; actorId: unknown }): ChannelManagementResult {
-    const id = this.requireMutableChannel(input.id)
-    const actorId = assertIdentifier(input.actorId)
-    const agentId = assertIdentifier(input.agentId)
-    if (!this.deps.repository.agentExists(agentId)) return { ok: false, code: 'channel-agent-missing' }
-
-    const ok = this.deps.repository.update(id, { name: assertIdentifier(input.name, 120), agentId, now: this.now() })
-    if (ok) this.deps.runtime?.stop(id)
-    this.deps.repository.audit(id, actorId, 'update', ok ? null : 'channel-not-found', this.now())
-    return ok ? { ok: true, code: 'updated', channel: this.deps.repository.query.get(id) ?? undefined } : { ok: false, code: 'channel-not-found' }
+  update(input: Parameters<typeof updateManagedChannel>[1]): ChannelManagementResult {
+    return updateManagedChannel(
+      {
+        repository: this.deps.repository,
+        now: () => this.now(),
+        stopRuntime: (id) => this.deps.runtime?.stop(id),
+        requireMutableChannel: (id) => this.requireMutableChannel(id)
+      },
+      input
+    )
   }
 
   disable(input: MutationInput): ChannelManagementResult {
@@ -471,16 +469,6 @@ export class ChannelManagementService {
     this.deps.repository.audit(id, assertIdentifier(actorId), 'request-enable', code, this.now())
     return { ok: false, code, channel }
   }
-}
-
-function assertManagedChannelType(value: unknown): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' {
-  if (value === undefined || value === 'telegram') return 'telegram'
-  if (value === 'slack') return 'slack'
-  if (value === 'feishu') return 'feishu'
-  if (value === 'qq') return 'qq'
-  if (value === 'discord') return 'discord'
-  if (value === 'wechat') return 'wechat'
-  throw new Error('channel-input-invalid')
 }
 
 function validatePolicy(value: unknown): {

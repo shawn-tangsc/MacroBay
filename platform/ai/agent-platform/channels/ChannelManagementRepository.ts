@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
+import type { AgentPermissionMode } from '../schemas/agentSchemas'
+import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
 import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
+import { insertManagedChannel, updateManagedChannelRow, type ManagedChannelCreateInput, type ManagedChannelUpdateInput } from './channelManagementRepositoryWrites'
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
@@ -58,16 +61,15 @@ export class ChannelManagementRepository {
     return Boolean(this.database.connection.prepare('select 1 from agent_entities where id = ?').get(agentId))
   }
 
-  create(input: { id: string; type?: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'; name: string; agentId: string; now: string }): boolean {
-    const created = this.database.connection
-      .prepare(
-        `insert into agent_channels (
-          id, adapter_key, name, agent_id, public_config_json, requested_enabled, lifecycle_state, created_at, updated_at
-        ) select ?, ?, ?, ?, ?, 0, 'credential-missing', ?, ?
-          where not exists (select 1 from channel_management_tombstones where channel_id = ?)`
-      )
-      .run(input.id, input.type === 'feishu' ? 'lark' : (input.type ?? 'telegram'), input.name, input.agentId, input.type === 'feishu' ? '{"domain":"lark"}' : '{}', input.now, input.now, input.id).changes === 1
-    return created
+  create(input: ManagedChannelCreateInput): boolean {
+    return insertManagedChannel(this.database, input)
+  }
+
+  update(id: string, input: ManagedChannelUpdateInput): boolean {
+    return updateManagedChannelRow(this.database, id, input, {
+      invalidateLifecycleOwner: (channelId) => this.invalidateLifecycleOwner(channelId),
+      fence: (channelId, at) => this.fence(channelId, at)
+    })
   }
 
   channelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
@@ -94,21 +96,6 @@ export class ChannelManagementRepository {
     return Boolean(this.database.connection.prepare(
       `select 1 from agent_channels where id = ? and adapter_key = 'wechat' and public_config_json = '{}'`
     ).get(id))
-  }
-
-  update(id: string, input: { name: string; agentId: string; now: string }): boolean {
-    return this.database.transact(() => {
-      this.invalidateLifecycleOwner(id)
-      const changed = this.database.connection
-        .prepare(
-          `update agent_channels
-           set name = ?, agent_id = ?, requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ?
-           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
-        )
-        .run(input.name, input.agentId, input.now, id).changes
-      if (changed) this.fence(id, input.now)
-      return changed === 1
-    })
   }
 
   disable(id: string, now: string): boolean {

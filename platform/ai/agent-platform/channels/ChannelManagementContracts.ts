@@ -1,4 +1,5 @@
 import type { AgentChannelType } from '../schemas/channelSchemas'
+import type { AgentPermissionMode } from '../schemas/agentSchemas'
 
 export type ChannelManagementCatalogEntry = {
   type: AgentChannelType
@@ -10,11 +11,25 @@ export type ChannelManagementCatalogEntry = {
 
 export type ChannelManagementState = 'configuration-ready' | 'credential-missing' | 'deleting' | 'disabled' | 'runtime-ready'
 
+/**
+ * 通道级的三项覆盖（需求 v7 六字段）。都存 `agent_channels` 同一行：
+ * 管理服务写、旧读模型读同一行，不存在两处各存一份。
+ */
+export type ChannelWorkspaceOverride =
+  | { type: 'system' }
+  | { type: 'user'; workspaceId: string }
+
 export type ChannelManagementSafeView = {
   id: string
   type: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'
   name: string
   agentId: string
+  /** 系统默认目录，或读者指定的一个工作区。 */
+  workspace: ChannelWorkspaceOverride
+  /** 允许的会话 ID。**空数组＝允许所有会话**（界面必须同时显示风险提示）。 */
+  allowedChatIds: readonly string[]
+  /** `null`＝继承助手；不落 `'default'`——那是助手级默认值，两者必须分得开。 */
+  permissionMode: AgentPermissionMode | null
   requestedEnabled: boolean
   state: ChannelManagementState
   credential: {

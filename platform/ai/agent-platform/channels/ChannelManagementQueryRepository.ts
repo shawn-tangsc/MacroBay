@@ -1,7 +1,9 @@
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { managedChannelSql } from './ChannelManagementPredicates'
+import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type {
   ChannelConversationSafeView,
+  ChannelWorkspaceOverride,
   ChannelDeliveryAttemptSafeView,
   ChannelDeliveryAuditSafeView,
   ChannelManagementAuditView,
@@ -22,6 +24,9 @@ type ChannelRow = {
   credential_health: 'configured' | 'missing' | 'unavailable'
   requested_enabled: number
   migration_state: string
+  workspace_json: string
+  active_chat_ids_json: string | null
+  permission_mode: string | null
   created_at: string
   updated_at: string
 }
@@ -34,7 +39,7 @@ export class ChannelManagementQueryRepository {
 
   get(id: string): ChannelManagementSafeView | null {
     const row = this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
        from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)`
     ).get(id) as ChannelRow | undefined
@@ -43,7 +48,7 @@ export class ChannelManagementQueryRepository {
 
   list(): ChannelManagementSafeView[] {
     return (this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
        from agent_channels where ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)
        order by updated_at desc, id asc`
@@ -247,9 +252,40 @@ function toSafeView(row: ChannelRow): ChannelManagementSafeView {
             : { bot_token: '********' }
         : {}
     },
+    workspace: readWorkspace(row.workspace_json),
+    allowedChatIds: readAllowedChatIds(row.active_chat_ids_json),
+    permissionMode: readPermissionMode(row.permission_mode),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
+}
+
+/** 存的是原始 JSON；读不出来就当系统默认目录，不猜一个工作区 id。 */
+function readWorkspace(value: string): ChannelWorkspaceOverride {
+  try {
+    const parsed = JSON.parse(value) as { type?: unknown; workspaceId?: unknown }
+    if (parsed?.type === 'user' && typeof parsed.workspaceId === 'string' && parsed.workspaceId.length > 0) {
+      return { type: 'user', workspaceId: parsed.workspaceId }
+    }
+  } catch { /* 坏 JSON 也落回系统默认目录 */ }
+  return { type: 'system' }
+}
+
+/** `null` 与 `[]` 同义：**空＝允许所有**。坏形状一律当空，方向是「允许」而不是静默拦死。 */
+function readAllowedChatIds(value: string | null): readonly string[] {
+  if (value === null) return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+  } catch {
+    return []
+  }
+}
+
+/** 只认四档；**`null` 就是继承**，不把助手级默认值 `'default'` 当前者的替代。 */
+function readPermissionMode(value: string | null): AgentPermissionMode | null {
+  return value === 'default' || value === 'acceptEdits' || value === 'bypassPermissions' || value === 'plan' ? value : null
 }
 
 function normalizeState(value: string): ChannelManagementState {
