@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 
+import { isTempDirectoryVerified } from './tempDirectoryReadiness'
+
 /**
  * 所有本地 SQLite 库共用的等待窗口。
  *
@@ -8,24 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
  */
 export const SQLITE_BUSY_TIMEOUT_MS = 5_000
 
-/**
- * 系统临时目录是否已确认可写。**默认 false，开库前必须被显式打开。**
- *
- * 为什么是运行时闸门而不是一条顺序测试：Windows 受限会话里 TEMP/TMP 可能指向进程建不出来的
- * 目录（`D:\tmp`），SQLite 建临时文件会返回 `unable to open database file`，而它发生在启动
- * 迁移里——用户看到的是「应用起不来」。修法（探针 + 改写到 `<userData>/tmp`）当初写在 `app.ts`
- * 里、撞行数上限才挪到 `platformCore`；**「先探针、后开库」这个顺序此前没有任何东西守着**，
- * 而 CI 的机器临时目录可写，正常跑永远走不到那条分支。
- *
- * 所以顺序不能靠「今天这条路径写对了」，只能靠入口：没标记就抛错。新增任何开库调用点，
- * 只要装配时没先探过，第一次跑就会炸在 `platformCore` 这一层，离根因很近。
- */
-let tempDirectoryVerified = false
 
-/** 由装配根在 `ensureWritableTempDirectory` 成功后调用；测试与脚本在自建可写目录后调用。 */
-export function markTempDirectoryVerified(): void {
-  tempDirectoryVerified = true
-}
 
 export type SqliteJournalMode =
   /** 默认：切到 WAL，读写不互相阻塞，崩溃后由 SQLite 自己恢复。 */
@@ -59,7 +44,8 @@ export function openSqliteDatabase(
   path: string,
   options: OpenSqliteDatabaseOptions = {}
 ): DatabaseSync {
-  if (!tempDirectoryVerified) throw new Error('sqlite-temp-directory-not-verified')
+  // 顺序闸门：见 `tempDirectoryReadiness.ts` 的注释（标志单独成文件，因为它要进渲染层测试 setup）。
+  if (!isTempDirectoryVerified()) throw new Error('sqlite-temp-directory-not-verified')
 
   const busyTimeoutMs = normalizeBusyTimeout(options.busyTimeoutMs)
   const pageSizeBytes =

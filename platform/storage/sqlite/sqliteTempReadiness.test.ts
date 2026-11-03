@@ -22,7 +22,8 @@ describe('sqlite temp-directory gate', () => {
   it('opens once the probe has marked the temp directory writable', async () => {
     vi.resetModules()
     const fresh = await import('./openSqliteDatabase')
-    fresh.markTempDirectoryVerified()
+    const readiness = await import('./tempDirectoryReadiness')
+    readiness.markTempDirectoryVerified()
 
     const database = fresh.openSqliteDatabase(':memory:')
     try {

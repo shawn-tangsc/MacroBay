@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { markTempDirectoryVerified, openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
+import { markTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
 
 /**
  * Seeds a throwaway data directory with a history that shows one cleaned writing attempt.
