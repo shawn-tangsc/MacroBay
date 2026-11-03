@@ -70,8 +70,13 @@ export async function briefingHistorySummaries(input: Readonly<{
         readingsAvailable: summary.readingsAvailable,
         readingsTotal: 4
       })
+      // An issue with nothing published is "not run" unless that run actually failed. Attempts the
+      // reader deleted the editions of are history, not a status: showing "generation failed" for a
+      // day that succeeded and was then emptied would blame the pipeline for the reader's action.
+      const published = summary.availableLocales.length > 0
+      const failedRun = run?.state === 'failed'
       let attempts: number | undefined
-      if (input.attemptCount && summary.state === 'generated') {
+      if (input.attemptCount && (summary.state === 'generated' || failedRun)) {
         const countAttempts = input.attemptCount
         try {
           attempts = await countAttempts(date, periodId, summary.locale)
@@ -84,7 +89,8 @@ export async function briefingHistorySummaries(input: Readonly<{
         ...(expectedLocales ? { expectedLocales } : {}),
         ...(attempts === undefined ? {} : { attemptCount: attempts }),
         ...(input.scheduledTime ? { scheduledTime: input.scheduledTime } : {}),
-        ...(completeness.state === 'missing-version' ? { state: 'partial' as const } : {})
+        // "Missing one version" only describes an issue that still has a version to compare with.
+        ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {})
       })
     }
   }

@@ -217,6 +217,14 @@ describe('daily briefing history rail', () => {
     expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(1)
   })
 
+  it('describes an emptied issue as not run, never as a failed generation', () => {
+    // The reader deleted the editions; the row describes the present, not the history.
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined })] })
+    expect(host.textContent).toContain(text.history.missingRun)
+    expect(host.textContent).not.toContain(text.history.generationFailed)
+    expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('data-state')).toBe('missing')
+  })
+
   it('offers only the languages this issue actually has', () => {
     // A menu that names a language the issue does not have is how "deleted the Chinese edition"
     // happened for an issue with only an English one.

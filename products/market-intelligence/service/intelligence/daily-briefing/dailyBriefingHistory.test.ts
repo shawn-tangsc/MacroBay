@@ -53,4 +53,36 @@ describe('history rows take incompleteness from the run', () => {
     const [summary] = await summaries([edition('zh-CN')], ['zh-CN'])
     expect(summary?.state).toBe('generated')
   })
+
+  it('treats a run whose editions were all deleted as not run, not as failed or partial', async () => {
+    // The reader emptied this issue. The run succeeded, the attempts are history: the row describes
+    // what is true now — no edition — and must not blame the pipeline or point at a missing version.
+    const [summary] = await briefingHistorySummaries({
+      dates: ['2026-11-02'],
+      primary: 'zh-CN',
+      primaryRows: [],
+      otherRows: [],
+      periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'published' as const })),
+      attemptCount: vi.fn(async () => 5),
+      scheduledTime: '07:00'
+    })
+
+    expect(summary?.state).toBe('missing')
+    expect(summary?.attemptCount).toBeUndefined()
+    expect(summary?.scheduledTime).toBe('07:00')
+  })
+
+  it('still reports a failed run as failed when nothing was published', async () => {
+    const [summary] = await briefingHistorySummaries({
+      dates: ['2026-11-02'],
+      primary: 'zh-CN',
+      primaryRows: [],
+      otherRows: [],
+      periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'failed' as const })),
+      attemptCount: vi.fn(async () => 2)
+    })
+
+    expect(summary?.state).toBe('missing')
+    expect(summary?.attemptCount).toBe(2)
+  })
 })
