@@ -124,9 +124,23 @@ describe('daily briefing issues', () => {
       text: zhText,
       formatTime
     }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
-    expect(noHistory.title).toBe('美国比特币现货基金：08:00 前无可用历史，最近交易日数据尚未返回')
+    // The clock comes from this edition's own cutoff, not from the current settings.
+    expect(noHistory.title).toBe('美国比特币现货基金：00:30 前无可用历史，最近交易日数据尚未返回')
     expect(noHistory.source).toBe('0xRouter ETF')
     expect(noHistory.advice).toContain('开盘后')
+
+    // No readable cutoff: the sentence says only that the trading day has not arrived, and prints no time.
+    const noTime = briefingIssues({
+      document: withFunds([pulse({
+        id: 'etf-btc', labelKey: 'dailyBriefing.row.etfBtc', value: null, change: null,
+        state: 'unavailable', reason: 'etf-unavailable', window: 'trading-day', observedAt: null
+      })]),
+      text: zhText,
+      formatTime: () => ''
+    }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
+    expect(noTime.title).toBe('美国比特币现货基金：最近交易日数据尚未返回')
+    expect(noTime.title).not.toMatch(/\d{2}:\d{2}/)
+    expect(noTime.advice).not.toMatch(/\d{2}:\d{2}/)
 
     const gated = briefingIssues({
       document: withFunds([pulse({
