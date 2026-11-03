@@ -49,20 +49,13 @@ import {
   editorialFailureText,
   issueCountsText,
   localDate,
+  readExistingEdition,
   summaryFromDocument,
   withDeadline
 } from './dailyBriefingPageDerived'
 
-type ViewState =
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'unavailable'; failureCode?: string; generationTrace?: GenerationTrace }>
-  | Readonly<{
-    status: 'ready'
-    document: DailyBriefingDocument
-    kind: 'today' | 'history'
-    /** `system` means the settings zone was unusable and the machine's zone stood in. */
-    timeZoneSource?: 'settings' | 'system'
-  }>
+import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
+import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -86,6 +79,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   timeZoneRef.current = timeZone
   const requestRef = useRef(0)
   const emptyGenerateRef = useRef(false)
+  // Set by the language tab only. It tells the next load "the reader asked to look, not to write",
+  // so a tab click reads that language's stored edition instead of opening a fresh run.
+  const localeSwitchRef = useRef(false)
   // The last readable edition, kept so a failed retry keeps the content under the failure notice.
   const lastReadyRef = useRef<DailyBriefingDocument | null>(null)
   const [showingStale, setShowingStale] = useState(false)
@@ -148,9 +144,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       // One-shot: only the reload a delete asked for skips the generation; the next ordinary open
       // must be able to generate today again.
       const skipGenerate = takeSkipGenerate()
+      // A tab click is a read of what already exists. Opening the page may still generate today's
+      // edition; switching the edition language must not, or the reader spends a run per glance.
+      const switchedLanguage = localeSwitchRef.current
+      localeSwitchRef.current = false
       const todayPromise = skipGenerate
         ? Promise.resolve(undefined)
-        : withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+        : switchedLanguage
+          ? readExistingEdition(client, todayDate, effectiveLocale)
+          : withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
@@ -187,6 +189,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
+      } else if (switchedLanguage && !keptCachedToday) {
+        // Nothing was written in this language today, and nothing was asked for: the reader gets the
+        // language's own state plus the one action that would produce it.
+        setView({ status: 'locale-missing', locale: effectiveLocale })
       } else if (!skipGenerate || !keptCachedToday) {
         // A read that failed still says so. The delete reload is the opposite case: today was never
         // read, so it must not be reported as unreadable — the row the list already returned stands.
@@ -415,6 +421,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'unavailable' && !failure
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
+        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} text={text} onGenerate={generateNow} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
@@ -442,7 +449,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <Tabs
             ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.label"
             items={[{ value: 'zh-CN', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.zh-CN' }, { value: 'en-US', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.en-US' }]}
-            onChange={(value) => setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN')}
+            onChange={(value) => { localeSwitchRef.current = true; setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN') }}
             panels={{ 'zh-CN': null, 'en-US': null }}
             resolveText={resolveProductText}
             value={contentLocale}

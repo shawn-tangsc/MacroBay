@@ -550,14 +550,42 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).toBeNull()
     expect(dom.querySelector('[data-briefing-detail]')?.firstElementChild?.getAttribute('data-content-language-tabs')).toBe('true')
 
-    // The selection comes from the one content-locale state: switching asks for that edition next.
+    // The selection comes from the one content-locale state. Switching is a read of what already
+    // exists in that language: it must never open a run, or a glance costs a full generation.
+    const getTodayCalls = (): number => (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+    const before = getTodayCalls()
     await act(async () => {
       tabs[1].click()
       await Promise.resolve(); await Promise.resolve()
     })
-    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
+    expect(getTodayCalls()).toBe(before)
+    expect(client.getToday).not.toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }))
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
+  it('shows the missing language as its own state with an explicit generate action', async () => {
+    const client = fakeClient({ getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })) })
+    const dom = await renderPage(client)
+    const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+
+    await act(async () => {
+      tabs[1].click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+
+    // The state belongs to that language; only a click starts the run.
+    const missing = dom.querySelector('[data-briefing-locale-missing]')
+    expect(missing?.getAttribute('data-briefing-locale-missing')).toBe('en-US')
+    expect(missing?.textContent).toContain(text.languageTabs.missing.replace('{language}', text.languageTabs['en-US']))
+
+    const generate = dom.querySelector<HTMLElement>('[data-generate-missing-locale="en-US"]')!
+    await act(async () => {
+      generate.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
   })
 
   it('ignores a stored English choice while English editions are switched off', async () => {
