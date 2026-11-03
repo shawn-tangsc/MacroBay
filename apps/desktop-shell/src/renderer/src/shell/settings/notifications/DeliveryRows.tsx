@@ -165,9 +165,18 @@ function ChannelRow(props: {
         {channel.kind === 'unbound' ? <span className="notification-row-state">{text.channelTargetUnbound}</span> : null}
         {channel.kind === 'multiple' ? <span className="notification-row-state">{text.channelTargetMultiple}</span> : null}
         {channel.kind === 'failed' ? (
-          // 失败行：原因 + 时刻。时刻由调用方用 formatShellCompactInstant 产出，这里只放进句子。
-          <span className="notification-row-state notification-row-state--danger" role="note">
-            {text.channelLastPushFailed(channel.reason, channel.at)}
+          // 失败行：**结论**由 `StatusPill` 说（红只落在圆点与边框），**句子**用中性文字。
+          // 原来把 `--danger` 加在整句上，深色底对比度只有 3.25–3.94，句子读不清；
+          // 时刻仍由调用方用 `formatShellCompactInstant` 产出，这里只放进句子，不自己拼。
+          <span className="notification-row-state-row">
+            <StatusPill
+              tone="bad"
+              labelKey="notificationSettings.channelPushFailedPill"
+              resolveText={(key) => (key === 'notificationSettings.channelPushFailedPill' ? text.channelPushFailedPill : key)}
+            />
+            <span className="notification-row-state" role="note">
+              {text.channelLastPushFailed(channel.reason, channel.at)}
+            </span>
           </span>
         ) : null}
         {channel.kind === 'ok' ? (

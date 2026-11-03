@@ -49,8 +49,14 @@
   color: var(--muted-strong);
 }
 
-.notification-row-state--danger {
-  color: var(--danger);
+
+/* 失败行：药丸 + 一句中性文字。**不要给这句话上 `--danger`**——红字只属于圆点与边框（见约定），
+   而且 `--danger` 在深色底上对比度 3.25–3.94，低于正文 4.5。 */
+.notification-row-state-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 /* 整行禁用（弹窗）：不靠降低透明度，原因本身就是内容。 */

@@ -31,6 +31,8 @@ export type NotificationSettingsText = {
   channelTargetUnbound: string
   channelTargetMultiple: string
   channelLastPushFailed: (reason: string, time: string) => string
+  /** 失败这个**结论**用 StatusPill 说：红只落在圆点与边框上，不落在句子上（见下方说明）。 */
+  channelPushFailedPill: string
   channelGoConnect: string
   channelGoCheck: string
   channelSelectLabel: string
@@ -84,6 +86,9 @@ const zh: NotificationSettingsText = {
   channelTargetUnbound: '目标未绑定：还看不出会发到哪个会话',
   channelTargetMultiple: '这个通道绑了多个会话，请到通道页只保留一个',
   channelLastPushFailed: (reason, time) => `最近一次推送没发出去：${reason} · ${time}`,
+  // 「失败」是结论，交给 StatusPill；句子本身用中性文字——`--danger` 在深色底上只有 3.25–3.94，
+  // 一整句红字读不清，那不是风格问题而是可读性问题。
+  channelPushFailedPill: '推送失败',
   channelGoConnect: '去接入',
   channelGoCheck: '去检查',
   channelSelectLabel: '通道选择',
@@ -140,6 +145,7 @@ const en: NotificationSettingsText = {
   channelTargetUnbound: 'No target bound: it is not yet knowable which conversation will receive it',
   channelTargetMultiple: 'This channel is bound to several conversations; keep only one on the channel page',
   channelLastPushFailed: (reason, time) => `The last push did not go out: ${reason} · ${time}`,
+  channelPushFailedPill: 'Push failed',
   channelGoConnect: 'Connect one',
   channelGoCheck: 'Check it',
   channelSelectLabel: 'Channel',
