@@ -54,13 +54,37 @@ async function mount(client: NotificationSettingsClient): Promise<HTMLElement> {
   return container
 }
 
+describe('desktop notification permission is not a fake state', () => {
+  it('says what we cannot read, where to turn it on, and how to check it ourselves', async () => {
+    const container = await mount({
+      listEventCatalog: async () => [],
+      getSubscriptions: async () => ({}),
+      getDeliverySettings: async () => ({ toastEnabled: false })
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const hint = container.querySelector('[data-desktop-cannot-read]')
+    expect(hint?.textContent).toContain('读不到')
+    expect(hint?.textContent).toContain('系统设置 › 通知 › MacroBay')
+    expect(hint?.textContent).toContain('发送测试通知')
+
+    // 三档状态词一个都不许出现：Electron 读不到系统开关，画出来就是一句恒定的假结论。
+    expect(container.textContent).not.toContain('系统已放行')
+    expect(container.textContent).not.toContain('暂时无法确认')
+    // 「去系统设置」那条链已删（`openExternal` 只放行 http(s)，点了会抛错）。
+    expect(container.textContent).not.toContain('去系统设置')
+    expect(container.querySelector('[data-row="desktop"] .status-pill')).toBeNull()
+  })
+})
+
 describe('notification settings screen', () => {
   it('waits with the platform loading surface instead of drawing an empty form', async () => {
     const container = await mount({
       listEventCatalog: () => new Promise(() => undefined),
       getSubscriptions: () => new Promise(() => undefined),
       getDeliverySettings: () => new Promise(() => undefined),
-      readDesktopPermission: () => new Promise(() => undefined)
     })
 
     expect(container.querySelector('[data-loading-state], .loading-state')).not.toBeNull()
@@ -71,7 +95,6 @@ describe('notification settings screen', () => {
       listEventCatalog: () => Promise.reject(new Error('boom')),
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({}),
-      readDesktopPermission: () => Promise.resolve('unknown' as const)
     })
 
     // 「读不到」与「没有」是两件事：这里绝不能说清单为空。
@@ -95,7 +118,6 @@ describe('notification settings screen', () => {
         ]),
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
-      readDesktopPermission: () => Promise.resolve('granted' as const)
     })
 
     // 无条件记录的事件：标签，不是控件。
@@ -112,7 +134,6 @@ describe('notification settings screen', () => {
       listEventCatalog: () => Promise.resolve([]),
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
-      readDesktopPermission: () => Promise.resolve('unknown' as const)
     })
 
     expect(container.querySelector('[data-row="center"]')).not.toBeNull()
@@ -130,7 +151,6 @@ describe('notification settings screen', () => {
       listEventCatalog: () => Promise.resolve([]),
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
-      readDesktopPermission: () => Promise.resolve('granted' as const)
     })
 
     expect(container.querySelector('[data-subs-empty]')).not.toBeNull()

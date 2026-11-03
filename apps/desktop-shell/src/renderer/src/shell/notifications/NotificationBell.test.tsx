@@ -33,18 +33,35 @@ function fakeSource(options: {
   }
 }
 
-async function mount(source: NotificationCenterSource): Promise<HTMLElement> {
+async function mount(
+  source: NotificationCenterSource,
+  state: { open?: boolean; controlsId?: string } = {}
+): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
-    root!.render(<NotificationBell labels={labels} onOpen={() => undefined} source={source} />)
+    root!.render(
+      <NotificationBell
+        labels={labels}
+        open={state.open ?? false}
+        {...(state.controlsId === undefined ? {} : { controlsId: state.controlsId })}
+        onOpen={() => undefined}
+        source={source}
+      />
+    )
   })
   // 读数是异步的：再 flush 一次，让 `.then` 落进 state。
   await act(async () => {
     await Promise.resolve()
   })
   return host
+}
+
+function bell(host: HTMLElement): HTMLButtonElement {
+  const button = host.querySelector<HTMLButtonElement>('[data-notification-bell] button')
+  if (!button) throw new Error('Expected the bell button.')
+  return button
 }
 
 function badgeText(): string | null {
@@ -141,3 +158,30 @@ describe('铃铛跟着事件走，不靠重新挂载', () => {
     expect(badgeText()).toBe('5')
   })
 })
+
+describe('铃铛是抽屉的触发器（aria-expanded 三态）', () => {
+  it('reports the drawer state and only points at a panel that exists', async () => {
+    const source = fakeSource({ unread: async () => ({ unread: 0, version: 0 }) })
+    const panelId = 'notification-center-panel'
+
+    // 关着：读屏要能听到「收起」，但不给一个指向不存在元素的控制关系。
+    const closed = await mount(source, { open: false, controlsId: panelId })
+    expect(bell(closed).getAttribute('aria-expanded')).toBe('false')
+    expect(bell(closed).getAttribute('aria-haspopup')).toBe('dialog')
+    expect(bell(closed).hasAttribute('aria-controls')).toBe(false)
+
+    // 开着：同一个按钮翻成 true，并指向抽屉面板。
+    const open = await mount(source, { open: true, controlsId: panelId })
+    expect(bell(open).getAttribute('aria-expanded')).toBe('true')
+    expect(bell(open).getAttribute('aria-controls')).toBe(panelId)
+  })
+
+  it('never emits aria-expanded="undefined" when no state is wired', async () => {
+    // 没有 id 时只丢 `aria-controls`，`aria-expanded` 仍是真正的布尔——这是组件规格，DOM 断言钉住。
+    const host = await mount(fakeSource({ unread: async () => ({ unread: 0, version: 0 }) }), { open: false })
+    expect(bell(host).getAttribute('aria-expanded')).toBe('false')
+    expect(bell(host).getAttribute('aria-expanded')).not.toBe('undefined')
+    expect(bell(host).hasAttribute('aria-controls')).toBe(false)
+  })
+})
+

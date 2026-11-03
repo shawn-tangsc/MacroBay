@@ -7,7 +7,7 @@ import type { NotificationUnreadState, SafeNotificationRecord } from '@platform/
 
 import { platformText } from '../../i18n/platformText'
 
-import { NotificationCenterDrawer } from './NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './NotificationCenterDrawer'
 import type { NotificationCenterSource } from './notificationCenterSource'
 
 const labels = platformText['zh-CN'].notifications
@@ -53,7 +53,11 @@ function fakeSource(overrides: Partial<NotificationCenterSource> = {}): Notifica
   }
 }
 
-async function mount(source: NotificationCenterSource, onOpenDeeplink: (d: unknown) => void = () => undefined): Promise<void> {
+async function mount(
+  source: NotificationCenterSource,
+  onOpenDeeplink: (d: unknown) => void = () => undefined,
+  language: 'zh-CN' | 'en-US' = 'zh-CN'
+): Promise<void> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -62,8 +66,8 @@ async function mount(source: NotificationCenterSource, onOpenDeeplink: (d: unkno
       <NotificationCenterDrawer
         open
         onClose={() => undefined}
-        labels={labels}
-        language="zh-CN"
+        labels={platformText[language].notifications}
+        language={language}
         onOpenDeeplink={onOpenDeeplink}
         source={source}
       />
@@ -114,6 +118,8 @@ describe('通知中心的分组与空态', () => {
     // 界面设计退回项：通用 `not-yet` 只说「还没到」，说不出这个页面等的是什么事件。
     const hint = document.body.querySelector('.notification-center-empty-hint')
     expect(hint?.textContent).toBe(labels.centerEmptyHint)
+    // 铃铛的 `aria-controls` 指向这个 id：打开时它必须真的存在（指向空处比不写更糟）。
+    expect(document.getElementById(NOTIFICATION_CENTER_PANEL_ID)).not.toBeNull()
     // 说明必须挂在 `StateView` 之外：改平台键会让另外七处 `not-yet` 说别人的话。
     expect(hint?.closest('.state-view')).toBeNull()
   })
@@ -425,5 +431,32 @@ describe('首次进入不闪错误或空态', () => {
     expect(stale?.textContent).not.toContain('重试')
     // 有旧数据时不许整块换成页面级错误。
     expect(document.body.querySelector('[data-state="error"]')).toBeNull()
+  })
+})
+
+describe('长正文的展开/收起', () => {
+  it('tells assistive tech whether the body is open, and flips it on click', async () => {
+    // 用英文那句（超过 90 字）触发收起形态：中文正文都太短，测不出这个分支。
+    const english = platformText['en-US'].notifications
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({ id: 'n-long', bodyKey: 'notification.test.body' })]
+      })
+    })
+    await mount(source, () => undefined, 'en-US')
+
+    const toggle = document.body.querySelector<HTMLButtonElement>('.notification-center-link')
+    expect(toggle).not.toBeNull()
+    // 收起时读屏要听到「收起状态」，并且按钮说的是「展开」。
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle?.textContent).toBe(english.centerExpand)
+
+    await act(async () => {
+      toggle!.click()
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle?.textContent).toBe(english.centerCollapse)
   })
 })

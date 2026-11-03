@@ -17,6 +17,14 @@ import { resolveNotificationText } from './notificationText'
 
 import './notificationCenter.css'
 
+/**
+ * 抽屉面板的 id：铃铛的 `aria-controls` 指向它。
+ *
+ * 只在抽屉打开时存在——所以铃铛那边**只在打开时**输出 `aria-controls`。指向一个不存在的 id
+ * 比不写更糟：读屏会给出一个跳到空处的指令。
+ */
+export const NOTIFICATION_CENTER_PANEL_ID = 'notification-center-panel'
+
 export const CENTER_TITLE_KEY = 'notifications.centerTitle'
 
 type NotificationCenterDrawerProps = {
@@ -148,6 +156,7 @@ export function NotificationCenterDrawer({
           )}
         </div>
       }>
+      <div id={NOTIFICATION_CENTER_PANEL_ID} data-notification-center-panel>
       {notice === null ? null : (
         <p className="notification-center-notice" role="status">
           {notice}
@@ -201,6 +210,7 @@ export function NotificationCenterDrawer({
           <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
         </>
       )}
+      </div>
     </Drawer>
   )
 }

@@ -233,14 +233,7 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'task-automation' ? <TaskAutomationSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'channels' ? <ChannelSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'notifications' ? (
-        <NotificationSettingsScreen
-          title={text.settings.notifications}
-          notice={null}
-          language={language}
-          onOpenSystemSettings={() =>
-            void window.platform.app.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')
-          }
-        />
+        <NotificationSettingsScreen title={text.settings.notifications} notice={null} language={language} />
       ) : null}
       {HOST_ONLY_SETTINGS_PANELS.includes(panelKey) ? (
         // 明确边界：正文由主窗 shell 持有，页窗不复制、不伪造；文案复用既有成对 i18n 安全壳键

@@ -20,6 +20,13 @@ export const BELL_UNREAD_KEY = 'notifications.bellUnread'
 
 type NotificationBellProps = {
   labels: PlatformText['notifications']
+  /**
+   * 抽屉现在开没开。铃铛是它的触发器，读屏要能听到 `aria-expanded`——
+   * 没有这个输入时，读屏只会说「通知按钮」，说不出抽屉是开是关。
+   */
+  open: boolean
+  /** 被展开面板的 id（`NOTIFICATION_CENTER_PANEL_ID`）；**只在打开时**输出 `aria-controls`。 */
+  controlsId?: string
   onOpen: () => void
   source?: NotificationCenterSource
 }
@@ -32,7 +39,7 @@ type NotificationBellProps = {
  * - **`version` 必须用掉**：订阅 `onChanged`，抽屉关着时来了新通知，角标也要跟着变。
  *   只在挂载时读一次的话，用户会看着一个永远不动的数字。
  */
-export function NotificationBell({ labels, onOpen, source }: NotificationBellProps): React.ReactElement {
+export function NotificationBell({ labels, open, controlsId, onOpen, source }: NotificationBellProps): React.ReactElement {
   const [unread, setUnread] = useState(0)
   // 只作依赖：值变了就说明「不是同一次事件」，让重读真的发生。
   const [version, setVersion] = useState(0)
@@ -86,6 +93,10 @@ export function NotificationBell({ labels, onOpen, source }: NotificationBellPro
         onSelect={onOpen}
         size="md"
         variant="solid"
+        // 弹出触发器三件套：读屏才知道「这能开一个对话框」以及「现在开没开」。
+        hasPopup="dialog"
+        expanded={open}
+        {...(open && controlsId !== undefined ? { controls: controlsId } : {})}
         resolveText={(key) => (key === BELL_UNREAD_KEY ? labels.bellUnread(String(unread)) : labels.bell)}
       />
       {badge === null ? null : (

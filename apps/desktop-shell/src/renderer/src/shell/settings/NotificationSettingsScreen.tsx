@@ -25,12 +25,10 @@ export function NotificationSettingsScreen(props: {
   notice?: string | null
   language: AppLanguage
   client?: NotificationSettingsClient
-  /** 页面窗里没有设置页导航，此时不传——**不画一个点了没反应的动作**。 */
-  onOpenSystemSettings?: () => void
 }): React.ReactElement {
   const text = notificationSettingsText[props.language]
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
-  const { state, reload, setSubscription, setToast, permission } = useNotificationSettingsData(client)
+  const { state, reload, setSubscription, setToast } = useNotificationSettingsData(client)
   const [receipt, setReceipt] = useState<string | null>(null)
 
   return (
@@ -58,8 +56,6 @@ export function NotificationSettingsScreen(props: {
             text={text}
             toastEnabled={state.data.toastEnabled}
             onToastChange={(next) => void setToast(next)}
-            desktopPermission={permission}
-            onOpenSystemSettings={props.onOpenSystemSettings}
           />
 
           <div className="notification-settings-test">

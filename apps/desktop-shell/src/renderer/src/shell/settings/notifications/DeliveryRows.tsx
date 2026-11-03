@@ -1,6 +1,4 @@
-import { Button, Switch } from 'antd'
-
-import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
+import { Switch } from 'antd'
 
 import type { NotificationSettingsText } from './notificationSettingsText'
 
@@ -13,20 +11,12 @@ import type { NotificationSettingsText } from './notificationSettingsText'
  * 这一块的硬规矩：**一件事只有一个控件**。曾经这里是「行开关 + 逐条勾选」两套，
  * 于是取消订阅后行开关还亮着、清单里那个勾也还亮着，读者无法判断哪个算数。
  */
-const PERMISSION_TONE: Record<'granted' | 'denied' | 'unknown', StatusPillTone> = {
-  granted: 'ok',
-  denied: 'bad',
-  unknown: 'muted'
-}
-
 export function DeliveryRows(props: {
   text: NotificationSettingsText
   toastEnabled: boolean
   onToastChange: (next: boolean) => void
-  desktopPermission: 'granted' | 'denied' | 'unknown' | null
-  onOpenSystemSettings?: () => void
 }): React.ReactElement {
-  const { text, desktopPermission } = props
+  const { text } = props
 
   return (
     <div className="notification-rows">
@@ -53,35 +43,17 @@ export function DeliveryRows(props: {
       </div>
 
       {/* 桌面通知：没有开关。开关是清单里的桌面列，这一行只说系统放没放行。 */}
-      <div className="notification-row" data-row="desktop" data-permission={desktopPermission ?? 'unknown'}>
+      <div className="notification-row" data-row="desktop">
         <span className="notification-row-copy">
           <strong>{text.desktopRow}</strong>
           <span className="notification-row-desc">{text.desktopDesc}</span>
-          {desktopPermission === 'denied' ? (
-            <span className="notification-row-hint" role="note">
-              {text.desktopKeepChoice}
-            </span>
-          ) : null}
-        </span>
-        <span className="notification-row-control">
-          {desktopPermission === null ? null : (
-            <StatusPill
-              tone={PERMISSION_TONE[desktopPermission]}
-              labelKey={
-                desktopPermission === 'granted'
-                  ? text.desktopPermissionGranted
-                  : desktopPermission === 'denied'
-                    ? text.desktopPermissionDenied
-                    : text.desktopPermissionUnknown
-              }
-              resolveText={(key) => key}
-            />
-          )}
-          {desktopPermission === 'denied' && props.onOpenSystemSettings !== undefined ? (
-            <Button size="small" onClick={props.onOpenSystemSettings}>
-              {text.desktopOpenSettings}
-            </Button>
-          ) : null}
+          {/*
+            * 不画「已放行 / 没放行 / 读不到」三档：Electron 没有读这个开关的 API，三档里前两档永远
+            * 不会出现，画出来的就只是一句恒定的「读不到」。改成一句白话：读不到、去哪儿开、怎么自验。
+            */}
+          <span className="notification-row-hint" role="note" data-desktop-cannot-read>
+            {text.desktopCannotRead}
+          </span>
         </span>
       </div>
 

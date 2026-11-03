@@ -17,7 +17,6 @@ export type NotificationSettingsData = {
   catalog: readonly NotificationEventCatalogEntry[]
   subscriptions: NotificationSubscriptionTable
   toastEnabled: boolean
-  desktopPermission: 'granted' | 'denied' | 'unknown'
 }
 
 export type NotificationSettingsClient = {
@@ -26,7 +25,6 @@ export type NotificationSettingsClient = {
   getDeliverySettings?: () => Promise<{ toastEnabled?: boolean }>
   setSubscription?: (id: string, patch: Record<string, unknown>) => Promise<unknown>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
-  readDesktopPermission?: () => Promise<'granted' | 'denied' | 'unknown'>
   sendTest?: () => Promise<unknown>
 }
 
@@ -40,11 +38,9 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
   reload: () => void
   setSubscription: (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => Promise<void>
   setToast: (next: boolean) => Promise<void>
-  permission: 'granted' | 'denied' | 'unknown'
 } {
   const [state, setState] = useState<NotificationSettingsState>({ status: 'loading' })
   const [nonce, setNonce] = useState(0)
-  const [permission, setPermission] = useState<'granted' | 'denied' | 'unknown'>('unknown')
 
   useEffect(() => {
     let alive = true
@@ -53,29 +49,21 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
       // 当成「本来就没有」，而这个屏幕上「没有」是一个必须被相信的结论。
       type DeliveryShape = { toastEnabled?: boolean }
       const readAll: Promise<
-        [
-          readonly NotificationEventCatalogEntry[],
-          NotificationSubscriptionTable,
-          DeliveryShape,
-          'granted' | 'denied' | 'unknown'
-        ]
+        [readonly NotificationEventCatalogEntry[], NotificationSubscriptionTable, DeliveryShape]
       > = Promise.all([
         client.listEventCatalog?.() ?? Promise.resolve([]),
         client.getSubscriptions?.() ?? Promise.resolve({}),
-        client.getDeliverySettings?.() ?? Promise.resolve({}),
-        client.readDesktopPermission?.() ?? Promise.resolve('unknown' as const)
+        client.getDeliverySettings?.() ?? Promise.resolve({})
       ])
       void readAll
-        .then(([catalog, subscriptions, delivery, desktopPermission]) => {
+        .then(([catalog, subscriptions, delivery]) => {
           if (!alive) return
-          setPermission(desktopPermission)
           setState({
             status: 'ready',
             data: {
               catalog,
               subscriptions,
-              toastEnabled: delivery.toastEnabled === true,
-              desktopPermission
+              toastEnabled: delivery.toastEnabled === true
             }
           })
         })
@@ -84,18 +72,8 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
         })
     }
     read()
-    // 读者去系统设置放行再切回来，那行必须跟着变，否则他会以为设置没生效、回去再改一遍。
-    const onFocus = (): void => {
-      void Promise.resolve(client.readDesktopPermission?.() ?? Promise.resolve('unknown' as const))
-        .then((next) => {
-          if (alive) setPermission(next)
-        })
-        .catch(() => undefined)
-    }
-    window.addEventListener('focus', onFocus)
     return () => {
       alive = false
-      window.removeEventListener('focus', onFocus)
     }
   }, [client, nonce])
 
@@ -132,5 +110,5 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
     [client]
   )
 
-  return { state, reload, setSubscription, setToast, permission }
+  return { state, reload, setSubscription, setToast }
 }

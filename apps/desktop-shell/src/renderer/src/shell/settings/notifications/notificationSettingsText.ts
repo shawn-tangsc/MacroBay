@@ -17,11 +17,11 @@ export type NotificationSettingsText = {
   toastDesc: string
   desktopRow: string
   desktopDesc: string
-  desktopPermissionGranted: string
-  desktopPermissionDenied: string
-  desktopPermissionUnknown: string
-  desktopKeepChoice: string
-  desktopOpenSettings: string
+  /**
+   * 系统开没开桌面通知，**我们读不到**（Electron 没有这个 API）。所以这一行不画状态、不下判断，
+   * 只说清「去哪儿开」和「怎么自己验证」——把身子探进系统设置里猜，就是假状态。
+   */
+  desktopCannotRead: string
   popupRow: string
   popupDisabled: string
   /** 失败这个**结论**用 StatusPill 说：红只落在圆点与边框上，不落在句子上（见下方说明）。 */
@@ -54,11 +54,8 @@ const zh: NotificationSettingsText = {
   toastDesc: '只决定获批的那几条要不要一闪而过；不逐条配置。',
   desktopRow: '桌面通知',
   desktopDesc: '逐条在下方清单里勾选；第一次勾桌面时才向系统请求授权。',
-  desktopPermissionGranted: '系统已放行桌面通知',
-  desktopPermissionDenied: '系统通知没有放行，去「系统设置 › 通知 › MacroBay」打开',
-  desktopPermissionUnknown: '暂时无法确认系统是否放行',
-  desktopKeepChoice: '这里的选择会被保留，系统放行后生效。',
-  desktopOpenSettings: '去系统设置',
+  desktopCannotRead:
+    '横幅由系统弹出，我们读不到系统里的通知开关。没看到横幅，就去「系统设置 › 通知 › MacroBay」打开允许通知，再点一次「发送测试通知」。',
   popupRow: '高优先级弹窗',
   popupDisabled: '这个版本还没有实现弹窗；需要立刻叫醒你的事，现在走横幅，位置先留着。',
   // 「失败」是结论，交给 StatusPill；句子本身用中性文字——`--danger` 在深色底上只有 3.25–3.94，
@@ -93,11 +90,8 @@ const en: NotificationSettingsText = {
   toastDesc: 'Only decides whether the approved few flash by; nothing is configured per event.',
   desktopRow: 'Desktop notifications',
   desktopDesc: 'Tick them row by row below. The system is asked for permission the first time you tick desktop.',
-  desktopPermissionGranted: 'The system allows desktop notifications',
-  desktopPermissionDenied: 'System notifications are not allowed. Open System Settings › Notifications › MacroBay',
-  desktopPermissionUnknown: 'Cannot tell right now whether the system allows them',
-  desktopKeepChoice: 'Your choices here are kept and take effect once the system allows them.',
-  desktopOpenSettings: 'Open System Settings',
+  desktopCannotRead:
+    'The system draws the banner and we cannot read its notification switch. If no banner appears, open System Settings › Notifications › MacroBay, allow notifications, then press "Send a test notification" again.',
   popupRow: 'High-priority popup',
   popupDisabled:
     'This version does not implement popups. Anything that must wake you now goes through the banner, and the place is kept for it.',

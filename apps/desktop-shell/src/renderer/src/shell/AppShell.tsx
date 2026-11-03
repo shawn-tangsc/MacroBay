@@ -48,7 +48,7 @@ import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
-import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { NotificationBanner } from './notifications/NotificationBanner'
 import { reportNavFallback, useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
@@ -1469,7 +1469,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         title={t.settings.notifications}
         notice={notice}
         language={settings.language}
-        onOpenSystemSettings={() => void window.platform.app.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')}
       />
     )
   }
@@ -1732,7 +1731,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
               等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
           <UpdateActionButton language={settings.language} />
-          <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
+          <NotificationBell labels={t.notifications} open={notificationCenterOpen}
+            controlsId={NOTIFICATION_CENTER_PANEL_ID} onOpen={() => setNotificationCenterOpen(true)} />
         </div>
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
