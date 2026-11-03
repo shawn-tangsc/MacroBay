@@ -141,6 +141,9 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
           language: { additional: draft.additionalLanguages }
         })
         if (result.state === 'available') {
+          // The saved values are the new baseline: without this, a successful save followed by a
+          // close would ask "discard your changes?" about edits that are already stored.
+          setLoaded(draft)
           setState('ready')
           return true
         }

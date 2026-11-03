@@ -130,6 +130,9 @@ export function useDailyBriefingAiSettings(input: Readonly<{
         }
         const result = await input.client.saveSettings(draft)
         if (result.state === 'available') {
+          // The saved values are the new baseline: without this, a successful save followed by a
+          // close would ask "discard your changes?" about edits that are already stored.
+          setLoaded(draft)
           setState('ready')
           return true
         }

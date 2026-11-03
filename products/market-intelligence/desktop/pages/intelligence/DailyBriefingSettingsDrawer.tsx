@@ -56,7 +56,10 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
   const confirm = useConfirm()
   // A close with unsaved edits is the one path that can destroy work silently: the reader edited
   // two forms, pressed Escape or 取消, and nothing on screen would ever say the edits were gone.
-  const dirty = (generation.state === 'ready' && generation.dirty) || (ai.state === 'ready' && ai.dirty)
+  // Not gated on `ready`: a section whose save just failed still holds the reader's edits, and that
+  // is exactly the moment a close must ask. A `load-failed` section has no draft, so its `dirty` is
+  // false on its own — the gate was adding no protection, only losing the save-failed case.
+  const dirty = generation.dirty || ai.dirty
 
   useEffect(() => {
     if (open) return

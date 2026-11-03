@@ -514,6 +514,86 @@ describe('daily briefing page', () => {
     expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
   })
 
+  it('asks after a failed save, when the edits are still in the drawer', async () => {
+    // The path the reviewer flagged: edit, press save, save fails, close — the edits are still
+    // there and the reader was just told the save did not go through. That close must ask.
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    const toggle = document.querySelector<HTMLElement>('[role="switch"]')!
+    await act(async () => { toggle.click(); await Promise.resolve() })
+
+    const save = document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
+    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+    // Both sections were ready, so both writes were attempted and both were rejected.
+    expect(document.body.textContent).toContain(text.settingsDrawer.saveFailed.replace('{sections}', `${text.settingsDrawer.sectionFailed.generation}、${text.settingsDrawer.sectionFailed.ai}`))
+
+    const cancel = [...document.querySelectorAll('button')].filter((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.cancel).at(-1)!
+    await act(async () => { cancel.click(); await Promise.resolve() })
+    expect(document.body.textContent).toContain(text.settingsDrawer.discardTitle)
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+
+    const discard = [...document.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.settingsDrawer.discardConfirm)!
+    await act(async () => { discard.click(); await Promise.resolve() })
+    expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
+  })
+
+  it('does not ask when the settings could not be loaded at all', async () => {
+    // No draft means nothing to lose: dropping the `ready` gate must not turn a failed read into
+    // an over-eager question.
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+
+    const cancel = [...document.querySelectorAll('button')].filter((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.cancel).at(-1)!
+    await act(async () => { cancel.click(); await Promise.resolve() })
+    expect(document.body.textContent).not.toContain(text.settingsDrawer.discardTitle)
+    expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
+  })
+
+  it('does not ask after a successful save, so the saved values are the new baseline', async () => {
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    const toggle = document.querySelector<HTMLElement>('[role="switch"]')!
+    await act(async () => { toggle.click(); await Promise.resolve() })
+
+    const save = document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
+    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+    expect(document.body.textContent).not.toContain(text.settingsDrawer.discardTitle)
+  })
+
+  it('takes the same asking path when the reader presses Escape', async () => {
+    // Three close routes (取消, Escape, backdrop) must not have a bypass; Escape is the one a
+    // keyboard reader reaches first.
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    const toggle = document.querySelector<HTMLElement>('[role="switch"]')!
+    await act(async () => { toggle.click(); await Promise.resolve() })
+
+    // antd's modal drawer handles Escape on its own panel; dispatch there, the way a keyboard does.
+    const panel = document.querySelector<HTMLElement>('[role="dialog"]')
+    await act(async () => { (panel ?? document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true })); await Promise.resolve() })
+    expect(document.body.textContent).toContain(text.settingsDrawer.discardTitle)
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+
+    const discard = [...document.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.settingsDrawer.discardConfirm)!
+    await act(async () => { discard.click(); await Promise.resolve() })
+    expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
+  })
+
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
     const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
     const client = fakeClient({
