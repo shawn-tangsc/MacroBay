@@ -22,9 +22,11 @@
   height: 36px;
   padding: 0 10px;
   border: 0;
+  /* 选中态靠左侧 2px 竖条：位置差异与颜色差异同时存在，不只靠底色。 */
+  border-left: 2px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--muted-strong);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -36,6 +38,8 @@
 
 .channel-platform-item[aria-current='true'] {
   background: var(--surface-raised);
+  border-left-color: var(--accent);
+  color: var(--text-strong);
   font-weight: 600;
 }
 
@@ -157,7 +161,7 @@
   letter-spacing: 1px;
   /* 等宽字体栈与壳层其余 8 处一致；不为它新造 token（收敛成 token 是另一笔）。 */
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .channel-row-error {
