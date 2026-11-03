@@ -9087,40 +9087,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 /*
- * 侧栏「设置」上的小点：有新版才亮。不做动画——它是提示，不是警报。
- *
- * 用 `<i>` 而不是 `<span>`：侧栏有一条 `.nav-item span { display: none }`（本意藏导航文字），
- * span 会被它一起藏掉。这里再显式写一次 `display`，让可见性不依赖元素类型的巧合。
- */
-.settings-update-dot {
-  position: relative;
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  margin-left: 2px;
-  flex: none;
-  cursor: pointer;
-}
-
-/*
- * 热区：以 6px 圆点为中心 22×22（界面设计 2026-11-03 签字时写死）。
- *
- * 它是圆点的**子元素**、绝对定位，所以不改变导航按钮的布局，视觉圆点仍是 6px。
- * 不是控件：无 role、无 tabIndex、没有自己的可读名；键盘用户走「设置」按钮再从侧栏进关于页。
- */
-.settings-update-dot-hit {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-}
-
-/*
  * 设置 → 关于我们。
  *
  * 只锁这一页：内容列 720、正文列 480。**不要动基础设置的 820**——那是另一页的密度，
