@@ -83,7 +83,8 @@ export default function AgentSessionInputbar({
   const draftStorageKey = draftStorageKeyOverride ?? `agent-session-draft:${agent.id}`
   const { draft, setDraft, draftRef } = useAgentDraftBuffer(draftStorageKey)
   const [files, setFiles] = useState<AgentAttachedFile[]>([])
-  const [pasteError, setPasteError] = useState<string | null>(null)
+  /** 只存「有没有失败」：句子留到渲染那一刻取，否则界面会冻结在失败当时的语言。 */
+  const [pasteFailed, setPasteFailed] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -210,12 +211,12 @@ export default function AgentSessionInputbar({
   }
 
   async function attachClipboardImage(file: File): Promise<void> {
-    setPasteError(null)
+    setPasteFailed(false)
     try {
       const attached = await readClipboardImageAttachment(file, allowImageAttachments)
       setFiles((current) => [...current, attached])
     } catch {
-      setPasteError(t.input.clipboardImageFailed)
+      setPasteFailed(true)
     }
   }
 
@@ -254,7 +255,7 @@ export default function AgentSessionInputbar({
         files={files}
         mentionedModels={mentionModels.mentionedModels}
         sendError={sendError}
-        pasteError={pasteError}
+        pasteError={pasteFailed ? t.input.clipboardImageFailed : null}
         text={t.input}
         onRemoveFile={(path) => setFiles((current) => current.filter((item) => item.path !== path))}
         onRemoveMentionedModel={mentionModels.removeByValue}
