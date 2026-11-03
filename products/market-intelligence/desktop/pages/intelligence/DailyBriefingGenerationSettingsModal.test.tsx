@@ -51,7 +51,10 @@ describe('daily briefing generation settings modal', () => {
     expect(document.body.textContent).not.toContain(text.aiSettings.title)
     // 标题现在由共用弹窗按键解析：键写错会渲染成空标题，所以这里断言渲染值，不只断言文本包含。
     expect(document.querySelector('.modal__title')?.textContent).toBe(text.generationSettings.title)
-    expect(document.body.textContent).toContain(text.generationSettings.note)
+    // The explanation is a question mark now, not a standing sentence: its accessible name is
+    // short, and the sentence itself stays out of the panel.
+    expect(document.body.querySelector(`[aria-label="${text.generationSettings.noteLabel}"]`)).not.toBeNull()
+    expect(document.body.textContent).not.toContain(text.generationSettings.note)
 
     const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
     await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve() })

@@ -260,7 +260,24 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
           : null}
       </div>
 
-      <p className="mi-daily-briefing__settings-note">{text.generationSettings.note}</p>
+      {/* The "applies from the next brief" sentence is an explanation, not a status: per UI spec
+          v4 §7 it lives in a question mark, whose accessible name is a short label — the reader
+          gets it without opening anything, and the panel stops restating it. */}
+      <p className="mi-daily-briefing__settings-link">
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+            variant="plain"
+            expanded={triggerProps.expanded}
+            icon={CircleHelp}
+            onSelect={triggerProps.onSelect}
+            resolveText={resolveProductText}
+            size="sm"
+          />}
+        />
+      </p>
       {failed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
     </>}
   </Modal>
