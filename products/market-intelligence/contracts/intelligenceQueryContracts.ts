@@ -210,14 +210,19 @@ export const capitalConditionsSnapshotPolicy = {
 } as const
 
 export const capitalConditionsDailyFlowPolicy = {
-  minimumRows: 5,
+  /**
+   * Chart rule only: below this many aligned days the chart is not drawn. It is **not** a
+   * validity rule — a source that returns one to four days is delivering real data, and the
+   * card says how many days it has instead of calling the whole reading a failure.
+   */
+  minimumChartRows: 5,
   maximumRows: 30,
   dayMilliseconds: 24 * 60 * 60 * 1_000,
   tradingDatePattern: /^\d{4}-\d{2}-\d{2}$/
 } as const
 
 export function isValidCapitalConditionsDailyFlows(value: unknown, asOf: unknown): value is readonly { tradingDate: string; netFlowUsd: number }[] {
-  if (!Array.isArray(value) || value.length < capitalConditionsDailyFlowPolicy.minimumRows || value.length > capitalConditionsDailyFlowPolicy.maximumRows || !isCanonicalCapitalConditionsSnapshotTime(asOf)) return false
+  if (!Array.isArray(value) || value.length > capitalConditionsDailyFlowPolicy.maximumRows || !isCanonicalCapitalConditionsSnapshotTime(asOf)) return false
   const currentDate = asOf.slice(0, 10)
   return value.every((row, index) => {
     if (!isPlainRecord(row) || !hasExactKeys(row, ['tradingDate', 'netFlowUsd']) || !isTradingDate(row.tradingDate) || row.tradingDate >= currentDate ||

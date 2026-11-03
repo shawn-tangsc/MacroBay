@@ -105,8 +105,9 @@ export function parseStablecoinDailyHistory(payload: unknown, now: string): read
       if (parsedRows[index - 1]!.tradingDate >= parsedRows[index]!.tradingDate) return undefined
     }
     if (parsedRows.some((row) => row.tradingDate > currentDay)) return undefined
+    // One to four complete days are still real readings: keep them so the card can say how many
+    // it has. The chart decides separately whether that is enough days to draw.
     const complete = parsedRows.filter((row) => row.tradingDate < currentDay)
-    if (complete.length < capitalConditionsDailyFlowPolicy.minimumRows) return undefined
     for (let index = 1; index < complete.length; index += 1) {
       const previous = complete[index - 1]!
       const current = complete[index]!

@@ -288,7 +288,7 @@ function isSnapshot(value: StablecoinCapitalSnapshot): boolean {
 }
 
 function isDailyFlows(value: readonly { tradingDate: string; netFlowUsd: number }[]): boolean {
-  if (!Array.isArray(value) || value.length < capitalConditionsDailyFlowPolicy.minimumRows || value.length > capitalConditionsDailyFlowPolicy.maximumRows) return false
+  if (!Array.isArray(value) || value.length > capitalConditionsDailyFlowPolicy.maximumRows) return false
   let previous: string | undefined
   for (const row of value) {
     const instant = typeof row?.tradingDate === 'string' ? Date.parse(`${row.tradingDate}T00:00:00.000Z`) : NaN

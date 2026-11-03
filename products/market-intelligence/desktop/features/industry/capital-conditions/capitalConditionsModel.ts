@@ -161,7 +161,7 @@ function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[
     return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
   })
   if (rows.length === 0) return { state: 'not-yet', availableDays: 0 }
-  if (rows.length < capitalConditionsDailyFlowPolicy.minimumRows) return { state: 'not-yet', availableDays: rows.length }
+  if (rows.length < capitalConditionsDailyFlowPolicy.minimumChartRows) return { state: 'not-yet', availableDays: rows.length }
   return { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
 }
 
