@@ -87,7 +87,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   getProviderState?: () => Promise<ProviderState>
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 模型服务页「默认模型」只读投影（翻译偏好跟随其中的默认翻译模型）。 */
-  getModelDefaults?: () => Promise<ModelDefaultsSettings>
+  getModelDefaults?: () => Promise<ModelDefaultsSettings>; /** Reader zone: schedule and day boundary follow it. */ getTimeZone: () => string
   registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
   registerProductCache: ProductCacheRegistrar
   registerProductDisposer?: ProductServiceDisposerRegistrar
@@ -168,7 +168,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
-    getModelDefaults: deps.getModelDefaults,
+    getModelDefaults: deps.getModelDefaults, getTimeZone: deps.getTimeZone,
     eventBusRuntime: deps.eventBusRuntime,
     platformFetch,
     createAgentSession: deps.createAgentSession,

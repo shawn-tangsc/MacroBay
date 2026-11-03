@@ -198,8 +198,8 @@ export type IntelligenceModulePlatformHooks = {
   eventBusRuntime?: EventBusRuntime
   /** Required: the first call must inject it, and every consumer reads this one. */
   platformFetch: CapitalConditionsPlatformFetch
-  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
-  getTimeZone?: () => string
+  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. Required: a missing one used to become UTC silently. */
+  getTimeZone: () => string
   /** The reader changed their display zone: the brief schedule follows it without a settings save. */
   onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
   /**

@@ -650,7 +650,7 @@ export type DesktopAppBootstrapOptions = {
     getModelDefaults: () => Promise<ModelDefaultsSettings>
     getNetworkSettings: () => Promise<NetworkSettings>
     /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
-    getTimeZone?: () => string
+    getTimeZone: () => string
     onSettingsCommitted?: (listener: SettingsCommittedListener) => () => void
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>

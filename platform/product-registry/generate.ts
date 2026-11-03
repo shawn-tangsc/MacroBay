@@ -256,6 +256,8 @@ export type ProductServiceDependencies = {
   getProviderState: () => Promise<ProviderState>
   getAppLanguage: () => Promise<'zh-CN' | 'en-US'>
   getModelDefaults: () => Promise<ModelDefaultsSettings>
+  /** The reader's display zone; a product's schedule and day boundary follow the setting. */
+  getTimeZone: () => string
   getNetworkSettings: () => Promise<NetworkSettings>
   platformFetch: typeof fetch
   secretVault: SecretVault

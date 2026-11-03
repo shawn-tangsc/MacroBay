@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -53,6 +54,25 @@ describe('market-intelligence product bootstrap', () => {
       expect(await registry.invoke('market-intelligence', crossAssetMethods.query, { range: '1h' })).toEqual({ state: 'unavailable' })
     } finally { open.mockRestore(); for (const dispose of disposers) await dispose() }
   })
+  it('gives the brief the reader time zone, not a silent UTC', async () => {
+    // Before the wiring existed, the product never received this hook and every installation ran
+    // the brief on UTC while the interface said otherwise. The case is red without the forwarding.
+    rmSync(join(tmpdir(), 'market-intelligence-bootstrap-test'), { recursive: true, force: true })
+    const registry = createProductIpcRegistry()
+    registerServices({ register: registry.register, jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
+      registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), platformFetch: vi.fn(),
+      getTimeZone: () => 'Asia/Shanghai' })
+    try {
+      registry.seal()
+      const view = await registry.invoke('market-intelligence', 'intelligence.dailyBriefing.getSettings', {}) as
+        Readonly<{ generation: Readonly<{ periods: readonly Readonly<{ generationTimeZone: string | null }>[] }> }>
+      // Nothing is stored for a fresh install, so the period means "the reader's zone".
+      expect(view.generation.periods[0]?.generationTimeZone).toBe('Asia/Shanghai')
+    } finally {
+      await getIntelligenceModule()?.dispose?.()
+    }
+  })
+
   it('registers all cross-asset methods without network startup and keeps queries read-only', async () => {
     const registry = createProductIpcRegistry()
     const fetch = vi.fn()
