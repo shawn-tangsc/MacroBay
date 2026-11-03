@@ -188,6 +188,23 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
   // Every form control in this block belongs to the brief's own settings; the drawer's
   // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
   return <div data-setting-scope="brief">
+    {/* This sentence explains the whole form's save, not one group, so it heads the block: both
+        hosts — the generation dialog and the settings drawer — show it from here, once. */}
+    <p className="mi-daily-briefing__settings-link">
+      <span>{text.generationSettings.noteLabel}</span>
+      <Popover
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
+        resolveText={resolveProductText}
+        trigger={(triggerProps) => <IconButton
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+          variant="plain"
+          icon={CircleHelp}
+          resolveText={resolveProductText}
+          size="sm"
+          {...triggerProps}
+        />}
+      />
+    </p>
     {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
     <div className="mi-daily-briefing__settings-row">
       <strong>{text.generationSettings.generationTime}</strong>

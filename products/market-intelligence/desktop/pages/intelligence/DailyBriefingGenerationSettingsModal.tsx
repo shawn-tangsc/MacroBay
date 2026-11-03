@@ -1,9 +1,6 @@
 import { Button } from 'antd'
-import { CircleHelp } from 'lucide-react'
 
-import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
-import { Popover } from '@platform/ui/components/popover'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -47,23 +44,6 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
     titleKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.title"
     width="standard"
   >
-    {/* The "applies from the next brief" sentence explains the whole form's save, not one group: it
-        belongs next to the title, above the fields. */}
-    <p className="mi-daily-briefing__settings-link">
-      <span>{text.generationSettings.noteLabel}</span>
-      <Popover
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
-        resolveText={resolveProductText}
-        trigger={(triggerProps) => <IconButton
-          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
-          variant="plain"
-          icon={CircleHelp}
-          resolveText={resolveProductText}
-          size="sm"
-          {...triggerProps}
-        />}
-      />
-    </p>
     <DailyBriefingGenerationSettingsSection
       displayZone={section.displayZone}
       draft={section.draft}
