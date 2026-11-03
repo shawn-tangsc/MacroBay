@@ -148,22 +148,21 @@ export function VersionCheckRow(props: {
           ) : null}
 
           {view.showAutoToggle ? (
-            <label className="version-auto-toggle">
-              <Switch
-                size="small"
-                checked={props.settings.updates.checkEnabled}
-                aria-describedby={FREQUENCY_HINT_ID}
-                onChange={(next) => void props.onUpdateSettings({ updates: { checkEnabled: next } })}
-              />
-              <span>{text.autoCheck}</span>
-            </label>
-          ) : null}
-
-          {view.showAutoToggle ? (
-            // 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。
-            <p className="preference-hint" id={FREQUENCY_HINT_ID}>
-              {text.autoHint}
-            </p>
+            <div className="version-auto-group">
+              <label className="version-auto-toggle">
+                <Switch
+                  size="small"
+                  checked={props.settings.updates.checkEnabled}
+                  aria-describedby={FREQUENCY_HINT_ID}
+                  onChange={(next) => void props.onUpdateSettings({ updates: { checkEnabled: next } })}
+                />
+                <span>{text.autoCheck}</span>
+              </label>
+              {/* 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。 */}
+              <p className="preference-hint" id={FREQUENCY_HINT_ID}>
+                {text.autoHint}
+              </p>
+            </div>
           ) : null}
         </>
       )}
