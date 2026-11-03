@@ -100,8 +100,7 @@ import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
 import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
 import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
 import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
-import { notifyEtfOutflowSignals } from './signals/etfOutflowNotifier'
-import type { ModuleSignal } from '../../contracts/moduleSignal'
+import { etfOutflowSignalHandoff } from './signals/etfOutflowNotifier'
 import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
@@ -511,12 +510,8 @@ export function getIntelligenceModule(
       },
       store: etfCurrentStateStore,
       now: () => new Date().toISOString(),
-      // The ETF leg's own trigger point: after this source writes new flows, the three-day rule is
-      // asked once per asset. This layer hands out the signals; the outlet (switch, dedupe params,
-      // event id) stays in the notifier, so the two can be asserted separately.
-      ...(hooks?.submitNotification
-        ? { notifySignals: (signals: readonly ModuleSignal[]) => notifyEtfOutflowSignals(hooks.submitNotification, signals) }
-        : {})
+      // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
+      ...etfOutflowSignalHandoff(hooks?.submitNotification)
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,

@@ -99,3 +99,15 @@ export async function notifyEtfOutflowSignals(
     }
   }
 }
+
+/**
+ * 刷新服务的交接点：有新流水时，把这一轮判出的信号交给通知层。
+ *
+ * 返回值只有一个问题：**有没有提交入口**。出口开关、去重参数、事件 id 都不在这里判——
+ * 通知层自己读同一份开关，装配处也就不会顺手再判一次、长出第二个真相。
+ */
+export function etfOutflowSignalHandoff(submit: SignalNoticeSubmit | undefined): Readonly<{
+  notifySignals?: (signals: readonly ModuleSignal[]) => Promise<void>
+}> {
+  return submit ? { notifySignals: signals => notifyEtfOutflowSignals(submit, signals) } : {}
+}

@@ -4,7 +4,7 @@ import { notificationDedupeBuilders } from '@platform/notifications/contracts/no
 
 import { etfOutflowOutletPolicy } from '../../../contracts/etfFlows'
 import { buildEtfOutflowSignal } from './etfOutflowSignal'
-import { buildEtfOutflowSignalRequest, notifyEtfOutflowSignals } from './etfOutflowNotifier'
+import { buildEtfOutflowSignalRequest, etfOutflowSignalHandoff, notifyEtfOutflowSignals } from './etfOutflowNotifier'
 
 const asOf = '2026-09-01T12:00:00.000Z'
 
@@ -106,5 +106,22 @@ describe('ETF outflow signal notification', () => {
     const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
     await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: true, notification: false })
     expect(submit).not.toHaveBeenCalled()
+  })
+})
+
+describe('the refresh hand-off', () => {
+  // 交接点只回答一个问题：有没有提交入口。开关在通知层，别在装配处再判一次。
+  it('hands nothing out when the host has no notification entry', () => {
+    expect(etfOutflowSignalHandoff(undefined)).toEqual({})
+  })
+
+  it('hands the signals out and awaits the submission', async () => {
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    const handoff = etfOutflowSignalHandoff(submit)
+
+    await handoff.notifySignals!([outflowSignal()])
+
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0]![0]).toMatchObject({ eventTypeId: 'market-intelligence.signal.triggered' })
   })
 })
