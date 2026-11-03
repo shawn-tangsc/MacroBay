@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ConfirmProvider } from '@platform/ui/components/confirm'
+
 import type { DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
@@ -43,7 +45,10 @@ const flush = async (): Promise<void> => {
 
 const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryRail>> = {}) =>
   act(() => {
-    root.render(<DailyBriefingHistoryRail
+    // The row menu's delete confirmation is the shared dialog: it must render inside its provider,
+    // or the hook throws instead of opening a themed dialog.
+    root.render(<ConfirmProvider>
+      <DailyBriefingHistoryRail
       editions={[edition()]}
       todayDate="2026-11-02"
       locale="zh-CN"
@@ -51,7 +56,8 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
       timeZone="Asia/Shanghai"
       onSelect={() => undefined}
       {...props}
-    />)
+    />
+    </ConfirmProvider>)
   })
 
 describe('daily briefing history rail', () => {

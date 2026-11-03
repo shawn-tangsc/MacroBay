@@ -9,7 +9,7 @@ describe('daily briefing period deletion', () => {
 
     const deleted = await createDailyBriefingPeriodDeletion({ store, links })({ date: '2026-11-02', periodId: 'default' })
 
-    expect(deleted).toEqual({ editions: 2, attempts: 1, periodRuns: 1, sessionLinks: 3, allDone: true })
+    expect(deleted).toEqual({ editions: 2, attempts: 1, periodRuns: 1, sessionLinks: 3, remaining: null, allDone: true })
     expect(store.deletePeriod).toHaveBeenCalledWith('2026-11-02', 'default')
     expect(links.deletePeriod).toHaveBeenCalledWith('2026-11-02', 'default')
   })
@@ -20,7 +20,7 @@ describe('daily briefing period deletion', () => {
 
     const deleted = await createDailyBriefingPeriodDeletion({ store, links })({ date: '2026-11-02', periodId: 'default' })
 
-    expect(deleted).toEqual({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 0, allDone: false })
+    expect(deleted).toEqual({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: null, allDone: false })
   })
 
   it('still answers when the store has no deletion path, and counts nothing as removed', async () => {
@@ -29,6 +29,6 @@ describe('daily briefing period deletion', () => {
       links: { deletePeriod: async () => 0 }
     })({ date: '2026-11-02', periodId: 'default' })
 
-    expect(deleted).toEqual({ editions: 0, attempts: 0, periodRuns: 0, sessionLinks: 0, allDone: true })
+    expect(deleted).toEqual({ editions: 0, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: null, allDone: true })
   })
 })

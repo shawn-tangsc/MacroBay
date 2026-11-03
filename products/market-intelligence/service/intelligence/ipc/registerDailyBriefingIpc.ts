@@ -2,6 +2,7 @@ import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegist
 
 import { isDailyBriefingEditionDate, isDailyBriefingLocale, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
+import type { DailyBriefingPeriodDeletion } from '../daily-briefing/dailyBriefingPeriodDeletion'
 import type { DailyBriefingSettingsPatch, DailyBriefingSettingsService } from '../daily-briefing/dailyBriefingSettingsService'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -21,16 +22,7 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
 })
 
 /** Read-only: one generation per (day, locale) on first open, then the stored edition. */
-/** The cross-database delete, supplied by the module because it owns both stores. */
-export type DailyBriefingDeletePeriod = (input: Readonly<{ date: string; periodId: string }>) => Promise<Readonly<{
-  editions: number
-  attempts: number
-  periodRuns: number
-  sessionLinks: number
-  allDone: boolean
-}>>
-
-export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService, deletePeriod?: DailyBriefingDeletePeriod): void {
+export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingSettingsService, deletePeriod?: DailyBriefingPeriodDeletion): void {
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getToday, async (payload) =>
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>

@@ -12,6 +12,8 @@ export type DailyBriefingPeriodDeletion = (input: Readonly<{ date: string; perio
   attempts: number
   periodRuns: number
   sessionLinks: number
+  /** How many issues that day still has; null means this path cannot tell (the UI shows no count). */
+  remaining: number | null
   allDone: boolean
 }>>
 
@@ -31,6 +33,7 @@ export function createDailyBriefingPeriodDeletion(deps: Readonly<{
     } catch {
       allDone = false
     }
-    return Object.freeze({ ...counts, sessionLinks, allDone })
+    // 这一版不从存储再读一次剩余期数：读不准的「剩余 N 期」比 null（不知道）更糟。
+    return Object.freeze({ ...counts, sessionLinks, remaining: null, allDone })
   }
 }
