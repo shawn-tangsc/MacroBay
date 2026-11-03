@@ -807,12 +807,13 @@ describe('daily briefing page', () => {
     expect(segments[0]).toMatch(/^\d+ 项$/)
     expect(segments[1]).toMatch(/^\d{2}:\d{2}$/)
 
-    // The trail lives in the one detail column, and only there.
+    // The trail lives in the one detail column, and only there: one disclosure, no toggle button.
     expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
-    const toggle = dom.querySelector<HTMLButtonElement>('[data-briefing-attempts] [data-attempts-toggle]')!
-    // The heading names the block; the control only says what it does, once.
-    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.expand)
-    expect(toggle.textContent).not.toMatch(/\d|次/)
+    const trail = dom.querySelector<HTMLDetailsElement>('[data-briefing-attempts]')!
+    const summary = trail.querySelector<HTMLElement>('summary')!
+    expect(trail.tagName).toBe('DETAILS')
+    expect(summary.querySelectorAll('button, a')).toHaveLength(0)
+    expect(summary.textContent).not.toMatch(/\d|次/)
     expect(dom.textContent!.match(/生成记录/g) ?? []).toHaveLength(1)
   })
 
@@ -1051,8 +1052,16 @@ describe('daily briefing page', () => {
     expect(aside.querySelector('[data-briefing-stages] .mi-generation-trace')).not.toBeNull()
     expect(aside.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
     expect(aside.textContent).toContain(text.sections.limits)
+    // The counts are the verdict: they are on the closed summary line, never behind the disclosure.
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
     expect(aside.textContent).toContain(text.limits.counts.info.replace('{count}', '5'))
+    const gaps = aside.querySelector<HTMLDetailsElement>('[data-briefing-gaps] details')!
+    expect(gaps.open).toBe(false)
+    // Closed means closed: the rows live inside the closed disclosure, not on the open page.
+    expect(gaps.querySelectorAll('.mi-daily-briefing-page__group').length).toBeGreaterThan(0)
+    expect(aside.querySelectorAll('.mi-daily-briefing-page__group')).toHaveLength(gaps.querySelectorAll('.mi-daily-briefing-page__group').length)
+
+    act(() => gaps.querySelector<HTMLElement>('summary')!.click())
 
     // The rail is a list of group summaries; no individual fact is listed before a group is opened.
     const groupButtons = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
@@ -1065,6 +1074,11 @@ describe('daily briefing page', () => {
       button.querySelector('.mi-daily-briefing-page__group-count')?.textContent
     const groupSeverities = groupButtons.map((button) => button.getAttribute('data-group-severity'))
     expect(groupSeverities.lastIndexOf('warning')).toBeLessThan(groupSeverities.indexOf('info'))
+    // Three facts per row and nothing more: severity, what it is, how many.
+    for (const button of groupButtons) {
+      expect(button.children).toHaveLength(3)
+      expect(button.querySelectorAll('.mi-daily-briefing-page__group-example')).toHaveLength(0)
+    }
 
     const consensusGroup = groupButtons.find((button) => groupLabel(button) === '预期值未收录')!
     expect(groupCount(consensusGroup)).toBe('2 项')
@@ -1108,15 +1122,16 @@ describe('daily briefing page', () => {
     expect(aside.textContent).not.toContain('no-baseline')
     expect(aside.textContent).not.toContain('provider:model')
 
-    const toggle = aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    act(() => toggle.click())
-    expect(aside.querySelectorAll('.mi-daily-briefing-page__group')).toHaveLength(0)
-    expect(aside.textContent).toContain(text.limits.expand)
+    // One disclosure shape for all three blocks: the same native details, no button of its own.
+    const gapSummary = gaps.querySelector<HTMLElement>('summary')!
+    expect(gapSummary.querySelectorAll('button, a')).toHaveLength(0)
+    expect(gaps.open).toBe(true)
+    act(() => gapSummary.click())
+    expect(gaps.open).toBe(false)
+    // Closed, the counts still answer "how bad is it" — they are the verdict, not the detail.
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
-    act(() => aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!.click())
-    expect(aside.querySelectorAll('.mi-daily-briefing-page__group').length).toBeGreaterThan(0)
-    expect(aside.textContent).toContain(text.limits.collapse)
+    act(() => gaps.querySelector<HTMLElement>('summary')!.click())
+    expect(gaps.open).toBe(true)
   })
 
   it('renders the diagnostics panel in English', async () => {
@@ -1125,11 +1140,11 @@ describe('daily briefing page', () => {
     const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
 
     expect(aside.textContent).toContain(englishText.sections.limits)
-    expect(aside.textContent).toContain(englishText.limits.categories.data)
     expect(aside.textContent).toContain(englishText.limits.severity.warning)
+    expect(aside.textContent).not.toContain('变化基线缺失')
+    act(() => aside.querySelector<HTMLElement>('[data-briefing-gaps] summary')!.click())
     expect(aside.textContent).toContain(englishText.limits.groupLabels['macro-consensus'])
     expect(aside.textContent).toContain(englishText.limits.groupLabels['no-baseline'])
-    expect(aside.textContent).not.toContain('变化基线缺失')
 
     const consensusGroup = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
       .find((button) => button.querySelector('.mi-daily-briefing-page__group-label')?.textContent === englishText.limits.groupLabels['macro-consensus'])!

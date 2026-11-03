@@ -45,22 +45,25 @@ describe('daily briefing attempt trail', () => {
     expect(host.querySelector('[data-briefing-attempts]')).toBeNull()
   })
 
-  it('opens from an action label, never from an attempt count', async () => {
+  it('opens from its summary line, never from an attempt count', async () => {
     const loadAttempts = vi.fn(async () => ({ state: 'available' as const, attempts: [] }))
     render(loadAttempts)
-    const toggle = host.querySelector<HTMLButtonElement>('[data-attempts-toggle]')!
+    // One disclosure shape with the other two blocks: native details, the summary is the target,
+    // and it holds no button of its own.
+    const details = host.querySelector<HTMLDetailsElement>('details[data-briefing-attempts]')!
+    const summary = details.querySelector<HTMLElement>('summary')!
 
-    // The heading names the block once; the control only says what it does.
     expect(host.querySelectorAll('h3')).toHaveLength(1)
     expect(host.textContent!.match(/生成记录/g) ?? []).toHaveLength(1)
-    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.expand)
-    expect(toggle.textContent).not.toMatch(/\d|次/)
+    expect(summary.querySelectorAll('button, a')).toHaveLength(0)
+    expect(summary.textContent).not.toMatch(/\d|次/)
+    expect(details.open).toBe(false)
     expect(loadAttempts).not.toHaveBeenCalled()
 
-    act(() => toggle.click())
+    act(() => summary.click())
     await flush()
+    expect(details.open).toBe(true)
     expect(loadAttempts).toHaveBeenCalledWith('2026-11-02', 'default', 'zh-CN')
-    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.collapse)
   })
 
   it('numbers the attempts and says which one was cleaned', async () => {
@@ -71,7 +74,7 @@ describe('daily briefing attempt trail', () => {
         { attemptNo: 1, state: 'failed' as const, failureCode: 'source-failed', startedAt: '2026-10-30T07:00:00.000Z', finishedAt: '2026-10-30T07:01:00.000Z' }
       ]
     }))
-    act(() => host.querySelector<HTMLButtonElement>('[data-attempts-toggle]')!.click())
+    act(() => host.querySelector<HTMLElement>('summary')!.click())
     await flush()
 
     expect(host.textContent).toContain('第 2 次')
@@ -81,7 +84,7 @@ describe('daily briefing attempt trail', () => {
 
   it('states an unreadable attempt list instead of drawing "no attempts"', async () => {
     render(async () => ({ state: 'unavailable' as const }))
-    act(() => host.querySelector<HTMLButtonElement>('[data-attempts-toggle]')!.click())
+    act(() => host.querySelector<HTMLElement>('summary')!.click())
     await flush()
 
     expect(host.textContent).toContain(text.history.attempts.unreadable)

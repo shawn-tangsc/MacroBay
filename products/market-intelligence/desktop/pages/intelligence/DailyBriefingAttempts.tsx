@@ -1,4 +1,3 @@
-import { Button } from 'antd'
 import { useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -32,8 +31,7 @@ export function DailyBriefingAttempts({ date, periodId, locale, text, loadAttemp
   const [state, setState] = useState<AttemptsState>({ status: 'idle' })
   if (!loadAttempts) return null
 
-  const toggle = (): void => {
-    const next = !open
+  const toggle = (next: boolean): void => {
     setOpen(next)
     if (!next || state.status === 'ready' || state.status === 'unavailable') return
     setState({ status: 'loading' })
@@ -44,14 +42,14 @@ export function DailyBriefingAttempts({ date, periodId, locale, text, loadAttemp
       .catch(() => setState({ status: 'unavailable' }))
   }
 
-  return <section className="mi-briefing-attempts" data-briefing-attempts="true" aria-labelledby="mi-briefing-attempts-title">
-    <header className="mi-briefing-detail__head">
-      <h3 id="mi-briefing-attempts-title">{text.history.attempts.title}</h3>
-      <Button className="mi-briefing-detail__action" data-attempts-toggle={date} aria-expanded={open} onClick={toggle}>
-        {open ? text.history.attempts.collapse : text.history.attempts.expand}
-      </Button>
-    </header>
-    {open ? <div className="mi-briefing-attempts__list" role="group" aria-label={text.history.attempts.title}>
+  // The same disclosure the stage list and the gap list use: native details, the whole summary line
+  // is the target, and the summary carries the state word — never a button of its own.
+  return <details className="mi-briefing-attempts" data-briefing-attempts="true" open={open}
+    onToggle={(event) => toggle((event.currentTarget as HTMLDetailsElement).open)}>
+    <summary className="mi-briefing-detail__head">
+      <h3>{text.history.attempts.title}</h3>
+    </summary>
+    <div className="mi-briefing-attempts__list" role="group" aria-label={text.history.attempts.title}>
       {state.status !== 'ready' && state.status !== 'unavailable' ? <LoadingState label={text.history.loading} minHeight={40} /> : null}
       {state.status === 'unavailable' ? <p data-attempts-unreadable="true">{text.history.attempts.unreadable}</p> : null}
       {state.status === 'ready' && state.attempts.length === 0 ? <p>{text.history.attempts.none}</p> : null}
@@ -62,6 +60,6 @@ export function DailyBriefingAttempts({ date, periodId, locale, text, loadAttemp
           {attempt.cleanedAt ? <em>{text.history.attempts.cleaned}</em> : null}
           {attempt.failureCode ? <small>{(text.aiSettings.failure as Readonly<Record<string, string>>)[attempt.failureCode] ?? attempt.failureCode}</small> : null}
         </p>) : null}
-    </div> : null}
-  </section>
+    </div>
+  </details>
 }

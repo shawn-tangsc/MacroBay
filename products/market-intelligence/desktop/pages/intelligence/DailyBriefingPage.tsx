@@ -111,7 +111,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
-  const [issuesOpen, setIssuesOpen] = useState(true)
+  // Closed by default: the counts on the summary line are the verdict, the rows are the detail.
+  const [issuesOpen, setIssuesOpen] = useState(false)
   const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
   const exportTimer = useRef<number | undefined>(undefined)
@@ -454,31 +455,28 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </div> : null}
         <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         <section data-briefing-gaps="true">
-        {issues.length > 0 ? <>
-          <header className="mi-daily-briefing-page__appendix-head">
+        {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
+          onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
+          {/* The counts are the verdict, not the detail: they stay on the summary line even closed. */}
+          <summary className="mi-briefing-gaps__head">
             <h2>{text.sections.limits}</h2>
-            <Button className="mi-daily-briefing-page__appendix-toggle" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
-              {issuesOpen ? text.limits.collapse : text.limits.expand}
-            </Button>
-          </header>
-          <p className="mi-daily-briefing-page__appendix-counts">{issueCountsText(issueCounts, text)}</p>
-          {issuesOpen ? <ol className="mi-daily-briefing-page__groups">
+            <span className="mi-briefing-gaps__counts">{issueCountsText(issueCounts, text)}</span>
+          </summary>
+          <ol className="mi-daily-briefing-page__groups">
             {groups.map((group) => <li key={group.key}>
+              {/* Three facts on the row: how bad, which kind, how many. The long titles live in the
+                  drawer this opens — keeping them here is what made two of them overlap. */}
               <Button className="mi-daily-briefing-page__group" aria-haspopup="dialog"
                 aria-label={text.limits.openGroup.replace('{label}', group.label).replace('{count}', String(group.count))}
                 data-group-key={group.key} data-group-severity={group.severity} data-group-category={group.category}
                 onClick={(event) => setOpenGroup({ key: group.key, trigger: event.currentTarget })}>
-                <span className="mi-daily-briefing-page__group-tags">
-                  <span data-severity={group.severity}>{text.limits.severity[group.severity]}</span>
-                  <span data-category={group.category}>{text.limits.categories[group.category]}</span>
-                </span>
-                <span className="mi-daily-briefing-page__group-label">{group.label}</span>
-                <span className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
-                <span className="mi-daily-briefing-page__group-example">{text.limits.groupExample.replace('{text}', group.example)}</span>
+                <span data-issue-severity={group.severity} className="mi-daily-briefing-page__group-severity">{text.limits.severity[group.severity]}</span>
+                <span data-issue-label={group.label} className="mi-daily-briefing-page__group-label" title={group.label}>{group.label}</span>
+                <span data-issue-count={group.count} className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
               </Button>
             </li>)}
-          </ol> : null}
-        </> : null}</section>
+          </ol>
+        </details> : null}</section>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
       </aside> : null}
     </div>
