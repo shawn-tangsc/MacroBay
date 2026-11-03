@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from 'antd'
-import { ArrowLeft, Settings2 } from 'lucide-react'
+import { ArrowLeft, CircleHelp, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import { briefingCompleteness, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
-import { productText } from '../../shared/i18n/productText'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
@@ -29,7 +29,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
-import { buildEditionCompletenessNote } from './dailyBriefingCompletenessNote'
+import { posterProps } from './dailyBriefingPoster'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -322,24 +322,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
   const openModelService = onOpenModelSettings ?? openModelSettings
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
-  // The exported image follows the edition it shows, not the interface: an English window may
-  // export a Chinese edition, so its labels and its completeness sentence come from that edition.
-  const posterDocument = view.status === 'ready' ? view.document : undefined
-  const posterSummary = posterDocument ? editions.find((edition) => edition.date === posterDocument.edition.date) : undefined
-  const posterText = posterDocument
-    ? productText[posterDocument.edition.locale].pages.intelligence.portal.dashboard.dailyBriefing
-    : text
-  const posterCompleteness = posterDocument
-    ? buildEditionCompletenessNote(
-      briefingCompleteness({
-        ...(posterSummary?.expectedLocales ? { expectedLocales: posterSummary.expectedLocales } : {}),
-        publishedLocales: posterSummary?.availableLocales ?? [posterDocument.edition.locale],
-        readingsAvailable: posterDocument.status.readingsAvailable,
-        readingsTotal: 4
-      }),
-      posterText
-    )
-    : undefined
+  // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
+  const poster = posterProps({ document: view.status === 'ready' ? view.document : undefined, editions, fallbackText: text })
+
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
@@ -388,10 +373,24 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
         </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state">
-          <LoadingState label={text.generating} minHeight={220} />
-          <p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p>
+          <div className="mi-daily-briefing-page__loading-head">
+            <LoadingState label={text.generating} minHeight={220} />
+            <Popover
+              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generateHint"
+              resolveText={resolveProductText}
+              trigger={(triggerProps) => <IconButton
+                {...triggerProps}
+                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.generation"
+                dataAttributes={{ 'data-generate-help': 'true' }}
+                icon={CircleHelp}
+                resolveText={resolveProductText}
+                size="sm"
+                variant="plain"
+              />}
+            />
+          </div>
           {/* The one spinner stays; the rows say which step it is on. */}
-          {liveProgress ? <DailyBriefingLiveSteps nowMs={Date.now()} progress={liveProgress} text={text} /> : null}
+          {liveProgress ? <DailyBriefingLiveSteps nowMs={Date.now()} progress={liveProgress} text={text} resolveText={resolveProductText} /> : null}
           {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
         </div> : null}
         {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
@@ -489,7 +488,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-        <DailyBriefingShareCard document={view.document} text={posterText} locale={view.document.edition.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(posterCompleteness ? { completenessNote: posterCompleteness } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        <DailyBriefingShareCard document={view.document} text={poster.text} locale={poster.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
       </div>
     </div> : null}
   </main>

@@ -28,7 +28,7 @@ import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
-import { briefingHistorySummaries } from './dailyBriefingHistory'
+import { readBriefingHistory } from './dailyBriefingHistory'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
@@ -583,24 +583,15 @@ export function createDailyBriefingService(deps: Readonly<{
     return { state: 'available', document: withGenerationTrace(document, failedTrace) }
   }
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
-    const window = briefingWindow(now(), input.timeZone, await generation())
+    const schedule = await generation()
+    const window = briefingWindow(now(), input.timeZone, schedule)
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const today = window.date
-    const dates = lastDays(today, dailyBriefingPolicy.retentionDays)
-    const from = dates[0]!
-    const to = dates[dates.length - 1]!
-    const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
-    const [primaryRows, otherRows] = await Promise.all([
-      deps.store.list(from, to, primary).catch(() => []),
-      deps.store.list(from, to, otherLocale).catch(() => [])
-    ])
-    // One row per (date, period): the two languages of a period are the same row, not two.
-    const editions = await briefingHistorySummaries({
-      dates,
-      primary,
-      primaryRows,
-      otherRows,
-      periodRun: (date, periodId) => deps.store.getPeriodRun?.(date, periodId)
+    const editions = await readBriefingHistory({
+      store: deps.store,
+      locale: input.locale,
+      today: window.date,
+      retentionDays: dailyBriefingPolicy.retentionDays,
+      scheduledTime: schedule.generationTime
     })
     return { state: 'available', result: { editions } }
   }
@@ -665,8 +656,3 @@ function previousDateOf(date: string): string {
   return new Date(Date.parse(`${date}T00:00:00.000Z`) - 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
 }
 
-function lastDays(today: string, days: number): readonly string[] {
-  const start = Date.parse(`${today}T00:00:00.000Z`)
-  return Object.freeze(Array.from({ length: days }, (_, index) =>
-    new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
-}

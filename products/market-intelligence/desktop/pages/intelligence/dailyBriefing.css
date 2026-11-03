@@ -199,3 +199,11 @@
 .mi-daily-briefing__rail-attempts { grid-column: 1 / -1; margin: 2px 0 6px 6px; padding-left: 8px; border-left: 2px solid var(--mi-dashboard-line); display: flex; flex-direction: column; gap: 3px; color: var(--mi-dashboard-muted); font-size: 11px; }
 .mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
 .mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }
+
+/* 行内三段各不断行：宽度修好后，事实段只保证自己不被折断。 */
+.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
+.mi-daily-briefing__rail-fact { white-space: nowrap; }
+.mi-daily-briefing__rail-sep { opacity: .6; }
+.mi-daily-briefing__rail-direction--none { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
+/* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
+.mi-daily-briefing__rail-attempts-toggle { grid-column: 2; justify-self: end; margin-top: 2px; }

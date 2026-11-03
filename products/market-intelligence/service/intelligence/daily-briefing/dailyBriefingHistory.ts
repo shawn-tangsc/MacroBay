@@ -1,5 +1,41 @@
 import { DEFAULT_PERIOD_ID, briefingCompleteness, type DailyBriefingEditionSummary, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
+import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
+
+/** The stored rows of one reader's history window, grouped into rail rows. */
+export async function readBriefingHistory(input: Readonly<{
+  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'>
+  locale: DailyBriefingLocale
+  today: string
+  retentionDays: number
+  scheduledTime: string
+}>): Promise<readonly DailyBriefingEditionSummary[]> {
+  const dates = lastDays(input.today, input.retentionDays)
+  const from = dates[0]!
+  const to = dates[dates.length - 1]!
+  const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
+  const [primaryRows, otherRows] = await Promise.all([
+    input.store.list(from, to, primary).catch(() => []),
+    input.store.list(from, to, otherLocale).catch(() => [])
+  ])
+  return briefingHistorySummaries({
+    dates,
+    primary,
+    primaryRows,
+    otherRows,
+    periodRun: (date, periodId) => input.store.getPeriodRun?.(date, periodId),
+    attemptCount: (date, periodId, locale) => {
+      const read = input.store.listAttempts
+      return read ? read(date, locale, periodId).then((attempts) => attempts.length) : Promise.resolve(0)
+    },
+    scheduledTime: input.scheduledTime
+  })
+}
+
+function lastDays(today: string, days: number): readonly string[] {
+  const start = Date.parse(`${today}T00:00:00.000Z`)
+  return Object.freeze(Array.from({ length: days }, (_, index) =>
+    new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
+}
 
 /**
  * The history rail's rows, built once from the stored editions.
@@ -14,6 +50,8 @@ export async function briefingHistorySummaries(input: Readonly<{
   primaryRows: readonly DailyBriefingStoredEdition[]
   otherRows: readonly DailyBriefingStoredEdition[]
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
+  attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
+  scheduledTime?: string
 }>): Promise<readonly DailyBriefingEditionSummary[]> {
   const byPeriod = new Map<string, DailyBriefingStoredEdition>()
   for (const row of input.otherRows) byPeriod.set(`${row.date}:${row.periodId ?? DEFAULT_PERIOD_ID}`, row)
@@ -32,9 +70,20 @@ export async function briefingHistorySummaries(input: Readonly<{
         readingsAvailable: summary.readingsAvailable,
         readingsTotal: 4
       })
+      let attempts: number | undefined
+      if (input.attemptCount && summary.state === 'generated') {
+        const countAttempts = input.attemptCount
+        try {
+          attempts = await countAttempts(date, periodId, summary.locale)
+        } catch {
+          attempts = undefined
+        }
+      }
       editions.push({
         ...summary,
         ...(expectedLocales ? { expectedLocales } : {}),
+        ...(attempts === undefined ? {} : { attemptCount: attempts }),
+        ...(input.scheduledTime ? { scheduledTime: input.scheduledTime } : {}),
         ...(completeness.state === 'missing-version' ? { state: 'partial' as const } : {})
       })
     }

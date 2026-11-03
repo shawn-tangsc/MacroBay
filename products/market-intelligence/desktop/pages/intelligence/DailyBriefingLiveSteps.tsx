@@ -1,4 +1,7 @@
-import { Check, CircleAlert, Loader, Minus } from 'lucide-react'
+import { Check, CircleAlert, CircleHelp, Loader, Minus } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 
 import { briefingGenerationDisplayRows, type BriefingGenerationProgress, type BriefingGenerationStage } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -22,9 +25,11 @@ export type DailyBriefingLiveStepsProps = Readonly<{
   text: DailyBriefingText
   /** Milliseconds, so the running row can show the time it has been running. */
   nowMs: number
+  /** Resolves the help popover's labels and body; absent means no help trigger is rendered. */
+  resolveText?: (key: string) => string
 }>
 
-export function DailyBriefingLiveSteps({ progress, text, nowMs }: DailyBriefingLiveStepsProps): React.ReactElement {
+export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: DailyBriefingLiveStepsProps): React.ReactElement {
   const byId = new Map(progress.stages.map((stage) => [stage.id, stage]))
   const copy = text.generationProgress
   return <div className="mi-brief-steps" role="status" data-live-steps="true">
@@ -41,8 +46,22 @@ export function DailyBriefingLiveSteps({ progress, text, nowMs }: DailyBriefingL
         </li>
       })}
     </ol>
-    {/* Says out loud what the rows cannot: a row that holds still is still working. */}
-    <p className="mi-brief-steps__note" data-live-steps-note="true">{copy.note}</p>
+    {/* Says out loud what the rows cannot, on request: a row that holds still is still working. */}
+    {resolveText ? <div className="mi-brief-steps__note-row">
+      <Popover
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationProgress.note"
+        resolveText={resolveText}
+        trigger={(triggerProps) => <IconButton
+          {...triggerProps}
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.progress"
+          dataAttributes={{ 'data-steps-help': 'true' }}
+          icon={CircleHelp}
+          resolveText={resolveText}
+          size="sm"
+          variant="plain"
+        />}
+      />
+    </div> : null}
   </div>
 }
 

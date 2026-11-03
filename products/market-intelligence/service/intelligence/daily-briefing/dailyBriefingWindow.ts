@@ -10,7 +10,8 @@ import { dailyBriefingCutoffMinutes, type DailyBriefingGenerationSettings } from
  *
  * A daily edition is not a rolling read from "now": its window is [the previous generation time,
  * the current generation time), both local wall-clock. The cutoff is the reader's generation
- * setting, defaulting to 08:00, so moving the schedule moves the cutoff with it.
+ * setting (07:00 for a fresh install, the stored value on an upgraded machine), so moving the
+ * schedule moves the cutoff with it.
  *
  * This lives beside the schedule setting rather than inside the service: the arithmetic is pure, and
  * keeping it in the service made the file carry both the run and the calendar.

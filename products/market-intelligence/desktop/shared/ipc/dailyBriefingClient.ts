@@ -371,6 +371,8 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
       ? { readingsAvailable: value.readingsAvailable }
       : {}),
     ...(isText(value.windowEnd) ? { windowEnd: value.windowEnd } : {}),
+    ...(typeof value.attemptCount === 'number' && Number.isSafeInteger(value.attemptCount) ? { attemptCount: value.attemptCount } : {}),
+    ...(isText(value.scheduledTime) ? { scheduledTime: value.scheduledTime } : {}),
     ...(Array.isArray(value.expectedLocales) && value.expectedLocales.every(isDailyBriefingLocale)
       ? { expectedLocales: Object.freeze([...value.expectedLocales]) as readonly ('zh-CN' | 'en-US')[] }
       : {})

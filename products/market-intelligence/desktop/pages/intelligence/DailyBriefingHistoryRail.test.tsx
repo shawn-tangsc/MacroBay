@@ -17,6 +17,7 @@ const edition = (overrides: Partial<DailyBriefingEditionSummary> = {}): DailyBri
   availableLocales: ['zh-CN'],
   state: 'generated',
   generatedAt: '2026-11-02T00:00:00.000Z',
+  scheduledTime: '08:00',
   readingsAvailable: 4,
   windowEnd: '2026-11-02T00:00:00.000Z',
   ...overrides
@@ -54,6 +55,31 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   })
 
 describe('daily briefing history rail', () => {
+  it('keeps the meta in unbreakable facts and moves the attempt count to the row end', () => {
+    render({ editions: [edition({ attemptCount: 2 })], onLoadAttempts: async () => ({ state: 'available', attempts: [] }) })
+    const meta = host.querySelector('.mi-daily-briefing__rail-meta')
+    expect(meta?.textContent).toContain('4')
+    expect(meta?.textContent).toContain('项')
+    // "/4" and the word "生成" are the two things this row no longer says.
+    expect(meta?.textContent).not.toContain('/4')
+    expect(meta?.textContent).not.toContain('生成')
+    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe('2 次')
+  })
+
+  it('says "not run" once, with the scheduled time, and keeps the direction word for screen readers', () => {
+    render({ editions: [
+      edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
+      edition({ date: '2026-11-01', direction: undefined })
+    ] })
+    expect(host.textContent).toContain('未运行 · 08:00')
+    // The missing row no longer repeats "not generated" and "app was not running" together.
+    expect(host.textContent).not.toContain('未生成')
+    // A row without a verdict shows a dot; the word is only in the accessible name.
+    const dot = host.querySelector('.mi-daily-briefing__rail-direction--none')
+    expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)
+    expect(host.textContent).not.toContain(text.history.noConclusion)
+  })
+
   it('shows one row per issue and switches language in place', () => {
     const onSelect = vi.fn()
     render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })], onSelect })

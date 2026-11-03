@@ -182,7 +182,7 @@ describe('daily briefing markdown', () => {
       next: { items: [], note: 'calendar-source-disabled' }
     })
     const markdown = dailyBriefingToMarkdown(empty, options)
-    expect(markdown).toContain('四个读数都读不到')
+    expect(markdown).toContain('四项数据都读不到')
     expect(markdown).not.toContain('## 过去 24 小时要闻')
     expect(markdown).not.toContain('## 结论')
     expect(markdown).not.toContain('## 接下来 7 日关注')

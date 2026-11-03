@@ -83,7 +83,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>
       <div className="mi-brief-poster__head-side">
         {readOnly ? <span className="mi-brief-poster__readonly">{text.history.readOnly}</span> : null}
-        <span className="mi-brief-poster__readings">{doc.status.readingsAvailable}/{doc.status.readingsTotal} {text.readingsUnit}</span>
+        <span className="mi-brief-poster__readings">{doc.status.readingsAvailable} {text.readingsUnit}</span>
       </div>
     </header>
     {doc.comparison ? <p className="mi-brief-poster__comparison">{comparisonText(doc, text, locale)}</p> : null}

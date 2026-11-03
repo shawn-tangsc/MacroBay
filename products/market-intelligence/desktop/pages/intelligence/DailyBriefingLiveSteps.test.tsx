@@ -39,7 +39,7 @@ async function render(input: BriefingGenerationProgress, nowMs: number): Promise
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => { root?.render(createElement(DailyBriefingLiveSteps, { progress: input, text, nowMs })) })
+  await act(async () => { root?.render(createElement(DailyBriefingLiveSteps, { progress: input, text, nowMs, resolveText: (key: string) => key })) })
   return container
 }
 
@@ -76,7 +76,9 @@ it('never invents a duration or a percentage', async () => {
   const second = await render(noTimestamp, Date.parse('2026-11-02T01:30:42.000Z'))
   expect(second.querySelector('[data-step="selection"]')!.textContent).not.toContain('已用')
   expect(container.textContent).not.toMatch(/\d+%/)
-  expect(container.querySelector('[data-live-steps-note]')!.textContent).toContain('模型调用')
+  // The long explanation moved behind the help trigger: it must not sit on the page.
+  expect(container.querySelector('[data-live-steps-note]')).toBeNull()
+  expect(container.querySelector('[data-steps-help]')).not.toBeNull()
 })
 
 it('says a skipped-only row was not needed instead of claiming it succeeded', async () => {

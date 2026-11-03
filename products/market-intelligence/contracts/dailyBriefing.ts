@@ -228,6 +228,10 @@ export type DailyBriefingEditionSummary = Readonly<{
   state: 'generated' | 'missing' | 'partial'
   /** What the run intended to publish; absent on rows written before the run record existed. */
   expectedLocales?: readonly DailyBriefingLocale[]
+  /** How many writing attempts this edition has; the rail shows it as "N 次" next to the meta. */
+  attemptCount?: number
+  /** The scheduled generation time this period runs at; shown on a day that did not generate. */
+  scheduledTime?: string
   generatedAt?: string
   direction?: AnalysisConclusionDirection
   summaryLine?: string

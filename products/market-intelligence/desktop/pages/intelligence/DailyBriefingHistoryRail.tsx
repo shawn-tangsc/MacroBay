@@ -101,14 +101,21 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
             {missing ? <small className="mi-daily-briefing__rail-missing">{
               edition.date === todayDate && generatingStage
                 ? text.generationProgress.railRunning + ' · ' + generatingStage
-                : text.history.missingRun
+                : `${text.history.missingRun}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
             }</small> : <>
-              <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction ?? 'none'}>
-                {edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion}
-              </span>
+              {edition.direction
+                // A direction, when present, is the row's word; when absent the dot alone carries
+                // it, with the word for screen readers instead of repeating "no conclusion" daily.
+                ? <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction}>{localizedDirectionTerm(edition.direction, locale)}</span>
+                : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
               {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
               <small className="mi-daily-briefing__rail-meta">
-                {edition.readingsAvailable ?? 0}/4{edition.generatedAt ? ` · ${formatTime ? formatTime(edition.generatedAt, 'minute') : edition.generatedAt.slice(11, 16)} ${text.history.generated}` : ''}
+                {/* Segments never break mid-word: the width is the fix, these keep each fact whole. */}
+                <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable ?? 0} {text.readingsUnit}</span>
+                {edition.generatedAt ? <>
+                  <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
+                  <span className="mi-daily-briefing__rail-fact">{formatTime ? formatTime(edition.generatedAt, 'minute') : edition.generatedAt.slice(11, 16)}</span>
+                </> : null}
               </small>
             </>}
           </button>
@@ -119,12 +126,14 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 onClick={() => onSelect(edition.date, available)}>
                 {text.history.languages[available]}
               </button>) : null}
-            {!missing && onLoadAttempts ? <button type="button" className="mi-daily-briefing__rail-attempts-toggle"
-              aria-expanded={open} data-attempts-toggle={edition.date}
-              onClick={() => expand(key, edition.date, edition.periodId)}>
-              {open ? text.history.attempts.hide : text.history.attempts.show}
-            </button> : null}
           </div>
+          {!missing && onLoadAttempts ? <button type="button" className="mi-daily-briefing__rail-attempts-toggle"
+            aria-expanded={open} data-attempts-toggle={edition.date}
+            onClick={() => expand(key, edition.date, edition.periodId)}>
+            {edition.attemptCount === undefined
+              ? (open ? text.history.attempts.hide : text.history.attempts.show)
+              : `${edition.attemptCount} ${text.history.attempts.times}`}
+          </button> : null}
           {open ? <div className="mi-daily-briefing__rail-attempts" role="group" aria-label={text.history.attempts.title}>
             {shown?.status !== 'ready' && shown?.status !== 'unavailable' ? <LoadingState label={text.history.loading} minHeight={40} /> : null}
             {shown?.status === 'unavailable' ? <small data-attempts-unreadable="true">{text.history.attempts.unreadable}</small> : null}

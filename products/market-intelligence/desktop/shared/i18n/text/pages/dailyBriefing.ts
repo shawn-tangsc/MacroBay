@@ -1,12 +1,12 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const dailyBriefingText = {
   'zh-CN': {
-    entry: '今日简报', title: '每日简报', close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；设定的生成时刻只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
+    entry: '今日简报', title: '每日简报', help: { generation: '生成说明', progress: '进度说明' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；设定的生成时刻只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
     // 升级没跑完时读者看到的就是这一句与一个按钮；它是状态，不是说明，所以一直在明面上。
     migration: { incomplete: '日报数据升级未完成，现在用的是旧数据。其余功能正常，升级完成后新功能会自动可用。', retry: '重试升级', retrying: '正在重试…' },
     /** 设置里的时区读不到时，窗口按系统时区算；说清为什么会和设定不同。 */
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
-    window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsUnit: '读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
+    window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     moreNumbers: '更多数字', noValue: '—',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '杠杆', policyPath: '利率路径', marketImplied: '市场隐含', rangeUnavailable: '区间未收录' },
     newsFocus: '重点',
@@ -45,12 +45,12 @@ export const dailyBriefingText = {
     flow: { in: '净流入', out: '净流出' },
     horizons: { short: '短期', medium: '中期', long: '长期' },
     visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', scale: '刻度 ±{max}', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
-    history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', missing: '缺口', missingRun: '未生成 · 当天未运行', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次', languages: { 'zh-CN': '中文', 'en-US': '英文' }, attempts: { show: '生成记录', hide: '收起生成记录', title: '生成记录', nth: '第 {n} 次', succeeded: '成功', failed: '失败', running: '进行中', cleaned: '那一次已清理', none: '还没有生成记录', unreadable: '生成记录读不到' } },
+    history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', missing: '缺口', missingRun: '未运行', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次', languages: { 'zh-CN': '中文', 'en-US': '英文' }, attempts: { show: '生成记录', hide: '收起生成记录', title: '生成记录', times: '次', nth: '第 {n} 次', succeeded: '成功', failed: '失败', running: '进行中', cleaned: '那一次已清理', none: '还没有生成记录', unreadable: '生成记录读不到' } },
     stateReasons: {
       noBrief: '简报只读取已启用的来源和已发布的结论。打开需要的来源并完成一次采集后，今天的消息、数据和结论会出现在这里。',
       unreadable: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
       unreadableSince: '这次读取没有完成；上次成功生成于 {moment}。',
-      nothingEnabled: '四块读数都没有接通。先检查情报源，再打开今天。',
+      nothingEnabled: '四块数据都没有接通。先检查情报源，再打开今天。',
       noEditions: '还没有历史版次。'
     },
     settings: {
@@ -71,12 +71,12 @@ export const dailyBriefingText = {
       },
       languageNames: { 'zh-CN': '中文', 'en-US': '英文' }
     },
-    emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
+    emptyGuide: '四块数据都没有接通。先检查情报源，再打开今天。',
     noBriefTitle: '还没有可用的日报',
     noBriefBody: '简报只读取已启用的来源和已发布的结论。先在「配置看板来源」里打开需要的源，等一次采集完成后，今天的消息、数据和结论会出现在这里。',
     unavailableHint: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
     configureSources: '配置情报源',
-    completeness: { missingVersion: '本期只有一版：另一版没有生成。', missingReadings: '本期缺 {n} 项读数。' },
+    completeness: { missingVersion: '本期只有一版：另一版没有生成。', missingReadings: '本期缺 {n} 项数据。' },
     copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试',
     aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', notApplied: 'AI 编辑未生成', failedHint: 'AI 没有通过校验，日报未生成；可以重试或检查 AI 设置。', failure: { 'editorial-disabled': 'AI 编辑已关闭', 'model-unavailable': '默认模型不可用', 'editorial-timeout': 'AI 编辑超时', 'editorial-fallback': 'AI 输出未通过校验', 'invalid-shape': 'AI 输出格式不合规', 'unknown-fact': 'AI 引用了不存在的事实', 'unknown-number': 'AI 写入了事实包外的数字', 'forbidden-content': 'AI 输出包含禁用内容', 'too-long': 'AI 输出超长', 'language-mismatch': 'AI 输出语言不符', 'model-not-ready': '模型尚未就绪', 'provider-disabled': '模型供应商已停用', 'missing-api-key': '模型供应商缺少 API Key', timeout: 'AI 调用超时', cancelled: 'AI 调用被取消', 'rate-limited': '模型请求被限流', 'provider-error': '模型供应商返回错误', 'invalid-json': 'AI 返回的不是合法 JSON', 'schema-validation-failed': 'AI 输出未通过结构校验', 'invalid-translation': '译文未通过校验', 'agent-turn-output-truncated': 'AI 单轮输出被截断', 'source-failed': '情报源采集失败', 'candidate-overflow': '候选数据超出上限', 'build-failed': '日报生成失败', 'store-failed': '日报保存失败', 'time-invalid': '生成时间无效', 'direction-conflict': 'AI 的结论方向与数据层相反', 'row-set-mismatch': 'AI 改动了本期行集合' }, loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', webSearch: '允许补查缺失结论', webSearchHint: '仅在本地缺少高影响事件结论时搜索；来源/时间写入日报，截止到本期生成时间。', webSearchOff: '日报未授权 WebSearch', webSearchOffHint: '若 Web Search 源已配置，点“去授权”打开日报 AI 设置开启；若未配置，先到 设置 → 网页搜索 → 供应商 配置。', webSearchNeedsSetup: '无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。', webSearchUnsupported: '当前模型不支持 Anthropic 内置搜索；补查将使用平台 Web Search（需已启用搜索源）。', goEnable: '去授权', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', save: '保存', saving: '保存中…', cancel: '取消', failed: '保存失败，请重试', openModelSettings: '打开模型设置' },
     limits: {
@@ -228,11 +228,11 @@ export const dailyBriefingText = {
     }
   },
   'en-US': {
-    entry: 'Daily brief', title: 'Daily brief', close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; the scheduled run is only a head start, and a missed one is caught up the next time you open it.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
+    entry: 'Daily brief', title: 'Daily brief', help: { generation: 'About generation', progress: 'About the steps' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; the scheduled run is only a head start, and a missed one is caught up the next time you open it.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
     migration: { incomplete: "The briefing data upgrade didn't finish, so the old data is still in use. Everything else works; the new features become available once it completes.", retry: 'Retry upgrade', retrying: 'Retrying…' },
     /** The settings zone was unreadable, so the window used the machine's zone. */
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
-    window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsUnit: 'readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
+    window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     moreNumbers: 'More numbers', noValue: '—',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Leverage', policyPath: 'Rate path', marketImplied: 'Market-implied', rangeUnavailable: 'Range unavailable' },
     newsFocus: 'Focus',
@@ -271,12 +271,12 @@ export const dailyBriefingText = {
     flow: { in: 'Net inflow', out: 'Net outflow' },
     horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
     visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', scale: 'Scale ±{max}', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
-    history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', missing: 'Missing', missingRun: 'Not generated · app was not running', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet', languages: { 'zh-CN': 'Chinese', 'en-US': 'English' }, attempts: { show: 'Attempts', hide: 'Hide attempts', title: 'Generation attempts', nth: 'Attempt {n}', succeeded: 'Succeeded', failed: 'Failed', running: 'Running', cleaned: 'That attempt was cleaned up', none: 'No attempts yet', unreadable: 'Attempts could not be read' } },
+    history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', missing: 'Missing', missingRun: 'Not run', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet', languages: { 'zh-CN': 'Chinese', 'en-US': 'English' }, attempts: { show: 'Attempts', hide: 'Hide attempts', title: 'Generation attempts', times: 'attempts', nth: 'Attempt {n}', succeeded: 'Succeeded', failed: 'Failed', running: 'Running', cleaned: 'That attempt was cleaned up', none: 'No attempts yet', unreadable: 'Attempts could not be read' } },
     stateReasons: {
       noBrief: 'The brief reads only enabled sources and published conclusions. Open the sources you need and let one collection finish; today’s messages, numbers and conclusion will appear here.',
       unreadable: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
       unreadableSince: 'This read did not finish; it last generated at {moment}.',
-      nothingEnabled: 'All four readings are disconnected. Check the sources, then open today again.',
+      nothingEnabled: 'All four data points are disconnected. Check the sources, then open today again.',
       noEditions: 'No earlier editions yet.'
     },
     settings: {
@@ -297,12 +297,12 @@ export const dailyBriefingText = {
       },
       languageNames: { 'zh-CN': 'Chinese', 'en-US': 'English' }
     },
-    emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
+    emptyGuide: 'All four data points are disconnected. Check the sources, then open today again.',
     noBriefTitle: 'No daily brief yet',
     noBriefBody: 'The brief reads only enabled sources and published conclusions. Open the dashboard sources, wait for one collection, and today’s messages, numbers and conclusion will appear here.',
     unavailableHint: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
     configureSources: 'Configure sources',
-    completeness: { missingVersion: 'This edition has only one version: the other one was not generated.', missingReadings: 'This edition is missing {n} readings.' },
+    completeness: { missingVersion: 'This edition has only one version: the other one was not generated.', missingReadings: 'The brief is missing {n} data items.' },
     copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again',
     aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', notApplied: 'AI editing did not run', failedHint: 'AI failed validation, so the brief was not generated. Retry or check AI settings.', failure: { 'editorial-disabled': 'AI editing is off', 'model-unavailable': 'Default model unavailable', 'editorial-timeout': 'AI editing timed out', 'editorial-fallback': 'AI output failed validation', 'invalid-shape': 'AI output shape is invalid', 'unknown-fact': 'AI cited a fact that does not exist', 'unknown-number': 'AI wrote a number outside the fact packet', 'forbidden-content': 'AI output contains forbidden content', 'too-long': 'AI output is too long', 'language-mismatch': 'AI output language mismatch', 'model-not-ready': 'Model is not ready', 'provider-disabled': 'Model provider is disabled', 'missing-api-key': 'Model provider has no API key', timeout: 'AI invocation timed out', cancelled: 'AI invocation was cancelled', 'rate-limited': 'Model request was rate-limited', 'provider-error': 'Model provider returned an error', 'invalid-json': 'AI did not return valid JSON', 'schema-validation-failed': 'AI output failed schema validation', 'invalid-translation': 'Translation failed validation', 'agent-turn-output-truncated': 'AI output was truncated', 'source-failed': 'Source collection failed', 'candidate-overflow': 'Too many candidates', 'build-failed': 'Brief generation failed', 'store-failed': 'Brief could not be saved', 'time-invalid': 'Invalid generation time', 'direction-conflict': 'AI concluded the opposite of the data layer', 'row-set-mismatch': 'AI changed this edition’s rows' }, loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', webSearch: 'Allow missing-conclusion research', webSearchHint: 'Only when a high-impact conclusion is missing; sources/time are cited and capped at this edition\'s generation time.', webSearchOff: 'WebSearch is not authorized for the brief', webSearchOffHint: 'If the source is configured, open Brief AI settings to authorize it; otherwise configure a provider under Settings → Web Search → Providers first.', webSearchNeedsSetup: 'Cannot enable: configure and enable a provider under Settings → Web Search → Providers first.', webSearchUnsupported: 'This model does not support Anthropic built-in web search; research will use the platform Web Search (a configured provider is required).', goEnable: 'Authorize', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', save: 'Save', saving: 'Saving…', cancel: 'Cancel', failed: 'Save failed — try again', openModelSettings: 'Open model settings' },
     limits: {
