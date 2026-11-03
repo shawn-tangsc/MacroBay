@@ -1,8 +1,8 @@
 import type { JobRuntime } from '@platform/jobs'
 import type { AnalysisRun, EventGroup, EventGroupType } from '../../../contracts/marketAnalysisContracts'
-import { isMarketAnalysisCanonicalUtc } from '../../../contracts/marketAnalysisContracts'
+import { queuedSignalEvidence, type SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
+import { signalTriggerKey, type ModuleSignal, type SignalWindow } from '../../../contracts/moduleSignal'
 import { eventGroupPolicy } from '../analysis/eventGroupService'
-import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
@@ -25,21 +25,15 @@ import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
  */
 
 export type SignalAnalysisRequest = Readonly<{
-  /** `signal.<moduleId>.<ruleId>`，与下面两个字段必须一致（见 `assertSignalRequest`）。 */
-  triggerKey: string
-  moduleId: string
-  ruleId: string
-  /** 牌子所属的板子；复用既有 `EventGroupType`，不新增枚举。 */
-  groupType: EventGroupType
   /**
-   * 规则判出的严重度。低档只显示牌子、不叫分析，所以这里不接受 `low`：让它进来就等于让「只展示」
-   * 也花一次模型调用。
+   * 规则产出的那条信号本身。触发键、模块、规则、资产、严重度、数据时刻、去重键都从它取——
+   * 调用方不再各带一份，免得同一件事在两个字段里说两句话。
    */
-  severity: 'medium' | 'high'
-  /** 信号描述的那一刻（数据时刻），也是快照的 `asOf`。 */
-  observedAt: string
-  /** 这条信号的去重键（模块/规则/资产/同一桶），写进账本唯一键。 */
-  changeHash: string
+  signal: ModuleSignal
+  /** 规则声明的窗口：账本读数要用它，`ModuleSignal` 故意不携窗口（窗口是规则自己的单位）。 */
+  window: SignalWindow
+  /** 牌子所属的板子；复用既有 `EventGroupType`，不新增枚举（OI→funding、ETF→capital）。 */
+  groupType: EventGroupType
 }>
 
 export type SignalAnalysisOutcome =
@@ -82,13 +76,17 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     const inFlightRun = deps.repository.listRuns().some((run: AnalysisRun) =>
       run.eventGroupId === group.id && (run.status === 'queued' || run.status === 'running'))
     if (activeFreeze.length > 0 || inFlightRun) return { state: 'in-flight', groupId: group.id }
+    const triggerKey = requestTriggerKey(request)
     const attemptLedgerId = deps.repository.appendTriggerLedger({
       id: `mi-ledger-${deps.idFactory()}`,
       eventGroupId: group.id,
-      triggerKey: request.triggerKey,
-      changeHash: request.changeHash,
+      triggerKey,
+      changeHash: request.signal.dedupeKey,
       decision: 'queued',
-      reasonCode: signalAnalysisPolicy.queuedReasonCodes[request.severity],
+      // 读数跟着行一起存：阈值会改，读的时候再算就是拿今天的答案印在昨天的行上。横条的
+      // 「装了几条」读 `signalCount`，详情的读数读 `signals[]`——两样都只有这一列能提供。
+      reasonCode: signalAnalysisPolicy.queuedReasonCodes[request.signal.severity as 'medium' | 'high'],
+      evidence: queuedSignalEvidence([{ signal: request.signal, window: request.window } as SignalWithWindow]),
       snapshotHash: null,
       analysisRunId: null,
       createdAt: deps.now()
@@ -104,9 +102,9 @@ export function createSignalAnalysisRequest(deps: Readonly<{
         // `analysisPhase: 'correction'`：信号是对已有判断的修正，不是首篇。
         payload: {
           eventGroupId: group.id,
-          triggerKey: request.triggerKey,
+          triggerKey,
           analysisPhase: 'correction',
-          asOf: request.observedAt,
+          asOf: request.signal.observedAt,
           attemptLedgerId
         }
       })
@@ -119,7 +117,7 @@ export function createSignalAnalysisRequest(deps: Readonly<{
   }
 
   function findOrCreateGroup(request: SignalAnalysisRequest): EventGroup {
-    const mergeKey = signalGroupMergeKey(request.moduleId, request.observedAt)
+    const mergeKey = signalGroupMergeKey(request.signal.moduleId, request.signal.observedAt)
     const existing = deps.repository.findEventGroupByMergeKey(mergeKey)
     if (existing) return existing
     // 信号不是条目：`eventRefs` 留空比塞一个假 itemId 诚实。组只当锚，`mergeKey` 带 UTC 日，
@@ -131,9 +129,9 @@ export function createSignalAnalysisRequest(deps: Readonly<{
       status: 'open',
       groupType: request.groupType,
       mergeKey,
-      firstObservedAt: request.observedAt,
-      lastObservedAt: request.observedAt,
-      reviewDeadlineAt: new Date(Date.parse(request.observedAt) + eventGroupPolicy.reviewWindowMs).toISOString(),
+      firstObservedAt: request.signal.observedAt,
+      lastObservedAt: request.signal.observedAt,
+      reviewDeadlineAt: new Date(Date.parse(request.signal.observedAt) + eventGroupPolicy.reviewWindowMs).toISOString(),
       eventRefs: [],
       triggerCount: 0,
       reviewCount: 0,
@@ -154,16 +152,20 @@ export function signalGroupMergeKey(moduleId: string, observedAt: string): strin
 }
 
 /**
- * 收下的请求必须是**完整**的信号键。
+ * 收下的请求必须是**能排队的**信号。
  *
- * 前缀判定会放过 `signal.debug` 这种没有 module/rule 两段的键；放进来的话，账本、额度线和时间轴
- * 都会把一条「不知道是哪条规则」的记录当成真事。所以这里要求键与两个字段逐字一致，并且时间是可
- * 排队的 UTC 瞬时。
+ * 键由契约的 `signalTriggerKey` 拼（两段齐全才拼得出来），所以 `signal.debug` 这种没有规则名的
+ * 形状在这里直接拒绝；低档只显示牌子、不叫分析，进来就等于让「只展示」也花一次模型调用。
  */
 function assertSignalRequest(request: SignalAnalysisRequest): void {
-  if (!isSignalTriggerKey(request.triggerKey)) throw new Error('analysis-invalid-request')
-  if (request.triggerKey !== `signal.${request.moduleId}.${request.ruleId}`) throw new Error('analysis-invalid-request')
-  if (request.severity !== 'medium' && request.severity !== 'high') throw new Error('analysis-invalid-request')
-  if (!isMarketAnalysisCanonicalUtc(request.observedAt) || !Number.isFinite(Date.parse(request.observedAt))) throw new Error('analysis-invalid-request')
-  if (request.changeHash.length === 0) throw new Error('analysis-invalid-request')
+  requestTriggerKey(request)
+  if (request.signal.severity !== 'medium' && request.signal.severity !== 'high') throw new Error('analysis-invalid-request')
+  if (!Number.isFinite(Date.parse(request.signal.observedAt))) throw new Error('analysis-invalid-request')
+}
+
+/** The one key the signal is queued under; a signal without a complete key cannot be queued. */
+function requestTriggerKey(request: SignalAnalysisRequest): string {
+  const key = signalTriggerKey(request.signal.moduleId, request.signal.ruleId)
+  if (!key) throw new Error('analysis-invalid-request')
+  return key
 }

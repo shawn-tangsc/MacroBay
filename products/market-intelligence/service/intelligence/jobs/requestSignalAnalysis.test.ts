@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 
 import type { EventGroup } from '../../../contracts/marketAnalysisContracts'
+import type { ModuleSignal, SignalWindow } from '../../../contracts/moduleSignal'
 import { createAnalysisSignificanceGate } from '../analysis/analysisSignificanceGate'
 import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 import { analysisRunLineOf } from '../analysis/analysisTriggerSourcePolicy'
@@ -9,7 +10,7 @@ import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
 const asOf = '2026-11-03T06:30:00.000Z'
 
-type LedgerRow = { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string }
+type LedgerRow = { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string; evidence?: unknown }
 
 /** Just the repository surface the entry and the counter touch. */
 function fakeRepository() {
@@ -25,7 +26,7 @@ function fakeRepository() {
       listRuns: () => [] as readonly unknown[],
       appendTriggerLedger: (row: LedgerRow) => {
         const existing = ledger.find(entry => entry.eventGroupId === row.eventGroupId && entry.triggerKey === row.triggerKey && entry.changeHash === row.changeHash)
-        if (existing) { Object.assign(existing, { decision: row.decision, reasonCode: row.reasonCode }); return existing.id }
+        if (existing) { Object.assign(existing, { decision: row.decision, reasonCode: row.reasonCode, evidence: row.evidence }); return existing.id }
         ledger.push(row)
         return row.id
       },
@@ -53,17 +54,27 @@ function fakeJobs(options: Readonly<{ inFlightFreeze?: boolean; fail?: boolean }
   }
 }
 
-function request(overrides: Partial<SignalAnalysisRequest> = {}): SignalAnalysisRequest {
+function signal(overrides: Partial<ModuleSignal> = {}): ModuleSignal {
   return {
-    triggerKey: 'signal.open-interest.oi-liquidation-proxy',
+    version: '1',
     moduleId: 'open-interest',
     ruleId: 'oi-liquidation-proxy',
-    groupType: 'funding',
+    asset: 'btc',
     severity: 'high',
     observedAt: asOf,
-    changeHash: 'oi|oi-liquidation-proxy|BTC|2026-11-03T06:30',
+    cadence: { kind: 'intraday', bucketMs: 15 * 60 * 1_000 },
+    values: { change24hPct: -1.9, volumeMultiple: 3.4 },
+    dedupeKey: 'oi|oi-liquidation-proxy|BTC|2026-11-03T06:30',
+    readiness: 'available',
+    triggerOwner: 'module-signal',
     ...overrides
   }
+}
+
+const window: SignalWindow = { unit: 'buckets', amount: 1, upperBoundMs: 15 * 60 * 1_000 }
+
+function request(overrides: Partial<ModuleSignal> = {}, groupType: SignalAnalysisRequest['groupType'] = 'funding'): SignalAnalysisRequest {
+  return { signal: signal(overrides), window, groupType }
 }
 
 function entry(overrides: Readonly<{ inFlightFreeze?: boolean; fail?: boolean; enabled?: boolean }> = {}) {
@@ -89,11 +100,13 @@ it('names every module signal as the event line, never the calendar line', () =>
   expect(analysisRunLineOf('signal.a.b.c')).toBe('calendar')
 })
 
-it('refuses a key that is not exactly signal.<moduleId>.<ruleId>', async () => {
+it('refuses a signal that cannot produce a complete trigger key', async () => {
   const { service } = entry()
-  await expect(service(request({ triggerKey: 'signal.debug' }))).rejects.toThrow('analysis-invalid-request')
-  await expect(service(request({ triggerKey: 'signal.other-module.oi-liquidation-proxy' }))).rejects.toThrow('analysis-invalid-request')
-  await expect(service(request({ severity: 'low' as never }))).rejects.toThrow('analysis-invalid-request')
+  // A rule id that is not a kebab token has no key; a module outside the closed set has none either.
+  await expect(service(request({ ruleId: 'oi_liquidation' }))).rejects.toThrow('analysis-invalid-request')
+  await expect(service(request({ moduleId: 'unknown-module' as never }))).rejects.toThrow('analysis-invalid-request')
+  // Low only marks the board; letting it in would spend a call for a display.
+  await expect(service(request({ severity: 'low' }))).rejects.toThrow('analysis-invalid-request')
   await expect(service(request({ observedAt: 'yesterday' }))).rejects.toThrow('analysis-invalid-request')
 })
 
@@ -120,12 +133,12 @@ it('anchors the signal on its own group, writes the attempt row, then queues the
   // The row says which severity let it through, and it is the id the freeze carries so a refusal
   // can rewrite this very row instead of counting a call that never happened.
   expect(ledger).toHaveLength(1)
-  expect(ledger[0]).toMatchObject({ triggerKey: request().triggerKey, decision: 'queued', reasonCode: 'signal-high-triggered' })
+  expect(ledger[0]).toMatchObject({ triggerKey: 'signal.open-interest.oi-liquidation-proxy', decision: 'queued', reasonCode: 'signal-high-triggered' })
   expect(enqueued[0]).toMatchObject({
     handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
     payload: expect.objectContaining({
       eventGroupId: group?.id,
-      triggerKey: request().triggerKey,
+      triggerKey: 'signal.open-interest.oi-liquidation-proxy',
       analysisPhase: 'correction',
       asOf,
       attemptLedgerId: ledger[0]?.id
@@ -133,14 +146,31 @@ it('anchors the signal on its own group, writes the attempt row, then queues the
   })
 })
 
+/**
+ * The architect's catch: a row without readings keeps the counts and the "why" blank, and nothing
+ * fails. The one column that can answer both is written with the row.
+ */
+it('stores the readings behind the run, so the bar and the detail are not blank', async () => {
+  const { service, ledger } = entry()
+
+  await service(request({ severity: 'medium' }))
+
+  const evidence = ledger[0]?.evidence as { signalCount?: number; signals?: readonly Record<string, unknown>[] } | undefined
+  expect(evidence?.signalCount).toBe(1)
+  // Exactly the seven entry keys: the refused-signal four plus what identifies it within a batch.
+  expect(Object.keys(evidence?.signals?.[0] ?? {}).sort())
+    .toEqual(['asset', 'moduleId', 'observedAt', 'ruleId', 'severity', 'values', 'window'])
+  expect(evidence?.signals?.[0]).toMatchObject({
+    severity: 'medium', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
+    values: { change24hPct: -1.9, volumeMultiple: 3.4 }
+  })
+})
+
 it('reuses the same day\u2019s group for another rule of the same module', async () => {
   const { service, groups, ledger } = entry()
 
   await service(request())
-  await service(request({
-    triggerKey: 'signal.open-interest.oi-short-crowded', ruleId: 'oi-short-crowded',
-    changeHash: 'oi|oi-short-crowded|BTC|2026-11-03T06:30'
-  }))
+  await service(request({ ruleId: 'oi-short-crowded', dedupeKey: 'oi|oi-short-crowded|BTC|2026-11-03T06:30' }))
 
   expect(groups.size).toBe(1)
   expect(ledger).toHaveLength(2)
@@ -185,7 +215,7 @@ it('spends the event line, and lets the gate refuse it there when that line is f
     lastAutoRunAt: () => null
   })
 
-  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: request().triggerKey, asOf, attemptLedgerId }))
+  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, attemptLedgerId }))
     .toMatchObject({ decision: 'queued', reasonCode: null })
   expect(recordDecision).not.toHaveBeenCalled()
 
@@ -196,7 +226,7 @@ it('spends the event line, and lets the gate refuse it there when that line is f
       changeHash: `seed-${index}`, decision: 'queued', reasonCode: 'signal-high-triggered', snapshotHash: null, analysisRunId: null, createdAt: asOf
     })
   }
-  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: request().triggerKey, asOf, attemptLedgerId }))
+  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, attemptLedgerId }))
     .toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
   expect(ledger.find(row => row.id === attemptLedgerId)).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
 })
