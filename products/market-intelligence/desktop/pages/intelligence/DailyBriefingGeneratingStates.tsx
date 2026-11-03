@@ -8,6 +8,7 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { runningRowName } from './DailyBriefingLiveSteps'
 import { generationStageIds, type GenerationTrace } from './dailyBriefingGenerationTrace'
 
@@ -42,9 +43,9 @@ export function DailyBriefingGeneratingView({ text, progress, progressUnreadable
   resolveText: (key: string) => string
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
-  return <div className="mi-daily-briefing-page__failure" data-briefing-stage-panel="true" data-state="generating">
+  return <DailyBriefingStagePanel state="generating" title={text.generating}>
     <div className="mi-daily-briefing-page__loading-head">
-      <LoadingState label={text.generating} minHeight={120} />
+      <LoadingState label={text.generatingShort} minHeight={120} />
       <Popover
         labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generateHint"
         resolveText={resolveText}
@@ -61,7 +62,7 @@ export function DailyBriefingGeneratingView({ text, progress, progressUnreadable
     </div>
     {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
     <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : pendingTrace()} />
-  </div>
+  </DailyBriefingStagePanel>
 }
 
 /** Before the first progress answer arrives every stage simply has not started; the rows still exist. */

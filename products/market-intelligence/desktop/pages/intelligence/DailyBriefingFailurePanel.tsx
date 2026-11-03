@@ -3,6 +3,7 @@ import { Button } from 'antd'
 import type { DailyBriefingText } from './dailyBriefingText'
 import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { briefFailureCodeLabel, failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
 
 /** A generation or editorial attempt that did not produce a readable edition. */
@@ -37,10 +38,16 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
   const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
-  return <div className="mi-daily-briefing-page__failure" role="alert"
-    data-briefing-stage-panel="true" data-state="failed" data-daily-brief-failure="true" data-failure-kind={failure.kind} data-failure-advice={advice}
-    {...(failure.code ? { 'data-failure-code': failure.code } : {})}>
-    <h2>{failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}</h2>
+  return <DailyBriefingStagePanel state="failed"
+    title={failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}
+    dataAttributes={{
+      role: 'alert',
+      'data-daily-brief-failure': 'true',
+      'data-failure-kind': failure.kind,
+      'data-failure-advice': advice,
+      ...(failure.code ? { 'data-failure-code': failure.code } : {})
+    }}>
+
     <p data-failure-code-label>{text.failurePanel.codeLabel}{separator}{codeLabel}</p>
     {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
     <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
@@ -55,5 +62,5 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
           paragraph above already names what to check, so a third button per advice would repeat it. */}
       <Button data-failure-action="settings" data-open-settings-section="ai" onClick={onOpenSettings}>{text.settingsDrawer.open}</Button>
     </div>
-  </div>
+  </DailyBriefingStagePanel>
 }
