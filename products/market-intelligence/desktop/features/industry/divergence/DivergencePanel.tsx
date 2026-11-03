@@ -73,12 +73,20 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
     }]
   })
 
-  // While the collectors upstream are down this card's only content is a constant apology: the
-  // same "nothing could be compared" block, naming the same missing legs, every time the page
-  // opens. The reader asked for it to be hidden rather than repeated — the card above already
-  // says 数据已滞后, which is the actual fact. It returns when the legs come back, and the
-  // reasons stay in the DTO for the analysis and for the panel that computes them.
-  if (nothingCompared || state.state === 'unavailable') return <></>
+  // Two different facts, two different treatments — merging them was the first version's mistake.
+  //
+  // "Nothing could be compared" means we DID read and every pair was short a leg: the card above
+  // already carries 数据已滞后, so a constant apology here is noise. Hidden, per the reader's
+  // request (168 §16). "The read failed" means WE could not look: hiding that would let a failure
+  // pass for "nothing here", so it keeps one assertable line — no numbers, no block.
+  if (nothingCompared) return <></>
+  if (state.state === 'unavailable') {
+    return (
+      <section className="mi-divergence" aria-label={text.title} data-state="unavailable" data-divergence-unavailable>
+        <p role="status" className="mi-divergence__unavailable">{text.unavailableTrace}</p>
+      </section>
+    )
+  }
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>

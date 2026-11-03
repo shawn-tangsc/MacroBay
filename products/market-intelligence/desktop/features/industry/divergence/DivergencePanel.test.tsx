@@ -172,12 +172,19 @@ describe('states that must not be confused', () => {
     // The reader asked for this: a refusal that never changes is noise, and the card above already
     // carries the stale-data badge. Nothing is drawn — not an empty block, not a container.
     expect(markup).toBe('')
-    expect(markup).not.toContain(text.nothingCompared)
+    // The sentence for that block is gone with it: no unreferenced key is left behind.
+    expect(markup).not.toContain(text.unavailableTrace)
   })
 
-  it('draws nothing when the read itself failed', () => {
+  it('leaves one assertable line when the read itself failed', () => {
+    // A failed read must not pass for "nothing here": one line, no numbers, no block — and its
+    // evidence comes from this DTO, not from another badge that happens to agree.
     const markup = render({ state: 'unavailable', reason: 'query-failed', missing: [] })
-    expect(markup).toBe('')
+    expect(markup).toContain('data-divergence-unavailable')
+    expect(markup).toContain('role="status"')
+    expect(markup).toContain(text.unavailableTrace)
+    // It is not the "nothing could be compared" sentence, and it draws no numbers.
+    expect(markup).not.toMatch(/\d/)
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {

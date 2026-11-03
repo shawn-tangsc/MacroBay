@@ -31,13 +31,15 @@ export type DivergencePanelText = Readonly<{
   withheldListSep: string
   labelSep: string
   missingValue: string
-  retry: string
   /** When we cannot even name a reading, say why in one short sentence. */
-  unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer', string>>
-  /** Every pair withheld: nothing was compared, which is not the same as no divergence. */
-  nothingCompared: string
-  /** "Missing: {legs}" — the legs that made the whole card unavailable. */
-  missingLegs: string
+  /**
+   * The one line a failed read leaves behind.
+   *
+   * The card no longer draws a block for it — the reader asked for that — but hiding a read WE
+   * failed to make would let "we could not look" pass for "there is nothing", which is the mistake
+   * this product keeps removing. One assertable line, no numbers, no block.
+   */
+  unavailableTrace: string
   loading: string
   /** No pair diverged: a state, not a failure. */
   empty: string
