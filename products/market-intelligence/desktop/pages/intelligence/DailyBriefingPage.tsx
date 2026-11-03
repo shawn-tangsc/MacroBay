@@ -335,8 +335,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
       <div className="mi-daily-briefing-page__actions">
-        {view.status === 'ready' && view.kind === 'today' ? <>
-          <Button className="mi-daily-briefing__regenerate" disabled={regenerating} onClick={() => void regenerate()}>
+        {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
+          <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={regenerating} onClick={() => void regenerate()}>
             {regenerating ? text.regenerating : text.regenerate}
           </Button>
           {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}

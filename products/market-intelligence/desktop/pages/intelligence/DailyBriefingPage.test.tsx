@@ -423,6 +423,11 @@ describe('daily briefing page', () => {
     expect(reason.getAttribute('data-reason-source')).toBe('platform')
   })
 
+  it('keeps the toolbar regenerate on the normal path', async () => {
+    const dom = await renderPage(fakeClient())
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')).not.toBeNull()
+  })
+
   it('renders an empty history rail through the platform state', async () => {
     const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
@@ -449,6 +454,10 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
     expect(panel.querySelector('[data-failure-action="ai-settings"]')).not.toBeNull()
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
+    // One retry, in the panel under the reason: the toolbar's copy is hidden while the failure is
+    // shown, so the reader never has to choose between two buttons that do the same thing.
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')).toBeNull()
+    expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     act(() => panel.querySelector<HTMLButtonElement>('[data-failure-action="model-service"]')!.click())
     expect(onOpenModelSettings).toHaveBeenCalledTimes(1)
