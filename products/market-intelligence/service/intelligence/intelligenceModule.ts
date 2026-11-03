@@ -100,7 +100,7 @@ import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
 import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
 import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
 import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
-import { etfOutflowSignalHandoff } from './signals/etfOutflowNotifier'
+import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
@@ -456,11 +456,9 @@ export function getIntelligenceModule(
       store: perpetualPositioningStore,
       now: () => new Date().toISOString()
     })
-    const openInterestWithSignals = createSignalledOpenInterestRefresh({
-      refresh: openInterestRefresh.refresh,
+    const openInterestWithSignals = createSignalledOpenInterestRefresh({ refresh: openInterestRefresh.refresh,
       readHistory: input => queryOpenInterestHistoryAsync({ ...input, store: perpetualPositioningStore }),
-      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification })
-    })
+      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }) })
     const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
     // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
     // REST provider, read through the same profile/credential pair every other source uses. The real
@@ -511,7 +509,7 @@ export function getIntelligenceModule(
       store: etfCurrentStateStore,
       now: () => new Date().toISOString(),
       // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
-      ...etfOutflowSignalHandoff(hooks?.submitNotification)
+      ...etfOutflowSignalHandoff(hooks?.submitNotification, () => marketAnalysisRuntime?.requestSignalAnalysis)
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
@@ -766,6 +764,7 @@ export function getIntelligenceModule(
       ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
       dataDir
     })
+    openInterestWithSignals.bindSignalAnalysis(marketAnalysisRuntime.requestSignalAnalysis)
     const sourcesService = createIntelligenceSourcesService({
       profileStore,
       focusSettingsStore,
