@@ -9149,14 +9149,32 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 .about-mark {
+  /* 图标本身是深色圆角方块：容器**不裁圆角**（图片自带），只加 1px 描边——
+     不描边的话它在深色页面底上几乎同色，只剩一条悬着的波形线。 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: 9px;
+  border: 1px solid var(--border);
   background: var(--surface-soft);
-  color: var(--text-strong);
+  overflow: visible;
+}
+
+.about-mark-image {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+
+.about-mark-fallback {
+  /* 同尺寸占位：布局不塌，也不写「图标加载失败」——装饰不是信息。 */
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--surface-strong);
 }
 
 .about-identity-text {

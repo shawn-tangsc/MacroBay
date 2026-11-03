@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Info } from 'lucide-react'
+import appIconUrl from '@resources/icon.png?url'
 import { Button } from 'antd'
 
 import type { AppSettings, AppSettingsPatch } from '@platform/settings/schema/appSettings'
@@ -31,6 +31,7 @@ export function AboutSettingsPage(props: {
   const text = platformText[props.settings.language].about
   const client = props.client ?? platformUpdateCheckClient
   const [openFailed, setOpenFailed] = useState<UpdateLinkId | null>(null)
+  const [markFailed, setMarkFailed] = useState(false)
   const [hasNewer, setHasNewer] = useState(false)
   const [notes, setNotes] = useState<readonly StructuredTextNode[] | null>(null)
   const [notesTruncated, setNotesTruncated] = useState(false)
@@ -86,8 +87,11 @@ export function AboutSettingsPage(props: {
   return (
     <section className="settings-detail-pane about-page">
       <header className="about-identity">
+        {/* 图标是装饰：图片 aria-hidden，失败时用同尺寸占位（不写「加载失败」——那对读者没有动作价值）。 */}
         <span className="about-mark" aria-hidden="true">
-          <Info size={22} />
+          {markFailed ? <span className="about-mark-fallback" /> : (
+            <img className="about-mark-image" src={appIconUrl} alt="" onError={() => setMarkFailed(true)} />
+          )}
         </span>
         <div className="about-identity-text">
           <h2 className="about-name">{props.productName}</h2>
