@@ -29,6 +29,8 @@ export type NewsSentimentItemView = {
   itemId: string
   title: string
   displayTitle?: string
+  /** The language `displayTitle` was translated into; absent means unknown, never "same as the edition". */
+  titleLocale?: string
   sourceId: string
   sourceName: string
   url?: string
@@ -161,7 +163,7 @@ export function createNewsSentimentQuery(deps: {
           const body = deps.bodyTranslation?.get(row.itemId, displayLocale)
           return {
             ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
-            ...(body?.titleText ? { displayTitle: body.titleText } : {}),
+            ...(body?.titleText ? { displayTitle: body.titleText, titleLocale: displayLocale } : {}),
             bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
@@ -217,7 +219,7 @@ export function createNewsSentimentQuery(deps: {
       const bodyTitle = body?.titleText
       return {
         ...toItemView(row, item, translations[input.itemId]),
-        ...(bodyTitle ? { displayTitle: bodyTitle } : {}),
+        ...(bodyTitle ? { displayTitle: bodyTitle, titleLocale: displayLocale } : {}),
         ...(document?.state === 'available' && document.bodyText
           ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
           : {}),

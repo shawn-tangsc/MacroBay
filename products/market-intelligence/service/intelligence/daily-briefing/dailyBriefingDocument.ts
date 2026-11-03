@@ -155,7 +155,12 @@ function selectNews(packet: DailyBriefingFactPacket): readonly BriefingNewsItem[
     .map((item) => Object.freeze({
       itemId: item.itemId,
       title: item.title,
-      ...(item.displayTitle && item.displayTitle !== item.title ? { translatedTitle: item.displayTitle } : {}),
+      // Only a title translated into this edition's language may be attached. A translation into
+      // another language (the interface's, usually) must not leak in — that cross-language fallback
+      // is exactly how a Chinese headline ended up in an English edition.
+      ...(item.displayTitle && item.titleLocale === packet.locale && item.displayTitle !== item.title
+        ? { translatedTitle: item.displayTitle }
+        : {}),
       sourceName: item.sourceName,
       publishedAt: item.publishedAt,
       polarity: item.polarity,
