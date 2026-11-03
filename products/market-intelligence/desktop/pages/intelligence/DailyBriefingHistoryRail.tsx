@@ -94,6 +94,10 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                   <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>
                 </> : null}
               </small>
+              {/* Read-only fact about this issue, not a control: it stays flat and out of Tab order. */}
+              {languageTag(edition.availableLocales) ? <span className="mi-daily-briefing__rail-edition-lang" data-edition-languages={languageTag(edition.availableLocales)}>
+                {text.history.editionLanguages[languageTag(edition.availableLocales)!]}
+              </span> : null}
             </>}
           </button>
           <div className="mi-daily-briefing__rail-side">
@@ -108,6 +112,16 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
       })}
     </div>
   </aside>
+}
+
+/** Which languages this issue has; absent when it has no edition at all. */
+export function languageTag(availableLocales: readonly DailyBriefingLocale[]): 'zh' | 'en' | 'both' | undefined {
+  const zh = availableLocales.includes('zh-CN')
+  const en = availableLocales.includes('en-US')
+  if (zh && en) return 'both'
+  if (en) return 'en'
+  if (zh) return 'zh'
+  return undefined
 }
 
 /** `HH:mm` in the reader's zone: the row's date is on the line above, the offset is the setting's. */

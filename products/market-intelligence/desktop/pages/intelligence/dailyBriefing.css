@@ -247,3 +247,6 @@
 [data-briefing-detail] .mi-briefing-detail__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 [data-briefing-detail] .mi-briefing-detail__action { flex: none; padding: 2px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; background: transparent; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; cursor: pointer; }
 [data-briefing-detail] .mi-briefing-attempts__list { display: flex; flex-direction: column; }
+
+/* Which languages an issue has: a fact, not a control — flat, muted, never in Tab order. */
+.mi-daily-briefing__rail-edition-lang { display: block; margin-top: 2px; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; }

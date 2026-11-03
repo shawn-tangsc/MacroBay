@@ -93,6 +93,23 @@ describe('daily briefing history rail', () => {
     expect(host.textContent).not.toContain(text.history.noConclusion)
   })
 
+  it('names which languages an issue has, as a read-only tag', () => {
+    render({ editions: [
+      edition({ date: '2026-10-30', availableLocales: ['zh-CN'] }),
+      edition({ date: '2026-10-29', availableLocales: ['en-US'] }),
+      edition({ date: '2026-10-28', availableLocales: ['zh-CN', 'en-US'] }),
+      edition({ date: '2026-10-27', state: 'missing', availableLocales: [], generatedAt: undefined })
+    ] })
+    const tags = [...host.querySelectorAll<HTMLElement>('[data-edition-languages]')]
+
+    expect(tags.map((tag) => tag.getAttribute('data-edition-languages'))).toEqual(['zh', 'en', 'both'])
+    expect(tags[2].textContent).toBe(text.history.editionLanguages.both)
+    // A fact, not a control: nothing here is focusable, so the row keeps one Tab stop.
+    expect(tags.every((tag) => !tag.hasAttribute('tabindex'))).toBe(true)
+    // A day without an edition has nothing to name.
+    expect(host.querySelector('[data-date="2026-10-27"]')?.closest('.mi-daily-briefing__rail-item')?.querySelector('[data-edition-languages]')).toBeNull()
+  })
+
   it('says a failed run on the row, without a count and without the reason', () => {
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })] })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
