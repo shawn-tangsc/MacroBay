@@ -11,6 +11,7 @@ import { useId, useState } from 'react'
 
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { SignalDetail, useSignalDetail } from '../shared'
 import type { DivergencePanelText } from './divergenceText'
 
 import './DivergencePanel.css'
@@ -53,6 +54,25 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   // 长笔记留在读者主动打开的地方：默认收起，打开后是卡片下方一块限高的区域，不盖住要解释的图。
   const [helpOpen, setHelpOpen] = useState(false)
   const helpDetailsId = useId()
+  // The rule's chip: only the intraday pair gets one, and it prints no numbers — those stay on the
+  // row below, once. "Data insufficient" is not a chip here: the card's own state already says why
+  // the pair was withheld, and a second badge saying the same thing would read as a second failure.
+  const intraday = state.state === 'available' ? state.rows.find(row => row.pairId === 'liquidity-leverage') : undefined
+  const chipDetail = useSignalDetail('mi-divergence-chip-detail')
+  /** One group per leg the pair is built from; a leg the row does not carry is simply not named. */
+  const legGroups = (['stablecoin', 'open-interest'] as const).flatMap(legId => {
+    const leg = intraday?.legs.find(entry => entry.id === legId)
+    if (!leg) return []
+    return [{
+      labelKey: legId === 'stablecoin'
+        ? 'pages.intelligence.portal.dashboard.divergence.legs.stablecoin'
+        : 'pages.intelligence.portal.dashboard.divergence.legs.open-interest',
+      rows: [{
+        labelKey: 'pages.intelligence.portal.dashboard.divergence.chipFreshLabel',
+        value: `${text.chipFresh} · ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`
+      }]
+    }]
+  })
   /**
    * The product's own sentence for the reason line, and only that line.
    *
@@ -72,6 +92,16 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <div className="mi-divergence__lead">
+        {/* The chip sits ahead of the help entries, where a card's title would be: it is the one
+            thing on this line that says "something happened", and the readings stay below it. */}
+        {intraday ? (
+          <Tooltip labelKey="pages.intelligence.portal.dashboard.divergence.chipTip" resolveText={resolveProductKey}>
+            <button type="button" className="mi-divergence__chip" data-state="alert"
+              {...chipDetail.triggerProps}
+              aria-label={`${text.chip} · ${text.chipDetailsOpen}`}
+              onClick={chipDetail.toggle}>{text.chip}</button>
+          </Tooltip>
+        ) : null}
         {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
             joined sentence with newlines would be lost the first time the copy is translated. */}
         <Popover
@@ -89,6 +119,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           className="mi-divergence__help-toggle" onClick={() => setHelpOpen(open => !open)}
           type="button">{text.helpDetailsLabel}</button>
       </div>
+      {intraday && chipDetail.open ? (
+        <SignalDetail
+          id="mi-divergence-chip-detail"
+          titleKey="pages.intelligence.portal.dashboard.divergence.chipDetailsTitle"
+          groups={legGroups}
+          rows={[{ labelKey: 'pages.intelligence.portal.dashboard.divergence.chipWhyLabel', value: text.chipWhy }]} />
+      ) : null}
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
         {state.state === 'unavailable' ? (

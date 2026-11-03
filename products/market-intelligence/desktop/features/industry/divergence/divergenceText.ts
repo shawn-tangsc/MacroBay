@@ -2,6 +2,22 @@ import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../
 
 export type DivergencePanelText = Readonly<{
   title: string
+  /**
+   * The rule's chip. Only the intraday pair gets one, and it carries no numbers: the readings stay
+   * on the rows below, once.
+   */
+  chip: string
+  /** The hover line: rule, windows, and whether the mark is an inference or an observation. */
+  chipTip: string
+  /** The word appended to the chip's accessible name, e.g. "看数据". */
+  chipDetailsOpen: string
+  chipDetailsTitle: string
+  /** Chip detail: one group per leg, each reading how fresh it is and when it was taken. */
+  chipFreshLabel: string
+  chipFresh: string
+  chipAsOf: string
+  chipWhyLabel: string
+  chipWhy: string
   /** The word that marks the block as a conclusion rather than another section. */
   helpLabel: string
   /** The popover's four one-look bullets, one point each: the bubble is a glance, not a document. */

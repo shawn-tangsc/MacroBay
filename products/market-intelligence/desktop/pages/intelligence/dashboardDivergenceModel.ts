@@ -19,7 +19,8 @@ export type DivergenceWithheldView = Readonly<{
 export type DivergenceRowView = Readonly<{
   pairId: string
   direction: 'bearish' | 'bullish' | 'unpriced'
-  legs: readonly Readonly<{ id: DivergenceLeg['id']; text: string }>[]
+  /** `observedAt` rides along so the chip's detail can say how fresh each leg is. */
+  legs: readonly Readonly<{ id: DivergenceLeg['id']; text: string; observedAt: string }>[]
 }>
 
 /**
@@ -44,7 +45,7 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
     rows: value.rows.map(row => ({
       pairId: row.pairId,
       direction: row.direction,
-      legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg) })),
+      legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg), observedAt: leg.observedAt })),
     })),
     withheld
   }

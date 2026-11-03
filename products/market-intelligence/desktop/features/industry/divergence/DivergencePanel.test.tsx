@@ -22,9 +22,20 @@ const row = {
   mechanism: '可动用稳定币在减少，永续空头却仍在加仓；价格一旦反弹，空头回补会放大涨幅。',
   invalidation: '稳定币 7 天转正，或持仓 24 小时内回落 3% 以上。',
   legs: [
-    { id: 'stablecoin' as const, text: '−1.21%' },
-    { id: 'open-interest' as const, text: '+3.40%' },
-    { id: 'funding' as const, text: '−0.0032% / 8h' }
+    { id: 'stablecoin' as const, text: '−1.21%', observedAt: '2026-10-30T10:00:00.000Z' },
+    { id: 'open-interest' as const, text: '+3.40%', observedAt: '2026-10-30T11:00:00.000Z' },
+    { id: 'funding' as const, text: '−0.0032% / 8h', observedAt: '2026-10-30T11:00:00.000Z' }
+  ]
+}
+
+/** Another pair in the same answer: it keeps its row and must never get a chip of its own. */
+const otherRow = {
+  pairId: 'flows-price' as const,
+  direction: 'bullish' as const,
+  legs: [
+    { id: 'etf' as const, text: '−$150M', observedAt: '2026-10-29T21:00:00.000Z' },
+    { id: 'open-interest' as const, text: '−3.20%', observedAt: '2026-10-30T11:00:00.000Z' },
+    { id: 'price' as const, text: '+0.20%', observedAt: '2026-10-30T11:00:00.000Z' }
   ]
 }
 
@@ -240,6 +251,53 @@ describe('help on the shared popover', () => {
     await act(async () => { trigger.focus() })
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
     for (const line of text.helpBullets) expect(document.body.textContent).toContain(line)
+    await act(async () => { root.unmount() })
+  })
+})
+
+describe('the divergence chip', () => {
+  const answer = (...rows: readonly (typeof row | typeof otherRow)[]) => ({ state: 'available' as const, rows, withheld: [] })
+
+  it('gives the intraday pair one chip and leaves every pair its row', () => {
+    const markup = render(answer(row, otherRow))
+    expect(markup).toContain(text.chip)
+    expect(markup.match(/class="mi-divergence__chip"/g)).toHaveLength(1)
+    // The readings stay on the rows, once: the chip itself carries no number.
+    const chip = markup.slice(markup.indexOf('mi-divergence__chip"'), markup.indexOf('</button>', markup.indexOf('mi-divergence__chip"')))
+    expect(chip).not.toMatch(/\d/)
+    expect(markup).toContain(row.legs[0]!.text)
+    expect(markup).toContain(otherRow.legs[0]!.text)
+  })
+
+  it('draws no chip when only another pair diverged', () => {
+    expect(render(answer(otherRow))).not.toContain(text.chip)
+  })
+
+  it('opens each leg freshness and the reason, and closes again on the same chip', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: answer(row), onRetry: () => undefined, text
+      })))
+    })
+    const chip = container.querySelector('button.mi-divergence__chip') as HTMLButtonElement
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    const detail = container.querySelector('#mi-divergence-chip-detail')!
+    // What the reader came for: which two legs, how fresh each is, and why the pair counts.
+    expect(detail.textContent).toContain(text.legs.stablecoin)
+    expect(detail.textContent).toContain(text.legs['open-interest'])
+    expect(detail.textContent).toContain(text.chipFresh)
+    expect(detail.textContent).toContain(text.chipWhy)
+    expect(detail.textContent).toContain('截至')
+    // Internal identifiers are not readings.
+    expect(detail.textContent).not.toContain('liquidity-leverage')
+    expect(detail.textContent).not.toContain('ruleId')
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(container.querySelector('#mi-divergence-chip-detail')).toBeNull()
     await act(async () => { root.unmount() })
   })
 })
