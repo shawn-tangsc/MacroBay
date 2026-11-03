@@ -1,3 +1,4 @@
+import { describeChannelRuntimeAudit } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
 /**
@@ -40,11 +41,15 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     })
   }
   for (const entry of sources.runtime ?? []) {
+    // 级别与文案都由平台那张表决定：**查不到的码给 WARN + 兜底句**，宁可当提醒，不许当故障。
+    const descriptor = describeChannelRuntimeAudit(entry.code)
     rows.push({
       id: `run-${entry.id}`,
       at: entry.createdAt,
-      level: 'ERROR',
-      text: `${labels.channelLogRuntimePrefix}${labels.channelLogRuntimeText[entry.code] ?? labels.channelLogsUnknownCode}`
+      level: descriptor?.level ?? 'WARN',
+      text: `${labels.channelLogRuntimePrefix}${
+        descriptor === undefined ? labels.channelLogsUnknownCode : labels.channelLogRuntimeText[descriptor.copyKey]
+      }`
     })
   }
   for (const entry of sources.deliveries ?? []) {

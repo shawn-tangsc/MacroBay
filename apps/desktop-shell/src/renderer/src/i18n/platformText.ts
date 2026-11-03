@@ -1,6 +1,7 @@
 import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import type { ChannelRuntimeAuditCopyKey } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 export type PlatformText = {
@@ -276,7 +277,7 @@ export type PlatformText = {
     channelLogUncertainPrefix: string
     /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
     channelLogActionText: Readonly<Record<string, string>>
-    channelLogRuntimeText: Readonly<Record<string, string>>
+    channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
     channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
   taskAutomation: {
@@ -1629,11 +1630,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         provision: '写入了凭据'
       }),
       channelLogRuntimeText: Object.freeze({
-        'channel-agent-missing': '绑定的助手不在了，收不到消息',
-        'channel-stale-generation': '旧的一次运行已经过期，被拒绝',
-        'channel-inbound-failed': '收到的消息没能处理成功',
-        'channel-receipt-without-work-item': '消息收到了，但对应的任务不见了',
-        'channel-work-capacity-exhausted': '待处理的消息太多，暂停接收'
+        runtimePolicyDenied: '这个会话不在放行名单里，消息没有处理',
+        runtimeMentionRequired: '群里没有 @ 机器人，已按规则忽略',
+        runtimeContentRejected: '这条消息的内容类型不支持，已跳过',
+        runtimeReceiptWithoutWorkItem: '消息收到了，但对应的任务不见了',
+        runtimeStaleGeneration: '旧的一次运行已经过期，被拒绝',
+        runtimeAgentMissing: '绑定的助手不在了，收不到消息',
+        runtimeWorkCapacityExhausted: '待处理的消息太多，暂停接收',
+        runtimeLifecycleFenced: '运行的代际变了，这次处理被放弃',
+        runtimeInboundFailed: '收到的消息没能处理成功'
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': '这一次没有发出去',
@@ -2879,11 +2884,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         provision: 'stored the credential'
       }),
       channelLogRuntimeText: Object.freeze({
-        'channel-agent-missing': 'the bound agent is gone, so messages are not handled',
-        'channel-stale-generation': 'an older runtime generation was rejected',
-        'channel-inbound-failed': 'an incoming message could not be handled',
-        'channel-receipt-without-work-item': 'a message arrived but its work item was missing',
-        'channel-work-capacity-exhausted': 'too many messages are waiting, so receiving paused'
+        runtimePolicyDenied: 'this conversation is not on the allow list, so the message was not handled',
+        runtimeMentionRequired: 'the bot was not mentioned, so the message was ignored as designed',
+        runtimeContentRejected: 'this message type is not supported and was skipped',
+        runtimeReceiptWithoutWorkItem: 'a message arrived but its work item was missing',
+        runtimeStaleGeneration: 'an older runtime generation was rejected',
+        runtimeAgentMissing: 'the bound agent is gone, so messages are not handled',
+        runtimeWorkCapacityExhausted: 'too many messages are waiting, so receiving paused',
+        runtimeLifecycleFenced: 'the runtime generation changed, so this handling was dropped',
+        runtimeInboundFailed: 'an incoming message could not be handled'
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': 'this one was not sent',

@@ -78,6 +78,42 @@ describe('the channel log panel', () => {
     expect(container.querySelector('.channel-log-row')?.textContent).not.toContain('GMT')
   })
 
+  it('files a mention-less group message as a warning, not a failure', async () => {
+    const container = await mount({
+      ...ok,
+      listRuntimeAudits: vi.fn(async () => ({
+        rows: [{ id: 'r3', code: 'channel-mention-required', createdAt: '2026-11-03T02:00:00.000Z' }],
+        nextCursor: null
+      }))
+    })
+
+    const row = [...container.querySelectorAll('.channel-log-row')].find((node) =>
+      node.textContent?.includes('群里没有 @ 机器人')
+    )
+    // 群里没 @ 机器人是「按规则忽略」，不是故障：WARN + 可读说明，不能写「没有更多说明」。
+    expect(row?.getAttribute('data-log-level')).toBe('WARN')
+    expect(row?.querySelector('.channel-log-level')?.textContent).toBe('[WARN]')
+    expect(row?.textContent).toContain('群里没有 @ 机器人，已按规则忽略')
+    expect(row?.textContent).not.toContain(labels.channelLogsUnknownCode)
+  })
+
+  it('treats an unknown runtime code as a warning, never as a failure', async () => {
+    const container = await mount({
+      ...ok,
+      listRuntimeAudits: vi.fn(async () => ({
+        rows: [{ id: 'r4', code: 'some-new-code', createdAt: '2026-11-03T02:00:00.000Z' }],
+        nextCursor: null
+      }))
+    })
+
+    const row = [...container.querySelectorAll('.channel-log-row')].find((node) =>
+      node.textContent?.includes(labels.channelLogsUnknownCode)
+    )
+    expect(row?.getAttribute('data-log-level')).toBe('WARN')
+    expect(row?.textContent).toContain(labels.channelLogsUnknownCode)
+    expect(row?.textContent).not.toContain('some-new-code')
+  })
+
   it('does not file an unconfirmed send under failures', async () => {
     const container = await mount({
       ...ok,
