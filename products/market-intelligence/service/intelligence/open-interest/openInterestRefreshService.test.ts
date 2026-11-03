@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createOpenInterestRefreshService, openInterestCollectionPolicy } from './openInterestRefreshService'
+import { coldStartPages, createOpenInterestRefreshService, isColdStartWithinPageCap, openInterestCollectionPolicy } from './openInterestRefreshService'
 
 const now = '2026-10-29T00:00:00.000Z'
 const nowMs = Date.parse(now)
@@ -32,6 +32,20 @@ const service = (deps: { client: ReturnType<typeof client>; store: ReturnType<ty
     store: deps.store,
     now: () => now
   })
+
+describe('cold start planning', () => {
+  it('counts pages from the bucket width, and never clamps them to the guard', () => {
+    expect(coldStartPages(900_000)).toEqual({ openInterest: 2, klines: 1 })
+    expect(coldStartPages(5 * 60_000)).toEqual({ openInterest: 5, klines: 3 })
+    // A one-minute bucket over seven days needs far more pages than the guard allows. The plan
+    // still reports the real number; refusing it is the caller's job, not a silent clamp's.
+    expect(coldStartPages(60_000)).toEqual({ openInterest: 21, klines: 11 })
+    // The refusal is explicit: over the guard the round fails loudly instead of shrinking coverage.
+    expect(isColdStartWithinPageCap(900_000)).toBe(true)
+    expect(isColdStartWithinPageCap(5 * 60_000)).toBe(true)
+    expect(isColdStartWithinPageCap(60_000)).toBe(false)
+  })
+})
 
 describe('open interest refresh', () => {
   it('spends no request when the source is disabled', async () => {
@@ -71,17 +85,17 @@ describe('open interest refresh', () => {
       return [{ asset: 'btc' as const, observedMs: bucket(15) - page * 15 * 60_000, notionalUsd: 8e9 }]
     }) as never
     const s = store(undefined)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    try {
-      const result = await service({ client: c, store: s }).refresh()
-      expect(result).toEqual({ state: 'updated' })
-      // The successful page of each asset was written; the failed page was not.
-      expect(s.upsert).toHaveBeenCalledTimes(2)
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('page=2/2'))
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('endpoint=open-interest'))
-    } finally {
-      warn.mockRestore()
-    }
+    const log = vi.fn()
+    const result = await service({ client: c, store: s }).refresh({ log })
+    expect(result).toEqual({ state: 'updated' })
+    // The successful page of each asset was written; the failed page was not.
+    expect(s.upsert).toHaveBeenCalledTimes(2)
+    // The failure goes to the job's log channel, not to a console nobody collects.
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+      level: 'warn',
+      message: expect.stringContaining('page=2/2')
+    }))
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('endpoint=open-interest') }))
   })
 
   it('asks only for the gap on the steady state', async () => {

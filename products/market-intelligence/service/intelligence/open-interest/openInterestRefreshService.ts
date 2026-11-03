@@ -10,6 +10,9 @@ export const openInterestCollectionPolicy = Object.freeze({
   })
 })
 
+/** The job's own log channel; a page that failed must land where support reads, not on a console. */
+export type OpenInterestRefreshLog = (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void>
+
 export type OpenInterestRefreshDeps = Readonly<{
   isEnabled: () => Promise<boolean>
   client: Pick<OpenInterestClient, 'requestOpenInterest' | 'requestKlines'>
@@ -34,7 +37,7 @@ export type OpenInterestRefreshDeps = Readonly<{
  */
 export function createOpenInterestRefreshService(deps: OpenInterestRefreshDeps) {
   return {
-    async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
+    async refresh(input?: Readonly<{ log?: OpenInterestRefreshLog }>): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
       try {
         if (!await deps.isEnabled()) return { state: 'unavailable' }
         const collectedAt = deps.now()
@@ -48,7 +51,7 @@ export function createOpenInterestRefreshService(deps: OpenInterestRefreshDeps) 
           const gap = newest === undefined ? Number.POSITIVE_INFINITY : Math.max(1, Math.ceil((nowMs - newest) / openInterestCollectionPolicy.bucketMs))
           const openInterestLimit = clamp(gap + 2, 2, openInterestHistoryPolicy.requestLimit.openInterest)
           const writes = newest === undefined
-            ? await coldStart(deps.client, target, collectedAt)
+            ? await coldStart(deps.client, target, collectedAt, input?.log)
             : await appendTail(deps.client, target, openInterestLimit, collectedAt, nowMs)
           if (writes === undefined) { failed += 1; continue }
           for (const rows of writes.openInterest) {
@@ -76,11 +79,45 @@ type SegmentWrite = Readonly<{ openInterest: readonly (readonly PositioningRow[]
 
 const COLD_START_SPAN_MS = 7 * 86_400_000
 
-async function coldStart(client: OpenInterestRefreshDeps['client'], target: { asset: 'btc' | 'eth'; symbol: string }, collectedAt: string): Promise<SegmentWrite | undefined> {
+/**
+ * How many requests a cold start needs at a bucket width.
+ *
+ * Exported so the guard below can be asserted without pretending the policy changed: a one-minute
+ * bucket would need more pages than the guard allows, and that must be a visible refusal rather
+ * than a silent clamp.
+ */
+export function isColdStartWithinPageCap(bucketMs: number): boolean {
+  const pages = coldStartPages(bucketMs)
+  return pages.openInterest <= openInterestHistoryPolicy.maximumBatchesPerEndpoint
+    && pages.klines <= openInterestHistoryPolicy.maximumBatchesPerEndpoint
+}
+
+export function coldStartPages(bucketMs: number): Readonly<{ openInterest: number; klines: number }> {
+  return {
+    openInterest: batchesForSpan(COLD_START_SPAN_MS, openInterestHistoryPolicy.requestLimit.openInterest, bucketMs),
+    klines: batchesForSpan(COLD_START_SPAN_MS, openInterestHistoryPolicy.requestLimit.klines, bucketMs)
+  }
+}
+
+async function coldStart(
+  client: OpenInterestRefreshDeps['client'],
+  target: { asset: 'btc' | 'eth'; symbol: string },
+  collectedAt: string,
+  log: OpenInterestRefreshLog | undefined
+): Promise<SegmentWrite | undefined> {
   const caps = openInterestHistoryPolicy.requestLimit
   const bucketMs = openInterestCollectionPolicy.bucketMs
-  const openInterestPages = Math.min(openInterestHistoryPolicy.maximumBatchesPerEndpoint, batchesForSpan(COLD_START_SPAN_MS, caps.openInterest, bucketMs))
-  const klinePages = Math.min(openInterestHistoryPolicy.maximumBatchesPerEndpoint, batchesForSpan(COLD_START_SPAN_MS, caps.klines, bucketMs))
+  const pages = coldStartPages(bucketMs)
+  const openInterestPages = pages.openInterest
+  const klinePages = pages.klines
+  // Silently clamping here would shrink the coverage without anyone noticing — the exact failure
+  // this whole step exists to prevent. Too many pages for the guard is a configuration fault: say
+  // how many are needed and refuse the round.
+  const cap = openInterestHistoryPolicy.maximumBatchesPerEndpoint
+  if (openInterestPages > cap || klinePages > cap) {
+    await log?.({ level: 'warn', message: `[open-interest] cold start refused: asset=${target.asset} open-interest-pages=${openInterestPages} kline-pages=${klinePages} cap=${cap}` })
+    return undefined
+  }
   const segments: PositioningRow[][] = []
   let openInterestEnd: number | undefined
   for (let page = 0; page < openInterestPages; page += 1) {
@@ -90,7 +127,7 @@ async function coldStart(client: OpenInterestRefreshDeps['client'], target: { as
     })
     // A failed page stops this asset's remaining pages: the endpoint already refused one request,
     // and hammering it for older data is how a rate limit becomes an outage.
-    if (!rows || rows.length === 0) { logFailedSegment(target.asset, 'open-interest', page, openInterestPages); break }
+    if (!rows || rows.length === 0) { await logFailedSegment(log, target.asset, 'open-interest', page, openInterestPages); break }
     segments.push(rows.map(toOpenInterestRow))
     openInterestEnd = rows[0]!.observedMs - 1
   }
@@ -104,16 +141,28 @@ async function coldStart(client: OpenInterestRefreshDeps['client'], target: { as
       asset: target.asset, symbol: target.symbol, limit: caps.klines, nowMs: Date.parse(collectedAt),
       ...(klineEnd === undefined ? {} : { endTime: klineEnd })
     })
-    if (!rows || rows.length === 0) { logFailedSegment(target.asset, 'klines', page, klinePages); break }
+    if (!rows || rows.length === 0) { await logFailedSegment(log, target.asset, 'klines', page, klinePages); break }
     klines.push(...rows.map(toKlineRow))
     klineEnd = rows[0]!.observedMs - 1
   }
   return { openInterest: segments, klines }
 }
 
-/** One line per failed page, with its position: a short round must be explainable from logs. */
-function logFailedSegment(asset: string, endpoint: 'open-interest' | 'klines', page: number, pages: number): void {
-  console.warn(`[open-interest] refresh segment failed: asset=${asset} endpoint=${endpoint} page=${page + 1}/${pages}`)
+/**
+ * One line per failed page, with its position: a short round must be explainable from the job's
+ * log. The console fallback exists for tests and for a call site without a job context — it is
+ * never the only channel a production round has.
+ */
+async function logFailedSegment(
+  log: OpenInterestRefreshLog | undefined,
+  asset: string,
+  endpoint: 'open-interest' | 'klines',
+  page: number,
+  pages: number
+): Promise<void> {
+  const message = `[open-interest] refresh segment failed: asset=${asset} endpoint=${endpoint} page=${page + 1}/${pages}`
+  if (log === undefined) { console.warn(message); return }
+  await log({ level: 'warn', message })
 }
 
 async function appendTail(client: OpenInterestRefreshDeps['client'], target: { asset: 'btc' | 'eth'; symbol: string }, limit: number, collectedAt: string, nowMs: number): Promise<SegmentWrite | undefined> {

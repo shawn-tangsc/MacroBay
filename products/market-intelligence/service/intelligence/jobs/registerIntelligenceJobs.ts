@@ -41,7 +41,7 @@ export function registerIntelligenceJobs(
     capitalConditions?: { refresh: () => Promise<unknown> }
     etfFlowHistory?: { refresh: () => Promise<unknown> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
-    openInterest?: { refresh: () => Promise<unknown> }
+    openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
@@ -62,7 +62,7 @@ export function registerIntelligenceJobs(
     // refreshed here rather than in a second job definition.
     if (input.sourceId === 'binance-futures-positioning') {
       await deps.fundingRateHistory?.refresh()
-      await deps.openInterest?.refresh()
+      await deps.openInterest?.refresh({ log: context.log })
       return
     }
     const result = await pipeline.collectSource({
