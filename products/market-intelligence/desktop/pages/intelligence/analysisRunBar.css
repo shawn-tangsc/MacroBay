@@ -36,10 +36,14 @@
   white-space: nowrap;
 }
 
+/* 横条是固定页脚：展开后的列表自己滚，别把上面的内容压没（短窗口下尤其明显）。 */
 .mi-analysis-run-bar__records {
   display: grid;
   gap: 8px;
+  max-block-size: 40vh;
   padding: 2px 0 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .mi-analysis-run-bar__records h3 {

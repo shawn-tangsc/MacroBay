@@ -69,7 +69,9 @@ export function AnalysisRunBar({ entries, loading, failed, text }: Readonly<{
         ? <ChevronDown aria-hidden="true" size={14} />
         : <ChevronUp aria-hidden="true" size={14} />}
     </button>
-    {open ? <div className="mi-analysis-run-bar__records" id={panelId}>
+    {/* 可滚动区域要能拿到焦点，键盘与读屏才滚得动（WCAG「可滚区域必须可聚焦」）；
+        没有可聚焦子元素的静态列表，这是唯一的进入方式。 */}
+    {open ? <div aria-label={text.title} className="mi-analysis-run-bar__records" id={panelId} role="group" tabIndex={0}>
       <h3>{text.ranTitle}</h3>
       {loading ? <LoadingState label={text.loading} layout="inline" size="sm" /> : null}
       {failed ? <p className="mi-analysis-run-bar__state" data-state="unavailable">{text.unavailable}</p> : null}
