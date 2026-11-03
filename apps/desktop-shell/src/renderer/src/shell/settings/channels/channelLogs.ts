@@ -1,3 +1,4 @@
+import { describeChannelManagementAudit } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import { describeChannelRuntimeAudit } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
@@ -33,11 +34,15 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
   const rows: ChannelLogRow[] = []
 
   for (const entry of sources.operations ?? []) {
+    // 动作码也只走闭集表；查不到才有兜底句，常用动作一个都不许落到它。
+    const copyKey = describeChannelManagementAudit(entry.action)
     rows.push({
       id: `op-${entry.id}`,
       at: entry.createdAt,
       level: 'INFO',
-      text: `${labels.channelLogOperationPrefix}${labels.channelLogActionText[entry.action] ?? labels.channelLogsUnknownCode}`
+      text: `${labels.channelLogOperationPrefix}${
+        copyKey === undefined ? labels.channelLogsUnknownCode : labels.channelLogActionText[copyKey]
+      }`
     })
   }
   for (const entry of sources.runtime ?? []) {

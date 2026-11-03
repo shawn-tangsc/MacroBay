@@ -2,6 +2,7 @@ import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/chan
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { ChannelRuntimeAuditCopyKey } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import type { ChannelManagementAuditCopyKey } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 export type PlatformText = {
@@ -277,7 +278,7 @@ export type PlatformText = {
     /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
     channelLogUncertainPrefix: string
     /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
-    channelLogActionText: Readonly<Record<string, string>>
+    channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
     channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
     channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
@@ -1621,15 +1622,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogDeliveryPrefix: '发送失败：',
       channelLogUncertainPrefix: '不确定：',
       channelLogActionText: Object.freeze({
-        create: '创建了这个频道',
-        update: '修改了频道设置',
-        enable: '开启了推送',
-        disable: '关闭了推送',
-        restart: '重启了运行时',
-        delete: '删除了这个频道',
-        'policy-create': '添加了一条放行名单',
-        'policy-delete': '删除了一条放行名单',
-        provision: '写入了凭据'
+        actionCreate: '创建了这个频道',
+        actionUpdate: '修改了频道设置',
+        actionProvision: '写入了凭据',
+        actionRotate: '更换了凭据',
+        actionDisable: '停用了推送',
+        actionRequestEnable: '启用了推送',
+        actionRestart: '重启了运行时',
+        actionTargetSet: '调整了接收消息的会话',
+        actionPolicyCreate: '添加了一条放行名单',
+        actionPolicyDelete: '删除了一条放行名单',
+        actionDelete: '删除了这个频道'
       }),
       channelLogRuntimeText: Object.freeze({
         runtimePolicyDenied: '这个会话不在放行名单里，消息没有处理',
@@ -2876,15 +2879,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogDeliveryPrefix: 'Send failed: ',
       channelLogUncertainPrefix: 'Uncertain: ',
       channelLogActionText: Object.freeze({
-        create: 'created this channel',
-        update: 'changed the channel settings',
-        enable: 'turned sending on',
-        disable: 'turned sending off',
-        restart: 'restarted the runtime',
-        delete: 'deleted this channel',
-        'policy-create': 'added an allowed conversation',
-        'policy-delete': 'removed an allowed conversation',
-        provision: 'stored the credential'
+        actionCreate: 'created this channel',
+        actionUpdate: 'changed the channel settings',
+        actionProvision: 'stored the credential',
+        actionRotate: 'replaced the credential',
+        actionDisable: 'turned sending off',
+        actionRequestEnable: 'turned sending on',
+        actionRestart: 'restarted the runtime',
+        actionTargetSet: 'changed the conversation that receives messages',
+        actionPolicyCreate: 'added an allowed conversation',
+        actionPolicyDelete: 'removed an allowed conversation',
+        actionDelete: 'deleted this channel'
       }),
       channelLogRuntimeText: Object.freeze({
         runtimePolicyDenied: 'this conversation is not on the allow list, so the message was not handled',

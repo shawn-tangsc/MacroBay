@@ -43,7 +43,7 @@ async function mount(client: Parameters<typeof ChannelLogsPanel>[0]['client']): 
 }
 
 const ok = {
-  listAudits: vi.fn(async () => [{ id: 'a1', action: 'enable', actorId: 'me', code: null, createdAt: '2026-11-03T01:00:00.000Z' }]),
+  listAudits: vi.fn(async () => [{ id: 'a1', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T01:00:00.000Z' }]),
   listRuntimeAudits: vi.fn(async () => ({
     rows: [{ id: 'r1', code: 'channel-inbound-failed', createdAt: '2026-11-03T02:00:00.000Z' }],
     nextCursor: null
@@ -58,7 +58,7 @@ describe('the channel log panel', () => {
     const rows = [...container.querySelectorAll('.channel-log-row')]
     expect(rows).toHaveLength(3)
     const text = container.textContent ?? ''
-    expect(text).toContain(`${labels.channelLogOperationPrefix}开启了推送`)
+    expect(text).toContain(`${labels.channelLogOperationPrefix}启用了推送`)
     expect(text).toContain(`${labels.channelLogRuntimePrefix}收到的消息没能处理成功`)
     expect(text).toContain(`${labels.channelLogDeliveryPrefix}通道拒收了这条`)
     expect(rows[0]?.querySelector('.channel-log-level')?.textContent).toBe('[ERROR]')
@@ -76,6 +76,19 @@ describe('the channel log panel', () => {
     // 时区由标签算出来，写进标题那一行；行内只留时刻。
     expect(container.querySelector('.channel-log-tz')?.textContent).toContain('GMT+8')
     expect(container.querySelector('.channel-log-row')?.textContent).not.toContain('GMT')
+  })
+
+  it('names common management actions instead of leaving the fallback sentence', async () => {
+    const container = await mount({
+      ...ok,
+      listAudits: vi.fn(async () => [
+        { id: 'a9', action: 'update', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }
+      ])
+    })
+
+    const row = container.querySelector('.channel-log-row')
+    expect(row?.textContent).toContain(`${labels.channelLogOperationPrefix}修改了频道设置`)
+    expect(row?.textContent).not.toContain(labels.channelLogsUnknownCode)
   })
 
   it('files a mention-less group message as a warning, not a failure', async () => {
