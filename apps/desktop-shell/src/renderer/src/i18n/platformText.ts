@@ -1492,7 +1492,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelStaleNotice: '没能更新，下面是上次读到的通道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
+      notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -1501,7 +1501,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       scheduledTaskDelivery: '我的定时任务投递',
       resourceJobRuns: '资源任务最近一次运行',
       resourceJobRunsEmpty: '当前没有已注册的资源任务。',
-      healthScopeNote: '投递=定时任务把消息投递到通道/通知；运行=产品资源任务最近一次执行。两者口径不同，分别统计。',
+      healthScopeNote: '投递=定时任务把消息投递到频道/通知；运行=产品资源任务最近一次执行。两者口径不同，分别统计。',
       myTasks: '我的定时任务',
       columns: { name: '名称', status: '状态', schedule: '调度', nextRun: '下次运行', lastResult: '最近结果', actions: '操作', source: '来源', registration: '注册状态', lastRun: '最近运行' },
       all: '全部', searchTasks: '搜索任务名称', tasksLoading: '正在加载定时任务…', tasksLoadFailed: '定时任务加载失败。', loadMore: '加载更多',
@@ -1513,8 +1513,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
       deliverySkipReason: {
-        'delivery-no-target-bound': '这条任务还没绑定通道，去「通道」里绑定一个就会开始投递',
-        'delivery-target-disabled': '绑定的通道已停用，重新启用后才会投递',
+        'delivery-no-target-bound': '这条任务还没绑定频道，去「频道」里绑定一个就会开始投递',
+        'delivery-target-disabled': '绑定的频道已停用，重新启用后才会投递',
         'delivery-empty-output': '这次运行没有可投递的内容',
         'delivery-not-authorized': '投递身份校验未通过，已按安全策略跳过',
         'delivery-retry-not-permitted': '这次投递不满足重试条件，不再重试',
@@ -1524,7 +1524,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       // 说的是「这次改动有没有生效」，不是「谁接受了谁」：与左侧动作词连起来读成一句事实
       // （「创建 · 已生效」「暂停 · 未生效」）。两种取值都只是平台没让改动落地，不是失败，档位 muted。
       auditAccepted: '已生效', auditRejected: '未生效',
-      auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
+      auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递频道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
       resourceBridgeMissing: '缺少接口，应用可能未重启；请重启应用后重试。', resourceLoadTimeout: '读取资源任务超时，请重试。',
       resourceEmptyBody: '启用某个产品的自动采集能力后，这里会显示它的调度、注册状态、下次运行与最近一次结果。未注册 ≠ 出错，通常代表该能力未启用。',
@@ -2315,10 +2315,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
       desktopPermissionUnknown: '暂时无法确认系统是否放行',
       desktopPreferenceKept: '这里的选择会被保留，系统放行后生效。',
-      channelBlockedAdapterNotSupported: '这一类通道不能用来发通知，换一个已接入的类型。',
-      channelBlockedCredentialMissing: '这个通道还没填凭据，在通道设置里填好才能发消息。',
-      channelBlockedNotEnabled: '这个通道没有启用，或者没有启动起来，在通道设置里启用它。',
-      channelBlockedNoTarget: '这个通道已经能发消息，但还没有绑定要发到哪个会话，先选一个目标。',
+      channelBlockedAdapterNotSupported: '这一类频道不能用来发通知，换一个已接入的类型。',
+      channelBlockedCredentialMissing: '这个频道还没填凭据，在频道设置里填好才能发消息。',
+      channelBlockedNotEnabled: '这个频道没有启用，或者没有启动起来，在频道设置里启用它。',
+      channelBlockedNoTarget: '这个频道已经能发消息，但还没有绑定要发到哪个会话，先选一个目标。',
       sendTestHint:
         '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
       centerRecordedGroup: '仅记录',

@@ -117,8 +117,8 @@ describe('TaskAutomationSettingsPage', () => {
     const markup = renderPage()
 
     // Each reason leads to a different action, so the page must name them, not echo a code.
-    expect(markup).toContain('这条任务还没绑定通道')
-    expect(markup).toContain('绑定的通道已停用')
+    expect(markup).toContain('这条任务还没绑定频道')
+    expect(markup).toContain('绑定的频道已停用')
     expect(markup).not.toContain('delivery-no-target-bound')
     // A skipped row with no recorded reason is a defect and must be visible as one.
     expect(markup).toContain('没有记录原因')
@@ -318,7 +318,7 @@ describe('TaskAutomationSettingsPage', () => {
 
     expect(markup).toContain('我的定时任务投递')
     expect(markup).toContain('资源任务最近一次运行')
-    expect(markup).toContain('投递=定时任务把消息投递到通道/通知；运行=产品资源任务最近一次执行。')
+    expect(markup).toContain('投递=定时任务把消息投递到频道/通知；运行=产品资源任务最近一次执行。')
     // 既有 5 项投递计数保持原样。
     expect(markup).toContain('已投递')
     expect(markup).toContain('待投递')
