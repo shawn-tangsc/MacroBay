@@ -157,6 +157,20 @@ describe('generation stage timeline', () => {
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
   })
 
+  it('prints one instant when a run starts and ends in the same second', () => {
+    const instant = '2026-10-30T00:00:05.000Z'
+    const dom = render(trace('success', [
+      stage('source', 'success', { startedAt: instant, finishedAt: instant, durationMs: 0 })
+    ], { startedAt: instant, finishedAt: instant }))
+
+    // One fact, one time: the arrow with the same value on both sides reads like a defect.
+    const summary = dom.querySelector('.mi-generation-trace__summary')?.textContent ?? ''
+    expect(summary).toContain('00:00:05')
+    expect(summary).not.toContain('→')
+    expect(resultOf(dom, 'source').textContent).toContain('00:00:05')
+    expect(resultOf(dom, 'source').textContent).not.toContain('00:00:05 → 00:00:05')
+  })
+
   it('maps finish, error and wait to the recorded stage states', () => {
     const success = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     expect(stepItems(success).every((item) => item.classList.contains('ant-steps-item-finish'))).toBe(true)

@@ -176,6 +176,9 @@ function formatRange(
   const start = startedAt ? timePoint(startedAt, formatTime) : undefined
   const finish = finishedAt ? timePoint(finishedAt, formatTime) : undefined
   if (start && finish) {
+    // A run that starts and ends in the same second has one instant to print, not two joined by an
+    // arrow: "15:54:23 → 15:54:23" reads like a bug because it is one.
+    if (start.time === finish.time && (start.date ?? '') === (finish.date ?? '')) return start.time
     const sameDay = !start.date || !finish.date || start.date === finish.date
     return `${sameDay ? start.time : withDate(start)} → ${sameDay ? finish.time : withDate(finish)}`
   }
