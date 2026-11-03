@@ -69,7 +69,7 @@ describe('daily briefing history rail', () => {
     expect(meta?.textContent).not.toContain('2026-11-02')
     expect(meta?.textContent).not.toContain('GMT')
     expect(meta?.textContent).toContain('08:00')
-    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe('2 次')
+    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe(`2 ${text.history.attempts.times}`)
   })
 
   it('says "not run" once, with the scheduled time only for today, and keeps the direction word for screen readers', () => {
@@ -79,12 +79,12 @@ describe('daily briefing history rail', () => {
       edition({ date: '2026-10-28', state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
       edition({ date: '2026-11-01', direction: undefined })
     ] })
-    expect(host.textContent).toContain('未运行 · 08:00')
+    expect(host.textContent).toContain(`${text.history.missingRun} · 08:00`)
     const past = host.querySelector('[data-date="2026-10-28"]')?.closest('.mi-daily-briefing__rail-item')
-    expect(past?.textContent).toContain('未运行')
+    expect(past?.textContent).toContain(text.history.missingRun)
     expect(past?.textContent).not.toContain('08:00')
     // The missing row no longer repeats "not generated" and "app was not running" together.
-    expect(host.textContent).not.toContain('未生成')
+    expect(host.textContent).not.toContain(`${text.history.missingRun}${text.history.generated}`)
     // A row without a verdict shows a dot; the word is only in the accessible name.
     const dot = host.querySelector('.mi-daily-briefing__rail-direction--none')
     expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)

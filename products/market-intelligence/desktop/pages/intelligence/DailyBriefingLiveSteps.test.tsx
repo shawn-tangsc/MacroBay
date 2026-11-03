@@ -54,7 +54,7 @@ it('shows eight rows from the contract, folding the two repair rounds into one',
     'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair', 'store'
   ])
   // The two rounds are one row, named by the copy table rather than by the stage id.
-  expect(container.querySelector('[data-step="repair"]')!.textContent).toContain('修正')
+  expect(container.querySelector('[data-step="repair"]')!.textContent).toContain(text.generationProgress.repair)
 })
 
 it('marks what finished, what is running and what has not started', async () => {
@@ -65,8 +65,8 @@ it('marks what finished, what is running and what has not started', async () => 
   expect(rowState(container, 'selection')).toBe('running')
   expect(rowState(container, 'writing')).toBe('waiting')
   // A started stage shows elapsed time, which is the only "progress" a single model call can report.
-  expect(container.querySelector('[data-step="selection"]')!.textContent).toContain('已用 0:40')
-  expect(container.querySelector('[data-step="writing"]')!.textContent).toContain('等待')
+  expect(container.querySelector('[data-step="selection"]')!.textContent).toContain(text.generationProgress.elapsed.replace('{duration}', '0:40'))
+  expect(container.querySelector('[data-step="writing"]')!.textContent).toContain(text.generationProgress.waiting)
 })
 
 it('never invents a duration or a percentage', async () => {
@@ -74,7 +74,7 @@ it('never invents a duration or a percentage', async () => {
   // A stage that has begun without a timestamp cannot claim an elapsed time.
   const noTimestamp = { ...progress, stages: progress.stages.map((stage) => (stage.id === 'selection' ? { id: stage.id, state: 'pending' as const } : stage)) }
   const second = await render(noTimestamp, Date.parse('2026-11-02T01:30:42.000Z'))
-  expect(second.querySelector('[data-step="selection"]')!.textContent).not.toContain('已用')
+  expect(second.querySelector('[data-step="selection"]')!.textContent).not.toContain(text.generationProgress.elapsed.split('{duration}')[0]!.trim())
   expect(container.textContent).not.toMatch(/\d+%/)
   // The long explanation moved behind the help trigger: it must not sit on the page.
   expect(container.querySelector('[data-live-steps-note]')).toBeNull()
