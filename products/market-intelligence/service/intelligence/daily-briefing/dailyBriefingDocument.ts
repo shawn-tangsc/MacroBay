@@ -18,6 +18,7 @@ import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
 import { baselineVisibility, leverageMateriality, policyPathMateriality } from './dailyBriefingDataSelection'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
+import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 export function buildDailyBriefingDocument(input: Readonly<{
@@ -152,22 +153,7 @@ function selectNews(packet: DailyBriefingFactPacket): readonly BriefingNewsItem[
       return true
     })
     .slice(0, dailyBriefingPolicy.maximumNewsItems)
-    .map((item) => Object.freeze({
-      itemId: item.itemId,
-      title: item.title,
-      // Only a title translated into this edition's language may be attached. A translation into
-      // another language (the interface's, usually) must not leak in — that cross-language fallback
-      // is exactly how a Chinese headline ended up in an English edition.
-      ...(item.displayTitle && item.titleLocale === packet.locale && item.displayTitle !== item.title
-        ? { translatedTitle: item.displayTitle }
-        : {}),
-      sourceName: item.sourceName,
-      publishedAt: item.publishedAt,
-      polarity: item.polarity,
-      strength: item.strength,
-      confidence: item.confidence,
-      symbols: Object.freeze([...item.symbols])
-    })))
+    .map((item) => toBriefingNewsItem(item, packet.locale)))
 }
 
 function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
