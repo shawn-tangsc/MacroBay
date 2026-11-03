@@ -9127,8 +9127,19 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
  */
 .about-page {
   display: grid;
-  gap: 20px;
   max-width: 720px;
+}
+
+/* 关于页的区块**直接用 `.preference-section`**（上下 18 + 底部分隔线），
+   和基础设置同一套长相；不新造卡片——同一片设置里出现第三种长相，比空着更怪。 */
+.about-page .preference-section {
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-page .preference-section:last-child {
+  border-bottom: none;
 }
 
 .about-identity {
@@ -9165,11 +9176,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   max-width: 480px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.about-section {
-  display: grid;
-  gap: 8px;
 }
 
 .about-links {

@@ -79,7 +79,7 @@ describe('the about page', () => {
 
     expect(container.textContent).toContain('MacroBay')
     expect(container.textContent).toContain(text.tagline)
-    expect(container.querySelectorAll('.about-section .preference-heading')).toHaveLength(1)
+    expect(container.querySelectorAll('.preference-section .preference-heading')).toHaveLength(1)
     // 更新块是同一个组件，文案与药丸沿用已签过的那一版。
     expect(container.textContent).toContain(versionText.pill.available)
     expect(container.textContent).toContain('0.4.0')

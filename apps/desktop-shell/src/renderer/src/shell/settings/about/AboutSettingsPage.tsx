@@ -96,12 +96,12 @@ export function AboutSettingsPage(props: {
       </header>
 
       {/* 标题跟组件走：VersionCheckRow 自带「版本」那一层，页面不再叠第二个标题。 */}
-      <div className="about-section">
+      <div className="preference-section">
         <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
       </div>
 
       {hasNewer && notes !== null ? (
-        <div className="about-section about-notes">
+        <div className="preference-section about-notes">
           <h3 className="about-section-title">{text.notes.title}</h3>
           {/* 组件不记状态：展开由这一页给 maxNodes。默认 7 块。 */}
           <StructuredText nodes={notes} maxNodes={notesExpanded ? undefined : 7} />
@@ -115,7 +115,7 @@ export function AboutSettingsPage(props: {
         </div>
       ) : null}
 
-      <div className="about-section">
+      <div className="preference-section">
         <h3 className="about-section-title">{text.links.title}</h3>
         <ul className="about-links">
           {linkRows.map((row) => (
