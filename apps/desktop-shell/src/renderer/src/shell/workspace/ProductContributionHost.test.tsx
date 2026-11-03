@@ -68,11 +68,34 @@ describe('the product contribution host failure state', () => {
     expect(container.querySelectorAll('.state-view__action')).toHaveLength(1)
   })
 
-  it('keeps the raw error out of every visible text', async () => {
+  it('keeps the raw error only inside the collapsed technical details', async () => {
     const container = await mount(failing('BOOM-RAW-ERROR'))
 
-    // 这一批只做「不许出现」，不塞折叠区（技术细节是第二批）。
-    expect(container.textContent ?? '').not.toContain('BOOM-RAW-ERROR')
-    expect(container.innerHTML).not.toContain('BOOM-RAW-ERROR')
+    const details = container.querySelector('details.state-view__details')
+    expect(details).not.toBeNull()
+    // 默认收起；摘要就是现成的那条「技术详情」。
+    expect(details?.hasAttribute('open')).toBe(false)
+    expect(details?.querySelector('summary')?.textContent).toBe('技术详情')
+    expect(details?.textContent).toContain('BOOM-RAW-ERROR')
+
+    // 折叠区之外零出现：去掉 fold 后整页不得再有原文；title 属性里也不许带。
+    const outside = container.cloneNode(true) as HTMLElement
+    outside.querySelector('details')?.remove()
+    expect(outside.textContent ?? '').not.toContain('BOOM-RAW-ERROR')
+    expect(
+      [...container.querySelectorAll('[title]')].some((element) => (element.getAttribute('title') ?? '').includes('BOOM-RAW-ERROR'))
+    ).toBe(false)
+  })
+
+  it('redacts the diagnostic before it reaches the fold', async () => {
+    const raw = "Cannot find module '/Users/alice/proj/secret.ts' while fetching https://user:SUPERSECRETTOKEN@example.com/api?key=abcdefghijklmnop"
+    const container = await mount(failing(raw))
+
+    const fold = container.querySelector('details')?.textContent ?? ''
+    expect(fold).toContain('~/secret.ts')
+    expect(fold).not.toContain('/Users/alice')
+    // URL 的值脱敏：userinfo 与 query 的值都不留，键保留。
+    expect(fold).not.toContain('SUPERSECRETTOKEN')
+    expect(fold).toContain('https://***@example.com/api?key=***')
   })
 })

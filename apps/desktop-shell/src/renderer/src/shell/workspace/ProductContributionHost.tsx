@@ -3,6 +3,7 @@ import { type ComponentType, useEffect, useState } from 'react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { redactDiagnosticText } from '@platform/secrets/redaction/redactDiagnostic'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '../../i18n/platformText'
 
@@ -23,19 +24,20 @@ interface ProductContributionHostProps {
  * - **不做 retry**：求值失败的模块记录被 ESM 缓存成 errored，同一个说明符再 `import()` 拿到的是
  *   那一次拒绝；重试等于点一个必然失败的按钮。
  * - **不重启应用**：平台没有可重启的接缝；`location.reload()` 是唯一能重建模块图的动作。
- * - **原始报错不显示**：这一版只做「不许出现」，可折叠的技术细节属第二批。
+ * - **原始报错只进折叠的「技术详情」，且调用方先脱敏**：正文/标题/原因句/动作位一律不许出现。
+ *   脱敏走 `redactDiagnosticText`（与启动失败页同一份实现）；组件只负责把已脱敏的原文塞进折叠区。
  *
  * 失败态是**内容区里的一个状态视图**，不另起整页：页面骨架（侧栏/顶栏）还在，读者能换页离开。
  */
 export function ProductContributionHost(props: ProductContributionHostProps): React.ReactElement {
   const [Component, setComponent] = useState<ComponentType | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<{ detail: string } | null>(null)
   const t = platformText[props.language]
 
   useEffect(() => {
     let cancelled = false
     setComponent(null)
-    setFailed(false)
+    setFailure(null)
 
     void props
       .load()
@@ -47,9 +49,11 @@ export function ProductContributionHost(props: ProductContributionHostProps): Re
         }
         setComponent(() => contributionModule.default!)
       })
-      .catch(() => {
-        // 原始报错只留在 catch 里，不进 state、不进界面（第二批才进折叠的技术细节）。
-        if (!cancelled) setFailed(true)
+      .catch((error) => {
+        if (cancelled) return
+        // 先脱敏再进 state：折叠区里的是「已脱敏的诊断原文」，不是 error.message 原样。
+        const raw = error instanceof Error ? error.message : String(error)
+        setFailure({ detail: redactDiagnosticText(raw) })
       })
 
     return () => {
@@ -57,7 +61,7 @@ export function ProductContributionHost(props: ProductContributionHostProps): Re
     }
   }, [props.load])
 
-  if (failed) {
+  if (failure !== null) {
     return (
       <ShellLanguageProvider language={props.language}>
         <section className="contribution-error">
@@ -65,6 +69,7 @@ export function ProductContributionHost(props: ProductContributionHostProps): Re
             state="error"
             reasonCode="page-load-failed"
             size="lg"
+            details={{ bodyText: failure.detail }}
             action={{
               labelKey: STATE_VIEW_ACTION_KEYS.reload_page,
               onSelect: () => window.location.reload()

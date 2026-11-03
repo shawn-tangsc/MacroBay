@@ -26,6 +26,10 @@ describe('failure page dependency surface', () => {
         const allowed =
           // 平台唯一的凭据模式表：纯函数，失败页要用它把 token 从错误消息里拿掉。
           module.endsWith('secrets/redaction/redactText') ||
+          // 诊断脱敏唯一入口：它只依赖两个纯函数（凭据表 + 路径锚定）。
+          module.endsWith('secrets/redaction/redactDiagnostic') ||
+          // 路径锚定本体：纯文本变换，一份实现。
+          module.endsWith('secrets/redaction/anchorPaths') ||
           // 同目录的失败页模块。
           module.startsWith('./') ||
           // 主进程框架本身：页面要在 Electron 里活着，这是它的宿主不是依赖。
@@ -49,20 +53,32 @@ describe('failure page dependency surface', () => {
 describe('failure presentation', () => {
   it('anchors every POSIX and Windows home path form the acceptance list names', () => {
     // 五种形态各一条：只挡 POSIX 等于只挡住一半用户，而 Windows 用户最常追问「这个路径在哪」。
+    // 11-03 起 home 路径统一收成 `~/<末段>`（用户可见变更，同批改期望值）。
     expect(anchorPaths("Cannot find module '/Users/alice/project/AI/MacroBay/products/market-intelligence/product.manifest.ts'"))
-      .toBe(`Cannot find module '${FAILURE_ELLIPSIS}/products/market-intelligence/product.manifest.ts'`)
+      .toBe("Cannot find module '~/product.manifest.ts'")
     expect(anchorPaths("Cannot find module '/home/bob/work/platform/desktop/main/app.ts'"))
-      .toBe(`Cannot find module '${FAILURE_ELLIPSIS}/platform/desktop/main/app.ts'`)
+      .toBe("Cannot find module '~/app.ts'")
     expect(anchorPaths('Cannot find module C:\\Users\\carol\\MacroBay\\apps\\desktop-shell\\main.ts'))
-      .toBe(`Cannot find module ${FAILURE_ELLIPSIS}/apps/desktop-shell/main.ts`)
+      .toBe('Cannot find module ~/main.ts')
     expect(anchorPaths('Cannot find module \\\\?\\C:\\Users\\carol\\MacroBay\\scripts\\release\\bump.mts'))
-      .toBe(`Cannot find module ${FAILURE_ELLIPSIS}/scripts/release/bump.mts`)
+      .toBe('Cannot find module ~/bump.mts')
     expect(anchorPaths('Failed to load file:///Users/alice/project/AI/MacroBay/products/x/manifest.ts'))
-      .toBe(`Failed to load ${FAILURE_ELLIPSIS}/products/x/manifest.ts`)
+      .toBe('Failed to load ~/manifest.ts')
+  })
+
+  it('keeps repository-relative paths when they are not under a home directory', () => {
+    // 仓库内路径保留相对形态：十几个目录里的 `app.ts` 只留末段就没法区分。
+    const screen = presentBootFailure({
+      code: 'product-bootstrap-failed',
+      stage: 'register-product-services',
+      productId: null,
+      reason: "Cannot find module '/srv/ci/MacroBay/platform/desktop/main/app.ts'"
+    })
+    expect(screen.reasonFull).toBe(`Cannot find module '${FAILURE_ELLIPSIS}/platform/desktop/main/app.ts'`)
   })
 
   it('keeps only the file name when a path has no repository anchor', () => {
-    expect(anchorPaths('open /Users/alice/secret/notes.txt failed')).toBe(`open ${FAILURE_ELLIPSIS}/notes.txt failed`)
+    expect(anchorPaths('open /Users/alice/secret/notes.txt failed')).toBe('open ~/notes.txt failed')
   })
 
   it('redacts credentials before anchoring, so a token cannot survive the path cut', () => {
@@ -76,7 +92,7 @@ describe('failure presentation', () => {
 
     expect(screen.reason).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789')
     expect(screen.reason).not.toContain('/Users/alice')
-    expect(screen.reason).toContain('products/x.ts')
+    expect(screen.reason).toContain('x.ts')
     // 日志侧由 productBootstrap 写 `message` 原文（那条由它自己的用例守着）；
     // 屏幕侧不承载原文，避免同一事实两份记录。
     expect(screen.reasonFull).not.toContain('/Users/alice')
