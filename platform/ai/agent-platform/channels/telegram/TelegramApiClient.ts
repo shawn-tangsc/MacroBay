@@ -1,14 +1,40 @@
-import type { TelegramApiResult, TelegramUpdate } from './TelegramContracts'
+import type { TelegramApiFailure, TelegramApiResult, TelegramUpdate } from './TelegramContracts'
 import { telegramApiBase } from './TelegramContracts'
 
 type Fetch = typeof fetch
+
+/** 自检要「一次接收往返」，不是等新消息：短轮询必须用 0，长轮询会让自检等到自己超时。 */
+const allowedUpdates = ['message', 'channel_post']
+
+/**
+ * Chromium 的代理层错误。命中它们说明**代理这一跳**没连上（代理没开、端口不对、隧道被拒），
+ * 与「代理通了但 Telegram 不可达」是两种处境，用户要修的地方也不同。
+ */
+const proxyTransportErrors = [
+  'ERR_PROXY_CONNECTION_FAILED',
+  'ERR_TUNNEL_CONNECTION_FAILED',
+  'ERR_PROXY_AUTH_UNSUPPORTED',
+  'ERR_PROXY_AUTH_REQUESTED',
+  'ERR_MANDATORY_PROXY_CONFIGURATION_FAILED',
+  'ERR_SOCKS_CONNECTION_FAILED',
+  'ERR_SOCKS_CONNECTION_HOST_UNREACHABLE'
+]
 
 /** All Telegram HTTP is injected from the desktop composition root. */
 export class TelegramApiClient {
   constructor(private readonly deps: { getPlatformFetch: () => Fetch; token: () => Promise<string | null> }) {}
 
   async updates(offset: number, signal: AbortSignal): Promise<TelegramApiResult<TelegramUpdate[]>> {
-    return this.request<TelegramUpdate[]>('getUpdates', { offset, timeout: 25, allowed_updates: ['message', 'channel_post'] }, signal)
+    return this.request<TelegramUpdate[]>('getUpdates', { offset, timeout: 25, allowed_updates: allowedUpdates }, signal)
+  }
+
+  /**
+   * 现场自检专用：**短轮询**，立刻返回一次（有没有新消息都算收到）。
+   * 用 `updates()` 会走 25 秒长轮询，外面再套一个更短的超时，自检就必然被自己掐断——
+   * 那正是「网络或代理连不通」这条假原因的来源。
+   */
+  async probe(signal?: AbortSignal): Promise<TelegramApiResult<TelegramUpdate[]>> {
+    return this.request<TelegramUpdate[]>('getUpdates', { offset: 0, timeout: 0, allowed_updates: allowedUpdates }, signal)
   }
 
   async sendMessage(chatId: string, text: string, plain: boolean, signal?: AbortSignal): Promise<TelegramApiResult<true>> {
@@ -41,10 +67,29 @@ export class TelegramApiClient {
       if (response.status >= 500) return { ok: false, code: 'telegram-network-unavailable' }
       return { ok: false, code: 'telegram-provider-rejected', parseRejected: /parse entities|can't parse/i.test(json.description ?? '') }
     } catch (error) {
-      if (signal?.aborted) return { ok: false, code: 'telegram-network-unavailable' }
-      return { ok: false, code: 'telegram-network-unavailable' }
+      return { ok: false, code: classifyTransportFailure(error, signal) }
     }
   }
+}
+
+/**
+ * 出网失败要能分辨「代理这一跳没通」与「目标不可达」：一个让用户去查代理，一个让用户去查网络。
+ * 拿不到 Chromium 错误名时（超时/我们自己 abort）只能说「网络不可用」——宁可保守，不编原因。
+ */
+export function classifyTransportFailure(error: unknown, signal?: AbortSignal): TelegramApiFailure {
+  if (signal?.aborted) return 'telegram-network-unavailable'
+  const text = describeError(error)
+  return proxyTransportErrors.some((marker) => text.includes(marker))
+    ? 'telegram-proxy-unavailable'
+    : 'telegram-network-unavailable'
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = error.cause instanceof Error ? error.cause.message : ''
+    return `${error.name}: ${error.message} ${cause}`
+  }
+  return String(error)
 }
 
 function boundedRetry(value: unknown): number {

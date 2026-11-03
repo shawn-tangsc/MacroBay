@@ -21,6 +21,7 @@ export const channelRuntimeFailureMirrorCodes = [
   'telegram-conflict',
   'telegram-provider-rejected',
   'telegram-network-unavailable',
+  'telegram-proxy-unavailable',
   'telegram-poll-failed',
   'telegram-update-invalid',
   'telegram-runtime-evidence-missing',

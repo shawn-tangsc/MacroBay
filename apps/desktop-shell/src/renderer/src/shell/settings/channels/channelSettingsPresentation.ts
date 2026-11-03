@@ -101,6 +101,7 @@ export const CHANNEL_ENABLE_FAILURE_REASONS = [
   'telegram-provider-rejected',
   'telegram-conflict',
   'telegram-network-unavailable',
+  'telegram-proxy-unavailable',
   'telegram-rate-limited',
   'channel-credential-missing',
   'channel-agent-missing',

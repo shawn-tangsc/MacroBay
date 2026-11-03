@@ -1,7 +1,7 @@
 import { app, protocol, safeStorage, session } from 'electron'
 import { join } from 'node:path'
 import type { AgentStoreState } from '../../../ai/agent-platform/store/agentStore'
-import { ChannelInboundRepository, ChannelDeliveryRepository, ChannelAdapterAcceptanceRegistry, ChannelAcceptanceService, ChannelManagementRepository, ChannelManagementService, ChannelSecureHandoff, TelegramApiClient, TelegramOffsetRepository, SlackRuntimeRepository, LarkRuntimeRepository, QqRuntimeRepository, DiscordRuntimeRepository, WechatEnrollmentRepository, WechatRuntimeRepository } from '../../../ai/agent-platform/channels'
+import { ChannelInboundRepository, ChannelDeliveryRepository, ChannelAdapterAcceptanceRegistry, ChannelAcceptanceService, ChannelManagementRepository, ChannelManagementService, ChannelSecureHandoff, TelegramOffsetRepository, SlackRuntimeRepository, LarkRuntimeRepository, QqRuntimeRepository, DiscordRuntimeRepository, WechatEnrollmentRepository, WechatRuntimeRepository } from '../../../ai/agent-platform/channels'
 import { createElectronChannelCredentialVault } from '../../../secrets/channels'
 import { createAssistantImageMessageService } from '../../../ai/assistant-platform/images/assistantImageMessageService'
 import { createGeneratedImageStorage } from '../../../storage/generatedImageStorage'
@@ -10,6 +10,7 @@ import { createAgentPlatformServices } from '../../../ai/agent-platform/services
 import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
+import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
@@ -80,19 +81,12 @@ const channelManagementService = new ChannelManagementService({
   handoff: new ChannelSecureHandoff(),
   // 用户点「启用」时现场自检：握手 + 一次接收往返（够证明 token、网络与代理都通），
   // 通过才在这条通道上启用；平台的七项真机验收照旧决定「对外是否声明支持」。
-  smoke: async ({ id, type }) => {
-    if (type !== 'telegram') return { ok: false, code: 'adapter-not-supported' }
-    const metadata = channelManagementRepository.credentialMetadata(id)
-    if (!metadata) return { ok: false, code: 'channel-credential-missing' }
-    const secret = await channelCredentialVault.get(metadata.ref)
-    const token = secret?.bot_token
-    if (!token) return { ok: false, code: 'channel-credential-missing' }
-    const client = new TelegramApiClient({ getPlatformFetch, token: async () => token })
-    const identity = await client.botUsername()
-    if (!identity.ok) return { ok: false, code: identity.code }
-    const updates = await client.updates(0, AbortSignal.timeout(10_000))
-    return updates.ok ? { ok: true } : { ok: false, code: updates.code }
-  }
+  // 实现在 `telegramChannelSmoke`：它有独立用例，免得「长轮询套短超时」这种必失败写法再躲进来。
+  smoke: createTelegramChannelSmoke({
+    credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+    readSecret: (ref) => channelCredentialVault.get(ref),
+    getPlatformFetch
+  })
 })
 const agentStore = createAgentSqliteStoreWithOptions(
   agentDatabase,

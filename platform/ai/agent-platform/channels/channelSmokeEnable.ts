@@ -21,6 +21,7 @@ export const CHANNEL_SMOKE_REASONS = [
   'telegram-provider-rejected',
   'telegram-conflict',
   'telegram-network-unavailable',
+  'telegram-proxy-unavailable',
   'telegram-rate-limited',
   // 凭据根本没存：与上面四个同属「用户能自己修」的原因，必须留在闭集里。
   'channel-credential-missing',

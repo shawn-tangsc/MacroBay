@@ -72,6 +72,7 @@ export function describeChannelRuntimeLifecycle(
 export type ChannelTelegramFailureCopyKey =
   | 'telegramConflict'
   | 'telegramNetworkUnavailable'
+  | 'telegramProxyUnavailable'
   | 'telegramPollFailed'
   | 'telegramProviderRejected'
   | 'telegramRateLimited'
@@ -85,6 +86,7 @@ export const channelTelegramFailureDescriptors: Readonly<
   'telegram-conflict': { level: 'ERROR', copyKey: 'telegramConflict' },
   'telegram-provider-rejected': { level: 'ERROR', copyKey: 'telegramProviderRejected' },
   'telegram-network-unavailable': { level: 'ERROR', copyKey: 'telegramNetworkUnavailable' },
+  'telegram-proxy-unavailable': { level: 'ERROR', copyKey: 'telegramProxyUnavailable' },
   'telegram-runtime-start-failed': { level: 'ERROR', copyKey: 'telegramRuntimeStartFailed' },
   'telegram-runtime-evidence-missing': { level: 'ERROR', copyKey: 'telegramRuntimeEvidenceMissing' },
   'telegram-rate-limited': { level: 'WARN', copyKey: 'telegramRateLimited' },

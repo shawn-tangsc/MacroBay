@@ -5,6 +5,8 @@ export type TelegramApiFailure =
   | 'telegram-conflict'
   | 'telegram-provider-rejected'
   | 'telegram-network-unavailable'
+  /** 代理这一跳没连上（代理没开、端口不对、隧道被拒）：与「代理通了但目标不可达」分开。 */
+  | 'telegram-proxy-unavailable'
 
 export type TelegramApiResult<T> =
   | { ok: true; value: T }
