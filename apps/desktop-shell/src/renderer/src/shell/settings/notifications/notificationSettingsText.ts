@@ -27,12 +27,12 @@ export type NotificationSettingsText = {
   channelRow: string
   channelDesc: string
   /**
-   * 没有可投递通道时的那句结论。**不画选择器**：空下拉会把「没有」说成「挑一个」，
-   * 而这一行真正能给的只有一个动作——去通道页接入。
+   * 没有可投递频道时的那句结论。**不画选择器**：空下拉会把「没有」说成「挑一个」，
+   * 而这一行真正能给的只有一个动作——去频道页接入。
    */
   channelNone: string
   channelNeedsEvidence: string
-  /** 有通道但还没选：这是「推送关着」，不是「没有通道」，两句话不能混。 */
+  /** 有频道但还没选：这是「推送关着」，不是「没有频道」，两句话不能混。 */
   channelUnselected: string
   channelUnbound: string
   channelAmbiguous: string
@@ -66,11 +66,11 @@ export type NotificationSettingsText = {
   subsColChannel: string
   notApprovedChannel: string
   /**
-   * 通道列消失时的那一句：列的条件含「已选通道」，读者一取消选择或目标被解绑，整列就不出现了，
+   * 频道列消失时的那一句：列的条件含「已选频道」，读者一取消选择或目标被解绑，整列就不出现了，
    * **但订阅还在**。没有这句，读者会以为自己的勾丢了，回头再勾一遍。
    */
   channelPendingEffective: (count: number) => string
-  /** 「已记录（因勾了桌面、通道）」的连接词：两种语言的分隔规则不同，不能在这里写死。 */
+  /** 「已记录（因勾了桌面、频道）」的连接词：两种语言的分隔规则不同，不能在这里写死。 */
   surfaceJoin: string
   /** 失败这个**结论**用 StatusPill 说：红只落在圆点与边框上，不落在句子上（见下方说明）。 */
   subsHeading: string
@@ -132,7 +132,7 @@ const zh: NotificationSettingsText = {
     'push-backoff': '连续失败后暂停了一会儿',
     'channel-rejected': '频道拒收了这条'
     // `unknown-after-send` 不在这张表里：它有自己的整句（`channelPushUnknown`），
-    // 因为「没发出去：已交给通道」这句话自己和自己打架。
+    // 因为「没发出去：已交给频道」这句话自己和自己打架。
   }),
   pushFailureReasonUnknown: '原因没有上报',
   channelTargetLabel: '目标',

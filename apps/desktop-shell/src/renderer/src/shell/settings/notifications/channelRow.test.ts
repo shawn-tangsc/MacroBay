@@ -32,7 +32,7 @@ describe('the channel row tells four different situations apart', () => {
   it('says there is no channel, and offers no selector, when nothing can deliver', () => {
     // 一条都没有：不画空下拉。空下拉把「没有」说成「挑一个」。
     expect(build({ channels: [] })).toEqual({ kind: 'not-wired' })
-    // 有通道但都没通过验证（不可投递）也算「没有」，选择器里不许出现不可用的那几条。
+    // 有频道但都没通过验证（不可投递）也算「没有」，选择器里不许出现不可用的那几条。
     expect(
       build({ channels: [target({ deliverable: false, reason: 'not-enabled' })] })
     ).toEqual({ kind: 'not-wired' })
@@ -40,7 +40,7 @@ describe('the channel row tells four different situations apart', () => {
 
   it('keeps an available channel and a selected channel apart', () => {
     const channels = [target()]
-    // 有通道、但读者没选：推送是关着的，这不是「未接入」。
+    // 有频道、但读者没选：推送是关着的，这不是「未接入」。
     expect(build({ channels })).toEqual({
       kind: 'unselected',
       choices: [{ id: 'telegram-1', name: 'Telegram · 观潮播报' }]
@@ -60,7 +60,7 @@ describe('the channel row tells four different situations apart', () => {
   })
 
   it('falls back to "nothing selected" when the selected channel is no longer deliverable', () => {
-    // 通道被停用后，界面不能还显示「已选一条不能发的通道」。
+    // 频道被停用后，界面不能还显示「已选一条不能发的频道」。
     const state = build({
       channels: [target({ id: 'telegram-1' }), target({ id: 'slack-1', deliverable: false })],
       channelId: 'slack-1'
@@ -74,7 +74,7 @@ describe('the channel row tells four different situations apart', () => {
   })
 
   it('refuses to pick between several bound conversations', () => {
-    // 绑了多个会话：不发、不猜，去通道页只留一个。
+    // 绑了多个会话：不发、不猜，去频道页只留一个。
     const state = build({
       channels: [target({ target: { kind: 'ambiguous', count: 3 } })],
       channelId: 'telegram-1'

@@ -206,8 +206,8 @@ function channelTarget(overrides: Partial<ChannelDeliveryTargetView> = {}): Chan
 }
 
 /**
- * 「发送到通道」这一行（U3 / U10）：没有通道时只给原因与「去接入」，有通道时给选择器、
- * 目标（只读）和状态；两种情况都不许出现行开关——开关在下面清单的通道列里。
+ * 「发送到频道」这一行（U3 / U10）：没有频道时只给原因与「去接入」，有频道时给选择器、
+ * 目标（只读）和状态；两种情况都不许出现行开关——开关在下面清单的频道列里。
  */
 describe('the send-to-channel row', () => {
   it('offers no selector and one way forward when nothing can deliver', async () => {
@@ -224,7 +224,7 @@ describe('the send-to-channel row', () => {
     expect(row?.textContent).toContain('需要一条真机验证记录才能启用')
     expect(row?.querySelector('.status-pill')?.textContent).toBe('未接入')
     expect([...row!.querySelectorAll('button')].map((node) => node.textContent)).toEqual(['去接入'])
-    // 这一行永远没有开关：推送由清单的通道列决定。
+    // 这一行永远没有开关：推送由清单的频道列决定。
     expect(row?.querySelector('[role="switch"], input[type="checkbox"]')).toBeNull()
   })
 
@@ -246,7 +246,7 @@ describe('the send-to-channel row', () => {
     })
     window.removeEventListener('app-shell:navigate', listener)
 
-    // 通道页是唯一能接入/绑目标的地方：按钮必须真的把人送过去。
+    // 频道页是唯一能接入/绑目标的地方：按钮必须真的把人送过去。
     expect(navigations).toEqual([{ navKey: 'settings', settingsPanelKey: 'channels' }])
   })
 
@@ -270,7 +270,7 @@ describe('the send-to-channel row', () => {
     // U10：只有接得上的那一条出现在这里，没验证过的不出现、也不留灰格。
     expect(options).toContain('Telegram · 观潮播报')
     expect(options).not.toContain('Slack · 实验室')
-    // 有通道但没选 ≠ 未接入。
+    // 有频道但没选 ≠ 未接入。
     expect(row.textContent).toContain('还没有选频道')
     expect(row.textContent).not.toContain('还没有可用频道')
   })
@@ -405,7 +405,7 @@ describe('the channel column', () => {
     const container = await mount({
       listEventCatalog: () =>
         Promise.resolve([entry({ id: 'platform.signal', approvedDisruptionLevels: ['center', 'desktop', 'channel'] })]),
-      // 读者早先勾过通道，现在通道没就绪：列不出现，但订阅还在。
+      // 读者早先勾过频道，现在频道没就绪：列不出现，但订阅还在。
       getSubscriptions: () => Promise.resolve({ 'platform.signal': { channel: true } }),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
     })
@@ -434,7 +434,7 @@ describe('the channel column', () => {
       getSubscriptions: () => Promise.resolve({}),
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
     })
-    // 没有勾过通道：没有东西要解释。
+    // 没有勾过频道：没有东西要解释。
     expect(empty.querySelector('[data-channel-column-pending]')).toBeNull()
   })
 

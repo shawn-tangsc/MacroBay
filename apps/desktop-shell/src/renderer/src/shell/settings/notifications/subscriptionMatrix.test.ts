@@ -88,7 +88,7 @@ describe('subscription matrix', () => {
       subscriptions: { [target.id]: { channel: true } },
       channelReady: true
     })
-    // 生效值是 record ∨ desktop ∨ channel：勾了通道之后，记录格就不是可关的勾了。
+    // 生效值是 record ∨ desktop ∨ channel：勾了频道之后，记录格就不是可关的勾了。
     expect(row!.record).toEqual({ kind: 'recorded-via-delivery', surfaces: ['channel'] })
   })
 

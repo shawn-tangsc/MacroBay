@@ -2,9 +2,9 @@ import type { NotificationSettingsText } from './notificationSettingsText'
 import type { SubscriptionCell, SubscriptionRow } from './subscriptionMatrix'
 
 /**
- * 订阅清单的表格（按目录渲染：记录 / 桌面，通道就绪时多一列「通道」）。
+ * 订阅清单的表格（按目录渲染：记录 / 桌面，频道就绪时多一列「频道」）。
  *
- * 通道列**整列**跟着就绪状态出现或消失，不是逐格禁用：一串禁用的勾等于承诺「勾上就能推到手机」，
+ * 频道列**整列**跟着就绪状态出现或消失，不是逐格禁用：一串禁用的勾等于承诺「勾上就能推到手机」，
  * 而那一列勾了也不会响。没就绪时连列头都不画（规范 §2.2）。
  *
  * 这一块只做一件事：把模型算好的**格子形态**画出来。形态判断在 `subscriptionMatrix.ts`，

@@ -9,10 +9,10 @@ import type { NotificationSubscriptionTable } from '@platform/notifications/cont
  * 读者会以为能关。这些判断不写在 JSX 里，才有一条条能断言的形状。
  *
  * 三列三形态，出处是界面规范 §2.2：
- * - 记录列：无条件记录的事件 = 「固定开启」（无控件）；结果类 = 可勾；勾了桌面/通道时
+ * - 记录列：无条件记录的事件 = 「固定开启」（无控件）；结果类 = 可勾；勾了桌面/频道时
  *   派生显示「已记录」（不可关，`record ∨ desktop ∨ channel`）。
  * - 桌面列：批准表里有这一档 = 可勾；没有 = 灰色「—」，**不是控件**。
- * - 通道列：**只在通道就绪时存在**（`channelReady`），就绪时批准含 `channel` 的才是勾，
+ * - 频道列：**只在频道就绪时存在**（`channelReady`），就绪时批准含 `channel` 的才是勾，
  *   其余行灰色「—」。就绪前整列不出现：一串禁用的勾等于承诺「勾上就能推到手机」。
  */
 export type SubscriptionCell =
@@ -30,14 +30,14 @@ export type SubscriptionRow = {
   productId: string
   record: SubscriptionCell
   desktop: SubscriptionCell
-  /** `null` = 通道没就绪，整列不渲染（连「—」都不画）。 */
+  /** `null` = 频道没就绪，整列不渲染（连「—」都不画）。 */
   channel: SubscriptionCell | null
 }
 
 export type SubscriptionMatrixInput = {
   entries: readonly NotificationEventCatalogEntry[]
   subscriptions: NotificationSubscriptionTable
-  /** 通道就绪（已接入 + 已选 + 目标已绑定）才出现第三列；由 `channelColumnReady` 算。 */
+  /** 频道就绪（已接入 + 已选 + 目标已绑定）才出现第三列；由 `channelColumnReady` 算。 */
   channelReady?: boolean
 }
 
@@ -57,7 +57,7 @@ function approved(entry: NotificationEventCatalogEntry, level: 'desktop' | 'chan
 export function buildSubscriptionRows(input: SubscriptionMatrixInput): SubscriptionRow[] {
   return input.entries.map((entry) => {
     const subscription = input.subscriptions[entry.id] ?? {}
-    // 生效的记录值 = record ∨ desktop ∨ channel：通道也算一条投递档。
+    // 生效的记录值 = record ∨ desktop ∨ channel：频道也算一条投递档。
     const delivered = subscription.desktop === true || subscription.channel === true
 
     // 记录列：无条件记录的事件永远进中心，读者能改的只有桌面与手机。
@@ -91,7 +91,7 @@ export function rowHasControl(row: SubscriptionRow): boolean {
   )
 }
 
-/** 记录列把「已记录（因勾了桌面/通道）」画出来时，读屏要说出**为什么**。 */
+/** 记录列把「已记录（因勾了桌面/频道）」画出来时，读屏要说出**为什么**。 */
 export type RecordedViaDeliveryReason = 'desktop' | 'channel' | 'desktop+channel'
 
 export function recordedViaDeliveryReason(

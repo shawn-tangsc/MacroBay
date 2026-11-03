@@ -3,7 +3,7 @@ import type { NotificationSettingsText } from './notificationSettingsText'
 /**
  * 测试通知的回执：桌面那半句（规范 §4）。
  *
- * 通道那半句已摘掉：`sendTest` 拿不到 `messageId`，也拿不到 push 的失败原因，
+ * 频道那半句已摘掉：`sendTest` 拿不到 `messageId`，也拿不到 push 的失败原因，
  * 渲染好了却没有数据源喂，就是「看起来能收到回执」。
  *
  * 每一句都不许出现「已送达」「已显示」：桌面那条是 `handed-to-system`（交给了系统），

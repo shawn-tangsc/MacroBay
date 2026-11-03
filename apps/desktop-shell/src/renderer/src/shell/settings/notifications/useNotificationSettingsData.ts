@@ -19,8 +19,8 @@ export type NotificationSettingsData = {
   subscriptions: NotificationSubscriptionTable
   toastEnabled: boolean
   /**
-   * 「发送到通道」那一行要的三样，全部来自主进程的同一个只读投影（`getDeliverySettings`）：
-   * 可选通道（`deliverable` 才算）、读者选的那条（`null` 就是推送关着）、最近一次失败的时刻。
+   * 「发送到频道」那一行要的三样，全部来自主进程的同一个只读投影（`getDeliverySettings`）：
+   * 可选频道（`deliverable` 才算）、读者选的那条（`null` 就是推送关着）、最近一次失败的时刻。
    *
    * 不在这里另算「就绪」：那是 `channelRow.ts` 的判断，这一层只搬事实。
    */
@@ -43,7 +43,7 @@ export type NotificationSettingsClient = {
   }>
   setSubscription?: (id: string, patch: Record<string, unknown>) => Promise<unknown>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
-  /** 选中哪条通道；`null` 就是关掉推送（契约里没有第二个「启用」布尔）。 */
+  /** 选中哪条频道；`null` 就是关掉推送（契约里没有第二个「启用」布尔）。 */
   setPushChannel?: (channelId: string | null) => Promise<unknown>
   sendTest?: () => Promise<unknown>
 }
@@ -92,7 +92,7 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
               subscriptions,
               toastEnabled: delivery.toastEnabled === true,
               channelId: typeof delivery.channelId === 'string' ? delivery.channelId : null,
-              // 不是数组就当作「没有任何可投递通道」：宁可少一条选择项，也不把形状不明的数据画出来。
+              // 不是数组就当作「没有任何可投递频道」：宁可少一条选择项，也不把形状不明的数据画出来。
               channels: Array.isArray(delivery.channels) ? delivery.channels : [],
               lastPushFailureAt:
                 typeof delivery.lastPushFailureAt === 'string' ? delivery.lastPushFailureAt : null,

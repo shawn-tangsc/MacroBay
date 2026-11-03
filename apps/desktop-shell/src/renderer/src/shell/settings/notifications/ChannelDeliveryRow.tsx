@@ -8,15 +8,15 @@ import type { ChannelRowState } from './channelRow'
 import type { NotificationSettingsText } from './notificationSettingsText'
 
 /**
- * 「发送到通道」行（规范 §2 表格第 5 行 + §2.1 的四态）。
+ * 「发送到频道」行（规范 §2 表格第 5 行 + §2.1 的四态）。
  *
- * 这一行**没有开关**：推送哪些事件由下方清单的「通道」列决定，行开关 + 逐条勾选会让
+ * 这一行**没有开关**：推送哪些事件由下方清单的「频道」列决定，行开关 + 逐条勾选会让
  * 「关了行开关、清单里的勾还亮着但已失效」出现。所以这里只有四样东西——选择器、目标（只读）、
  * 状态行、一个动作。
  *
  * 形态判断全在 `channelRow.ts`；这个文件只负责把每种形态画对，尤其是两种**不许画成对方**的形态：
- * - 「没有可用通道」不画选择器（空下拉把「没有」说成「挑一个」），只给原因与「去接入」；
- * - 「有通道但还没选」不画成「未接入」——那是「推送关着」，不是「没有通道」。
+ * - 「没有可用频道」不画选择器（空下拉把「没有」说成「挑一个」），只给原因与「去接入」；
+ * - 「有频道但还没选」不画成「未接入」——那是「推送关着」，不是「没有频道」。
  */
 export function ChannelDeliveryRow(props: {
   text: NotificationSettingsText
@@ -26,7 +26,7 @@ export function ChannelDeliveryRow(props: {
 }): React.ReactElement {
   const { text, state } = props
 
-  /** 通道页是唯一能改通道、绑目标的地方：这一行只把人送过去，不在这里改配置。 */
+  /** 频道页是唯一能改频道、绑目标的地方：这一行只把人送过去，不在这里改配置。 */
   const openChannels = (): void => navigateTo({ page: 'settings', panel: 'channels' })
 
   return (
@@ -73,7 +73,7 @@ function ChannelStatusLine(props: {
     // 时刻由统一格式化产出（带时区），这里只放进模板，不自己拼、不自己 slice。
     const at = formatShellCompactInstant(state.failedAt, { timeZone: props.timeZone })
     // `unknown-after-send`：交出去了、没拿到回执。**不能套「没发出去」那句**——那句话自己会和
-    // 「已交给通道」打架，而手机很可能真的收到了。只出中性句，不给「失败」药丸：
+    // 「已交给频道」打架，而手机很可能真的收到了。只出中性句，不给「失败」药丸：
     // 药丸是状态结论，这里既不是成功也不是失败。
     if (state.failedReason === 'unknown-after-send') {
       // 药丸用 `muted`「不确定」：这一档既不是失败也不是成功，不能借「推送失败」那档。
@@ -125,7 +125,7 @@ function ChannelControls(props: {
 }): React.ReactElement {
   const { text, state } = props
 
-  // 「没有可用通道」：不出现选择器，只留一个动作。
+  // 「没有可用频道」：不出现选择器，只留一个动作。
   if (state.kind === 'not-wired') {
     return (
       <Button size="small" onClick={props.onOpenChannels}>
@@ -143,7 +143,7 @@ function ChannelControls(props: {
         value={selectedId}
         onChange={(event) => props.onSelectChannel(event.currentTarget.value)}
       >
-        {/* 没选时的那一项只是位置，不给它「未接入」的语义：通道是有的，只是还没选。 */}
+        {/* 没选时的那一项只是位置，不给它「未接入」的语义：频道是有的，只是还没选。 */}
         {state.kind === 'unselected' ? (
           <option value="" disabled>
             {text.channelChoosePlaceholder}
@@ -163,7 +163,7 @@ function ChannelControls(props: {
         </span>
       ) : null}
 
-      {/* 未绑定、多会话、失败：三种都要人回通道页处理，动作是同一个。 */}
+      {/* 未绑定、多会话、失败：三种都要人回频道页处理，动作是同一个。 */}
       {state.kind === 'unbound' || state.kind === 'ambiguous' || state.kind === 'failed' ? (
         <Button size="small" onClick={props.onOpenChannels}>
           {text.goCheck}
