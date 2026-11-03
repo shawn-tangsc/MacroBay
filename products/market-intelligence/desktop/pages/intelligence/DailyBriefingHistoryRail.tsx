@@ -1,3 +1,6 @@
+import { useRef, useState } from 'react'
+
+import { ContextMenu, type MenuAnchor } from '@platform/ui/components/menu'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -33,6 +36,15 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
 }>): React.ReactElement {
+  // The row menu: opened by right-click or by Shift+F10 / the menu key, and focus returns to the row.
+  const [menu, setMenu] = useState<Readonly<{ date: string; anchor: MenuAnchor }> | null>(null)
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>())
+  const openMenu = (date: string, anchor: MenuAnchor): void => setMenu({ date, anchor })
+  const closeMenu = (): void => {
+    const date = menu?.date
+    setMenu(null)
+    if (date) rowRefs.current.get(date)?.focus()
+  }
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
     {loading && editions.length === 0 ? <LoadingState label={text.history.loading} /> : failed && editions.length === 0 && onRetry ? <StateView
@@ -61,7 +73,17 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
           <button type="button" disabled={missing}
             aria-current={selected ? 'true' : undefined}
             data-date={edition.date} data-state={edition.state}
-            className="mi-daily-briefing__rail-row" onClick={() => onSelect(edition.date)}>
+            className="mi-daily-briefing__rail-row"
+            ref={(node) => { if (node) rowRefs.current.set(edition.date, node) }}
+            onContextMenu={(event) => { event.preventDefault(); openMenu(edition.date, { x: event.clientX, y: event.clientY }) }}
+            onKeyDown={(event) => {
+              // Shift+F10 and the dedicated menu key are the keyboard equivalents of right-click.
+              if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
+              event.preventDefault()
+              const rect = event.currentTarget.getBoundingClientRect()
+              openMenu(edition.date, { x: rect.left + 8, y: rect.top + 8 })
+            }}
+            onClick={() => onSelect(edition.date)}>
             <span className="mi-daily-briefing__rail-line">
               <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
               {edition.date === todayDate ? <em>{text.history.today}</em> : null}
@@ -105,6 +127,22 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         </div>
       })}
     </div>
+    <ContextMenu
+      anchor={menu?.anchor ?? null}
+      ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.history.rowMenu"
+      items={[{
+        key: 'delete-period',
+        labelKey: menu && editions.some((edition) => edition.date === menu.date && edition.date === todayDate && generatingStage)
+          ? 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked'
+          : 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriod',
+        tone: 'danger',
+        disabled: Boolean(menu && editions.some((edition) => edition.date === menu.date && edition.date === todayDate && generatingStage))
+      }]}
+      onClose={closeMenu}
+      onSelect={() => closeMenu()}
+      open={menu !== null}
+      resolveText={resolveText ?? (() => '')}
+    />
   </aside>
 }
 

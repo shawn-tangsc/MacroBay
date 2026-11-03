@@ -134,6 +134,30 @@ describe('daily briefing history rail', () => {
     expect(onSelect).toHaveBeenCalledWith('2026-11-02')
   })
 
+  it('opens a one-item delete menu from right-click or the keyboard, and disables it while generating', () => {
+    const resolveText = (key: string) => key.endsWith('history.deletePeriod')
+      ? '删除这一期…'
+      : key.endsWith('history.deletePeriodBlocked') ? '生成中不能删除这一期' : key
+    render({ resolveText })
+    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(items).toHaveLength(1)
+    expect(items[0].textContent).toContain('删除这一期…')
+
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(document.querySelectorAll('.ant-dropdown-menu-item')).toHaveLength(0)
+
+    // Keyboard equivalent opens the same menu; while the day is generating it is disabled with a reason.
+    render({ resolveText, generatingStage: 'AI 选择' })
+    const running = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+    act(() => { running.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true })) })
+    const blocked = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(blocked).toHaveLength(1)
+    expect(blocked[0].textContent).toContain('生成中不能删除这一期')
+  })
+
   it('marks an incomplete issue with the status pill, not a hand-made chip', () => {
     render({ editions: [edition({ state: 'partial' })], resolveText: () => '未完整' })
     expect(host.querySelector('.status-pill--warn')).not.toBeNull()
