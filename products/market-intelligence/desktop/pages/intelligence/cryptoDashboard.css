@@ -576,12 +576,11 @@
 .mi-crypto-dashboard__briefing:hover { background: color-mix(in srgb, var(--mi-dashboard-lime) 15%, var(--mi-dashboard-surface)); }
 .mi-crypto-dashboard__briefing:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-/* 现货牌子的两种形态：有事是实线描边，数据不齐是虚线空心加一个点。
-   灰度下靠「虚线 + 有没有数字」也能分开，不靠颜色；字号锁 10px，不随正文字号漂。 */
+/* 现货牌子：有事是实线描边的按钮（点开在卡片内展开读数），数据不齐是平台药丸、不可点。
+   字号锁 10px，不随正文字号漂；灰度下靠「虚线/文字/有没有数字」也能分开，不靠颜色。 */
 .mi-capital-conditions__signal {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   padding: 1px 6px;
   border: 1px solid var(--mi-dashboard-line);
   border-radius: 3px;
@@ -597,28 +596,24 @@
 .mi-capital-conditions__signal:hover,
 .mi-capital-conditions__signal:focus-visible { border-color: var(--mi-dashboard-text); }
 .mi-capital-conditions__signal:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
-.mi-capital-conditions__signal[data-state='insufficient'] {
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--mi-dashboard-caution) 48%, var(--mi-dashboard-line));
-  color: var(--mi-dashboard-text);
-}
-.mi-capital-conditions__signal-dot {
-  width: 6px;
-  height: 6px;
-  border: 1.5px solid var(--mi-dashboard-caution);
-  border-radius: 50%;
-}
+/* 数据不齐是陈述，不是控件；外层只负责把「缺哪一路」挂到悬停与聚焦上。 */
+.mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
+.mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-/* 牌子点开后的读数详情：一行一项，词在前读数在后；内部标识不出现。 */
+/* 牌子点开的读数：标题行下的脚注块，和持仓牌子同一落点——不盖住要对照的卡片与日流表。 */
 .mi-capital-conditions__signal-detail {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 4px;
   color: var(--mi-dashboard-muted);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 10px;
+  line-height: 1.5;
 }
-.mi-capital-conditions__signal-detail div { display: flex; gap: 8px; }
-.mi-capital-conditions__signal-detail dt { margin: 0; min-width: 8em; }
+.mi-capital-conditions__signal-detail div { display: flex; gap: 4px; }
+.mi-capital-conditions__signal-detail dt { margin: 0; }
 .mi-capital-conditions__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
-.mi-capital-conditions__signal-detail p { margin: 0; }
+.mi-capital-conditions__signal-detail p { flex-basis: 100%; margin: 0; }

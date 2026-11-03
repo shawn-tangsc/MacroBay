@@ -322,20 +322,24 @@ describe('CapitalConditionsPanel', () => {
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
-  it('puts the module rule\u2019s chip beside the title and never draws a number when data is missing', () => {
+  it('shows \u201cinsufficient data\u201d as a statement, not a control, and draws no number', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
       text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } }
     }))
 
-    const button = markup.match(/<button[^>]*mi-capital-conditions__signal[^>]*>.*?<\/button>/)?.[0] ?? ''
-    expect(button).toContain('data-state="insufficient"')
-    expect(button).toContain(text.signalInsufficient)
-    // 数据不齐时一个数字都不许出现：拿不到不许被画成「很小」。
-    expect(button).not.toMatch(/\d/)
-    // 牌子在标题之后、观测时间之前，且正常态不渲染任何元素。
-    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><button[^>]*mi-capital-conditions__signal`))
-    expect(markup).toContain('aria-label="' + text.signalInsufficientReason + '"')
+    // 「数据不齐」是陈述不是控件：背后没有可展开的读数，做成按钮只会让人点个空。
+    expect(markup).toContain('status-pill')
+    expect(markup).toContain(text.signalInsufficient)
+    expect(markup).not.toContain('mi-capital-conditions__signal"')
+    // 数据不齐时牌子里的字一个数字都不许有：拿不到不许被画成「很小」。
+    const pillLabel = markup.match(/status-pill__label">(.*?)<\/span>/)?.[1] ?? ''
+    expect(pillLabel).toBe(text.signalInsufficient)
+    expect(pillLabel).not.toMatch(/[\d$%]/)
+    // 陈述不是控件：牌位里没有按钮，也没有可展开的读数。
+    const header = markup.slice(markup.indexOf('mi-capital-conditions__header-band'), markup.indexOf('</div>', markup.indexOf('mi-capital-conditions__header-band')))
+    expect(header).not.toContain('<button')
+    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><span class="mi-capital-conditions__signal-statement"`))
   })
 
   it('draws no chip at all while the rule had nothing to say', () => {
@@ -344,7 +348,7 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).not.toContain('mi-capital-conditions__signal')
   })
 
-  it('opens the readings behind the chip, in plain words and without an internal id', async () => {
+  it('opens the readings inside the card, keeps focus on the chip, and closes again', async () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const container = document.createElement('div')
     document.body.append(container)
@@ -361,12 +365,17 @@ describe('CapitalConditionsPanel', () => {
     const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
     expect(chip.textContent).toBe('Three-day net outflow $488.7M')
     expect(chip.getAttribute('aria-label')).toBe('Three-day net outflow $488.7M, BTC')
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(chip.getAttribute('aria-controls')).toBe('mi-capital-conditions-signal-detail')
 
-    await act(async () => chip.click())
+    await act(async () => { chip.focus(); chip.click() })
 
-    // 抽屉走 portal，不在卡片容器里。
-    const drawer = document.body.querySelector<HTMLElement>('.drawer__body') ?? document.body
-    const content = drawer.textContent ?? ''
+    const detail = container.querySelector<HTMLElement>('#mi-capital-conditions-signal-detail')!
+    const content = detail.textContent ?? ''
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    // 读数在卡片里展开，不盖住要对照的卡片与日流表。
+    expect(detail.tagName).toBe('DL')
+    expect(container.querySelector('.drawer__body')).toBeNull()
     expect(content).toContain(text.signalDetailRule)
     expect(content).toContain(text.signalRuleName)
     expect(content).toContain(text.signalRuleWindow)
@@ -377,6 +386,11 @@ describe('CapitalConditionsPanel', () => {
     // 读者看得见的只有白话：规则名、模块名、原始码都不出现。
     expect(content).not.toContain('etf-outflow-3d')
     expect(content).not.toContain('etf-flows')
+    // 焦点留在牌子上，再点收起。
+    expect(document.activeElement).toBe(chip)
+    await act(async () => chip.click())
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {

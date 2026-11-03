@@ -16,7 +16,7 @@ import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
-import { EtfOutflowSignal, type EtfSignalText } from './EtfOutflowSignal'
+import { EtfOutflowChip, EtfOutflowDetail, type EtfSignalText } from './EtfOutflowSignal'
 
 type Text = {
   title: string
@@ -79,6 +79,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshFailed?: boolean
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // The chip's readings open inside the card, below the title row: the card and the flow table it
+  // is read against stay visible. One open state per card, and the chip keeps focus on toggle.
+  const [signalOpen, setSignalOpen] = useState(false)
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
@@ -104,11 +107,15 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           {/* The module rule's chip sits beside the title, at most one per card. It is drawn only
               when the rule had something to say; a quiet card renders no element at all. */}
           {state.etfSignal && state.etfSignal.state !== 'hidden'
-            ? <EtfOutflowSignal chip={state.etfSignal} text={text}
-                verifiedAt={state.etf === 'unavailable' ? undefined : state.etf.verifiedAt} />
+            ? <EtfOutflowChip chip={state.etfSignal} open={signalOpen} text={text}
+                onToggle={() => setSignalOpen(open => !open)} />
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
+        {signalOpen && state.etfSignal
+          ? <EtfOutflowDetail chip={state.etfSignal} text={text}
+              verifiedAt={state.etf === 'unavailable' ? undefined : state.etf.verifiedAt} />
+          : null}
         {/* These are the last numbers that read successfully. Saying so is the difference between
             "old" and "gone", and only one of those is true after a failed re-read. */}
         {state.stale ? <p className="mi-capital-conditions__stale" role="status">{text.staleRead}</p> : null}
