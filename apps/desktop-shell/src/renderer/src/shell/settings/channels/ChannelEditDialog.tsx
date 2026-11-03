@@ -20,14 +20,26 @@ export function ChannelEditDialog(props: {
   labels: PlatformText['settings']
   saving: boolean
   onCancel: () => void
-  onSave: (input: { name: string; agentId: string }) => void
+  onSave: (input: {
+    name: string
+    agentId: string
+    workspaceId: string | null
+    permissionMode: ChannelFieldValues['permissionMode']
+  }) => void
 }): React.ReactElement {
   const { labels, channel } = props
-  const [values, setValues] = useState<ChannelFieldValues>({ name: channel.name, agentId: channel.agentId, token: '' })
+  const fromChannel = (target: Channel): ChannelFieldValues => ({
+    name: target.name,
+    agentId: target.agentId,
+    token: '',
+    workspaceId: target.workspace?.type === 'user' ? target.workspace.workspaceId : null,
+    permissionMode: target.permissionMode ?? null
+  })
+  const [values, setValues] = useState<ChannelFieldValues>(fromChannel(channel))
 
   useEffect(() => {
-    setValues({ name: channel.name, agentId: channel.agentId, token: '' })
-  }, [channel.id, channel.name, channel.agentId])
+    setValues(fromChannel(channel))
+  }, [channel.id, channel.name, channel.agentId, channel.workspace, channel.permissionMode])
 
   return (
     <Modal
@@ -45,7 +57,14 @@ export function ChannelEditDialog(props: {
             disabled={values.name.trim().length === 0 || values.agentId.length === 0}
             key="save"
             loading={props.saving}
-            onClick={() => props.onSave({ name: values.name.trim(), agentId: values.agentId })}
+            onClick={() =>
+              props.onSave({
+                name: values.name.trim(),
+                agentId: values.agentId,
+                workspaceId: values.workspaceId,
+                permissionMode: values.permissionMode
+              })
+            }
             type="primary">
             {labels.channelUpdate}
           </Button>

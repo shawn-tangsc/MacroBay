@@ -235,6 +235,13 @@ export type PlatformText = {
     channelFieldNotSavable: string
     /** 编辑弹层里 Token 只有圆点：说明它是占位，不是真值。 */
     channelTokenReadOnly: string
+    /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
+    channelPermissionDefault: string
+    channelPermissionAcceptEdits: string
+    channelPermissionBypass: string
+    channelPermissionPlan: string
+    /** 工作目录：读者已经指定过一个工作区时，那一项的名字（本版没有工作区目录接口，只能回显它）。 */
+    channelWorkspaceCurrent: string
   }
   taskAutomation: {
     title: string
@@ -1545,7 +1552,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelWorkspaceDefault: '不使用工作目录',
       channelPermissionInherit: '继承助手设置',
       channelFieldNotSavable: '这一版还保存不了这一项',
-      channelTokenReadOnly: '圆点只是占位，不是真值'
+      channelTokenReadOnly: '圆点只是占位，不是真值',
+      channelPermissionDefault: '每次都要问',
+      channelPermissionAcceptEdits: '自动接受修改',
+      channelPermissionBypass: '完全放行',
+      channelPermissionPlan: '只做计划',
+      channelWorkspaceCurrent: '当前工作区'
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -2742,7 +2754,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelWorkspaceDefault: 'Do not use a working folder',
       channelPermissionInherit: 'Inherit the agent setting',
       channelFieldNotSavable: 'This version cannot save this field yet',
-      channelTokenReadOnly: 'The dots are a placeholder, not the value'
+      channelTokenReadOnly: 'The dots are a placeholder, not the value',
+      channelPermissionDefault: 'Ask every time',
+      channelPermissionAcceptEdits: 'Accept edits automatically',
+      channelPermissionBypass: 'Allow everything',
+      channelPermissionPlan: 'Plan only',
+      channelWorkspaceCurrent: 'Current working folder'
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',

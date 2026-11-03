@@ -9,6 +9,9 @@ import { platformText } from '../../../i18n/platformText'
  * 数据值到档位/文案键的穷举表、把目录项翻成人话的函数、凭据状态的标签。页面里的读态与空态判据
  * 一条没动，尤其「一个通道都没有」与「有通道但没选中」仍然是两个码、两个动作。
  */
+export type ChannelWorkspace = { type: 'system' } | { type: 'user'; workspaceId: string }
+export type ChannelPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
+
 export type Channel = {
   id: string
   type: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'
@@ -16,6 +19,12 @@ export type Channel = {
   agentId: string
   state: 'credential-missing' | 'configuration-ready' | 'disabled' | 'deleting' | 'runtime-ready'
   credential: { status: 'configured' | 'missing' | 'unavailable'; hasCredential: boolean }
+  /** 系统默认目录或读者指定的工作区；老视图没有这一项时按系统默认处理。 */
+  workspace?: ChannelWorkspace
+  /** `null` = 继承助手；不落 `'default'`。老视图缺这一项时同样按「继承」处理。 */
+  permissionMode?: ChannelPermissionMode | null
+  /** 空数组 = 允许所有会话（本版接口尚未生效，界面先只读回显）。 */
+  allowedChatIds?: readonly string[]
 }
 
 export type Conversation = { id: string; kind: string; targetEnabled: boolean }

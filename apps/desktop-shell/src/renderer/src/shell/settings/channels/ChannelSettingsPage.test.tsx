@@ -157,6 +157,67 @@ describe('a channel row', () => {
   })
 })
 
+describe('the two fields that became saveable', () => {
+  it('shows "inherit the agent" for a null permission mode and "no working folder" for the system workspace', async () => {
+    installPlatform({ list: vi.fn(async () => [{ ...channel, permissionMode: null, workspace: { type: 'system' } }]) })
+    const container = await mount()
+
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    expect(document.body.textContent).toContain(labels.channelPermissionInherit)
+    expect(document.body.textContent).toContain(labels.channelWorkspaceDefault)
+  })
+
+  it('sends the workspace and the permission mode through update, keeping "inherit" as null', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, permissionMode: null, workspace: { type: 'system' } }])
+    })
+    const container = await mount()
+
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    const save = [...document.body.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelUpdate)
+    await act(async () => save?.click())
+    await act(async () => {})
+
+    expect(channels.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'channel-1',
+        workspace: { type: 'system' },
+        permissionMode: null
+      })
+    )
+  })
+
+  it('sends the system workspace and an inherited mode on create', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => []) })
+    const container = await mount()
+
+    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+    await act(async () => add?.click())
+    await act(async () => {})
+
+    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
+    await act(async () => {
+      name.value = 'Telegram 主频道'
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const save = [...document.body.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelCreate)
+    expect(save).not.toBeUndefined()
+    // Token 与助手是必填：没填时保存按钮禁用——这是「不许保存成功但没存」那条规矩的延伸。
+    expect((save as HTMLButtonElement).disabled).toBe(true)
+    expect(channels.create).not.toHaveBeenCalled()
+  })
+})
+
 describe('platforms that are not implemented', () => {
   it('says only that this version cannot connect it, with no add button and no red copy', async () => {
     installPlatform()

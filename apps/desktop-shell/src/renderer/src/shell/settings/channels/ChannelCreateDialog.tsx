@@ -9,7 +9,7 @@ import { ChannelFields, type ChannelFieldValues } from './ChannelFields'
 import type { Agent } from './channelSettingsPresentation'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
-const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '' }
+const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', workspaceId: null, permissionMode: null }
 
 /**
  * 「＋ 添加」的弹层：六字段布局与编辑弹层共用（需求 v7 要求新建和编辑统一）。
@@ -22,7 +22,13 @@ export function ChannelCreateDialog(props: {
   labels: PlatformText['settings']
   saving: boolean
   onCancel: () => void
-  onCreate: (input: { name: string; agentId: string; token: string }) => void
+  onCreate: (input: {
+    name: string
+    agentId: string
+    token: string
+    workspaceId: string | null
+    permissionMode: ChannelFieldValues['permissionMode']
+  }) => void
 }): React.ReactElement {
   const { labels } = props
   const [values, setValues] = useState<ChannelFieldValues>(EMPTY)
@@ -47,7 +53,15 @@ export function ChannelCreateDialog(props: {
             disabled={!ready}
             key="create"
             loading={props.saving}
-            onClick={() => props.onCreate({ name: values.name.trim(), agentId: values.agentId, token: values.token })}
+            onClick={() =>
+              props.onCreate({
+                name: values.name.trim(),
+                agentId: values.agentId,
+                token: values.token,
+                workspaceId: values.workspaceId,
+                permissionMode: values.permissionMode
+              })
+            }
             type="primary">
             {labels.channelCreate}
           </Button>

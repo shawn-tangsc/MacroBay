@@ -12,7 +12,7 @@ import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreate
 import { ChannelEditDialog } from './ChannelEditDialog'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
+import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
 
@@ -102,7 +102,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     )
   }
 
-  const createChannel = async (input: { name: string; agentId: string; token: string }): Promise<void> => {
+  const workspacePayload = (workspaceId: string | null): { type: 'system' } | { type: 'user'; workspaceId: string } =>
+    workspaceId === null ? { type: 'system' } : { type: 'user', workspaceId }
+
+  const createChannel = async (input: {
+    name: string
+    agentId: string
+    token: string
+    workspaceId: string | null
+    permissionMode: ChannelPermissionMode | null
+  }): Promise<void> => {
     setSavingEdit(true)
     setError(null)
     try {
@@ -110,6 +119,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         type: selectedType,
         name: input.name,
         agentId: input.agentId,
+        workspace: workspacePayload(input.workspaceId),
+        // `null` 就是继承助手；不传 `'default'`，两者必须分得开。
+        permissionMode: input.permissionMode,
         actorId: 'settings-user'
       })) as { id?: string } | undefined
       if (typeof created?.id === 'string') await submitNewChannelCredential(created.id, input.token)
@@ -122,7 +134,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     }
   }
 
-  const saveEdit = async (input: { name: string; agentId: string }): Promise<void> => {
+  const saveEdit = async (input: {
+    name: string
+    agentId: string
+    workspaceId: string | null
+    permissionMode: ChannelPermissionMode | null
+  }): Promise<void> => {
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
     setError(null)
@@ -131,6 +148,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         id: editor.channel.id,
         name: input.name,
         agentId: input.agentId,
+        workspace: workspacePayload(input.workspaceId),
+        permissionMode: input.permissionMode,
         actorId: 'settings-user'
       })
       setEditor(null)
