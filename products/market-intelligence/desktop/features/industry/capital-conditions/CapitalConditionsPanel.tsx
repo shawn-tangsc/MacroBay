@@ -236,7 +236,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
         ]}
         resolveText={resolveText}
         trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
-          icon={Info} size="sm" resolveText={resolveText} />} />
+          icon={Info} size="sm" resolveText={resolveText} variant="plain" />} />
       <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
       <button type="button" className="mi-capital-conditions__daily-button"
         aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>
