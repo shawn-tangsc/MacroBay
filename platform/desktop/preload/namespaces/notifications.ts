@@ -1,6 +1,14 @@
 import type { IpcRenderer } from 'electron'
 
 import { IpcChannels } from '../../ipc/channels'
+import type { SafeNotificationRecord, NotificationUnreadState } from '../../../notifications/contracts/notificationContracts'
+import type { NotificationRuntime } from '../../../notifications/runtime/notificationRuntime'
+
+/** 测试通知的真实回执：一条记录 + 每一档投递的尝试结果。形状取自运行时签名，不在这里抄第二份。 */
+export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['submitSelfTest']>>
+
+/** 订阅写入的回执：`ok:false` 带原因码。同样取自运行时签名，抄一份迟早与主进程漂移。 */
+export type NotificationSubscriptionWriteResult = Awaited<ReturnType<NotificationRuntime['setSubscription']>>
 
 /**
  * 通知命名空间（从 `preload/index.ts` 抽出来的第一块）。
@@ -10,35 +18,46 @@ import { IpcChannels } from '../../ipc/channels'
  *
  * 这一块只有读写与两条订阅，**没有能凭空造通知的方法**：`submit` 不在渲染层，
  * 「谁可以产生一条通知」仍由主进程说了算（见 `notificationProducerBoundary.test.ts`）。
+ *
+ * **每个写方法的返回值都标了真实类型**（不标就是 `Promise<any>`，渲染层写错字段编译器不会报错——
+ * 频道设置那 8 条重复频道正是这么来的）。读侧还有几处仍是推断出来的 `any`，另笔处理，
+ * 不在这笔里顺手改，免得与通知设置屏的在途改动撞同一批文件。
  */
 export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
   return {
     list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.notificationsList, query),
     /** 返回 `{ unread, version }`：角标只需一次调用；版本号随每次记录变化递增。 */
     getUnreadState: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadState, input),
-    markRead: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }),
+    markRead: (id: string) =>
+      ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<SafeNotificationRecord>,
     /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
-    sendTest: () => ipcRenderer.invoke(IpcChannels.notificationsSendTest),
+    sendTest: () =>
+      ipcRenderer.invoke(IpcChannels.notificationsSendTest) as Promise<NotificationSelfTestReceipt>,
     /** 清空 = 全部未读标为已读；返回 `{ unread, version }`，角标不必再查一次。 */
-    markAllRead: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input),
-    acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),
+    markAllRead: (input?: { productId?: string }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input) as Promise<NotificationUnreadState>,
+    acknowledge: (id: string) =>
+      ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }) as Promise<SafeNotificationRecord>,
     /** 真删除已读记录；返回实际删掉的条数。**未读不受影响**，与 `markAllRead` 不是一回事。 */
-    deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead),
-    dismiss: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }),
-    snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
+    // 单行形态是那条接线守卫的断言原文（`appIpcSurface.test.ts`），别为了排版拆开它。
+    deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead) as Promise<{ deleted: number }>,
+    dismiss: (id: string) =>
+      ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }) as Promise<SafeNotificationRecord>,
+    snooze: (id: string, until: string) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }) as Promise<SafeNotificationRecord>,
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
     readDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsReadDesktopPermission),
     /** 事件目录投影：带 `notifyOnlyIfSubscribed` 与批准档位；清单按它渲染，不写死事件名。 */
     listEventCatalog: () => ipcRenderer.invoke(IpcChannels.notificationsListEventCatalog),
     getSubscriptions: () => ipcRenderer.invoke(IpcChannels.notificationsGetSubscriptions),
     setSubscription: (eventTypeId: string, patch: Record<string, unknown>) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSetSubscription, { eventTypeId, patch }),
+      ipcRenderer.invoke(IpcChannels.notificationsSetSubscription, { eventTypeId, patch }) as Promise<NotificationSubscriptionWriteResult>,
     /** 当前提示开关 / 通道选择 / 接线状态：设置页首帧要三个值，不是只给写口。 */
     getDeliverySettings: () => ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings),
     setPushChannel: (channelId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSetPushChannel, { channelId }),
+      ipcRenderer.invoke(IpcChannels.notificationsSetPushChannel, { channelId }) as Promise<{ channelId: string | null }>,
     setToastEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSetToastEnabled, { enabled }),
+      ipcRenderer.invoke(IpcChannels.notificationsSetToastEnabled, { enabled }) as Promise<{ toastEnabled: boolean }>,
     /**
      * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是那条记录本身（键与参数）。
      * 渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。
