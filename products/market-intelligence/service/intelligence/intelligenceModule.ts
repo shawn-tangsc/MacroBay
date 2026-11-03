@@ -67,6 +67,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
@@ -252,6 +253,7 @@ export type IntelligenceModule = {
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
+  deleteDailyBriefingPeriod: DailyBriefingPeriodDeletion
   /** The deterministic core-fact pass, exposed for logs and focused verification. */
   dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
@@ -331,7 +333,6 @@ function articleFetchUrl(url: string): string {
     return url
   }
 }
-
 function articleFetchHeaders(url: string): Record<string, string> {
   if (url.includes('sec.gov')) {
     return { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
@@ -1003,7 +1004,7 @@ export function getIntelligenceModule(
       },
       sourcesService,
       publicQueryService,
-      dailyBriefingService,
+      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks }),
       dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
