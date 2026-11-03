@@ -231,7 +231,10 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('[data-asset-price="index"]')?.textContent).toBe('712.30')
       expect(host.querySelector('[data-status-row="index"]')?.getAttribute('data-index-source')).toBe('proxy')
       expect(host.querySelector('[data-index-proxy="true"]')?.textContent).toBe(text.proxyTag)
-      expect(host.querySelector('[data-source-state="limited"]')?.textContent).toBe(text.states.limited)
+      // 整块的来源药丸已撤掉（读者 2026-11-03）：曲线是收盘存档，实时流断了照样画，
+      // 而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产那行仍在，且只说这一只的情况。
+      expect(host.querySelector('[data-source-state]')).toBeNull()
+      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.states.missing}`)
       for (const asset of ['index', 'btc', 'eth']) expect(host.querySelector(`[data-status-row="${asset}"][data-connected="true"]`)).not.toBeNull()
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')
