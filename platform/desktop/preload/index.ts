@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 import { IpcChannels } from '../ipc/channels'
 import { createNotificationsNamespace } from './namespaces/notifications'
+import type { ChannelManagementResult } from '../../ai/agent-platform/channels'
 import { unwrapTaskIpc } from '../ipc/taskIpcEnvelope'
 import type { ModelDetectionMode, ModelDetectionResult } from '../../ai/providers/modelDetection/types'
 
@@ -93,19 +94,20 @@ const api = {
   },
   channels: {
     catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),
+    // 返回形状写进类型：渲染层若按 `result.id` 去取（真实形状是 `result.channel.id`），typecheck 直接红。
     list: () => ipcRenderer.invoke(IpcChannels.channelsList),
     /** 通知设置页的只读投影：可投递三档 + 绑定目标（0/1/多），不写任何通道配置。 */
     listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets),
     get: (id: string) => ipcRenderer.invoke(IpcChannels.channelsGet, id),
-    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input),
-    update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input),
-    disable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDisable, input),
-    requestEnable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input),
-    restart: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRestart, input),
-    remove: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDelete, input),
+    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input) as Promise<ChannelManagementResult>,
+    update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input) as Promise<ChannelManagementResult>,
+    disable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDisable, input) as Promise<ChannelManagementResult>,
+    requestEnable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input) as Promise<ChannelManagementResult>,
+    restart: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRestart, input) as Promise<ChannelManagementResult>,
+    remove: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDelete, input) as Promise<ChannelManagementResult>,
     beginCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialBegin, input),
-    submitCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input),
-    rotateCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input),
+    submitCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input) as Promise<ChannelManagementResult>,
+    rotateCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input) as Promise<ChannelManagementResult>,
     beginPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyBegin, input),
     createPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyCreate, input),
     listAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListAudits, input),

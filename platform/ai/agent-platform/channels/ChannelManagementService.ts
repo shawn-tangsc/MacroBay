@@ -250,7 +250,10 @@ export class ChannelManagementService {
     if (!started || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
       this.deps.runtime?.stop(id, owner.token)
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
+      // 启动把异常吞成一句「启动失败」时，用户看不到为什么。原因码与自检同一套闭集，
+      // 界面只需要认一个字段：`reason`。
+      const rejected = this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
+      return channel.type === 'telegram' ? { ...rejected, reason: 'telegram-network-unavailable' } : rejected
     }
     this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())
     return {
