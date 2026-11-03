@@ -5,6 +5,7 @@ import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegistry'
 import { seedChannelAdapterSupport } from './channelTestSupport'
 import { assertLarkSecret, assertSlackSecret } from './ChannelManagementContracts'
+import { ChannelAcceptanceService } from './ChannelAcceptanceService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelManagementService } from './ChannelManagementService'
@@ -1394,5 +1395,112 @@ describe('channel settings overrides (workspace / allowed chats / permission mod
     expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'user' } })).toThrow('channel-input-invalid')
     expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: ['x'.repeat(65)] })).toThrow('channel-input-invalid')
     expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', permissionMode: 'yolo' })).toThrow('channel-input-invalid')
+  })
+})
+
+describe('Slack enable chain (evidence -> canEnable -> in-app enable)', () => {
+  function slackEntry() {
+    return {
+      adapterType: 'slack' as const,
+      adapterVersion: 'release-b',
+      status: 'supported' as const,
+      capabilities: {
+        receiveText: true, receiveImages: false, receiveFiles: false, sendText: true,
+        streaming: false, typingIndicator: false, nativeCommands: false, groupMention: false,
+        qrEnrollment: false, reconnect: true
+      },
+      receiveSmokeAt: '2026-11-04T00:00:00.000Z',
+      sendSmokeAt: '2026-11-04T00:00:00.000Z',
+      reconnectSmokeAt: '2026-11-04T00:00:00.000Z',
+      restartRecoveryAt: '2026-11-04T00:00:00.000Z',
+      proxySmokeAt: '2026-11-04T00:00:00.000Z',
+      credentialRotationAt: '2026-11-04T00:00:00.000Z',
+      disableDeleteFencingAt: '2026-11-04T00:00:00.000Z',
+      capabilityEvidence: {}
+    }
+  }
+
+  function slackChannel(database: ReturnType<typeof harness>['database'], service: ChannelManagementService): string {
+    const id = service.create({ type: 'slack', name: 'Slack', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    // 凭据由加密交接写入；这里直接把「已配置」的事实摆上，专注这条链本身。
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    return id
+  }
+
+  it('turns the acceptance record written by the CLI into canEnable for Slack', () => {
+    const { database } = harness()
+    const acceptance = new ChannelAcceptanceService(database)
+    expect(acceptance.isSupported('slack')).toBe(false)
+    // 这就是 `pnpm channel:acceptance --record` 的写入路径：证据进台账、投影翻成 supported。
+    acceptance.recordSuccessfulSmoke({ entry: slackEntry(), actor: 'cli-operator', realSmokeAt: '2026-11-04T00:00:00.000Z' })
+    expect(acceptance.isSupported('slack')).toBe(true)
+
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    acceptance.load(registry)
+    expect(registry.canEnable('slack')).toBe(true)
+    // 目录状态由注册表驱动：证据进台账后，接入页那一行才会翻成「证据完备」。
+    const catalogService = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff()
+    })
+    expect(catalogService.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'supported', reason: 'evidence-complete' })
+  })
+
+  it('enables a Slack channel in-app once the adapter is supported and starts its runtime once', async () => {
+    const { database, service } = harness()
+    const acceptance = new ChannelAcceptanceService(database)
+    acceptance.recordSuccessfulSmoke({ entry: slackEntry(), actor: 'cli-operator', realSmokeAt: '2026-11-04T00:00:00.000Z' })
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    acceptance.load(registry)
+
+    const started: string[] = []
+    const guarded = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} },
+      now: () => new Date('2026-11-04T00:00:00.000Z')
+    })
+    const id = slackChannel(database, guarded)
+
+    await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: true,
+      code: 'runtime-ready'
+    })
+    expect(started).toEqual([id])
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id = ?').get(id)).toEqual({
+      requested_enabled: 1,
+      lifecycle_state: 'enabled'
+    })
+  })
+
+  it('refuses to enable Slack while its evidence is still missing', async () => {
+    const { database, service } = harness()
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    expect(registry.canEnable('slack')).toBe(false)
+    const started: string[] = []
+    const guarded = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} }
+    })
+    const id = slackChannel(database, guarded)
+
+    await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: false,
+      code: 'adapter-not-supported'
+    })
+    expect(started).toEqual([])
+    expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
   })
 })
