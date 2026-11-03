@@ -640,9 +640,9 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
-    // One retry, in the panel under the reason: the toolbar's copy is hidden while the failure is
-    // shown, so the reader never has to choose between two buttons that do the same thing.
-    expect(dom.querySelector('[data-toolbar-action="regenerate"]')).toBeNull()
+    // The header keeps a generate action in every state (a later requirement); the panel's retry is
+    // still the one the reason leads into.
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')).not.toBeNull()
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     await act(async () => {
@@ -1407,6 +1407,19 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+})
+
+it('keeps a generate action in the header even when there is nothing to regenerate', async () => {
+  const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const dom = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } }))
+  }))
+  // An empty page must not hide the action that makes content: it is disabled only mid-run.
+  const button = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+  expect(button).not.toBeNull()
+  expect(button.disabled).toBe(false)
+  expect(button.textContent).toContain(text.regenerate)
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {

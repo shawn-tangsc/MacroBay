@@ -366,10 +366,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </Button>
       <div className="mi-daily-briefing-page__actions">
         {view.status === 'loading' ? <DailyBriefingGeneratingStatus progress={liveProgress} resolveText={resolveProductText} text={text} /> : null}
+        {/* The generate action is always in the header: an empty or failed page must not force the
+            reader to hunt for it somewhere else. It is disabled only while a run is in flight. */}
+        <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
+          {...(generating ? { 'aria-label': text.generationProgress.workingHint } : {})}
+          onClick={() => { if (view.status === 'ready' && view.kind === 'today') void regenerate(); else generateNow() }}>
+          {regenerating ? text.regenerating : text.regenerate}
+        </Button>
         {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
-          <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={regenerating} onClick={() => void regenerate()}>
-            {regenerating ? text.regenerating : text.regenerate}
-          </Button>
           {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
           {/* The settings zone was unusable, so the window was computed in the machine's zone. The
               reader configured a time and is getting another day boundary; saying nothing would let
