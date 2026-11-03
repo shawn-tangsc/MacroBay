@@ -11,18 +11,22 @@ import { describe, expect, it, vi } from 'vitest'
  * 这里用 `vi.resetModules()` 取一份全新的模块实例——它的闸门是关着的——来模拟「装配没探过就开库」。
  * 不能依赖 setup 文件的状态，那个 setup 本来就会把闸门打开。
  */
+/** The flag is process-wide (see the module's comment), so a test that wants it closed clears it. */
+const clearFlag = (): void => { delete (globalThis as Record<symbol, unknown>)[Symbol.for('macrobay.storage.tempDirectoryVerified')] }
+
 describe('sqlite temp-directory gate', () => {
   it('refuses to open a database before the probe has run', async () => {
     vi.resetModules()
-    const fresh = await import('./openSqliteDatabase')
+    clearFlag()
+    const fresh = await import('@platform/storage/sqlite/openSqliteDatabase')
 
     expect(() => fresh.openSqliteDatabase(':memory:')).toThrow('sqlite-temp-directory-not-verified')
   })
 
   it('opens once the probe has marked the temp directory writable', async () => {
     vi.resetModules()
-    const fresh = await import('./openSqliteDatabase')
-    const readiness = await import('./tempDirectoryReadiness')
+    const fresh = await import('@platform/storage/sqlite/openSqliteDatabase')
+    const readiness = await import('@platform/storage/sqlite/tempDirectoryReadiness')
     readiness.markTempDirectoryVerified()
 
     const database = fresh.openSqliteDatabase(':memory:')
@@ -31,6 +35,21 @@ describe('sqlite temp-directory gate', () => {
     } finally {
       database.close()
     }
+  })
+
+  it('shares one flag across import specifiers', async () => {
+    // The seed script marked readiness through the package alias while the database opener read it
+    // through another URL: under tsx those are two module instances. The flag therefore lives on a
+    // process-wide symbol, and this pins the property that matters — one marks, the other sees it.
+    vi.resetModules()
+    clearFlag()
+    const viaAlias = await import('@platform/storage/sqlite/tempDirectoryReadiness')
+    const viaRelative = await import('./tempDirectoryReadiness')
+
+    expect(viaRelative.isTempDirectoryVerified()).toBe(false)
+    viaAlias.markTempDirectoryVerified()
+    expect(viaRelative.isTempDirectoryVerified()).toBe(true)
+    expect((await import('@platform/storage/sqlite/openSqliteDatabase')).openSqliteDatabase(':memory:')).toBeDefined()
   })
 
   it('keeps the composition root calling the probe before it marks readiness', async () => {

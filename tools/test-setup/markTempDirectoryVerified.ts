@@ -1,4 +1,4 @@
-import { markTempDirectoryVerified } from '../../platform/storage/sqlite/tempDirectoryReadiness'
+import { markTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
 
 /**
  * 测试环境：开库闸门默认是关的（生产路径必须先探一次临时目录可写）。

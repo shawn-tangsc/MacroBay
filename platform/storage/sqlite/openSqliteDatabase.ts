@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 
-import { isTempDirectoryVerified } from './tempDirectoryReadiness'
+import { isTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
 
 /**
  * 所有本地 SQLite 库共用的等待窗口。

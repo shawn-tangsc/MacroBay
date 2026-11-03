@@ -17,7 +17,7 @@ import { createTaskIpcScheduleValidationOptions } from '../taskScheduleValidatio
 import { createMainWindowHost } from '../window/mainWindow'
 import { createMainWindow, loadMainWindowRenderer } from '../../window/createMainWindow'
 import { ensureWritableTempDirectory } from '../ensureWritableTempDirectory'
-import { markTempDirectoryVerified } from '../../../storage/sqlite/tempDirectoryReadiness'
+import { markTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
 import { getPanelWorkspaceForDisposal } from './slots'
 
 export type PlatformCorePorts = Readonly<{
