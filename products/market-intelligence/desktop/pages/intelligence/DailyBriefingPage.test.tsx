@@ -1308,7 +1308,7 @@ it('shows only a loading state before the first read resolves', async () => {
   expect(dom.querySelector('[data-state="error"]')).toBeNull()
 })
 
-it('shows the generating state with one status word and the stage list in the detail column', async () => {
+it('shows the generating state as the same centred panel a failure uses', async () => {
   const progress = {
     attemptId: 'attempt-1',
     startedAt: '2026-10-30T04:00:00.000Z',
@@ -1328,27 +1328,17 @@ it('shows the generating state with one status word and the stage list in the de
   const dom = await renderPage(client as ReturnType<typeof fakeClient>)
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
-  // One status word in the header, no settled state, one whole loading block in the body.
+  // One status word in the header; the attempt panel lives in the body, exactly where a failure's lives.
   expect(dom.querySelectorAll('.status-pill')).toHaveLength(1)
   expect(dom.querySelectorAll('.state-view')).toHaveLength(0)
-  expect(dom.querySelectorAll('.mi-daily-briefing-page__content [data-loading-state]')).toHaveLength(1)
-  // The stage list is in the detail column while the run is in flight, not nowhere.
-  const column = dom.querySelector<HTMLElement>('[data-briefing-detail="true"]')!
-  // Same stepper the failed state uses: a run in flight is not a second visual language.
-  expect(column.querySelector('[data-briefing-stages] .mi-generation-trace[data-generation-trace-state="running"]')).not.toBeNull()
-  expect(column.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
-  // Running: the stepper is open and its summary is the live word.
-  expect(column.querySelector('details.mi-generation-trace[open]')).not.toBeNull()
-  // One phrase, one row state, no missing-language claim while the run is in flight.
-  expect(dom.textContent.match(/正在生成今天的日报/g)).toHaveLength(1)
+  const panel = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content [data-daily-brief-generating="true"]')!
+  expect(panel.querySelectorAll('[data-loading-state]')).toHaveLength(1)
+  expect(panel.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
+  // No third layout: the right-hand column is absent while generating, like after a failure.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  expect(dom.textContent!.match(/正在生成今天的日报/g)).toHaveLength(1)
   const todayRow = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
   expect(todayRow.textContent).toMatch(/生成中 · /)
-  expect(dom.querySelectorAll('[data-language-missing]')).toHaveLength(0)
-  expect(column.querySelector('[data-briefing-attempts]')).toBeNull()
-  // The action is disabled and says why; there is no invented stop control.
-  const generating = dom.querySelector<HTMLButtonElement>(`[aria-label="${text.generationProgress.workingHint}"]`)!
-  expect(generating.disabled).toBe(true)
-  expect(dom.textContent).not.toContain(text.failurePanel.editorialTitle)
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {

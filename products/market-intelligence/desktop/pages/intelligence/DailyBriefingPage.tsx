@@ -36,7 +36,7 @@ import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFai
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { useBriefingContentLocale } from './useBriefingContentLocale'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
-import { DailyBriefingGeneratingAside, DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
+import { DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -384,7 +384,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
         </div> : null}
-        {view.status === 'loading' ? <DailyBriefingGeneratingView progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
+        {view.status === 'loading' ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'unavailable' && !failure
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
@@ -410,7 +410,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {view.status === 'loading' ? <DailyBriefingGeneratingAside formatTime={formatTime} progress={liveProgress} text={text} /> : null}
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         {englishEditionsEnabled ? <div className="mi-daily-briefing-page__lang-tabs" data-content-language-tabs="true">
           <Tabs

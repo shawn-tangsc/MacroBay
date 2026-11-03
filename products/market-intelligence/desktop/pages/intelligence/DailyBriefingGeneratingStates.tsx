@@ -1,4 +1,3 @@
-import { Button } from 'antd'
 import { CircleHelp } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -29,20 +28,23 @@ export function DailyBriefingGeneratingStatus({ text, progress, resolveText }: R
   const stage = progress ? runningRowName(progress, text) : undefined
   return <>
     <StatusPill tone="info" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generatingShort" resolveText={resolveText} />
-    {stage ? <small className="mi-daily-briefing-page__clock-note" data-generating-stage="true">{stage}</small> : null}
-    <Button disabled aria-label={text.generationProgress.workingHint}>{text.generatingShort}</Button>
+
+    {/* One status word only: the pill already says the run is in flight, so a second disabled
+        button with the same word was pure repetition in the header. */}
   </>
 }
 
-/** The body's generating state: one whole loading block — never half a brief. */
-export function DailyBriefingGeneratingView({ text, progressUnreadable, resolveText }: Readonly<{
+/** The body's generating state: the same panel and stage list a failed attempt uses. */
+export function DailyBriefingGeneratingView({ text, progress, progressUnreadable, resolveText, formatTime }: Readonly<{
   text: DailyBriefingText
+  progress: BriefingGenerationProgress | undefined
   progressUnreadable: boolean
   resolveText: (key: string) => string
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
-  return <div className="mi-daily-briefing__state">
+  return <div className="mi-daily-briefing-page__failure" data-daily-brief-generating="true">
     <div className="mi-daily-briefing-page__loading-head">
-      <LoadingState label={text.generating} minHeight={220} />
+      <LoadingState label={text.generating} minHeight={120} />
       <Popover
         labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generateHint"
         resolveText={resolveText}
@@ -58,6 +60,7 @@ export function DailyBriefingGeneratingView({ text, progressUnreadable, resolveT
       />
     </div>
     {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
+    <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : pendingTrace()} />
   </div>
 }
 
