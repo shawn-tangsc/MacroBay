@@ -168,12 +168,19 @@ describe('a channel row', () => {
     expect(off.requestEnable).toHaveBeenCalledWith({ id: 'channel-1', actorId: 'settings-user' })
   })
 
-  it('says a channel whose credential cannot be read has an inline reason, not a panel', async () => {
-    installPlatform({ list: vi.fn(async () => [{ ...channel, credential: { status: 'unavailable', hasCredential: true } }]) })
+  it('says a stored-but-unreadable credential is not the same as having none', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, credential: { status: 'unavailable', hasCredential: true, revision: 1 } }])
+    })
     const container = await mount()
 
     const row = container.querySelector('[data-channel-id="channel-1"]')
-    expect(row?.textContent).toContain(labels.channelCredentialUnavailable)
+    // 存过但读不出来：说这一句。
+    expect(row?.textContent).toContain(labels.channelTokenUnavailable)
+    // **不许**再说「还没有 Token」——今天两个相反的结论同屏，就是另一种假话。
+    expect(row?.textContent).not.toContain(labels.channelTokenNone)
+    // 也不画星号：星号会被读成「有值但看不见」。
+    expect(row?.textContent).not.toContain(labels.channelTokenMask.trim())
   })
 })
 
@@ -338,6 +345,33 @@ describe('an empty credential is said out loud, never dressed as a mask', () => 
     expect(row?.textContent).toContain(labels.channelTokenNone)
     // 星号会被读成「有值但看不见」——用户正是看到它才以为「我明明设了」。
     expect(row?.querySelector('.channel-row-mask')?.textContent).not.toContain(labels.channelTokenMask.trim())
+  })
+
+  it('says a stored token cannot be read, instead of saying nothing is stored', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        {
+          ...channel,
+          allowedChatIds: [],
+          credential: { status: 'unavailable', hasCredential: true, revision: 1 }
+        }
+      ])
+    })
+    const container = await mount()
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    const current = document.body.querySelector('[data-current-token]')
+    expect(current?.textContent).toContain(labels.channelTokenUnavailable)
+    // 同一屏里不许同时出现相反的结论。
+    expect(current?.textContent).not.toContain(labels.channelTokenCurrentNone)
+    expect(current?.textContent).not.toContain('当前已存')
+    // 提示也跟着档位走：这一档是「填一把新的换掉它」，不是「留空＝不修改」。
+    expect(document.body.textContent).toContain(labels.channelTokenUnavailableHint)
+    expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
   })
 
   it('does not say "currently stored" in the dialog when nothing is stored, and asks for a token', async () => {

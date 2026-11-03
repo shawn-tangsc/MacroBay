@@ -50,9 +50,11 @@ export function ChannelFields(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
   policyPresence: ChannelPolicyPresence
-  /** 编辑时这个频道**有没有已经存下的 Token**：决定输入框下面那句提示是「留空＝不改」还是「填一个」。
+  /**
+   * 编辑时库里凭据的真实档位：决定输入框下面那句提示。
+   * `configured` → 留空＝不改；`missing` → 填一个，留空什么都不会存；`unavailable` → 填新的换掉它。
    */
-  tokenStored?: boolean
+  tokenState?: 'configured' | 'missing' | 'unavailable'
   /** 读者已有的工作区（只列 `user` 那类）。 */
   workspaces?: readonly { id: string; name: string; path: string }[]
   /** 选文件夹：返回工作区编号（用户取消返回 null）。登记动作在主进程，这里只拿编号。 */
@@ -160,8 +162,12 @@ export function ChannelFields(props: {
               </small>
             ) : null}
             <small className="channel-field-hint">
-              {/* 本来就一个 Token 都没有时，「留空＝不修改」是句假话：留空保存什么也存不上。 */}
-              {props.tokenStored === false ? labels.channelTokenEnterHint : labels.channelTokenReadOnly}
+              {/* 三档三句：「留空＝不修改」只在真有一把可读的凭据时才是实话。 */}
+              {props.tokenState === 'missing'
+                ? labels.channelTokenEnterHint
+                : props.tokenState === 'unavailable'
+                  ? labels.channelTokenUnavailableHint
+                  : labels.channelTokenReadOnly}
             </small>
           </>
         )}

@@ -243,6 +243,9 @@ export type PlatformText = {
     channelTokenEnterHint: string
     /** 正在输入的新 Token 可以临时看一眼（旧值永不可见、不可复制）。 */
     channelTokenVisibility: string
+    /** `unavailable` 档：**存过但读不出来**，与「从来没存」是两件事，必须两句话。 */
+    channelTokenUnavailable: string
+    channelTokenUnavailableHint: string
     channelTokenVisibleHint: string
     /** 日志面板在没有数据源时的唯一一句话。 */
     channelLogsEmpty: string
@@ -1649,6 +1652,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenCurrentNone: '这个频道还没有存 Token',
       channelTokenEnterHint: '这个频道还没有 Token：填一个再保存，留空保存不会存上任何东西。',
       channelTokenVisibility: '显示或隐藏刚输入的 Token',
+      channelTokenUnavailable: '存过，但读不出来了——重新保存一次会换一把新的',
+      channelTokenUnavailableHint: '现在这把读不出来：填一把新的再保存，会换掉它。',
       channelTokenVisibleHint: '仅本机显示：关掉这个眼睛就恢复点号，旧值始终不可见。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
@@ -2955,6 +2960,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenCurrentNone: 'this channel has no token stored yet',
       channelTokenEnterHint: 'this channel has no token yet: enter one and save; leaving it empty stores nothing.',
       channelTokenVisibility: 'Show or hide the token you are typing',
+      channelTokenUnavailable: 'a token was stored, but it cannot be read any more — saving again replaces it',
+      channelTokenUnavailableHint: 'the stored token cannot be read; enter a new one and save to replace it.',
       channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it goes back to dots. A stored token is never shown.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',

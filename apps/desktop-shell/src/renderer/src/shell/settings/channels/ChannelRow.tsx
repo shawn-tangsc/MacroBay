@@ -36,27 +36,29 @@ export function ChannelRow(props: {
     'settings.channels.delete': labels.channelDelete
   }
   const resolveText = (key: string): string => rowActionText[key] ?? ''
-  // 凭据取不到是「这条频道现在不能用」，红点 + 行内原因；其余状态只用点色区分，不写句子。
-  const failure = channel.credential.status === 'unavailable' ? labels.channelCredentialUnavailable : null
-  const dot = failure !== null ? 'bad' : channel.state === 'runtime-ready' ? 'ok' : 'muted'
+  // 凭据读不出来 = 这条频道现在不能用：点变红，完整说法写在掩码那一位（同一件事只说一遍）。
+  const dot =
+    channel.credential.status === 'unavailable'
+      ? 'bad'
+      : channel.state === 'runtime-ready'
+        ? 'ok'
+        : 'muted'
 
   return (
     <div className="channel-row" data-channel-id={channel.id} data-channel-state={channel.state}>
       <span className={`channel-row-dot channel-row-dot--${dot}`} aria-hidden="true" />
       <span className="channel-row-name">{channel.name}</span>
       <span className="channel-row-mask" aria-label={labels.channelCredential}>
-        {/* 掩码由主进程算好（头尾各几位 + 省略号）；渲染层只显示，不拿完整值再切。
-            **没有凭据时不画星号**：`********` 会被读成「有值但看不见」，那是在替空值发言——
-            用户就是看到星号才以为「我明明设了」，所以这里只写「还没有 Token」。 */}
-        {channel.credential.hasCredential !== false && channel.credential.status !== 'missing'
+        {/* 三档必须三句话，别把「从来没存」和「存过但读不出来」说成一句：
+            - configured：显示主进程算好的头尾掩码（渲染层不切值）；
+            - unavailable：**存过**，只是读不出来——写这一句，绝不画星号也不会写「还没有 Token」；
+            - missing：真没有，说「还没有 Token」（画星号会被读成「有值但看不见」）。 */}
+        {channel.credential.status === 'configured'
           ? (channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask)
-          : labels.channelTokenNone}
+          : channel.credential.status === 'unavailable'
+            ? labels.channelTokenUnavailable
+            : labels.channelTokenNone}
       </span>
-      {failure === null ? null : (
-        <span className="channel-row-error" role="note">
-          {failure}
-        </span>
-      )}
       {props.enableFailure === null || props.enableFailure === undefined ? null : (
         <span className="channel-row-error" data-enable-failure role="note">
           {props.enableFailure}

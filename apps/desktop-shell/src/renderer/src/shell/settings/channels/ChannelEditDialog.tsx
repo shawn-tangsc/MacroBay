@@ -89,14 +89,16 @@ export function ChannelEditDialog(props: {
         {/* 只显示头尾掩码（主进程算好送来的），不显示「最近更新」：安全视图里没有凭据时间戳，
             拿频道记录的 updated_at 冒充它，就是另一种说假话。改没改成功，看这串变没变。
             **没有凭据时不许写「当前已存：********」**：那句话会让人以为自己早就存过。 */}
-        {channel.credential.hasCredential !== false && channel.credential.status !== 'missing'
+        {channel.credential.status === 'configured'
           ? labels.channelTokenCurrent.replace(
               '{mask}',
               channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask
             )
-          : labels.channelTokenCurrentNone}
+          : channel.credential.status === 'unavailable'
+            ? labels.channelTokenUnavailable
+            : labels.channelTokenCurrentNone}
         {/* 「改没改成功」的第二条凭据：保存次数。不是时间——没有凭据时间戳，写时间就是假话。 */}
-        {channel.credential.hasCredential !== false && typeof channel.credential.revision === 'number'
+        {channel.credential.status === 'configured' && typeof channel.credential.revision === 'number'
           ? ` · ${labels.channelTokenRevision.replace('{count}', String(channel.credential.revision))}`
           : ''}
       </p>
@@ -113,7 +115,7 @@ export function ChannelEditDialog(props: {
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
         onChooseWorkspace={props.onChooseWorkspace}
         workspaces={props.workspaces}
-        tokenStored={channel.credential.hasCredential !== false && channel.credential.status !== 'missing'}
+        tokenState={channel.credential.status}
         values={values}
       />
     </Modal>
