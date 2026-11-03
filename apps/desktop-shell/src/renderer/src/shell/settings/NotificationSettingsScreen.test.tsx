@@ -290,6 +290,23 @@ describe('the send-to-channel row', () => {
     expect(row.querySelector('[data-channel-state]')).toBeNull()
   })
 
+  it('names a broadcast conversation as a broadcast channel, not as the feature itself', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [channelTarget({ target: { kind: 'bound', conversationKind: 'channel' } })],
+          channelId: 'telegram-1',
+          toastEnabled: false
+        })
+    })
+
+    // 「频道」是功能名，「广播频道」是会话类型：两个词不许再撞在一起。
+    const target = container.querySelector('[data-row="channel"] [data-channel-target]')
+    expect(target?.textContent).toBe('目标广播频道')
+  })
+
   it('writes the last failure with the reader time zone and never claims it arrived', async () => {
     const container = await mount({
       listEventCatalog: () => Promise.resolve([]),
