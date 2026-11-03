@@ -102,6 +102,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
   const [settingsReloadKey, setSettingsReloadKey] = useState(0)
+  // A delete that only half finished: `remaining` is the real count, null when unknown.
+  const [deleteOutcome, setDeleteOutcome] = useState<Readonly<{ target: Readonly<{ date: string; periodId: string }>; remaining: number | null }> | null>(null)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -365,6 +367,18 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
   const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime
   const todayMissing = editions.some((edition) => edition.date === todayDate && edition.state === 'missing')
+  const deletePeriod = async (target: Readonly<{ date: string; periodId: string }>): Promise<void> => {
+    const remove = client.deletePeriod
+    if (!remove) return
+    try {
+      const result = await remove(target)
+      setDeleteOutcome(result.allDone ? null : { target, remaining: result.remaining })
+    } catch {
+      // The call itself failed: which rows remain is unknown, and "unknown" is not zero.
+      setDeleteOutcome({ target, remaining: null })
+    }
+    setReloadKey((key) => key + 1)
+  }
   const openModelService = onOpenModelSettings ?? openModelSettings
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
@@ -411,11 +425,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         onDeletePeriod={(target) => {
           // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
-          const deletePeriod = client.deletePeriod?.bind(client)
-          if (!deletePeriod) return
-          void deletePeriod(target).catch(() => undefined).finally(() => setReloadKey((key) => key + 1))
+          void deletePeriod(target)
         }} />
       <section className="mi-daily-briefing-page__content">
+        {deleteOutcome ? <p className="mi-daily-briefing-page__loading-hint" role="alert" data-delete-outcome="true">
+          {deleteOutcome.remaining === null ? text.history.deleteUnknownRemaining : text.history.deletePartial.replace('{count}', String(deleteOutcome.remaining))}{' '}
+          <Button onClick={() => void deletePeriod(deleteOutcome.target)} type="link">{text.history.deleteRetry}</Button>
+        </p> : null}
         <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
         <DailyBriefingStorageNotice text={text.migration} />
         {webSearchEnabled === false && settingsSection === null ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
