@@ -36,7 +36,25 @@ export const REVIEW_MARKER = 'state-ternary: reviewed'
  */
 const REVIEW_WITH_REASON = /state-ternary: reviewed\s*—\s*\S[^\n]{7,}/
 
-export type Candidate = { file: string; line: number; source: string; reviewed: boolean }
+/**
+ * 有计划但还没修的候选：`debt: MI-11-R161`。
+ *
+ * 为什么要有这一档：`reviewed` 表达的是「看过，这里没问题」；可今晚那 10 条里有一条其实是
+ * **知道自己有问题、只是还没到修的时候**（注释里写着「迁移时一起改」）。把它写成 `reviewed`
+ * 就等于让一条欠账冒充例外，而扫描器会一直说「全部已复核」——欠账从此消失。
+ * 所以欠账单独一档：**照报、不判红、单独计数**，让「还没修」这件事在输出里一直看得见。
+ */
+const DEBT_MARKER = /debt:\s*(MI-[\w-]*R\d+)/
+
+export type Candidate = {
+  file: string
+  line: number
+  source: string
+  /** 已复核（写了理由）或已记为欠账——两者都不判红。 */
+  reviewed: boolean
+  /** 记为欠账时带上台账行号，输出里逐条列出来。 */
+  debt?: string
+}
 
 function codeLines(text: string): string[] {
   return text.split('\n')
@@ -53,9 +71,30 @@ export function findCandidates(file: string, text: string): Candidate[] {
     if (!CONTENT_CONTAINER.test(windowText)) continue
     // 留痕可以写在候选上方 3 行内（注释通常紧贴上面），也可以在同一行尾。
     const nearby = lines.slice(Math.max(0, index - 3), index + 1).join('\n')
-    found.push({ file, line: index + 1, source: line.trim().slice(0, 120), reviewed: REVIEW_WITH_REASON.test(nearby) })
+    const debt = DEBT_MARKER.exec(nearby)?.[1]
+    found.push({
+      file,
+      line: index + 1,
+      source: line.trim().slice(0, 120),
+      // 欠账与例外都不判红：一个是「还没修」，一个是「不用修」，但两者都不许冒充对方。
+      reviewed: debt !== undefined || REVIEW_WITH_REASON.test(nearby),
+      ...(debt === undefined ? {} : { debt })
+    })
   }
   return found
+}
+
+/**
+ * 欠账行号必须在台账里真实存在。
+ *
+ * `debt: MI-11-R999` 这种写错的号码比不写更糟：它看起来有人管，实际指向一行不存在的东西，
+ * 永远不会有人来修。台账是 gitignore 的本地文件，读不到时**不判红**（CI 上没有它），
+ * 但要明说「本次没校验」，不让「没查」冒充「查过了」。
+ */
+export function unknownDebtRows(candidates: readonly Candidate[], knownRows: ReadonlySet<string>): string[] {
+  return candidates
+    .map((candidate) => candidate.debt)
+    .filter((debt): debt is string => debt !== undefined && !knownRows.has(debt))
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -78,24 +117,54 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out
 }
 
+/** 台账里出现过哪些行号。读不到就返回 null（CI 上没有 docs-private），由调用方明说「没校验」。 */
+function knownBacklogRows(): Set<string> | null {
+  const path = join(ROOT, 'docs-private', 'iterations', 'BACKLOG.md')
+  try {
+    const text = readFileSync(path, 'utf8')
+    return new Set([...text.matchAll(/MI-[\w-]*R\d+/g)].map((match) => match[0]))
+  } catch {
+    return null
+  }
+}
+
 function main(): void {
   const files = SCAN_ROOTS.flatMap((root) => sourceFiles(join(ROOT, root)))
   const candidates = files.flatMap((file) => findCandidates(relative(ROOT, file), readFileSync(file, 'utf8')))
   const unreviewed = candidates.filter((candidate) => !candidate.reviewed)
+  const debts = candidates.filter((candidate) => candidate.debt !== undefined)
 
-  if (unreviewed.length === 0) {
-    console.log(
-      `state-content-ternary: ${candidates.length} candidate(s), all reviewed.`
-    )
+  const backlogRows = knownBacklogRows()
+  const unknownDebts = backlogRows === null ? [] : unknownDebtRows(candidates, backlogRows)
+
+  if (unreviewed.length === 0 && unknownDebts.length === 0) {
+    const reviewed = candidates.length - debts.length
+    console.log(`state-content-ternary: ${candidates.length} candidate(s), ${reviewed} reviewed, ${debts.length} debt.`)
+    for (const candidate of debts) {
+      console.log(`  debt ${candidate.debt}  ${candidate.file}:${candidate.line}`)
+    }
+    if (backlogRows === null) {
+      console.log('  （台账不在本机，本轮没有校验 debt 行号是否真实存在）')
+    }
     return
   }
 
-  console.error(`state-content-ternary: ${unreviewed.length} unreviewed candidate(s) — 状态判定在决定整片内容画不画：`)
-  for (const candidate of unreviewed) {
-    console.error(`  ${candidate.file}:${candidate.line}  ${candidate.source}`)
+  if (unknownDebts.length > 0) {
+    console.error(`state-content-ternary: ${unknownDebts.length} 处 debt 指向台账里不存在的行，等于没人会来修：`)
+    for (const candidate of candidates.filter((entry) => entry.debt !== undefined && unknownDebts.includes(entry.debt))) {
+      console.error(`  ${candidate.file}:${candidate.line}  debt: ${candidate.debt}`)
+    }
   }
-  console.error(`  看过之后在候选上方写一行 \`${REVIEW_MARKER} — <为什么这处没问题>\`；假阳性也要写。`)
-  console.error('  约定：内容按数据长度渲染（rows.length > 0 ? 内容 : 空态），不用状态位藏内容。')
+
+  if (unreviewed.length > 0) {
+    console.error(`state-content-ternary: ${unreviewed.length} unreviewed candidate(s) — 状态判定在决定整片内容画不画：`)
+    for (const candidate of unreviewed) {
+      console.error(`  ${candidate.file}:${candidate.line}  ${candidate.source}`)
+    }
+    console.error(`  看过之后在候选上方写一行 \`${REVIEW_MARKER} — <为什么这处没问题>\`；假阳性也要写。`)
+    console.error('  有计划但还没修的，写 `debt: MI-11-R<行号>`——照报、不判红，但要有人在台账里认领它。')
+    console.error('  约定：内容按数据长度渲染（rows.length > 0 ? 内容 : 空态），不用状态位藏内容。')
+  }
   process.exit(1)
 }
 

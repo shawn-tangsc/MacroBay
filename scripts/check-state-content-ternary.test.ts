@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { findCandidates, REVIEW_MARKER } from './check-state-content-ternary.mts'
+import { findCandidates, REVIEW_MARKER, unknownDebtRows } from './check-state-content-ternary.mts'
 
 /**
  * 发现器自己的两个夹具，各钉一个方向：
@@ -58,5 +58,39 @@ describe('state-content-ternary candidate finder', () => {
     ].join('\n')
 
     expect(findCandidates('thin-marker.tsx', text)[0]?.reviewed).toBe(false)
+  })
+
+  it('debt 档不判红，但要把台账行号带出来（欠账不许冒充例外）', () => {
+    const text = [
+      `{/* debt: MI-11-R161 — 有计划，等迁移 AsyncState 时一起改 */}`,
+      `const block = {state === 'available' ? <table><tbody>{rows.map((row) => row.id)}</tbody></table> : null}`
+    ].join('\n')
+
+    const candidate = findCandidates('debt.tsx', text)[0]
+    expect(candidate?.reviewed).toBe(true)
+    expect(candidate?.debt).toBe('MI-11-R161')
+  })
+
+  it('debt 行号必须在台账里真的存在，写错了要点名', () => {
+    const text = [
+      `{/* debt: MI-11-R999 */}`,
+      `const block = {state === 'available' ? <table><tbody>{rows.map((row) => row.id)}</tbody></table> : null}`
+    ].join('\n')
+
+    const candidates = findCandidates('debt-bad.tsx', text)
+    // 号码写错时它不是「已复核」，因为台账里没人会来修这一条。
+    expect(unknownDebtRows(candidates, new Set(['MI-11-R161']))).toEqual(['MI-11-R999'])
+    expect(unknownDebtRows(candidates, new Set(['MI-11-R999']))).toEqual([])
+  })
+
+  it('写成 debt 但没有行号，等于没写，仍算未复核', () => {
+    const text = [
+      `{/* debt: 以后再说 */}`,
+      `const block = {state === 'available' ? <table><tbody>{rows.map((row) => row.id)}</tbody></table> : null}`
+    ].join('\n')
+
+    const candidate = findCandidates('debt-null.tsx', text)[0]
+    expect(candidate?.reviewed).toBe(false)
+    expect(candidate?.debt).toBeUndefined()
   })
 })
