@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
+import { APP_NAVIGATE_EVENT } from '@platform/workspace/navigation/navigationRequest'
 
 import { UpdateActionButton } from './UpdateActionButton'
 import type { UpdateCheckClient } from '../settings/version/updateCheckClient'
@@ -20,17 +21,16 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   document.body.innerHTML = ''
-  vi.useRealTimers()
 })
 
-function clientFor(state: UpdateCheckProjection, ok: boolean) {
+function clientFor(state: UpdateCheckProjection) {
   const opened: string[] = []
   const client: UpdateCheckClient = {
     getState: async () => state,
     checkNow: async () => state,
     openUpdateLink: async (destination) => {
       opened.push(destination)
-      return { ok }
+      return { ok: true }
     },
     onChanged: () => () => undefined,
     getReleaseNotes: async () => ({ ok: false })
@@ -52,19 +52,28 @@ async function mount(client: UpdateCheckClient): Promise<HTMLElement> {
 }
 
 describe('the update action button in the top bar', () => {
-  it('appears only when a newer version exists, and opens the download page without navigating', async () => {
-    const { client, opened } = clientFor(available, true)
+  it('appears only when a newer version exists, and opens About without opening the download page', async () => {
+    const { client, opened } = clientFor(available)
     const container = await mount(client)
     const button = container.querySelector('button')
     expect(button).not.toBeNull()
-    // 用户 11-03：「一点都不醒目」——现在是实心按钮 + 文字，文字带目标版本号。
-    expect(button?.textContent).toBe('更新到 0.3.1')
-    // 可读名**以可见文字开头**（label-in-name），后半句补动作。
-    expect(button?.getAttribute('aria-label')).toBe('更新到 0.3.1，打开下载页')
+    // 只负责发现：文字是陈述句「有新版本 X」，不是命令句「更新到 X」。
+    expect(button?.textContent).toBe('有新版本 0.3.1')
+    // 可读名**以可见文字开头**（label-in-name），后半句说出它真正做的事。
+    expect(button?.getAttribute('aria-label')).toBe('有新版本 0.3.1，打开关于我们')
 
+    const seen: unknown[] = []
+    const onNavigate = (event: Event): void => {
+      seen.push((event as CustomEvent).detail)
+    }
+    window.addEventListener(APP_NAVIGATE_EVENT, onNavigate)
     await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(opened).toEqual(['download'])
-    // 点完不消失：结论没变，还能再点（等于重试）。
+    window.removeEventListener(APP_NAVIGATE_EVENT, onNavigate)
+
+    // 站内导航：与壳层所有「去设置某页」同一条路；不调 openUpdateLink、不碰白名单。
+    expect(seen).toEqual([{ navKey: 'settings', settingsPanelKey: 'about' }])
+    expect(opened).toEqual([])
+    // 点完不消失：结论没变，还能再点。
     expect(container.querySelector('button')).not.toBeNull()
   })
 
@@ -76,48 +85,25 @@ describe('the update action button in the top bar', () => {
       latestVersion: '0.10.0-beta.3',
       checkedAt: '2026-11-03T05:00:00.000Z'
     }
-    const { client } = clientFor(longVersion, true)
+    const { client } = clientFor(longVersion)
     const container = await mount(client)
     const button = container.querySelector('button')
     expect(button?.textContent).toBe('有新版本')
     // 回退时用原来那条可读名，不硬拼一个空版本号。
-    expect(button?.getAttribute('aria-label')).toBe('有新版本可用，打开下载页')
+    expect(button?.getAttribute('aria-label')).toBe('有新版本可用，打开关于我们')
   })
 
   it('takes the version from the same field the version row reads', async () => {
     // 这条守的是「一个值两处各取一次」：按钮文字里的版本号只能来自投影的 `latestVersion`，
-    // 和版本行「最新版本」那一格同源，否则会出现「按钮说更新到 A、行里写最新 B」。
-    const { client } = clientFor(available, true)
+    // 和版本行「最新版本」那一格同源，否则会出现「按钮说 A、行里写最新 B」。
+    const { client } = clientFor(available)
     const container = await mount(client)
-    expect(container.querySelector('button')?.textContent).toBe(`更新到 ${available.state === 'available' ? available.latestVersion : ''}`)
+    expect(container.querySelector('button')?.textContent).toBe('有新版本 0.3.1')
   })
 
   it('stays hidden when there is nothing newer', async () => {
-    const { client } = clientFor({ state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt: '2026-11-03T05:00:00.000Z' }, true)
+    const { client } = clientFor({ state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt: '2026-11-03T05:00:00.000Z' })
     const container = await mount(client)
     expect(container.querySelector('button')).toBeNull()
-  })
-
-  it('shows a four-second warning, announces once, keeps its name, and lets the reader retry', async () => {
-    vi.useFakeTimers()
-    const { client, opened } = clientFor(available, false)
-    const container = await mount(client)
-    const button = container.querySelector('button')!
-
-    await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    // 失败：播报一句（role=status），**文字与可读名都不变**——它做的事没变，只换图标。
-    expect(container.querySelector('[role="status"]')?.textContent).toBe('没能打开浏览器，可再点一次重试')
-    expect(button.getAttribute('aria-label')).toBe('更新到 0.3.1，打开下载页')
-    expect(button.textContent).toBe('更新到 0.3.1')
-
-    // 4 秒后回到正常态，播报消失。
-    await act(async () => {
-      vi.advanceTimersByTime(4000)
-    })
-    expect(container.querySelector('[role="status"]')).toBeNull()
-
-    // 再点一次 = 重试，会再次尝试打开。
-    await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(opened).toHaveLength(2)
   })
 })

@@ -1062,22 +1062,21 @@ export type PlatformText = {
     /**
      * 更新块里那颗唯一动作按钮——它不属于链接块，键就挂在 action 下。
      *
-     * 文案是**用户拍过的字面**（2026-11-03）：有新版叫「立即更新」、顶栏那颗叫「更新到 {版本}」。
-     * 外部有人以「点下去只是打开下载页」为理由改成「打开下载页」——那说法不算离谱，但改这几个字
-     * 要走用户确认，不许直接改：改文案的人通常连用例里的期望值一起改，测试仍然是绿的。
+     * 文案是**用户拍过的字面**（2026-11-03）：页内「立即更新」是唯一执行按钮；
+     * 顶栏那颗只负责发现，文字是陈述句「有新版本 {版本}」，点它进关于页。
+     * 改这几个字要走用户确认，不许直接改：改文案的人通常连用例里的期望值一起改，
+     * 测试仍然是绿的。
      */
     action: {
       update: string
-      /** 顶栏那颗动作按钮的读屏名：动作不变，失败时也不改。 */
+      /** 顶栏按钮的读屏名（无版本号时）：说出动作——打开关于我们。 */
       updateAvailable: string
-      /** 顶栏按钮的可见文字：**带目标版本号**，比「有新版本」明确。 */
+      /** 顶栏按钮的可见文字：**带目标版本号**，陈述句，不是命令句。 */
       updateToVersion: (version: string) => string
       /** 取不到版本号（或串太长塞不下）时的可见文字，不硬拼一个空版本号。 */
       updateNoVersion: string
       /** 上面那条的读屏名：**以可见文字开头**（label-in-name），后面再补动作。 */
       updateToVersionLabel: (version: string) => string
-      /** 点开失败时的播报（视觉隐藏的 role=status）：读屏听不到颜色变化。 */
-      openFailedNote: string
     }
     links: {
       changelog: string
@@ -2254,11 +2253,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsWithUpdate: '设置，有新版本可用',
       action: {
         update: '立即更新',
-        updateAvailable: '有新版本可用，打开下载页',
-        updateToVersion: (version) => `更新到 ${version}`,
+        updateAvailable: '有新版本可用，打开关于我们',
+        updateToVersion: (version) => `有新版本 ${version}`,
         updateNoVersion: '有新版本',
-        updateToVersionLabel: (version) => `更新到 ${version}，打开下载页`,
-        openFailedNote: '没能打开浏览器，可再点一次重试'
+        updateToVersionLabel: (version) => `有新版本 ${version}，打开关于我们`
       },
       links: {
         changelog: '更新日志',
@@ -3438,11 +3436,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsWithUpdate: 'Settings, an update is available',
       action: {
         update: 'Update now',
-        updateAvailable: 'An update is available; open the download page',
-        updateToVersion: (version) => `Update to ${version}`,
+        updateAvailable: 'An update is available; open About',
+        updateToVersion: (version) => `Version ${version} available`,
         updateNoVersion: 'Update available',
-        updateToVersionLabel: (version) => `Update to ${version}; open the download page`,
-        openFailedNote: 'The browser did not open. Click again to retry'
+        updateToVersionLabel: (version) => `Version ${version} available; open About`
       },
       links: {
         changelog: 'Release notes',
