@@ -37,4 +37,26 @@ describe('state-content-ternary candidate finder', () => {
     // 没有内容容器，本来就不算候选；这条同时钉住「留痕标记的写法」。
     expect(findCandidates('reviewed.tsx', text)).toEqual([])
   })
+
+  it('a bare marker with no reason still counts as unreviewed — 免检牌不算复核', () => {
+    // 只判「出现过这几个字」的话，光秃秃一行就能让扫描器说「全部已复核」，
+    // 而实际上没人写过一个字的理由。这就是「绿得没法验证」。
+    const text = [
+      `{/* ${REVIEW_MARKER} */}`,
+      `const block = {state === 'available' ? <table><tbody>{rows.map((row) => row.id)}</tbody></table> : null}`
+    ].join('\n')
+
+    const candidates = findCandidates('bare-marker.tsx', text)
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]?.reviewed).toBe(false)
+  })
+
+  it('a marker whose reason is a single character is not a review either', () => {
+    const text = [
+      `{/* ${REVIEW_MARKER} — 无 */}`,
+      `const block = {state === 'available' ? <table><tbody>{rows.map((row) => row.id)}</tbody></table> : null}`
+    ].join('\n')
+
+    expect(findCandidates('thin-marker.tsx', text)[0]?.reviewed).toBe(false)
+  })
 })

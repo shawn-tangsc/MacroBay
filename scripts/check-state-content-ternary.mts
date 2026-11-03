@@ -27,6 +27,15 @@ const CONTENT_CONTAINER = /<table\b|<ul\b|<tbody\b|<List\b|rows\.map\(|items\.ma
 /** 留痕标记：人看过之后的结论。 */
 export const REVIEW_MARKER = 'state-ternary: reviewed'
 
+/**
+ * 留痕**必须带理由**。
+ *
+ * 只判「出现过这个词」会留下最坏的一种情况：`// state-ternary: reviewed` 光秃秃一行，扫描器说
+ * 「全部已复核」，人以为有人看过，其实什么都没写下来。扫描器能证实的只有「有人写过一行」，
+ * 不能证实「他看过」——所以至少要求破折号后面真有内容，让空标记当场算未复核。
+ */
+const REVIEW_WITH_REASON = /state-ternary: reviewed\s*—\s*\S[^\n]{7,}/
+
 export type Candidate = { file: string; line: number; source: string; reviewed: boolean }
 
 function codeLines(text: string): string[] {
@@ -44,7 +53,7 @@ export function findCandidates(file: string, text: string): Candidate[] {
     if (!CONTENT_CONTAINER.test(windowText)) continue
     // 留痕可以写在候选上方 3 行内（注释通常紧贴上面），也可以在同一行尾。
     const nearby = lines.slice(Math.max(0, index - 3), index + 1).join('\n')
-    found.push({ file, line: index + 1, source: line.trim().slice(0, 120), reviewed: nearby.includes(REVIEW_MARKER) })
+    found.push({ file, line: index + 1, source: line.trim().slice(0, 120), reviewed: REVIEW_WITH_REASON.test(nearby) })
   }
   return found
 }
