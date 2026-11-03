@@ -78,6 +78,13 @@ describe('ETF outflow signal notification', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
+  // 出厂状态：开关两个出口都开着。这条钉的是「别让总闸在没人注意时被关回去」。
+  it('ships with the switch open, so the ordinary call submits', async () => {
+    const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
+    await notifyEtfOutflowSignals(submit, [outflowSignal()])
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
   it('sends nothing when the notification outlet itself is closed', async () => {
     const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
     await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: true, notification: false })

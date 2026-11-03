@@ -105,6 +105,11 @@ describe('ETF outflow signal query', () => {
     // 信号描述的是流水所属的交易日，不是这次读取发生的时刻。
     expect(signals[0]).toMatchObject({ observedAt: `${day(2)}T00:00:00.000Z` })
     expect(isModuleSignal(signals[0])).toBe(true)
+
+    // 同一交易日再读一次：还是那一条，去重键不变——不会因为读了两遍就多出一次信号。
+    const again = await createEtfOutflowSignalQuery({ readSnapshot }).query({ asOf })
+    expect(again.filter(signal => signal.asset === 'btc')).toHaveLength(1)
+    expect(again.map(signal => signal.dedupeKey)).toEqual(signals.map(signal => signal.dedupeKey))
   })
 
   it('says the window is not complete instead of calling two days a three-day reading', async () => {
