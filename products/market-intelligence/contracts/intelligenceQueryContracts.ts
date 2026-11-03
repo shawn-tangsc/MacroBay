@@ -3,6 +3,14 @@
  * Cross-product consumers must import from this module only.
  */
 
+import type {
+  CapitalConditionsSnapshotQueryInput,
+  CapitalConditionsSnapshotResult,
+  EtfPublicAssetSnapshot,
+  EtfPublicFlow,
+  EtfPublicSnapshot
+} from './capitalConditionsQueryTypes'
+
 export const MARKET_INTELLIGENCE_QUERY_SCHEMA_VERSION = 1
 
 export const MARKET_INTELLIGENCE_QUERY_TYPES = {
@@ -148,58 +156,17 @@ export function isCanonicalFundingRateHistoryTime(value: unknown): value is stri
   try { return new Date(value).toISOString() === value } catch { return false }
 }
 
+export type {
+  CapitalConditionsSnapshotQueryInput,
+  CapitalConditionsSnapshotResult,
+  EtfPublicAssetSnapshot,
+  EtfPublicFlow,
+  EtfPublicSnapshot
+} from './capitalConditionsQueryTypes'
+
 export function isFundingRateHistoryRate(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= -100 && value <= 100
 }
-
-export type CapitalConditionsSnapshotQueryInput = {
-  asOf: string
-  /** Daily briefing may read a stale snapshot with its observedAt; normal queries stay strict. */
-  allowStale?: boolean
-}
-
-export type EtfPublicFlow = Readonly<{
-  tradingDate: string
-  netFlowUsd: number
-  observedAt: string
-}>
-
-export type EtfPublicAssetSnapshot = Readonly<{
-  asset: 'BTC' | 'ETH'
-  rows: readonly EtfPublicFlow[]
-}>
-
-export type EtfPublicSnapshot = Readonly<{
-  state: 'available'
-  schemaVersion: 1
-  sourceId: '0xrouter'
-  windowEnd: string
-  verifiedAt: string
-  btc: EtfPublicAssetSnapshot
-  eth: EtfPublicAssetSnapshot
-}>
-
-export type CapitalConditionsSnapshotResult =
-  | {
-      state: 'available'
-      asOf: string
-      etf: EtfPublicSnapshot | { state: 'unavailable' }
-      coreStablecoins: {
-        observedAt: string
-        verifiedAt: string
-        currentUsd: number
-        change1dUsd: number
-        change1dPercent: number
-        change7dUsd: number
-        change7dPercent: number
-        change30dUsd: number
-        change30dPercent: number
-        dailyFlows?: readonly { tradingDate: string; netFlowUsd: number }[]
-      }
-      conclusion: 'partial' | 'unavailable'
-    }
-  | { state: 'empty'; asOf: string }
-  | { state: 'unavailable'; failureCode: 'capital-conditions-query-unavailable' }
 
 export const capitalConditionsSnapshotPolicy = {
   sourceId: 'defillama-stablecoins',
