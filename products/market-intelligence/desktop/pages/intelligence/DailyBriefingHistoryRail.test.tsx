@@ -56,7 +56,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   })
 
 describe('daily briefing history rail', () => {
-  it('keeps the meta in unbreakable facts and moves the attempt count to the row end', () => {
+  it('keeps the meta in unbreakable facts and leaves the attempt count to the list', () => {
     render({ editions: [edition({ attemptCount: 2 })], onLoadAttempts: async () => ({ state: 'available', attempts: [] }) })
     const meta = host.querySelector('.mi-daily-briefing__rail-meta')
     expect(meta?.textContent).toContain('4')
@@ -69,7 +69,10 @@ describe('daily briefing history rail', () => {
     expect(meta?.textContent).not.toContain('2026-11-02')
     expect(meta?.textContent).not.toContain('GMT')
     expect(meta?.textContent).toContain('08:00')
-    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe(`2 ${text.history.attempts.times}`)
+    // The row is the clock and the item count; the attempts list below already numbers every try, so
+    // repeating "2 attempts" up here said the same fact twice.
+    expect(meta?.textContent).not.toContain(text.history.attempts.times)
+    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe(text.history.attempts.show)
   })
 
   it('says "not run" once, with the scheduled time only for today, and keeps the direction word for screen readers', () => {

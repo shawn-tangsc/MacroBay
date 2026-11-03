@@ -134,9 +134,9 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
           {!missing && onLoadAttempts ? <button type="button" className="mi-daily-briefing__rail-attempts-toggle"
             aria-expanded={open} data-attempts-toggle={edition.date}
             onClick={() => expand(key, edition.date, edition.periodId)}>
-            {edition.attemptCount === undefined
-              ? (open ? text.history.attempts.hide : text.history.attempts.show)
-              : `${edition.attemptCount} ${text.history.attempts.times}`}
+            {/* The count belongs to the attempt list below it: repeating it on the row was the same
+                fact twice, and the row's own meta is the item count and the clock. */}
+            {open ? text.history.attempts.hide : text.history.attempts.show}
           </button> : null}
           {open ? <div className="mi-daily-briefing__rail-attempts" role="group" aria-label={text.history.attempts.title}>
             {shown?.status !== 'ready' && shown?.status !== 'unavailable' ? <LoadingState label={text.history.loading} minHeight={40} /> : null}
