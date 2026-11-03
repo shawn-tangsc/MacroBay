@@ -170,6 +170,42 @@ describe('the channel log panel', () => {
     expect(row?.textContent).not.toContain('some-new-code')
   })
 
+  it('writes why an enable attempt failed on the same line, not just that it happened', async () => {
+    const container = await mount({
+      ...ok,
+      listAudits: vi.fn(async () => [
+        { id: 'f1', action: 'request-enable', actorId: 'me', code: 'telegram-conflict', createdAt: '2026-11-03T04:30:00.000Z' },
+        { id: 'f2', action: 'request-enable', actorId: 'me', code: null, createdAt: '2026-11-03T04:00:00.000Z' }
+      ])
+    })
+
+    const rows = [...container.querySelectorAll('.channel-log-row')]
+    const failed = rows.find((node) => node.textContent?.includes('启用没有通过'))
+    const enabled = rows.find((node) => node.textContent?.includes('启用了推送'))
+    // 失败那行：动作 + 原因，同一行里能看出「为什么没开」。
+    expect(failed?.textContent).toContain(`${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}`)
+    expect(failed?.textContent).toContain(labels.channelSmokeReason['telegram-conflict'])
+    expect(failed?.textContent).not.toContain(labels.channelLogsUnknownCode)
+    expect(failed?.textContent).not.toContain('telegram-conflict')
+    // 成功那行不带 code，仍只说动作。
+    expect(enabled?.textContent).toContain(`${labels.channelLogOperationPrefix}${labels.channelLogActionText.actionRequestEnable}`)
+    expect(enabled?.textContent).not.toContain(labels.channelLogEnableFailedPrefix)
+  })
+
+  it('keeps an unknown enable-failure code off the screen and says why it cannot be more specific', async () => {
+    const container = await mount({
+      ...ok,
+      listAudits: vi.fn(async () => [
+        { id: 'f3', action: 'request-enable', actorId: 'me', code: 'some-new-code', createdAt: '2026-11-03T04:30:00.000Z' }
+      ])
+    })
+
+    const row = container.querySelector('.channel-log-row')
+    expect(row?.textContent).toContain(labels.channelSmokeReasonUnknown)
+    expect(row?.textContent).not.toContain('some-new-code')
+    expect(row?.textContent).not.toContain('没有上报')
+  })
+
   it('does not file an unconfirmed send under failures', async () => {
     const container = await mount({
       ...ok,

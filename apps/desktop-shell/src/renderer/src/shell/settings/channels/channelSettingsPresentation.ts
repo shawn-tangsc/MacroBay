@@ -84,3 +84,52 @@ export function credentialStatusLabel(
   if (status === 'unavailable') return labels.channelCredentialUnavailable
   return labels.channelCredentialMissing
 }
+
+/**
+ * 启用失败的**闭集**：`ChannelManagementResult.code` 与自检那支的 `reason` 合起来就这些
+ * （凭据没存、频道不在了、运行时没起来、平台还没接上、Telegram 那五种自检失败）。
+ *
+ * 以前只映射了自检的 5 个码，别的码一律落进兜底句「原因没有上报」——那等于告诉用户「不知道」，
+ * 却包装成一句解释。现在**每一个码都有话**；闭集外也有一句实话，且原始码永不上屏。
+ * 这张表与文案表一一对应，`channelSettingsPresentation.test.ts` 两边各钉一条。
+ */
+export const CHANNEL_ENABLE_FAILURE_REASONS = [
+  'telegram-credential-missing',
+  'telegram-provider-rejected',
+  'telegram-conflict',
+  'telegram-network-unavailable',
+  'telegram-rate-limited',
+  'channel-credential-missing',
+  'channel-agent-missing',
+  'adapter-not-supported',
+  'adapter-runtime-start-failed',
+  'channel-not-found'
+] as const
+
+export type ChannelEnableFailureReason = (typeof CHANNEL_ENABLE_FAILURE_REASONS)[number]
+
+type EnableFailureLabels = Pick<typeof platformText['en-US']['settings'], 'channelSmokeReason' | 'channelSmokeReasonUnknown'>
+
+/** 码 → 人话；闭集外（或根本没有码）走那句实话，绝不把空值包装成解释。 */
+export function smokeReasonSentence(code: string | null | undefined, labels: EnableFailureLabels): string {
+  if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(labels.channelSmokeReason, code)) {
+    return labels.channelSmokeReason[code]
+  }
+  return labels.channelSmokeReasonUnknown
+}
+
+/**
+ * `requestEnable` 的返回值 → 行内那句话；`null` 表示这次确实开成了。
+ *
+ * 两个字段都要认：自检失败带 `reason`，而「凭据没存 / 频道不在了 / 运行时没起来」只带 `code`。
+ * 只读 `reason` 就会把后三种当成「没有原因」——那正是用户看到的「原因没有上报」。
+ * 拿不到返回值（`undefined`）也算没开成：开关回弹却一句话不写，比说实话更糟。
+ */
+export function enableFailureSentence(
+  result: { ok?: boolean; code?: string; reason?: string } | null | undefined,
+  labels: EnableFailureLabels
+): string | null {
+  if (result?.ok === true) return null
+  const code = typeof result?.reason === 'string' && result.reason !== '' ? result.reason : result?.code
+  return smokeReasonSentence(code, labels)
+}

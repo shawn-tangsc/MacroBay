@@ -251,6 +251,12 @@ export type PlatformText = {
     channelTokenCurrent: string
     /** 保存次数（revision）：合法且不会说谎，别写成时间。 */
     channelTokenRevision: string
+    /** 保存凭据后回读确认：没存上、没填、读不到，三句话三个意思，都不能说成「保存成功」。 */
+    channelCredentialRequired: string
+    channelCredentialSaveFailed: string
+    channelCredentialUnverified: string
+    /** 新建成功但 Token 没落库：先说频道已经建好，免得用户以为要再点一次「创建」。 */
+    channelCreatedWithoutCredential: string
     /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
     channelPermissionDefault: string
     channelPermissionAcceptEdits: string
@@ -286,6 +292,8 @@ export type PlatformText = {
     /** 闭集里查不到的码：只写这一句，原始码不上屏。 */
     channelLogsUnknownCode: string
     channelLogOperationPrefix: string
+    /** 启用失败那一行不写「启用了推送」：改成这个前缀 + 同一套原因人话，日志里能追到「为什么没开」。 */
+    channelLogEnableFailedPrefix: string
     channelLogRuntimePrefix: string
     /** 起停不算异常：单独一个「运行：」前缀。 */
     channelLogLifecyclePrefix: string
@@ -1604,9 +1612,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
         'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
         'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
-        'telegram-rate-limited': '请求太频繁被限流，等一会儿再试'
+        'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
+        'channel-credential-missing': '还没有存 Token，先在「编辑」里填一把再启用',
+        'channel-agent-missing': '这条频道没有绑上可用的助手，重新创建一条再试',
+        'adapter-not-supported': '这个平台还没接上，这一版启用不了',
+        'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
+        'channel-not-found': '这条频道已经不在了，刷新一下列表'
       }),
-      channelSmokeReasonUnknown: '启用没有通过检查，但原因没有上报',
+      channelSmokeReasonUnknown: '这次没有通过检查，暂时说不出具体原因，可以再试一次',
       channelLogs: '日志',
       channelEdit: '编辑',
       channelTokenMask: '********',
@@ -1622,6 +1635,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
       channelTokenCurrent: '当前已存：{mask}',
       channelTokenRevision: '第 {count} 次保存',
+      channelCredentialRequired: '这条频道还没有 Token，需要填一个',
+      channelCredentialSaveFailed: 'Token 没存上，请重试',
+      channelCredentialUnverified: '没能确认 Token 是否存进库里：关掉重开这个弹层看状态',
+      channelCreatedWithoutCredential: '频道建好了，但 Token 没存上——在「编辑」里重新填一次',
       channelPermissionDefault: '每次都要问',
       channelPermissionAcceptEdits: '自动接受修改',
       channelPermissionBypass: '完全放行',
@@ -1647,6 +1664,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsTimeZone: '时间均为 {zone}',
       channelLogsUnknownCode: '没有更多说明',
       channelLogOperationPrefix: '操作：',
+      channelLogEnableFailedPrefix: '启用没有通过——',
       channelLogRuntimePrefix: '运行异常：',
       channelLogLifecyclePrefix: '运行：',
       channelLogDeliveryPrefix: '发送失败：',
@@ -2887,9 +2905,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
         'telegram-conflict': 'another program is using the same bot; stop that one first',
         'telegram-network-unavailable': 'the network or proxy cannot be reached; check the proxy and retry',
-        'telegram-rate-limited': 'too many requests right now; wait a moment and retry'
+        'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
+        'channel-credential-missing': 'no token is stored yet; add one in Edit and enable again',
+        'channel-agent-missing': 'this channel has no usable assistant bound; create it again',
+        'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
+        'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
+        'channel-not-found': 'this channel is gone now; refresh the list'
       }),
-      channelSmokeReasonUnknown: 'the enable check failed and the reason was not reported',
+      channelSmokeReasonUnknown: 'the check did not pass and this time the reason is unclear; try again',
       channelLogs: 'Logs',
       channelEdit: 'Edit',
       channelTokenMask: '********',
@@ -2905,6 +2928,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
       channelTokenCurrent: 'Currently stored: {mask}',
       channelTokenRevision: 'saved {count} times',
+      channelCredentialRequired: 'this channel has no token yet; enter one',
+      channelCredentialSaveFailed: 'the token was not saved; retry',
+      channelCredentialUnverified: 'could not confirm the token reached the store; close and reopen this dialog to check',
+      channelCreatedWithoutCredential: 'the channel was created, but the token was not saved — enter it again in Edit',
       channelPermissionDefault: 'Ask every time',
       channelPermissionAcceptEdits: 'Accept edits automatically',
       channelPermissionBypass: 'Allow everything',
@@ -2930,6 +2957,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsTimeZone: 'All times are in {zone}',
       channelLogsUnknownCode: 'No further explanation',
       channelLogOperationPrefix: 'Operation: ',
+      channelLogEnableFailedPrefix: 'enabling failed — ',
       channelLogRuntimePrefix: 'Runtime error: ',
       channelLogLifecyclePrefix: 'Runtime: ',
       channelLogDeliveryPrefix: 'Send failed: ',

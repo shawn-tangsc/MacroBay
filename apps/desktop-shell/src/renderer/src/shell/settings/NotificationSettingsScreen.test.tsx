@@ -380,7 +380,7 @@ describe('the send-to-channel row', () => {
     })
 
     const row = container.querySelector('[data-row="channel"]')!
-    expect(row.textContent).toContain('原因没有上报')
+    expect(row.textContent).toContain('这次没留下原因')
     expect(row.textContent).not.toContain('some-new-code')
   })
 

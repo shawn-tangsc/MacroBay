@@ -27,13 +27,16 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
   const channels = {
     catalog: vi.fn(async () => catalogEntries),
     list: vi.fn(async () => [channel]),
+    // 保存后回读用的就是这一口：默认「已配置」，只有需要演「没存上」的用例才覆盖它。
+    get: vi.fn(async () => ({ ...channel, id: 'channel-1' })),
     create: vi.fn(async () => ({})),
     update: vi.fn(async () => ({})),
-    requestEnable: vi.fn(async () => ({})),
+    requestEnable: vi.fn(async () => ({ ok: true, code: 'runtime-ready' })),
     disable: vi.fn(async () => ({})),
     remove: vi.fn(async () => ({})),
     listPolicies: vi.fn(async () => []),
     beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
+    submitCredential: vi.fn(async () => ({})),
     rotateCredential: vi.fn(async () => ({})),
     ...overrides
   }
@@ -497,5 +500,166 @@ describe('an empty platform', () => {
     expect(empty?.querySelector('.state-view__action')).not.toBeNull()
     const addButtons = [...container.querySelectorAll('button')].filter((node) => node.textContent?.trim() === labels.channelAdd)
     expect(addButtons).toHaveLength(1)
+  })
+})
+
+/**
+ * 保存凭据必须自证。
+ *
+ * 用户上一次的现场是：填了 Token、界面没报错、他以为存上了，而库里 `credential_health` 一直是
+ * `missing`——点启用时才变成「没得检查」。所以这里钉三件事：回读没配置就不许报成功、本来就
+ * 没有凭据时留空保存必须明说「需要填一个」、回读确实配置了才算成功。
+ */
+describe('saving a credential has to prove itself', () => {
+  /** happy-dom 没有 SubtleCrypto；这里只要让加密交接能跑完，验的是交接之后那次回读。 */
+  function stubWebCrypto(): void {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (array: Uint8Array) => array,
+      subtle: {
+        deriveBits: vi.fn(async () => new ArrayBuffer(32)),
+        encrypt: vi.fn(async () => new ArrayBuffer(4)),
+        exportKey: vi.fn(async () => ({})),
+        generateKey: vi.fn(async () => ({ privateKey: {}, publicKey: {} })),
+        importKey: vi.fn(async () => ({}))
+      }
+    })
+  }
+
+  function typeInto(field: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  async function openEdit(container: HTMLElement): Promise<void> {
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+  }
+
+  async function clickByText(label: string): Promise<void> {
+    const button = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === label
+    )
+    await act(async () => button?.click())
+    await act(async () => {})
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reports a save that did not land, keeps the dialog open and keeps what the user typed', async () => {
+    stubWebCrypto()
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      // 回读说：库里还是 missing。界面不许把这当成保存成功。
+      get: vi.fn(async () => ({ ...channel, credential: { status: 'missing', hasCredential: false } }))
+    })
+    const container = await mount()
+    await openEdit(container)
+
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(field, '123:new-token'))
+    await clickByText(labels.channelUpdate)
+
+    expect(channels.rotateCredential).toHaveBeenCalled()
+    const error = document.body.querySelector('[data-channel-save-error]')
+    expect(error?.textContent).toContain(labels.channelCredentialSaveFailed)
+    // 弹层没关：没有假装成功。
+    expect(document.body.querySelector('[data-current-token]')).not.toBeNull()
+    // 用户粘的内容还在，不用重打一遍。
+    expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).value).toBe('123:new-token')
+  })
+
+  it('does not mistake the old credential for a successful replacement', async () => {
+    stubWebCrypto()
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      // 写接口明确失败，但库里那条**旧**凭据还在：只看回读会读到 configured，于是错报成功。
+      rotateCredential: vi.fn(async () => ({ ok: false, code: 'channel-credential-invalid' }))
+    })
+    const container = await mount()
+    await openEdit(container)
+
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(field, '123:new-token'))
+    await clickByText(labels.channelUpdate)
+
+    expect(document.body.querySelector('[data-channel-save-error]')?.textContent).toContain(labels.channelCredentialSaveFailed)
+    expect(document.body.querySelector('[data-current-token]')).not.toBeNull()
+  })
+
+  it('refuses to call an empty box saved when the channel never had a token', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [], credential: { status: 'missing', hasCredential: false } }]),
+      get: vi.fn(async () => ({ ...channel, credential: { status: 'missing', hasCredential: false } }))
+    })
+    const container = await mount()
+    await openEdit(container)
+
+    await clickByText(labels.channelUpdate)
+
+    expect(channels.update).toHaveBeenCalled()
+    // 留空＝不改，但库里本来就没有：这不算成功，得说清「需要填一个」。
+    expect(document.body.querySelector('[data-channel-save-error]')?.textContent).toContain(labels.channelCredentialRequired)
+    expect(document.body.querySelector('[data-current-token]')).not.toBeNull()
+  })
+
+  it('closes the dialog once the read-back says configured', async () => {
+    stubWebCrypto()
+    installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    await openEdit(container)
+
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(field, '123:new-token'))
+    await clickByText(labels.channelUpdate)
+
+    expect(document.body.querySelector('[data-channel-save-error]')).toBeNull()
+    expect(document.body.querySelector('[data-current-token]')).toBeNull()
+  })
+
+  it('tells the user the channel exists but the token did not land, instead of a silent success', async () => {
+    stubWebCrypto()
+    const channels = installPlatform({
+      list: vi.fn(async () => []),
+      create: vi.fn(async () => ({ id: 'channel-9' })),
+      get: vi.fn(async () => ({ ...channel, id: 'channel-9', credential: { status: 'missing', hasCredential: false } }))
+    })
+    const container = await mount()
+
+    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+    await act(async () => add?.click())
+    await act(async () => {})
+
+    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
+    await act(async () => typeInto(name, 'Telegram 9'))
+    // 助手是必填：不选它，「创建」按钮一直是禁用的。
+    const select = document.body.querySelector('.ant-select') as HTMLElement
+    const trigger = select.querySelector('.ant-select-selector') ?? select
+    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await vi.waitFor(() => {
+      const options = [...document.querySelectorAll('.ant-select-item-option')]
+      expect(options.some((option) => option.textContent?.trim() === '助手一')).toBe(true)
+    })
+    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === '助手一'
+    ) as HTMLElement
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(token, '123:new-token'))
+    await clickByText(labels.channelCreate)
+
+    expect(channels.create).toHaveBeenCalled()
+    expect(channels.submitCredential).toHaveBeenCalled()
+    // 建好了但 Token 没落库：页面级那句必须说清「频道已建好、Token 要重填」。
+    expect(container.textContent).toContain(labels.channelCreatedWithoutCredential)
+    expect(document.body.querySelector('[data-current-token]')).toBeNull()
   })
 })

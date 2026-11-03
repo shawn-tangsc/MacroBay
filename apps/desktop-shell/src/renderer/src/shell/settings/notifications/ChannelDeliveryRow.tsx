@@ -88,7 +88,7 @@ function ChannelStatusLine(props: {
         </span>
       )
     }
-    // 其余原因码是闭集：查得到翻译，查不到就说「原因没有上报」，绝不把码或原始错误印给读者。
+    // 其余原因码是闭集：查得到翻译，查不到就如实说「这次没留下原因」，绝不把码或原始错误印给读者。
     const reason =
       state.failedReason === null
         ? text.pushFailureReasonUnknown

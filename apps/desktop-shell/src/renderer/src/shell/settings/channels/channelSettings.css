@@ -326,3 +326,13 @@
   font-size: 12px;
   user-select: none;
 }
+
+/* 页面与弹层共用的就地报错：红色只落在左侧 2px 竖条上，句子用中性色——
+   --danger 在这一档对比度只有 3.25–3.94，落在字上读不清。 */
+.channel-inline-error {
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--danger);
+  color: var(--muted-strong);
+  font-size: 12.5px;
+}

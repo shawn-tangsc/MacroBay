@@ -38,8 +38,8 @@ export type NotificationSettingsText = {
   channelAmbiguous: string
   /** 失败句：时刻由 `formatShellCompactInstant` 产出，调用点只把它放进模板。 */
   /**
-   * 失败行：**原因的人话 + 时刻**。原因码是闭集（`ChannelPushReason`），查不到就说「原因没有上报」，
-   * 绝不把码或原始错误当读者文字印上去。
+   * 失败行：**原因的人话 + 时刻**。原因码是闭集（`ChannelPushReason`），查不到就如实说「这次没留下原因」，
+   * 绝不把码或原始错误当读者文字印上去，也不写「没有上报」——那是拿空值包装成解释。
    */
   channelPushFailed: (reason: string, at: string) => string
   /**
@@ -134,7 +134,7 @@ const zh: NotificationSettingsText = {
     // `unknown-after-send` 不在这张表里：它有自己的整句（`channelPushUnknown`），
     // 因为「没发出去：已交给频道」这句话自己和自己打架。
   }),
-  pushFailureReasonUnknown: '原因没有上报',
+  pushFailureReasonUnknown: '这次没留下原因',
   channelTargetLabel: '目标',
   channelTargetDirect: '私聊',
   channelTargetGroup: '群聊',
@@ -225,7 +225,7 @@ const en: NotificationSettingsText = {
     'channel-rejected': 'the channel rejected this message'
     // `unknown-after-send` has its own sentence; see `channelPushUnknown`.
   }),
-  pushFailureReasonUnknown: 'the reason was not reported',
+  pushFailureReasonUnknown: 'no reason was recorded this time',
   channelTargetLabel: 'Target',
   channelTargetDirect: 'Direct message',
   channelTargetGroup: 'Group chat',

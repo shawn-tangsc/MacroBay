@@ -15,6 +15,7 @@ import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
+import { enableFailureSentence } from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
@@ -49,6 +50,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   // 编辑弹层里「空列表」到底是不是「允许所有」，取决于这个频道有没有显式放行名单。
   const [policyPresence, setPolicyPresence] = useState<ChannelPolicyPresence>('unknown')
   const [savingEdit, setSavingEdit] = useState(false)
+  /** 保存弹层里的就地报错：页面级那句在弹层后面，读者根本看不见。 */
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Channel | null>(null)
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
 
@@ -127,9 +130,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         id: channel.id,
         actorId: 'settings-user'
       })) as { ok?: boolean; code?: string; reason?: string } | undefined
-      if (result?.ok === false) {
-        const reason = typeof result.reason === 'string' ? result.reason : ''
-        const sentence = labels.channelSmokeReason[reason] ?? labels.channelSmokeReasonUnknown
+      const sentence = enableFailureSentence(result, labels)
+      if (sentence !== null) {
         setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
       }
       await reload()
@@ -145,6 +147,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   /** 打开编辑弹层时先看有没有显式放行名单：查不到就记「未知」，不默认成任何一种。 */
   const openEditor = async (channel: Channel): Promise<void> => {
+    setSaveError(null)
     setEditor({ mode: 'edit', channel })
     setPolicyPresence('unknown')
     try {
@@ -152,6 +155,25 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setPolicyPresence(policies.length > 0 ? 'present' : 'none')
     } catch {
       setPolicyPresence('unknown')
+    }
+  }
+
+  /**
+   * 保存凭据后**回读一次**：库里必须真的变成「已配置」。
+   *
+   * 「请求没报错」不等于「存进了库」。这条回读是用户上一次那件事的直接教训：界面显示存好了，
+   * 库里 `credential_health` 却是 `missing`，于是点启用时变成「没得检查」。
+   * 三种结果必须分开说：`true` 存上了、`false` 确定没存上、`null` 读不到（读不到 ≠ 没存上）。
+   */
+  const readCredentialConfigured = async (channelId: string): Promise<boolean | null> => {
+    try {
+      const view = (await window.platform.channels.get(channelId)) as
+        | { credential?: { status?: string; hasCredential?: boolean } }
+        | null
+        | undefined
+      return view?.credential?.hasCredential === true && view.credential.status === 'configured'
+    } catch {
+      return null
     }
   }
 
@@ -165,6 +187,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }): Promise<void> => {
     setSavingEdit(true)
     setError(null)
+    setSaveError(null)
+    let createdId: string | null = null
     try {
       const created = (await window.platform.channels.create({
         type: selectedType,
@@ -176,11 +200,36 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })) as { id?: string } | undefined
-      if (typeof created?.id === 'string') await submitNewChannelCredential(created.id, input.token)
+      if (typeof created?.id !== 'string') {
+        setError(labels.channelOperationFailed)
+        return
+      }
+      createdId = created.id
+      const submitted = await submitNewChannelCredential(created.id, input.token)
+      // 返回 `ok: false` 也是失败（它不抛错），一样不许当成存好了。
+      const stored = submitted?.ok === false ? false : await readCredentialConfigured(created.id)
+      // 建好了也要回读：频道的存在不等于凭据落库。两种结局分开说，且都关掉弹层——
+      // 留着弹层让用户再点一次「创建」只会建出第二条重复频道。
+      setError(
+        stored === true
+          ? null
+          : stored === null
+            ? labels.channelCredentialUnverified
+            : labels.channelCreatedWithoutCredential
+      )
       setEditor(null)
+      setSaveError(null)
       await reload()
     } catch {
-      setError(labels.channelOperationFailed)
+      if (createdId === null) {
+        // 连频道都没建出来：留在弹层里说，页面那句在遮罩后面读者看不见。
+        setSaveError(labels.channelOperationFailed)
+        return
+      }
+      // 频道已经建好，只是凭据没落库：关掉弹层并把话说清（再点一次「创建」会建出重复频道）。
+      setError(labels.channelCreatedWithoutCredential)
+      setEditor(null)
+      await reload()
     } finally {
       setSavingEdit(false)
     }
@@ -197,6 +246,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
     setError(null)
+    setSaveError(null)
+    const tokenProvided = input.token.trim().length > 0
     try {
       await window.platform.channels.update({
         id: editor.channel.id,
@@ -208,7 +259,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         actorId: 'settings-user'
       })
       // 空串＝不修改旧 Token；非空＝整串替换（旧值全程不可读，走同一套加密交接）。
-      if (input.token.trim().length > 0) {
+      let tokenWrite: { ok?: boolean } | undefined
+      if (tokenProvided) {
         const begin = await window.platform.channels.beginCredential({ id: editor.channel.id })
         const handoff = await encryptChannelHandoff(
           begin as Parameters<typeof encryptChannelHandoff>[0],
@@ -216,16 +268,33 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           'credential',
           { bot_token: input.token }
         )
-        await window.platform.channels.rotateCredential({
+        tokenWrite = (await window.platform.channels.rotateCredential({
           id: editor.channel.id,
           actorId: 'settings-user',
           handoff
-        })
+        })) as { ok?: boolean } | undefined
+      }
+      // 回读确认后再关弹层：没存上就不许显示「保存成功」。
+      // 写接口返回 `ok: false` 也算没写成——回读这时仍会读到**旧**凭据，只看回读会被骗。
+      const stored = tokenWrite?.ok === false ? false : await readCredentialConfigured(editor.channel.id)
+      if (stored !== true) {
+        // 填了还没存上 → 没存上；没填且库里本来就没有 → 先告诉他「需要填一个」；
+        // 读不到 → 说读不到，但不许说成「没存」。
+        setSaveError(
+          stored === null
+            ? labels.channelCredentialUnverified
+            : tokenProvided
+              ? labels.channelCredentialSaveFailed
+              : labels.channelCredentialRequired
+        )
+        await reload()
+        return
       }
       setEditor(null)
       await reload()
     } catch {
-      setError(labels.channelOperationFailed)
+      // 弹层还开着：错误必须写在弹层里，页面级那句在遮罩后面读者看不见。
+      setSaveError(labels.channelOperationFailed)
     } finally {
       setSavingEdit(false)
     }
@@ -262,7 +331,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
       <div className="channel-detail">
         {error === null ? null : (
-          <p role="alert">{error}</p>
+          <p className="channel-inline-error" role="alert">
+            {error}
+          </p>
         )}
 
         {initialLoading ? (
@@ -292,7 +363,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 <Button
                   className="channel-add-button"
                   icon={<Plus size={14} />}
-                  onClick={() => setEditor({ mode: 'create' })}
+                  onClick={() => {
+                    setSaveError(null)
+                    setEditor({ mode: 'create' })
+                  }}
                   type="primary"
                 >
                   {labels.channelAdd}
@@ -313,7 +387,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               // 空态走组件契约：标准两行（通用标题 + 原因句）+ 一个「添加」动作。
               // 不自绘、也不给 StateView 加「只显示一行」的开关——同一件事只说一遍即可。
               <StateView
-                action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: () => setEditor({ mode: 'create' }) }}
+                action={{
+                  labelKey: STATE_VIEW_ACTION_KEYS.create,
+                  onSelect: () => {
+                    setSaveError(null)
+                    setEditor({ mode: 'create' })
+                  }
+                }}
                 reasonCode="never-created"
                 state="empty"
               />
@@ -356,6 +436,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           policyPresence={policyPresence}
           onCancel={() => setEditor(null)}
           onSave={(input) => void saveEdit(input)}
+          saveError={saveError}
           saving={savingEdit}
         />
       ) : null}

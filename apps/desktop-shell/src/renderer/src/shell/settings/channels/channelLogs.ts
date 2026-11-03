@@ -6,6 +6,8 @@ import {
 } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
+import { smokeReasonSentence } from './channelSettingsPresentation'
+
 /**
  * 日志面板的行模型：三类来源合并成一条时间线，**每条正文都带类别前缀**。
  *
@@ -26,7 +28,8 @@ export type ChannelLogRow = {
 type Labels = PlatformText['settings']
 
 export type ChannelLogSources = {
-  operations?: readonly { id: string; action: string; createdAt: string }[]
+  /** 管理审计：`code` 在这一类里只在「启用失败」时有值（写的是原因码）。 */
+  operations?: readonly { id: string; action: string; code?: string | null; createdAt: string }[]
   runtime?: readonly { id: string; code: string; createdAt: string }[]
   /** 发送失败的来源是**投递审计**（不是投递尝试）：一条审计一行，code 是闭集。 */
   deliveries?: readonly { id: string; code: string; createdAt: string }[]
@@ -40,13 +43,18 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
   for (const entry of sources.operations ?? []) {
     // 动作码也只走闭集表；查不到才有兜底句，常用动作一个都不许落到它。
     const copyKey = describeChannelManagementAudit(entry.action)
+    // 启用失败和启用成功是同一个动作码，区别只在 `code`：不把原因写进这一行，日志里就只剩
+    // 「操作：启用了推送」，读者看不出这次其实没开成、更看不出为什么。
+    const failedEnable = entry.action === 'request-enable' && typeof entry.code === 'string' && entry.code !== ''
     rows.push({
       id: `op-${entry.id}`,
       at: entry.createdAt,
       level: 'INFO',
-      text: `${labels.channelLogOperationPrefix}${
-        copyKey === undefined ? labels.channelLogsUnknownCode : labels.channelLogActionText[copyKey]
-      }`
+      text: failedEnable
+        ? `${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}${smokeReasonSentence(entry.code, labels)}`
+        : `${labels.channelLogOperationPrefix}${
+            copyKey === undefined ? labels.channelLogsUnknownCode : labels.channelLogActionText[copyKey]
+          }`
     })
   }
   for (const entry of sources.runtime ?? []) {

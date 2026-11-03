@@ -20,6 +20,8 @@ export function ChannelEditDialog(props: {
   labels: PlatformText['settings']
   /** 这个频道有没有显式放行名单：决定空列表的文案。 */
   policyPresence: ChannelPolicyPresence
+  /** 保存没通过时的就地一句话（回读没确认到凭据）。页面级那句在遮罩后面，读者看不见。 */
+  saveError?: string | null
   saving: boolean
   onCancel: () => void
   onSave: (input: {
@@ -91,6 +93,11 @@ export function ChannelEditDialog(props: {
           ? ` · ${labels.channelTokenRevision.replace('{count}', String(channel.credential.revision))}`
           : ''}
       </p>
+      {props.saveError ? (
+        <p className="channel-inline-error" data-channel-save-error role="alert">
+          {props.saveError}
+        </p>
+      ) : null}
       <ChannelFields
         agents={props.agents}
         labels={labels}

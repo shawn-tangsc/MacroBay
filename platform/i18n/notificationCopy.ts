@@ -101,7 +101,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.deliveryReason.pushUnavailable': '这条没接通投递通道',
     'notification.deliveryReason.systemUnsupported': '这台系统不支持桌面通知',
     'notification.deliveryReason.handedToSystem': '已推送到系统，未确认显示',
-    'notification.deliveryReason.sendFailedUnknown': '发送失败，原因没有上报',
+    'notification.deliveryReason.sendFailedUnknown': '发送失败，系统没有给出原因。',
   }),
   'en-US': Object.freeze({
     'notification.taskFailed.title': 'Task failed: {taskName}',
@@ -141,7 +141,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.deliveryReason.pushUnavailable': 'This notification has no delivery channel connected.',
     'notification.deliveryReason.systemUnsupported': 'This system does not support desktop notifications.',
     'notification.deliveryReason.handedToSystem': 'Handed to the system; display is unconfirmed.',
-    'notification.deliveryReason.sendFailedUnknown': 'Sending failed and the reason was not reported.',
+    'notification.deliveryReason.sendFailedUnknown': 'Sending failed and the system gave no reason.',
   })
 })
 

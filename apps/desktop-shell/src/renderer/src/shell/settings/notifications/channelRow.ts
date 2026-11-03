@@ -36,7 +36,7 @@ export type ChannelRowState =
     channelName: string
     target: ChannelBoundTargetKind
     failedAt: string
-    /** 失败原因码（闭集，`ChannelPushReason`）；`null` = 记录里没写原因，界面就说「原因没有上报」。 */
+    /** 失败原因码（闭集，`ChannelPushReason`）；`null` = 记录里没写原因，界面就说「这次没留下原因」。 */
     failedReason: string | null
   }>
   /** 可用且没在失败态：**成功不打标**，一行都不写。 */

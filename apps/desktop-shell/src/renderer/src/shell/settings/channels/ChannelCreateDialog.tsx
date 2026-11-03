@@ -82,8 +82,16 @@ export function ChannelCreateDialog(props: {
   )
 }
 
-/** 新建成功后提交凭据：先取一次交接材料，加密后再交回去；明文与密钥都不跨 IPC。 */
-export async function submitNewChannelCredential(channelId: string, token: string): Promise<void> {
+/**
+ * 新建成功后提交凭据：先取一次交接材料，加密后再交回去；明文与密钥都不跨 IPC。
+ *
+ * 把返回**交回调用方**：`submitCredential` 失败时会正常返回 `{ ok: false, code }` 而不抛错，
+ * 调用方不看这个字段，就会把一次没落库的提交当成成功——用户上一次就是这么被误导的。
+ */
+export async function submitNewChannelCredential(
+  channelId: string,
+  token: string
+): Promise<{ ok?: boolean; code?: string } | undefined> {
   const begin = await window.platform.channels.beginCredential({ id: channelId })
   const handoff = await encryptChannelHandoff(
     begin as Parameters<typeof encryptChannelHandoff>[0],
@@ -91,5 +99,9 @@ export async function submitNewChannelCredential(channelId: string, token: strin
     'credential',
     { bot_token: token }
   )
-  await window.platform.channels.submitCredential({ id: channelId, actorId: 'settings-user', handoff })
+  return (await window.platform.channels.submitCredential({
+    id: channelId,
+    actorId: 'settings-user',
+    handoff
+  })) as { ok?: boolean; code?: string } | undefined
 }
