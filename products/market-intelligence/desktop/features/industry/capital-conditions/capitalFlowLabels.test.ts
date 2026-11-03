@@ -76,20 +76,19 @@ describe('placeFlowLabels', () => {
     }
   })
 
-  it('keeps every label above the bar edge it belongs to, outflow included', () => {
-    // The outflow bar hangs from the zero line, so its top edge is where the label starts —
-    // dropping it below the bar would put it on the date axis.
+  it('follows each value end: above an inflow top, below an outflow tip', () => {
     const anchors: FlowLabelAnchor[] = [
       { index: 1, centerX: 200, anchorY: 30, direction: 'inflow', width: 60 },
-      { index: 2, centerX: 120, anchorY: 54, direction: 'outflow', width: 60 }
+      { index: 2, centerX: 120, anchorY: 60, direction: 'outflow', width: 60 }
     ]
     const boxes = placeFlowLabels(anchors, geometry)
-    for (const box of boxes) {
-      expect(box.top + geometry.labelHeight).toBeLessThanOrEqual(54 - geometry.gap + 1)
-    }
+    const inflow = boxes.find((box) => box.index === 1)!
+    const outflow = boxes.find((box) => box.index === 2)!
+    expect(inflow.top + geometry.labelHeight).toBeLessThanOrEqual(30 - geometry.gap)
+    expect(outflow.top).toBeGreaterThanOrEqual(60 + geometry.gap)
   })
 
-  it('never enters the date band, even for the tallest bar', () => {
+  it('pushes a bar-tip label up to the band edge instead of entering the band', () => {
     const boxes = placeFlowLabels([{ index: 0, centerX: 200, anchorY: 108, direction: 'outflow', width: 60 }], geometry)
     expect(boxes[0]!.top + geometry.labelHeight).toBeLessThanOrEqual(108 - 22 - 2)
   })

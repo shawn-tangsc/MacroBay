@@ -59,9 +59,9 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
         anchors.push({
           index,
           centerX: barRect.left - chartRect.left + barRect.width / 2,
-          // Always the bar's top edge: an outflow label then rises into the upper half rather
-          // than descending onto the date axis.
-          anchorY: barRect.top - chartRect.top,
+          // The bar's own end: the tip of an inflow, the tip of an outflow. The placer keeps the
+          // box above the date band, so a bar that reaches the floor pushes its label up.
+          anchorY: (direction === 'outflow' ? barRect.bottom : barRect.top) - chartRect.top,
           direction,
           width: label.offsetWidth
         })

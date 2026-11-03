@@ -34,9 +34,9 @@ export type FlowLabelAnchor = {
   /** Hub of the bar, used to centre the label. */
   centerX: number
   /**
-   * The bar edge the label sits above. Always the bar's top: for an inflow that is the tip, for
-   * an outflow it is the edge at the zero line — so an outflow label rises into the empty upper
-   * half instead of dropping towards the date axis below the chart.
+   * The end of the bar that carries the number: the top for an inflow, the tip for an outflow.
+   * The label follows it, so a reader can tell which bar a reading belongs to without tracing
+   * the bar. Covering the bar body is accepted; covering the date ticks is not.
    */
   anchorY: number
   direction: FlowLabelDirection
@@ -90,22 +90,29 @@ export function placeFlowLabels(
       geometry.inset,
       Math.max(geometry.inset, geometry.chartWidth - anchor.width - geometry.inset)
     )
-    // Every label rises. A label that dropped below an outflow bar would land on the date axis.
-    const baseTop = clamp(anchor.anchorY - geometry.labelHeight - geometry.gap, lowestTop, highestTop)
+    // Follow the value's end: above an inflow's top, below an outflow's tip. Both are clamped
+    // above the date band, so a bar that reaches the floor simply pushes its label up to the
+    // band's edge.
+    const rises = anchor.direction !== 'outflow'
+    const baseTop = clamp(
+      rises ? anchor.anchorY - geometry.labelHeight - geometry.gap : anchor.anchorY + geometry.gap,
+      lowestTop,
+      highestTop
+    )
     const rectOf = (top: number) => ({ left, top, right: left + anchor.width, bottom: top + geometry.labelHeight })
     const free = (top: number) => !placed.some((box) => intersects(box, rectOf(top)))
     let top = baseTop
     let chosen = rectOf(top)
     // Whole lane steps first, so several labels line up instead of scattering by a pixel.
     for (let lane = 0; lane <= geometry.maxLanes; lane += 1) {
-      const candidate = clamp(baseTop - (geometry.labelHeight + geometry.gap) * lane, lowestTop, highestTop)
+      const candidate = clamp(baseTop + (geometry.labelHeight + geometry.gap) * lane * (rises ? -1 : 1), lowestTop, highestTop)
       chosen = rectOf(candidate)
       if (free(candidate)) { top = candidate; break }
     }
     if (!free(top)) {
       // The frame is too short for whole lanes: walk one pixel at a time so the boxes still
       // never overlap while there is any free row left.
-      for (let candidate = baseTop; candidate >= lowestTop; candidate -= 1) {
+      for (let candidate = baseTop; rises ? candidate >= lowestTop : candidate <= highestTop; candidate += rises ? -1 : 1) {
         if (free(candidate)) { top = candidate; break }
       }
       chosen = rectOf(top)
