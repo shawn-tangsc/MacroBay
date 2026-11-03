@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ChannelDeliveryTargetView } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
+import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
 import type { NotificationEventCatalogEntry } from '@platform/notifications/contracts/notificationEventCatalog'
+import type { DeliveryAttempt } from '@platform/notifications/runtime/notificationRouting'
 import type {
   NotificationSubscriptionLevel,
   NotificationSubscriptionTable
@@ -45,7 +47,8 @@ export type NotificationSettingsClient = {
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
   /** 选中哪条频道；`null` 就是关掉推送（契约里没有第二个「启用」布尔）。 */
   setPushChannel?: (channelId: string | null) => Promise<unknown>
-  sendTest?: () => Promise<unknown>
+  /** 真实回执：一条记录 + 每一档投递的尝试结果（形状取自主进程运行时，不是我们自己拼的）。 */
+  sendTest?: () => Promise<{ record: SafeNotificationRecord; delivery: readonly DeliveryAttempt[] }>
 }
 
 export type NotificationSettingsState =

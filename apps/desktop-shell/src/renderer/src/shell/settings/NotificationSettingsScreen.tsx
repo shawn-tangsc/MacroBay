@@ -12,7 +12,7 @@ import { DeliveryRows } from './notifications/DeliveryRows'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
 import { SubscriptionMatrixView } from './notifications/SubscriptionMatrixView'
 import { buildSubscriptionRows } from './notifications/subscriptionMatrix'
-import { describeTestReceipt, type TestDeliveryAttempt } from './notifications/testReceipt'
+import { describeTestReceipt } from './notifications/testReceipt'
 import { useNotificationSettingsData, type NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
 /**
@@ -148,7 +148,8 @@ async function sendTest(
   setReceipt: (value: string) => void
 ): Promise<void> {
   try {
-    const result = (await client.sendTest?.()) as { delivery?: readonly TestDeliveryAttempt[] } | undefined
+    // 类型已由主进程标好：直接取字段，不再手写形状（`as` 会把「少一个字段」变成运行时 undefined）。
+    const result = await client.sendTest?.()
     setReceipt(describeTestReceipt({ delivery: result?.delivery ?? [], toastEnabled, text }))
   } catch {
     // 抛出来连「交给系统了」都没拿到：只能说失败，并如实写「原因不明」。

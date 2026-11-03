@@ -19,15 +19,20 @@ export type NotificationSubscriptionWriteResult = Awaited<ReturnType<Notificatio
  * 这一块只有读写与两条订阅，**没有能凭空造通知的方法**：`submit` 不在渲染层，
  * 「谁可以产生一条通知」仍由主进程说了算（见 `notificationProducerBoundary.test.ts`）。
  *
- * **每个写方法的返回值都标了真实类型**（不标就是 `Promise<any>`，渲染层写错字段编译器不会报错——
- * 频道设置那 8 条重复频道正是这么来的）。读侧还有几处仍是推断出来的 `any`，另笔处理，
- * 不在这笔里顺手改，免得与通知设置屏的在途改动撞同一批文件。
+ * **读写两侧的返回值都标了真实类型**，形状一律 `Awaited<ReturnType<NotificationRuntime[...]>>`
+ * 从运行时签名取，不在这里抄第二份：`ipcRenderer.invoke` 的默认返回是 `any`，标漏一个，
+ * 渲染层写错字段编译器就不会红——频道设置那 8 条重复频道正是这么来的。
  */
 export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
   return {
-    list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.notificationsList, query),
+    list: (query?: unknown) =>
+      ipcRenderer.invoke(IpcChannels.notificationsList, query) as Promise<Awaited<ReturnType<NotificationRuntime['list']>>>,
     /** 返回 `{ unread, version }`：角标只需一次调用；版本号随每次记录变化递增。 */
-    getUnreadState: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadState, input),
+    getUnreadState: (input?: { productId?: string }) =>
+      ipcRenderer.invoke(
+        IpcChannels.notificationsGetUnreadState,
+        input
+      ) as Promise<Awaited<ReturnType<NotificationRuntime['getUnreadState']>>>,
     markRead: (id: string) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<SafeNotificationRecord>,
     /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
@@ -46,14 +51,26 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     snooze: (id: string, until: string) =>
       ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }) as Promise<SafeNotificationRecord>,
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
-    readDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsReadDesktopPermission),
+    readDesktopPermission: () =>
+      ipcRenderer.invoke(
+        IpcChannels.notificationsReadDesktopPermission
+      ) as Promise<Awaited<ReturnType<NotificationRuntime['readDesktopPermission']>>>,
     /** 事件目录投影：带 `notifyOnlyIfSubscribed` 与批准档位；清单按它渲染，不写死事件名。 */
-    listEventCatalog: () => ipcRenderer.invoke(IpcChannels.notificationsListEventCatalog),
-    getSubscriptions: () => ipcRenderer.invoke(IpcChannels.notificationsGetSubscriptions),
+    listEventCatalog: () =>
+      ipcRenderer.invoke(IpcChannels.notificationsListEventCatalog) as Promise<
+        Awaited<ReturnType<NotificationRuntime['listEventCatalog']>>
+      >,
+    getSubscriptions: () =>
+      ipcRenderer.invoke(IpcChannels.notificationsGetSubscriptions) as Promise<
+        Awaited<ReturnType<NotificationRuntime['getSubscriptions']>>
+      >,
     setSubscription: (eventTypeId: string, patch: Record<string, unknown>) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetSubscription, { eventTypeId, patch }) as Promise<NotificationSubscriptionWriteResult>,
     /** 当前提示开关 / 通道选择 / 接线状态：设置页首帧要三个值，不是只给写口。 */
-    getDeliverySettings: () => ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings),
+    getDeliverySettings: () =>
+      ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings) as Promise<
+        Awaited<ReturnType<NotificationRuntime['getDeliverySettings']>>
+      >,
     setPushChannel: (channelId: string | null) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetPushChannel, { channelId }) as Promise<{ channelId: string | null }>,
     setToastEnabled: (enabled: boolean) =>
