@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { openSqliteDatabase } from '../sqlite/openSqliteDatabase'
+import {
+  clampCacheAuditMaxRecords,
+  clampCacheAuditRetentionDays,
+  pruneCacheAuditRecords
+} from './cacheAuditRetention'
 
 import type {
   CacheOperationAuditRecord,
@@ -8,9 +13,28 @@ import type {
   CacheOperationQuery
 } from './cacheContracts'
 
+/** 裁剪结果：两组数分开报，否则「删了 900 条」说不清是被时间清掉还是被条数上限挤掉。 */
+export type CacheOperationAuditPruneResult = Readonly<{
+  removedByAge: number
+  removedByCount: number
+}>
+
+export type CacheOperationAuditPruneOptions = Readonly<{
+  now?: string
+  retentionDays?: number
+  maxRecords?: number
+}>
+
 export interface CacheOperationAuditRepository {
   append(record: CacheOperationAuditRecord): Promise<void>
   listPage(query?: CacheOperationQuery): Promise<CacheOperationPage>
+  /**
+   * 按 `cacheAuditRetentionPolicy` 的时间与条数上限裁剪。
+   *
+   * 这张表原先只增不减（`MI-11-R16`），所以裁剪必须真的有人定期调用：调用方是
+   * `registerCacheAuditRetentionJob`，挂在 `@platform/jobs` 上，不自造定时器。
+   */
+  prune(options?: CacheOperationAuditPruneOptions): Promise<CacheOperationAuditPruneResult>
 }
 
 export class InMemoryCacheOperationAuditRepository implements CacheOperationAuditRepository {
@@ -22,6 +46,13 @@ export class InMemoryCacheOperationAuditRepository implements CacheOperationAudi
 
   async listPage(query: CacheOperationQuery = {}): Promise<CacheOperationPage> {
     return listAuditPage(this.records, query)
+  }
+
+  async prune(options: CacheOperationAuditPruneOptions = {}): Promise<CacheOperationAuditPruneResult> {
+    const result = pruneCacheAuditRecords(this.records, options)
+    this.records.length = 0
+    this.records.push(...result.records)
+    return { removedByAge: result.removedByAge, removedByCount: result.removedByCount }
   }
 }
 
@@ -100,6 +131,35 @@ export function createSqliteCacheOperationAuditRepository(path: string): CacheOp
         records: pageRows,
         nextCursor
       }
+    },
+    prune: async (options = {}) => {
+      const now = options.now ?? new Date().toISOString()
+      const nowMs = Date.parse(now)
+      const retentionDays = clampCacheAuditRetentionDays(options.retentionDays)
+      const maxRecords = clampCacheAuditMaxRecords(options.maxRecords)
+      if (!Number.isFinite(nowMs)) return { removedByAge: 0, removedByCount: 0 }
+
+      const cutoff = new Date(nowMs - retentionDays * 24 * 60 * 60 * 1000).toISOString()
+      // 只删「形状可比较且确实更旧」的行：`requested_at` 不是 ISO 形状的记录读不出年龄，保留不猜。
+      const aged = connection
+        .prepare(`
+          delete from cache_operation_audit
+          where requested_at < ? and requested_at like '____-__-__T%'
+        `)
+        .run(cutoff)
+      // 条数上限按列表顺序裁剪（`requested_at desc, operation_id desc`），删的是列表最底部那几条。
+      const trimmed = connection
+        .prepare(`
+          delete from cache_operation_audit
+          where operation_id in (
+            select operation_id from cache_operation_audit
+            order by requested_at desc, operation_id desc
+            limit -1 offset ?
+          )
+        `)
+        .run(maxRecords)
+
+      return { removedByAge: Number(aged.changes), removedByCount: Number(trimmed.changes) }
     }
   }
 }
