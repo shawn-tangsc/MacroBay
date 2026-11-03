@@ -5,6 +5,7 @@ import { Modal } from '@platform/ui/components/modal'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import {
+  DailyBriefingAddPeriodAction,
   DailyBriefingGenerationSettingsSection,
   useDailyBriefingGenerationSettings
 } from './DailyBriefingGenerationSettingsSection'
@@ -44,6 +45,12 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
     titleKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.title"
     width="standard"
   >
+    <div className="mi-briefing-settings-form">
+      <div className="mi-daily-briefing__settings-row mi-briefing-settings-form__group-heading">
+        <strong>{text.settingsDrawer.sections.generation}</strong>
+        <DailyBriefingAddPeriodAction text={text} />
+      </div>
+    </div>
     <DailyBriefingGenerationSettingsSection
       displayZone={section.displayZone}
       draft={section.draft}

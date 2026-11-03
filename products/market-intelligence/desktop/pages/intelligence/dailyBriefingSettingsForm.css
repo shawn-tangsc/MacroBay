@@ -1,0 +1,51 @@
+/*
+ * One grid for the whole settings form.
+ *
+ * The label column is a single fixed width and every value or control is right-aligned to the
+ * same edge, so two rows never look like two different forms. Rows are two columns only:
+ * `title (question first)` and `value/control` — no third column, and no control pushed away from
+ * the right edge.
+ *
+ * A state sentence (unavailable, warning, failed) is not a field: it takes the full row width,
+ * starts at the label column and may wrap. Hiding a state behind a question mark would tell the
+ * reader everything is fine while the control would do nothing.
+ */
+.mi-briefing-settings-form {
+  display: block;
+}
+
+.mi-briefing-settings-form .mi-daily-briefing__settings-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  /* One height for every setting row: the explanations live in their questions now, so a row
+     must not grow taller because a sentence happens to be long. */
+  min-height: 52px;
+}
+
+/* The value/control column: one right edge for text, selects, switches and check boxes. */
+.mi-briefing-settings-form .mi-daily-briefing__settings-row > :nth-child(2) {
+  justify-self: end;
+}
+
+/* A question plus its title, kept as one unit so DOM order and focus order agree. */
+.mi-briefing-settings-form .mi-daily-briefing__field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The group heading row carries the group's own action, right-aligned to the same edge as the
+   values, and on the same line as the heading. */
+.mi-briefing-settings-form .mi-briefing-settings-form__group-heading > :nth-child(2) {
+  justify-self: end;
+}
+
+/* States are rows of their own, not a second line inside a field. */
+.mi-briefing-settings-form .mi-briefing-settings-form__state {
+  grid-column: 1 / -1;
+  justify-self: start;
+  white-space: normal;
+}

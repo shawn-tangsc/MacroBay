@@ -121,7 +121,11 @@ describe('daily briefing generation settings modal', () => {
     expect(document.body.textContent).toContain(text.settings.periods.timeValue.replace('{time}', '08:00'))
     expect(document.body.textContent).toContain(text.settings.periods.windowValue.replace('{hours}', '24'))
 
+    // The control must be a real, enabled checkbox in the value column — "the row shows the text"
+    // is not the same as "there is something to tick".
     const tick = document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    expect(tick.disabled).toBe(false)
+    expect(tick.getAttribute('aria-label')).toBe(text.settings.periods.additional)
     await act(async () => { tick.click(); await Promise.resolve() })
     const trigger = costTrigger()!
     await act(async () => { trigger.click(); await Promise.resolve(); await Promise.resolve() })
@@ -238,13 +242,16 @@ describe('daily briefing generation settings modal', () => {
     expect(reason.tagName).toBe('BUTTON')
     expect(reason.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
 
-    // D8: the reason question belongs to the disabled button, immediately beside it.
-    const add = [...document.body.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
-    expect(add.parentElement?.nextElementSibling?.querySelector(`[aria-label="${text.settings.periods.addReason}"]`)).not.toBeNull()
+    // D8: "add an edition" is the group's action on the heading row, with its reason question
+    // directly beside it — the pair never splits to opposite ends of the line.
+    const heading = document.body.querySelector('.mi-briefing-settings-form__group-heading')!
+    const add = [...heading.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
+    expect(add.parentElement?.querySelector(`[aria-label="${text.settings.periods.addReason}"]`)).not.toBeNull()
 
     // D11: the note explains the whole form, so its question sits at the top, above the fields.
     const note = document.body.querySelector<HTMLElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
-    const firstField = document.body.querySelector('.mi-daily-briefing__settings-row')!
+    const firstField = [...document.body.querySelectorAll('.mi-daily-briefing__settings-row')]
+      .find((row) => !row.classList.contains('mi-briefing-settings-form__group-heading'))!
     expect(note.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 

@@ -15,6 +15,7 @@ import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import './dailyBriefingSettingsForm.css'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 export type EditionLocale = 'zh-CN' | 'en-US'
@@ -187,7 +188,7 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
 
   // Every form control in this block belongs to the brief's own settings; the drawer's
   // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
-  return <div data-setting-scope="brief">
+  return <div className="mi-briefing-settings-form" data-setting-scope="brief">
     {/* This sentence explains the whole form's save, not one group, so it heads the block: both
         hosts — the generation dialog and the settings drawer — show it from here, once. */}
     <p className="mi-daily-briefing__settings-link">
@@ -237,28 +238,8 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
         style={{ width: 128 }}
       />
     </div>
-    {/* One edition only in this version: the button says why it cannot be added instead of
-        disappearing, and that reason is the control's own accessible name. */}
-    <div className="mi-daily-briefing__settings-row">
-      <div className="mi-daily-briefing__settings-time">
-        <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
-        <Popover
-          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
-          resolveText={resolveProductText}
-          trigger={(triggerProps) => <IconButton
-            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
-            variant="plain"
-            icon={CircleHelp}
-            resolveText={resolveProductText}
-            size="sm"
-            {...triggerProps}
-          />}
-        />
-      </div>
-    </div>
 
     <div className="mi-daily-briefing__settings-row">
-      <div>
         <span className="mi-daily-briefing__field-label">
           {plan?.fallback
             ? <Popover
@@ -281,12 +262,12 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
         <small>{plan?.fallback
           ? periodLabels.languageFallback.replace('{language}', languageName(plan.used))
           : periodLabels.languageFollow.replace('{language}', plan ? languageName(plan.used) : '')}</small>
-      </div>
     </div>
     {/* The extra edition sits on its own row, left-aligned: its cost question opens inside the
         panel, not off its right edge. */}
     {extraLanguages.length > 0
       ? <div className="mi-daily-briefing__settings-row">
+        <span className="mi-daily-briefing__field-label">
         {extraChecked
           ? <Popover
             labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.cost"
@@ -302,7 +283,10 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
             />}
           />
           : null}
+        <strong>{periodLabels.additional}</strong>
+        </span>
         <Checkbox
+          aria-label={periodLabels.additional}
           checked={extraChecked}
           onChange={(event) => {
             const checked = event.target.checked
@@ -312,9 +296,37 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
                 : draft.additionalLanguages.filter((locale) => !extraLanguages.includes(locale))
             })
           }}
-        >{periodLabels.additional}</Checkbox>
+        />
       </div>
       : null}
     {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
   </div>
+}
+
+/**
+ * The generation group's own action, for the host to place on its group heading row.
+ *
+ * It belongs to the group, not to a row: a row would only exist when a second period does, so the
+ * control would jump between the two states — and the single-period view must not show a period
+ * number to earn a row. The reason is the button's accessible name, and its question sits directly
+ * beside it, so the pair never splits to opposite ends of the line.
+ */
+export function DailyBriefingAddPeriodAction({ text }: Readonly<{ text: DailyBriefingText }>): React.ReactElement {
+  const resolveProductText = useProductTextKey()
+  const periodLabels = text.settings.periods
+  return <span className="mi-daily-briefing__settings-time">
+    <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
+    <Popover
+      labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
+      resolveText={resolveProductText}
+      trigger={(triggerProps) => <IconButton
+        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
+        variant="plain"
+        icon={CircleHelp}
+        resolveText={resolveProductText}
+        size="sm"
+        {...triggerProps}
+      />}
+    />
+  </span>
 }

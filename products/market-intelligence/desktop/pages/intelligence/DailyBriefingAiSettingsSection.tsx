@@ -14,6 +14,7 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import './dailyBriefingSettingsForm.css'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 const MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
@@ -184,7 +185,7 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
 
   // Every form control in this block belongs to the brief's own settings; the drawer's
   // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
-  return <div data-setting-scope="brief">
+  return <div className="mi-briefing-settings-form" data-setting-scope="brief">
     <div className="mi-daily-briefing__settings-row">
       <ExplainedTitle
         label={text.aiSettings.enabled}
@@ -210,8 +211,8 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
         {/* Unavailability is a state, not an explanation: it stays visible, as its own node, so a
             reader cannot think everything is fine while the switch would do nothing. */}
         {webSearchBlocked
-          ? <small className="mi-daily-briefing-ai__error" data-state="warning" role="status">{text.aiSettings.webSearchNeedsSetup}</small>
-          : !webSearchSupported ? <small data-state="warning" role="status">{text.aiSettings.webSearchUnsupported}</small> : null}
+          ? null
+          : null}
       </div>
     </div>
     {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
@@ -237,7 +238,12 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
         placement="bottomRight"
       />
     </div> : null}
-    {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.failed}</p> : null}
+    {webSearchBlocked
+      ? <small className="mi-daily-briefing-ai__error mi-briefing-settings-form__state" data-state="warning" role="status">{text.aiSettings.webSearchNeedsSetup}</small>
+      : !webSearchSupported
+        ? <small className="mi-briefing-settings-form__state" data-state="warning" role="status">{text.aiSettings.webSearchUnsupported}</small>
+        : null}
+    {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error mi-briefing-settings-form__state" role="alert">{text.aiSettings.failed}</p> : null}
   </div>
 }
 
