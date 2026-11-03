@@ -20,7 +20,6 @@ import type {
   SecureHandoffBegin
 } from '../../ai/agent-platform/channels'
 import type { ModelDetectionMode, ModelDetectionResult } from '../../ai/providers/modelDetection/types'
-import type { AgentWorkspaceEnsureResult } from '../../ai/agent-platform/schemas/workspaceSchemas'
 
 type ProductEventPayload = {
   productId?: string

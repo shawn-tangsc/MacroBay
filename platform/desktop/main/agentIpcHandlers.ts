@@ -95,6 +95,24 @@ export function createAgentIpcHandlers(
 ) {
   return {
     getState: () => services.state.getState(),
+    /**
+     * 频道设置页「选择文件夹…」：路径 → 工作区编号，没有就先登记一条。
+     *
+     * 频道的 `workspace` 存编号不存路径，所以「路径 → 编号」只在 `AgentWorkspaceService`
+     * 里做一次，界面拿到的永远是编号。
+     */
+    ensureWorkspace: async (path: unknown) => {
+      if (typeof path !== 'string' || path.trim() === '') return { ok: false as const, code: 'workspace-path-invalid' as const }
+      try {
+        const result = await services.workspaces.findOrCreateByPathResult(path)
+        return {
+          ok: true as const,
+          workspace: { id: result.workspace.id, name: result.workspace.name, path: result.workspace.path }
+        }
+      } catch {
+        return { ok: false as const, code: 'workspace-unavailable' as const }
+      }
+    },
     getRuntimeSnapshot: () =>
       runtime?.getSnapshot?.() ?? {
         sessions: {},

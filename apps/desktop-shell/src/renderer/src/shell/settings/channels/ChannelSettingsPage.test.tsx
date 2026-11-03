@@ -42,7 +42,21 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
   }
   Object.assign(globalThis, {
     window: Object.assign(globalThis.window, {
-      platform: { channels, agents: { listAgents: vi.fn(async () => ({ agents: [{ id: 'agent-1', name: '助手一' }] })) } }
+      platform: {
+        channels,
+        agents: {
+          listAgents: vi.fn(async () => ({ agents: [{ id: 'agent-1', name: '助手一' }] })),
+          // 工作目录下拉的真实来源：整份智能体状态里的工作区。
+          getState: vi.fn(async () => ({
+            workspaces: [
+              { id: 'ws-1', name: 'market-notes', path: '/Users/me/market-notes', type: 'user', orderKey: 'a' },
+              { id: 'ws-system', name: 'System', path: '/Users/me/Library/app', type: 'system', orderKey: 'b' }
+            ]
+          })),
+          ensureWorkspace: vi.fn(async (path: string) => ({ ok: true, workspace: { id: 'ws-new', name: '新目录', path } }))
+        },
+        app: { selectDirectory: vi.fn(async () => '/Users/me/new-folder') }
+      }
     })
   })
   return channels as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -867,5 +881,122 @@ describe('the token you are typing can be checked', () => {
     await act(async () => toggle.click())
     expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('password')
     expect(document.body.querySelector('[data-token-visible-hint]')).toBeNull()
+  })
+})
+
+/**
+ * 工作目录必须是真选项，不是只有一个「不使用」。
+ *
+ * 频道的 `workspace` 存的是工作区**编号**，所以「选文件夹」这一步是：系统窗口给路径 →
+ * 主进程换成编号（没有就先登记）→ 下拉选中它 → 保存写 `{ type:'user', workspaceId }`。
+ * 取消与失败都不许把这栏悄悄退回默认值。
+ */
+describe('the working folder picker', () => {
+  async function openCreateDialog(container: HTMLElement): Promise<void> {
+    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+    await act(async () => add?.click())
+    await act(async () => {})
+  }
+
+  async function chooseWorkspace(value: string): Promise<void> {
+    const select = [...document.body.querySelectorAll('.ant-select')].find((node) =>
+      node.querySelector(`[title="${labels.channelFieldWorkspace}"], [aria-label="${labels.channelFieldWorkspace}"]`)
+    ) as HTMLElement | undefined
+    const trigger = (select ?? (document.body.querySelectorAll('.ant-select')[1] as HTMLElement)).querySelector(
+      '.ant-select-selector'
+    ) ?? (select as HTMLElement)
+    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await vi.waitFor(() => {
+      const options = [...document.querySelectorAll('.ant-select-item-option')]
+      expect(options.some((option) => option.textContent?.trim() === value)).toBe(true)
+    })
+    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === value
+    ) as HTMLElement
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => {})
+  }
+
+  it('lists the reader\'s own workspaces and saves the chosen one by id', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => []) })
+    const container = await mount()
+    await openCreateDialog(container)
+
+    await chooseWorkspace('market-notes')
+    expect(document.body.textContent).toContain('market-notes')
+
+    // 名称、助手、Token 都要有才能提交。
+    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(name, 'Telegram 1')
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const agentSelect = document.body.querySelectorAll('.ant-select')[0] as HTMLElement
+    await act(async () => (agentSelect.querySelector('.ant-select-selector') ?? agentSelect).dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await vi.waitFor(() => expect(document.querySelectorAll('.ant-select-item-option').length).toBeGreaterThan(0))
+    const agentOption = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === '助手一'
+    ) as HTMLElement
+    await act(async () => {
+      agentOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(token, '123:new-token')
+      token.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const submit = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelCreate
+    )
+    await act(async () => submit?.click())
+    await act(async () => {})
+
+    expect(channels.create).toHaveBeenCalledWith(expect.objectContaining({ workspace: { type: 'user', workspaceId: 'ws-1' } }))
+  })
+
+  it('turns a chosen folder into a workspace id before it is saved', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => []) })
+    const container = await mount()
+    await openCreateDialog(container)
+
+    await chooseWorkspace(labels.channelWorkspaceChoose)
+
+    const agentsBridge = window.platform.agents as unknown as { ensureWorkspace: ReturnType<typeof vi.fn> }
+    expect(agentsBridge.ensureWorkspace).toHaveBeenCalledWith('/Users/me/new-folder')
+    expect(document.body.textContent).toContain('新目录')
+    expect(channels.create).not.toHaveBeenCalled()
+  })
+
+  it('keeps the current choice and says so when the folder cannot be used', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        { ...channel, allowedChatIds: [], workspace: { type: 'user', workspaceId: 'ws-1' } }
+      ])
+    })
+    const agentsBridge = window.platform.agents as unknown as { ensureWorkspace: ReturnType<typeof vi.fn> }
+    agentsBridge.ensureWorkspace.mockResolvedValue({ ok: false, code: 'workspace-unavailable' })
+
+    const container = await mount()
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    await chooseWorkspace(labels.channelWorkspaceChoose)
+
+    expect(document.body.textContent).toContain(labels.channelWorkspaceFailed)
+    // 不许静默退回「不使用工作目录」：选中的仍是原来那条工作区。
+    const selected = [...document.body.querySelectorAll('.ant-select-selection-item')].map(
+      (node) => node.textContent?.trim() ?? ''
+    )
+    expect(selected).toContain('market-notes')
+    expect(selected).not.toContain(labels.channelWorkspaceDefault)
   })
 })

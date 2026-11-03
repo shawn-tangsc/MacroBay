@@ -50,19 +50,29 @@ export function ChannelFields(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
   policyPresence: ChannelPolicyPresence
-  /** 编辑时这个频道**有没有已经存下的 Token**：决定输入框下面那句提示是「留空＝不改」还是「填一个」。 */
+  /** 编辑时这个频道**有没有已经存下的 Token**：决定输入框下面那句提示是「留空＝不改」还是「填一个」。
+   */
   tokenStored?: boolean
+  /** 读者已有的工作区（只列 `user` 那类）。 */
+  workspaces?: readonly { id: string; name: string; path: string }[]
+  /** 选文件夹：返回工作区编号（用户取消返回 null）。登记动作在主进程，这里只拿编号。 */
+  onChooseWorkspace?: () => Promise<string | null>
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
   // 输入中的新 Token 临时可见；旧值永远不经过这个开关（接口里就没有旧值）。
   const [tokenVisible, setTokenVisible] = useState(false)
 
+  const CHOOSE_WORKSPACE = '__choose-directory__'
+  const workspaceChoices = props.workspaces ?? []
+  const currentMissing =
+    values.workspaceId !== null && !workspaceChoices.some((workspace) => workspace.id === values.workspaceId)
   const workspaceOptions = [
     { value: 'system', label: labels.channelWorkspaceDefault },
-    // 本版没有「列出工作区」的接口：已经指定过工作区的那条频道，把它的工作区原样回显，
-    // 不清空、也不假装能从列表里换一个（换到别的工作区等接口到了再做）。
-    ...(values.workspaceId === null ? [] : [{ value: values.workspaceId, label: labels.channelWorkspaceCurrent }])
+    // 已经选过、但不在读者现有工作区列表里的那条（被删掉了）：原样回显它，不悄悄换成别的。
+    ...(currentMissing ? [{ value: values.workspaceId as string, label: labels.channelWorkspaceCurrent }] : []),
+    ...workspaceChoices.map((workspace) => ({ value: workspace.id, label: workspace.name })),
+    { value: CHOOSE_WORKSPACE, label: labels.channelWorkspaceChoose }
   ]
 
   const permissionOptions = [
@@ -94,7 +104,16 @@ export function ChannelFields(props: {
       <FieldShell label={labels.channelFieldWorkspace}>
         <Select
           aria-label={labels.channelFieldWorkspace}
-          onChange={(value: string) => props.onChange({ workspaceId: value === 'system' ? null : value })}
+          onChange={(value: string) => {
+            // 「选择文件夹…」不是一次选择：它要先调系统窗口、登记工作区，拿到编号后才改这一栏。
+            if (value === CHOOSE_WORKSPACE) {
+              void props.onChooseWorkspace?.().then((workspaceId) => {
+                if (workspaceId !== null && workspaceId !== undefined) props.onChange({ workspaceId })
+              })
+              return
+            }
+            props.onChange({ workspaceId: value === 'system' ? null : value })
+          }}
           options={workspaceOptions}
           style={{ width: '100%' }}
           value={values.workspaceId ?? 'system'}

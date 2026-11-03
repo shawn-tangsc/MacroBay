@@ -834,6 +834,8 @@ const AGENT_API_KEYS = [
   'listToolApprovals',
   'resolveToolApproval',
   'listAgents',
+  // 频道设置页「选择文件夹…」：路径 → 工作区编号（没有就先登记一条）。
+  'ensureWorkspace',
   'createAgent',
   'listTasks',
   'getTaskLogs',
@@ -928,7 +930,7 @@ describe('preload 分片后的形状', () => {
     expect(assistantsShapeComplete).toBe(true)
     expect(preloadSource).toContain('agents: createAgentsNamespace(ipcRenderer)')
     expect(preloadSource).toContain('assistants: createAssistantsNamespace(ipcRenderer)')
-    expect(AGENT_API_KEYS.length).toBe(57)
+    expect(AGENT_API_KEYS.length).toBe(58)
     expect(ASSISTANT_API_KEYS.length).toBe(29)
   })
 })

@@ -35,3 +35,20 @@ export type CreateAgentWorkspaceDto = {
 export type UpdateAgentWorkspaceDto = {
   name: string
 }
+
+/** 频道设置页能选的工作区：只给读者要的三样（名字用于下拉，id 用于落库）。 */
+export type AgentWorkspaceChoice = {
+  id: string
+  name: string
+  path: string
+}
+
+/**
+ * 「按路径取一个工作区，没有就先登记一条」的结果。
+ *
+ * 为什么不让渲染层自己拼：频道的 `workspace` 存的是工作区**编号**，不存路径；
+ * 路径 → 编号的唯一实现必须在主进程（`AgentWorkspaceService.findOrCreateByPathResult`）。
+ */
+export type AgentWorkspaceEnsureResult =
+  | { ok: true; workspace: AgentWorkspaceChoice }
+  | { ok: false; code: 'workspace-path-invalid' | 'workspace-unavailable' }

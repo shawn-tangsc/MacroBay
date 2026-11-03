@@ -144,6 +144,8 @@ export const IpcChannels = {
   agentsRunTask: 'platform:agents-run-task',
   agentsCancelTaskRun: 'platform:agents-cancel-task-run',
   agentsListSessions: 'platform:agents-list-sessions',
+  /** 频道设置页「选择文件夹…」：路径 → 工作区编号；没有就先登记一条（写操作，因此不在只读表里）。 */
+  agentsEnsureWorkspace: 'platform:agents-ensure-workspace',
   agentsListSessionMessages: 'platform:agents-list-session-messages',
   agentsCreateSession: 'platform:agents-create-session',
   agentsUpdateAgent: 'platform:agents-update-agent',

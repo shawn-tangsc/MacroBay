@@ -253,6 +253,10 @@ export type PlatformText = {
     channelFieldAllowedChats: string
     channelFieldPermissionMode: string
     channelWorkspaceDefault: string
+    /** 下拉最后一项：调系统选目录窗口，选完登记成工作区并选中它。 */
+    channelWorkspaceChoose: string
+    /** 选目录/登记失败：如实说没成功，不静默退回「不使用工作目录」。 */
+    channelWorkspaceFailed: string
     channelPermissionInherit: string
     /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
     channelFieldNotSavable: string
@@ -1652,6 +1656,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelFieldAllowedChats: '允许的会话 ID',
       channelFieldPermissionMode: '频道权限模式',
       channelWorkspaceDefault: '不使用工作目录',
+      channelWorkspaceChoose: '选择文件夹…',
+      channelWorkspaceFailed: '没能用上这个文件夹，可以再试一次',
       channelPermissionInherit: '继承助手设置',
       channelFieldNotSavable: '这一版还保存不了这一项',
       channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
@@ -2956,6 +2962,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelFieldAllowedChats: 'Allowed chat IDs',
       channelFieldPermissionMode: 'Channel permission mode',
       channelWorkspaceDefault: 'Do not use a working folder',
+      channelWorkspaceChoose: 'Choose a folder…',
+      channelWorkspaceFailed: 'That folder could not be used; try again',
       channelPermissionInherit: 'Inherit the agent setting',
       channelFieldNotSavable: 'This version cannot save this field yet',
       channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',

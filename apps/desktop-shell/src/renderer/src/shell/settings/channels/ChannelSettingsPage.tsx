@@ -10,14 +10,28 @@ import { platformText } from '../../../i18n/platformText'
 
 import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
+import {
+  chooseWorkspaceFolder,
+  readCredentialConfigured,
+  runChannelAction,
+  workspacePayload
+} from './channelSettingsActions'
 import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
 import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import { enableFailureSentence, mutationFailureSentence, readAgents, toCatalog, toChannel } from './channelSettingsPresentation'
+import {
+  enableFailureSentence,
+  mutationFailureSentence,
+  readAgents,
+  readWorkspaces,
+  toCatalog,
+  toChannel
+} from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
+import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
 
@@ -39,6 +53,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [catalog, setCatalog] = useState<Catalog[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
+  /** 读者已有的工作区（只列 `user` 那一类）：工作目录下拉的真实选项。 */
+  const [workspaces, setWorkspaces] = useState<readonly AgentWorkspaceChoice[]>([])
   const [selectedType, setSelectedType] = useState<CatalogType>('telegram')
   const [initialLoading, setInitialLoading] = useState(true)
   const [readError, setReadError] = useState(false)
@@ -58,14 +74,17 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const reload = async (): Promise<void> => {
     try {
-      const [nextCatalog, nextChannels, agentState] = await Promise.all([
+      const [nextCatalog, nextChannels, agentState, workspaceState] = await Promise.all([
         window.platform.channels.catalog(),
         window.platform.channels.list(),
-        window.platform.agents.listAgents({})
+        window.platform.agents.listAgents({}),
+        // 工作目录下拉要的是工作区本体（编号 + 名字），它挂在整份智能体状态上。
+        window.platform.agents.getState()
       ])
       setCatalog(nextCatalog.map(toCatalog))
       setChannels(nextChannels.map(toChannel))
       setAgents(readAgents(agentState))
+      setWorkspaces(readWorkspaces(workspaceState))
       setReadError(false)
       setStale(false)
     } catch {
@@ -93,34 +112,20 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const rows = channels.filter((channel) => channel.type === selectedType)
 
 
-  const runAction = async (channel: Channel, action: () => Promise<ChannelManagementResult>): Promise<void> => {
-    setBusyId(channel.id)
-    setError(null)
-    try {
-      // 这些接口失败时**正常返回** `{ ok:false, code }`，不抛错：不看 `ok` 就会把「没停成」
-      // 显示成成功。删除也一样——用户现在库里有一堆重复频道，正靠这一步逐条删。
-      const result = await action()
-      if (result.ok !== true) setError(mutationFailureSentence(result, labels))
-      await reload()
-    } catch {
-      setError(labels.channelOperationFailed)
-    } finally {
-      setBusyId(null)
-    }
-  }
+  const actionDeps = { labels, setBusyId, setError, reload }
 
   const toggle = (channel: Channel, next: boolean): void => {
     if (!next) {
-      void runAction(channel, () => window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' }))
+      void runChannelAction(
+        channel,
+        () => window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' }),
+        actionDeps
+      )
       return
     }
     void enableWithSelfCheck(channel)
   }
 
-  /**
-   * 点启用 → 主进程用已存凭据现场检查 → 通过就开。
-   * 失败时后台已经写过审计行，**界面不再重复写**；只在行内说一句人话，开关回弹。
-   */
   const enableWithSelfCheck = async (channel: Channel): Promise<void> => {
     setBusyId(channel.id)
     setError(null)
@@ -146,9 +151,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     }
   }
 
-  const workspacePayload = (workspaceId: string | null): { type: 'system' } | { type: 'user'; workspaceId: string } =>
-    workspaceId === null ? { type: 'system' } : { type: 'user', workspaceId }
-
   /** 打开编辑弹层时先看有没有显式放行名单：查不到就记「未知」，不默认成任何一种。 */
   const openEditor = async (channel: Channel): Promise<void> => {
     setSaveError(null)
@@ -162,21 +164,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     }
   }
 
-  /**
-   * 保存凭据后**回读一次**：库里必须真的变成「已配置」。
-   *
-   * 「请求没报错」不等于「存进了库」。这条回读是用户上一次那件事的直接教训：界面显示存好了，
-   * 库里 `credential_health` 却是 `missing`，于是点启用时变成「没得检查」。
-   * 三种结果必须分开说：`true` 存上了、`false` 确定没存上、`null` 读不到（读不到 ≠ 没存上）。
-   */
-  const readCredentialConfigured = async (channelId: string): Promise<boolean | null> => {
-    try {
-      const view = await window.platform.channels.get(channelId)
-      return view?.credential.hasCredential === true && view.credential.status === 'configured'
-    } catch {
-      return null
-    }
-  }
+  /** 「选择文件夹…」：取消不改选择，失败说一句，成功把新旧工作区并进下拉并选中它。 */
+  const chooseWorkspace = (): Promise<string | null> => chooseWorkspaceFolder({ labels, setSaveError, setWorkspaces })
 
   const createChannel = async (input: {
     name: string
@@ -322,7 +311,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     if (deleting === null) return
     const target = deleting
     setDeleting(null)
-    await runAction(target, () => window.platform.channels.remove({ id: target.id, actorId: 'settings-user' }))
+    await runChannelAction(target, () => window.platform.channels.remove({ id: target.id, actorId: 'settings-user' }), actionDeps)
   }
 
   return (
@@ -441,9 +430,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           agents={agents}
           labels={labels}
           onCancel={() => setEditor(null)}
+          onChooseWorkspace={chooseWorkspace}
           onCreate={(input) => void createChannel(input)}
           saveError={saveError}
           saving={savingEdit}
+          workspaces={workspaces}
         />
       ) : null}
 
@@ -454,9 +445,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           labels={labels}
           policyPresence={policyPresence}
           onCancel={() => setEditor(null)}
+          onChooseWorkspace={chooseWorkspace}
           onSave={(input) => void saveEdit(input)}
           saveError={saveError}
           saving={savingEdit}
+          workspaces={workspaces}
         />
       ) : null}
 

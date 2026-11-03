@@ -22,6 +22,10 @@ export function ChannelEditDialog(props: {
   policyPresence: ChannelPolicyPresence
   /** 保存没通过时的就地一句话（回读没确认到凭据）。页面级那句在遮罩后面，读者看不见。 */
   saveError?: string | null
+  /** 读者已有的工作区：工作目录下拉的真实选项。 */
+  workspaces?: readonly { id: string; name: string; path: string }[]
+  /** 「选择文件夹…」：返回工作区编号（取消返回 null）。 */
+  onChooseWorkspace?: () => Promise<string | null>
   saving: boolean
   onCancel: () => void
   onSave: (input: {
@@ -107,6 +111,8 @@ export function ChannelEditDialog(props: {
         mode="edit"
         policyPresence={props.policyPresence}
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
+        onChooseWorkspace={props.onChooseWorkspace}
+        workspaces={props.workspaces}
         tokenStored={channel.credential.hasCredential !== false && channel.credential.status !== 'missing'}
         values={values}
       />

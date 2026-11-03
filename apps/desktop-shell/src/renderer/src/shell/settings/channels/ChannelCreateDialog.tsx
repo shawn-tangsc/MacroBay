@@ -23,6 +23,10 @@ export function ChannelCreateDialog(props: {
   labels: PlatformText['settings']
   /** 创建失败/凭据没存上时的就地一句话：页面级那句在遮罩后面，读者看不见。 */
   saveError?: string | null
+  /** 读者已有的工作区：工作目录下拉的真实选项。 */
+  workspaces?: readonly { id: string; name: string; path: string }[]
+  /** 「选择文件夹…」：返回工作区编号（取消返回 null）。 */
+  onChooseWorkspace?: () => Promise<string | null>
   saving: boolean
   onCancel: () => void
   onCreate: (input: {
@@ -84,6 +88,8 @@ export function ChannelCreateDialog(props: {
         mode="create"
         policyPresence="none"
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
+        onChooseWorkspace={props.onChooseWorkspace}
+        workspaces={props.workspaces}
         values={values}
       />
     </Modal>

@@ -1,3 +1,4 @@
+import type { AgentWorkspaceEnsureResult } from '../../ai/agent-platform/schemas/workspaceSchemas'
 import type { IpcRenderer } from 'electron'
 
 import { IpcChannels } from '../ipc/channels'
@@ -32,6 +33,9 @@ export function createAgentsNamespace(ipcRenderer: IpcRenderer) {
     resolveToolApproval: (approvalId: string, decision: unknown) =>
       ipcRenderer.invoke(IpcChannels.agentsResolveToolApproval, approvalId, decision),
     listAgents: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListAgents, query),
+    /** 频道设置页「选择文件夹…」：路径 → 工作区编号（没有就先登记一条），返回 `{ ok, workspace }`。 */
+    ensureWorkspace: (path: string) =>
+      ipcRenderer.invoke(IpcChannels.agentsEnsureWorkspace, path) as Promise<AgentWorkspaceEnsureResult>,
     createAgent: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsCreateAgent, input),
     listTasks: async (agentId: string, query?: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTasks, agentId, query)),
     getTaskLogs: async (agentId: string, taskId: string, query?: unknown) =>
