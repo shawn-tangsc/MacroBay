@@ -1083,8 +1083,6 @@ export type PlatformText = {
     }
     notes: {
       title: string
-      expand: string
-      collapse: string
       /** 内容被截到上限时那一行：他看的是开头，也知道去哪儿看全。 */
       truncated: string
     }
@@ -2265,8 +2263,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       },
       notes: {
         title: '更新说明',
-        expand: '展开全部',
-        collapse: '收起',
         truncated: '正文过长，已显示开头部分；完整内容见更新日志'
       }
     },
@@ -3452,8 +3448,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       },
       notes: {
         title: 'What changed',
-        expand: 'Show all',
-        collapse: 'Show less',
         truncated: 'This note is long, so only the beginning is shown; see Release notes for the full text'
       }
     },

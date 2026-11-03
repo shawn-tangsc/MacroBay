@@ -35,7 +35,7 @@ export function AboutSettingsPage(props: {
   const [hasNewer, setHasNewer] = useState(false)
   const [notes, setNotes] = useState<readonly StructuredTextNode[] | null>(null)
   const [notesTruncated, setNotesTruncated] = useState(false)
-  const [notesExpanded, setNotesExpanded] = useState(false)
+  const [notesAtEnd, setNotesAtEnd] = useState(false)
 
   // 只有「有新版本」才显示说明块：它的正文属于最新那版，未必是读者正在跑的那一版。
   useEffect(() => {
@@ -108,17 +108,27 @@ export function AboutSettingsPage(props: {
         <div className="preference-section about-notes">
           <h3 className="about-section-title">{text.notes.title}</h3>
           {/* 组件不记状态：展开由这一页给 maxNodes。默认 7 块。 */}
-          <StructuredText nodes={notes} maxNodes={notesExpanded ? undefined : 7} />
+          {/*
+            固定高度 + 块内滚动（界面设计 11-03 定，推翻了先前「展开/靠页面滚」那版）。
+            三条硬要求：③ 可聚焦（tabindex + role=region + 可读名），否则键盘用户滚不动；
+            ④ `overscroll-behavior-y: auto`：块内到底后继续滚要带动外层页面；
+            渐隐遮罩 `pointer-events: none`，且只在「还能往下滚」时出现。
+          */}
+          <div
+            className="about-notes-scroller"
+            data-about-notes-scroller
+            tabIndex={0}
+            role="region"
+            aria-label={text.notes.title}
+            onScroll={(event) => {
+              const el = event.currentTarget
+              setNotesAtEnd(el.scrollTop + el.clientHeight >= el.scrollHeight - 1)
+            }}>
+            <StructuredText nodes={notes} />
+          </div>
+          {notesAtEnd ? null : <div className="about-notes-fade" aria-hidden="true" />}
           {/* 「有这行」和「有那块」是两件事：只有内容被截断才出这一行。 */}
           {notesTruncated ? <p className="preference-hint about-notes-truncated">{text.notes.truncated}</p> : null}
-          {notes.length > 7 ? (
-            // 「收起」只是收起说明，不是主操作：靠右、宽度按内容，不横跨整行。
-            <div className="about-notes-toggle">
-              <Button className="ant-secondary-button" size="small" onClick={() => setNotesExpanded((value) => !value)}>
-                {notesExpanded ? text.notes.collapse : text.notes.expand}
-              </Button>
-            </div>
-          ) : null}
         </div>
       ) : null}
 

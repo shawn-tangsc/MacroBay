@@ -134,25 +134,6 @@ describe('the about page', () => {
     }
   })
 
-  it('styles the notes disclosure as the same secondary button', async () => {
-    const notes = Array.from({ length: 8 }, (_, index) => ({
-      kind: 'paragraph',
-      runs: [{ text: `第 ${index + 1} 条`, bold: false }]
-    }))
-    const state = { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' } as const
-    const container = await mount(state, clientFor(state, { notes }))
-    const toggle = container.querySelector<HTMLButtonElement>('.about-notes button')
-    expect(toggle?.textContent).toBe(text.notes.expand)
-    expect(toggle?.classList.contains('ant-secondary-button')).toBe(true)
-    expect(toggle?.className).not.toContain('ant-btn-link')
-
-    // 两字标签（收起）走同一份全局配置：不出现「收 起」的插入空格。
-    await act(async () => {
-      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(container.querySelector('.about-notes button')?.textContent).toBe(text.notes.collapse)
-  })
-
   it('says the browser did not open, using the sentence all five buttons share', async () => {
     const container = await mount(
       { state: 'idle', currentVersion: '0.3.1' },
@@ -201,33 +182,6 @@ describe('the about page', () => {
     )
     // 正好在上限内：不出这一行。
     expect(whole.querySelector('.about-notes-truncated')).toBeNull()
-  })
-
-  it('offers "show all" only when the note has more than seven units', async () => {
-    // 展开/收起按**节点**数：12 个段落 = 12 个节点（一个 list 里 20 条也只算 1 个节点）。
-    const many = Array.from({ length: 12 }, (_, i) => ({ kind: 'paragraph', runs: [{ text: `第 ${i + 1} 段`, bold: false }] }))
-    const shown = await mount(
-      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
-      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes: many })
-    )
-    // 一个 12 项的列表是 12 个「内容单元」——按节点数算只会算 1，按钮永远不会出现（那正是被退回的缺陷）。
-    expect(shown.querySelector('.about-notes-toggle button')?.textContent).toBe(platformText['zh-CN'].about.notes.expand)
-    expect(shown.querySelectorAll('.about-notes p')).toHaveLength(7)
-
-    await act(async () => {
-      shown.querySelector('.about-notes-toggle button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(shown.querySelectorAll('.about-notes p')).toHaveLength(12)
-    expect(shown.querySelector('.about-notes-toggle button')?.textContent).toBe(platformText['zh-CN'].about.notes.collapse)
-  })
-
-  it('shows no "show all" when the note fits in seven units', async () => {
-    const seven = Array.from({ length: 7 }, (_, i) => ({ kind: 'paragraph', runs: [{ text: `第 ${i + 1} 段`, bold: false }] }))
-    const container = await mount(
-      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
-      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes: seven })
-    )
-    expect(container.querySelector('.about-notes-toggle')).toBeNull()
   })
 
   it('holds no address anywhere in the page', async () => {
