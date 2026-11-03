@@ -373,8 +373,10 @@ describe('CapitalConditionsPanel', () => {
     const detail = container.querySelector<HTMLElement>('#mi-capital-conditions-signal-detail')!
     const content = detail.textContent ?? ''
     expect(chip.getAttribute('aria-expanded')).toBe('true')
-    // 读数在卡片里展开，不盖住要对照的卡片与日流表。
-    expect(detail.tagName).toBe('DL')
+    // 读数由共用详情块渲染：在卡片里展开（不盖住要对照的卡片与日流表），区域有名字。
+    expect(detail.tagName).toBe('DIV')
+    expect(detail.getAttribute('role')).toBe('region')
+    expect(detail.getAttribute('aria-label')).toBe(text.signalDetailTitle)
     expect(container.querySelector('.drawer__body')).toBeNull()
     expect(content).toContain(text.signalDetailRule)
     expect(content).toContain(text.signalRuleName)

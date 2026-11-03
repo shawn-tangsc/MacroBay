@@ -15,8 +15,9 @@ import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { useSignalDetail } from '../shared'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
-import { EtfOutflowChip, EtfOutflowDetail, type EtfSignalText } from './EtfOutflowSignal'
+import { ETF_SIGNAL_DETAIL_ID, EtfOutflowChip, EtfOutflowSignalDetail, type EtfSignalText } from './EtfOutflowSignal'
 
 type Text = {
   title: string
@@ -79,9 +80,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshFailed?: boolean
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  // The chip's readings open inside the card, below the title row: the card and the flow table it
-  // is read against stay visible. One open state per card, and the chip keeps focus on toggle.
-  const [signalOpen, setSignalOpen] = useState(false)
+  // 牌子的开合、`aria-expanded` / `aria-controls` 与区域语义都来自共用的 `useSignalDetail`：
+  // 四块牌子同一条规矩，抄四份必然有一份漏。读数的落点在标题行下，卡片与日流表不被盖住。
+  const signalDetail = useSignalDetail(ETF_SIGNAL_DETAIL_ID)
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
@@ -107,13 +108,13 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           {/* The module rule's chip sits beside the title, at most one per card. It is drawn only
               when the rule had something to say; a quiet card renders no element at all. */}
           {state.etfSignal && state.etfSignal.state !== 'hidden'
-            ? <EtfOutflowChip chip={state.etfSignal} open={signalOpen} text={text}
-                onToggle={() => setSignalOpen(open => !open)} />
+            ? <EtfOutflowChip chip={state.etfSignal} text={text}
+                triggerProps={signalDetail.triggerProps} onToggle={signalDetail.toggle} />
             : null}
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
-        {signalOpen && state.etfSignal
-          ? <EtfOutflowDetail chip={state.etfSignal} text={text}
+        {signalDetail.open && state.etfSignal
+          ? <EtfOutflowSignalDetail chip={state.etfSignal} text={text}
               verifiedAt={state.etf === 'unavailable' ? undefined : state.etf.verifiedAt} />
           : null}
         {/* These are the last numbers that read successfully. Saying so is the difference between

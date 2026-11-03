@@ -600,20 +600,3 @@
 .mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
 .mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-/* 牌子点开的读数：标题行下的脚注块，和持仓牌子同一落点——不盖住要对照的卡片与日流表。 */
-.mi-capital-conditions__signal-detail {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--mi-dashboard-line);
-  border-radius: 4px;
-  color: var(--mi-dashboard-muted);
-  font-size: 10px;
-  line-height: 1.5;
-}
-.mi-capital-conditions__signal-detail div { display: flex; gap: 4px; }
-.mi-capital-conditions__signal-detail dt { margin: 0; }
-.mi-capital-conditions__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
-.mi-capital-conditions__signal-detail p { flex-basis: 100%; margin: 0; }

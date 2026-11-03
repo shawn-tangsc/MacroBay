@@ -4,6 +4,7 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { SignalDetail, type SignalDetailRow } from '../shared'
 import type { DashboardEtfSignalChip } from './capitalConditionsModel'
 
 /**
@@ -38,15 +39,15 @@ type VisibleChip = Extract<DashboardEtfSignalChip, { state: 'alert' | 'insuffici
 /**
  * 资金面卡片标题旁的牌子。
  *
- * 牌子只回答两件事：有没有事（画不画）、是什么事（一句话）。有事是按钮，点开在卡片内展开
- * 读数（`aria-expanded` / `aria-controls`，再点收起，焦点留在牌子上）；**数据不齐是陈述，
- * 不是控件**——它背后没有可展开的读数，做成按钮只会让读者点了个空。两种状态都带悬停/聚焦
- * 解释：有事说有规则、窗口、这是事实；不齐说清缺哪一路。
+ * 牌子只回答两件事：有没有事（画不画）、是什么事（一句话）。有事是按钮，开合状态与
+ * `aria-expanded` / `aria-controls` 由共用的 `useSignalDetail` 给（和持仓、背离同一套规矩）；
+ * **数据不齐是陈述，不是控件**——它背后没有可展开的读数，做成按钮只会让读者点了个空。
+ * 两种状态都带悬停/聚焦解释：有事说有规则、窗口、这是事实；不齐说清缺哪一路。
  */
-export function EtfOutflowChip({ chip, open, text, onToggle }: Readonly<{
+export function EtfOutflowChip({ chip, text, triggerProps, onToggle }: Readonly<{
   chip: VisibleChip
-  open: boolean
   text: EtfSignalText
+  triggerProps: Readonly<{ 'aria-expanded': boolean; 'aria-controls': string }>
   onToggle: () => void
 }>): React.ReactElement {
   const resolveText = useProductTextKey()
@@ -74,8 +75,7 @@ export function EtfOutflowChip({ chip, open, text, onToggle }: Readonly<{
     labelKey="pages.intelligence.portal.dashboard.capitalConditions.signalTooltip"
     labelParams={{ rule: text.signalRuleName, window: text.signalRuleWindow, kind: text.signalKindObserved }}>
     <button
-      aria-controls={ETF_SIGNAL_DETAIL_ID}
-      aria-expanded={open}
+      {...triggerProps}
       aria-label={ariaLabel}
       className="mi-capital-conditions__signal"
       data-state="alert"
@@ -87,12 +87,12 @@ export function EtfOutflowChip({ chip, open, text, onToggle }: Readonly<{
 }
 
 /**
- * 点在牌子上展开的读数：落在标题行下、卡片内容上，与持仓牌子的落点一致。
+ * 点在牌子上展开的读数：标题行下、卡片内容上，由共用的 `SignalDetail` 渲染落点、开合与区域语义。
  *
- * 数字全部取自规则算出的信号，这里不做任何求和；数据所走的字段、取数与 `19cb59d` 一致。
+ * 这个组件只做共用组件不做的那件事——把数字格式成读者看的样子；行、标题、说明都交给共用块。
  * 数据不齐的牌子没有可展开的东西，本组件对它返回 `null`。
  */
-export function EtfOutflowDetail({ chip, verifiedAt, text }: Readonly<{
+export function EtfOutflowSignalDetail({ chip, verifiedAt, text }: Readonly<{
   chip: DashboardEtfSignalChip
   /** 来源快照的校验时刻。快照不可用时没有它，就不写这一行，不编一个时间。 */
   verifiedAt?: string
@@ -100,13 +100,23 @@ export function EtfOutflowDetail({ chip, verifiedAt, text }: Readonly<{
 }>): React.ReactElement | null {
   const formatTime = useShellTimeFormat()
   if (chip.state !== 'alert') return null
-  return <dl className="mi-capital-conditions__signal-detail" id={ETF_SIGNAL_DETAIL_ID}>
-    <div><dt>{text.signalDetailRule}</dt><dd>{text.signalRuleName}</dd></div>
-    <div><dt>{text.signalDetailWindow}</dt><dd>{text.signalRuleWindow}</dd></div>
-    <div><dt>{text.signalDetailCumulative}</dt><dd data-flow-direction="outflow">{chip.cumulativeUsd}</dd></div>
-    <div><dt>{text.signalDetailCoverage}</dt><dd>{fillLabelParams(text.signalCoverage, { covered: String(chip.coveredDays), required: String(chip.requiredDays) })}</dd></div>
-    <div><dt>{text.signalDetailTradingDay}</dt><dd>{chip.observedAt.slice(0, 10)}</dd></div>
-    {verifiedAt ? <div><dt>{text.signalDetailObservedAt}</dt><dd>{formatTime(verifiedAt)}</dd></div> : null}
-    <p>{text.signalDetailNote}</p>
-  </dl>
+  const rows: SignalDetailRow[] = [
+    { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailRule', value: text.signalRuleName },
+    { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailWindow', value: text.signalRuleWindow },
+    { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailCumulative', value: chip.cumulativeUsd },
+    {
+      labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailCoverage',
+      value: fillLabelParams(text.signalCoverage, { covered: String(chip.coveredDays), required: String(chip.requiredDays) })
+    },
+    // 数据所属交易日是数据自身的日期，不是这次读取的时刻；UTC 口径写明在标签里。
+    { labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailTradingDay', value: chip.observedAt.slice(0, 10) },
+    ...(verifiedAt
+      ? [{ labelKey: 'pages.intelligence.portal.dashboard.capitalConditions.signalDetailObservedAt', value: formatTime(verifiedAt) }]
+      : [])
+  ]
+  return <SignalDetail
+    id={ETF_SIGNAL_DETAIL_ID}
+    titleKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailTitle"
+    rows={rows}
+    noteKey="pages.intelligence.portal.dashboard.capitalConditions.signalDetailNote" />
 }
