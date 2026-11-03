@@ -409,4 +409,24 @@ describe('opening the reading', () => {
     delete (window as unknown as { platform?: unknown }).platform
     await act(async () => { root.unmount() })
   })
+
+  it('names the block it opens, and closes it again with the focus still on the chip', async () => {
+    const { container, root } = await mount()
+    // focus() only works on a node inside the document; the other cases never need it.
+    document.body.append(container)
+    const chip = container.querySelector('button.mi-positioning-panel__signal') as HTMLButtonElement
+    const controls = chip.getAttribute('aria-controls')
+    expect(controls).toBe('mi-positioning-signal-detail')
+    await act(async () => { chip.focus() })
+    expect(document.activeElement).toBe(chip)
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(container.querySelector(`#${controls}`)).not.toBeNull()
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // The trigger is not replaced, so closing returns the reader to it rather than to the document.
+    expect(container.querySelector(`#${controls}`)).toBeNull()
+    expect(document.activeElement).toBe(chip)
+    delete (window as unknown as { platform?: unknown }).platform
+    await act(async () => { root.unmount() })
+    container.remove()
+  })
 })

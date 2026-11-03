@@ -109,9 +109,8 @@
 .mi-positioning-panel__signal:focus-visible { border-color: var(--mi-dashboard-text); }
 
 
-/* Opening the chip's numbers: the block itself is the shared `SignalDetail`; this card only says
-   where it sits. */
-.mi-positioning-panel__signal-detail { margin: 0; }
+/* The block behind the chip is the shared `SignalDetail`; this card adds nothing to it, so there is
+   no card-local rule here to drift from the shared one. */
 
 /* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
    footnote size of the chip row beside it; hover brightens the word and draws nothing — a block

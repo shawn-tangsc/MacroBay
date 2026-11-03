@@ -295,6 +295,7 @@ describe('the divergence chip', () => {
     })
     const chip = container.querySelector('button.mi-divergence__chip') as HTMLButtonElement
     expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(chip.getAttribute('aria-controls')).toBe('mi-divergence-chip-detail')
     await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(chip.getAttribute('aria-expanded')).toBe('true')
     const detail = container.querySelector('#mi-divergence-chip-detail')!
