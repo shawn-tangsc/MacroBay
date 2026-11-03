@@ -121,8 +121,11 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 {edition.date === todayDate && generatingStage
                   ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
                   : <>
-                {/* Segments never break mid-word: the width is the fix, these keep each fact whole. */}
-                <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable ?? 0} {text.readingsUnit}</span>
+                {/* Segments never break mid-word: the width is the fix, these keep each fact whole.
+                    A count nobody recorded is not zero: print it only when the list carries one. */}
+                {typeof edition.readingsAvailable === 'number'
+                  ? <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable} {text.readingsUnit}</span>
+                  : null}
                 {edition.generatedAt ? <>
                   <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
                   <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>

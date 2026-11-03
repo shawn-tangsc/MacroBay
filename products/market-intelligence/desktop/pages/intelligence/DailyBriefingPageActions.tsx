@@ -14,7 +14,7 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
  * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
  * not layout, and the page is a layout.
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -22,6 +22,8 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   generating: boolean
   regenerating: boolean
   todayReady: boolean
+  /** Whether today already has an edition: the label says "generate" or "regenerate" accordingly. */
+  hasTodayEdition: boolean
   zoneInvalid: boolean
   systemZone: boolean
   exportable: boolean
@@ -43,7 +45,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
         ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
         : { 'aria-label': text.headerGenerate })}
       onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
-      {regenerating ? text.regenerating : text.regenerate}
+      {regenerating ? text.regenerating : hasTodayEdition ? text.regenerateToday : text.generateToday}
     </Button>
     {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}

@@ -49,7 +49,6 @@ import {
   editorialFailureText,
   issueCountsText,
   localDate,
-  readExistingEdition,
   briefingFailure,
   summaryFromDocument,
   withDeadline
@@ -57,6 +56,7 @@ import {
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
+import { openBriefingEdition } from './openBriefingEdition'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 
@@ -82,9 +82,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   timeZoneRef.current = timeZone
   const requestRef = useRef(0)
   const emptyGenerateRef = useRef(false)
-  // Set by the language tab only. It tells the next load "the reader asked to look, not to write",
-  // so a tab click reads that language's stored edition instead of opening a fresh run.
-  const localeSwitchRef = useRef(false)
+  // The one read path, reachable from effects that must not re-implement it (the delete fallback).
+  const openEditionRef = useRef<(date: string, locale: 'zh-CN' | 'en-US', row?: { state: string; attemptCount?: number }) => void>(() => undefined)
+  // The language this component last loaded for; a change means the stored edition language arrived.
+  const loadedLocaleRef = useRef<'zh-CN' | 'en-US' | null>(null)
   // The last readable edition, kept so a failed retry keeps the content under the failure notice.
   const lastReadyRef = useRef<DailyBriefingDocument | null>(null)
   const [showingStale, setShowingStale] = useState(false)
@@ -130,6 +131,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
+  const effectiveLocaleRef = useRef(effectiveLocale)
+  effectiveLocaleRef.current = effectiveLocale
   useEffect(() => {
     if (view.status === 'ready') lastReadyRef.current = view.document
   }, [view])
@@ -150,16 +153,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       // One-shot: only the reload a delete asked for skips the generation; the next ordinary open
       // must be able to generate today again.
       const skipGenerate = takeSkipGenerate()
-      // A tab click is a read of what already exists. Opening the page may still generate today's
-      // edition; switching the edition language must not, or the reader spends a run per glance.
-      const switchedLanguage = localeSwitchRef.current
-      localeSwitchRef.current = false
+      // Opening the page may generate today's edition; everything else is a read. The language tab
+      // therefore never comes through here — it calls the same read path a row click does.
+      const localeForLoad = effectiveLocaleRef.current
+      loadedLocaleRef.current = localeForLoad
       const todayPromise = skipGenerate
         ? Promise.resolve(undefined)
-        : switchedLanguage
-          ? readExistingEdition(client, todayDate, effectiveLocale)
-          : withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
+        : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
@@ -169,7 +170,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
       let keptCachedToday = false
       if (cachedRow) {
-        const cached = await client.get({ date: cachedRow.date, locale: effectiveLocale }).catch(() => undefined)
+        const cached = await client.get({ date: cachedRow.date, locale: localeForLoad }).catch(() => undefined)
         // On the delete reload the captured `view` is the one from before (still ready), and no
         // getToday answer follows to fill the screen: the list's row is what must stand.
         if (active && cached?.state === 'available' && (view.status === 'loading' || skipGenerate)) {
@@ -179,8 +180,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           // The reader just deleted the edition they were reading. If the issue still has another
           // language, fall back to it instead of leaving them on an empty pane; the switch is a
           // read, so it must not open a run.
-          const other = (cachedRow.availableLocales ?? []).find((candidate) => candidate !== effectiveLocale)
-          if (other) { localeSwitchRef.current = true; setContentLocale(other) }
+          const other = (cachedRow.availableLocales ?? []).find((candidate) => candidate !== localeForLoad)
+          if (other) {
+            setContentLocale(other)
+            openEditionRef.current(cachedRow.date, other, cachedRow)
+            // The pane is being handled by the other language's read: the branches below must not
+            // overwrite it with "nothing here".
+            keptCachedToday = true
+          }
         }
       }
       const today = await todayPromise
@@ -201,10 +208,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
         })
         setRegenerateFailure(null)
-      } else if (switchedLanguage && !keptCachedToday) {
-        // Nothing was written in this language today, and nothing was asked for: the reader gets the
-        // language's own state plus the one action that would produce it.
-        setView({ status: 'locale-missing', locale: effectiveLocale })
       } else if (skipGenerate && !keptCachedToday) {
         // Nothing is left for that day. It is the ordinary "nothing generated yet" state, not a
         // special one: what the reader did is said by the one-time delete note, not by the pane.
@@ -241,7 +244,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setRegenerating(false)
     })()
     return () => { active = false }
-  }, [effectiveLocale, client, reloadKey])
+  }, [client, reloadKey])
 
   useEffect(() => {
     let active = true
@@ -261,6 +264,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     return () => { active = false }
   }, [client, settingsReloadKey])
 
+  // The stored edition language arrives with the settings answer, after the first read. Reading
+  // again here is the open path (it may generate today); the language tab never comes through it.
+  const initialLocaleAppliedRef = useRef(false)
+  useEffect(() => {
+    if (!languageSettingsKnown || initialLocaleAppliedRef.current) return
+    initialLocaleAppliedRef.current = true
+    if (loadedLocaleRef.current !== null && loadedLocaleRef.current !== effectiveLocale) setReloadKey((key) => key + 1)
+  }, [effectiveLocale, languageSettingsKnown])
+
   // A setting changed in the drawer (or in another window) takes effect without a reload.
   useEffect(() => {
     const bump = (): void => setSettingsReloadKey((key) => key + 1)
@@ -273,35 +285,20 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     }
   }, [])
 
-  const selectEdition = (date: string): void => {
-    const target = effectiveLocale
-    const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
-    if (!row) return
-    if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return
-    setPinnedDate(date)
-    const request = ++requestRef.current
-    setRegenerateFailure(null)
-    // A day with no edition is still a day the reader may look into: it says which of the two
-    // nothing-states it is. Selecting never generates, so this branch reads nothing at all.
-    if (row.state === 'missing') {
-      setView({ status: 'no-edition', date, failed: Boolean(row.attemptCount) })
-      if (!row.attemptCount) return
-    }
-    setView((current) => current.status === 'no-edition' ? current : { status: 'loading' })
-    void client.get({ date, locale: target })
-      .then((result) => {
-        if (request !== requestRef.current) return
-        if (result.state === 'available') setView({ status: 'ready', document: result.document, kind: date === todayDate ? 'today' : 'history' })
-        else if (row.state === 'missing') setView({
-          status: 'no-edition',
-          date,
-          failed: result.state === 'unavailable',
-          ...(result.state === 'unavailable' ? { failureCode: result.failureCode } : {})
-        })
-        else setView({ status: 'unavailable' })
-      })
-      .catch(() => { if (request === requestRef.current) setView({ status: 'no-edition', date, failed: row.state === 'missing' }) })
-  }
+  /**
+   * The one way an edition is read: a row click and a language switch both land here, with the
+   * date the reader is on and the language they asked for. It never generates.
+   */
+  const openEdition = (date: string, target: 'zh-CN' | 'en-US', rowHint?: { state: string; attemptCount?: number }): void =>
+    openBriefingEdition({
+      client, date, locale: target, rows: editions, todayDate, current: view, request: requestRef,
+      onStart: setPinnedDate,
+      onFailureCleared: () => setRegenerateFailure(null),
+      setView,
+      ...(rowHint ? { row: rowHint } : {})
+    })
+  openEditionRef.current = openEdition
+  const selectEdition = (date: string): void => openEdition(date, effectiveLocaleRef.current)
   const regenerate = async (): Promise<void> => {
     setRegenerating(true)
     setRegenerateFailure(null)
@@ -382,7 +379,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       {/* In the header, not in the detail column: the column disappears on a day with no edition,
           which is exactly when the reader wants to switch to the other one. */}
       {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale}
-        onChange={(value) => { localeSwitchRef.current = true; setContentLocale(value) }} /> : null}
+        onChange={(value) => {
+          // Same read path as a row click, with the language swapped: no second implementation.
+          setContentLocale(value)
+          openEdition(pinnedDate ?? todayDate, value)
+        }} /> : null}
       <DailyBriefingPageActions
         text={text}
         resolveText={resolveProductText}
@@ -391,6 +392,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generating={generating}
         regenerating={regenerating}
         todayReady={view.status === 'ready' && view.kind === 'today'}
+        hasTodayEdition={hasTodayEdition}
         zoneInvalid={zoneInvalid !== null}
         systemZone={view.status === 'ready' && view.timeZoneSource === 'system'}
         exportable={view.status === 'ready' && !contentBlocked}
@@ -424,7 +426,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'unavailable' && !failure
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
-        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} text={text} onGenerate={generateNow} /> : null}
+        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
         {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}

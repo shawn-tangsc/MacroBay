@@ -12,8 +12,11 @@ export type DailyBriefingPageViewState =
     failureCode?: string
     generationTrace?: GenerationTrace
   }>
-  /** The language tab is a read: this day had no edition written in the language asked for. */
-  | Readonly<{ status: 'locale-missing'; locale: 'zh-CN' | 'en-US' }>
+  /**
+   * The language tab is a read: this day had no edition written in the language asked for.
+   * `historical` marks a past day, where this version cannot write the missing edition at all.
+   */
+  | Readonly<{ status: 'locale-missing'; locale: 'zh-CN' | 'en-US'; date?: string; historical?: boolean }>
   /**
    * The reader selected a day that has no edition. `failed` separates "the run failed" from "the
    * run never happened": both have nothing to read, and only one of them has a reason to show.

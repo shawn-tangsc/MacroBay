@@ -43,20 +43,6 @@ export async function withDeadline<T>(read: Promise<T>, milliseconds: number): P
   }
 }
 
-/**
- * Read the edition that already exists for one day and language, never starting a run.
- *
- * The language tab is a look, not a request: opening the page may still generate today's edition,
- * but a glance at the other language must not spend a model call. The answer keeps the shape of an
- * open so the page has one branch below it.
- */
-export async function readExistingEdition(client: Pick<DailyBriefingClient, 'get'>, date: string, locale: 'zh-CN' | 'en-US'): Promise<DailyBriefingClientTodayResult | undefined> {
-  const existing = await withDeadline(client.get({ date, locale }), 8_000).catch(() => undefined)
-  if (!existing) return undefined
-  if (existing.state === 'available') return { state: 'available', document: existing.document }
-  return { state: 'unavailable', failureCode: existing.state === 'unavailable' ? existing.failureCode : 'edition-missing' }
-}
-
 export function localDate(timeZone: string): string {
   try {
     return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })

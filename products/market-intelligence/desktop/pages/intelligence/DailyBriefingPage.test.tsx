@@ -673,6 +673,108 @@ describe('daily briefing page', () => {
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
   })
 
+  it('does not leave the other language\'s missing sentence on screen when the day has no edition at all', async () => {
+    // The reported case: today has no edition in either language (the rail has no row for it), so
+    // switching to English says "no English edition"; switching back must say nothing about English.
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: editions.filter((edition) => edition.date !== '2026-10-30') } })),
+      get: vi.fn(async () => ({ state: 'missing' as const }))
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).not.toBeNull()
+
+    await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).toBeNull()
+  })
+
+  it('keeps each language correct when both editions exist and the switch moves both ways', async () => {
+    const chinese = briefingDocument('2026-11-02')
+    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English lede for this day' } }
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: '2026-11-02T00:30:00.000Z', windowEnd: '2026-11-02T00:30:00.000Z', readingsAvailable: 4 }] } })),
+      get: vi.fn(async ({ locale }: { locale: string }) => ({ state: 'available' as const, document: locale === 'en-US' ? english : chinese }))
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-11-02"]')!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+
+    for (const index of [1, 0, 1]) {
+      await act(async () => { tabs()[index]!.click(); await Promise.resolve(); await Promise.resolve() })
+      expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+      expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+      expect(tabs()[index]!.getAttribute('aria-selected')).toBe('true')
+    }
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-11-02', locale: 'en-US' })
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-11-02', locale: 'zh-CN' })
+  })
+
+  it('keeps saying "never generated" while the switch moves on an empty day', async () => {
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } }))
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-no-edition="2026-10-28"]')).not.toBeNull()
+
+    for (const index of [1, 0, 1, 0]) {
+      await act(async () => { tabs()[index]!.click(); await Promise.resolve(); await Promise.resolve() })
+      expect(dom.querySelector('[data-briefing-no-edition="2026-10-28"]')).not.toBeNull()
+      expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+    }
+  })
+
+  it('keeps the surviving language on screen while the switch moves after a delete', async () => {
+    const chinese = briefingDocument('2026-10-30')
+    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English survives the delete' } }
+    let listCalls = 0
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      list: vi.fn(async () => {
+        listCalls += 1
+        return { state: 'available' as const, result: { editions: [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: (listCalls === 1 ? ['zh-CN', 'en-US'] : ['en-US']) as readonly ('zh-CN' | 'en-US')[], state: 'generated' as const, generatedAt: '2026-10-30T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z', readingsAvailable: 4 }] } }
+      }),
+      get: vi.fn(async ({ locale }: { locale: string }) => locale === 'en-US'
+        ? { state: 'available' as const, document: english }
+        : { state: 'missing' as const }),
+      deletePeriod: vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }))
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 20; round += 1) {
+      await act(async () => { await Promise.resolve() })
+      if (dom.querySelectorAll('[data-content-language-tabs] [role="tab"]').length === 2) break
+    }
+    const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    act(() => { item.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    await act(async () => { confirm.click() })
+    for (let round = 0; round < 20; round += 1) {
+      await act(async () => { await Promise.resolve() })
+      if (dom.querySelector('.mi-daily-briefing-page__paper')) break
+    }
+
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    // The surviving English edition stays; asking for the deleted Chinese one honestly says it is
+    // missing (with the one click that would make it), and coming back restores English.
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-locale-missing="zh-CN"]')).not.toBeNull()
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+  })
+
   it('keeps the language switch in the header on a day with nothing to read', async () => {
     // The switch used to live in the detail column, which only exists when the issue has an
     // edition — so selecting a day with nothing on it took the switch away with it, and the reader
@@ -762,6 +864,36 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('en')
     // Falling back to the other language is a read: no run was opened by the delete or the switch.
     expect(client.getToday).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads the edition of whichever language is selected, every time the switch moves', async () => {
+    // The reader's report: switch to English (no English edition), switch back to Chinese — and the
+    // pane still said "no English edition". The pane must always show the language the switch shows.
+    const chinese = briefingDocument('2026-10-30')
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      get: vi.fn(async ({ locale }: { locale: string }) => locale === 'zh-CN'
+        ? { state: 'available' as const, document: chinese }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).not.toBeNull()
+
+    await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    // Back on Chinese: the Chinese edition is read again, and the English-missing sentence is gone.
+    expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    expect(dom.textContent).not.toContain(text.languageTabs.missing.split('{')[0]!)
+    expect(tabs()[0]!.getAttribute('aria-selected')).toBe('true')
+
+    // And going back to English repeats its own state; nothing generates on the way.
+    const calls = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).not.toBeNull()
+    expect((client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(calls)
   })
 
   it('shows the missing language as its own state with an explicit generate action', async () => {
@@ -1641,6 +1773,18 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
+it('labels the header action by whether today already has an edition', async () => {
+  const ready = await renderPage(fakeClient())
+  expect(ready.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.regenerateToday)
+
+  const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const empty = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } }))
+  }))
+  expect(empty.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.generateToday)
+})
+
 it('keeps a generate action in the header even when there is nothing to regenerate', async () => {
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const dom = await renderPage(fakeClient({
@@ -1651,7 +1795,8 @@ it('keeps a generate action in the header even when there is nothing to regenera
   const button = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(button).not.toBeNull()
   expect(button.disabled).toBe(false)
-  expect(button.textContent).toContain(text.regenerate)
+  // No edition for today yet: the label says "generate", not "regenerate".
+  expect(button.textContent).toContain(text.generateToday)
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {
