@@ -7,6 +7,7 @@ import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
 import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 import {
+  abandonCredentialOperation,
   insertManagedChannel,
   listManagedCredentialRows,
   recordCredentialRecoveryFailure,
@@ -597,10 +598,9 @@ export class ChannelManagementRepository {
     })
   }
 
+  /** 放弃一条操作：连带清掉它自己的生命周期 owner 行，否则下一次启用会被它挡住。 */
   abandonOperation(id: string, code: string, now: string): void {
-    this.database.connection
-      .prepare(`update channel_management_operations set state = 'abandoned', operation_permit = null, stable_error_code = ?, updated_at = ? where id = ?`)
-      .run(code, now, id)
+    abandonCredentialOperation(this.database, id, code, now)
   }
 
   pendingOperations(): ChannelManagementOperation[] {

@@ -147,3 +147,32 @@ export function setManagedCredentialHealth(
      where id = ? and ${managedChannelSql()} and lifecycle_state not in ('deleting')`
   ).run(health, now, channelId)
 }
+
+/**
+ * 放弃一条凭据操作，并**连带清掉它自己的生命周期 owner 行**。
+ *
+ * 为什么必须连带：`beginLifecycleOwner` 要求这个频道没有任何生命周期 owner 行，否则下一次启用/保存
+ * 直接被挡（`adapter-runtime-start-failed`）。一条操作都放弃了还留着它的 owner，就是把用户永久锁在门外——
+ * 「恢复失败 → 放弃 → 下次还是不能动」正是这么来的。owner token 是一笔调用一个，按 token 删不会误伤别人。
+ */
+export function abandonCredentialOperation(
+  database: AgentPlatformDatabase,
+  operationId: string,
+  code: string,
+  now: string
+): void {
+  database.transact(() => {
+    const row = database.connection.prepare(
+      'select channel_id, lifecycle_owner_token from channel_management_operations where id = ?'
+    ).get(operationId) as { channel_id: string; lifecycle_owner_token: string | null } | undefined
+    database.connection.prepare(
+      `update channel_management_operations set state = 'abandoned', operation_permit = null,
+         stable_error_code = ?, updated_at = ? where id = ?`
+    ).run(code, now, operationId)
+    if (!row?.lifecycle_owner_token) return
+    database.connection.prepare(
+      `delete from channel_telegram_lifecycle_operations
+       where channel_id = ? and owner_token = ? and purpose = 'mutation' and generation is null`
+    ).run(row.channel_id, row.lifecycle_owner_token)
+  })
+}

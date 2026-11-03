@@ -300,6 +300,10 @@ describe('credential writes settle the reserved record', () => {
       expectedRevision: 1, now: '2026-11-04T03:00:00.000Z'
     })
     database.connection.prepare("update channel_management_operations set state = 'revoked-cleanup' where id = ?").run(operationId)
+    // 那一夜失败的操作还留下了自己的生命周期 owner 行：它不清掉，用户下次点启用/保存会被永久挡住。
+    database.connection.prepare("update channel_management_operations set lifecycle_owner_token = 'owner-crashed' where id = ?").run(operationId)
+    database.connection.exec(`insert into channel_telegram_lifecycle_operations(channel_id, owner_token, purpose, generation, created_at, updated_at)
+      values('${id}', 'owner-crashed', 'mutation', null, '2026-11-04T03:00:00.000Z', '2026-11-04T03:00:00.000Z')`)
 
     await service.recover()
 
@@ -314,8 +318,14 @@ describe('credential writes settle the reserved record', () => {
       stable_error_code: 'channel-credential-settled'
     })
     expect(service.get(id)?.credential.status).toBe('configured')
+    // 卡住那笔操作自己的 owner 行必须一起清掉，否则下一次启用会被「这个频道已有 owner」挡住。
+    expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id = ?').get(id)).toEqual({ count: 0 })
     const enabled = await Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))
     expect(enabled.code).not.toBe('channel-credential-unavailable')
+    // 用户能在原频道上继续动作（这一次走真的轮换，而不是再写一条）。
+    const rotated = await Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff: await handoffOf(service, id, '222:after-recovery') }))
+    expect(rotated).toMatchObject({ ok: true })
+    expect(vault.revisionOf(reservation.credentialRef)).toBe(3)
   })
 
   it('saving over an unreadable credential switches the ref and retires the old reserved record', async () => {
