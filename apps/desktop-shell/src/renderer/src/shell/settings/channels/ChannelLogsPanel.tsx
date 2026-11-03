@@ -82,6 +82,55 @@ export function ChannelLogsPanel(props: {
     }
   }
 
+  /**
+   * 先判状态（加载 / 读失败），再**按长度**决定画内容还是空态。
+   * 不把「有没有内容」交给状态位：那是守卫抓的形态，也是「读到了 0 条却画成加载中」的来源。
+   */
+  function renderBody(): React.ReactElement {
+    if (state.status === 'loading') return <LoadingState label={labels.channelLogsRetry} />
+    if (state.status === 'error') {
+      return (
+        <>
+          <p className="channel-log-state" role="note">
+            {labels.channelLogsReadFailed}
+          </p>
+          <p className="channel-log-hint">{labels.channelLogsReadFailedHint}</p>
+          <Button onClick={() => void load()} size="small">
+            {labels.channelLogsRetry}
+          </Button>
+        </>
+      )
+    }
+    if (state.rows.length === 0) {
+      return (
+        <>
+          <p className="channel-log-state" role="note">
+            {labels.channelLogsEmptyTitle}
+          </p>
+          <p className="channel-log-hint">{labels.channelLogsEmptyHint}</p>
+        </>
+      )
+    }
+    return (
+      <>
+        {/* 时区只声明一次：每行都带 GMT+n 会吵，也容易在标题里被手写成固定值。 */}
+        <p className="channel-log-tz">{labels.channelLogsTimeZone.replace('{zone}', timeLabel)}</p>
+        <ul className="channel-log-list">
+          {state.rows.map((row) => (
+            <li className="channel-log-row" data-log-level={row.level} key={row.id}>
+              <span className="channel-log-time">{clock(row)}</span>
+              <span className="channel-log-level" data-log-level={row.level}>
+                [{row.level}]
+              </span>
+              <span className="channel-log-text">{row.text}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="channel-log-footer">{labels.channelLogsFooter}</p>
+      </>
+    )
+  }
+
   return (
     <Modal
       open
@@ -105,50 +154,7 @@ export function ChannelLogsPanel(props: {
         </div>
       ) : null}
 
-      {state.status === 'loading' ? <LoadingState label={labels.channelLogsRetry} /> : null}
-
-      {state.status === 'error' ? (
-        <>
-          <p className="channel-log-state" role="note">
-            {labels.channelLogsReadFailed}
-          </p>
-          <p className="channel-log-hint">{labels.channelLogsReadFailedHint}</p>
-          <Button onClick={() => void load()} size="small">
-            {labels.channelLogsRetry}
-          </Button>
-        </>
-      ) : null}
-
-      {state.status === 'ready' && state.rows.length === 0 ? (
-        <>
-          <p className="channel-log-state" role="note">
-            {labels.channelLogsEmptyTitle}
-          </p>
-          <p className="channel-log-hint">{labels.channelLogsEmptyHint}</p>
-        </>
-      ) : null}
-
-      {state.status === 'ready' && state.rows.length > 0 ? (
-        <>
-          {/* 时区只声明一次：每行都带 GMT+n 会吵，也容易在标题里被手写成固定值。 */}
-          <p className="channel-log-tz">{labels.channelLogsTimeZone.replace('{zone}', timeLabel)}</p>
-          <ul className="channel-log-list">
-          {state.rows.map((row) => (
-            <li className="channel-log-row" data-log-level={row.level} key={row.id}>
-              <span className="channel-log-time">{clock(row)}</span>
-              <span className="channel-log-level" data-log-level={row.level}>
-                [{row.level}]
-              </span>
-              <span className="channel-log-text">{row.text}</span>
-            </li>
-          ))}
-          </ul>
-        </>
-      ) : null}
-
-      {state.status === 'ready' && state.rows.length > 0 ? (
-        <p className="channel-log-footer">{labels.channelLogsFooter}</p>
-      ) : null}
+      {renderBody()}
     </Modal>
   )
 }

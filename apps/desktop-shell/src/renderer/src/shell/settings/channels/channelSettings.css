@@ -260,8 +260,18 @@
 .channel-log-row {
   display: flex;
   gap: 8px;
-  padding: 4px 0;
+  padding: 4px 0 4px 8px;
   border-top: 1px solid var(--border-subtle);
+  /* 级别只落在左侧 2px 竖条：INFO 用 transparent 占位，三档文字左边缘对齐不跳。 */
+  border-left: 2px solid transparent;
+}
+
+.channel-log-row[data-log-level='WARN'] {
+  border-left-color: var(--caution);
+}
+
+.channel-log-row[data-log-level='ERROR'] {
+  border-left-color: var(--danger);
 }
 
 .channel-log-time {
