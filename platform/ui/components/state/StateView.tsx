@@ -124,7 +124,31 @@ type StateViewBase = {
   productReason?: ProductReason
 }
 
-type StateDetails = { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
+/**
+ * 排障详情：一句摘要 + **正文二选一**（`bodyKey` 或 `bodyText`，同时给编译不过是故意的）。
+ *
+ * - `bodyKey`：正文也来自文案表（老路径，行为一字不变）；
+ * - `bodyText`：**诊断原文**，由调用方提供，且**必须已经脱敏**——脱敏不归组件，只能有一份实现；
+ *   组件只负责把它塞进折叠区：等宽、可选中、默认收起、不参与播报。
+ *
+ * 两条正文形态都要求内容非空：空串或纯空白**不渲染这个折叠区**——渲染一个空框比不渲染更糟。
+ */
+export type StateDetails =
+  | {
+      /** 摘要的键；不传时用 `ui.state.error.details`（现成的那条「技术详情」）。 */
+      summaryKey?: StateViewTextKey
+      bodyKey: StateViewTextKey
+      bodyText?: never
+    }
+  | {
+      summaryKey?: StateViewTextKey
+      /** 已经脱敏的诊断原文；组件不做脱敏。 */
+      bodyText: string
+      bodyKey?: never
+    }
+
+/** 摘要不传时的默认键：与 `ui.state.error.details` 同一条，不新造句子。 */
+const DETAILS_SUMMARY_KEY: StateViewTextKey = 'ui.state.error.details'
 
 /**
  * 产品原因句入口（契约 §17）。**只覆盖原因句这一格**：标题/状态词、图标、播报、动作仍归平台。
@@ -288,6 +312,14 @@ export function StateView(props: StateViewProps): ReactElement {
   }
   // `details` 只挂在 error 上（判别联合已挡住别的态传它），收成局部量给 JSX 收窄。
   const details = state === 'error' ? props.details : undefined
+  // 空正文等于没有详情：不渲染那个折叠区，而不是渲染一个空框。
+  const detailsBody =
+    details === undefined
+      ? undefined
+      : details.bodyText !== undefined
+        ? details.bodyText
+        : resolveText(details.bodyKey)
+  const hasDetails = detailsBody !== undefined && detailsBody.trim() !== ''
 
   return (
     <div
@@ -305,12 +337,14 @@ export function StateView(props: StateViewProps): ReactElement {
           {reasonText}
         </span>
       </span>
-      {details === undefined ? null : (
+      {hasDetails ? (
         <details className="state-view__details">
-          <summary>{resolveText(details.summaryKey)}</summary>
-          <p>{resolveText(details.bodyKey)}</p>
+          <summary>{resolveText(details?.summaryKey ?? DETAILS_SUMMARY_KEY)}</summary>
+          {details?.bodyText === undefined
+            ? <p>{detailsBody}</p>
+            : <pre className="state-view__details-text">{detailsBody}</pre>}
         </details>
-      )}
+      ) : null}
       {props.action === undefined ? null : (
         <button type="button" className="state-view__action" onClick={props.action.onSelect}>
           {resolveText(props.action.labelKey)}

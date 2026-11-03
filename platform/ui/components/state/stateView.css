@@ -87,6 +87,20 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * 诊断原文（`details.bodyText`）：等宽、保留换行、**可选中**——读者要能复制它去搜。
+ * 它与 `bodyKey` 那条 `<p>` 分开，是因为两者的性质不同：一个是平台句子，一个是原始输出。
+ */
+.state-view__details-text {
+  margin: 4px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .state-view__action {
   margin-top: 2px;
   padding: 3px 10px;
