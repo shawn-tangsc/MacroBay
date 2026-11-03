@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import type {
-  AnalysisPredictionStatus,
   AnalysisRun,
   AnalysisSummary,
   EvidenceSnapshot,
@@ -14,20 +13,26 @@ import type {
 } from '../../../contracts/marketAnalysisContracts'
 import { PREDICTION_LEDGER_SHAPE_POLICY } from '../../../contracts/marketAnalysisContracts'
 import {
-  mostSevereSkippedEvidence, parseSignalEvidence, signalEvidenceJson, type SignalEvidence
+  parseSignalEvidence, signalEvidenceJson, type SignalEvidence
 } from '../../../contracts/moduleSignalEvidence'
 import { SignalLedgerError, signalLedgerErrorCodes } from '../../../contracts/signalLedgerErrors'
-import { buildAnalysisSnapshotHash, canonicalizeMarketAnalysisJson, snapshotHashInput } from '../analysis/analysisHash'
+import { canonicalizeMarketAnalysisJson } from '../analysis/analysisHash'
 import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
 import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
 import { createMarketAnalysisSqlite, type MarketAnalysisSqlite } from './marketAnalysisSqlite'
+import {
+  fromEventGroup, fromLedger, fromRun, fromSnapshot, fromTimeline, restateAsSkipped,
+  stableMergeKey, validateArchiveMetadata, validateEventGroup, validateRun, validateSnapshot,
+  validateSummaryReferences, type MarketAnalysisArchiveMetadata, type StoredRow
+} from './marketAnalysisRepositoryRows'
+
+/** 归档元数据的形状与「怎么校验它」在同一处：行换算模块拥有它，这里只转出去。 */
+export type { MarketAnalysisArchiveMetadata } from './marketAnalysisRepositoryRows'
 
 const MARKET_ANALYSIS_SCHEMA_VERSION = 2
 const DEFAULT_TIMELINE_PAGE_SIZE = 50
 const MAX_TIMELINE_PAGE_SIZE = 50
 const CURSOR_TTL_MS = 15 * 60 * 1000
-const ARCHIVE_REF_PATTERN = /^[a-f0-9]{64}\.json\.gz$/
-const ARCHIVE_STATUS = Object.freeze({ readable: 'readable', unavailable: 'unavailable' } as const)
 
 /**
  * The one attempt a signal may retry.
@@ -50,15 +55,8 @@ export const marketAnalysisStoragePolicy = Object.freeze({
 })
 
 export type MarketAnalysisTimelinePage = Readonly<{ items: TimelineEntry[]; nextCursor: string | null }>
-export type MarketAnalysisArchiveMetadata = Readonly<{
-  archiveRef: string
-  archiveHash: string
-  archiveBytes: number
-  archiveSchemaVersion: number
-  archiveStatus: keyof typeof ARCHIVE_STATUS
-}>
 export type MarketAnalysisRepository = Readonly<ReturnType<typeof createRepository>>
-type Row = Record<string, unknown>
+type Row = StoredRow
 type RepositoryInput = ({ filePath: string; storage?: never } | { storage: MarketAnalysisSqlite; filePath?: never })
 
 export function createMarketAnalysisRepository(input: RepositoryInput): MarketAnalysisRepository {
@@ -485,51 +483,3 @@ function insertLedgerEntry(database: MarketAnalysisSqlite['database'], value: Pr
 }
 function exists(sqlite: MarketAnalysisSqlite, table: string, id: string): boolean { return Boolean(sqlite.database.prepare(`select 1 from ${table} where id=?`).get(id)) }
 function json(value: unknown): string { return canonicalizeMarketAnalysisJson(value) }
-
-/**
- * One rewrite rule for a row that stops being a queued run.
- *
- * The decision picks the shape, so the batch is converted here and never left for the reader to
- * discard. Corrupt bytes become `null` on purpose: keeping them would keep a row that claims a
- * reading it cannot state.
- */
-function restateAsSkipped(stored: string | null): string | null {
-  const queued = parseSignalEvidence('queued', stored)
-  // `parseSignalEvidence` returns whichever shape its decision validates; the key check narrows it
-  // back for the conversion, because the parser's return type names both shapes.
-  if (queued && 'signalCount' in queued) return signalEvidenceJson('skipped', mostSevereSkippedEvidence(queued))
-  const skipped = parseSignalEvidence('skipped', stored)
-  return skipped && !('signalCount' in skipped) ? signalEvidenceJson('skipped', skipped) : null
-}
-function validateEventGroup(value: EventGroup): void { if (!value.id.startsWith('mi-eg-') || value.schemaVersion !== 1) throw new Error('analysis-event-group-invalid') }
-function validateSnapshot(value: EvidenceSnapshot): void {
-  if (!value.id.startsWith('mi-es-') || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || value.snapshotHash !== buildAnalysisSnapshotHash(snapshotHashInput(value))) throw new Error('analysis-snapshot-invalid')
-}
-function validateRun(value: AnalysisRun): void { if (!value.id.startsWith('mi-ar-') || value.schemaVersion !== 1) throw new Error('analysis-run-invalid') }
-function validateArchiveMetadata(value: MarketAnalysisArchiveMetadata | undefined): void {
-  if (!value) return
-  if (!ARCHIVE_REF_PATTERN.test(value.archiveRef) || !/^[a-f0-9]{64}$/.test(value.archiveHash) || !Number.isSafeInteger(value.archiveBytes) || value.archiveBytes <= 0 || !Number.isSafeInteger(value.archiveSchemaVersion) || value.archiveSchemaVersion < 1 || !Object.values(ARCHIVE_STATUS).includes(value.archiveStatus)) throw new Error('analysis-archive-metadata-invalid')
-  if (value.archiveRef.slice(0, 64) !== value.archiveHash) throw new Error('analysis-archive-metadata-invalid')
-}
-function validateSummaryReferences(summary: AnalysisSummary, snapshot: EvidenceSnapshot): void {
-  const facts = new Set(snapshot.facts.map(value => value.factId))
-  const evidence = new Set(snapshot.evidenceRefs.map(value => value.evidenceRefId))
-  const factRefs = [...summary.knownFacts.map(value => value.factId), ...summary.marketReaction.flatMap(value => value.factIds)]
-  const evidenceRefs = [
-    ...summary.knownFacts.flatMap(value => value.evidenceRefIds),
-    ...summary.transmissionHypotheses.flatMap(value => value.evidenceRefIds),
-    ...summary.marketReaction.flatMap(value => value.evidenceRefIds),
-    ...summary.supportingEvidence.map(value => value.evidenceRefId),
-    ...summary.counterEvidence.map(value => value.evidenceRefId),
-    ...summary.nextCatalysts.flatMap(value => value.evidenceRefIds),
-    ...(summary.directions ?? []).flatMap(value => value.evidenceRefIds),
-    ...summary.evidenceRefs
-  ]
-  if (factRefs.some(value => !facts.has(value)) || evidenceRefs.some(value => !evidence.has(value))) throw new Error('analysis-missing-evidence')
-}
-function fromEventGroup(row: Row): EventGroup { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, status: row.status as EventGroup['status'], groupType: row.group_type as EventGroup['groupType'], mergeKey: String(row.merge_key), firstObservedAt: String(row.first_observed_at), lastObservedAt: String(row.last_observed_at), reviewDeadlineAt: String(row.review_deadline_at), eventRefs: JSON.parse(String(row.event_refs_json)), triggerCount: Number(row.trigger_count), reviewCount: Number(row.review_count), currentSummaryId: row.current_summary_id as string | null, supersededByGroupId: row.superseded_by_group_id as string | null, revision: Number(row.revision), createdAt: String(row.created_at), updatedAt: String(row.updated_at) } }
-function fromSnapshot(row: Row): EvidenceSnapshot { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1 | 2, eventGroupId: String(row.event_group_id), asOf: String(row.as_of), dataCutoff: String(row.data_cutoff), snapshotHash: String(row.snapshot_hash), profileId: 'crypto-market-analysis-v1', facts: JSON.parse(String(row.facts_json)), missingDomains: JSON.parse(String(row.missing_domains_json)), caveats: JSON.parse(String(row.caveats_json)), evidenceRefs: JSON.parse(String(row.evidence_refs_json)), sourceHealth: JSON.parse(String(row.source_health_json)), createdAt: String(row.created_at), policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1' } }
-function fromRun(row: Row): AnalysisRun { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), snapshotId: String(row.snapshot_id), snapshotHash: String(row.snapshot_hash), analysisPhase: row.analysis_phase as AnalysisRun['analysisPhase'], triggerKey: String(row.trigger_key), idempotencyKey: String(row.idempotency_key), status: row.status as AnalysisRun['status'], attempt: Number(row.attempt), retryOfRunId: row.retry_of_run_id as string | null, modelProviderId: row.model_provider_id as string | null, modelId: row.model_id as string | null, policyVersion: String(row.policy_version), promptVersion: String(row.prompt_version), skillVersion: String(row.skill_version), outputSchemaVersion: Number(row.output_schema_version) as 1 | 2, jobRunId: row.job_run_id as string | null, traceId: row.trace_id as string | null, failureCode: row.failure_code as string | null, failureDetailCode: row.failure_detail_code as string | null, queuedAt: String(row.queued_at), startedAt: row.started_at as string | null, completedAt: row.completed_at as string | null } }
-function fromTimeline(row: Row): TimelineEntry { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), analysisRunId: row.analysis_run_id as string | null, kind: row.kind as TimelineEntry['kind'], status: row.status as TimelineEntry['status'], occurredAt: String(row.occurred_at), summaryRef: row.summary_ref as string | null, safeTitle: String(row.safe_title), safeExcerpt: row.safe_excerpt as string | null, direction: (row.direction as TimelineEntry['direction']) ?? null, version: Number(row.version) } }
-function fromLedger(row: Row): PredictionLedgerEntry { return { predictionId: String(row.prediction_id), schemaVersion: 1, asset: row.asset as PredictionLedgerEntry['asset'], horizonStart: String(row.horizon_start), horizonEnd: String(row.horizon_end), predicate: row.predicate === null ? null : String(row.predicate), conditionCount: Number(row.condition_count), status: row.status as AnalysisPredictionStatus, reasonCode: String(row.reason_code), ruleVersion: row.rule_version as PredictionLedgerEntry['ruleVersion'], evidenceRefs: JSON.parse(String(row.evidence_refs_json)) as string[], evidenceRefCount: Number(row.evidence_ref_count), predictionCreatedAt: String(row.prediction_created_at), evaluatedAt: String(row.evaluated_at) } }
-function stableMergeKey(value: string): string { const parts = value.split('|'); return parts.slice(0, -1).join('|') }
