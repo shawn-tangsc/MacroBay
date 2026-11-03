@@ -225,4 +225,39 @@ describe('daily briefing generation settings modal', () => {
     expect(occurrences).toBe(1)
     expect(document.body.textContent).not.toContain(`\n08:00`)
   })
+
+  it('attaches the question to the control it explains, and puts the form-wide note above the fields', async () => {
+    const { view: _ } = {} as { view?: unknown }
+    await render()
+
+    // D6 wires hover/focus; this DOM environment does not deliver React's synthetic mouseenter,
+    // so the open-on-hover proof belongs to the window-driving script (it hovers the real button).
+    // What is asserted here is the part this environment can see: the trigger is a real, focusable
+    // button, and the reason is still its accessible name.
+    const reason = document.body.querySelector<HTMLButtonElement>(`[aria-label="${text.settings.periods.addReason}"]`)!
+    expect(reason.tagName).toBe('BUTTON')
+    expect(reason.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
+
+    // D8: the reason question belongs to the disabled button, immediately beside it.
+    const add = [...document.body.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
+    expect(add.parentElement?.nextElementSibling?.querySelector(`[aria-label="${text.settings.periods.addReason}"]`)).not.toBeNull()
+
+    // D11: the note explains the whole form, so its question sits at the top, above the fields.
+    const note = document.body.querySelector<HTMLElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
+    const firstField = document.body.querySelector('.mi-daily-briefing__settings-row')!
+    expect(note.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('puts the language question before the label it explains', async () => {
+    await render({
+      ...view,
+      language: {
+        settings: { primary: 'follow-ui', additional: [] },
+        plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 }
+      }
+    })
+    const label = document.body.querySelector('.mi-daily-briefing__field-label')!
+    expect(label.firstElementChild?.querySelector('button')).not.toBeNull()
+    expect(label.textContent).toContain(text.settings.periods.language)
+  })
 })

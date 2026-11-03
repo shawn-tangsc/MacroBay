@@ -149,6 +149,23 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
         state="error"
       />
       : !draft ? <LoadingState label={text.generationSettings.loading} minHeight={90} /> : <>
+      {/* The "applies from the next brief" sentence explains the whole form's save, not one group: it belongs beside the title, so it
+          sits at the top of the form instead of at the bottom under the language row. */}
+      <p className="mi-daily-briefing__settings-link">
+        <span>{text.generationSettings.noteLabel}</span>
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+            variant="plain"
+            icon={CircleHelp}
+            resolveText={resolveProductText}
+            size="sm"
+            {...triggerProps}
+          />}
+        />
+      </p>
       {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
       <div className="mi-daily-briefing__settings-row">
         <strong>{text.generationSettings.generationTime}</strong>
@@ -182,6 +199,7 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
       {/* One edition only in this version: the button says why it cannot be added instead of
           disappearing, and that reason is the control's own accessible name. */}
       <div className="mi-daily-briefing__settings-row">
+        <div className="mi-daily-briefing__settings-time">
         <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
         <Popover
           labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
@@ -189,38 +207,39 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
           trigger={(triggerProps) => <IconButton
             ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
             variant="plain"
-            expanded={triggerProps.expanded}
             icon={CircleHelp}
-            onSelect={triggerProps.onSelect}
             resolveText={resolveProductText}
             size="sm"
+            {...triggerProps}
           />}
         />
+        </div>
       </div>
 
       <div className="mi-daily-briefing__settings-row">
         <div>
-          <strong>{periodLabels.language}</strong>
+          <span className="mi-daily-briefing__field-label">
+            {plan?.fallback
+              ? <Popover
+                labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
+                labelParams={{ language: plan.requested }}
+                resolveText={resolveProductText}
+                trigger={(triggerProps) => <IconButton
+                  ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
+                  ariaLabelParams={{ language: plan.requested }}
+                  variant="plain"
+                  icon={CircleHelp}
+                  resolveText={resolveProductText}
+                  size="sm"
+                  {...triggerProps}
+                />}
+              />
+              : null}
+            <strong>{periodLabels.language}</strong>
+          </span>
           <small>{plan?.fallback
             ? periodLabels.languageFallback.replace('{language}', languageName(plan.used))
             : periodLabels.languageFollow.replace('{language}', plan ? languageName(plan.used) : '')}</small>
-          {plan?.fallback
-            ? <Popover
-              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
-              labelParams={{ language: plan.requested }}
-              resolveText={resolveProductText}
-              trigger={(triggerProps) => <IconButton
-                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
-                ariaLabelParams={{ language: plan.requested }}
-                variant="plain"
-                expanded={triggerProps.expanded}
-                icon={CircleHelp}
-                onSelect={triggerProps.onSelect}
-                resolveText={resolveProductText}
-                size="sm"
-              />}
-            />
-            : null}
         </div>
       </div>
       {/* The extra edition sits on its own row, left-aligned: its cost question opens inside the
@@ -247,36 +266,16 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
               trigger={(triggerProps) => <IconButton
                 ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
                 variant="plain"
-                expanded={triggerProps.expanded}
                 icon={CircleHelp}
-                onSelect={triggerProps.onSelect}
                 resolveText={resolveProductText}
                 size="sm"
+                {...triggerProps}
               />}
             />
             : null}
         </div>
         : null}
 
-      {/* The "applies from the next brief" sentence is an explanation, not a status: per UI spec
-          v4 §7 it lives in a question mark, whose accessible name is a short label — the reader
-          gets it without opening anything, and the panel stops restating it. */}
-      <p className="mi-daily-briefing__settings-link">
-        <span>{text.generationSettings.noteLabel}</span>
-        <Popover
-          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
-          resolveText={resolveProductText}
-          trigger={(triggerProps) => <IconButton
-            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
-            variant="plain"
-            expanded={triggerProps.expanded}
-            icon={CircleHelp}
-            onSelect={triggerProps.onSelect}
-            resolveText={resolveProductText}
-            size="sm"
-          />}
-        />
-      </p>
       {failed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
     </>}
   </Modal>
