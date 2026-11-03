@@ -3,7 +3,7 @@ import type { OpenInterestClient } from './binanceOpenInterestClient'
 import type { PerpetualPositioningStore, PositioningRow, PositioningVolumeRow } from '../store/perpetualPositioningStore'
 
 export const openInterestCollectionPolicy = Object.freeze({
-  bucketMs: openInterestBucketPolicy.bucketMs,
+  bucketMs: openInterestBucketPolicy.storageBucketMs,
   assets: Object.freeze({
     btc: Object.freeze({ asset: 'btc' as const, symbol: 'BTCUSDT' }),
     eth: Object.freeze({ asset: 'eth' as const, symbol: 'ETHUSDT' })

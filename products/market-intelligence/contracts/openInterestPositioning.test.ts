@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { liquidationHintPolicy } from './openInterestPositioning'
+import { openInterestBucketPolicy } from './openInterestHistory'
 
 import {
   liquidationHintPolicy,
@@ -126,8 +127,13 @@ describe('liquidation mark anchoring', () => {
 })
 
 describe('liquidation lookback', () => {
-  it('is a duration, so its bar count follows the bucket width', () => {
+  it('is a duration, so its bar count follows the judgement bucket', () => {
     expect(liquidationHintPolicy.lookbackMs).toBe(24 * 3_600_000)
     expect(liquidationHintPolicy.lookbackBars).toBe(96)
+    // Counted on the judgement bucket, not the storage bucket: while storage gets finer, the
+    // baseline must stay one day, so 96 — never 288.
+    expect(openInterestBucketPolicy.signalBucketMs).toBe(900_000)
+    expect(Math.round(liquidationHintPolicy.lookbackMs / openInterestBucketPolicy.signalBucketMs)).toBe(96)
+    expect(Math.round(liquidationHintPolicy.lookbackMs / 300_000)).toBe(288)
   })
 })

@@ -16,7 +16,7 @@ import { detectLiquidationHints, liquidationHintPolicy, type PositioningBar } fr
 import type { PerpetualPositioningStore, PositioningStoredBar } from '../store/perpetualPositioningStore'
 
 /** Read from the one bucket source; a second literal here would drift silently. */
-const BUCKET_MS = openInterestBucketPolicy.bucketMs
+const BUCKET_MS = openInterestBucketPolicy.storageBucketMs
 
 /**
  * Reads the positioning series and shapes it for one window.

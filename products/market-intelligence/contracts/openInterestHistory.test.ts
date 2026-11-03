@@ -4,6 +4,7 @@ import {
   bucketPeriodLabel,
   bucketsInSpan,
   openInterestBucketPolicy,
+  isBucketPolicyValid,
   isCanonicalOpenInterestTime,
   isOpenInterestChange,
   isOpenInterestNotional,
@@ -31,13 +32,25 @@ describe('open interest policy', () => {
   it('derives the lookback and the request limits from the bucket width, not from a count', () => {
     // The assertion that would have caught the regression: `96 bars` is a day at fifteen minutes
     // and eight hours at five. A count encodes the bucket width it was written for.
-    expect(openInterestBucketPolicy.bucketMs).toBe(900_000)
-    expect(bucketsInSpan(86_400_000)).toBe(96)
+    expect(openInterestBucketPolicy.storageBucketMs).toBe(900_000)
+    expect(openInterestBucketPolicy.signalBucketMs).toBe(900_000)
+    expect(bucketsInSpan(86_400_000, openInterestBucketPolicy.signalBucketMs)).toBe(96)
     expect(bucketsInSpan(86_400_000, 5 * 60_000)).toBe(288)
-    expect(bucketsInSpan(7 * 86_400_000)).toBe(672)
+    expect(bucketsInSpan(7 * 86_400_000, openInterestBucketPolicy.storageBucketMs)).toBe(672)
     expect(bucketsInSpan(7 * 86_400_000, 5 * 60_000)).toBe(2016)
-    expect(bucketPeriodLabel()).toBe('15m')
+    expect(bucketPeriodLabel(openInterestBucketPolicy.storageBucketMs)).toBe('15m')
     expect(bucketPeriodLabel(5 * 60_000)).toBe('5m')
+  })
+
+  it('keeps the judgement bucket at or above the storage bucket, and a whole multiple of it', () => {
+    // Finer than storage could only be interpolation, and an interpolated reading is invented.
+    expect(isBucketPolicyValid()).toBe(true)
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 900_000 })).toBe(true)
+    expect(isBucketPolicyValid({ storageBucketMs: 300_000, signalBucketMs: 900_000 })).toBe(true)
+    // The pair the architect named: a 5-minute judgement over 15-minute storage must be refused.
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 300_000 })).toBe(false)
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 600_000 })).toBe(false)
+    expect(isBucketPolicyValid({ storageBucketMs: 0, signalBucketMs: 900_000 })).toBe(false)
   })
 
   it('allows 172 points on the 7-day window, because the fold yields 168 or 169', () => {

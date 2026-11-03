@@ -14,22 +14,49 @@
  * minutes and 8 hours at five, and no assertion would notice.
  */
 export const openInterestBucketPolicy = Object.freeze({
-  bucketMs: 900_000
+  /** The width the store keeps, one row per bucket. */
+  storageBucketMs: 900_000,
+  /**
+   * The width the liquidation rule judges one bucket on.
+   *
+   * Never finer than `storageBucketMs`, and always a whole multiple of it: a judgement bucket
+   * narrower than what is stored could only be produced by interpolation, and an interpolated
+   * reading is a made-up number wearing the same clothes as a measured one.
+   */
+  signalBucketMs: 900_000
 })
 
-/** Buckets that fit in a span. The only division by the bucket width in this domain. */
-export function bucketsInSpan(spanMs: number, bucketMs: number = openInterestBucketPolicy.bucketMs): number {
+/**
+ * Why the two widths may differ, and when they may not.
+ *
+ * The storage bucket can get finer without changing what the rule reads; the rule's own bucket
+ * cannot get finer than what is actually stored. Everything else about the pair is arithmetic.
+ */
+export function isBucketPolicyValid(policy: Readonly<{ storageBucketMs: number; signalBucketMs: number }> = openInterestBucketPolicy): boolean {
+  const { storageBucketMs, signalBucketMs } = policy
+  if (!Number.isInteger(storageBucketMs) || !Number.isInteger(signalBucketMs)) return false
+  if (storageBucketMs <= 0 || signalBucketMs <= 0) return false
+  return signalBucketMs >= storageBucketMs && signalBucketMs % storageBucketMs === 0
+}
+
+/**
+ * Buckets that fit in a span. The only division by a bucket width in this domain.
+ *
+ * The width is required: a default here would silently pick one of the two widths, and picking
+ * the wrong one turns a day of volume baseline into eight hours without a single assertion.
+ */
+export function bucketsInSpan(spanMs: number, bucketMs: number): number {
   return Math.round(spanMs / bucketMs)
 }
 
 /** The provider's period label for a bucket width (`15m`, `5m`), derived rather than spelled twice. */
-export function bucketPeriodLabel(bucketMs: number = openInterestBucketPolicy.bucketMs): string {
+export function bucketPeriodLabel(bucketMs: number): string {
   return `${Math.round(bucketMs / 60_000)}m`
 }
 
 export const openInterestHistoryPolicy = Object.freeze({
   sourceId: 'binance-futures-positioning',
-  storedPeriod: bucketPeriodLabel(),
+  storedPeriod: bucketPeriodLabel(openInterestBucketPolicy.storageBucketMs),
   windows: Object.freeze({
     '7d': Object.freeze({ spanMs: 7 * 86_400_000, resolution: '1h' as const, maximumPointsPerAsset: 172 }),
     '24h': Object.freeze({ spanMs: 86_400_000, resolution: '15m' as const, maximumPointsPerAsset: 100 })
@@ -51,7 +78,7 @@ export const openInterestHistoryPolicy = Object.freeze({
    * quietly shortening the backfill. A finer bucket may need to respect the endpoint's own cap
    * when it lands; that is a request-shape question for the step that changes the bucket width.
    */
-  requestLimit: Object.freeze({ openInterest: 500, klines: bucketsInSpan(7 * 86_400_000) }),
+  requestLimit: Object.freeze({ openInterest: 500, klines: bucketsInSpan(7 * 86_400_000, openInterestBucketPolicy.storageBucketMs) }),
   timeoutMs: 15_000,
   maximumResponseBytes: 256 * 1024,
   unavailableFailureCode: 'open-interest-history-query-unavailable' as const,

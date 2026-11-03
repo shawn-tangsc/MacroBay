@@ -1,4 +1,4 @@
-import { bucketsInSpan } from './openInterestHistory'
+import { bucketsInSpan, openInterestBucketPolicy } from './openInterestHistory'
 
 /**
  * Turns notional open interest and the funding rate into one of six named states.
@@ -117,7 +117,7 @@ export const liquidationHintPolicy = Object.freeze({
   priceDropPct: -0.8,
   volumeMultiple: 2,
   lookbackMs: LIQUIDATION_LOOKBACK_MS,
-  lookbackBars: bucketsInSpan(LIQUIDATION_LOOKBACK_MS),
+  lookbackBars: bucketsInSpan(LIQUIDATION_LOOKBACK_MS, openInterestBucketPolicy.signalBucketMs),
   maximumHints: 8,
   /**
    * Below this share of closed buckets carrying volume, the whole window reports
