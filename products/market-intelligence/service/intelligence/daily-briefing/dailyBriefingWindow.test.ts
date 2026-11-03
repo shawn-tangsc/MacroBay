@@ -23,6 +23,16 @@ describe('briefing window zone source', () => {
     expect(window?.windowStart).toBe('2026-10-28T23:00:00.000Z')
   })
 
+  it('keeps the current issue on the previous day before the generation hour', () => {
+    // 03:21 local on 11-04, cutoff 07:00: the reader is still inside the 11-03 issue — the one the
+    // list shows first and the one a generate lands on. Both paths read this function, so the two
+    // dates cannot diverge.
+    const window = briefingWindow('2026-11-03T19:21:25.083Z', SHANGHAI, { generationTime: '07:00', windowHours: 24 })
+
+    expect(window?.date).toBe('2026-11-03')
+    expect(window?.windowEnd).toBe('2026-11-02T23:00:00.000Z')
+  })
+
   it('falls back to the machine zone, not UTC, when the setting is empty', () => {
     const window = briefingWindow(AS_OF, '', { generationTime: '07:00', windowHours: 24 }, SHANGHAI)
     const utc = briefingWindow(AS_OF, 'UTC', { generationTime: '07:00', windowHours: 24 })
