@@ -18,7 +18,7 @@ import {
   PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId
 } from '../modelPins'
 import { AssistantLibrarySettingsPage } from '../settings/assistants/AssistantLibrarySettingsPage'
-import { NotificationSettingsPane } from '../settings/NotificationSettingsPane'
+import { NotificationSettingsScreen } from '../settings/NotificationSettingsScreen'
 import { StorageCacheSettingsPage } from '../settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from '../settings/task-automation/TaskAutomationSettingsPage'
 import { ChannelSettingsPage } from '../settings/channels/ChannelSettingsPage'
@@ -233,12 +233,13 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'task-automation' ? <TaskAutomationSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'channels' ? <ChannelSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'notifications' ? (
-        <NotificationSettingsPane
+        <NotificationSettingsScreen
           title={text.settings.notifications}
           notice={null}
-          settings={settings.notifications}
-          labels={text.notifications}
-          onChange={(patch) => void data.updateSettings({ notifications: patch })}
+          language={language}
+          onOpenSystemSettings={() =>
+            void window.platform.app.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')
+          }
         />
       ) : null}
       {HOST_ONLY_SETTINGS_PANELS.includes(panelKey) ? (

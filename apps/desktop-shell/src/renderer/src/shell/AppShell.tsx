@@ -121,7 +121,7 @@ import { buildProviderInputFromDraft } from '@platform/ai/providers/providerConf
 import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndpoints'
 import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
 import { PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId } from './modelPins'
-import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
+import { NotificationSettingsScreen } from './settings/NotificationSettingsScreen'
 import { AboutSettingsPage } from './settings/about/AboutSettingsPage'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
@@ -550,14 +550,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     })
   }
 
-  async function updateNotificationSettings(patch: Partial<NotificationSettings>): Promise<void> {
-    await updateSettings({
-      notifications: {
-        ...settings.notifications,
-        ...patch
-      }
-    })
-  }
 
   async function updateSettings(patch: AppSettingsPatch): Promise<void> {
     setNotice(null)
@@ -1465,12 +1457,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   function renderNotifications(): React.ReactElement {
     return (
-      <NotificationSettingsPane
+      <NotificationSettingsScreen
         title={t.settings.notifications}
         notice={notice}
-        settings={settings.notifications}
-        labels={t.notifications}
-        onChange={(patch) => void updateNotificationSettings(patch)}
+        language={settings.language}
+        onOpenChannelPage={() => setSettingsPanelKey('channels')}
+        onOpenSystemSettings={() => void window.platform.app.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')}
       />
     )
   }
