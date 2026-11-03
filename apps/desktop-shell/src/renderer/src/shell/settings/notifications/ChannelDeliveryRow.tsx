@@ -72,7 +72,17 @@ function ChannelStatusLine(props: {
   if (state.kind === 'failed') {
     // 时刻由统一格式化产出（带时区），这里只放进模板，不自己拼、不自己 slice。
     const at = formatShellCompactInstant(state.failedAt, { timeZone: props.timeZone })
-    // 原因码是闭集：查得到翻译，查不到就说「原因没有上报」，绝不把码或原始错误印给读者。
+    // `unknown-after-send`：交出去了、没拿到回执。**不能套「没发出去」那句**——那句话自己会和
+    // 「已交给通道」打架，而手机很可能真的收到了。只出中性句，不给「失败」药丸：
+    // 药丸是状态结论，这里既不是成功也不是失败。
+    if (state.failedReason === 'unknown-after-send') {
+      return (
+        <span className="notification-row-state" role="note" data-channel-state data-push-unknown>
+          {text.channelPushUnknown(at)}
+        </span>
+      )
+    }
+    // 其余原因码是闭集：查得到翻译，查不到就说「原因没有上报」，绝不把码或原始错误印给读者。
     const reason =
       state.failedReason === null
         ? text.pushFailureReasonUnknown

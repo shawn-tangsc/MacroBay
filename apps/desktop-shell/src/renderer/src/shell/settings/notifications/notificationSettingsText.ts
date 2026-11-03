@@ -42,6 +42,11 @@ export type NotificationSettingsText = {
    * 绝不把码或原始错误当读者文字印上去。
    */
   channelPushFailed: (reason: string, at: string) => string
+  /**
+   * `unknown-after-send` 自己的那一句（界面规范 v2.14 §2.5）：它既不是成功，也说不清原因，
+   * 套「没发出去」那句就是把「拿不到」写成「没有」——先发后断线时手机很可能已经收到了。
+   */
+  channelPushUnknown: (at: string) => string
   pushFailureReason: Readonly<Record<string, string>>
   pushFailureReasonUnknown: string
   channelTargetLabel: string
@@ -117,13 +122,15 @@ const zh: NotificationSettingsText = {
   channelUnbound: '目标未绑定：还看不出会发到哪个会话',
   channelAmbiguous: '这个通道绑了多个会话，请到通道页只保留一个；现在不发，也不替你挑',
   channelPushFailed: (reason, at) => `最近一次推送没发出去：${reason} · ${at}`,
+  channelPushUnknown: (at) => `不确定有没有发到手机：没有拿到确认 · ${at}`,
   pushFailureReason: Object.freeze({
     'push-unavailable': '通道还没有接通',
     'delivery-no-target-bound': '通道还没有绑定会话',
     'delivery-ambiguous-target': '通道绑了不止一个会话',
     'push-backoff': '连续失败后暂停了一会儿',
-    'channel-rejected': '通道拒收了这条',
-    'unknown-after-send': '已交给通道，但没拿到回执'
+    'channel-rejected': '通道拒收了这条'
+    // `unknown-after-send` 不在这张表里：它有自己的整句（`channelPushUnknown`），
+    // 因为「没发出去：已交给通道」这句话自己和自己打架。
   }),
   pushFailureReasonUnknown: '原因没有上报',
   channelTargetLabel: '目标',
@@ -206,13 +213,14 @@ const en: NotificationSettingsText = {
   channelAmbiguous:
     'This channel has several conversations bound; keep only one on the Channels page. Nothing is sent, and we do not pick for you.',
   channelPushFailed: (reason, at) => `The last push did not go out: ${reason} · ${at}`,
+  channelPushUnknown: (at) => `We cannot tell whether it reached your phone: no confirmation came back · ${at}`,
   pushFailureReason: Object.freeze({
     'push-unavailable': 'no channel is connected yet',
     'delivery-no-target-bound': 'the channel has no conversation bound',
     'delivery-ambiguous-target': 'the channel has more than one conversation bound',
     'push-backoff': 'paused for a while after repeated failures',
-    'channel-rejected': 'the channel rejected this message',
-    'unknown-after-send': 'handed to the channel, but no receipt came back'
+    'channel-rejected': 'the channel rejected this message'
+    // `unknown-after-send` has its own sentence; see `channelPushUnknown`.
   }),
   pushFailureReasonUnknown: 'the reason was not reported',
   channelTargetLabel: 'Target',

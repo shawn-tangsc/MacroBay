@@ -313,6 +313,30 @@ describe('the send-to-channel row', () => {
     expect(row.textContent).not.toContain('已送达')
   })
 
+  it('does not claim the push failed when the channel cannot say whether it arrived', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [channelTarget()],
+          channelId: 'telegram-1',
+          lastPushFailureAt: '2026-11-02T13:37:00.000Z',
+          lastPushFailureReason: 'unknown-after-send',
+          toastEnabled: false
+        })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    // 交出去了、没拿到回执：既不能写「没发出去」，也不能给「失败」药丸。
+    expect(row.textContent).toContain('不确定有没有发到手机')
+    expect(row.textContent).toContain('没有拿到确认')
+    expect(row.textContent).not.toContain('没发出去')
+    expect(row.querySelector('.status-pill')).toBeNull()
+    // 时刻照样带时区。
+    expect(row.textContent).toContain('11-02 21:37 GMT+8')
+  })
+
   it('says the reason was not reported instead of printing an unknown code', async () => {
     const container = await mount({
       listEventCatalog: () => Promise.resolve([]),
