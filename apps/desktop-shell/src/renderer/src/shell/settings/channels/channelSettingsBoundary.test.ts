@@ -40,7 +40,8 @@ describe('channel settings boundary', () => {
   })
 
   it('sends the token through the encrypted handoff and clears the draft afterwards', () => {
-    expect(createDialog).toContain('clearSensitiveDraft(setToken)')
+    // 草稿清空的具体形状（清一个 state 还是清整个表单）不锁，锁的是「提交后立刻清」这件事本身。
+    expect(createDialog).toContain('clearSensitiveDraft(')
     expect(createDialog).toContain('encryptChannelHandoff')
     expect(createDialog).toContain('window.platform.channels.beginCredential')
     expect(createDialog).toContain('window.platform.channels.submitCredential')

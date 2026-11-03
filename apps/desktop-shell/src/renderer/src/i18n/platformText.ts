@@ -210,12 +210,12 @@ export type PlatformText = {
     channelPlatformName: Record<'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack', string>
     /** 「＋ 添加」按钮。 */
     channelAdd: string
-    /** 已接入平台的一句话用途（标题下方那一行）。 */
-    channelTelegramPurpose: string
+    /** 每个平台的一句话用途（标题下方那一行）。按平台取，不许拿一个平台的句子套另一个。 */
+    channelPlatformPurpose: Record<'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack', string>
     /** 没接入的平台点进去只写这一句，不画添加按钮、不带红字。 */
     channelUnsupportedPane: string
-    /** 空态原因句：「暂无 {platform} 频道」。 */
-    channelEmptyForPlatform: string
+    /** 适配器在、但还没通过真机验收：说清缺什么，不画添加按钮。 */
+    channelNeedsEvidence: string
     /** 行内四个动作的读屏名与提示。 */
     channelLogs: string
     channelEdit: string
@@ -225,6 +225,16 @@ export type PlatformText = {
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
     channelEnableSwitch: string
+    /** 编辑弹层的六字段标签；新建与编辑共用同一套。 */
+    channelFieldWorkspace: string
+    channelFieldAllowedChats: string
+    channelFieldPermissionMode: string
+    channelWorkspaceDefault: string
+    channelPermissionInherit: string
+    /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
+    channelFieldNotSavable: string
+    /** 编辑弹层里 Token 只有圆点：说明它是占位，不是真值。 */
+    channelTokenReadOnly: string
   }
   taskAutomation: {
     title: string
@@ -1514,14 +1524,28 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '广播频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' },
       channelPlatformName: { telegram: 'Telegram', feishu: '飞书', qq: 'QQ', wechat: '微信', discord: 'Discord', slack: 'Slack' },
       channelAdd: '添加',
-      channelTelegramPurpose: '通过 Telegram 机器人用长轮询接收和回复消息。',
+      channelPlatformPurpose: {
+        telegram: '通过 Telegram 机器人用长轮询接收和回复消息。',
+        feishu: '通过飞书机器人接收和回复消息。',
+        qq: '通过 QQ 机器人接收和回复消息。',
+        wechat: '通过微信机器人接收和回复消息。',
+        discord: '通过 Discord 机器人接收和回复消息。',
+        slack: '通过 Slack 机器人接收和回复消息。'
+      },
       channelUnsupportedPane: '这一版还接不了，先把 Telegram 接上。',
-      channelEmptyForPlatform: '暂无 {platform} 频道',
+      channelNeedsEvidence: '还需要一条真机验证记录才能启用；先按接入页的步骤跑一遍。',
       channelLogs: '日志',
       channelEdit: '编辑',
       channelTokenMask: '********',
       channelLogsEmpty: '这个频道还没有记录',
-      channelEnableSwitch: '启用这个频道'
+      channelEnableSwitch: '启用这个频道',
+      channelFieldWorkspace: '工作目录',
+      channelFieldAllowedChats: '允许的会话 ID',
+      channelFieldPermissionMode: '频道权限模式',
+      channelWorkspaceDefault: '不使用工作目录',
+      channelPermissionInherit: '继承助手设置',
+      channelFieldNotSavable: '这一版还保存不了这一项',
+      channelTokenReadOnly: '圆点只是占位，不是真值'
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -2697,14 +2721,28 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Broadcast channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' },
       channelPlatformName: { telegram: 'Telegram', feishu: 'Lark', qq: 'QQ', wechat: 'WeChat', discord: 'Discord', slack: 'Slack' },
       channelAdd: 'Add',
-      channelTelegramPurpose: 'Receive and reply through a Telegram bot using long polling.',
+      channelPlatformPurpose: {
+        telegram: 'Receive and reply through a Telegram bot using long polling.',
+        feishu: 'Receive and reply through a Lark bot.',
+        qq: 'Receive and reply through a QQ bot.',
+        wechat: 'Receive and reply through a WeChat bot.',
+        discord: 'Receive and reply through a Discord bot.',
+        slack: 'Receive and reply through a Slack bot.'
+      },
       channelUnsupportedPane: 'This version cannot connect it yet — start with Telegram.',
-      channelEmptyForPlatform: 'No {platform} channel yet',
+      channelNeedsEvidence: 'A real-device verification record is still required before it can be enabled.',
       channelLogs: 'Logs',
       channelEdit: 'Edit',
       channelTokenMask: '********',
       channelLogsEmpty: 'This channel has no records yet',
-      channelEnableSwitch: 'Enable this channel'
+      channelEnableSwitch: 'Enable this channel',
+      channelFieldWorkspace: 'Working folder',
+      channelFieldAllowedChats: 'Allowed chat IDs',
+      channelFieldPermissionMode: 'Channel permission mode',
+      channelWorkspaceDefault: 'Do not use a working folder',
+      channelPermissionInherit: 'Inherit the agent setting',
+      channelFieldNotSavable: 'This version cannot save this field yet',
+      channelTokenReadOnly: 'The dots are a placeholder, not the value'
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',

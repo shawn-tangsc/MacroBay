@@ -159,12 +159,54 @@ describe('platforms that are not implemented', () => {
   })
 })
 
+describe('the platform list follows the approved layout', () => {
+  it('keeps the six platforms in the fixed order, whatever their status is', async () => {
+    installPlatform()
+    const container = await mount()
+
+    // 第一格是字母徽标，名字在第二个 span 里：只比名字，不把徽标拼进来。
+    const order = [...container.querySelectorAll('.channel-platform-item')].map((node) =>
+      node.querySelectorAll('span')[1]?.textContent?.trim()
+    )
+    expect(order).toEqual(['飞书', 'Telegram', 'QQ', '微信', 'Discord', 'Slack'])
+  })
+
+  it('never shows another platform sentence once the selection changes', async () => {
+    installPlatform()
+    const container = await mount()
+
+    expect(container.textContent).toContain(labels.channelPlatformPurpose.telegram)
+    const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
+    await act(async () => (slack as HTMLButtonElement).click())
+
+    // Slack 这版接不了：说明换成那一句，且不再出现 Telegram 的说明。
+    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    expect(container.textContent).not.toContain(labels.channelPlatformPurpose.telegram)
+  })
+
+  it('leaves a platform that cannot be connected with only its name, one sentence and no empty block', async () => {
+    installPlatform()
+    const container = await mount()
+
+    const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
+    await act(async () => (slack as HTMLButtonElement).click())
+
+    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    expect(container.querySelector('[data-state="empty"]')).toBeNull()
+    expect([...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)).toBeUndefined()
+  })
+})
+
 describe('an empty platform', () => {
   it('says no Telegram channel yet, and leaves the only add button at the top right', async () => {
     installPlatform({ list: vi.fn(async () => []) })
     const container = await mount()
 
-    expect(container.textContent).toContain(labels.channelEmptyForPlatform.replace('{platform}', 'Telegram'))
+    // 空态按组件契约：标准两行（通用标题 + 原因句）加一个「添加」动作，不再叠加自己的一句话。
+    const empty = container.querySelector('[data-state="empty"]')
+    expect(empty).not.toBeNull()
+    expect(empty?.querySelectorAll('.state-view__title, .state-view__reason').length).toBe(2)
+    expect(empty?.querySelector('.state-view__action')).not.toBeNull()
     const addButtons = [...container.querySelectorAll('button')].filter((node) => node.textContent?.trim() === labels.channelAdd)
     expect(addButtons).toHaveLength(1)
   })

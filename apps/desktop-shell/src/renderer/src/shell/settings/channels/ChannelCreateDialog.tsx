@@ -1,13 +1,16 @@
-import { Input, Modal, Select } from 'antd'
+import { Modal } from 'antd'
 import { useEffect, useState } from 'react'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
+import { ChannelFields, type ChannelFieldValues } from './ChannelFields'
 import type { Agent } from './channelSettingsPresentation'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
+const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '' }
+
 /**
- * 「＋ 添加」的弹层：名称、接消息的助手、Bot Token（原型 B 的前三个字段）。
+ * 「＋ 添加」的弹层：六字段布局与编辑弹层共用（需求 v7 要求新建和编辑统一）。
  *
  * Token 只在这里出现一次，且**只进不出**：提交走平台的凭据交接（WebCrypto 加密后再过 IPC），
  * 成功后立刻清空草稿。列表里它永远只是星号——这一条是安全口径，不是排版偏好。
@@ -20,47 +23,28 @@ export function ChannelCreateDialog(props: {
   onCreate: (input: { name: string; agentId: string; token: string }) => void
 }): React.ReactElement {
   const { labels } = props
-  const [name, setName] = useState('')
-  const [agentId, setAgentId] = useState('')
-  const [token, setToken] = useState('')
+  const [values, setValues] = useState<ChannelFieldValues>(EMPTY)
 
-  useEffect(() => () => clearSensitiveDraft(setToken), [])
+  useEffect(() => () => clearSensitiveDraft(() => setValues(EMPTY)), [])
+
+  const ready = values.name.trim().length > 0 && values.agentId.length > 0 && values.token.trim().length > 0
 
   return (
     <Modal
       cancelText={labels.channelCancel}
-      okButtonProps={{
-        disabled: name.trim().length === 0 || agentId.length === 0 || token.trim().length === 0,
-        loading: props.saving
-      }}
+      okButtonProps={{ disabled: !ready, loading: props.saving }}
       okText={labels.channelCreate}
       onCancel={props.onCancel}
-      onOk={() => props.onCreate({ name: name.trim(), agentId, token })}
+      onOk={() => props.onCreate({ name: values.name.trim(), agentId: values.agentId, token: values.token })}
       open
       title={labels.channelCreate}
     >
-      <Input
-        aria-label={labels.channelName}
-        autoFocus
-        onChange={(event) => setName(event.target.value)}
-        placeholder={labels.channelName}
-        value={name}
-      />
-      <Select
-        aria-label={labels.channelAgentId}
-        onChange={setAgentId}
-        options={props.agents.map((agent) => ({ value: agent.id, label: agent.name }))}
-        placeholder={labels.channelAgentId}
-        style={{ marginTop: 10, width: '100%' }}
-        value={agentId.length === 0 ? undefined : agentId}
-      />
-      <Input.Password
-        aria-label={labels.channelCredential}
-        autoComplete="off"
-        onChange={(event) => setToken(event.target.value)}
-        placeholder={labels.channelCredential}
-        style={{ marginTop: 10 }}
-        value={token}
+      <ChannelFields
+        agents={props.agents}
+        labels={labels}
+        mode="create"
+        onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
+        values={values}
       />
     </Modal>
   )

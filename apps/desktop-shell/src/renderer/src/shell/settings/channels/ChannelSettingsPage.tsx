@@ -14,7 +14,8 @@ import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
 
-const PLATFORM_ORDER: readonly CatalogType[] = ['telegram', 'feishu', 'qq', 'wechat', 'discord', 'slack']
+// 顺序照设计固定：飞书 → Telegram → QQ → 微信 → Discord → Slack（不按接入状态重排）。
+const PLATFORM_ORDER: readonly CatalogType[] = ['feishu', 'telegram', 'qq', 'wechat', 'discord', 'slack']
 
 /**
  * 设置 → 频道（原型 A：列表与行）。
@@ -69,7 +70,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const platform = catalog.find((entry) => entry.type === selectedType)
   const implemented = platform?.implemented === true
+  // 「能接」= 证据完备（supported），不是「代码里有适配器」：`implemented` 只说明收凭据有意义。
+  const supported = platform?.status === 'supported'
+  const planned = platform?.status === 'planned'
+  // 「还没接」= 没有适配器，或被挡在验收证据之外：这一类的右侧只留三样（名字、一句用途、一句原因），
+  // 不画加号、不画频道行、也不画空态块——空态会被读成「这里本来可以有频道」。
+  const notConnectable = platform === undefined || platform.status === 'blocked' || !platform.implemented
   const rows = channels.filter((channel) => channel.type === selectedType)
+
 
   const runAction = async (channel: Channel, action: () => Promise<unknown>): Promise<void> => {
     setBusyId(channel.id)
@@ -178,17 +186,21 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <div>
                 <h2 className="channel-detail-title">{labels.channelPlatformName[selectedType]}</h2>
                 <p className="channel-detail-purpose">
-                  {implemented ? labels.channelTelegramPurpose : labels.channelUnsupportedPane}
+                  {supported
+                    ? labels.channelPlatformPurpose[selectedType]
+                    : planned
+                      ? labels.channelNeedsEvidence
+                      : labels.channelUnsupportedPane}
                 </p>
               </div>
-              {implemented ? (
+              {supported ? (
                 <Button icon={<Plus size={14} />} onClick={() => setEditor({ mode: 'create' })} type="primary">
                   {labels.channelAdd}
                 </Button>
               ) : null}
             </header>
 
-            {implemented && stale ? (
+            {!notConnectable && stale ? (
               <p className="channel-settings-stale" role="status">
                 <span>{labels.channelStaleNotice}</span>
                 <button onClick={() => void reload()} type="button">
@@ -197,37 +209,30 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               </p>
             ) : null}
 
-            {implemented ? (
-              rows.length === 0 ? (
-                <StateView
-                  productReason={{
-                    key: 'channelEmptyForPlatform',
-                    params: { platform: labels.channelPlatformName[selectedType] },
-                    resolve: (key, params) => {
-                      if (key !== 'channelEmptyForPlatform') return key
-                      return labels.channelEmptyForPlatform.replace('{platform}', params?.platform ?? '')
-                    }
-                  }}
-                  reasonCode="never-created"
-                  state="empty"
-                />
-              ) : (
-                <div role="list">
-                  {rows.map((channel) => (
-                    <ChannelRow
-                      busy={busyId === channel.id}
-                      channel={channel}
-                      key={channel.id}
-                      labels={labels}
-                      onDelete={setDeleting}
-                      onEdit={(channel) => setEditor({ mode: 'edit', channel })}
-                      onLogs={setLogsFor}
-                      onToggle={toggle}
-                    />
-                  ))}
-                </div>
-              )
-            ) : null}
+            {notConnectable ? null : rows.length === 0 ? (
+              // 空态走组件契约：标准两行（通用标题 + 原因句）+ 一个「添加」动作。
+              // 不自绘、也不给 StateView 加「只显示一行」的开关——同一件事只说一遍即可。
+              <StateView
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: () => setEditor({ mode: 'create' }) }}
+                reasonCode="never-created"
+                state="empty"
+              />
+            ) : (
+              <div role="list">
+                {rows.map((channel) => (
+                  <ChannelRow
+                    busy={busyId === channel.id}
+                    channel={channel}
+                    key={channel.id}
+                    labels={labels}
+                    onDelete={setDeleting}
+                    onEdit={(channel) => setEditor({ mode: 'edit', channel })}
+                    onLogs={setLogsFor}
+                    onToggle={toggle}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -271,10 +276,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         open={logsFor !== null}
         title={logsFor === null ? labels.channelLogs : `${labels.channelLogs} · ${logsFor.name}`}
       >
-        <StateView productReason={{
-          key: 'channelLogsEmpty',
-          resolve: () => labels.channelLogsEmpty
-        }} reasonCode="not-yet" size="sm" state="empty" />
+        <p className="channel-logs-empty">{labels.channelLogsEmpty}</p>
       </Modal>
     </section>
   )
