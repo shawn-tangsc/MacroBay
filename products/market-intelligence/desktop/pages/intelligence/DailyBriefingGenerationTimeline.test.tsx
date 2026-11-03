@@ -137,13 +137,14 @@ async function settle(): Promise<void> {
 }
 
 describe('generation stage timeline', () => {
-  it('folds a finished run to one line, and that line still carries the step count and duration', () => {
+  it('opens a finished run by default, and the summary line still carries the step count and duration', () => {
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     const steps = stepItems(dom)
     const details = dom.querySelector<HTMLDetailsElement>('.mi-generation-trace')!
-    // Contract: a completed run defaults to collapsed; the summary is the only visible line.
+    // Contract: the list is open in every state — the reader asked to see the steps without a
+    // click — and the summary line is where collapsing starts.
     expect(details.tagName).toBe('DETAILS')
-    expect(details.open).toBe(false)
+    expect(details.open).toBe(true)
     expect(details.querySelector('summary')!.textContent).toMatch(/生成阶段9 步 · .+ · 全部完成/)
     expect(dom.querySelector('.ant-steps-vertical')).not.toBeNull()
     expect(steps).toHaveLength(9)

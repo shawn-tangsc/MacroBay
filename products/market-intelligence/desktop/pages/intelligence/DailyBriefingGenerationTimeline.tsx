@@ -54,7 +54,9 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
         ? `${labels.failedAt.replace('{stage}', failedLabel)} · ${labels.notExecutedCount.replace('{count}', String(notStarted))}`
         : `${labels.stepsCount.replace('{count}', String(steps))} · ${durationLabel} · ${labels.allCompleted}`
       : labels.notRecorded
-  return <details className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'} open={running || trace?.state === 'failed'}>
+  // Open by default in every state: the reader asked to see the steps without a click, so the
+  // summary line is the place to collapse from, not the place to start.
+  return <details className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'} open>
     <summary className="mi-generation-trace__head">
       <h3>{labels.title}</h3>
       <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-stage-summary="true">{summaryLine}</span>

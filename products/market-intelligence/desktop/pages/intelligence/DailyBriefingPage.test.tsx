@@ -545,8 +545,8 @@ describe('daily briefing page', () => {
     const column = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
 
     expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(0)
-    // No gap is left behind: the column starts with the stage block.
-    expect(column.firstElementChild?.hasAttribute('data-briefing-stages')).toBe(true)
+    // No gap is left behind: the column starts with the gap block, which is the first block now.
+    expect(column.firstElementChild?.hasAttribute('data-briefing-gaps')).toBe(true)
   })
 
   it('keeps the toolbar regenerate on the normal path', async () => {
@@ -817,7 +817,7 @@ describe('daily briefing page', () => {
     expect(dom.textContent!.match(/生成记录/g) ?? []).toHaveLength(1)
   })
 
-  it('keeps the detail column as one scroll container ordered stages → gaps → attempts', async () => {
+  it('keeps the detail column as one scroll container ordered gaps → stages → attempts', async () => {
     const dom = await renderPage(fakeClient({ listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })) }))
     const column = dom.querySelector<HTMLElement>('[data-briefing-detail="true"]')!
 
@@ -832,9 +832,9 @@ describe('daily briefing page', () => {
     const stages = children.findIndex((child) => child.hasAttribute('data-briefing-stages'))
     const gaps = children.findIndex((child) => child.hasAttribute('data-briefing-gaps'))
     const attempts = children.findIndex((child) => child.hasAttribute('data-briefing-attempts'))
-    expect(stages).toBeGreaterThanOrEqual(0)
-    expect(gaps).toBeGreaterThan(stages)
-    expect(attempts).toBeGreaterThan(gaps)
+    expect(gaps).toBeGreaterThanOrEqual(0)
+    expect(stages).toBeGreaterThan(gaps)
+    expect(attempts).toBeGreaterThan(stages)
   })
 
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
@@ -1056,12 +1056,11 @@ describe('daily briefing page', () => {
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
     expect(aside.textContent).toContain(text.limits.counts.info.replace('{count}', '5'))
     const gaps = aside.querySelector<HTMLDetailsElement>('[data-briefing-gaps] details')!
-    expect(gaps.open).toBe(false)
-    // Closed means closed: the rows live inside the closed disclosure, not on the open page.
+    // Open by default, on the reader's request: the rows are visible without a click.
+    expect(gaps.open).toBe(true)
+    // The rows are inside that disclosure and nowhere else.
     expect(gaps.querySelectorAll('.mi-daily-briefing-page__group').length).toBeGreaterThan(0)
     expect(aside.querySelectorAll('.mi-daily-briefing-page__group')).toHaveLength(gaps.querySelectorAll('.mi-daily-briefing-page__group').length)
-
-    act(() => gaps.querySelector<HTMLElement>('summary')!.click())
 
     // The rail is a list of group summaries; no individual fact is listed before a group is opened.
     const groupButtons = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
@@ -1173,7 +1172,8 @@ describe('daily briefing page', () => {
     // Contract change: a finished run is collapsed by default; the summary still says it finished.
     const details = trace as HTMLDetailsElement
     expect(details.tagName).toBe('DETAILS')
-    expect(details.open).toBe(false)
+    // Open in every state; the summary line is where collapsing starts.
+    expect(details.open).toBe(true)
     expect(details.querySelector('summary')!.textContent).toMatch(/9 步 · .+ · 全部完成/)
     expect(details.querySelectorAll('.ant-steps-item')).toHaveLength(9)
     expect(details.querySelectorAll('[data-stage]')).toHaveLength(9)

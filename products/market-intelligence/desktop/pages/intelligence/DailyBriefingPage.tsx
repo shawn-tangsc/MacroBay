@@ -111,8 +111,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
-  // Closed by default: the counts on the summary line are the verdict, the rows are the detail.
-  const [issuesOpen, setIssuesOpen] = useState(false)
+  // Open by default: the reader asked to see the groups without a click; the counts stay on the
+  // summary line either way.
+  const [issuesOpen, setIssuesOpen] = useState(true)
   const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
   const exportTimer = useRef<number | undefined>(undefined)
@@ -453,7 +454,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
             value={contentLocale}
           />
         </div> : null}
-        <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         <section data-briefing-gaps="true">
         {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
           onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
@@ -477,6 +477,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
             </li>)}
           </ol>
         </details> : null}</section>
+        <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
       </aside> : null}
     </div>
