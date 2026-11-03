@@ -230,8 +230,10 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   const openNotificationTarget = createNotificationDeeplinkHandler({
     productMenuEntries,
-    setActiveNavKey,
-    setSettingsPanelKey,
+    // 必须传 `activateNavKey`：有 Tab 桥时它走 `openTab`，否则只改侧栏高亮、页面不打开。
+    navigate: activateNavKey,
+    // 面板键可能不存在（产品卸载 / 版本差异）：落到第一个可用面板，别把读者送进空屏。
+    setSettingsPanelKey: (key) => setSettingsPanelKey(resolveAvailableSettingsPanelKey(key, productSettingsEntries)),
     setNotificationCenterOpen,
     setFocusEntityId
   })
