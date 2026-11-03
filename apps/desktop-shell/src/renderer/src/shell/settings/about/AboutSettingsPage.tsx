@@ -107,10 +107,11 @@ export function AboutSettingsPage(props: {
         </div>
       </header>
 
-      {/* 标题跟组件走：VersionCheckRow 自带「版本」那一层，页面不再叠第二个标题。 */}
-      <div className="preference-section">
-        <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
-      </div>
+      {/*
+        版本块**不再是外面再包一层**：`VersionCheckRow` 自己就渲染 `.preference-section`，
+        再包一层就成了「卡片里套卡片」（两圈边、两倍内边距）——分组只该有一层。
+      */}
+      <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
 
       {hasNewer && notes !== null ? (
         <div className="preference-section about-notes">
