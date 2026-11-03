@@ -195,3 +195,72 @@
   color: var(--text-primary);
   font-size: 12.5px;
 }
+
+/* 日志面板：等宽、按级别上色，但红只落在 `[LEVEL]` 几个字符上。 */
+.channel-log-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.channel-log-tz {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.channel-log-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.channel-log-time {
+  color: var(--muted);
+  flex: none;
+}
+
+.channel-log-level {
+  color: var(--muted-strong);
+  flex: none;
+}
+
+.channel-log-level[data-log-level='WARN'] {
+  color: var(--caution);
+}
+
+.channel-log-level[data-log-level='ERROR'] {
+  color: var(--danger);
+}
+
+.channel-log-text {
+  color: var(--text);
+}
+
+.channel-log-footer {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-log-state {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.channel-log-hint {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}

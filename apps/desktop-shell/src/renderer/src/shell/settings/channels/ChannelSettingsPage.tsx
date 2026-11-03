@@ -11,6 +11,7 @@ import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
+import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
@@ -326,16 +327,15 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         <p>{labels.channelDeleteConfirm}</p>
       </Modal>
 
-      <Modal
-        open={logsFor !== null}
-        width="expanded"
-        onClose={() => setLogsFor(null)}
-        titleKey="settings.channels.logs"
-        titleParams={{ name: logsFor?.name ?? '' }}
-        resolveText={(key) => (key === 'settings.channels.logs' ? `${labels.channelLogs} · {name}` : '')}
-      >
-        <p className="channel-logs-empty">{labels.channelLogsEmpty}</p>
-      </Modal>
+      {logsFor === null ? null : (
+        <ChannelLogsPanel
+          channelId={logsFor.id}
+          client={window.platform.channels}
+          labels={labels}
+          onClose={() => setLogsFor(null)}
+          platformName={labels.channelPlatformName[selectedType]}
+        />
+      )}
     </section>
   )
 }

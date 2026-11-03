@@ -251,6 +251,28 @@ export type PlatformText = {
     channelAllowedChatsPolicies: string
     /** 判不出来：写「未知」，不许默认成其中一种。 */
     channelAllowedChatsUnknown: string
+    /** 日志面板：一条记录的三种类别，正文必须带前缀，读者一眼能分。 */
+    channelLogsTitle: string
+    channelLogsCopy: string
+    channelLogsRetry: string
+    channelLogsEmptyTitle: string
+    channelLogsEmptyHint: string
+    channelLogsReadFailed: string
+    channelLogsReadFailedHint: string
+    channelLogsFooter: string
+    /** 面板标题下那一行：时间口径声明；时区由 `formatShellTimeZoneLabel` 算，不写死。 */
+    channelLogsTimeZone: string
+    /** 闭集里查不到的码：只写这一句，原始码不上屏。 */
+    channelLogsUnknownCode: string
+    channelLogOperationPrefix: string
+    channelLogRuntimePrefix: string
+    channelLogDeliveryPrefix: string
+    /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
+    channelLogUncertainPrefix: string
+    /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
+    channelLogActionText: Readonly<Record<string, string>>
+    channelLogRuntimeText: Readonly<Record<string, string>>
+    channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
   taskAutomation: {
     title: string
@@ -1571,7 +1593,46 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelAllowedChatsRisk: '留空＝允许所有会话——任何人都能用这个机器人。',
       channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
       channelAllowedChatsPolicies: '这个频道已有显式放行名单：留空不会放开所有人。',
-      channelAllowedChatsUnknown: '无法确认这个频道是否已有放行名单，留空的作用未知。'
+      channelAllowedChatsUnknown: '无法确认这个频道是否已有放行名单，留空的作用未知。',
+      channelLogsTitle: '{name} — 日志',
+      channelLogsCopy: '复制',
+      channelLogsRetry: '重试',
+      channelLogsEmptyTitle: '这个频道还没有记录。',
+      channelLogsEmptyHint: '开启、改动、发送失败都会记在这里。',
+      channelLogsReadFailed: '日志没读出来。',
+      channelLogsReadFailedHint: '已有的记录不会因此丢失，这次只是没读到。',
+      channelLogsFooter: '只显示这三类：操作记录、运行异常、最近一次发送失败。没有逐次轮询日志，也没有起停时间线。',
+      channelLogsTimeZone: '时间均为 {zone}',
+      channelLogsUnknownCode: '没有更多说明',
+      channelLogOperationPrefix: '操作：',
+      channelLogRuntimePrefix: '运行异常：',
+      channelLogDeliveryPrefix: '发送失败：',
+      channelLogUncertainPrefix: '不确定：',
+      channelLogActionText: Object.freeze({
+        create: '创建了这个频道',
+        update: '修改了频道设置',
+        enable: '开启了推送',
+        disable: '关闭了推送',
+        restart: '重启了运行时',
+        delete: '删除了这个频道',
+        'policy-create': '添加了一条放行名单',
+        'policy-delete': '删除了一条放行名单',
+        provision: '写入了凭据'
+      }),
+      channelLogRuntimeText: Object.freeze({
+        'channel-agent-missing': '绑定的助手不在了，收不到消息',
+        'channel-stale-generation': '旧的一次运行已经过期，被拒绝',
+        'channel-inbound-failed': '收到的消息没能处理成功',
+        'channel-receipt-without-work-item': '消息收到了，但对应的任务不见了',
+        'channel-work-capacity-exhausted': '待处理的消息太多，暂停接收'
+      }),
+      channelLogDeliveryText: Object.freeze({
+        'channel-delivery-skipped': '这一次没有发出去',
+        'delivery-send-lease-expired': '发送没有回音，按未确认处理',
+        'delivery-lifecycle-fenced': '运行的代际变了，这次发送被放弃',
+        'channel-rejected': '通道拒收了这条',
+        unknownAfterSend: '已交给通道，但没拿到回执'
+      })
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -2778,7 +2839,46 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelAllowedChatsRisk: 'Empty means every conversation is allowed — anyone can use this bot.',
       channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
       channelAllowedChatsPolicies: 'This channel already has an explicit allow list, so an empty box does not open it up.',
-      channelAllowedChatsUnknown: 'Cannot tell whether this channel already has an allow list, so what an empty box does is unknown.'
+      channelAllowedChatsUnknown: 'Cannot tell whether this channel already has an allow list, so what an empty box does is unknown.',
+      channelLogsTitle: '{name} — Logs',
+      channelLogsCopy: 'Copy',
+      channelLogsRetry: 'Retry',
+      channelLogsEmptyTitle: 'This channel has no records yet.',
+      channelLogsEmptyHint: 'Enabling, changes and failed sends are recorded here.',
+      channelLogsReadFailed: 'The log could not be read.',
+      channelLogsReadFailedHint: 'Existing records are not lost; this read just failed.',
+      channelLogsFooter: 'Only these three kinds: operations, runtime errors, and the last failed send. No per-poll log, no start/stop timeline.',
+      channelLogsTimeZone: 'All times are in {zone}',
+      channelLogsUnknownCode: 'No further explanation',
+      channelLogOperationPrefix: 'Operation: ',
+      channelLogRuntimePrefix: 'Runtime error: ',
+      channelLogDeliveryPrefix: 'Send failed: ',
+      channelLogUncertainPrefix: 'Uncertain: ',
+      channelLogActionText: Object.freeze({
+        create: 'created this channel',
+        update: 'changed the channel settings',
+        enable: 'turned sending on',
+        disable: 'turned sending off',
+        restart: 'restarted the runtime',
+        delete: 'deleted this channel',
+        'policy-create': 'added an allowed conversation',
+        'policy-delete': 'removed an allowed conversation',
+        provision: 'stored the credential'
+      }),
+      channelLogRuntimeText: Object.freeze({
+        'channel-agent-missing': 'the bound agent is gone, so messages are not handled',
+        'channel-stale-generation': 'an older runtime generation was rejected',
+        'channel-inbound-failed': 'an incoming message could not be handled',
+        'channel-receipt-without-work-item': 'a message arrived but its work item was missing',
+        'channel-work-capacity-exhausted': 'too many messages are waiting, so receiving paused'
+      }),
+      channelLogDeliveryText: Object.freeze({
+        'channel-delivery-skipped': 'this one was not sent',
+        'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
+        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',
+        'channel-rejected': 'the channel rejected this message',
+        unknownAfterSend: 'handed to the channel, but no receipt came back'
+      })
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
