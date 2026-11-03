@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
+import { markTempDirectoryVerified, openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 /**
  * Seeds a throwaway data directory with a history that shows one cleaned writing attempt.
@@ -42,6 +42,10 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new Error(`--today must be YYYY-MM
 const cleanedEdition = shift(today, -10)
 /** One day back: a normal row beside the cleaned one, so the difference is visible in one screen. */
 const liveEdition = shift(today, -1)
+
+// 这个脚本把 fixture 写进它自己 `mkdirSync` 出来的目录，目标目录的可写性由它自己保证；
+// 临时目录闸门是给「应用启动时先探一次」用的，脚本里显式打开（见 openSqliteDatabase 注释）。
+markTempDirectoryVerified()
 
 const productDir = join(resolve(out), 'products', PRODUCT_DIR)
 mkdirSync(productDir, { recursive: true })
