@@ -190,6 +190,19 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
     void loadPageForStatus('all', { append: false, resetExpansion: true })
   }, [])
 
+  /**
+   * 卸载时把两个请求号都推进一步：在途的读回来时守卫失败，不再 `setState`。
+   *
+   * 不写这一句的后果不是“React 警告”（18 之后不再警告），而是**续体落在环境销毁之后**：
+   * 读在卸载后才 resolve，React 仍要为这次更新排一次调度，而调度器用的是全局定时器——
+   * 全量并行时那个续体会在 happy-dom 拆掉 `window` 之后才跑，于是整份测试以一个“未捕获错误”
+   * 收场，而所有断言都是绿的。姊妹 hook（`useResourceJobSchedules`）早就有这句，这里补齐。
+   */
+  useEffect(() => () => {
+    pageRequestId.current += 1
+    detailRequestId.current += 1
+  }, [])
+
   useEffect(() => {
     const taskId = expandedTaskId
     const requestId = ++detailRequestId.current
