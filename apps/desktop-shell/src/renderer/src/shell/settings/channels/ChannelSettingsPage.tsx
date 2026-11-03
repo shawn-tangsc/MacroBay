@@ -1,83 +1,46 @@
-import { Button, Input, Popconfirm, Select, Switch, type InputRef } from 'antd'
-import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Modal } from 'antd'
+import { Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { StateView } from '@platform/ui/components/state'
-import { StatusPill } from '@platform/ui/components/status-pill'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
-import {
-  catalogReason,
-  catalogStatusKey,
-  catalogTone,
-  credentialStatusLabel,
-  runtimeTone,
-  type Agent,
-  type Candidate,
-  type Catalog,
-  type Channel,
-  type Conversation,
-  type Policy,
-  type RuntimeStatus
-} from './channelSettingsPresentation'
-import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
+import './channelSettings.css'
+import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
+import { ChannelEditDialog } from './ChannelEditDialog'
+import { ChannelRow } from './ChannelRow'
+import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
+
+type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
+
+const PLATFORM_ORDER: readonly CatalogType[] = ['telegram', 'feishu', 'qq', 'wechat', 'discord', 'slack']
+
+/**
+ * 设置 → 频道（原型 A：列表与行）。
+ *
+ * 这一屏只回答一件事：**哪些频道存在、各自什么状态**。它不再画详情面板——运行代际、请求启用、
+ * 适配器证据、待授权会话、访问策略都不上屏：那些要么是内部账，要么是这次改版明确不做的。
+ *
+ * 两处口径与旧实现一致，别在重构里丢掉：
+ * - 列表**读失败**与「还没有频道」是两句话：前者给重试，后者给加号；已经有旧数据时只标一句 stale；
+ * - 未接入的平台点进去只有一句话，不画添加按钮、不带红字（红字会被读成「你操作错了」）。
+ */
 export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' }): React.ReactElement {
   const labels = platformText[language].settings
   const [catalog, setCatalog] = useState<Catalog[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [agentId, setAgentId] = useState<string | undefined>()
-  const [createType, setCreateType] = useState<'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'>('telegram')
-  const [editName, setEditName] = useState('')
-  const [editAgentId, setEditAgentId] = useState<string | undefined>()
-  const [credentialDraft, setCredentialDraft] = useState('')
-  const [appCredentialDraft, setAppCredentialDraft] = useState('')
-  const [policyDraft, setPolicyDraft] = useState('')
-  const [policies, setPolicies] = useState<Policy[]>([])
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [candidates, setCandidates] = useState<Candidate[]>([])
-  const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
-  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  /**
-   * 列表读取失败，与写操作失败分成两个状态。
-   *
-   * 合成一个的话，「一次都没读成」和「创建没成功」在侧栏里长得一样，可前者该说「读不到」、
-   * 后者该说「还没有通道」。两个处境的原因不同，就不能共用一个标记。
-   */
-  const [readError, setReadError] = useState(false)
-  /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
+  const [selectedType, setSelectedType] = useState<CatalogType>('telegram')
   const [initialLoading, setInitialLoading] = useState(true)
-  // 右栏详情独立三态：首帧只加载中；读失败给原因与重试；有数据后再失败保留详情并标 stale。
-  const [detailsLoading, setDetailsLoading] = useState(false)
-  const [detailsLoadedId, setDetailsLoadedId] = useState<string | null>(null)
-  const [detailsReadError, setDetailsReadError] = useState(false)
-  const [detailsStale, setDetailsStale] = useState(false)
-  /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
-  const nameInputRef = useRef<InputRef | null>(null)
-  const railRef = useRef<HTMLElement | null>(null)
-  const focusRail = (): void => {
-    railRef.current?.scrollIntoView({ block: 'nearest' })
-    railRef.current?.focus()
-  }
-  const focusCreateForm = (): void => {
-    nameInputRef.current?.input?.scrollIntoView({ block: 'nearest' })
-    nameInputRef.current?.focus()
-  }
-
-  /** 药丸只收键；键就是状态值本身，取值仍来自同一张文案表（不另造一套键名）。 */
-  const resolveChannelLabel = (key: string): string => {
-    const value = (labels as unknown as Record<string, unknown>)[key]
-    return typeof value === 'string' ? value : ''
-  }
-
-  const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
-  const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
-  const currentSupported = current ? catalog.some((entry) => entry.type === current.type && entry.status === 'supported') : false
-  const currentImplemented = currentCatalog?.implemented === true
+  const [readError, setReadError] = useState(false)
+  const [stale, setStale] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [editor, setEditor] = useState<{ mode: 'create' } | { mode: 'edit'; channel: Channel } | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deleting, setDeleting] = useState<Channel | null>(null)
+  const [logsFor, setLogsFor] = useState<Channel | null>(null)
 
   const reload = async (): Promise<void> => {
     try {
@@ -89,40 +52,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setCatalog(nextCatalog as Catalog[])
       setChannels(nextChannels as Channel[])
       setAgents((agentState as { agents?: Agent[] }).agents ?? [])
-      setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
       setReadError(false)
+      setStale(false)
     } catch {
-      // 读失败不写进 `error`：那个位置属于写操作。这里只记「没读成」，渲染时再分
-      // 「一次都没读到」与「有旧数据、这次没刷上」两种处境——它们是两句话，不是一个。
+      // 第一次就没读到：给错误态与重试；已经有列表：保留旧列表并标一句「这是上次读到的」。
       setReadError(true)
+      setStale(true)
     } finally {
       setInitialLoading(false)
-    }
-  }
-
-  const reloadDetails = async (channelId: string): Promise<void> => {
-    setDetailsLoading(true)
-    try {
-      const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
-        window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
-        window.platform.channels.listConversations({ id: channelId, limit: 100 }),
-        window.platform.channels.listCandidates({ id: channelId, limit: 100 }),
-        window.platform.channels.runtimeStatus({ id: channelId })
-      ])
-      setPolicies(nextPolicies as Policy[])
-      setConversations(nextConversations as Conversation[])
-      setCandidates(nextCandidates as Candidate[])
-      setRuntimeStatus(nextRuntime as RuntimeStatus)
-      setDetailsLoadedId(channelId)
-      setDetailsReadError(false)
-      setDetailsStale(false)
-    } catch {
-      // 读失败不是写失败：不写 `error`（那个位置属于操作），否则用户会以为刚才那一步操作坏了，
-      // 而且那条句子不带重试。一次都没读到给错误态；手上有同一通道的旧详情就只标 stale。
-      setDetailsReadError((previous) => (detailsLoadedId === channelId ? previous : true))
-      setDetailsStale(detailsLoadedId === channelId)
-    } finally {
-      setDetailsLoading(false)
     }
   }
 
@@ -130,340 +67,215 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     void reload()
   }, [])
 
-  useEffect(() => {
-    // 换通道先清空上一份详情：首帧只画加载中，不把「还没读到」画成「没有待授权会话」。
-    setDetailsLoadedId(null)
-    setDetailsReadError(false)
-    setDetailsStale(false)
-    setPolicies([])
-    setConversations([])
-    setCandidates([])
-    setRuntimeStatus(null)
-    if (current) void reloadDetails(current.id)
-  }, [current?.id])
+  const platform = catalog.find((entry) => entry.type === selectedType)
+  const implemented = platform?.implemented === true
+  const rows = channels.filter((channel) => channel.type === selectedType)
 
-  useEffect(() => {
-    setEditName(current?.name ?? '')
-    setEditAgentId(current?.agentId)
-  }, [current?.id, current?.name, current?.agentId])
-
-  const create = async (): Promise<void> => {
-    if (!agentId) return
+  const runAction = async (channel: Channel, action: () => Promise<unknown>): Promise<void> => {
+    setBusyId(channel.id)
+    setError(null)
     try {
-      await window.platform.channels.create({ type: createType, name, agentId, actorId: 'settings-user' })
-      setName('')
-      await reload()
-    } catch {
-      setError(labels.channelOperationFailed)
-    }
-  }
-
-  const saveCredential = async (): Promise<void> => {
-    if (!current || !currentImplemented || !credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)) return
-    try {
-      const begin = await window.platform.channels.beginCredential({ id: current.id })
-      const handoff = await encryptChannelHandoff(begin as Parameters<typeof encryptChannelHandoff>[0], current.id, 'credential',
-        current.type === 'slack'
-          ? { bot_token: credentialDraft, app_token: appCredentialDraft }
-          : current.type === 'feishu'
-            ? { app_id: credentialDraft, app_secret: appCredentialDraft }
-            : current.type === 'qq'
-              ? { app_id: credentialDraft, client_secret: appCredentialDraft }
-              : current.type === 'discord'
-                ? { bot_token: credentialDraft }
-            : { bot_token: credentialDraft })
-      const submit = current.credential.hasCredential
-        ? window.platform.channels.rotateCredential
-        : window.platform.channels.submitCredential
-      await submit({ id: current.id, actorId: 'settings-user', handoff })
+      await action()
       await reload()
     } catch {
       setError(labels.channelOperationFailed)
     } finally {
-      clearSensitiveDraft(setCredentialDraft)
-      clearSensitiveDraft(setAppCredentialDraft)
+      setBusyId(null)
     }
   }
 
-  const update = async (): Promise<void> => {
-    if (!current || !editAgentId) return
+  const toggle = (channel: Channel, next: boolean): void => {
+    void runAction(channel, () =>
+      next
+        ? window.platform.channels.requestEnable({ id: channel.id, actorId: 'settings-user' })
+        : window.platform.channels.disable({ id: channel.id, actorId: 'settings-user' })
+    )
+  }
+
+  const createChannel = async (input: { name: string; agentId: string; token: string }): Promise<void> => {
+    setSavingEdit(true)
+    setError(null)
     try {
-      await window.platform.channels.update({ id: current.id, name: editName, agentId: editAgentId, actorId: 'settings-user' })
+      const created = (await window.platform.channels.create({
+        type: selectedType,
+        name: input.name,
+        agentId: input.agentId,
+        actorId: 'settings-user'
+      })) as { id?: string } | undefined
+      if (typeof created?.id === 'string') await submitNewChannelCredential(created.id, input.token)
+      setEditor(null)
       await reload()
     } catch {
       setError(labels.channelOperationFailed)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
-  const createPolicy = async (): Promise<void> => {
-    if (!current || !policyDraft) return
+  const saveEdit = async (input: { name: string; agentId: string }): Promise<void> => {
+    if (editor === null || editor.mode !== 'edit') return
+    setSavingEdit(true)
+    setError(null)
     try {
-      const begin = await window.platform.channels.beginPolicy({ id: current.id })
-      const handoff = await encryptChannelHandoff(begin as Parameters<typeof encryptChannelHandoff>[0], current.id, 'policy', {
-        subjectType: 'user',
-        key: policyDraft
+      await window.platform.channels.update({
+        id: editor.channel.id,
+        name: input.name,
+        agentId: input.agentId,
+        actorId: 'settings-user'
       })
-      await window.platform.channels.createPolicy({ id: current.id, actorId: 'settings-user', handoff })
-      await reloadDetails(current.id)
+      setEditor(null)
+      await reload()
     } catch {
       setError(labels.channelOperationFailed)
     } finally {
-      clearSensitiveDraft(setPolicyDraft)
+      setSavingEdit(false)
     }
+  }
+
+  const confirmDelete = async (): Promise<void> => {
+    if (deleting === null) return
+    const target = deleting
+    setDeleting(null)
+    await runAction(target, () => window.platform.channels.remove({ id: target.id, actorId: 'settings-user' }))
   }
 
   return (
-    <section className="settings-workspace channel-settings" aria-busy={initialLoading || undefined}>
-      <aside className="channel-settings-rail" ref={railRef} tabIndex={-1}>
-        <header>
-          <strong>{labels.channels}</strong>
-          <Button size="small" icon={<RefreshCw size={14} />} onClick={() => void reload()}>
-            {labels.channelRefresh}
-          </Button>
-        </header>
+    <section className="channel-settings-page">
+      <nav aria-label={labels.channels} className="channel-platform-list">
+        {PLATFORM_ORDER.map((type) => (
+          <button
+            aria-current={type === selectedType}
+            className="channel-platform-item"
+            key={type}
+            onClick={() => setSelectedType(type)}
+            type="button"
+          >
+            <span aria-hidden="true" className="channel-platform-badge">
+              {labels.channelPlatformName[type].slice(0, 1)}
+            </span>
+            <span>{labels.channelPlatformName[type]}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="channel-detail">
+        {error === null ? null : (
+          <p role="alert">{error}</p>
+        )}
+
         {initialLoading ? (
-          // 首次读完成之前只画加载中：这时既不「没有」，也不「读不到」。
-          <StateView state="loading" size="md" />
+          <StateView size="lg" state="loading" />
         ) : readError && channels.length === 0 ? (
-          // 一次都没读成 —— 这是「读不到」，不是「还没有通道」。两个处的动作都是去创建/重试，
-          // 但原因不同，画成同一个空态就等于告诉用户「你没有通道」。
           <StateView
-            state="error"
-            reasonCode="unreadable"
-            size="sm"
             action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
+            reasonCode="unreadable"
+            size="lg"
+            state="error"
           />
         ) : (
           <>
-            {readError ? (
-              // 手上还有上一次的列表：不清空它，只标一句这是旧的，并把重试放在同一行。
+            <header className="channel-detail-header">
+              <div>
+                <h2 className="channel-detail-title">{labels.channelPlatformName[selectedType]}</h2>
+                <p className="channel-detail-purpose">
+                  {implemented ? labels.channelTelegramPurpose : labels.channelUnsupportedPane}
+                </p>
+              </div>
+              {implemented ? (
+                <Button icon={<Plus size={14} />} onClick={() => setEditor({ mode: 'create' })} type="primary">
+                  {labels.channelAdd}
+                </Button>
+              ) : null}
+            </header>
+
+            {implemented && stale ? (
               <p className="channel-settings-stale" role="status">
                 <span>{labels.channelStaleNotice}</span>
-                <button type="button" onClick={() => void reload()}>
+                <button onClick={() => void reload()} type="button">
                   {labels.channelRefresh}
                 </button>
               </p>
             ) : null}
-            {channels.length === 0 ? (
-              <StateView
-                state="empty"
-                reasonCode="never-created"
-                size="sm"
-                action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: focusCreateForm }}
-              />
+
+            {implemented ? (
+              rows.length === 0 ? (
+                <StateView
+                  productReason={{
+                    key: 'channelEmptyForPlatform',
+                    params: { platform: labels.channelPlatformName[selectedType] },
+                    resolve: (key, params) => {
+                      if (key !== 'channelEmptyForPlatform') return key
+                      return labels.channelEmptyForPlatform.replace('{platform}', params?.platform ?? '')
+                    }
+                  }}
+                  reasonCode="never-created"
+                  state="empty"
+                />
+              ) : (
+                <div role="list">
+                  {rows.map((channel) => (
+                    <ChannelRow
+                      busy={busyId === channel.id}
+                      channel={channel}
+                      key={channel.id}
+                      labels={labels}
+                      onDelete={setDeleting}
+                      onEdit={(channel) => setEditor({ mode: 'edit', channel })}
+                      onLogs={setLogsFor}
+                      onToggle={toggle}
+                    />
+                  ))}
+                </div>
+              )
             ) : null}
-            {channels.map((channel) => (
-              <button
-                key={channel.id}
-                type="button"
-                className={channel.id === selected ? 'active' : ''}
-                onClick={() => setSelected(channel.id)}
-              >
-                <strong>{channel.name}</strong>
-                <small>{labels.channelState[channel.state]}</small>
-              </button>
-            ))}
           </>
         )}
-        <section>
-          <Select
-            aria-label={labels.channels}
-            value={createType}
-            options={catalog.filter((entry) => entry.type === 'telegram' || entry.type === 'slack' || entry.type === 'feishu' || entry.type === 'qq' || entry.type === 'discord' || entry.type === 'wechat').map((entry) => ({ value: entry.type, label: entry.type }))}
-            onChange={setCreateType}
-          />
-          <Input ref={nameInputRef} value={name} aria-label={labels.channelName} placeholder={labels.channelName} onChange={(event) => setName(event.target.value)} />
-          <Select
-            aria-label={labels.channelAgentId}
-            placeholder={labels.channelAgentId}
-            value={agentId}
-            options={agents.map((agent) => ({ value: agent.id, label: agent.name }))}
-            onChange={setAgentId}
-          />
-          <Button disabled={!name.trim() || !agentId} icon={<Plus size={14} />} onClick={() => void create()}>
-            {labels.channelCreate}
-          </Button>
-        </section>
-        {catalog.map((entry) => (
-          <p key={entry.type}>
-            <StatusPill
-              tone={catalogTone[entry.status]}
-              labelKey={catalogStatusKey[entry.status]}
-              resolveText={(key) => {
-                const status = (Object.keys(catalogStatusKey) as Array<Catalog['status']>).find(
-                  (candidate) => catalogStatusKey[candidate] === key
-                )
-                return status === undefined ? '' : labels.channelCatalogStatus[status]
-              }}
-            />
-            {entry.type}
-            <small>{catalogReason(entry, labels)}</small>
-          </p>
-        ))}
-      </aside>
-      <main className="channel-settings-detail">
-        {error ? <p role="alert">{error}</p> : null}
-        {initialLoading ? <StateView state="loading" size="lg" /> : current ? (
-          detailsReadError && detailsLoadedId !== current.id ? (
-            // 一次都没读成：这是「读不到」，不是「还没有待授权会话」，也不是刚才那步操作失败。
-            <StateView
-              state="error"
-              reasonCode="unreadable"
-              size="lg"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reloadDetails(current.id) }}
-            />
-          ) : detailsLoading && detailsLoadedId !== current.id ? (
-            // 详情回来之前只画加载中，空态文案一个字都不许先出现。
-            <StateView state="loading" size="lg" />
-          ) : (
-          <>
-            {detailsStale ? (
-              // 手上有同一通道的旧详情：不清空，只标一句这是旧数据，并把重试放在同一行。
-              <p className="channel-settings-stale" role="status">
-                <span>{labels.channelDetailsStaleNotice}</span>
-                <button type="button" onClick={() => void reloadDetails(current.id)}>
-                  {labels.channelRefresh}
-                </button>
-              </p>
-            ) : null}
-            <header>
-              <strong>{current.name}</strong>
-              <StatusPill
-                tone={runtimeTone(current.state)}
-                labelKey={current.state === 'runtime-ready' ? 'channelRunning' : 'channelNotRunning'}
-                resolveText={resolveChannelLabel}
-              />
-            </header>
-            <p>{credentialStatusLabel(current.credential.status, labels)}</p>
-            <Input value={editName} aria-label={labels.channelName} onChange={(event) => setEditName(event.target.value)} />
-            <Select
-              aria-label={labels.channelAgentId}
-              value={editAgentId}
-              options={agents.map((agent) => ({ value: agent.id, label: agent.name }))}
-              onChange={setEditAgentId}
-            />
-            <Button disabled={!editName.trim() || !editAgentId} onClick={() => void update()}>{labels.channelUpdate}</Button>
-            {current.type === 'wechat' ? <p>{labels.channelWechatEnrollment}</p> : !currentImplemented ? <p>{labels.channelAdapterUnavailable}</p> : <>
-              <Input.Password
-                aria-label={current.type === 'feishu' ? labels.channelLarkAppId : current.type === 'qq' ? labels.channelQqAppId : current.type === 'discord' ? labels.channelDiscordBotToken : labels.channelCredential}
-                value={credentialDraft}
-                onChange={(event) => setCredentialDraft(event.target.value)}
-                autoComplete="off"
-              />
-              {current.type === 'slack' || current.type === 'feishu' || current.type === 'qq' ? <Input.Password aria-label={current.type === 'feishu' ? labels.channelLarkAppSecret : current.type === 'qq' ? labels.channelQqClientSecret : labels.channelAppCredential} value={appCredentialDraft} onChange={(event) => setAppCredentialDraft(event.target.value)} autoComplete="off" /> : null}
-              <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button>
-            </>}
-            <p>{labels.channelState[current.state]}</p>
-            <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? labels.channelRuntimeMissing}</p>
-            <section>
-              <strong>{labels.channelCandidates}</strong>
-              {candidates.length === 0 ? <StateView state="empty" reasonCode="not-yet" size="sm" /> : candidates.map((candidate) => (
-                <div key={candidate.id} className="channel-target-row">
-                  <span>{candidate.displayLabel ?? labels.channelCandidateUnknown} · {labels.channelConversationKind[candidate.kind]}</span>
-                  <Switch
-                    aria-label={labels.channelCandidateAlsoTarget}
-                    checked={candidateTargets[candidate.id] ?? true}
-                    onChange={(checked) => setCandidateTargets((previous) => ({ ...previous, [candidate.id]: checked }))}
-                  />
-                  <small>{labels.channelCandidateAlsoTarget}</small>
-                  <Button
-                    size="small"
-                    onClick={() => void window.platform.channels.allowCandidate({
-                      channelId: current.id,
-                      candidateId: candidate.id,
-                      enableTarget: candidateTargets[candidate.id] ?? true
-                    }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
-                  >
-                    {labels.channelCandidateAllow}
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => void window.platform.channels.ignoreCandidate({ channelId: current.id, candidateId: candidate.id }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
-                  >
-                    {labels.channelCandidateIgnore}
-                  </Button>
-                </div>
-              ))}
-            </section>
-            {current.type !== 'wechat' ? <section>
-              <strong>{labels.channelPolicy}</strong>
-              <Input
-                aria-label={labels.channelPolicy}
-                value={policyDraft}
-                onChange={(event) => setPolicyDraft(event.target.value)}
-                autoComplete="off"
-              />
-              <Button disabled={!policyDraft.trim()} onClick={() => void createPolicy()}>{labels.channelPolicyCreate}</Button>
-              {policies.map((policy) => (
-                <Button
-                  key={policy.id}
-                  size="small"
-                  onClick={() => void window.platform.channels.deletePolicy({ channelId: current.id, policyId: policy.id, actorId: 'settings-user' }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
-                >
-                  {labels.channelPolicySubject[policy.subjectType]} {labels.channelDelete}
-                </Button>
-              ))}
-            </section> : null}
-            {current.type !== 'wechat' ? <section>
-              <strong>{labels.channelTarget}</strong>
-              {conversations.map((conversation) => (
-                <div key={conversation.id} className="channel-target-row">
-                  <span>{labels.channelConversationKind[conversation.kind as keyof typeof labels.channelConversationKind]}</span>
-                  <Switch
-                    aria-label={labels.channelTarget}
-                    checked={conversation.targetEnabled}
-                    onChange={(enabled) => void window.platform.channels.setTarget({
-                      channelId: current.id,
-                      conversationId: conversation.id,
-                      enabled,
-                      actorId: 'settings-user'
-                    }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
-                  />
-                </div>
-              ))}
-            </section> : null}
-            <Button icon={<ShieldOff size={14} />} onClick={() => void window.platform.channels.disable({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
-              {labels.channelDisable}
-            </Button>
-            {current.state !== 'runtime-ready' ? <p>{labels.channelEnableBlocked}</p> : null}
-            <Button disabled={!currentSupported || current.credential.status !== 'configured' || current.state === 'deleting'} onClick={() => void window.platform.channels.requestEnable({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
-              {labels.channelEnable}
-            </Button>
-            <Button disabled={current.state !== 'runtime-ready'} icon={<RotateCw size={14} />} onClick={() => void window.platform.channels.restart({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
-              {labels.channelRestart}
-            </Button>
-            <Popconfirm
-              title={labels.channelDeleteConfirm}
-              okText={labels.channelDelete}
-              cancelText={labels.channelCancel}
-              onConfirm={() => void window.platform.channels.remove({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}
-            >
-              <Button danger icon={<Trash2 size={14} />}>{labels.channelDelete}</Button>
-            </Popconfirm>
-          </>
-          )
-        ) : readError && channels.length === 0 ? (
-          // 左栏已经说过「没读到」：右栏不再编一个「还没创建过」，否则同一屏两句话互相矛盾。
-          null
-        ) : channels.length === 0 ? (
-          // 一个通道都没有：这是「还没创建过」，动作指向下方创建表单，不是「没选中」。
-          <StateView
-            state="empty"
-            reasonCode="never-created"
-            size="lg"
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: focusCreateForm }}
-          />
-        ) : (
-          // 有通道但当前没有选中（例如刚把选中项删掉）：这是「没选」，不是「没有」。
-          // 动作只把焦点送回左栏列表，不复制第二个创建入口。
-          <StateView
-            state="empty"
-            reasonCode="no-target-selected"
-            size="lg"
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.select_target, onSelect: focusRail }}
-          />
-        )}
-      </main>
+      </div>
+
+      {editor !== null && editor.mode === 'create' ? (
+        <ChannelCreateDialog
+          agents={agents}
+          labels={labels}
+          onCancel={() => setEditor(null)}
+          onCreate={(input) => void createChannel(input)}
+          saving={savingEdit}
+        />
+      ) : null}
+
+      {editor !== null && editor.mode === 'edit' ? (
+        <ChannelEditDialog
+          agents={agents}
+          channel={editor.channel}
+          labels={labels}
+          onCancel={() => setEditor(null)}
+          onSave={(input) => void saveEdit(input)}
+          saving={savingEdit}
+        />
+      ) : null}
+
+      <Modal
+        cancelText={labels.channelCancel}
+        okButtonProps={{ danger: true }}
+        okText={labels.channelDelete}
+        onCancel={() => setDeleting(null)}
+        onOk={() => void confirmDelete()}
+        open={deleting !== null}
+        title={labels.channelDelete}
+      >
+        <p>{labels.channelDeleteConfirm}</p>
+      </Modal>
+
+      <Modal
+        footer={null}
+        onCancel={() => setLogsFor(null)}
+        open={logsFor !== null}
+        title={logsFor === null ? labels.channelLogs : `${labels.channelLogs} · ${logsFor.name}`}
+      >
+        <StateView productReason={{
+          key: 'channelLogsEmpty',
+          resolve: () => labels.channelLogsEmpty
+        }} reasonCode="not-yet" size="sm" state="empty" />
+      </Modal>
     </section>
   )
 }
