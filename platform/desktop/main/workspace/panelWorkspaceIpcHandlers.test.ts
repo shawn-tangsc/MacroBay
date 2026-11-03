@@ -587,7 +587,10 @@ function createComposition(overrides: {
     panelLayoutStore: overrides.panelLayoutStore,
     sendToHost: (webContentsId, event) => { delivered.push({ webContentsId, event }); return true },
     preferences: { getLanguage: async () => 'zh-CN', getTheme: () => 'light' , getTimeZone: async () => 'UTC'},
-    disposeTimeoutMs: 30
+    // 30ms 比一次 fsync 还短：全量并行时写盘超过它，flushLayout() 会合法地返回 `timeout`，
+    // 而底层 drain 仍在写——那一刻 persistenceState() 还是 `pending`。这不是丢数据，是预算太紧。
+    // 生产用 `releaseTimeoutMs = 2_000`（platform/workspace/policies.ts），这里对齐它。
+    disposeTimeoutMs: 2_000
   })
   if (composition.status !== 'ready') throw new Error(`composition disabled: ${composition.reason}`)
   return { composition, ipcMain: recorder, delivered }
@@ -692,7 +695,9 @@ describe('composePanelWorkspace', () => {
     expect(applied.status).toBe('applied')
     expect(applied.snapshot.persistenceState).toBe('pending')
 
-    await composition.flushLayout()
+    const flushed = await composition.flushLayout()
+    // 先断言报告：超时会在这里报 `timeout`，而不是伪装成「状态不对」。
+    expect(flushed.outcome).toBe('saved')
     expect(composition.layoutStore.persistenceState()).toBe('saved')
     const snapshot = await composition.handlers.getSnapshot(event)
     expect(snapshot).toMatchObject({ status: 'ok', snapshot: { persistenceState: 'saved' } })
