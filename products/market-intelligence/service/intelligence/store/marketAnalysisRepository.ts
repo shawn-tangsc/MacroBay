@@ -28,6 +28,18 @@ const CURSOR_TTL_MS = 15 * 60 * 1000
 const ARCHIVE_REF_PATTERN = /^[a-f0-9]{64}\.json\.gz$/
 const ARCHIVE_STATUS = Object.freeze({ readable: 'readable', unavailable: 'unavailable' } as const)
 
+/**
+ * The one attempt a signal may retry.
+ *
+ * Enqueue failure is the only refusal that never spent a model call, so it is the only row a retry
+ * may re-open. The pair lives here because the repository enforces it; the receiver reads it instead
+ * of keeping a second copy of the string.
+ */
+export const signalTriggerRetryPolicy = Object.freeze({
+  decision: 'skipped' as const,
+  reasonCode: 'signal-freeze-unavailable' as const
+})
+
 export const marketAnalysisStoragePolicy = Object.freeze({
   owner: 'products/market-intelligence/service/intelligence/store',
   schemaVersion: MARKET_ANALYSIS_SCHEMA_VERSION,
@@ -261,6 +273,52 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
      * Deliberately by row id: a group and a trigger key repeat, so locating by that pair would
      * rewrite an older attempt that really did run.
      */
+    /**
+     * Records one signal attempt, or reports that this exact attempt already has a row.
+     *
+     * The ledger's unique key stops a second *row*, never a second *enqueue*: deciding "may I run
+     * this?" after the write is what let two calls queue two runs against one row. This writes with
+     * `on conflict do nothing`, so a duplicate leaves every column exactly as it was — including
+     * `evidence_json` — and answers with the decision that is already there. The caller's only job
+     * then is to return `duplicate` without touching the queue.
+     *
+     * The calendar line's legitimate re-decision (same content after its coalescing window) does not
+     * come through here: that is `appendTriggerLedger`, whose conflict path rewrites the decision.
+     */
+    appendSignalTrigger(value: Readonly<{
+      id: string; eventGroupId: string; triggerKey: string; changeHash: string
+      reasonCode: string; evidence: SignalEvidence | null; createdAt: string
+    }>): Readonly<{ id: string; created: boolean; previous: Readonly<{ decision: string; reasonCode: string }> | null }> {
+      const evidenceJson = signalEvidenceJson('queued', value.evidence)
+      const inserted = sqlite.database.prepare(`insert into mi_analysis_trigger_ledger (id,schema_version,event_group_id,trigger_key,change_hash,decision,reason_code,snapshot_hash,analysis_run_id,created_at,evidence_json) values (?,?,?,?,?,?,?,?,?,?,?) on conflict(event_group_id,trigger_key,change_hash) do nothing`)
+        .run(value.id, 1, value.eventGroupId, value.triggerKey, value.changeHash, 'queued', value.reasonCode, null, null, value.createdAt, evidenceJson)
+      if (Number(inserted.changes) === 1) return { id: value.id, created: true, previous: null }
+      const row = sqlite.database.prepare('select id,decision,reason_code from mi_analysis_trigger_ledger where event_group_id=? and trigger_key=? and change_hash=?')
+        .get(value.eventGroupId, value.triggerKey, value.changeHash) as Row | undefined
+      // Deleted between the insert and this read: a duplicate cannot be reported for a row that is
+      // gone, so fail closed with no `previous` and let the caller treat it as not claimed.
+      if (!row) return { id: value.id, created: false, previous: null }
+      return { id: String(row.id), created: false, previous: { decision: String(row.decision), reasonCode: String(row.reason_code) } }
+    },
+    /**
+     * Re-opens the one attempt whose enqueue failed, and nothing else.
+     *
+     * The guard lives here, not at the call site: this row may only change when it says the previous
+     * attempt never spent anything (`skipped` + `signal-freeze-unavailable`). A queued row, a refused
+     * row, or a second retry is refused with an error instead of being silently rewritten — which
+     * would be a run that happened in the queue but not in the books.
+     *
+     * The update is a compare-and-swap on that same pair, so two callers racing the retry cannot both
+     * win it, and the evidence must be the queued batch shape: a refused row carries the four-key
+     * reading, and leaving it there under `queued` would read back as null.
+     */
+    rewriteSignalTrigger(rowId: string, value: Readonly<{ decision: 'queued'; reasonCode: string; evidence: SignalEvidence }>): void {
+      if (value.decision !== 'queued') throw new Error('signal-trigger-rewrite-refused')
+      const evidenceJson = signalEvidenceJson('queued', value.evidence)
+      const rewritten = sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=?, evidence_json=? where id=? and decision=? and reason_code=?')
+        .run('queued', value.reasonCode, evidenceJson, rowId, signalTriggerRetryPolicy.decision, signalTriggerRetryPolicy.reasonCode)
+      if (Number(rewritten.changes) !== 1) throw new Error('signal-trigger-rewrite-refused')
+    },
     /**
      * Rewrites one attempt as skipped, restating its reading in the shape that decision reads.
      *

@@ -181,3 +181,110 @@ it('leaves a rewrite without a reading empty instead of inventing one', () => {
   repo.updateTriggerLedgerDecision(corruptId, 'skipped', 'day-budget-exhausted')
   expect(repo.listTriggerLedger(eventGroupId).find(row => row.id === corruptId)?.evidenceJson).toBeNull()
 })
+
+const signalKey = 'signal.open-interest.oi-liquidation-proxy'
+const attempt = (overrides: Record<string, unknown> = {}) => ({
+  id: 'mi-tl-s-1', eventGroupId, triggerKey: signalKey, changeHash: 'hash-signal',
+  reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())]),
+  createdAt: asOf, ...overrides
+})
+
+it('records a signal attempt once, and a duplicate leaves every column untouched', () => {
+  const repo = repository()
+  expect(repo.appendSignalTrigger(attempt())).toEqual({ id: 'mi-tl-s-1', created: true, previous: null })
+  const before = repo.listTriggerLedger(eventGroupId)[0]!
+  // The same attempt arrives again ten minutes later, with a new id and a new reading.
+  const again = repo.appendSignalTrigger(attempt({
+    id: 'mi-tl-s-2', createdAt: '2026-10-09T12:10:00.000Z',
+    evidence: queuedSignalEvidence([withWindow(signal({ severity: 'low', ruleId: 'oi-quiet' }))])
+  }))
+  expect(again).toEqual({ id: 'mi-tl-s-1', created: false, previous: { decision: 'queued', reasonCode: 'signal-high-triggered' } })
+  expect(repo.listTriggerLedger(eventGroupId)).toHaveLength(1)
+  // Every column, evidence included: nothing about the second call may leak into the stored row.
+  expect(repo.listTriggerLedger(eventGroupId)[0]).toEqual(before)
+})
+
+it('does not rewrite a refused row into queued when the same attempt arrives again', () => {
+  const repo = repository()
+  const rowId = repo.appendTriggerLedger(ledger({
+    triggerKey: signalKey, changeHash: 'hash-signal', decision: 'skipped', reasonCode: 'hour-budget-exhausted'
+  }))
+  const again = repo.appendSignalTrigger(attempt())
+  expect(again).toMatchObject({ id: rowId, created: false, previous: { decision: 'skipped', reasonCode: 'hour-budget-exhausted' } })
+  // Flipping it back to queued would count a run that never happened: the books and the queue would
+  // disagree in the expensive direction.
+  expect(repo.listTriggerLedger(eventGroupId)[0]).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted', evidenceJson: null })
+})
+
+it('re-opens only the attempt whose enqueue failed, and only once', () => {
+  const repo = repository()
+  const rowId = repo.appendTriggerLedger(ledger({
+    triggerKey: signalKey, changeHash: 'hash-signal', decision: 'skipped', reasonCode: 'signal-freeze-unavailable'
+  }))
+  expect(repo.appendSignalTrigger(attempt())).toMatchObject({
+    id: rowId, created: false, previous: { decision: 'skipped', reasonCode: 'signal-freeze-unavailable' }
+  })
+  repo.rewriteSignalTrigger(rowId, {
+    decision: 'queued', reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())])
+  })
+  const [row] = repo.listTriggerLedger(eventGroupId)
+  expect(row).toMatchObject({ decision: 'queued', reasonCode: 'signal-high-triggered' })
+  // The reading comes back as the queued batch shape, not the refused row's four keys: leaving those
+  // under `queued` is how the retry would read back as null.
+  expect(parseSignalEvidence('queued', row!.evidenceJson)).toMatchObject({ signalCount: 1 })
+  // The guard is the row's own state, so a second retry cannot re-open it.
+  expect(() => repo.rewriteSignalTrigger(rowId, {
+    decision: 'queued', reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())])
+  })).toThrowError('signal-trigger-rewrite-refused')
+})
+
+it('refuses to re-open a row that is not the failed-enqueue case', () => {
+  const repo = repository()
+  const queuedRow = repo.appendSignalTrigger(attempt()).id
+  expect(() => repo.rewriteSignalTrigger(queuedRow, {
+    decision: 'queued', reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())])
+  })).toThrowError('signal-trigger-rewrite-refused')
+  const refusedRow = repo.appendTriggerLedger(ledger({
+    id: 'mi-tl-refused', changeHash: 'hash-refused', decision: 'skipped', reasonCode: 'hour-budget-exhausted'
+  }))
+  expect(() => repo.rewriteSignalTrigger(refusedRow, {
+    decision: 'queued', reasonCode: 'signal-high-triggered', evidence: queuedSignalEvidence([withWindow(signal())])
+  })).toThrowError('signal-trigger-rewrite-refused')
+})
+
+it('refuses to put a refused reading back under a queued decision', () => {
+  const repo = repository()
+  const rowId = repo.appendTriggerLedger(ledger({
+    triggerKey: signalKey, changeHash: 'hash-signal', decision: 'skipped', reasonCode: 'signal-freeze-unavailable'
+  }))
+  // Four keys under `queued` reads back as null through the decision-first parser, so the write itself
+  // must reject it rather than store a shape no reader can use.
+  expect(() => repo.rewriteSignalTrigger(rowId, {
+    decision: 'queued', reasonCode: 'signal-high-triggered', evidence: skippedSignalEvidence(withWindow(signal()))
+  })).toThrowError('signal-evidence-shape-mismatch')
+  expect(repo.listTriggerLedger(eventGroupId)[0]).toMatchObject({ decision: 'skipped' })
+})
+
+it('keeps the attempt claimed across a receiver restart', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mi-signal-claim-'))
+  const filePath = join(directory, 'analysis.sqlite')
+  try {
+    const first = createMarketAnalysisRepository({ filePath })
+    first.appendEventGroup({
+      id: eventGroupId, schemaVersion: 1, status: 'monitoring', groupType: 'macro', mergeKey: 'signal|open-interest|2026-10-09',
+      firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-10-09T14:00:00.000Z', eventRefs: [],
+      triggerCount: 0, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    })
+    expect(first.appendSignalTrigger(attempt())).toMatchObject({ created: true })
+    first.close()
+    // A new receiver against the same database: only the ledger can answer, so a memory set cannot
+    // pass this one.
+    const second = createMarketAnalysisRepository({ filePath })
+    expect(second.appendSignalTrigger(attempt({ id: 'mi-tl-s-2', createdAt: '2026-10-09T12:10:00.000Z' })))
+      .toMatchObject({ id: 'mi-tl-s-1', created: false, previous: { decision: 'queued' } })
+    expect(second.listTriggerLedger(eventGroupId)).toHaveLength(1)
+    second.close()
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
