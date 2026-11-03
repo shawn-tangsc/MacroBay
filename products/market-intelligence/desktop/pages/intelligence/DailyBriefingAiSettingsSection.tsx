@@ -153,7 +153,9 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
     ? `${text.aiSettings.followDefault} · ${defaultModel.providerName} / ${defaultModel.modelName}`
     : text.aiSettings.followDefault
 
-  return <>
+  // Every form control in this block belongs to the brief's own settings; the drawer's
+  // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
+  return <div data-setting-scope="brief">
     <div className="mi-daily-briefing__settings-row">
       <div>
         <strong>{text.aiSettings.enabled}</strong>
@@ -199,7 +201,7 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
       />
     </div> : null}
     {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error" role="alert">{text.aiSettings.failed}</p> : null}
-  </>
+  </div>
 }
 
 async function readDefaultModel(providers: readonly SafeModelProvider[]): Promise<{ providerId: string; modelId: string; providerName: string; modelName: string } | null> {

@@ -185,7 +185,9 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
   // looks like a working zone.
   const zone = invalidZone ? null : (state.zone ?? state.displayZone)
 
-  return <>
+  // Every form control in this block belongs to the brief's own settings; the drawer's
+  // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
+  return <div data-setting-scope="brief">
     {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
     <div className="mi-daily-briefing__settings-row">
       <strong>{text.generationSettings.generationTime}</strong>
@@ -295,5 +297,5 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
       </div>
       : null}
     {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
-  </>
+  </div>
 }
