@@ -166,6 +166,25 @@ describe('the about page', () => {
     expect(hidden.querySelector('[data-structured-text]')).toBeNull()
   })
 
+  it('puts the note in a focusable scroll region named after the section', async () => {
+    const notes = [
+      { kind: 'section', title: '本次更新' },
+      { kind: 'paragraph', runs: [{ text: '第一段', bold: false }] }
+    ]
+    const container = await mount(
+      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
+      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes })
+    )
+    const region = container.querySelector('[data-about-notes-scroller]')
+    // 不可聚焦的滚动区 = 键盘用户永远滚不动，鼠标能做的键盘做不到。
+    expect(region?.getAttribute('tabindex')).toBe('0')
+    expect(region?.getAttribute('role')).toBe('region')
+    // 可读名复用「更新说明」：同一个东西不搞两种说法（不为区域名新开键）。
+    expect(region?.getAttribute('aria-label')).toBe(text.notes.title)
+    // 截断那一行在滚动区**外面**：滚动和截断是两件事，不用滚到底才发现没显示全。
+    expect(region?.querySelector('.about-notes-truncated')).toBeNull()
+  })
+
   it('says the note was truncated only when it really was', async () => {
     const notes = [{ kind: 'paragraph', runs: [{ text: '开头', bold: false }] }]
     const truncated = await mount(

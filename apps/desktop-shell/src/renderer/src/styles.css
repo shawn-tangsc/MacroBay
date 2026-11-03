@@ -9236,6 +9236,43 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted-strong);
 }
 
+/*
+ * 设置 → 关于我们 · 更新说明块：**固定高度 + 块内滚动**（界面设计 11-03 定）。
+ *
+ * 为什么改：先前是「展开 + 靠页面滚」，读者滚到「链接」那段就以为到头了；
+ * 现在正文收在自己的框里，整页高度不随正文长度变。
+ *
+ * 三条硬要求缺一条就变成「能用鼠标、键盘滚不动」：
+ * - 块高封顶 360；窗口矮（46vh < 360）时按 46vh 收，保证下面的链接块仍在首屏；
+ * - 能聚焦（`tabindex=0` + `role="region"` + 可读名在组件里），焦点环用平台默认，这里不画；
+ * - `overscroll-behavior-y: auto`：块内到底后继续滚**带动外层页面**，不卡在框里。
+ */
+.about-notes-viewport {
+  position: relative;
+  min-width: 0;
+}
+
+.about-notes-scroller {
+  max-height: min(360px, 46vh);
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+/*
+ * 底边渐隐：只表达「还有」，不加颜色、**不吃点击**（`pointer-events: none`，否则最底下那行字点不到）。
+ * 显隐由页面按滚动位置控制——到底就不再渲染它；所以这里没有「内容超出就常显」的第二套规则
+ * （那会让读者看完了还暗示「下面还有」）。
+ */
+.about-notes-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 16px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+}
+
 /* 正文列：说明句与失败句都收在 480 以内（长串由 overflow-wrap 兜底，不出横向滚动条）。 */
 .about-page .about-tagline,
 .about-page .version-notice,

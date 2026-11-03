@@ -107,26 +107,27 @@ export function AboutSettingsPage(props: {
       {hasNewer && notes !== null ? (
         <div className="preference-section about-notes">
           <h3 className="about-section-title">{text.notes.title}</h3>
-          {/* 组件不记状态：展开由这一页给 maxNodes。默认 7 块。 */}
-          {/*
-            固定高度 + 块内滚动（界面设计 11-03 定，推翻了先前「展开/靠页面滚」那版）。
-            三条硬要求：③ 可聚焦（tabindex + role=region + 可读名），否则键盘用户滚不动；
-            ④ `overscroll-behavior-y: auto`：块内到底后继续滚要带动外层页面；
-            渐隐遮罩 `pointer-events: none`，且只在「还能往下滚」时出现。
-          */}
-          <div
-            className="about-notes-scroller"
-            data-about-notes-scroller
-            tabIndex={0}
-            role="region"
-            aria-label={text.notes.title}
-            onScroll={(event) => {
-              const el = event.currentTarget
-              setNotesAtEnd(el.scrollTop + el.clientHeight >= el.scrollHeight - 1)
-            }}>
-            <StructuredText nodes={notes} />
+          {/* 固定高度 + 块内滚动（界面设计 11-03 定，推翻了先前「展开/靠页面滚」那版）。
+              三条硬要求：③ 可聚焦（tabindex + role=region + 可读名），否则键盘用户滚不动；
+              ④ `overscroll-behavior-y: auto`：块内到底后继续滚要带动外层页面；
+              渐隐遮罩 `pointer-events: none`，且只在「还能往下滚」时出现。
+              遮罩与滚动区同住一层 viewport：遮罩要贴**滚动区**底部，不是区块底部——
+              否则下面常驻的截断行会把遮罩顶开，看起来像盖住了那行字。 */}
+          <div className="about-notes-viewport">
+            <div
+              className="about-notes-scroller"
+              data-about-notes-scroller
+              tabIndex={0}
+              role="region"
+              aria-label={text.notes.title}
+              onScroll={(event) => {
+                const el = event.currentTarget
+                setNotesAtEnd(el.scrollTop + el.clientHeight >= el.scrollHeight - 1)
+              }}>
+              <StructuredText nodes={notes} />
+            </div>
+            {notesAtEnd ? null : <div className="about-notes-fade" aria-hidden="true" />}
           </div>
-          {notesAtEnd ? null : <div className="about-notes-fade" aria-hidden="true" />}
           {/* 「有这行」和「有那块」是两件事：只有内容被截断才出这一行。 */}
           {notesTruncated ? <p className="preference-hint about-notes-truncated">{text.notes.truncated}</p> : null}
         </div>
