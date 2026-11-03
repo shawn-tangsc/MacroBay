@@ -73,7 +73,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   onConfigureWebSearch?: () => void
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
-  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'> & Partial<Pick<DailyBriefingClient, 'listAttempts'>>
+  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'> & Partial<Pick<DailyBriefingClient, 'listAttempts' | 'deletePeriod'>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const resolveProductText = useProductTextKey()
@@ -408,7 +408,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
-        locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition} />
+        locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
+        onDeletePeriod={(target) => {
+          // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
+          const deletePeriod = client.deletePeriod?.bind(client)
+          if (!deletePeriod) return
+          void deletePeriod(target).catch(() => undefined).finally(() => setReloadKey((key) => key + 1))
+        }} />
       <section className="mi-daily-briefing-page__content">
         <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
         <DailyBriefingStorageNotice text={text.migration} />

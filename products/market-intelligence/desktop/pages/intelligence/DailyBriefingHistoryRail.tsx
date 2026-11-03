@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 
+import { useConfirm } from '@platform/ui/components/confirm'
 import { ContextMenu, type MenuAnchor } from '@platform/ui/components/menu'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -16,7 +17,7 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
  * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
  * stays one line of facts.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onDeletePeriod }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -35,11 +36,14 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
+  /** 删除某一天的一期；缺省时菜单项仍在但点了不做任何事（由宿主决定能不能删）。 */
+  onDeletePeriod?: (input: Readonly<{ date: string; periodId: string }>) => void | Promise<void>
 }>): React.ReactElement {
   // The row menu: opened by right-click or by Shift+F10 / the menu key, and focus returns to the row.
-  const [menu, setMenu] = useState<Readonly<{ date: string; anchor: MenuAnchor }> | null>(null)
+  const confirm = useConfirm()
+  const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; anchor: MenuAnchor }> | null>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
-  const openMenu = (date: string, anchor: MenuAnchor): void => setMenu({ date, anchor })
+  const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void => setMenu({ date: edition.date, periodId: edition.periodId, anchor })
   const closeMenu = (): void => {
     const date = menu?.date
     setMenu(null)
@@ -75,13 +79,13 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
             data-date={edition.date} data-state={edition.state}
             className="mi-daily-briefing__rail-row"
             ref={(node) => { if (node) rowRefs.current.set(edition.date, node) }}
-            onContextMenu={(event) => { event.preventDefault(); openMenu(edition.date, { x: event.clientX, y: event.clientY }) }}
+            onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
             onKeyDown={(event) => {
               // Shift+F10 and the dedicated menu key are the keyboard equivalents of right-click.
               if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
               event.preventDefault()
               const rect = event.currentTarget.getBoundingClientRect()
-              openMenu(edition.date, { x: rect.left + 8, y: rect.top + 8 })
+              openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
             }}
             onClick={() => onSelect(edition.date)}>
             <span className="mi-daily-briefing__rail-line">
@@ -139,7 +143,19 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         disabled: Boolean(menu && editions.some((edition) => edition.date === menu.date && edition.date === todayDate && generatingStage))
       }]}
       onClose={closeMenu}
-      onSelect={() => closeMenu()}
+      onSelect={(key) => {
+        const target = menu
+        closeMenu()
+        if (key !== 'delete-period' || !target || !onDeletePeriod) return
+        confirm({
+          title: text.history.deleteTitle,
+          description: text.history.deleteDescription.replace('{date}', target.date),
+          confirmLabel: text.history.deleteConfirm,
+          cancelLabel: text.history.deleteCancel,
+          tone: 'danger',
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId })
+        })
+      }}
       open={menu !== null}
       resolveText={resolveText ?? (() => '')}
     />

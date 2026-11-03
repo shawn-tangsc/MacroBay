@@ -3,7 +3,9 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ConfigProvider } from 'antd'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import type { DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
@@ -47,7 +49,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   act(() => {
     // The row menu's delete confirmation is the shared dialog: it must render inside its provider,
     // or the hook throws instead of opening a themed dialog.
-    root.render(<ConfirmProvider>
+    root.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider>
       <DailyBriefingHistoryRail
       editions={[edition()]}
       todayDate="2026-11-02"
@@ -57,7 +59,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
       onSelect={() => undefined}
       {...props}
     />
-    </ConfirmProvider>)
+    </ConfirmProvider></ConfigProvider>)
   })
 
 describe('daily briefing history rail', () => {
@@ -138,6 +140,28 @@ describe('daily briefing history rail', () => {
 
     act(() => host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.click())
     expect(onSelect).toHaveBeenCalledWith('2026-11-02')
+  })
+
+  it('deletes the issue the menu was opened on, after the shared confirmation', async () => {
+    const onDeletePeriod = vi.fn()
+    const resolveText = (key: string) => key.endsWith('history.deletePeriod') ? '删除这一期…' : key
+    render({ resolveText, onDeletePeriod })
+    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = document.querySelector<HTMLElement>('.ant-dropdown-menu-item') ?? document.querySelector<HTMLElement>('[role="menuitem"]')!
+    act(() => { item.click() })
+    for (let round = 0; round < 6; round += 1) await flush()
+
+    // 删除是一个不可撤销的动作：先弹共用确认框，点「删除」才真的调宿主。
+    const confirmButton = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    expect(confirmButton).not.toBeUndefined()
+    expect(onDeletePeriod).not.toHaveBeenCalled()
+    act(() => { confirmButton.click() })
+    await flush()
+
+    expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default' })
   })
 
   it('opens a one-item delete menu from right-click or the keyboard, and disables it while generating', () => {
