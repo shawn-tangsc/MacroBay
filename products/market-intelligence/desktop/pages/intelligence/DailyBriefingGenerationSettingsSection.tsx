@@ -40,6 +40,8 @@ export type DailyBriefingGenerationSettingsState = Readonly<{
   displayZone: string
   invalidZone: string | null
   periodCount: number
+  /** True when the reader has edited something that a save would write. */
+  dirty: boolean
   update: (patch: Partial<GenerationSettingsDraft>) => void
 }>
 
@@ -57,6 +59,9 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
   const [state, setState] = useState<'loading' | 'ready' | 'load-failed' | 'save-failed'>('loading')
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<GenerationSettingsDraft | null>(null)
+  // What was read, kept to answer "did the reader change anything". A close with unsaved edits must
+  // not throw them away silently, so the drawer asks this before it closes.
+  const [loaded, setLoaded] = useState<GenerationSettingsDraft | null>(null)
   const [plan, setPlan] = useState<Readonly<{ used: EditionLocale; requested: string; fallback: boolean }> | null>(null)
   const [zone, setZone] = useState<string | null>(null)
   const [invalidZone, setInvalidZone] = useState<string | null>(null)
@@ -99,11 +104,13 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
         requested: settings.view.language.plan.primary.requested,
         fallback: settings.view.language.plan.primary.fallbackReason === 'ui-language-unsupported'
       })
-      setDraft({
+      const next = {
         generationTime: period.generationTime,
         windowHours: period.windowHours,
         additionalLanguages: settings.view.language.settings.additional
-      })
+      } as const
+      setLoaded(next)
+      setDraft(next)
       setState('ready')
     }).catch(() => { if (active) setState('load-failed') })
     return () => { active = false }
@@ -118,6 +125,7 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
     displayZone,
     invalidZone,
     periodCount,
+    dirty: Boolean(draft && loaded && JSON.stringify(draft) !== JSON.stringify(loaded)),
     update(patch) {
       setDraft((current) => current ? { ...current, ...patch } : current)
     },

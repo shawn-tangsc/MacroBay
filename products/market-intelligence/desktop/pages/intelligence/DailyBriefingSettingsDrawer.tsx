@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { CircleHelp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
@@ -52,6 +53,10 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState<readonly BriefingSettingsSection[]>([])
   const aiSection = useRef<HTMLElement>(null)
+  const confirm = useConfirm()
+  // A close with unsaved edits is the one path that can destroy work silently: the reader edited
+  // two forms, pressed Escape or 取消, and nothing on screen would ever say the edits were gone.
+  const dirty = (generation.state === 'ready' && generation.dirty) || (ai.state === 'ready' && ai.dirty)
 
   useEffect(() => {
     if (open) return
@@ -90,6 +95,21 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
     onClose()
   }
 
+  const requestClose = (): void => {
+    if (!dirty) {
+      onClose()
+      return
+    }
+    confirm({
+      title: text.settingsDrawer.discardTitle,
+      description: text.settingsDrawer.discardBody,
+      confirmLabel: text.settingsDrawer.discardConfirm,
+      cancelLabel: text.settingsDrawer.discardCancel,
+      tone: 'danger',
+      onConfirm: onClose
+    })
+  }
+
   const failedSentence = failed.length === 0
     ? null
     : text.settingsDrawer.saveFailed.replace('{sections}', failed.map((key) => text.settingsDrawer.sectionFailed[key]).join('、'))
@@ -100,14 +120,14 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
     footer={<div className="mi-briefing-settings__footer">
       {failedSentence ? <p className="mi-briefing-settings__footer-failed" data-settings-save-failed="true" role="alert">{failedSentence}</p> : null}
       <div className="mi-briefing-settings__footer-actions">
-        <Button onClick={onClose}>{text.generationSettings.cancel}</Button>
+        <Button onClick={requestClose}>{text.generationSettings.cancel}</Button>
         <Button disabled={!canSave} loading={saving} onClick={() => void saveAll()} type="primary" data-settings-save="true">
           {saving ? text.generationSettings.saving : text.generationSettings.save}
         </Button>
       </div>
     </div>}
     mode="modal"
-    onClose={onClose}
+    onClose={requestClose}
     open={open}
     resolveText={resolveProductText}
     size="narrow"

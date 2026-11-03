@@ -222,7 +222,11 @@ export const dailyBriefingText = {
       platformNote: '模型服务、网页搜索供应商属于平台设置，请到设置里改。',
       openModelService: '模型服务', openWebSearch: '网页搜索供应商',
       sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
-      saveFailed: '保存失败：{sections}'
+      saveFailed: '保存失败：{sections}',
+      discardTitle: '有改动没保存，要丢掉吗？',
+      discardBody: '关掉之后这两节的改动都不保留。',
+      discardConfirm: '丢掉改动',
+      discardCancel: '继续编辑'
     },
     generationSettings: {
       open: '生成设置', title: '日报生成设置',
@@ -457,7 +461,11 @@ export const dailyBriefingText = {
       platformNote: 'Model service and web-search providers are platform settings — change them in Settings.',
       openModelService: 'Model service', openWebSearch: 'Web-search providers',
       sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },
-      saveFailed: 'Save failed: {sections}'
+      saveFailed: 'Save failed: {sections}',
+      discardTitle: 'You have unsaved changes. Discard them?',
+      discardBody: 'Closing now keeps none of the edits in either section.',
+      discardConfirm: 'Discard changes',
+      discardCancel: 'Keep editing'
     },
     generationSettings: {
       open: 'Generation settings', title: 'Brief generation settings',

@@ -5,6 +5,7 @@ import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
@@ -239,7 +240,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><DailyBriefingPage
+    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider><DailyBriefingPage
       locale={locale}
       text={textOverride ?? (locale === 'zh-CN' ? text : englishText)}
       eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
@@ -247,7 +248,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
       client={client}
-    /></ConfigProvider>)
+    /></ConfirmProvider></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container
@@ -478,6 +479,39 @@ describe('daily briefing page', () => {
     expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
     expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
     expect(dom.textContent).toContain('重新生成版')
+  })
+
+  it('asks before closing the drawer with unsaved edits instead of dropping them', async () => {
+    // The one silent-loss path: the reader edits a field, presses 取消 (or Escape), and nothing on
+    // screen says the edit is gone. The drawer must ask; and a clean close must not ask.
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client)
+
+    // Clean close: no confirmation, the drawer just closes.
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    const cancelText = text.generationSettings.cancel
+    const cancelClean = [...document.querySelectorAll('button')].filter((button) => button.textContent?.replace(/\s/g, '') === cancelText).at(-1)!
+    await act(async () => { cancelClean.click(); await Promise.resolve() })
+    expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
+    expect(document.body.textContent).not.toContain(text.settingsDrawer.discardTitle)
+
+    // Edit, then try to close: the drawer stays, and the question names what would be lost.
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    const toggle = document.querySelector<HTMLElement>('[role="switch"]')!
+    await act(async () => { toggle.click(); await Promise.resolve() })
+    const cancelDirty = [...document.querySelectorAll('button')].filter((button) => button.textContent?.replace(/\s/g, '') === cancelText).at(-1)!
+    await act(async () => { cancelDirty.click(); await Promise.resolve() })
+    expect(document.body.textContent).toContain(text.settingsDrawer.discardTitle)
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+
+    // Discarding is the only way the edits leave: confirm closes the drawer.
+    const discard = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.settingsDrawer.discardConfirm)!
+    await act(async () => { discard.click(); await Promise.resolve() })
+    expect(document.querySelector('[data-settings-section="generation"]')).toBeNull()
   })
 
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {

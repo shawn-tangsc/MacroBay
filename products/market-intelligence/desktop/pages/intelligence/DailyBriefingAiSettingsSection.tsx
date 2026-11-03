@@ -33,6 +33,8 @@ export type DailyBriefingAiSettingsState = Readonly<{
   save: () => Promise<boolean>
   reload: () => void
   draft: AiDraft | null
+  /** True when the reader has edited something that a save would write. */
+  dirty: boolean
   update: (patch: Partial<AiDraft>) => void
   providers: readonly SafeModelProvider[]
   candidates: readonly ModelPickerCandidate[]
@@ -57,6 +59,8 @@ export function useDailyBriefingAiSettings(input: Readonly<{
   const [state, setState] = useState<'loading' | 'ready' | 'load-failed' | 'save-failed'>('loading')
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<AiDraft | null>(null)
+  // What was read, kept to answer "did the reader change anything".
+  const [loaded, setLoaded] = useState<AiDraft | null>(null)
   const [providers, setProviders] = useState<readonly SafeModelProvider[]>([])
   const [defaultModel, setDefaultModel] = useState<Readonly<{ providerId: string; modelId: string; providerName: string; modelName: string }> | null>(null)
   const [webSearchSupported, setWebSearchSupported] = useState(false)
@@ -79,13 +83,15 @@ export function useDailyBriefingAiSettings(input: Readonly<{
         setState('load-failed')
         return
       }
-      setDraft({
+      const next = {
         editorialEnabled: settings.view.settings.editorialEnabled,
         providerId: settings.view.settings.providerId,
         modelId: settings.view.settings.modelId,
         webSearchEnabled: settings.view.settings.webSearchEnabled,
         ...(settings.view.settings.webSearchAuthorizedAt ? { webSearchAuthorizedAt: settings.view.settings.webSearchAuthorizedAt } : {})
-      })
+      }
+      setLoaded(next)
+      setDraft(next)
       setProviders(modelProviders ?? [])
       setDefaultModel(await readDefaultModel(modelProviders ?? []))
       setWebSearchSupported(settings.view.webSearchSupported)
@@ -109,6 +115,7 @@ export function useDailyBriefingAiSettings(input: Readonly<{
     webSearchSupported,
     webSearchBlocked,
     clearWebSearchBlocked() { setWebSearchBlocked(false) },
+    dirty: Boolean(draft && loaded && JSON.stringify(draft) !== JSON.stringify(loaded)),
     update(patch) { setDraft((current) => current ? { ...current, ...patch } : current) },
     reload() { setReloadKey((count) => count + 1) },
     async save() {
