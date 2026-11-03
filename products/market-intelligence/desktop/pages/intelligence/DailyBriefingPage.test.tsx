@@ -535,6 +535,40 @@ describe('daily briefing page', () => {
     expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
   })
 
+  it('closes one explanation on Escape without closing the drawer, and returns focus', async () => {
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => {
+      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    // The disabled "add a period" button carries the same reason sentence as its own name; the
+    // question mark beside it is the enabled one.
+    const trigger = [...document.querySelectorAll<HTMLButtonElement>(`[aria-label="${text.settings.periods.addReason}"]`)]
+      .find((button) => !button.disabled)!
+    expect(trigger).not.toBeUndefined()
+
+    await act(async () => {
+      trigger.focus()
+      await Promise.resolve()
+    })
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await Promise.resolve(); await Promise.resolve()
+    })
+    // One Escape closes the explanation it was aimed at; the drawer stays, and focus is back on
+    // the question mark instead of falling to the page behind the mask.
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
+  })
+
   it('names a model failure and keeps the readable detail', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'custom-unavailable') })) })
     const dom = await renderPage(client)
