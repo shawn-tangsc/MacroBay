@@ -65,10 +65,28 @@ describe('ETF signal → the analysis entry, end to end', () => {
       findEventGroupByMergeKey: (mergeKey: string) => [...groups.values()].find(group => group.mergeKey === mergeKey),
       listEventGroups: () => [...groups.values()],
       listRuns: () => [] as readonly unknown[],
-      appendTriggerLedger: (row: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string; evidence?: unknown }) => {
+      // 信号入口的写入形状（`appendSignalTrigger`）：同键插不进去就返回那一行，让接收端自己判
+      // 「已存在」还是「上次入队失败、可以重来」。
+      //
+      // 这里不能只留 `appendTriggerLedger`——那是条目线的写法，接收端根本不调它。调不到时异常会被
+      // 交接层的「入队失败不升级成采集失败」吞掉，台账空着，用例只看到「0 行」，看起来像产品缺陷。
+      appendSignalTrigger: (value: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; reasonCode: string; evidence?: unknown; createdAt: string }) => {
+        const existing = ledger.find(row => row.eventGroupId === value.eventGroupId && row.triggerKey === value.triggerKey && row.changeHash === value.changeHash)
+        if (existing) return { id: existing.id, created: false, previous: { decision: existing.decision, reasonCode: existing.reasonCode } }
         // 与仓储同形：读数随行落成 JSON，读端拿到的就是判定当时的快照。
-        ledger.push({ ...row, evidenceJson: row.evidence ? JSON.stringify(row.evidence) : null })
-        return row.id
+        ledger.push({
+          ...value,
+          decision: 'queued',
+          snapshotHash: null,
+          analysisRunId: null,
+          evidenceJson: value.evidence ? JSON.stringify(value.evidence) : null
+        })
+        return { id: value.id, created: true, previous: null }
+      },
+      rewriteSignalTrigger: (rowId: string, value: { decision: string; reasonCode: string; evidence: unknown }) => {
+        const row = ledger.find(entry => entry.id === rowId)
+        if (!row) throw new Error('signal-trigger-rewrite-refused')
+        Object.assign(row, { decision: value.decision, reasonCode: value.reasonCode, evidenceJson: JSON.stringify(value.evidence) })
       },
       updateTriggerLedgerDecision: (rowId: string, decision: string, reasonCode: string) => {
         const row = ledger.find(entry => entry.id === rowId)
