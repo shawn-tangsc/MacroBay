@@ -1066,6 +1066,12 @@ export type PlatformText = {
       update: string
       /** 顶栏那颗动作按钮的读屏名：动作不变，失败时也不改。 */
       updateAvailable: string
+      /** 顶栏按钮的可见文字：**带目标版本号**，比「有新版本」明确。 */
+      updateToVersion: (version: string) => string
+      /** 取不到版本号（或串太长塞不下）时的可见文字，不硬拼一个空版本号。 */
+      updateNoVersion: string
+      /** 上面那条的读屏名：**以可见文字开头**（label-in-name），后面再补动作。 */
+      updateToVersionLabel: (version: string) => string
       /** 点开失败时的播报（视觉隐藏的 role=status）：读屏听不到颜色变化。 */
       openFailedNote: string
     }
@@ -2245,6 +2251,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       action: {
         update: '立即更新',
         updateAvailable: '有新版本可用，打开下载页',
+        updateToVersion: (version) => `更新到 ${version}`,
+        updateNoVersion: '有新版本',
+        updateToVersionLabel: (version) => `更新到 ${version}，打开下载页`,
         openFailedNote: '没能打开浏览器，可再点一次重试'
       },
       links: {
@@ -3428,6 +3437,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       action: {
         update: 'Update now',
         updateAvailable: 'An update is available; open the download page',
+        updateToVersion: (version) => `Update to ${version}`,
+        updateNoVersion: 'Update available',
+        updateToVersionLabel: (version) => `Update to ${version}; open the download page`,
         openFailedNote: 'The browser did not open. Click again to retry'
       },
       links: {
