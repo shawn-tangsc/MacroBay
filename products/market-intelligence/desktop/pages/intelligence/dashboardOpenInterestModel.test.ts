@@ -30,7 +30,8 @@ describe('module signal chip', () => {
   it('shows the reading a fired rule produced, numbers intact', () => {
     expect(projectModuleSignalChip([signal()])).toEqual({
       state: 'alert', asset: 'btc', dropPct: -1.8, volumeMultiple: 2.4,
-      ruleId: 'oi-liquidation-proxy', observedAt: at
+      // The internal rule id stays out of the view: the card shows the rule's own words instead.
+      observedAt: at
     })
   })
 

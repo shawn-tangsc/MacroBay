@@ -56,7 +56,6 @@ export type DashboardSignalChip =
       asset: 'btc' | 'eth'
       dropPct: number
       volumeMultiple: number
-      ruleId: string
       observedAt: string
     }>
 
@@ -155,5 +154,5 @@ export function projectModuleSignalChip(
   if (asset === null || observedAt === undefined || dropPct === undefined || volumeMultiple === undefined) {
     return { state: 'insufficient' }
   }
-  return { state: 'alert', asset, dropPct, volumeMultiple, ruleId: loudest.ruleId, observedAt }
+  return { state: 'alert', asset, dropPct, volumeMultiple, observedAt }
 }
