@@ -256,7 +256,8 @@ describe('daily briefing generation settings modal', () => {
         plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 }
       }
     })
-    const label = document.body.querySelector('.mi-daily-briefing__field-label')!
+    const label = [...document.body.querySelectorAll('.mi-daily-briefing__field-label')]
+      .find((node) => node.textContent?.includes(text.settings.periods.language))!
     expect(label.firstElementChild?.querySelector('button')).not.toBeNull()
     expect(label.textContent).toContain(text.settings.periods.language)
   })

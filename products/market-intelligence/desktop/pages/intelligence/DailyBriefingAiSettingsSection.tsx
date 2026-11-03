@@ -1,12 +1,16 @@
 import { Switch } from 'antd'
+import { CircleHelp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Popover } from '@platform/ui/components/popover'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
@@ -133,6 +137,31 @@ export function useDailyBriefingAiSettings(input: Readonly<{
   }
 }
 
+/**
+ * A field title whose explanation lives in a question **before** it.
+ *
+ * The sentence is never printed twice: a reader sees the title, and the question's accessible name
+ * is the whole explanation, so opening it (or hearing it read out) gives the same words.
+ */
+function ExplainedTitle({ label, labelKey, text }: Readonly<{ label: string; labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.enabledHint' | 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchHint' | 'pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.modelUnavailable'; text: string }>): React.ReactElement {
+  const resolveProductText = useProductTextKey()
+  return <span className="mi-daily-briefing__field-label">
+    <Popover
+      labelKey={labelKey}
+      resolveText={resolveProductText}
+      trigger={(triggerProps) => <IconButton
+        ariaLabelKey={labelKey}
+        variant="plain"
+        icon={CircleHelp}
+        resolveText={resolveProductText}
+        size="sm"
+        {...triggerProps}
+      />}
+    />
+    <strong>{label}</strong>
+  </span>
+}
+
 /** The AI editing block's content. Content only — the host supplies the cancel/save pair. */
 export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
   text: DailyBriefingText
@@ -157,14 +186,19 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
   // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
   return <div data-setting-scope="brief">
     <div className="mi-daily-briefing__settings-row">
-      <div>
-        <strong>{text.aiSettings.enabled}</strong>
-        <small>{text.aiSettings.enabledHint}</small>
-      </div>
+      <ExplainedTitle
+        label={text.aiSettings.enabled}
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.enabledHint"
+        text={text.aiSettings.enabledHint}
+      />
       <Switch checked={draft.editorialEnabled} onChange={(editorialEnabled) => update({ editorialEnabled })} />
     </div>
     <div className="mi-daily-briefing__settings-row">
-      <div><strong>{text.aiSettings.webSearch}</strong><small>{text.aiSettings.webSearchHint}</small></div>
+      <ExplainedTitle
+        label={text.aiSettings.webSearch}
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.webSearchHint"
+        text={text.aiSettings.webSearchHint}
+      />
       <div className="mi-daily-briefing-ai__websearch">
         <Switch checked={draft.webSearchEnabled} onChange={(checked) => {
           state.clearWebSearchBlocked()
@@ -173,16 +207,19 @@ export function DailyBriefingAiSettingsSection({ text, ...state }: Readonly<{
             ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {})
           })
         }} />
+        {/* Unavailability is a state, not an explanation: it stays visible, as its own node, so a
+            reader cannot think everything is fine while the switch would do nothing. */}
         {webSearchBlocked
-          ? <small className="mi-daily-briefing-ai__error">{text.aiSettings.webSearchNeedsSetup}</small>
-          : !webSearchSupported ? <small>{text.aiSettings.webSearchUnsupported}</small> : null}
+          ? <small className="mi-daily-briefing-ai__error" data-state="warning" role="status">{text.aiSettings.webSearchNeedsSetup}</small>
+          : !webSearchSupported ? <small data-state="warning" role="status">{text.aiSettings.webSearchUnsupported}</small> : null}
       </div>
     </div>
     {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
-      <div>
-        <strong>{text.aiSettings.model}</strong>
-        <small>{text.aiSettings.modelUnavailable}</small>
-      </div>
+      <ExplainedTitle
+        label={text.aiSettings.model}
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.modelUnavailable"
+        text={text.aiSettings.modelUnavailable}
+      />
       <ModelPicker
         pickerId="daily-briefing-ai-settings"
         value={pickerValue}

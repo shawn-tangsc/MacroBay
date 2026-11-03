@@ -191,19 +191,21 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
     {/* This sentence explains the whole form's save, not one group, so it heads the block: both
         hosts — the generation dialog and the settings drawer — show it from here, once. */}
     <p className="mi-daily-briefing__settings-link">
-      <span>{text.generationSettings.noteLabel}</span>
-      <Popover
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
-        resolveText={resolveProductText}
-        trigger={(triggerProps) => <IconButton
-          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
-          variant="plain"
-          icon={CircleHelp}
+      <span className="mi-daily-briefing__field-label">
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
           resolveText={resolveProductText}
-          size="sm"
-          {...triggerProps}
-        />}
-      />
+          trigger={(triggerProps) => <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+            variant="plain"
+            icon={CircleHelp}
+            resolveText={resolveProductText}
+            size="sm"
+            {...triggerProps}
+          />}
+        />
+        <span>{text.generationSettings.noteLabel}</span>
+      </span>
     </p>
     {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
     <div className="mi-daily-briefing__settings-row">
