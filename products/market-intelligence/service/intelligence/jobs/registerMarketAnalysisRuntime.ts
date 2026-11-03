@@ -38,6 +38,7 @@ import { appendAnalysisNewsSentiment, newsSentimentSince } from '../analysis/ana
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
+import { createSignalAnalysisRequest, type SignalAnalysisService } from './requestSignalAnalysis'
 
 export { buildMarketAnalysisVerificationObservations } from '../analysis/verificationObservations'
 
@@ -47,6 +48,8 @@ export type MarketAnalysisRuntime = Readonly<{
   getSettings: () => Promise<MarketAnalysisSettings>
   updateSettings: (patch: MarketAnalysisSettingsPatch) => Promise<MarketAnalysisSettings>
   requestInitialAnalysis: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
+  /** 最后一跳：规则线把一条模块信号交给它（见 `requestSignalAnalysis`）。 */
+  requestSignalAnalysis: SignalAnalysisService
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   dispose: () => void
 }>
@@ -339,6 +342,16 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       }
     })
 
+  // 最后一跳的接收端：规则线把一条信号交给它，它建组、写账本行、入 freeze。额度在闸门里判，
+  // 这里只保证入口认得 `signal.*`（事件线）并把尝试行的 id 带进载荷。
+  const requestSignalAnalysis = createSignalAnalysisRequest({
+    repository,
+    jobRuntime: input.jobRuntime,
+    now,
+    idFactory: () => randomUUID(),
+    isEnabled
+  })
+
   return {
     repository,
     startRecovery,
@@ -355,6 +368,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       return saved
     },
     requestInitialAnalysis,
+    requestSignalAnalysis,
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },

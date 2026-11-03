@@ -6,7 +6,7 @@ import {
 } from './marketAnalysisJobIds'
 import { analysisSlotTickPolicy } from '../analysis/analysisSlotTick'
 import { analysisTriggerPolicy } from '../analysis/analysisTriggerPolicy'
-import { analysisTriggerSourcePolicy } from '../analysis/analysisTriggerSourcePolicy'
+import { analysisTriggerSourcePolicy, isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
 
 export const marketAnalysisJobPolicy = Object.freeze({
   productId: 'market-intelligence',
@@ -53,7 +53,11 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // at the payload boundary so no caller can enqueue this work without the id it needs.
     // `assertPayload` proved both fields are strings when present.
     const attemptTriggerKey = payload.triggerKey as string
-    if ((analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(attemptTriggerKey) && typeof payload.attemptLedgerId !== 'string') {
+    // Item keys and module signals both write their attempt row before the freeze; without its id a
+    // refusal cannot be recorded against that attempt, so the work is refused instead of running and
+    // counting unmarked. Calendar keys have no attempt row and keep their own decision path.
+    const ownsAttemptRow = (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(attemptTriggerKey) || isSignalTriggerKey(attemptTriggerKey)
+    if (ownsAttemptRow && typeof payload.attemptLedgerId !== 'string') {
       throw new Error('analysis-missing-attempt-ledger-row')
     }
     const result = await deps.freezeSnapshot(payload, context)
