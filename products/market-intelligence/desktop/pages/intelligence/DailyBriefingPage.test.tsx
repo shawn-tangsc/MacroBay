@@ -1376,6 +1376,39 @@ it('shows a past edition\'s archive while today has never been generated', async
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
 })
 
+it('keeps the same three-column body whether or not the archive has content', async () => {
+  const withArchive = await renderPage(fakeClient())
+  const body = withArchive.querySelector('.mi-daily-briefing-page__body')!
+  expect(body.classList.contains('mi-daily-briefing-page__body--with-appendix')).toBe(true)
+  expect(withArchive.querySelectorAll('.mi-daily-briefing-page__appendix')).toHaveLength(1)
+
+  const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const withoutArchive = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } }))
+  }))
+  // Same grid and the same (empty) column: the body must not reflow when the archive is absent.
+  expect(withoutArchive.querySelector('.mi-daily-briefing-page__body')!.classList.contains('mi-daily-briefing-page__body--with-appendix')).toBe(true)
+  expect(withoutArchive.querySelectorAll('.mi-daily-briefing-page__appendix')).toHaveLength(1)
+  expect(withoutArchive.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+})
+
+it('keeps the stored edition under a failure notice when a retry fails after an earlier success', async () => {
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
+    regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'store-failed' as const }))
+  })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  })
+
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+})
+
 it('shows one empty reason and no detail column when no edition exists', async () => {
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const client = fakeClient({

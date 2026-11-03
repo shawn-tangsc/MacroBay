@@ -86,6 +86,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   timeZoneRef.current = timeZone
   const requestRef = useRef(0)
   const emptyGenerateRef = useRef(false)
+  // The last readable edition, kept so a failed retry keeps the content under the failure notice.
+  const lastReadyRef = useRef<DailyBriefingDocument | null>(null)
+  const [showingStale, setShowingStale] = useState(false)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
   // The rail starts empty while the list is still being read. "Nothing yet" and "nothing at all"
   // look the same once the array is empty, so the rail has to be told which one it is.
@@ -125,6 +128,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
+  useEffect(() => {
+    if (view.status === 'ready') lastReadyRef.current = view.document
+  }, [view])
   const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
@@ -185,6 +191,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // A read that failed still says so. The delete reload is the opposite case: today was never
         // read, so it must not be reported as unreadable — the row the list already returned stands.
         const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
+        const stale = lastReadyRef.current
+        // A retry that failed after an earlier success: the issue still has an edition, so the reader
+        // keeps reading it under the failure notice. Only a day that never produced one goes blank.
+        if (stale && stale.edition.date === todayDate && rows.some((row) => row.date === todayDate && row.state !== 'missing')) {
+          setView({ status: 'ready', document: stale, kind: 'today' })
+          setShowingStale(true)
+          setRegenerating(false)
+          return
+        }
         setView({
           status: 'unavailable',
           ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
@@ -293,7 +308,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
     }
   }
-  const contentBlocked = editorialBlocked || regenerateFailure !== null
+  // A stored edition under a failure notice is content, not a blocked state.
+  const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
   const selectedLocale = view.status === 'ready' ? view.document.edition.locale : undefined
   // The right rail audits the edition that was actually generated: a missing source, a hidden
@@ -334,7 +350,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime
   const todayMissing = editions.some((edition) => edition.date === todayDate && edition.state === 'missing')
   const openModelService = onOpenModelSettings ?? openModelSettings
-  const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
+  // The grid never changes shape: the detail column keeps its width even with nothing to show, so the
+  // body does not jump sideways when an edition appears or disappears.
+  const bodyClass = 'mi-daily-briefing-page__body mi-daily-briefing-page__body--with-appendix'
   // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
   const poster = posterProps({ document: view.status === 'ready' ? view.document : undefined, editions, fallbackText: text })
   // Content follows the edition, chrome follows the interface: the rail, buttons and counts stay.
@@ -451,7 +469,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </details> : null}</section>
         <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
-      </aside> : null}
+      </aside> : <aside className="mi-daily-briefing-page__appendix" aria-hidden="true" />}
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
     {/* Mounted only while open: both blocks read settings on mount, so a closed page reads none. */}
