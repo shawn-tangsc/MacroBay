@@ -109,16 +109,9 @@
 .mi-positioning-panel__signal:focus-visible { border-color: var(--mi-dashboard-text); }
 
 
-/* Opening the chip's numbers: what the rule read, when, and that it is an inference. */
-.mi-positioning-panel__signal-detail {
-  display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0;
-  padding: 6px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.5;
-}
-.mi-positioning-panel__signal-detail div { display: flex; gap: 4px; }
-.mi-positioning-panel__signal-detail dt { margin: 0; }
-.mi-positioning-panel__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
-.mi-positioning-panel__signal-detail p { flex-basis: 100%; margin: 0; }
+/* Opening the chip's numbers: the block itself is the shared `SignalDetail`; this card only says
+   where it sits. */
+.mi-positioning-panel__signal-detail { margin: 0; }
 
 /* The entry to the readings behind the numbers: a word, not a chip. Body-level type, not the
    footnote size of the chip row beside it; hover brightens the word and draws nothing — a block
