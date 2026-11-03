@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * 谁加了一步只改一处，这个测试就红。
  */
 
-import { VERIFY_CHECKS, compareSamples, countDirty, type TreeSample } from '../../../scripts/verify-sample'
+import { VERIFY_CHECKS, compareSamples, countDirty, samplePath, type TreeSample } from '../../../scripts/verify-sample'
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePath}`, 'utf8')
@@ -172,5 +172,21 @@ describe('verify sampling', () => {
     // 守卫同时钉住命令本身：谁把 `-uall` 去掉，这条红。
     const source = readFileSync(`${ROOT}scripts/verify-sample.ts`, 'utf8')
     expect(source).toContain("'status', '--porcelain', '-uall'")
+  })
+
+  it('keys the sample file by checkout, so two clones cannot overwrite each other', () => {
+    // `tmpdir()` 是按机器不是按 checkout 的：固定文件名下，克隆里跑一次、共享树跑一次，
+    // 后起的覆盖起点样本，先起的那次收尾读到别人的 `dirty` → 判 invalid。
+    // 「关账去钉死 SHA 的克隆里跑」这条规矩正依赖它，所以它是判据不是细节。
+    const path = samplePath()
+    expect(path).toMatch(/macrobay-verify-sample-[0-9a-f]{12}\.json$/)
+    // 反向：不再是不带键的固定名。
+    expect(path).not.toMatch(/macrobay-verify-sample\.json$/)
+
+    // 键必须来自 checkout 身份，不能来自机器或随机数：随机数会让同一个 checkout 的
+    // preflight 与 postflight 找不到同一份样本，那比撞名更糟（每次都 invalid）。
+    const source = readFileSync(`${ROOT}scripts/verify-sample.ts`, 'utf8')
+    expect(source).toContain("'rev-parse', '--show-toplevel'")
+    expect(source).not.toContain('randomUUID')
   })
 })

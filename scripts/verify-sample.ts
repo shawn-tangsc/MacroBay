@@ -9,6 +9,7 @@
  * `git status --porcelain`、另一边算 `git diff --stat` 的漂移。
  */
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -19,9 +20,30 @@ export type TreeSample = {
   at: string
 }
 
-/** 起点采样的落点：临时目录、固定文件名。放仓库里会把树弄脏，正好破坏它要验的东西。 */
+/**
+ * 起点采样的落点：临时目录里，**一个 checkout 一个文件**。
+ *
+ * 放仓库里会把树弄脏，正好破坏它要验的东西；所以落在临时目录。但**只落临时目录还不够**：
+ * `tmpdir()` 是按机器、不是按 checkout 的，两个克隆会撞到同一个文件名——
+ *
+ *   克隆里跑一次、共享树跑一次 → 后起的那次覆盖起点样本 → 先起的那次收尾时读到别人的 `dirty`
+ *   → 判 `invalid`。**合法被作废**，而且最坏的情况是它教会人「这门禁爱乱报 invalid」然后去找绕过。
+ *
+ * 「关账去钉死 SHA 的克隆里跑」这条规矩依赖它：稳态下同时只该有一次全量，但共享树上的范围测试
+ * 与克隆里的关账可以同时存在，这正是撞名会发生的场景。所以键取仓库根路径的哈希，而不是机器。
+ */
 export function samplePath(): string {
-  return join(tmpdir(), 'macrobay-verify-sample.json')
+  return join(tmpdir(), `macrobay-verify-sample-${checkoutKey()}.json`)
+}
+
+/** 仓库根的短哈希。不是 git 仓库时固定一个键——那种环境下本来就没有第二个 checkout 可撞。 */
+function checkoutKey(): string {
+  try {
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+    return createHash('sha256').update(root).digest('hex').slice(0, 12)
+  } catch {
+    return 'no-git'
+  }
 }
 
 /**
