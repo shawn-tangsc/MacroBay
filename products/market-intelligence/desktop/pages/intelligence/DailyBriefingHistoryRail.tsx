@@ -87,12 +87,16 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
               {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
               <small className="mi-daily-briefing__rail-meta">
+                {edition.date === todayDate && generatingStage
+                  ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
+                  : <>
                 {/* Segments never break mid-word: the width is the fix, these keep each fact whole. */}
                 <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable ?? 0} {text.readingsUnit}</span>
                 {edition.generatedAt ? <>
                   <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
                   <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>
                 </> : null}
+                  </>}
               </small>
               {/* Read-only fact about this issue, not a control: it stays flat and out of Tab order. */}
               {languageTag(edition.availableLocales) ? <span className="mi-daily-briefing__rail-edition-lang" data-edition-languages={languageTag(edition.availableLocales)}>

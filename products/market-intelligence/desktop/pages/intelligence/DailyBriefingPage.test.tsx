@@ -1189,6 +1189,11 @@ it('shows the generating state with one status word and the stage list in the de
   // Same stepper the failed state uses: a run in flight is not a second visual language.
   expect(column.querySelector('[data-briefing-stages] .mi-generation-trace[data-generation-trace-state="running"]')).not.toBeNull()
   expect(column.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
+  // One phrase, one row state, no missing-language claim while the run is in flight.
+  expect(dom.textContent.match(/正在生成今天的日报/g)).toHaveLength(1)
+  const todayRow = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
+  expect(todayRow.textContent).toMatch(/生成中 · /)
+  expect(dom.querySelectorAll('[data-language-missing]')).toHaveLength(0)
   expect(column.querySelector('[data-briefing-attempts]')).toBeNull()
   // The action is disabled and says why; there is no invented stop control.
   const generating = dom.querySelector<HTMLButtonElement>(`[aria-label="${text.generationProgress.workingHint}"]`)!
