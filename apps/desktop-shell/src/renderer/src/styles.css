@@ -9156,23 +9156,26 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   justify-content: center;
   width: 36px;
   height: 36px;
+  /* 内容区 = 36 − 4 − 2（padding 2 + 描边 1）→ 图片按内容区填满，**不许盖住描边**。 */
+  padding: 2px;
   border-radius: 9px;
-  border: 1px solid var(--border);
+  /* `--border` 对页面底只有 1.35:1，等于没画；这个元素唯一的存在理由就是「看得出是个图标」。 */
+  border: 1px solid var(--muted);
   background: var(--surface-soft);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .about-mark-image {
-  width: 36px;
-  height: 36px;
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
 .about-mark-fallback {
   /* 同尺寸占位：布局不塌，也不写「图标加载失败」——装饰不是信息。 */
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 100%;
+  height: 100%;
   border-radius: 9px;
   background: var(--surface-strong);
 }
