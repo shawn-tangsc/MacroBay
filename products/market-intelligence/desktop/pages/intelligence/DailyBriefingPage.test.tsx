@@ -698,6 +698,32 @@ describe('daily briefing page', () => {
     expect(discardQuestionVisible()).toBe(false)
   })
 
+  it('leaves the readings count out of the document masthead', async () => {
+    const dom = await renderPage(fakeClient())
+    const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+
+    // The masthead said "4 items" while the body listed those items one by one.
+    expect(paper.querySelector('.mi-brief-poster__readings')).toBeNull()
+    expect(paper.textContent).not.toMatch(/\d+\s*项/)
+  })
+
+  it('never repeats an attempt count on the period row', async () => {
+    const dom = await renderPage(fakeClient({ listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })) }))
+    const row = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!
+    const item = row.closest('.mi-daily-briefing__rail-item')!
+    const toggle = item.querySelector<HTMLElement>('[data-attempts-toggle]')!
+    // The toggle opens the attempts list; it must say what it does, not how many attempts there were.
+    expect(toggle.textContent).toBe(text.history.attempts.show)
+    expect(toggle.textContent).not.toMatch(/\d|次/)
+
+    // The row's meta is exactly two segments: the item count and the clock.
+    const meta = item.querySelector<HTMLElement>('.mi-daily-briefing__rail-meta')!.textContent!
+    const segments = meta.split('·').map((segment) => segment.trim())
+    expect(segments).toHaveLength(2)
+    expect(segments[0]).toMatch(/^\d+ 项$/)
+    expect(segments[1]).toMatch(/^\d{2}:\d{2}$/)
+  })
+
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
     const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
     const client = fakeClient({

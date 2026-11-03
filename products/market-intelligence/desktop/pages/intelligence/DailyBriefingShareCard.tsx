@@ -83,7 +83,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>
       <div className="mi-brief-poster__head-side">
         {readOnly ? <span className="mi-brief-poster__readonly">{text.history.readOnly}</span> : null}
-        <span className="mi-brief-poster__readings">{doc.status.readingsAvailable} {text.readingsUnit}</span>
+        {/* The masthead used to carry "3 items" here. The body lists those items one by one, so the
+            number said the same thing twice and never named what it counted. */}
       </div>
     </header>
     {doc.comparison ? <p className="mi-brief-poster__comparison">{comparisonText(doc, text, locale)}</p> : null}
