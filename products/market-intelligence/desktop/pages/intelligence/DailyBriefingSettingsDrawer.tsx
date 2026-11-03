@@ -1,7 +1,10 @@
 import { Button } from 'antd'
+import { CircleHelp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { Drawer } from '@platform/ui/components/drawer'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -16,7 +19,8 @@ export type BriefingSettingsSection = 'generation' | 'ai'
 
 const SECTION_IDS = {
   generation: 'mi-briefing-settings-generation',
-  ai: 'mi-briefing-settings-ai'
+  ai: 'mi-briefing-settings-ai',
+  platform: 'mi-briefing-settings-platform'
 } as const
 
 /**
@@ -113,13 +117,29 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
       <DailyBriefingAiSettingsSection {...ai} text={text} />
     </section>
     {/* The two platform-wide settings stay outside this drawer's editing surface: a second editable
-        copy here would let the reader change a value this page does not own. */}
-    <p className="mi-briefing-settings__platform" data-settings-platform="true">
-      <span>{text.settingsDrawer.platformNote}</span>
+        copy here would let the reader change a value this page does not own. The sentence explaining
+        what belongs to the platform is a permanent explanation, so it lives in the question mark;
+        the two jumps are actions and stay on the surface. */}
+    <section className="mi-briefing-settings__platform" data-settings-platform="true" aria-labelledby={SECTION_IDS.platform}>
+      <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.platform}>
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settingsDrawer.platformNote"
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => <IconButton
+            {...triggerProps}
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settingsDrawer.platformNote"
+            icon={CircleHelp}
+            resolveText={resolveProductText}
+            size="sm"
+            variant="plain"
+          />}
+        />
+        <span>{text.settingsDrawer.platformTitle}</span>
+      </h3>
       <span className="mi-briefing-settings__platform-links">
         <Button data-global-link="model-service" onClick={onOpenModelSettings} type="link">{text.settingsDrawer.openModelService}</Button>
         <Button data-global-link="web-search" onClick={onConfigureWebSearch} type="link">{text.settingsDrawer.openWebSearch}</Button>
       </span>
-    </p>
+    </section>
   </Drawer>
 }

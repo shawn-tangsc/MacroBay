@@ -218,6 +218,7 @@ export const dailyBriefingText = {
     settingsDrawer: {
       open: '日报设置', title: '日报设置',
       sections: { generation: '生成', ai: 'AI 编辑' },
+      platformTitle: '平台设置',
       platformNote: '模型服务、网页搜索供应商属于平台设置，请到设置里改。',
       openModelService: '模型服务', openWebSearch: '网页搜索供应商',
       sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
@@ -452,6 +453,7 @@ export const dailyBriefingText = {
     settingsDrawer: {
       open: 'Brief settings', title: 'Brief settings',
       sections: { generation: 'Generation', ai: 'AI editing' },
+      platformTitle: 'Platform settings',
       platformNote: 'Model service and web-search providers are platform settings — change them in Settings.',
       openModelService: 'Model service', openWebSearch: 'Web-search providers',
       sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },

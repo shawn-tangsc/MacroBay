@@ -504,8 +504,23 @@ describe('daily briefing page', () => {
     const ai = document.querySelector('[data-settings-section="ai"]')
     expect(generation).not.toBeNull()
     expect(ai).not.toBeNull()
-    // The platform-wide values are jumps, never a second editable copy.
-    expect(document.querySelector('[data-settings-platform="true"]')?.textContent).toContain(text.settingsDrawer.platformNote)
+    // The platform-wide values are jumps, never a second editable copy. The sentence explaining
+    // that is an explanation, so it rides in the question mark instead of taking a line of its own.
+    const platform = document.querySelector<HTMLElement>('[data-settings-platform="true"]')!
+    expect(platform.textContent).not.toContain(text.settingsDrawer.platformNote)
+    expect(platform.textContent).toContain(text.settingsDrawer.platformTitle)
+    const platformHeading = platform.querySelector('h3')!
+    const help = platformHeading.querySelector<HTMLButtonElement>(`[aria-label="${text.settingsDrawer.platformNote}"]`)!
+    expect(help).not.toBeNull()
+    // The question mark comes before the title, like every other field-level explanation.
+    expect(platformHeading.firstElementChild?.contains(help)).toBe(true)
+    expect(platformHeading.lastElementChild?.textContent).toBe(text.settingsDrawer.platformTitle)
+    // The sentence is not gone: focus opens the explanation that holds it.
+    await act(async () => {
+      help.focus()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(document.querySelector('[data-popover-content]')?.textContent).toContain(text.settingsDrawer.platformNote)
     const globalLinks = [...document.querySelectorAll<HTMLElement>('[data-global-link]')]
     expect(globalLinks).toHaveLength(2)
     expect(globalLinks.every((link) => !link.matches('input, select, textarea'))).toBe(true)
