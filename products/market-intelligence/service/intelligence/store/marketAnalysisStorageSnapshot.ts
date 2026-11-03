@@ -14,6 +14,26 @@ export type MarketAnalysisStorageSnapshot = Readonly<{
 
 export function createMarketAnalysisStorageSnapshot(input: Readonly<{ archiveDirectory: string; failBeforeRename?: boolean }>): MarketAnalysisStorageSnapshot {
   mkdirSync(input.archiveDirectory, { recursive: true })
+  /**
+   * Reads one archive back and validates it.
+   *
+   * A local function rather than a method: `write` needs the same read when the content is already
+   * archived, and calling a sibling method of this frozen object literal is not a binding that
+   * exists while the literal is being built (`read` resolved to nothing → `ReferenceError` on the
+   * second write of identical content, `TS2304` before that).
+   */
+  const readArchive = (archiveRef: string): string | undefined => {
+    if (!ARCHIVE_FILE_PATTERN.test(archiveRef)) return undefined
+    try {
+      const envelope = JSON.parse(gunzipSync(readFileSync(join(input.archiveDirectory, archiveRef))).toString('utf8')) as { schemaVersion?: unknown; createdAt?: unknown; sha256?: unknown; body?: unknown }
+      if (!Number.isSafeInteger(envelope.schemaVersion) || typeof envelope.createdAt !== 'string' || typeof envelope.sha256 !== 'string' || typeof envelope.body !== 'string') return undefined
+      const body = envelope.body
+      const expected = archiveRef.slice(0, 64)
+      return envelope.sha256 === expected && createHash('sha256').update(body, 'utf8').digest('hex') === expected ? body : undefined
+    } catch {
+      return undefined
+    }
+  }
   return Object.freeze({
     write(value) {
       if (!Number.isSafeInteger(value.schemaVersion) || value.schemaVersion < 1 || typeof value.body !== 'string' || typeof value.createdAt !== 'string') throw new Error('analysis-archive-invalid-input')
@@ -21,7 +41,7 @@ export function createMarketAnalysisStorageSnapshot(input: Readonly<{ archiveDir
       const archiveRef = `${sha256}.json.gz`
       const finalPath = join(input.archiveDirectory, archiveRef)
       if (existsSync(finalPath)) {
-        if (read(archiveRef) !== value.body) throw new Error('analysis-archive-hash-mismatch')
+        if (readArchive(archiveRef) !== value.body) throw new Error('analysis-archive-hash-mismatch')
         return { archiveRef, sha256, bytes: readFileSync(finalPath).byteLength, schemaVersion: value.schemaVersion }
       }
       const temporaryPath = join(input.archiveDirectory, `.${sha256}.${randomUUID()}.tmp`)
@@ -39,18 +59,7 @@ export function createMarketAnalysisStorageSnapshot(input: Readonly<{ archiveDir
         throw error
       }
     },
-    read(archiveRef) {
-      if (!ARCHIVE_FILE_PATTERN.test(archiveRef)) return undefined
-      try {
-        const envelope = JSON.parse(gunzipSync(readFileSync(join(input.archiveDirectory, archiveRef))).toString('utf8')) as { schemaVersion?: unknown; createdAt?: unknown; sha256?: unknown; body?: unknown }
-        if (!Number.isSafeInteger(envelope.schemaVersion) || typeof envelope.createdAt !== 'string' || typeof envelope.sha256 !== 'string' || typeof envelope.body !== 'string') return undefined
-        const body = envelope.body
-        const expected = archiveRef.slice(0, 64)
-        return envelope.sha256 === expected && createHash('sha256').update(body, 'utf8').digest('hex') === expected ? body : undefined
-      } catch {
-        return undefined
-      }
-    },
+    read: readArchive,
     recover() {
       for (const name of readdirSync(input.archiveDirectory)) {
         if (!TEMP_FILE_PATTERN.test(name)) continue

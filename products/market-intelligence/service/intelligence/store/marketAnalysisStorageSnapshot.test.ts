@@ -26,6 +26,46 @@ describe('marketAnalysisStorageSnapshot', () => {
     }
   })
 
+  /**
+   * The second write of identical content takes the "already archived" branch, which used to call a
+   * sibling method that had no binding: it threw `ReferenceError` (and `TS2304` before that, in a
+   * file no type check reached). It is the path an idempotent archive write takes every time.
+   */
+  it('returns the existing archive when the same content is written twice', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'mi-analysis-archive-'))
+    try {
+      const archive = createMarketAnalysisStorageSnapshot({ archiveDirectory: directory })
+      const body = JSON.stringify({ schemaVersion: 1, facts: [{ id: 'fact-1', value: 3.2 }] })
+
+      const first = archive.write({ body, schemaVersion: 1, createdAt: '2026-09-25T08:30:00.000Z' })
+      const second = archive.write({ body, schemaVersion: 1, createdAt: '2026-09-25T09:00:00.000Z' })
+
+      expect(second.archiveRef).toBe(first.archiveRef)
+      expect(second.sha256).toBe(first.sha256)
+      expect(second.bytes).toBe(first.bytes)
+      expect(archive.read(second.archiveRef)).toBe(body)
+      expect((await readdir(directory)).filter(name => name.endsWith('.json.gz'))).toHaveLength(1)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps different content in its own file', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'mi-analysis-archive-'))
+    try {
+      const archive = createMarketAnalysisStorageSnapshot({ archiveDirectory: directory })
+      const first = archive.write({ body: '{"ok":1}', schemaVersion: 1, createdAt: '2026-09-25T08:30:00.000Z' })
+      const second = archive.write({ body: '{"ok":2}', schemaVersion: 1, createdAt: '2026-09-25T08:30:00.000Z' })
+
+      expect(second.archiveRef).not.toBe(first.archiveRef)
+      expect(archive.read(first.archiveRef)).toBe('{"ok":1}')
+      expect(archive.read(second.archiveRef)).toBe('{"ok":2}')
+      expect((await readdir(directory)).filter(name => name.endsWith('.json.gz'))).toHaveLength(2)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('cleans interrupted temporary archives and never exposes them as readable content', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'mi-analysis-archive-'))
     try {
