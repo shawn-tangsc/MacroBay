@@ -130,6 +130,12 @@
 .mi-capital-conditions__refresh { justify-self: start; }
 .mi-capital-conditions__refresh-error { color: var(--mi-dashboard-negative); font-size: 12px; }
 .mi-capital-conditions__etf-col-supply { width: 20%; }
+/* The stablecoin row is named by scope now ("稳定币（USDT + USDC）"), which does not fit the
+   fixed 26% column: `nowrap` pushed it over the numbers. Let this one table size its columns from
+   content — the name wraps inside its own column, the number cells stay `nowrap` and keep their
+   width. The ETF table below keeps the fixed layout: its row names are two words. */
+.mi-capital-conditions__stable-table { table-layout: auto; }
+.mi-capital-conditions__stable-table tbody th { white-space: normal; line-height: 1.25; }
 .mi-capital-conditions__stable-table thead th,
 .mi-capital-conditions__stable-table tbody th,
 .mi-capital-conditions__stable-table tbody td { padding-top: 7px; padding-bottom: 6px; }

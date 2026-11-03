@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -92,6 +94,27 @@ describe('bar-top labels', () => {
       createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
     expect(markup).toContain('aria-label="净流入 4.026 亿美元，全部美元稳定币"')
     expect(markup).not.toContain('402.6 亿美元')
+  })
+})
+
+describe('the stablecoin row name', () => {
+  it('wraps inside its own column instead of running over the numbers', () => {
+    // jsdom has no layout: `scrollWidth <= clientWidth` there is 0 <= 0 and would pass on a
+    // broken card. The facts that can be checked here are the CSS decisions and the full name —
+    // the pixel check belongs to the real window.
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+    const stableTable = css.slice(css.indexOf('.mi-capital-conditions__stable-table {'))
+    expect(stableTable).toContain('table-layout: auto')
+    expect(stableTable).toContain('white-space: normal')
+    expect(stableTable).toContain('line-height: 1.25')
+    // The number cells keep their single line: only the name column may wrap.
+    expect(css).toMatch(/\.mi-capital-conditions__etf-table tbody td \{[^}]*white-space: nowrap/)
+  })
+
+  it('keeps the full scoped name in the card', () => {
+    const container = mount()
+    const rowName = container.querySelector('.mi-capital-conditions__stable-table tbody th')
+    expect(rowName?.textContent).toBe('稳定币（USDT + USDC）')
   })
 })
 
