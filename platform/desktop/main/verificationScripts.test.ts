@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
@@ -176,6 +176,29 @@ describe('verification scripts are all wired somewhere', () => {
       DEV_ENTRIES.length,
       'DEV_ENTRIES 只减不增：确实要加一个开发入口，就把这个上限一起加一，并写清为什么它不需要落点。'
     ).toBeLessThanOrEqual(DEV_ENTRIES_CEILING)
+  })
+
+  it('normalizes the repository-relative path before a gate looks a baseline up', () => {
+    // Windows 的 `relative()` 给反斜杠，而基线 JSON 的键是正斜杠：不归一化，每个基线文件都会被当成
+    // 「新增违规」，Windows 本机一片假红；CI 在 Linux，永远绿。2026-11-03 只修了 `check-file-size`，
+    // 2026-11-04 才发现 `check-hex-color`、`check-danger-color` 是同一个 bug——所以这条按「读基线的
+    // 门禁」扫，而不是按文件名点修。
+    const gates = readdirSync(`${ROOT}scripts`)
+      .filter((name) => /^check-.*\.(mts|mjs)$/u.test(name))
+      .map((name) => `scripts/${name}`)
+      .filter((path) => {
+        const text = read(path)
+        return text.includes('baseline') && text.includes('relative(')
+      })
+
+    expect(gates.length, '没找到任何「读基线 + 用 relative()」的门禁：这条守卫失效了，先确认文件命名。').toBeGreaterThan(0)
+    const unnormalized = gates.filter((path) => !read(path).includes('split(sep)'))
+    expect(
+      unnormalized,
+      `这些门禁用 relative() 当基线键却没有归一化路径分隔符（Windows 上会整片假红）：\n` +
+        `${unnormalized.map((path) => `  - ${path}`).join('\n')}\n` +
+        '改法：relative(ROOT, file).split(sep).join("/")。'
+    ).toEqual([])
   })
 
   it('keeps every manual-only key a real script, so the list cannot rot', () => {
