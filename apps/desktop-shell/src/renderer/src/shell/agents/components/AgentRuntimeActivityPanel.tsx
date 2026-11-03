@@ -210,11 +210,12 @@ function ApprovalActions({
   const t = useAgentText()
   const approvalInputText = card.approvalInputText ?? null
   const [draftInputText, setDraftInputText] = useState(approvalInputText ?? '')
-  const [inputError, setInputError] = useState<string | null>(null)
+  /** 只存「有没有失败」，原因句在渲染时取——存句子会让它冻结在写入那一刻的语言。 */
+  const [inputInvalid, setInputInvalid] = useState(false)
 
   useEffect(() => {
     setDraftInputText(approvalInputText ?? '')
-    setInputError(null)
+    setInputInvalid(false)
   }, [approvalInputText, card.approvalId])
 
   const hasEditableInput = Boolean(approvalInputText)
@@ -234,10 +235,12 @@ function ApprovalActions({
             autoSize={{ minRows: 3, maxRows: 8 }}
             onChange={(event) => {
               setDraftInputText(event.target.value)
-              setInputError(null)
+              setInputInvalid(false)
             }}
           />
-          {inputError ? <span className="agent-runtime-activity-input-error">{inputError}</span> : null}
+          {inputInvalid ? (
+            <span className="agent-runtime-activity-input-error">{t.runtimeActivity.invalidInputJson}</span>
+          ) : null}
         </label>
       ) : null}
       <div className="agent-runtime-activity-actions">
@@ -257,7 +260,7 @@ function ApprovalActions({
             onClick={() => {
               const resolution = resolveApprovalInputDraft(approvalInputText, draftInputText)
               if (resolution.kind === 'invalid') {
-                setInputError(t.runtimeActivity.invalidInputJson)
+                setInputInvalid(true)
                 return
               }
               if (resolution.kind === 'original') {
