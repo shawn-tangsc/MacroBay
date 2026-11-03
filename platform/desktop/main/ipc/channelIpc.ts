@@ -29,10 +29,10 @@ export function registerChannelIpc(
   const { channelManagementService, channelInboundService } = ports
 
   ipcMain.handle(IpcChannels.channelsCatalog, () => channelManagementService.catalog())
-  ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.list())
+  ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.listWithCredentialPreviews())
   // 只读投影：通知设置页的「发送到通道」一行读它，不缓存第二份通道状态。
   ipcMain.handle(IpcChannels.channelsListDeliveryTargets, () => channelManagementService.listDeliveryTargets())
-  ipcMain.handle(IpcChannels.channelsGet, (_event: IpcMainInvokeEvent, id: unknown) => channelManagementService.get(id))
+  ipcMain.handle(IpcChannels.channelsGet, (_event: IpcMainInvokeEvent, id: unknown) => channelManagementService.getWithCredentialPreviews(id))
   ipcMain.handle(IpcChannels.channelsCreate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.create(asChannelInput(input)))
   ipcMain.handle(IpcChannels.channelsUpdate, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.update(asChannelInput(input)))
   ipcMain.handle(IpcChannels.channelsDisable, (_event: IpcMainInvokeEvent, input: unknown) => channelManagementService.disable(asChannelInput(input)))

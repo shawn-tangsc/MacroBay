@@ -73,9 +73,9 @@ function sentinelService(prefix: string, methods: readonly string[]) {
 
 const MANAGEMENT_METHODS = [
   'catalog',
-  'list',
+  'listWithCredentialPreviews',
   'listDeliveryTargets',
-  'get',
+  'getWithCredentialPreviews',
   'create',
   'update',
   'disable',
@@ -210,9 +210,9 @@ describe('channel ipc surface', () => {
 function managementOf(channel: string): string {
   const map: Record<string, string> = {
     'platform:channels-catalog': 'catalog',
-    'platform:channels-list': 'list',
+    'platform:channels-list': 'listWithCredentialPreviews',
     'platform:channels-list-delivery-targets': 'listDeliveryTargets',
-    'platform:channels-get': 'get',
+    'platform:channels-get': 'getWithCredentialPreviews',
     'platform:channels-create': 'create',
     'platform:channels-update': 'update',
     'platform:channels-disable': 'disable',

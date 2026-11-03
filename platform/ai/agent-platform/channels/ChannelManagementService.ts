@@ -16,6 +16,7 @@ import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
 import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { requestSmokeEnabledChannel } from './channelSmokeEnable'
+import { getWithCredentialPreviews, listWithCredentialPreviews } from './channelCredentialProjection'
 import { listDeliveryAttemptsFor, listDeliveryAuditsFor } from './channelDeliveryQueries'
 import { createManagedChannel, updateManagedChannel } from './channelSettingsMutations'
 import { assertManagedChannelType } from './channelSettingsInputs'
@@ -78,6 +79,10 @@ export class ChannelManagementService {
   list() {
     return this.deps.repository.query.list()
   }
+
+  /** 界面读：附凭据头尾掩码（异步解密一次）。推送端口仍用同步 `list()`。 */
+  listWithCredentialPreviews() { return listWithCredentialPreviews(this.deps.repository, this.deps.vault, this.deps.repository.query.list()) }
+  getWithCredentialPreviews(id: unknown) { return getWithCredentialPreviews(this.deps.repository, this.deps.vault, this.deps.repository.query.get(String(id))) }
 
   /**
    * 通知设置页的只读投影：每个通道能否投递、为什么不能、绑了几个目标。
