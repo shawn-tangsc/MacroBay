@@ -27,9 +27,9 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
   'platform.desktop.blocked': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
-  // ── 情报 7 行（情报模块产品经理 2026-11-02 签；2026-11-03 删 ready，待重签 7 行） ──
+  // ── 情报 7 行（情报模块产品经理 2026-11-02 签；2026-11-03 核：删 ready 后 manifest 与批准表均 7 条一一对应，无需重签） ──
   'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  // 这两行的 channel 是**上限**：通道投递尚未获用户点头，通道就绪前界面不提供该列（规范见 ui-spec v2.9 §清单）。
+  // 这两行的 channel 是**上限**：通道投递尚未获用户点头，通道就绪前界面不提供该列。
   // 批准 ≠ 现况；撤掉再接通要重签，所以留着并解释——下一个人读到这里不许以为「批了就等于读者能配」。
   'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
   'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
