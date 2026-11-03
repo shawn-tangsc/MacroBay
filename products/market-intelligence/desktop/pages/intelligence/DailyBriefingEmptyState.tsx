@@ -9,7 +9,7 @@ import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBrief
  * itself failed. Each branch carries a literal reason key, so the resolver guard can tell which
  * sentence the reader will see; a computed key is invisible to it.
  */
-export function DailyBriefingEmptyState({ editions, todayDate, timeZone, lastGeneratedAt, formatTime, text, onGenerate, deleted = false }: Readonly<{
+export function DailyBriefingEmptyState({ editions, todayDate, timeZone, lastGeneratedAt, formatTime, text, onGenerate }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   todayDate: string
   timeZone: string
@@ -17,21 +17,12 @@ export function DailyBriefingEmptyState({ editions, todayDate, timeZone, lastGen
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   text: DailyBriefingText
   onGenerate: () => void
-  /**
-   * The pane went empty because the reader deleted this issue. Nothing failed, so it must not be
-   * dressed as an unreadable read: deleting is a choice, and a failed read is an accident.
-   */
-  deleted?: boolean
 }>): React.ReactElement {
   const resolve = (key: string, params?: Readonly<Record<string, string>>): string => resolveBriefingStateReason(text, key, params)
   const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime
   const todayMissing = editions.some((edition) => edition.date === todayDate && edition.state === 'missing')
   const action = { labelKey: 'ui.state.action.create' as const, onSelect: onGenerate }
 
-  if (deleted) {
-    return <StateView state="empty" reasonCode="never-created" size="lg" action={action}
-      productReason={{ key: 'mi.dailyBriefing.deletedEdition', resolve }} />
-  }
 
   if (editions.every((edition) => edition.state === 'missing')) {
     return scheduledTime

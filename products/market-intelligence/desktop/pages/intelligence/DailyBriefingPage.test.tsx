@@ -439,11 +439,15 @@ describe('daily briefing page', () => {
     expect(railRow().getAttribute('aria-current')).toBe('true')
     expect(railRow().hasAttribute('data-missing') || railRow().textContent).toBeTruthy()
     expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
-    // 2. The pane is empty, not broken: the delete sentence, and no unreadable sentence at all.
-    expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')?.getAttribute('data-state')).toBe('empty')
-    expect(dom.textContent).toContain(text.stateReasons.deletedEdition)
+    // 2. The pane is the ordinary "not generated" state — one state, one name — and never the
+    //    unreadable one: no read was attempted, so none can have failed.
+    const pane = dom.querySelector('[data-briefing-no-edition="2026-10-30"]')
+    expect(pane?.textContent).toContain(text.history.notRunTitle)
     expect(dom.textContent).not.toContain(text.stateReasons.unreadable)
     expect(dom.textContent).not.toContain(text.stateReasons.unreadableSince.split('{')[0]!)
+    // What the reader did is said once, by the delete note, not by the empty state.
+    expect(dom.querySelector('[data-delete-outcome="done"]')?.textContent).toBe(
+      text.history.deleteDone.replace('{date}', '2026-10-30').replace('{language}', text.history.editionLanguages.zh))
     // 3. The generate control is still there and still usable.
     const regenerate = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(regenerate).not.toBeNull()

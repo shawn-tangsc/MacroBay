@@ -205,6 +205,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // Nothing was written in this language today, and nothing was asked for: the reader gets the
         // language's own state plus the one action that would produce it.
         setView({ status: 'locale-missing', locale: effectiveLocale })
+      } else if (skipGenerate && !keptCachedToday) {
+        // Nothing is left for that day. It is the ordinary "nothing generated yet" state, not a
+        // special one: what the reader did is said by the one-time delete note, not by the pane.
+        setView({ status: 'no-edition', date: pinnedDate ?? todayDate, failed: false })
       } else if (!skipGenerate || !keptCachedToday) {
         // A read that failed still says so. The delete reload is the opposite case: today was never
         // read, so it must not be reported as unreadable — the row the list already returned stands.
@@ -222,9 +226,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         }
         setView({
           status: 'unavailable',
-          // A delete reload attempts no read, so an empty pane is a result of the delete, not a
-          // failed read. The pane must not accuse the read that never happened.
-          ...(skipGenerate ? { readSkipped: true } : {}),
           ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
           ...(generationTrace ? { generationTrace } : {})
         })
@@ -421,7 +422,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </div> : null}
         {view.status === 'loading' ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'unavailable' && !failure
-          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} deleted={view.readSkipped === true} />
+          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
         {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} text={text} onGenerate={generateNow} /> : null}
         {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
