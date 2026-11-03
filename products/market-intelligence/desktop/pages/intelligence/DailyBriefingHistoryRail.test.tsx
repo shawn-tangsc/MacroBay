@@ -72,12 +72,17 @@ describe('daily briefing history rail', () => {
     expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe('2 次')
   })
 
-  it('says "not run" once, with the scheduled time, and keeps the direction word for screen readers', () => {
+  it('says "not run" once, with the scheduled time only for today, and keeps the direction word for screen readers', () => {
     render({ editions: [
       edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
+      // A past day that did not run: repeating the same clock twelve times told the reader nothing.
+      edition({ date: '2026-10-28', state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
       edition({ date: '2026-11-01', direction: undefined })
     ] })
     expect(host.textContent).toContain('未运行 · 08:00')
+    const past = host.querySelector('[data-date="2026-10-28"]')?.closest('.mi-daily-briefing__rail-item')
+    expect(past?.textContent).toContain('未运行')
+    expect(past?.textContent).not.toContain('08:00')
     // The missing row no longer repeats "not generated" and "app was not running" together.
     expect(host.textContent).not.toContain('未生成')
     // A row without a verdict shows a dot; the word is only in the accessible name.

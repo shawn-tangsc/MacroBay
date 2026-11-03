@@ -102,7 +102,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
             {missing ? <small className="mi-daily-briefing__rail-missing">{
               edition.date === todayDate && generatingStage
                 ? text.generationProgress.railRunning + ' · ' + generatingStage
-                : `${text.history.missingRun}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
+                : `${text.history.missingRun}${edition.date === todayDate && edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
             }</small> : <>
               {edition.direction
                 // A direction, when present, is the row's word; when absent the dot alone carries
