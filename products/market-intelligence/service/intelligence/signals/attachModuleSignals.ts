@@ -1,8 +1,9 @@
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
+import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
 import { isCanonicalSignalTime, type ModuleSignal } from '../../../contracts/moduleSignal'
 import type { MacroRouteQuery } from '../public-query/macroRouteQuery'
 import { normalizeMacroRouteMonths, queryMacroRoute } from '../public-query/macroRouteQuery'
-import { createCalendarSignalQuery, createOpenInterestSignalQuery, type ModuleSignalProducer } from './moduleSignalQuery'
+import { createCalendarSignalQuery, createEtfOutflowSignalQuery, createOpenInterestSignalQuery, type ModuleSignalProducer } from './moduleSignalQuery'
 
 /**
  * The two readers behind `queryModuleSignals`, kept out of the public-query file.
@@ -13,15 +14,18 @@ import { createCalendarSignalQuery, createOpenInterestSignalQuery, type ModuleSi
  */
 export type ModuleSignalHost = {
   queryOpenInterestHistory: (input: Readonly<{ asOf: string; window: OpenInterestWindow }>) => Promise<OpenInterestHistoryResult>
+  /** The panel's own snapshot read: the ETF leg judges the rows the card already draws. */
+  queryCapitalConditionsSnapshot: (input: Readonly<{ asOf: string }>) => Promise<CapitalConditionsSnapshotResult>
   queryModuleSignals: (input: Readonly<{ asOf: string }>) => Promise<readonly ModuleSignal[]>
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
 } & MacroRouteQuery
 
 export function attachModuleSignals(host: ModuleSignalHost): void {
-  // The legs that can answer a signal today. The ETF leg joins this list when its own wiring lands —
-  // as a producer that answers, never as a placeholder that returns nothing.
+  // The legs that can answer a signal today, each an addition to this list rather than a second
+  // read of its own: the ETF leg reads the snapshot the capital-conditions card already draws.
   const producers: ModuleSignalProducer[] = [
     createOpenInterestSignalQuery({ readHistory: input => host.queryOpenInterestHistory(input) }),
+    createEtfOutflowSignalQuery({ readSnapshot: input => host.queryCapitalConditionsSnapshot(input) }),
     // The calendar's own trigger key stays the only one that spends a call; this leg exists so the
     // chip and the analysis name the same release the same way.
     createCalendarSignalQuery({

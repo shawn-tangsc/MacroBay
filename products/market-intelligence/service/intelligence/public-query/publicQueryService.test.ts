@@ -663,9 +663,12 @@ describe('module signals', () => {
     const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
     // One read for the query, and the signals come out of its hints rather than a second pass.
     expect(read).toHaveBeenCalledTimes(1)
-    expect(signals.length).toBeGreaterThan(0)
-    expect(signals.every(signal => signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
-    expect(new Set(signals.map(signal => signal.asset))).toEqual(new Set(['btc', 'eth']))
+    const oi = signals.filter(signal => signal.moduleId === 'open-interest')
+    expect(oi.length).toBeGreaterThan(0)
+    expect(oi.every(signal => signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
+    expect(new Set(oi.map(signal => signal.asset))).toEqual(new Set(['btc', 'eth']))
+    // 这条服务没有资金面快照读取：ETF 腿如实说读不到，而不是消失成安静。
+    expect(signals.filter(signal => signal.moduleId === 'etf-flows').every(signal => signal.readiness === 'unavailable')).toBe(true)
   })
 
   it('lets another leg join the list without changing the shape the page reads', async () => {

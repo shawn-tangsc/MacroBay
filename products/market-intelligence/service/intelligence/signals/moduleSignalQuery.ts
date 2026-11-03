@@ -1,8 +1,10 @@
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
+import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import type { MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
 import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
 import { calendarSurpriseSignals, calendarUnavailableSignals } from './calendarSurpriseSignals'
+import { buildEtfOutflowSignal, etfOutflowUnavailableSignals } from './etfOutflowSignal'
 import { openInterestSignalsFromHistory } from './openInterestSignals'
 
 /**
@@ -38,6 +40,37 @@ export function createOpenInterestSignalQuery(deps: Readonly<{
         // A thrown read is a failed read, not a quiet market: it must reach the card as `unavailable`
         // instead of an empty list, which is what a reader would read as "nothing happened".
         return openInterestSignalsFromHistory({ state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }, input.asOf)
+      }
+    }
+  }
+}
+
+/**
+ * The ETF leg, read at one instant.
+ *
+ * Its input is the same capital-conditions snapshot the panel reads: the panel's five- and
+ * twenty-day rows and this three-day rule come from one store read, so the chip and the table
+ * cannot describe different days. The rule itself is not reimplemented here — this producer maps
+ * the snapshot onto the rule's own input and returns what the rule says.
+ *
+ * A failed read is `unavailable`, never an empty list: "we could not look" and "nothing happened"
+ * are different facts, and the chip has to be able to say the first one.
+ */
+export function createEtfOutflowSignalQuery(deps: Readonly<{
+  readSnapshot: (input: Readonly<{ asOf: string }>) => Promise<CapitalConditionsSnapshotResult>
+}>): ModuleSignalQuery {
+  return {
+    async query(input) {
+      try {
+        const snapshot = await deps.readSnapshot({ asOf: input.asOf })
+        if (snapshot.state !== 'available' || snapshot.etf.state !== 'available') return etfOutflowUnavailableSignals(input.asOf)
+        const etf = snapshot.etf
+        return (['btc', 'eth'] as const).flatMap(asset => {
+          const signal = buildEtfOutflowSignal({ asset, rows: etf[asset].rows, asOf: input.asOf })
+          return signal ? [signal] : []
+        })
+      } catch {
+        return etfOutflowUnavailableSignals(input.asOf)
       }
     }
   }

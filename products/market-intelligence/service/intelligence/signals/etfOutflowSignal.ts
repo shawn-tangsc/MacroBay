@@ -122,6 +122,39 @@ function build(input: Readonly<{
 }
 
 /**
+ * 这一路读不到时，两个资产各出一条 `unavailable` 信号。
+ *
+ * 与「安静」不是一件事：安静是根本没有信号，读不到是「不知道有没有」。给一个空列表，牌子就
+ * 只能消失，读者会把它读成「没事」——这正是要防的那句话。覆盖写 0/3 是如实的分母：契约要求
+ * 求和的规则必须交代分母，一行都没有时它确实是 0。这里**不写任何读数**（累计金额那两个数字
+ * 一个都不出现），拿不到时给数字就是猜。
+ */
+export function etfOutflowUnavailableSignals(asOf: string): readonly ModuleSignal[] {
+  return Object.freeze((['btc', 'eth'] as const)
+    .map(asset => unavailableSignal(asset, asOf))
+    .filter((signal): signal is ModuleSignal => signal !== undefined))
+}
+
+function unavailableSignal(asset: 'btc' | 'eth', asOf: string): ModuleSignal | undefined {
+  const dedupeKey = buildSignalDedupeKey({
+    moduleId: etfOutflowSignalPolicy.moduleId,
+    ruleId: etfOutflowSignalPolicy.ruleId,
+    asset,
+    observedAt: asOf,
+    cadence: etfOutflowSignalPolicy.cadence
+  })
+  if (!dedupeKey) return undefined
+  return build({
+    values: { coveredDays: 0, requiredDays: etfFlowPolicy.signalWindowDays },
+    observedAt: asOf,
+    dedupeKey,
+    severity: 'low',
+    readiness: 'unavailable',
+    input: { asset, rows: [], asOf }
+  })
+}
+
+/**
  * The row with the latest trading date, regardless of the order the caller handed them in.
  *
  * Not `.at(-1)`: the rows are only sorted by the sum below, which does nothing to the array itself,
