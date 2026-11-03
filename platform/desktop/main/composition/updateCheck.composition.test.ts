@@ -6,7 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { IpcChannels } from '../../ipc/channels'
 
-import { composeUpdateCheck, updateCheckModeFor, type UpdateCheckCompositionPorts } from './updateCheck'
+import { composeUpdateCheck, type UpdateCheckCompositionPorts } from './updateCheck'
+
+/**
+ * 更新检查的装配：**只有一条路**。
+ *
+ * 11-03 用户定了「源码启动和装好的包不必区别对待」，所以这里没有 `mode`、没有「开发态只注册一部分
+ * 通道」也没有「开发态不挂定时器」。省下的风险由服务里那道**同一个 UTC 自然日最多一次**承担：
+ * 开发机每天最多多打一次请求，不会变成每开一次窗就打一发。
+ */
 
 const directories: string[] = []
 
@@ -39,14 +47,12 @@ function recorder(): {
 }
 
 function ports(input: {
-  mode: 'packaged' | 'development'
   directory: string
   fetchSpy: typeof fetch
   ipcMain: IpcMainPort
-}) {
+}): UpdateCheckCompositionPorts {
   return {
     ipcMain: input.ipcMain,
-    mode: input.mode,
     currentVersion: '0.3.1',
     platform: 'darwin',
     stateFilePath: join(input.directory, 'state.json'),
@@ -61,78 +67,84 @@ function ports(input: {
 }
 
 function temporaryDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'macrobay-update-gate-'))
+  const directory = mkdtempSync(join(tmpdir(), 'macrobay-update-composition-'))
   directories.push(directory)
   return directory
 }
 
-describe('the update check delivery gate', () => {
-  it('maps the one read-only app fact to a mode: source runs are development', () => {
-    expect(updateCheckModeFor(true)).toBe('packaged')
-    expect(updateCheckModeFor(false)).toBe('development')
-  })
-
-  it('development registers every channel, but never arms the automatic timer', async () => {
+describe('composing the update check', () => {
+  it('registers every channel, and starts out as "not checked yet"', async () => {
     const fetchSpy = vi.fn(async () => {
       throw new Error('offline in this test')
     }) as unknown as typeof fetch
     const harness = recorder()
     const composition = await composeUpdateCheck(
-      ports({ mode: 'development', directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
+      ports({ directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
     )
 
-    // 用户 11-03 改的口径：开发态也能点出结果，所以通道**全都在**（旧写法「只注册 get-state」已作废）。
     expect(harness.channels).toEqual([
       IpcChannels.updatesGetState,
       IpcChannels.updatesCheckNow,
       IpcChannels.updatesOpenLink,
       IpcChannels.updatesGetReleaseNotes
     ])
-
-    // 但初值是普通的「还没检查」——开发态不再是一种投影状态，画法与安装版完全一致。
     expect(composition.getProjection()).toEqual({ state: 'idle', currentVersion: '0.3.1' })
 
-    // 手动查是真的：点一下发一次请求（这里让它离线，只为数调用次数）。
+    // 手动查真的发请求（这里让它离线，只为数调用次数）。
     const checkNow = harness.listeners.get(IpcChannels.updatesCheckNow) as () => Promise<unknown>
     await expect(checkNow()).resolves.toMatchObject({ state: 'unavailable' })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('development arms no automatic check, so the source build never goes online on its own', async () => {
+  it('arms the automatic check after the first screen, like an installed build', async () => {
     vi.useFakeTimers()
     try {
       const fetchSpy = vi.fn(async () => {
-        throw new Error('development must not fetch on its own')
+        throw new Error('offline in this test')
       }) as unknown as typeof fetch
       const harness = recorder()
       const composition = await composeUpdateCheck(
-        ports({ mode: 'development', directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
+        ports({ directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
       )
 
-      // 这就是 `mode` 在开发态的唯一作用：**不挂自动检查**。15 秒是打包版的延迟，跑过去也不许发。
-      composition.startAutomaticCheck()
-      await vi.advanceTimersByTimeAsync(60_000)
       expect(fetchSpy).not.toHaveBeenCalled()
+      composition.startAutomaticCheck()
+      // `vi.waitFor` 会自动推进假定时器，并真的给异步链路（读文件、写文件）留出轮次；
+      // 只 `advanceTimersByTimeAsync` 会在「写记账文件」那步还没落地时就看断言。
+      // 先把 15 秒的假定时器推过去，再给异步尾巴（读/写记账文件）留轮次。
+      await vi.advanceTimersByTimeAsync(20_000)
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+      })
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('packaged registers all four channels, so the gate only closes the source build', async () => {
-    const fetchSpy = vi.fn(async () => {
-      throw new Error('no network in this test')
-    }) as unknown as typeof fetch
-    const harness = recorder()
-    await composeUpdateCheck(
-      ports({ mode: 'packaged', directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
-    )
+  it('does not spend a second automatic request on the same UTC day', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchSpy = vi.fn(async () => {
+        throw new Error('offline in this test')
+      }) as unknown as typeof fetch
+      const directory = temporaryDirectory()
 
-    expect(harness.channels).toEqual([
-      IpcChannels.updatesGetState,
-      IpcChannels.updatesCheckNow,
-      IpcChannels.updatesOpenLink,
-      IpcChannels.updatesGetReleaseNotes
-    ])
-    expect(fetchSpy).not.toHaveBeenCalled()
+      // 同一个数据目录、同一天，起两次「应用」：第二次不该再发请求。
+      for (let round = 0; round < 2; round += 1) {
+        const harness = recorder()
+        const composition = await composeUpdateCheck(
+          ports({ directory, fetchSpy, ipcMain: harness.ipcMain })
+        )
+        composition.startAutomaticCheck()
+        await vi.advanceTimersByTimeAsync(20_000)
+        await vi.waitFor(() => {
+          expect(fetchSpy).toHaveBeenCalledTimes(1)
+        })
+        // 走完这一轮，再等一拍，确认没有第二个请求挤进来。
+        await vi.advanceTimersByTimeAsync(60_000)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

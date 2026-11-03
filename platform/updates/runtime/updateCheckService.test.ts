@@ -6,7 +6,6 @@ import type { StoredUpdateCheckState } from './updateCheckState'
 import { updateCheckTimeoutMs } from './updateCheckService'
 import {
   createUpdateCheckService,
-  type UpdateCheckMode,
   type UpdateCheckServicePorts
 } from './updateCheckService'
 
@@ -22,7 +21,6 @@ type Harness = {
 }
 
 type HarnessOptions = {
-  mode?: UpdateCheckMode
   currentVersion?: string
   platform?: string
   enabled?: boolean
@@ -48,7 +46,6 @@ function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
   let fetchCalls = 0
 
   const ports: UpdateCheckServicePorts = {
-    mode: options.mode ?? 'packaged',
     currentVersion: options.currentVersion ?? '0.3.1',
     platform: options.platform ?? 'darwin',
     storage: {
@@ -309,29 +306,20 @@ describe('the single settlement exit', () => {
   })
 })
 
-describe('development mode', () => {
-  it('checks for real when asked by hand, so the row can show an actual result', async () => {
-    const harness = await makeHarness({ mode: 'development' })
+describe('one code path for source runs and installed builds', () => {
+  it('lets an automatic check run, and caps it at one per UTC day', async () => {
+    // 11-03 用户定的：两边逻辑一模一样，只靠「同一个 UTC 自然日最多一次」封顶。
+    // 所以这里断的是那个封顶本身，而不是「开发态不发请求」——那条分支已经不存在了。
+    const harness = await makeHarness()
 
-    // 用户 11-03：开发版也要能点出结果。手动查是**真查**，不是「假装不可用」。
-    const projection = await harness.service.checkNow('manual')
-    expect(projection).toEqual({
-      state: 'available',
-      currentVersion: '0.3.1',
-      latestVersion: '0.4.0',
-      checkedAt: '2026-11-03T00:10:00.000Z'
-    })
+    const first = await harness.service.checkNow('auto')
+    expect(first.state).toBe('available')
     expect(harness.fetchCalls()).toBe(1)
-  })
 
-  it('never checks on its own: the automatic trigger is a no-op in development', async () => {
-    const harness = await makeHarness({ mode: 'development' })
-
-    const projection = await harness.service.checkNow('auto')
-    // 「开发版不会自己联网」就靠这一条：自动那一路在服务层就返回，连记账都不写。
-    expect(harness.fetchCalls()).toBe(0)
-    expect(projection).toEqual({ state: 'idle', currentVersion: '0.3.1' })
-    expect(harness.settled()).toEqual([])
+    // 同一天再开一次窗：一个请求都不发，直接给已有结论。
+    const second = await harness.service.checkNow('auto')
+    expect(second.state).toBe('available')
+    expect(harness.fetchCalls()).toBe(1)
   })
 })
 
@@ -340,7 +328,6 @@ describe('state file tolerance', () => {
     let stored: StoredUpdateCheckState | null = null
     const logs: string[] = []
     const service = await createUpdateCheckService({
-      mode: 'packaged',
       currentVersion: '0.3.1',
       platform: 'darwin',
       storage: {

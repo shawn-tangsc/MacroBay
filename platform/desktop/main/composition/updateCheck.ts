@@ -4,7 +4,7 @@ import { createJsonFileStorage } from '../../../storage/jsonFileStorage'
 import type { UpdateCheckProjection } from '../../../updates/contracts/updateCheck'
 import { registerUpdateCheckIpc } from '../../../updates/ipc/registerUpdateCheckIpc'
 import { openUpdateLink } from '../../../updates/runtime/openUpdateLink'
-import { autoCheckDelayMs, createUpdateCheckService, type UpdateCheckMode } from '../../../updates/runtime/updateCheckService'
+import { autoCheckDelayMs, createUpdateCheckService } from '../../../updates/runtime/updateCheckService'
 import { createEmptyUpdateCheckState } from '../../../updates/runtime/updateCheckState'
 import { parseReleaseNotes } from '../../../updates/contracts/releaseNotes'
 import { createReleaseNotesService } from '../../../updates/runtime/releaseNotesService'
@@ -13,13 +13,13 @@ import { createReleaseNotesService } from '../../../updates/runtime/releaseNotes
  * 更新检查的装配：建服务、注册三条通道、把自动检查排到主界面之后。
  *
  * 为什么单独一片而不是塞回 `app.ts`：`app.ts` 是受保护接缝、而且是体积基线文件（只减不增）。
- * 这里只做接线，**不含任何判断**；判断全在 `platform/updates/**` 里，模式由组合根读一次「装没装」
- * 后经 `updateCheckModeFor` 传进来——**源码启动是开发态（无能力），安装版/目录版才有**。
- * 这个文件**不读任何应用级事实**（数据目录、应用名、装没装都从入参来），有守卫用例盯着。
+ * 这里只做接线，**不含任何判断**；判断全在 `platform/updates/**` 里。
+ * **没有「开发态 / 打包态」这条分支**（11-03 用户定的）：两边逻辑一模一样，区别只由服务里的
+ * 「同一个 UTC 自然日最多一次」承担。这个文件**不读任何应用级事实**（数据目录、应用名、装没装
+ * 都从入参来），有守卫用例盯着。
  */
 export type UpdateCheckCompositionPorts = Readonly<{
   ipcMain: Pick<IpcMain, 'handle'>
-  mode: UpdateCheckMode
   currentVersion: string
   platform: string
   /** `userData/platform/updates/state.json`：日桶、上次结论、上次手动检查都记在这里。 */
@@ -49,13 +49,8 @@ export type UpdateCheckComposition = Readonly<{
  * 零出网由「没有那条路」保证，不靠调用方自觉。**改这一行等于开/关能力**，
  * 验收必须同时覆盖 `packaged` 与 `development` 两侧。
  */
-export function updateCheckModeFor(isPackaged: boolean): UpdateCheckMode {
-  return isPackaged ? 'packaged' : 'development'
-}
-
 export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Promise<UpdateCheckComposition> {
   const service = await createUpdateCheckService({
-    mode: ports.mode,
     currentVersion: ports.currentVersion,
     platform: ports.platform,
     storage: createJsonFileStorage(ports.stateFilePath, createEmptyUpdateCheckState()),
@@ -98,14 +93,12 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
     getProjection: service.getProjection,
     startAutomaticCheck: () => {
       /**
-       * **`mode` 在这里的唯一用处**：源码启动不挂自动检查。
+       * **源码启动与装好的包走同一条路**（11-03 用户定的）：不再有「开发态不挂定时器」这种分支。
        *
-       * 开发态手动查是真的（能看到结论），只有「自己联网」这件事不许发生——所以门开在
-       * 「要不要挂这个定时器」上，而不是把能力藏起来。服务里还有第二道同向闸，两层都写是因为
-       * 这条一旦漏了，就是「开发版在没人看着的时候发请求」。
+       * 唯一的风险是「开发版每次启动都发一次请求」，由服务里那道**同一个 UTC 自然日最多一次**挡着：
+       * 每台开发机每天最多一次，不会变成每开一次窗就打一发。闸门只在服务里一处，这里只负责
+       * 「首屏之后试一次」。
        */
-      if (ports.mode === 'development') return
-      // 其余闸门在服务里（开关、同一个 UTC 自然日最多一次）；这里只负责「什么时候试一次」。
       setTimeout(() => {
         void service.checkNow('auto').catch(() => undefined)
       }, autoCheckDelayMs)

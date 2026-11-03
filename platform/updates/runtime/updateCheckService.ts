@@ -27,7 +27,6 @@ export const autoCheckDelayMs = 15_000
  */
 export const updateCheckTimeoutMs = 30_000
 
-export type UpdateCheckMode = 'packaged' | 'development'
 export type UpdateCheckTrigger = 'auto' | 'manual'
 
 /**
@@ -38,7 +37,6 @@ export type UpdateCheckTrigger = 'auto' | 'manual'
  * 这个模块**不 import electron**：模式由组合根判一次传进来，判据只有 `app.isPackaged`。
  */
 export type UpdateCheckServicePorts = Readonly<{
-  mode: UpdateCheckMode
   /** 当前应用版本（`app.getVersion()` 由组合根取来传入）。 */
   currentVersion: string
   /** `process.platform`；决定读哪一份元数据文件，这是本功能唯一的平台分支。 */
@@ -118,15 +116,6 @@ export async function createUpdateCheckService(ports: UpdateCheckServicePorts): 
   }
 
   async function perform(trigger: UpdateCheckTrigger): Promise<UpdateCheckProjection> {
-    /**
-     * `mode` 只决定一件事：**自动检查跑不跑**。
-     *
-     * 开发态手动点「检查更新」是**真查**（要能看到三种结论），打开链接也是真打开；
-     * 不跑自动的原因是风险点在「自己联网」——开发版不该在没人看着的时候发请求。
-     * 旧口径「开发态能力不存在、调用要抛错」已作废：用户要的是能点出结果，不是没有能力。
-     */
-    if (ports.mode === 'development' && trigger === 'auto') return projection()
-
     const now = ports.now()
     const nowIso = now.toISOString()
 
