@@ -1,5 +1,5 @@
 import type { ModuleSignal, SignalCadence, SignalSeverity } from '../../../contracts/moduleSignal'
-import { buildSignalDedupeKey, isModuleSignal, moduleSignalPolicy, signalTriggerKey } from '../../../contracts/moduleSignal'
+import { buildSignalDedupeKey, isModuleSignal, moduleSignalPolicy, signalTriggerKey, signalWindow, type SignalWindow } from '../../../contracts/moduleSignal'
 import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../contracts/etfFlows'
 
 /**
@@ -182,44 +182,35 @@ function canonicalTradingDayInstant(tradingDate: string): string | undefined {
 /**
  * 一条成立的三日净流出信号，转成一次分析请求。
  *
- * 字段与最后一跳的接收端一一对应（`jobs/requestSignalAnalysis` 的 `SignalAnalysisRequest`），
- * 装配处可以直接递过去、不再映射一遍——两份形状各自演化，就是「同一件事两个说法」的老路。
+ * 形状就是接收端声明的那个：**信号本身 + 规则自己的窗口 + 板子**。触发键、模块、规则、资产、
+ * 严重度、数据时刻、去重键都从信号取，不再各带一份标量副本——同一件事在两个字段里说两句话，
+ * 迟早会有一句落后。窗口也不由接收端推：三天是这条规则自己的单位。
  */
 export type EtfOutflowAnalysisRequest = Readonly<{
-  /** `signal.<moduleId>.<ruleId>`：一条规则一个键，资产不进键。 */
-  triggerKey: string
-  moduleId: 'etf-flows'
-  ruleId: string
+  signal: ModuleSignal
+  /** 规则判的那三个交易日；`ModuleSignal` 故意不携窗口。 */
+  window: SignalWindow
   /** 牌子所属的板子：现货是资金面。 */
   groupType: 'capital'
-  /** 只有成立的中/高档会到这里：低档只打牌子，不叫分析。 */
-  severity: 'medium' | 'high'
-  /** 数据描述的那个交易日，不是这次读取的时刻，也是快照的 asOf。 */
-  observedAt: string
-  /** 信号自己的去重键：同一资产同一桶只算一次，账本按它挡重复。 */
-  changeHash: string
 }>
 
 /**
  * 这一批信号里，哪些值得递交一次分析。
  *
- * 只递成立的（`readiness: 'available'`）：窗口没凑齐是「还判不了」，不是一件已经发生的事，
- * 递上去等于让分析去解释没发生的事。一条信号一个请求，而不是两个资产合成一条——资产不进
- * 触发键，同一天 BTC 与 ETH 靠各自的 `changeHash` 分开，账本的去重再按这个键挡第二次。
+ * 只递成立的（`readiness: 'available'`）：窗口没凑齐是「还判不了」，不是一件已经发生的事。
+ * 低档只打牌子、不叫分析，这里先挡掉。一条信号一个请求：同一天 BTC 与 ETH 是两条读数，
+ * 靠各自的去重键区分，合并与单飞归接收端。
  */
 export function etfOutflowAnalysisRequests(signals: readonly ModuleSignal[]): readonly EtfOutflowAnalysisRequest[] {
   const requests: EtfOutflowAnalysisRequest[] = []
   for (const signal of signals) {
     if (signal.moduleId !== etfOutflowSignalPolicy.moduleId || signal.readiness !== 'available') continue
-    // 低档只打牌子；接收端也不接受它，这里先挡掉，免得一次「只展示」被当成一次调用。
     if (signal.severity === 'low') continue
-    const triggerKey = signalTriggerKey(signal.moduleId, signal.ruleId)
-    // 一条拼不出合规触发键的信号不花额度：宁可不叫这次分析，也不匿名记账。
-    if (!triggerKey) continue
-    requests.push(Object.freeze({
-      triggerKey, moduleId: signal.moduleId, ruleId: signal.ruleId, groupType: 'capital',
-      severity: signal.severity, observedAt: signal.observedAt, changeHash: signal.dedupeKey
-    }))
+    // 键拼不出来就不花额度：宁可不叫这次分析，也不匿名记账（接收端还会再拒一次）。
+    if (!signalTriggerKey(signal.moduleId, signal.ruleId)) continue
+    const window = signalWindow(signal.cadence, etfFlowPolicy.signalWindowDays)
+    if (!window) continue
+    requests.push(Object.freeze({ signal, window, groupType: 'capital' as const }))
   }
   return Object.freeze(requests)
 }

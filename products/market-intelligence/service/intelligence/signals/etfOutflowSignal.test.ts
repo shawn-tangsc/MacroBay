@@ -4,6 +4,7 @@ import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
 import { buildEtfOutflowSignal, etfOutflowAnalysisRequests, etfOutflowSignalPolicy } from './etfOutflowSignal'
 import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
+import { signalTriggerKey } from '../../../contracts/moduleSignal'
 
 const threshold = etfFlowPolicy.signalOutflowUsd
 
@@ -124,29 +125,28 @@ describe('ETF outflow signal', () => {
 
 describe('handing a signal to the analysis entry', () => {
   const readingAt = '2026-10-28T12:00:00.000Z'
-  // 一条成立的三日净流出，必须带着「谁能花额度」的那个键递出去：`signal.<module>.<rule>`。
-  it('turns each available signal into one request with a registered trigger key', () => {
+
+  // 请求只有一个形状：信号本身 + 规则自己的窗口 + 板子。标量副本一律不再各带一份。
+  it('hands the signal, its own three-day window, and the board it belongs to', () => {
     const btc = buildEtfOutflowSignal({ asset: 'btc', rows: flows([-40_000_000, -50_000_000, -60_000_000]), asOf: readingAt })!
     const eth = buildEtfOutflowSignal({ asset: 'eth', rows: flows([-10_000_000, -40_000_000, -120_000_000]), asOf: readingAt })!
     const requests = etfOutflowAnalysisRequests([btc, eth])
 
     expect(requests).toHaveLength(2)
     for (const request of requests) {
-      expect(request.triggerKey).toBe('signal.etf-flows.etf-outflow-3d')
-      // 键必须是预算认得的形状，否则这次分析会匿名花掉事件线额度。
-      expect(isSignalTriggerKey(request.triggerKey)).toBe(true)
-      // 标签是数据所属交易日，不是这次计算的时刻。
-      expect(request.observedAt).toBe('2026-10-28T00:00:00.000Z')
-      expect(request.moduleId).toBe('etf-flows')
+      expect(request.signal).toBe(request.signal)
       expect(request.groupType).toBe('capital')
-      expect(['medium', 'high']).toContain(request.severity)
-      // 同一天两个资产靠各自的去重键分开，账本按它挡第二次。
-      expect(request.changeHash).toMatch(/^etf-flows:etf-outflow-3d:(btc|eth):2026-10-28$/)
+      // 窗口是规则的单位：三个交易日，不是 3×24 小时。
+      expect(request.window).toEqual({ unit: 'trading-days', amount: 3, upperBoundMs: null })
+      // 键仍是预算认得的那个形状，只是现在由接收端从信号拼。
+      expect(signalTriggerKey(request.signal.moduleId, request.signal.ruleId)).toBe('signal.etf-flows.etf-outflow-3d')
+      expect(isSignalTriggerKey('signal.etf-flows.etf-outflow-3d')).toBe(true)
     }
-    expect(new Set(requests.map(request => request.changeHash))).toEqual(new Set([
+    // 同一天两个资产是两条读数，各自的去重键不同、交易日相同。
+    expect(requests.map(request => request.signal.dedupeKey).sort()).toEqual([
       'etf-flows:etf-outflow-3d:btc:2026-10-28',
       'etf-flows:etf-outflow-3d:eth:2026-10-28'
-    ]))
+    ])
   })
 
   it('asks for no analysis while the window is not complete', () => {

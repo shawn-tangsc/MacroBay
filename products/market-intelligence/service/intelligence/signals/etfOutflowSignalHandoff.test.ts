@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { EventGroup } from '../../../contracts/marketAnalysisContracts'
 import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 import { createSignalAnalysisRequest, type SignalAnalysisRequest } from '../jobs/requestSignalAnalysis'
+import { signalTriggerKey } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from './etfOutflowSignal'
 import { etfOutflowSignalHandoff } from './etfOutflowSignalHandoff'
 
@@ -32,8 +33,12 @@ describe('the ETF signal hand-off', () => {
 
     expect(submit).toHaveBeenCalledTimes(2)
     expect(analyze).toHaveBeenCalledTimes(2)
-    const keys = analyze.mock.calls.map(([request]) => request.triggerKey)
-    expect(new Set(keys)).toEqual(new Set(['signal.etf-flows.etf-outflow-3d']))
+    // 每条请求带的是信号本身与它自己的窗口，键由接收端从信号拼。
+    const requests = analyze.mock.calls.map(([request]) => request)
+    expect(requests.map(request => signalTriggerKey(request.signal.moduleId, request.signal.ruleId)))
+      .toEqual(['signal.etf-flows.etf-outflow-3d', 'signal.etf-flows.etf-outflow-3d'])
+    expect(requests.every(request => request.groupType === 'capital')).toBe(true)
+    expect(requests.every(request => request.window.unit === 'trading-days' && request.window.amount === 3)).toBe(true)
   })
 
   // 刷新服务先于分析运行时建好：入口还没绑定时，通知照发、分析一条都不递，不假装做过。
@@ -54,13 +59,17 @@ describe('ETF signal → the analysis entry, end to end', () => {
   // 判据（架构师）：造一条信号 → 接收端收到该触发键 → 一次 queued 行 → 计数落在 event 线。
   it('writes one queued ledger row on the event line, and none on the calendar line', async () => {
     const groups = new Map<string, EventGroup>()
-    const ledger: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string }[] = []
+    const ledger: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string; evidenceJson: string | null }[] = []
     const repository = {
       appendEventGroup: (group: EventGroup) => { groups.set(group.id, group) },
       findEventGroupByMergeKey: (mergeKey: string) => [...groups.values()].find(group => group.mergeKey === mergeKey),
       listEventGroups: () => [...groups.values()],
       listRuns: () => [] as readonly unknown[],
-      appendTriggerLedger: (row: typeof ledger[number]) => { ledger.push(row); return row.id },
+      appendTriggerLedger: (row: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string; evidence?: unknown }) => {
+        // 与仓储同形：读数随行落成 JSON，读端拿到的就是判定当时的快照。
+        ledger.push({ ...row, evidenceJson: row.evidence ? JSON.stringify(row.evidence) : null })
+        return row.id
+      },
       updateTriggerLedgerDecision: (rowId: string, decision: string, reasonCode: string) => {
         const row = ledger.find(entry => entry.id === rowId)
         if (row) Object.assign(row, { decision, reasonCode })
@@ -88,6 +97,17 @@ describe('ETF signal → the analysis entry, end to end', () => {
       changeHash: 'etf-flows:etf-outflow-3d:btc:2026-10-28'
     })
     expect(enqueued[0]).toMatchObject({ payload: { triggerKey: 'signal.etf-flows.etf-outflow-3d', analysisPhase: 'correction', asOf: '2026-10-28T00:00:00.000Z' } })
+
+    // 架构师那条判据：行上必须带判定当时的读数，否则横条与详情都能空着还不报错。
+    expect(ledger[0]!.evidenceJson).not.toBeNull()
+    const evidence = JSON.parse(ledger[0]!.evidenceJson!) as { signalCount: number; signals: Record<string, unknown>[] }
+    expect(evidence.signalCount).toBe(1)
+    expect(Object.keys(evidence.signals[0]!).sort()).toEqual(['asset', 'moduleId', 'observedAt', 'ruleId', 'severity', 'values', 'window'])
+    expect(evidence.signals[0]).toMatchObject({
+      moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', severity: 'medium',
+      observedAt: '2026-10-28T00:00:00.000Z', window: { unit: 'trading-days', amount: 3, upperBoundMs: null },
+      values: { cumulativeNetFlowUsd: -150_000_000, coveredDays: 3, requiredDays: 3, thresholdUsd: -100_000_000 }
+    })
 
     const counts = countAnalysisRuns(repository as never, readingAt)
     expect(counts.eventRunsToday).toBe(1)
