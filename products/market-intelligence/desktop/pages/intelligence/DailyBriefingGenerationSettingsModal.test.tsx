@@ -154,4 +154,27 @@ describe('daily briefing generation settings modal', () => {
     expect(getSettings).toHaveBeenCalledTimes(2)
     expect(document.body.querySelector('[data-state="error"]')).toBeNull()
   })
+
+  it('keeps the unsupported-language sentence in a question mark and the short status on the row', async () => {
+    // The product cannot reach this state (the interface language is a closed set), so this fixture
+    // is the machine evidence for it: short status visible, long sentence only inside its question.
+    const sentence = text.settings.periods.languageUnsupported.replace('{language}', 'ja-JP')
+    const shortStatus = text.settings.periods.languageFallback.replace('{language}', (text.settings.languageNames as Record<string, string>)['en-US'])
+    await render({
+      ...view,
+      language: {
+        settings: { primary: 'follow-ui', additional: [] },
+        plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 }
+      }
+    })
+
+    expect(document.body.textContent).toContain(shortStatus)
+    expect(document.body.textContent).not.toContain(sentence)
+
+    const question = document.body.querySelector<HTMLElement>(`[aria-label="${sentence}"]`)
+    expect(question).not.toBeNull()
+    // A screen reader gets the whole sentence from the name, without opening anything.
+    await act(async () => { question!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(document.body.textContent).toContain(sentence)
+  })
 })
