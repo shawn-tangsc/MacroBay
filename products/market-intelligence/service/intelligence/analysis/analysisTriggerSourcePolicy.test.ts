@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import {
-  analysisTriggerSourcePolicy, analysisTriggerSources, isGateEligible, isGateExempt, isGateTimestamp,
-  phaseForNewTriggerKey, resolveTriggerKey, type AnalysisTriggerSource
+  analysisRunLineOf, analysisTriggerSourcePolicy, analysisTriggerSources, isGateEligible, isGateExempt,
+  isGateTimestamp, isSignalTriggerKey, phaseForNewTriggerKey, resolveTriggerKey, type AnalysisTriggerSource
 } from './analysisTriggerSourcePolicy'
 
 it('maps every caller to the trigger key that says who asked', () => {
@@ -55,6 +55,32 @@ it('judges the calendar trigger and every session slot, and passes everything el
   for (const key of ['macro.actual.first-confirmed', 'market-reaction.15m', 'manual.refresh', 'manual.initial', 'unknown.key']) {
     expect(isGateEligible(key)).toBe(false)
   }
+})
+
+it('judges every module signal by its prefix, and nothing that only looks like one', () => {
+  for (const key of ['signal.open-interest.oi-liquidation-proxy', 'signal.etf-flows.three-day-outflow', 'signal.macro-calendar.release-surprise']) {
+    expect(isGateEligible(key)).toBe(true)
+    expect(isSignalTriggerKey(key)).toBe(true)
+  }
+  // A near miss stays unregistered: the prefix is the registration, not "anything signal-ish".
+  for (const key of ['signal', 'signal.', 'signal..rule', 'signals.open-interest.rule', 'signalx.rule']) {
+    expect(isSignalTriggerKey(key)).toBe(false)
+    expect(isGateEligible(key)).toBe(false)
+  }
+})
+
+it('spends the event line for a signal and leaves the calendar line alone', () => {
+  // Not registering the line is the failure this pins: without it a few morning signals would empty
+  // the calendar's nine a day, and nothing in the panel would say why the calendar stopped.
+  for (const key of ['signal.open-interest.oi-liquidation-proxy', 'signal.etf-flows.three-day-outflow']) {
+    expect(analysisRunLineOf(key)).toBe('event')
+    expect(phaseForNewTriggerKey(key)).toBe('correction')
+  }
+  expect(analysisRunLineOf('calendar.refresh')).toBe('calendar')
+  expect(analysisRunLineOf('schedule.asia.open')).toBe('scheduled')
+  expect(analysisRunLineOf('macro.actual.first-confirmed')).toBe('event')
+  // An unregistered key keeps the strict default.
+  expect(analysisRunLineOf('future.unknown.key')).toBe('calendar')
 })
 
 it('gives the new keys a phase that cannot disturb the item path', () => {

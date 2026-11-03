@@ -24,6 +24,14 @@ export const analysisTriggerSourcePolicy = Object.freeze({
    * a data change (running at an open is the trigger).
    */
   gateEligibleTriggerKeys: ['calendar.refresh', ...analysisSessionSlots.map(triggerKeyForSlot)] as readonly string[],
+  /**
+   * Module signals are one key per rule (`signal.<moduleId>.<ruleId>`), so they are registered by
+   * prefix instead of by listing rules that do not exist yet. Two registrations read this one
+   * constant: the gate judges the key, and the budget line spends the event line — a signal that
+   * skipped the gate would spend a model call without a decision, and one left on the default line
+   * would eat the calendar's nine a day.
+   */
+  signalTriggerKeyPrefix: 'signal.' as const,
   gateExemptTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[],
   itemTriggerKeys: ['macro.actual.first-confirmed', 'market-reaction.15m'] as readonly string[],
   correctionPhase: 'correction' as AnalysisPhase,
@@ -58,7 +66,19 @@ export function isGateExempt(triggerKey: string): boolean {
 
 /** Only the data-driven sources are judged by the gate; everything else passes through. */
 export function isGateEligible(triggerKey: string): boolean {
-  return analysisTriggerSourcePolicy.gateEligibleTriggerKeys.includes(triggerKey)
+  return isSignalTriggerKey(triggerKey) || analysisTriggerSourcePolicy.gateEligibleTriggerKeys.includes(triggerKey)
+}
+
+/**
+ * One key per module rule: `signal.<moduleId>.<ruleId>`.
+ *
+ * Prefix rather than an enumerated list, because the rule set is the module's own policy and this
+ * file must not grow a copy of it. The pattern is narrow on purpose — a key such as
+ * `signals.foo` or a bare `signal` stays unregistered instead of silently spending the event line.
+ */
+export function isSignalTriggerKey(triggerKey: string): boolean {
+  const prefix = analysisTriggerSourcePolicy.signalTriggerKeyPrefix
+  return triggerKey.startsWith(prefix) && triggerKey.length > prefix.length && !triggerKey.slice(prefix.length).startsWith('.')
 }
 
 /**
@@ -74,7 +94,8 @@ export function phaseForNewTriggerKey(triggerKey: string): AnalysisPhase {
  * cannot disagree about the same attempt:
  *
  * - `scheduled` — the three session opens, which carry their own daily reserve.
- * - `event` — the item line's two keys, registered in `itemTriggerKeys`.
+ * - `event` — the item line's two keys, registered in `itemTriggerKeys`, plus every module signal
+ *   (`signal.*`), which shares that allowance rather than the calendar's.
  * - `calendar` — everything else, including any future key. The default is the stricter line:
  *   a new source must be registered explicitly to get the event line's larger allowance.
  */
@@ -82,6 +103,7 @@ export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
 
 export function analysisRunLineOf(triggerKey: string): AnalysisRunLine {
   if (isScheduledSlotTriggerKey(triggerKey)) return 'scheduled'
+  if (isSignalTriggerKey(triggerKey)) return 'event'
   return (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(triggerKey) ? 'event' : 'calendar'
 }
 
