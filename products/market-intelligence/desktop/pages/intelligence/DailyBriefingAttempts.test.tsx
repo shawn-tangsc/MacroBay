@@ -50,15 +50,17 @@ describe('daily briefing attempt trail', () => {
     render(loadAttempts)
     const toggle = host.querySelector<HTMLButtonElement>('[data-attempts-toggle]')!
 
-    // The list below numbers every try; a count on the action said the same fact twice.
-    expect(toggle.textContent).toBe(text.history.attempts.show)
+    // The heading names the block once; the control only says what it does.
+    expect(host.querySelectorAll('h3')).toHaveLength(1)
+    expect(host.textContent!.match(/生成记录/g) ?? []).toHaveLength(1)
+    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.expand)
     expect(toggle.textContent).not.toMatch(/\d|次/)
     expect(loadAttempts).not.toHaveBeenCalled()
 
     act(() => toggle.click())
     await flush()
     expect(loadAttempts).toHaveBeenCalledWith('2026-11-02', 'default', 'zh-CN')
-    expect(toggle.textContent).toBe(text.history.attempts.hide)
+    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.collapse)
   })
 
   it('numbers the attempts and says which one was cleaned', async () => {

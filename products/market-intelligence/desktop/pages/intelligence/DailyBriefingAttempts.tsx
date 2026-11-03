@@ -48,7 +48,7 @@ export function DailyBriefingAttempts({ date, periodId, locale, text, loadAttemp
     <header className="mi-briefing-detail__head">
       <h3 id="mi-briefing-attempts-title">{text.history.attempts.title}</h3>
       <Button className="mi-briefing-detail__action" data-attempts-toggle={date} aria-expanded={open} onClick={toggle}>
-        {open ? text.history.attempts.hide : text.history.attempts.show}
+        {open ? text.history.attempts.collapse : text.history.attempts.expand}
       </Button>
     </header>
     {open ? <div className="mi-briefing-attempts__list" role="group" aria-label={text.history.attempts.title}>

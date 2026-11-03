@@ -740,8 +740,10 @@ describe('daily briefing page', () => {
     // The trail lives in the one detail column, and only there.
     expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
     const toggle = dom.querySelector<HTMLButtonElement>('[data-briefing-attempts] [data-attempts-toggle]')!
-    expect(toggle.textContent).toBe(text.history.attempts.show)
+    // The heading names the block; the control only says what it does, once.
+    expect(toggle.textContent!.replace(/\s/g, '')).toBe(text.history.attempts.expand)
     expect(toggle.textContent).not.toMatch(/\d|次/)
+    expect(dom.textContent!.match(/生成记录/g) ?? []).toHaveLength(1)
   })
 
   it('keeps the detail column as one scroll container ordered stages → gaps → attempts', async () => {
