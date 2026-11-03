@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { prepareMarketCollection, type MarketCollectionContext, zeroXRouterCalendarStoragePolicy as storagePolicy } from './marketCalendarStorageValidation.ts'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository.ts'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser.ts'
 
 // Test-only executable/helpers; never import into runtime. Product acceptance owns gates.
@@ -84,8 +85,9 @@ async function measure(scale: number, workload: string) {
   let options: Parameters<typeof createMarketCalendarEventRepository>[0] | undefined
   let parsed: ReturnType<typeof parseZeroXRouterEconomicData> | undefined
   try {
-    db = new DatabaseSync(path)
-    db.exec('pragma journal_mode=wal; pragma foreign_keys=on')
+    db = openSqliteDatabase(path)
+    // WAL 由共享入口设置；`foreign_keys` 是本库自己的语义，仍在这里追加。
+    db.exec('pragma foreign_keys=on')
     const execute = db.exec.bind(db)
     db.exec = (sql: string) => {
       if (sql === 'begin immediate') { beginAt = performance.now(); sample('prepared-before-begin') }
@@ -199,7 +201,7 @@ async function measure(scale: number, workload: string) {
     sample('db-closed')
     await new Promise<void>((resolve) => setImmediate(resolve))
     sample('event-loop-after-close')
-    db = new DatabaseSync(path)
+    db = openSqliteDatabase(path)
     sample('reopened')
     const reopenStartupStart = performance.now()
     const reopened = createMarketCalendarEventRepository({ database: db, cursorKey: Buffer.alloc(32, 4) })
