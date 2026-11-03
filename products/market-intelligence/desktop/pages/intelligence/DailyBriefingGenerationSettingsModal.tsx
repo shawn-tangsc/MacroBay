@@ -11,6 +11,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { Modal } from '@platform/ui/components/modal'
 import { Popover } from '@platform/ui/components/popover'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
@@ -57,6 +58,9 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
   const [loadFailed, setLoadFailed] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const resolveProductText = useProductTextKey()
+  // The reader's own zone: a period with no stored zone means "the reader's zone", and the label
+  // must name a real offset (GMT+8), not fall back to a bare "GMT" that would be wrong for them.
+  const shellTimeZone = useShellTimeZone()
 
   useEffect(() => {
     if (!open) return
@@ -79,7 +83,7 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
         return
       }
       setPeriodCount(Math.max(1, periods.length))
-      setZone(period.generationTimeZone)
+      setZone(period.generationTimeZoneInvalid ? null : (period.generationTimeZone ?? shellTimeZone))
       setInvalidZone(period.generationTimeZoneInvalid)
       setPlan({
         used: settings.view.language.plan.primary.used,
@@ -93,7 +97,7 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
       })
     }).catch(() => { if (active) setLoadFailed(true) })
     return () => { active = false }
-  }, [open, client, reloadKey])
+  }, [open, client, reloadKey, shellTimeZone])
 
   const periodLabels = text.settings.periods
   const languageName = (locale: EditionLocale): string => (text.settings.languageNames as Record<string, string>)[locale] ?? locale
@@ -147,16 +151,13 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
       : !draft ? <LoadingState label={text.generationSettings.loading} minHeight={90} /> : <>
       {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
       <div className="mi-daily-briefing__settings-row">
-        <div>
-          <strong>{text.generationSettings.generationTime}</strong>
-          <small>{periodLabels.timeValue.replace('{time}', draft.generationTime)}</small>
-        </div>
+        <strong>{text.generationSettings.generationTime}</strong>
         <div className="mi-daily-briefing__settings-time">
           <Select
             aria-label={text.generationSettings.generationTime}
             value={draft.generationTime}
             onChange={(generationTime: string) => setDraft((current) => current ? { ...current, generationTime } : current)}
-            options={dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))}
+            options={dailyBriefingGenerationTimes.map((value) => ({ value, label: periodLabels.timeValue.replace('{time}', value) }))}
             style={{ width: 108 }}
           />
           {/* The time is only half of the setting: 07:00 means 07:00 in this zone, and saying which
@@ -166,17 +167,14 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
       </div>
       {invalidZone ? <p className="mi-daily-briefing__settings-warning" role="status">{text.generationSettings.invalidTimeZone.replace('{zone}', invalidZone)}</p> : null}
       <div className="mi-daily-briefing__settings-row">
-        <div>
-          <strong>{text.generationSettings.windowHours}</strong>
-          <small>{periodLabels.windowValue.replace('{hours}', String(draft.windowHours))}</small>
-        </div>
+        <strong>{text.generationSettings.windowHours}</strong>
         <Select
           aria-label={text.generationSettings.windowHours}
           value={draft.windowHours}
           onChange={(windowHours: number) => setDraft((current) => current ? { ...current, windowHours } : current)}
           options={dailyBriefingGenerationPolicy.windowHoursOptions.map((hours) => ({
             value: hours,
-            label: text.generationSettings.windowHoursOption.replace('{hours}', String(hours))
+            label: periodLabels.windowValue.replace('{hours}', String(hours))
           }))}
           style={{ width: 128 }}
         />
@@ -224,46 +222,47 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
             />
             : null}
         </div>
-        {extraLanguages.length > 0
-          ? <div className="mi-daily-briefing__settings-time">
-            <Checkbox
-              checked={extraChecked}
-              onChange={(event) => {
-                const checked = event.target.checked
-                setDraft((current) => current ? {
-                  ...current,
-                  additionalLanguages: checked
-                    ? [...new Set([...current.additionalLanguages, ...extraLanguages])]
-                    : current.additionalLanguages.filter((locale) => !extraLanguages.includes(locale))
-                } : current)
-              }}
-            >{periodLabels.additional}</Checkbox>
-            {/* The cost exists only while the extra edition is ticked, and its number is the one the
-                generation will use. */}
-            {extraChecked
-              ? <Popover
-                labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.cost"
-                labelParams={costParams}
-                resolveText={resolveProductText}
-                trigger={(triggerProps) => <IconButton
-                  ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
-                  variant="plain"
-                  expanded={triggerProps.expanded}
-                  icon={CircleHelp}
-                  onSelect={triggerProps.onSelect}
-                  resolveText={resolveProductText}
-                  size="sm"
-                />}
-              />
-              : null}
-          </div>
-          : null}
       </div>
+      {/* The extra edition sits on its own row, left-aligned: its cost question opens inside the
+          dialog, not off its right edge. */}
+      {extraLanguages.length > 0
+        ? <div className="mi-daily-briefing__settings-row">
+          <Checkbox
+            checked={extraChecked}
+            onChange={(event) => {
+              const checked = event.target.checked
+              setDraft((current) => current ? {
+                ...current,
+                additionalLanguages: checked
+                  ? [...new Set([...current.additionalLanguages, ...extraLanguages])]
+                  : current.additionalLanguages.filter((locale) => !extraLanguages.includes(locale))
+              } : current)
+            }}
+          >{periodLabels.additional}</Checkbox>
+          {extraChecked
+            ? <Popover
+              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.cost"
+              labelParams={costParams}
+              resolveText={resolveProductText}
+              trigger={(triggerProps) => <IconButton
+                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
+                variant="plain"
+                expanded={triggerProps.expanded}
+                icon={CircleHelp}
+                onSelect={triggerProps.onSelect}
+                resolveText={resolveProductText}
+                size="sm"
+              />}
+            />
+            : null}
+        </div>
+        : null}
 
       {/* The "applies from the next brief" sentence is an explanation, not a status: per UI spec
           v4 §7 it lives in a question mark, whose accessible name is a short label — the reader
           gets it without opening anything, and the panel stops restating it. */}
       <p className="mi-daily-briefing__settings-link">
+        <span>{text.generationSettings.noteLabel}</span>
         <Popover
           labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
           resolveText={resolveProductText}

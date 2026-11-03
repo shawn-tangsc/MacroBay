@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 import { DailyBriefingPage } from './DailyBriefingPage'
 
@@ -39,7 +41,7 @@ async function render(settingsView: DailyBriefingSettingsView = view) {
   }
   const onClose = vi.fn()
   await act(async () => {
-    root!.render(<DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={onClose} />)
+    root!.render(<ShellTimeZoneProvider timeZone="Asia/Shanghai"><DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={onClose} /></ShellTimeZoneProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return { client, onClose }
@@ -206,5 +208,21 @@ describe('daily briefing generation settings modal', () => {
     expect(pageLine, 'the page renders the same sentence').toBeDefined()
     act(() => pageRoot.unmount())
     pageHost.remove()
+  })
+
+  it('names the reader zone when the period carries none, and prints the value only once', async () => {
+    // A fresh install stores no zone; the chip must still name the offset the reader is in, not a
+    // bare "GMT". And the value is stated once, as its sentence — not as "08:00" plus "每天 08:00".
+    await render({
+      ...view,
+      generation: { periods: [{ ...view.generation.periods[0]!, generationTimeZone: null }] }
+    })
+    const chip = document.body.querySelector('.mi-daily-briefing__settings-zone')
+    expect(chip?.textContent).toBe('GMT+8')
+    expect(chip?.getAttribute('data-time-zone')).toBe('Asia/Shanghai')
+
+    const occurrences = (document.body.textContent ?? '').split(text.settings.periods.timeValue.replace('{time}', '08:00')).length - 1
+    expect(occurrences).toBe(1)
+    expect(document.body.textContent).not.toContain(`\n08:00`)
   })
 })
