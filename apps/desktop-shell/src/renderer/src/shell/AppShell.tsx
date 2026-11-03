@@ -32,7 +32,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
 import brandMarkUrl from '../assets/brand/mark.svg'
-import { platformText } from '../i18n/platformText'
+import { platformText, type PlatformText } from '../i18n/platformText'
 import { AppMenuBar } from './window/AppMenuBar'
 import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
@@ -106,7 +106,10 @@ import {
 import { AgentPage } from './agents/AgentPage'
 import { AssistantPage } from './assistants/AssistantPage'
 import { createConnectionCheckApiKeyOptions, selectDefaultConnectionCheckModelId } from './modelProviderConnectionCheck'
-import { formatProviderRuntimeCheckReason, resolveProviderRuntimeCheckReasonCode } from './providerRuntimeCheckReason'
+import { resolveProviderRuntimeCheckReasonCode } from './providerRuntimeCheckReason'
+import { describeConnectionStatus } from './modelConnectionStatus'
+import { resolveLiveText, type PlatformLiveText } from './liveText'
+import { useLiveNotice } from './useLiveNotice'
 import {
   sanitizeIpcErrorMessage,
   type ModelSyncErrorState
@@ -169,6 +172,7 @@ type AppShellNavigateDetail = {
 }
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
+
 
 function createEmptyProviderDraft(): ProviderDraft {
   return {
@@ -253,8 +257,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [isAddModelOpen, setIsAddModelOpen] = useState(false)
   const [editingModelId, setEditingModelId] = useState<string | null>(null)
   const [providerSearch, setProviderSearch] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<string | null>(null)
+  const liveNotice = useLiveNotice()
+  const [connectionStatus, setConnectionStatus] = useState<PlatformLiveText | null>(null)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [preserveProviderDraftForId, setPreserveProviderDraftForId] = useState<string | null>(null)
   const [isConnectionCheckOpen, setIsConnectionCheckOpen] = useState(false)
@@ -279,6 +283,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 提示与状态在渲染时解析：存的是「怎么生成这句话」，所以切语言后连历史提示一起变。
+  const noticeText = resolveLiveText(liveNotice.notice, t)
+  const connectionStatusText = resolveLiveText(connectionStatus, t)
   // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。
   const preferencesText = (key: string): string =>
     resolvePreferencesText(t.preferences as unknown as Record<string, unknown>, key)
@@ -560,13 +567,13 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
 
   async function updateSettings(patch: AppSettingsPatch): Promise<void> {
-    setNotice(null)
+    liveNotice.clear()
     try {
       const nextSettings = (await window.platform.settings.update(patch)) as AppSettings
       setSettings(nextSettings)
-      setNotice(t.status.saved)
+      liveNotice.showSaved()
     } catch (error) {
-      setNotice(proxyRejectionNotice(error, t.preferences) ?? t.status.failed)
+      liveNotice.showSaveFailed(error)
     }
   }
 
@@ -665,7 +672,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       await reloadProviders(selectedProvider.id)
       setProviderDraft((current) => ({ ...current, enabled: true }))
     } catch (error) {
-      setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
       return
     }
     await startConnectionCheck({ enabledOverride: true })
@@ -707,12 +714,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     // PLAT-61：拉取模型清单是只读操作 ⇒ 只要求 baseUrl + Key，停用状态也允许（便于先看免费模型）。
     if (!selectedProvider.baseUrl.trim() || !(selectedProvider.hasApiKey || apiKeyDraft.trim())) {
-      setConnectionStatus(t.models.modelSyncNeedsApiKey)
+      setConnectionStatus(() => (current: PlatformText) => current.models.modelSyncNeedsApiKey)
       return
     }
 
     setIsSyncingModels(true)
-    setNotice(null)
+    liveNotice.clear()
     setModelSyncError(null)
     try {
       setPreserveProviderDraftForId(selectedProvider.id)
@@ -759,7 +766,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       if (hasDiff || options.openDrawerWhenDiff !== false) {
         setIsModelSyncOpen(true)
       } else {
-        setNotice(t.models.modelSyncUpToDate)
+        liveNotice.show((current) => current.models.modelSyncUpToDate)
       }
     } catch (error) {
       const friendly = sanitizeIpcErrorMessage(error)
@@ -795,7 +802,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       }
       await reloadProviders(selectedProvider.id)
       const removed = plan.toRemove.length
-      setNotice(t.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
+      liveNotice.show((current) => current.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
       if (options.closeDrawer !== false) setIsModelSyncOpen(false)
     } catch (error) {
       const friendly = sanitizeIpcErrorMessage(error)
@@ -882,7 +889,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     try {
       await window.platform.agents.setModelGatewayEnabled(true)
     } catch (error) {
-      setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
       return
     }
     await startConnectionCheck()
@@ -898,19 +905,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   function openConnectionCheck(): void {
     if (!selectedProvider) return
     if (!providerConnectionTestable) {
-      setConnectionStatus(t.models.connectionNeedsConfig)
+      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
       return
     }
 
     const defaultModelId = selectDefaultConnectionCheckModelId(selectedProvider)
     if (!defaultModelId) {
-      setConnectionStatus(t.models.noChatModelForConnectionCheck)
+      setConnectionStatus(() => (current: PlatformText) => current.models.noChatModelForConnectionCheck)
       return
     }
 
     const apiKeyOptions = createConnectionCheckApiKeyOptions(selectedProvider, apiKeyDraft)
     if (apiKeyOptions.length === 0) {
-      setConnectionStatus(t.models.connectionNeedsConfig)
+      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
       return
     }
 
@@ -952,27 +959,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       })) as import('@platform/ai/agent-platform/runtime/compatibility/providerRuntimeCheckTypes').ProviderRuntimeCheckReport
       const overallOk = report.finalCompatibility.selectable
       // PLAT-61：最终结论文案同样「把原因说出来」（例如供应商停用），不再只回英文 summary。
-      const finalReason = formatProviderRuntimeCheckReason(
-        resolveProviderRuntimeCheckReasonCode({
-          status: report.finalCompatibility.status,
-          summary: report.finalCompatibility.summary,
-          providerEnabled: options.enabledOverride === true || providerDraft.enabled,
-          hasApiKey: connectionCheckApiKeyOptions.length > 0
-        }),
-        t.models
-      )
+      const reasonCode = resolveProviderRuntimeCheckReasonCode({
+        status: report.finalCompatibility.status,
+        summary: report.finalCompatibility.summary,
+        providerEnabled: options.enabledOverride === true || providerDraft.enabled,
+        hasApiKey: connectionCheckApiKeyOptions.length > 0
+      })
       const chatOk = report.ordinaryChat.status === 'ready'
-      const message = overallOk
-        ? t.models.connectionCheckAgentReady
-        : chatOk
-          ? t.models.connectionCheckAgentMixed
-          : finalReason || report.finalCompatibility.summary || t.models.connectionCheckAgentNotReady
-      setConnectionCheckResult({ ok: overallOk, message, report })
-      setConnectionStatus(chatOk && overallOk ? null : message)
+      const messageFor = describeConnectionStatus({ overallOk, chatOk, reasonCode, summary: report.finalCompatibility.summary })
+      setConnectionCheckResult({ ok: overallOk, message: messageFor(t), report })
+      setConnectionStatus(chatOk && overallOk ? null : () => messageFor)
     } catch (error) {
-      const message = sanitizeIpcErrorMessage(error) ?? t.status.failed
-      setConnectionCheckResult({ ok: false, message })
-      setConnectionStatus(message)
+      setConnectionCheckResult({ ok: false, message: sanitizeIpcErrorMessage(error) ?? t.status.failed })
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
     } finally {
       setIsTestingConnection(false)
     }
@@ -1013,7 +1012,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     await window.platform.modelProviders.removeModel(selectedProvider.id, modelId)
     await reloadProviders(selectedProvider.id)
-    setNotice(t.models.modelRemovedNotice(1))
+    liveNotice.show((current) => current.models.modelRemovedNotice(1))
   }
 
   /**
@@ -1154,9 +1153,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         apiKeyDraft={apiKeyDraft}
         modelGroups={modelGroups}
         collapsedGroups={collapsedModelGroups}
-        connectionStatus={connectionStatus}
+        connectionStatus={connectionStatusText}
         isSyncingModels={isSyncingModels}
-        notice={notice}
+        notice={noticeText}
         syncError={modelSyncError}
         onProviderSearchChange={setProviderSearch}
         onSelectProvider={selectProvider}
@@ -1334,7 +1333,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       <section className="settings-detail-pane preferences-pane">
         <div className="section-heading">
           <span>{t.settings.basicSettings}</span>
-          {notice ? <small>{notice}</small> : null}
+          {noticeText ? <small>{noticeText}</small> : null}
         </div>
 
         <div className="preference-section">
@@ -1467,7 +1466,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     return (
       <NotificationSettingsScreen
         title={t.settings.notifications}
-        notice={notice}
+        notice={noticeText}
         language={settings.language}
       />
     )

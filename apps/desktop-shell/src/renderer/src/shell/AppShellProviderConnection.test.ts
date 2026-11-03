@@ -31,7 +31,9 @@ describe('AppShell provider connection testing', () => {
 
     // 连接检查抽屉仍由 `openConnectionCheck` 驱动，且草稿不可测时只写状态、不开抽屉。
     const connectionCheck = shell.slice(shell.indexOf('function openConnectionCheck()'))
-    expect(connectionCheck).toMatch(/if \(!providerConnectionTestable\)[\s\S]*setConnectionStatus\(t\.models\.connectionNeedsConfig\)/)
+    // 状态行现在存的是「按当前语言生成这句话」的函数，不再是当场解析好的句子，
+    // 所以只锚「写状态 + 用 connectionNeedsConfig 这个键」，不锚具体调用形状。
+    expect(connectionCheck).toMatch(/if \(!providerConnectionTestable\)[\s\S]*setConnectionStatus\([\s\S]*connectionNeedsConfig/)
     expect(connectionCheck).toContain('setIsConnectionCheckOpen(true)')
   })
 })
