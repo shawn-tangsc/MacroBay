@@ -1,13 +1,19 @@
+import { useRef } from 'react'
+
 import { Button } from 'antd'
-import { RefreshCw } from 'lucide-react'
+import { Info, RefreshCw } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
-import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
+
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
+import { AnchoredPanel } from './anchored-panel'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
 
 type Text = {
@@ -30,7 +36,13 @@ type Text = {
   observedAt: string
   etfFlow: string
   chartWindow: string
-  chartScopeNote: string
+  infoAria: string
+  chartScopeNoteMain: string
+  chartScopeNoteEtf: string
+  columnScopeNote: string
+  dailyPanelTitle: string
+  dailyUnits: string
+  dailyFundsShort: string
   fundsColumn: string
   fundsScope: string
   btc: string
@@ -40,10 +52,8 @@ type Text = {
   notComparable: string
   expandDaily: string
   collapseDaily: string
-  sameSource: string
   dailyCaption: string
   dateColumn: string
-  utcDays: string
   dailyEmpty: string
   a11yNoFlow: string
   a11yLabel: string
@@ -83,10 +93,6 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     </div>
   </section>
 
-  // Filled once: the chart note and the table note render this same string, so "word for word
-  // identical" is a property of the structure rather than of two careful copies.
-  const notComparable = fillLabelParams(text.notComparable, { row: text.stablecoin })
-
   return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
@@ -100,7 +106,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         <StablecoinTable state={state} text={text} />
         <EtfTable etf={state.etf} text={text} onRetry={onRefresh} />
       </div>
-      <EtfFlow etf={state.etf} flowHistory={state.flowHistory} text={text} notComparable={notComparable} onRetry={onRefresh} />
+      <EtfFlow etf={state.etf} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
     </div>
   </section>
 }
@@ -183,34 +189,60 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
 }
 
 /**
- * The chart, its two notes and the daily table. All of them read the same `flowHistory.rows`
- * handed down by the projection — the seven-day window is cut once, in the model, so the bar
- * labels and the table cannot show different days.
+ * The chart, the info bubble and the daily table. All of them read the same
+ * `flowHistory.rows` handed down by the projection — the seven-day window is cut once, in the
+ * model — and the table's trigger sits in the title row while its panel hangs off this section's
+ * bottom edge, so opening it moves nothing in the card.
  */
-function EtfFlow({ etf, flowHistory, text, notComparable, onRetry }: {
+function EtfFlow({ etf, flowHistory, text, onRetry }: {
   etf: AvailableState['etf']
   flowHistory?: AvailableState['flowHistory']
   text: Text
-  notComparable: string
   onRetry: () => void
 }): React.ReactElement {
+  const sectionRef = useRef<HTMLElement>(null)
+  const resolveText = useProductTextKey()
   if (etf === 'unavailable' || !flowHistory) {
     return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
       <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />
     </section>
   }
   const rows = flowHistory.rows
-  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available">
-    <header><h3>{text.etfFlow}</h3><span className="mi-capital-conditions__chart-window">{text.chartWindow}</span></header>
+  const key = (name: string): string => `pages.intelligence.portal.dashboard.capitalConditions.${name}`
+  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available" ref={sectionRef}>
+    <header>
+      <h3>{text.etfFlow}</h3>
+      {/* Everything the numbers cannot carry themselves lives here: what the series are, which row
+          they must not be reconciled with, and what each column covers. */}
+      <Popover
+        lines={[
+          { labelKey: key('chartScopeNoteMain') },
+          { labelKey: key('chartScopeNoteEtf') },
+          { labelKey: key('notComparable'), params: { row: text.stablecoin } },
+          { labelKey: key('columnScopeNote') }
+        ]}
+        resolveText={resolveText}
+        trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
+          icon={Info} size="sm" resolveText={resolveText} />} />
+      <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
+      {rows.length > 0
+        ? <AnchoredPanel anchor={sectionRef} labelKey={key('dailyPanelTitle')} resolveText={resolveText}
+            trigger={(triggerProps) => <button type="button" className="text-action mi-capital-conditions__daily-button"
+              ref={triggerProps.ref} onClick={triggerProps.onSelect} onKeyDown={triggerProps.onKeyDown}
+              aria-expanded={triggerProps.expanded} aria-haspopup={triggerProps.hasPopup}
+              {...(triggerProps.controls === undefined ? {} : { 'aria-controls': triggerProps.controls })}>
+              {triggerProps.expanded ? text.collapseDaily : text.expandDaily}
+            </button>}>
+            <CapitalFlowDailyTable rows={rows} text={text} />
+          </AnchoredPanel>
+        : <p className="mi-capital-conditions__daily-empty">{text.dailyEmpty}</p>}
+    </header>
     <div className="mi-capital-conditions__chart-legend">
       <span><i data-series="funds" />{text.fundsColumn}</span>
       <span><i data-series="btc" />{text.btc}</span>
       <span><i data-series="eth" />{text.eth}</span>
     </div>
     <CapitalFlowChart rows={rows} text={text} />
-    <p className="mi-capital-conditions__chart-scope">{text.chartScopeNote}</p>
-    <p className="mi-capital-conditions__not-comparable">{notComparable}</p>
-    <CapitalFlowDailyTable rows={rows} text={text} notComparable={notComparable} />
   </section>
 }
 

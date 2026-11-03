@@ -1,0 +1,18 @@
+/* 锚定内容面板：位置与尺寸由组件按锚点算出（fixed），这里只管外观。 */
+.mi-anchored-panel {
+  position: fixed;
+  z-index: 1400;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
+  color: var(--text);
+  overflow: auto;
+}
+
+.mi-anchored-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

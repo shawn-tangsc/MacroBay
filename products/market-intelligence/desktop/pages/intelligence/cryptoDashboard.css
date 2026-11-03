@@ -209,7 +209,8 @@
 .mi-capital-conditions__not-comparable { margin: 0; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.45; }
 .mi-capital-conditions__daily { display: grid; gap: 6px; min-width: 0; }
 .mi-capital-conditions__daily-toggle { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.mi-capital-conditions__daily-button { justify-self: start; padding: 0; }
+/* The trigger sits at the right end of the title row; the window line keeps its place. */
+.mi-capital-conditions__daily-button { margin-left: auto; padding: 0; white-space: nowrap; }
 .mi-capital-conditions__daily-source { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__daily-table { width: 100%; border-collapse: collapse; table-layout: auto; }
 .mi-capital-conditions__daily-table caption { padding: 0 0 4px; color: var(--mi-dashboard-muted); font-size: 10px; text-align: left; }

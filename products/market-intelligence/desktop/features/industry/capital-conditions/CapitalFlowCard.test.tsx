@@ -74,6 +74,12 @@ function mount(text = cardText(), rows: readonly FlowChartRow[] = plainRows) {
   return container
 }
 
+
+/** jsdom's `.click()` reports `detail: 0`, which reads as a keyboard activation. */
+function clickLikeMouse(element: HTMLElement): void {
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))
+}
+
 describe('bar-top labels', () => {
   it('labels three readings and nothing else', () => {
     const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
@@ -142,49 +148,47 @@ describe('accessible names', () => {
 })
 
 describe('daily table', () => {
-  it('renders nothing until the button is pressed, and keeps focus on the button', async () => {
+  it('keeps the table out of the card until the title-row button is pressed', async () => {
     const container = mount()
+    const card = container.querySelector('.mi-capital-conditions')!
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(button.hasAttribute('aria-controls')).toBe(false)
-    expect(container.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
+    expect(document.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
+    // The trigger sits in the title row, above the chart.
+    expect(button.closest('header')).toBe(container.querySelector('header'))
 
     button.focus()
-    await act(async () => button.click())
-    const table = container.querySelector('.mi-capital-conditions__daily-table')!
+    await act(async () => clickLikeMouse(button))
+    const table = document.querySelector<HTMLElement>('.mi-capital-conditions__daily-table')!
     expect(table).not.toBeNull()
+    expect(card.contains(table)).toBe(false)
     expect(button.getAttribute('aria-expanded')).toBe('true')
-    expect(button.getAttribute('aria-controls')).toBe(container.querySelector('.mi-capital-conditions__daily-table')?.closest('[id]')?.id ?? '')
+    expect(button.getAttribute('aria-controls')).toBe(table.closest('[id]')?.id ?? '')
     expect(document.activeElement).toBe(button)
 
-    // One tab stop for the whole table: the next tabbable thing after the button is the table.
-    const tabbables = [...container.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
-    expect(tabbables[tabbables.indexOf(button) + 1]).toBe(table)
-    expect(table.tagName).toBe('TABLE')
-
-    await act(async () => button.click())
-    expect(container.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
+    await act(async () => clickLikeMouse(button))
+    expect(document.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
     expect(button.getAttribute('aria-expanded')).toBe('false')
     expect(button.hasAttribute('aria-controls')).toBe(false)
   })
 
   it('shows the same amount in the label and in the cell', async () => {
     const container = mount()
-    const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
     const labels = [...container.querySelectorAll<HTMLElement>('[data-flow-label]')].map((node) => node.textContent)
-    await act(async () => button.click())
-    const rows = [...container.querySelectorAll<HTMLElement>('.mi-capital-conditions__daily-table tbody tr')]
+    await act(async () => clickLikeMouse(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!))
+    const rows = [...document.querySelectorAll<HTMLElement>('.mi-capital-conditions__daily-table tbody tr')]
     const cells = rows.map((rowNode) => rowNode.querySelectorAll('td')[0]?.textContent ?? '')
     for (const label of labels) expect(cells).toContain(label)
   })
 
   it('names every cell with amount and scope', async () => {
     const container = mount()
-    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!.click())
-    const cell = container.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody td')!
+    await act(async () => clickLikeMouse(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!))
+    const cell = document.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody td')!
     expect(cell.getAttribute('aria-label')).toBe('净流入 3.124 亿美元，全部美元稳定币')
     expect(cell.textContent).toBe('+$312.4M')
-    const dateCell = container.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody th')!
+    const dateCell = document.querySelector<HTMLElement>('.mi-capital-conditions__daily-table tbody th')!
     expect(dateCell.textContent).toBe('10-26')
     expect(dateCell.getAttribute('data-trading-date')).toBe('2026-10-26')
   })
@@ -196,20 +200,18 @@ describe('daily table', () => {
   })
 })
 
-describe('the two notes', () => {
-  it('are the same string and quote the row by the row key', () => {
+describe('the explanation lives in the title info bubble', () => {
+  it('keeps no sentence in the card body', () => {
     const container = mount()
-    const chartNote = container.querySelector('.mi-capital-conditions__not-comparable')!
-    expect(chartNote.textContent).toBe('与卡片「稳定币（USDT + USDC）」行不可相互核对：那行含今天。')
-    expect(chartNote.textContent).not.toContain('{row}')
+    const body = container.textContent ?? ''
+    expect(body).not.toContain(zhText.chartScopeNoteMain)
+    expect(body).not.toContain(zhText.columnScopeNote)
+    expect(body).not.toContain('不可相互核对')
   })
 
-  it('follow the row name when it changes', async () => {
-    const container = mount(cardText({ stablecoin: '稳定币（测试行名）' }))
-    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!.click())
-    const chartNote = container.querySelector('.mi-capital-conditions__not-comparable')?.textContent
-    const tableNote = container.querySelector('.mi-capital-conditions__daily-note')?.textContent
-    expect(chartNote).toBe('与卡片「稳定币（测试行名）」行不可相互核对：那行含今天。')
-    expect(tableNote).toBe(chartNote)
+  it('names the info button for screen readers', () => {
+    const container = mount()
+    const info = container.querySelector<HTMLButtonElement>('header button[aria-label]')
+    expect(info?.getAttribute('aria-label')).toBe(zhText.infoAria)
   })
 })

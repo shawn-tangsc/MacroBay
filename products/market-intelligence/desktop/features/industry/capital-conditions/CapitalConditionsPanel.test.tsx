@@ -155,9 +155,10 @@ describe('CapitalConditionsPanel', () => {
   it('defaults the shared chart to the latest seven complete days without a window control', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
-    // The only control here is the daily table's toggle; there is no window switcher.
-    expect((markup.match(/<button/g) ?? []).length).toBe(1)
+    // Two controls in the title row: the info bubble and the daily-data trigger. No window switcher.
+    expect(markup).toContain('aria-haspopup="dialog"')
     expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('data-etf-flow-window=')
     expect((markup.match(/class="mi-capital-conditions__chart-day"/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="funds" data-flow/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="btc" data-flow/g) ?? []).length).toBe(7)
