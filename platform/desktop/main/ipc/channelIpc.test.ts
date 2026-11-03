@@ -4,7 +4,7 @@ import type { ChannelIpcPorts } from './channelIpc'
 
 const { registerChannelIpc } = await import('./channelIpc')
 
-/** 23 个渠道管理通道：顺序即注册顺序。 */
+/** 25 个渠道管理通道：顺序即注册顺序。 */
 const MANAGEMENT_CHANNELS = [
   'platform:channels-catalog',
   'platform:channels-list',
@@ -25,6 +25,10 @@ const MANAGEMENT_CHANNELS = [
   'platform:channels-runtime-status',
   'platform:channels-list-delivery-attempts',
   'platform:channels-list-delivery-audits',
+  // 设置页「日志 → 运行异常」的只读一页（keyset 游标，服务端夹 limit ≤ 200）。
+  'platform:channels-list-runtime-audits',
+  // 设置页「发一条测试消息」真走一次投递（只发，不改配置）。
+  'platform:channels-send-test-message',
   'platform:channels-list-policies',
   'platform:channels-delete-policy',
   'platform:channels-list-conversations',
@@ -87,6 +91,8 @@ const MANAGEMENT_METHODS = [
   'runtimeStatus',
   'listDeliveryAttempts',
   'listDeliveryAudits',
+  'listRuntimeAudits',
+  'sendTestMessage',
   'listPolicies',
   'deletePolicy',
   'listConversations',
@@ -116,7 +122,7 @@ function setup() {
 const event = { sender: { id: 42 } } as never
 
 describe('channel ipc surface', () => {
-  it('registers 23 management channels then 3 inbound channels, in that order', () => {
+  it('registers 25 management channels then 3 inbound channels, in that order', () => {
     const { channels, ipcMain } = record()
     const management = sentinelService('management', MANAGEMENT_METHODS)
     const inbound = sentinelService('inbound', INBOUND_METHODS)
@@ -147,6 +153,8 @@ describe('channel ipc surface', () => {
       'platform:channels-runtime-status': { id: 'channel-1' },
       'platform:channels-list-delivery-attempts': { id: 'channel-1' },
       'platform:channels-list-delivery-audits': { id: 'channel-1' },
+      'platform:channels-list-runtime-audits': { id: 'channel-1', limit: 20, cursor: null },
+      'platform:channels-send-test-message': { id: 'channel-1', text: '测试消息' },
       'platform:channels-list-policies': { id: 'channel-1', limit: 5 },
       'platform:channels-delete-policy': { channelId: 'channel-1', policyId: 'policy-1', actorId: 'actor' },
       'platform:channels-list-conversations': { id: 'channel-1', limit: 5 },
@@ -220,6 +228,8 @@ function managementOf(channel: string): string {
     'platform:channels-runtime-status': 'runtimeStatus',
     'platform:channels-list-delivery-attempts': 'listDeliveryAttempts',
     'platform:channels-list-delivery-audits': 'listDeliveryAudits',
+    'platform:channels-list-runtime-audits': 'listRuntimeAudits',
+    'platform:channels-send-test-message': 'sendTestMessage',
     'platform:channels-list-policies': 'listPolicies',
     'platform:channels-delete-policy': 'deletePolicy',
     'platform:channels-list-conversations': 'listConversations',
