@@ -33,6 +33,24 @@ export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: D
   const byId = new Map(progress.stages.map((stage) => [stage.id, stage]))
   const copy = text.generationProgress
   return <div className="mi-brief-steps" role="status" data-live-steps="true">
+    <div className="mi-brief-steps__head">
+      {/* The trigger comes before the title it explains, and before the list in DOM order, so the
+          keyboard reaches it in the same order the eye does. */}
+      {resolveText ? <Popover
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationProgress.note"
+        resolveText={resolveText}
+        trigger={(triggerProps) => <IconButton
+          {...triggerProps}
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.progress"
+          dataAttributes={{ 'data-steps-help': 'true' }}
+          icon={CircleHelp}
+          resolveText={resolveText}
+          size="sm"
+          variant="plain"
+        />}
+      /> : null}
+      <h3 className="mi-brief-steps__title">{copy.title}</h3>
+    </div>
     <ol className="mi-brief-steps__list">
       {briefingGenerationDisplayRows.map((row) => {
         const stages = row.stages.map((id) => byId.get(id)).filter((stage) => stage !== undefined)
@@ -46,22 +64,6 @@ export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: D
         </li>
       })}
     </ol>
-    {/* Says out loud what the rows cannot, on request: a row that holds still is still working. */}
-    {resolveText ? <div className="mi-brief-steps__note-row">
-      <Popover
-        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationProgress.note"
-        resolveText={resolveText}
-        trigger={(triggerProps) => <IconButton
-          {...triggerProps}
-          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.progress"
-          dataAttributes={{ 'data-steps-help': 'true' }}
-          icon={CircleHelp}
-          resolveText={resolveText}
-          size="sm"
-          variant="plain"
-        />}
-      />
-    </div> : null}
   </div>
 }
 

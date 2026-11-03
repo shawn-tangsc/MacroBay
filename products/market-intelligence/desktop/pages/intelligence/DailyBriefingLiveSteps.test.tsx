@@ -78,7 +78,16 @@ it('never invents a duration or a percentage', async () => {
   expect(container.textContent).not.toMatch(/\d+%/)
   // The long explanation moved behind the help trigger: it must not sit on the page.
   expect(container.querySelector('[data-live-steps-note]')).toBeNull()
-  expect(container.querySelector('[data-steps-help]')).not.toBeNull()
+  const help = container.querySelector('[data-steps-help]')
+  expect(help).not.toBeNull()
+  // The trigger sits before the title it explains, and before the list, so the visual order and the
+  // keyboard order are the same one.
+  const head = container.querySelector('.mi-brief-steps__head')!
+  // The popover wraps its trigger in an anchor; the anchor is the first child, the title second.
+  expect(head.firstElementChild!.contains(help)).toBe(true)
+  expect(head.firstElementChild!.nextElementSibling?.tagName.toLowerCase()).toBe('h3')
+  expect(head.textContent).toContain(text.generationProgress.title)
+  expect(head.compareDocumentPosition(container.querySelector('ol')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('says a skipped-only row was not needed instead of claiming it succeeded', async () => {

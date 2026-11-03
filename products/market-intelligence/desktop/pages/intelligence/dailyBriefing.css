@@ -210,3 +210,7 @@
 
 /* 回退到英语是状态，不是说明：一行灰字、无边框、无图标，常驻可见（规范 §7 第三档）。 */
 .mi-daily-briefing-page__language-fallback { margin: 0 0 10px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.5; }
+
+/* 步骤面板：问号在标题前、同一行最左；它是标题的帮助，不是列表的孤儿。 */
+.mi-brief-steps__head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mi-brief-steps__title { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }

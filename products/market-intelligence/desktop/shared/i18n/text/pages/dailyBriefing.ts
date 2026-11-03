@@ -156,6 +156,7 @@ export const dailyBriefingText = {
       }
     },
     generationProgress: {
+      title: '生成阶段',
       running: '进行中',
       waiting: '等待',
       elapsed: '已用 {duration}',
@@ -382,6 +383,7 @@ export const dailyBriefingText = {
       }
     },
     generationProgress: {
+      title: 'Generation steps',
       running: 'Running',
       waiting: 'Waiting',
       elapsed: 'Elapsed {duration}',
