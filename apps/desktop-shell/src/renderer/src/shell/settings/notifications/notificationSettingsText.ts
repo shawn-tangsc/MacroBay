@@ -97,6 +97,8 @@ export type NotificationSettingsText = {
   desktopQueued: string
   desktopFailed: (reason: string) => string
   reasonUnknown: string
+  /** 写操作没成功（订阅/提示开关/推送频道）：一句话说没存上，不给内部码，也不假装成功。 */
+  writeFailed: string
   retry: string
   loading: string
   sendTest: string
@@ -183,6 +185,7 @@ const zh: NotificationSettingsText = {
   desktopQueued: '桌面通知已交给系统，未确认显示。',
   desktopFailed: (reason) => `桌面通知发送失败：${reason}`,
   reasonUnknown: '原因不明',
+  writeFailed: '这次没存上，可以再试一次',
   retry: '重试',
   loading: '正在读取通知设置…',
   sendTest: '发送测试通知',
@@ -272,6 +275,7 @@ const en: NotificationSettingsText = {
   desktopQueued: 'Handed to the system; display unconfirmed.',
   desktopFailed: (reason) => `The desktop notification failed: ${reason}`,
   reasonUnknown: 'reason unknown',
+  writeFailed: 'that was not saved; try again',
   retry: 'Retry',
   loading: 'Reading the notification settings…',
   sendTest: 'Send a test notification',

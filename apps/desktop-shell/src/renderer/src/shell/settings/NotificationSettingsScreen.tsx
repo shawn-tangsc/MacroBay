@@ -32,8 +32,15 @@ export function NotificationSettingsScreen(props: {
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
   const { state, reload, setSubscription, setToast, setPushChannel } = useNotificationSettingsData(client)
   const [receipt, setReceipt] = useState<string | null>(null)
+  /** 写操作没存上：勾选与开关都不许自己亮起来，就地告诉他「没存上」。 */
+  const [writeFailed, setWriteFailed] = useState(false)
   // 失败时刻按**读者的设置时区**写：这是给人看的时间，不是记账。
   const timeZone = useShellTimeZone()
+
+  const runWrite = async (write: Promise<{ ok: boolean }>): Promise<void> => {
+    const result = await write
+    setWriteFailed(!result.ok)
+  }
 
   const channelRow =
     state.status === 'ready'
@@ -73,13 +80,19 @@ export function NotificationSettingsScreen(props: {
 
       {state.status === 'ready' ? (
         <>
+          {/* 写失败只有一句、只在原地：不把勾选/开关自己点亮，也不给内部码。 */}
+          {writeFailed ? (
+            <p className="notification-settings-write-failed" role="alert" data-notification-write-failed>
+              {text.writeFailed}
+            </p>
+          ) : null}
           <DeliveryRows
             text={text}
             toastEnabled={state.data.toastEnabled}
-            onToastChange={(next) => void setToast(next)}
+            onToastChange={(next) => void runWrite(setToast(next))}
             channel={channelRow}
             channelTimeZone={timeZone}
-            onSelectChannel={(channelId) => void setPushChannel(channelId)}
+            onSelectChannel={(channelId) => void runWrite(setPushChannel(channelId))}
           />
 
           <div className="notification-settings-test">
@@ -111,7 +124,7 @@ export function NotificationSettingsScreen(props: {
                   channelReady
                 })}
                 text={text}
-                onToggle={(id, level, next) => void setSubscription(id, level, next)}
+                onToggle={(id, level, next) => void runWrite(setSubscription(id, level, next))}
               />
             )}
             {/* 列消失 ≠ 订阅消失：不写这句，读者会以为勾丢了，回头再勾一遍。 */}

@@ -53,12 +53,23 @@ export type NotificationSettingsState =
   | { status: 'error' }
   | { status: 'ready'; data: NotificationSettingsData }
 
+/**
+ * 写操作的回执。**只有主进程说 `ok: true` 才算存上**：
+ * - 订阅写入失败时是正常返回 `{ ok: false, reasonCode }`，不抛错——不看它就会把「没存上」
+ *   显示成勾上了（勾选状态是乐观更新，下一帧看起来已经生效，其实库里没有）；
+ * - 提示开关与推送频道失败时是抛错；抛出也要变成同一张回执，别让调用方吞掉。
+ */
+export type NotificationWriteResult = { ok: true } | { ok: false }
+
+const WRITE_OK: NotificationWriteResult = { ok: true }
+const WRITE_FAILED: NotificationWriteResult = { ok: false }
+
 export function useNotificationSettingsData(client: NotificationSettingsClient): {
   state: NotificationSettingsState
   reload: () => void
-  setSubscription: (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => Promise<void>
-  setToast: (next: boolean) => Promise<void>
-  setPushChannel: (channelId: string) => Promise<void>
+  setSubscription: (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => Promise<NotificationWriteResult>
+  setToast: (next: boolean) => Promise<NotificationWriteResult>
+  setPushChannel: (channelId: string) => Promise<NotificationWriteResult>
 } {
   const [state, setState] = useState<NotificationSettingsState>({ status: 'loading' })
   const [nonce, setNonce] = useState(0)
@@ -117,8 +128,15 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
   }, [])
 
   const setSubscription = useCallback(
-    async (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => {
-      await client.setSubscription?.(id, { [level]: next })
+    async (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean): Promise<NotificationWriteResult> => {
+      let result: unknown
+      try {
+        result = await client.setSubscription?.(id, { [level]: next })
+      } catch {
+        return WRITE_FAILED
+      }
+      // 订阅写入失败是**正常返回** `{ ok:false, reasonCode }`：不看它，勾选会亮着而库里没有。
+      if (typeof result === 'object' && result !== null && (result as { ok?: boolean }).ok === false) return WRITE_FAILED
       setState((current) => {
         if (current.status !== 'ready') return current
         const previous = current.data.subscriptions[id] ?? {}
@@ -130,26 +148,37 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
           }
         }
       })
+      return WRITE_OK
     },
     [client]
   )
 
   const setToast = useCallback(
-    async (next: boolean) => {
-      await client.setToastEnabled?.(next)
+    async (next: boolean): Promise<NotificationWriteResult> => {
+      try {
+        await client.setToastEnabled?.(next)
+      } catch {
+        return WRITE_FAILED
+      }
       setState((current) =>
         current.status === 'ready' ? { status: 'ready', data: { ...current.data, toastEnabled: next } } : current
       )
+      return WRITE_OK
     },
     [client]
   )
 
   const setPushChannel = useCallback(
-    async (channelId: string) => {
-      await client.setPushChannel?.(channelId)
+    async (channelId: string): Promise<NotificationWriteResult> => {
+      try {
+        await client.setPushChannel?.(channelId)
+      } catch {
+        return WRITE_FAILED
+      }
       setState((current) =>
         current.status === 'ready' ? { status: 'ready', data: { ...current.data, channelId } } : current
       )
+      return WRITE_OK
     },
     [client]
   )

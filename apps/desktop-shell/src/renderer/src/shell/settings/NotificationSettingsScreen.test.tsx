@@ -478,3 +478,55 @@ describe('the channel column', () => {
     expect(container.textContent).toContain('这条不会到手机')
   })
 })
+
+/**
+ * 写操作必须看回执。
+ *
+ * 订阅写入失败时是**正常返回** `{ ok:false, reasonCode }`（不抛错），提示开关失败时是抛错。
+ * 两种都不能让勾选/开关自己亮起来：这一屏的每个勾都是「以后会这样发生」的承诺，
+ * 亮着而库里没有，就是又一次「界面说存好了」。
+ */
+describe('a write that did not land does not leave the control looking saved', () => {
+  it('keeps the record box unchecked and says it was not saved when the write is refused', async () => {
+    const container = await mount({
+      // 只有 `notifyOnlyIfSubscribed` 的事件，记录格才是可勾的控件（其余是无条件记录的文字）。
+      listEventCatalog: () => Promise.resolve([entry({ notifyOnlyIfSubscribed: true })]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
+      setSubscription: async () => ({ ok: false, reasonCode: 'scope-mismatch' })
+    })
+
+    const box = container.querySelector('input[type="checkbox"][aria-label*="记录"]') as HTMLInputElement
+    await act(async () => {
+      box.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-notification-write-failed]')?.textContent).toContain(
+      notificationSettingsText['zh-CN'].writeFailed
+    )
+    expect((container.querySelector('input[type="checkbox"][aria-label*="记录"]') as HTMLInputElement).checked).toBe(false)
+    // 内部原因码不上屏。
+    expect(container.textContent).not.toContain('scope-mismatch')
+  })
+
+  it('keeps the toast switch off and says it was not saved when the write throws', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
+      setToastEnabled: async () => {
+        throw new Error('ipc-unavailable')
+      }
+    })
+
+    const toastSwitch = container.querySelector('[data-row="toast"] [role="switch"]') as HTMLElement | null
+    await act(async () => {
+      toastSwitch?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-notification-write-failed]')).not.toBeNull()
+    expect(container.textContent).not.toContain('ipc-unavailable')
+  })
+})
