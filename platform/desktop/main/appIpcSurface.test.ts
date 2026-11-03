@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { IpcChannels } from '../ipc/channels'
+import type { PlatformApi } from '../preload'
 
 /**
  * Source-text assertions below spell out multi-line snippets with `\n`. A Windows checkout
@@ -41,7 +42,18 @@ const windowIpcSource = readSource('ipc/windowIpc.ts')
 const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, ' ')
 const looseIndexOf = (source: string, needle: string): number =>
   collapseWhitespace(source).indexOf(collapseWhitespace(needle))
-const preloadSource = readSource('../preload/index.ts')
+/**
+ * preload 已按命名空间分片：`index.ts` 只留装配，`agentNamespaces.ts` 装 Agent/Assistant 两个受保护面。
+ *
+ * 这些断言必须读**合并文本**：读单文件的话，搬一次文件就会被判成「接缝丢了接线」，
+ * 而删掉断言让它绿才是真的丢证据。分片列表就是这条接缝的清单，新增分片要加在这里。
+ */
+const PRELOAD_SHARDS = [
+  '../preload/index.ts',
+  '../preload/agentNamespaces.ts',
+  '../preload/namespaces/notifications.ts'
+] as const
+const preloadSource = PRELOAD_SHARDS.map(readSource).join('\n')
 /**
  * 删除已读是**破坏性**通道，必须能一眼看出它落在哪一层：
  * 渲染层只经 preload → 主进程 handler → 运行时，不许绕过去直接写文件。
@@ -802,5 +814,121 @@ describe('notification delete-read surface', () => {
     expect(readSource('../preload/namespaces/notifications.ts')).toContain(
       'deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)'
     )
+  })
+})
+
+/**
+ * 拆分 preload 不许改形状：`agents` / `assistants` 两个命名空间的成员集合逐字锁死。
+ *
+ * 两向都查：`satisfies` 保证「列出的名字都真的存在」，`Exclude<keyof …, 列出的>` 保证「没有漏掉任何一个」。
+ * 谁把方法搬丢、或改了名字，这里编译期就红——比逐个断言 `IpcChannels.*` 更早一步。
+ *
+ * 为什么不用手写返回类型标注去「保住」形状：那会把命名空间整体退化成 `any`，
+ * 正好抵消「跨进程返回值必须有类型」这条（今晚 8 条重复频道就是这么来的）。
+ */
+const AGENT_API_KEYS = [
+  'getState',
+  'getRuntimeSnapshot',
+  'getChannelRuntimeSnapshot',
+  'restartChannelRuntime',
+  'listToolApprovals',
+  'resolveToolApproval',
+  'listAgents',
+  'createAgent',
+  'listTasks',
+  'getTaskLogs',
+  'previewTaskSchedule',
+  'listTaskPage',
+  'getTaskDeliveryAttempts',
+  'retryTaskDelivery',
+  'listTaskMutationAudits',
+  'getTaskAutomationPolicy',
+  'updateTaskAutomationPolicy',
+  'getTaskDeliveryReadiness',
+  'createTask',
+  'updateTask',
+  'deleteTask',
+  'runTask',
+  'cancelTaskRun',
+  'listSessions',
+  'listSessionMessages',
+  'createSession',
+  'updateAgent',
+  'deleteAgent',
+  'reorderAgents',
+  'selectAgent',
+  'updateSession',
+  'deleteSessions',
+  'reorderSessions',
+  'setSessionAgent',
+  'setSessionWorkspace',
+  'setSessionWorkspaceByPath',
+  'switchSessionPinState',
+  'selectSession',
+  'clearSessionMessages',
+  'deleteSessionMessage',
+  'replaceState',
+  'sendMessage',
+  'cancelMessage',
+  'cancelSession',
+  'refreshMcpTools',
+  'getRuntimeCompatibility',
+  'probeRuntimeCompatibility',
+  'getModelGatewayStatus',
+  'startModelGateway',
+  'stopModelGateway',
+  'setModelGatewayEnabled',
+  'executeRuntimeCommand',
+  'productTools',
+  'skills',
+  'onStateChanged',
+  'onRuntimeStateChanged',
+  'onChannelRuntimeStateChanged'
+] as const satisfies readonly (keyof PlatformApi['agents'])[]
+const ASSISTANT_API_KEYS = [
+  'list',
+  'get',
+  'create',
+  'update',
+  'delete',
+  'reorder',
+  'listTopics',
+  'createTopic',
+  'updateTopic',
+  'deleteTopic',
+  'pinTopic',
+  'unpinTopic',
+  'listTopicMessages',
+  'setActiveNode',
+  'renameTopic',
+  'createMessageSibling',
+  'editAndResendUserMessage',
+  'clearTopicMessages',
+  'searchTopicMessages',
+  'deleteMessage',
+  'streamOpen',
+  'streamAttach',
+  'streamAbort',
+  'streamGetStatus',
+  'library',
+  'onStreamChunk',
+  'onStreamDone',
+  'onStreamError',
+  'onStreamStatusChanged'
+] as const satisfies readonly (keyof PlatformApi['assistants'])[]
+
+type MissingAgentKey = Exclude<keyof PlatformApi['agents'], (typeof AGENT_API_KEYS)[number]>
+type MissingAssistantKey = Exclude<keyof PlatformApi['assistants'], (typeof ASSISTANT_API_KEYS)[number]>
+const agentsShapeComplete: MissingAgentKey extends never ? true : never = true
+const assistantsShapeComplete: MissingAssistantKey extends never ? true : never = true
+
+describe('preload 分片后的形状', () => {
+  it('keeps every agents and assistants member, and the shard that carries them', () => {
+    expect(agentsShapeComplete).toBe(true)
+    expect(assistantsShapeComplete).toBe(true)
+    expect(preloadSource).toContain('agents: createAgentsNamespace(ipcRenderer)')
+    expect(preloadSource).toContain('assistants: createAssistantsNamespace(ipcRenderer)')
+    expect(AGENT_API_KEYS.length).toBe(57)
+    expect(ASSISTANT_API_KEYS.length).toBe(29)
   })
 })

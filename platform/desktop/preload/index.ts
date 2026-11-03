@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 import { IpcChannels } from '../ipc/channels'
 import { createNotificationsNamespace } from './namespaces/notifications'
+import { createAgentsNamespace, createAssistantsNamespace } from './agentNamespaces'
 import type {
   ChannelCandidateSafeView,
   ChannelConversationSafeView,
@@ -18,8 +19,8 @@ import type {
   ChannelTestMessageReceipt,
   SecureHandoffBegin
 } from '../../ai/agent-platform/channels'
-import { unwrapTaskIpc } from '../ipc/taskIpcEnvelope'
 import type { ModelDetectionMode, ModelDetectionResult } from '../../ai/providers/modelDetection/types'
+import type { AgentWorkspaceEnsureResult } from '../../ai/agent-platform/schemas/workspaceSchemas'
 
 type ProductEventPayload = {
   productId?: string
@@ -228,188 +229,8 @@ const api = {
     revealCustomHeaders: (providerId: string) =>
       ipcRenderer.invoke(IpcChannels.modelProvidersRevealCustomHeaders, providerId)
   },
-  agents: {
-    getState: () => ipcRenderer.invoke(IpcChannels.agentsGetState),
-    getRuntimeSnapshot: () => ipcRenderer.invoke(IpcChannels.agentsGetRuntimeSnapshot),
-    getChannelRuntimeSnapshot: (options?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsGetChannelRuntimeSnapshot, options),
-    restartChannelRuntime: (channelId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsRestartChannelRuntime, channelId),
-    listToolApprovals: () => ipcRenderer.invoke(IpcChannels.agentsListToolApprovals),
-    resolveToolApproval: (approvalId: string, decision: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsResolveToolApproval, approvalId, decision),
-    listAgents: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListAgents, query),
-    createAgent: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsCreateAgent, input),
-    listTasks: async (agentId: string, query?: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTasks, agentId, query)),
-    getTaskLogs: async (agentId: string, taskId: string, query?: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskLogs, agentId, taskId, query)),
-    previewTaskSchedule: async (input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsPreviewTaskSchedule, input)),
-    listTaskPage: async (query?: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTaskPage, query)),
-    getTaskDeliveryAttempts: async (agentId: string, runLogId: string, query?: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskDeliveryAttempts, agentId, runLogId, query)),
-    retryTaskDelivery: async (agentId: string, runLogId: string, attemptId: string) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsRetryTaskDelivery, agentId, runLogId, attemptId)),
-    listTaskMutationAudits: async (query: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTaskMutationAudits, query)),
-    getTaskAutomationPolicy: async () => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskAutomationPolicy)),
-    updateTaskAutomationPolicy: async (input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsUpdateTaskAutomationPolicy, input)),
-    getTaskDeliveryReadiness: async (agentId: string, taskId: string) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskDeliveryReadiness, agentId, taskId)),
-    createTask: async (agentId: string, input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsCreateTask, agentId, input)),
-    updateTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsUpdateTask, agentId, taskId, request)),
-    deleteTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsDeleteTask, agentId, taskId, request)),
-    runTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsRunTask, agentId, taskId, request)),
-    cancelTaskRun: async (runLogId: string) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsCancelTaskRun, runLogId)),
-    listSessions: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListSessions, query),
-    listSessionMessages: (sessionId: string, query?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsListSessionMessages, sessionId, query),
-    createSession: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsCreateSession, input),
-    updateAgent: (agentId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.agentsUpdateAgent, agentId, patch),
-    deleteAgent: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsDeleteAgent, agentId),
-    reorderAgents: (orderedAgentIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsReorderAgents, orderedAgentIds),
-    selectAgent: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsSelectAgent, agentId),
-    updateSession: (sessionId: string, patch: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsUpdateSession, sessionId, patch),
-    deleteSessions: (sessionIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsDeleteSessions, sessionIds),
-    reorderSessions: (orderedSessionIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsReorderSessions, orderedSessionIds),
-    setSessionAgent: (sessionId: string, agentId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionAgent, sessionId, agentId),
-    setSessionWorkspace: (sessionId: string, source: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionWorkspace, sessionId, source),
-    setSessionWorkspaceByPath: (sessionId: string, path: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionWorkspaceByPath, sessionId, path),
-    switchSessionPinState: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsSwitchSessionPinState, sessionId),
-    selectSession: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsSelectSession, sessionId),
-    clearSessionMessages: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsClearSessionMessages, sessionId),
-    deleteSessionMessage: (sessionId: string, messageId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsDeleteSessionMessage, sessionId, messageId),
-    replaceState: (state: unknown) => ipcRenderer.invoke(IpcChannels.agentsReplaceState, state),
-    sendMessage: (request: unknown) => ipcRenderer.invoke(IpcChannels.agentsSendMessage, request),
-    cancelMessage: (runId: string) => ipcRenderer.invoke(IpcChannels.agentsCancelMessage, runId),
-    cancelSession: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsCancelSession, sessionId),
-    refreshMcpTools: (serverId: string) => ipcRenderer.invoke(IpcChannels.agentsRefreshMcpTools, serverId),
-    getRuntimeCompatibility: (providerId: string, modelId: string, runtimeId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsGetRuntimeCompatibility, providerId, modelId, runtimeId),
-    probeRuntimeCompatibility: (providerId: string, modelId: string, runtimeId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsProbeRuntimeCompatibility, providerId, modelId, runtimeId),
-    getModelGatewayStatus: () => ipcRenderer.invoke(IpcChannels.agentsGetModelGatewayStatus),
-    startModelGateway: (providerId?: string, modelId?: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsStartModelGateway, providerId, modelId),
-    stopModelGateway: () => ipcRenderer.invoke(IpcChannels.agentsStopModelGateway),
-    setModelGatewayEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetModelGatewayEnabled, enabled),
-    executeRuntimeCommand: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsExecuteRuntimeCommand, input),
-    productTools: {
-      listPackages: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsListProductToolPackages, agentId),
-      updatePackageBinding: (
-        agentId: string,
-        productId: string,
-        permissionMode: 'allow-read-only' | 'prompt' | 'disabled'
-      ) => ipcRenderer.invoke(IpcChannels.agentsUpdateProductToolPackageBinding, agentId, productId, permissionMode),
-      listCallTracePage: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListProductToolCallTracePage, query),
-      getCallTrace: (toolCallId: string) => ipcRenderer.invoke(IpcChannels.agentsGetProductToolCallTrace, toolCallId)
-    },
-    skills: {
-      list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsList, query),
-      getRuntime: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsGetRuntime, agentId),
-      search: (query: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsSearch, query),
-      install: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstall, options),
-      installFromZip: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstallFromZip, options),
-      installFromDirectory: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstallFromDirectory, options),
-      uninstall: (skillId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsUninstall, skillId),
-      toggle: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsToggle, options),
-      readFile: (skillId: string, filename: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsReadFile, skillId, filename),
-      listFiles: (skillId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsListFiles, skillId),
-      listLocal: (workdir: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsListLocal, workdir)
-    },
-    onStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsStateChanged, listener)
-      }
-    },
-    onRuntimeStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsRuntimeStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsRuntimeStateChanged, listener)
-      }
-    },
-    onChannelRuntimeStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsChannelRuntimeStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsChannelRuntimeStateChanged, listener)
-      }
-    }
-  },
-  assistants: {
-    list: () => ipcRenderer.invoke(IpcChannels.assistantsList),
-    get: (assistantId: string) => ipcRenderer.invoke(IpcChannels.assistantsGet, assistantId),
-    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.assistantsCreate, input),
-    update: (assistantId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.assistantsUpdate, assistantId, patch),
-    delete: (assistantId: string) => ipcRenderer.invoke(IpcChannels.assistantsDelete, assistantId),
-    reorder: (orderedIds: string[]) => ipcRenderer.invoke(IpcChannels.assistantsReorder, orderedIds),
-    listTopics: (query?: unknown) => ipcRenderer.invoke(IpcChannels.assistantsListTopics, query),
-    createTopic: (input: unknown) => ipcRenderer.invoke(IpcChannels.assistantsCreateTopic, input),
-    updateTopic: (topicId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.assistantsUpdateTopic, topicId, patch),
-    deleteTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsDeleteTopic, topicId),
-    pinTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsPinTopic, topicId),
-    unpinTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsUnpinTopic, topicId),
-    listTopicMessages: (topicId: string, nodeId?: string | null) =>
-      ipcRenderer.invoke(IpcChannels.assistantsListTopicMessages, topicId, nodeId),
-    setActiveNode: (topicId: string, nodeId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.assistantsSetActiveNode, topicId, nodeId),
-    renameTopic: (topicId: string, name: string, isNameManuallyEdited?: boolean) =>
-      ipcRenderer.invoke(IpcChannels.assistantsRenameTopic, topicId, name, isNameManuallyEdited),
-    createMessageSibling: (messageId: string, dto: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsCreateMessageSibling, messageId, dto),
-    editAndResendUserMessage: (input: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsEditAndResendUserMessage, input),
-    clearTopicMessages: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsClearTopicMessages, topicId),
-    searchTopicMessages: (topicId: string, query: string, limit?: number) =>
-      ipcRenderer.invoke(IpcChannels.assistantsSearchTopicMessages, topicId, query, limit),
-    deleteMessage: (messageId: string, options?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsDeleteMessage, messageId, options),
-    streamOpen: (request: unknown) => ipcRenderer.invoke(IpcChannels.assistantsStreamOpen, request),
-    streamAttach: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamAttach, topicId),
-    streamAbort: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamAbort, topicId),
-    streamGetStatus: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamGetStatus, topicId),
-    library: {
-      listTemplates: (query?: unknown, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryListTemplates, query, language),
-      getTemplate: (templateId: string, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryGetTemplate, templateId, language),
-      installTemplate: (input: unknown, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryInstallTemplate, input, language),
-      listGroups: (language?: string) => ipcRenderer.invoke(IpcChannels.assistantsLibraryListGroups, language),
-      createAssistant: (input: unknown) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryCreateAssistant, input)
-    },
-    onStreamChunk: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamChunk, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamChunk, listener)
-    },
-    onStreamDone: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamDone, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamDone, listener)
-    },
-    onStreamError: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamError, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamError, listener)
-    },
-    onStreamStatusChanged: (callback: (snapshot: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot)
-      ipcRenderer.on(IpcChannels.assistantsStreamStatusChanged, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamStatusChanged, listener)
-    }
-  },
+  agents: createAgentsNamespace(ipcRenderer),
+  assistants: createAssistantsNamespace(ipcRenderer),
   webSearch: {
     listProviders: () => ipcRenderer.invoke(IpcChannels.webSearchListProviders),
     getSettings: () => ipcRenderer.invoke(IpcChannels.webSearchGetSettings),
