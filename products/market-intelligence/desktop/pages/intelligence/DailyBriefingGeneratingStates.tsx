@@ -10,7 +10,7 @@ import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefin
 import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { runningRowName } from './DailyBriefingLiveSteps'
-import type { GenerationTrace } from './dailyBriefingGenerationTrace'
+import { generationStageIds, type GenerationTrace } from './dailyBriefingGenerationTrace'
 
 /**
  * What the page shows while today's edition is still being generated.
@@ -28,9 +28,9 @@ export function DailyBriefingGeneratingStatus({ text, progress, resolveText }: R
 }>): React.ReactElement {
   const stage = progress ? runningRowName(progress, text) : undefined
   return <>
-    <StatusPill tone="info" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generating" resolveText={resolveText} />
+    <StatusPill tone="info" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generatingShort" resolveText={resolveText} />
     {stage ? <small className="mi-daily-briefing-page__clock-note" data-generating-stage="true">{stage}</small> : null}
-    <Button disabled aria-label={text.generationProgress.workingHint}>{text.generating}</Button>
+    <Button disabled aria-label={text.generationProgress.workingHint}>{text.generatingShort}</Button>
   </>
 }
 
@@ -61,6 +61,18 @@ export function DailyBriefingGeneratingView({ text, progressUnreadable, resolveT
   </div>
 }
 
+/** Before the first progress answer arrives every stage simply has not started; the rows still exist. */
+function pendingTrace(): GenerationTrace {
+  const startedAt = new Date().toISOString()
+  return {
+    attemptId: 'pending',
+    startedAt,
+    finishedAt: startedAt,
+    state: 'success',
+    stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
+  }
+}
+
 /** The stage list has one shape everywhere: a run in flight uses the same stepper as a failed one. */
 function traceFromProgress(progress: BriefingGenerationProgress): GenerationTrace {
   return {
@@ -82,7 +94,7 @@ export function DailyBriefingGeneratingAside({ text, progress, formatTime }: Rea
     <div data-briefing-stages="true">
       {progress
         ? <DailyBriefingGenerationTimeline formatTime={formatTime} running text={text} trace={traceFromProgress(progress)} />
-        : <LoadingState label={text.generationProgress.title} minHeight={120} />}
+        : <DailyBriefingGenerationTimeline formatTime={formatTime} running text={text} trace={pendingTrace()} />}
     </div>
   </aside>
 }

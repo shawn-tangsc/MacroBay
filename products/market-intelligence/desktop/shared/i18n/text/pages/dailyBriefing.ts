@@ -1,7 +1,7 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const dailyBriefingText = {
   'zh-CN': {
-    entry: '今日简报', title: '每日简报', help: { generation: '生成说明', progress: '进度说明' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；设定的生成时刻只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
+    entry: '今日简报', title: '每日简报', help: { generation: '生成说明', progress: '进度说明' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', generatingShort: '正在生成', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；设定的生成时刻只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
     // 升级没跑完时读者看到的就是这一句与一个按钮；它是状态，不是说明，所以一直在明面上。
     migration: { incomplete: '日报数据升级未完成，现在用的是旧数据。其余功能正常，升级完成后新功能会自动可用。', retry: '重试升级', retrying: '正在重试…' },
     /** 设置里的时区读不到时，窗口按系统时区算；说清为什么会和设定不同。 */
@@ -245,7 +245,7 @@ export const dailyBriefingText = {
     }
   },
   'en-US': {
-    entry: 'Daily brief', title: 'Daily brief', help: { generation: 'About generation', progress: 'About the steps' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; the scheduled run is only a head start, and a missed one is caught up the next time you open it.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
+    entry: 'Daily brief', title: 'Daily brief', help: { generation: 'About generation', progress: 'About the steps' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', generatingShort: 'Generating', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; the scheduled run is only a head start, and a missed one is caught up the next time you open it.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
     migration: { incomplete: "The briefing data upgrade didn't finish, so the old data is still in use. Everything else works; the new features become available once it completes.", retry: 'Retry upgrade', retrying: 'Retrying…' },
     /** The settings zone was unreadable, so the window used the machine's zone. */
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
