@@ -161,6 +161,11 @@ function assertSignalRequest(request: SignalAnalysisRequest): void {
   requestTriggerKey(request)
   if (request.signal.severity !== 'medium' && request.signal.severity !== 'high') throw new Error('analysis-invalid-request')
   if (!Number.isFinite(Date.parse(request.signal.observedAt))) throw new Error('analysis-invalid-request')
+  // 两档读取失败与「事件已有别人的键接管」都不该叫分析：前者是数据没到，花一次调用只会得到
+  // 一份「我不知道」；后者由 `calendar.refresh` 那条线负责，再跑一次就是同一件事花两次钱。
+  // 扫描层本来会先滤掉这两种，这里是最后一道：漏一次就等于白花一次事件线额度。
+  if (request.signal.readiness !== 'available') throw new Error('analysis-invalid-request')
+  if (request.signal.triggerOwner !== 'module-signal') throw new Error('analysis-invalid-request')
 }
 
 /** The one key the signal is queued under; a signal without a complete key cannot be queued. */

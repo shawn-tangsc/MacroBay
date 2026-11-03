@@ -71,7 +71,7 @@ function signal(overrides: Partial<ModuleSignal> = {}): ModuleSignal {
   }
 }
 
-const window: SignalWindow = { unit: 'buckets', amount: 1, upperBoundMs: 15 * 60 * 1_000 }
+const window: SignalWindow = { unit: 'buckets', amount: 1, bucketMs: 15 * 60 * 1_000, upperBoundMs: 15 * 60 * 1_000 }
 
 function request(overrides: Partial<ModuleSignal> = {}, groupType: SignalAnalysisRequest['groupType'] = 'funding'): SignalAnalysisRequest {
   return { signal: signal(overrides), window, groupType }
@@ -108,6 +108,11 @@ it('refuses a signal that cannot produce a complete trigger key', async () => {
   // Low only marks the board; letting it in would spend a call for a display.
   await expect(service(request({ severity: 'low' }))).rejects.toThrow('analysis-invalid-request')
   await expect(service(request({ observedAt: 'yesterday' }))).rejects.toThrow('analysis-invalid-request')
+  // "Data did not arrive" is not "the rule fired": an unavailable signal would spend a call to be
+  // told the reading is missing.
+  await expect(service(request({ readiness: 'unavailable' }))).rejects.toThrow('analysis-invalid-request')
+  // An event another key owns is analysed by that key's line; queueing it here would spend twice.
+  await expect(service(request({ triggerOwner: 'calendar.refresh' }))).rejects.toThrow('analysis-invalid-request')
 })
 
 it('writes nothing when the capability is off', async () => {
@@ -215,7 +220,7 @@ it('spends the event line, and lets the gate refuse it there when that line is f
     lastAutoRunAt: () => null
   })
 
-  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, attemptLedgerId }))
+  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, previousSnapshot: null, attemptLedgerId }))
     .toMatchObject({ decision: 'queued', reasonCode: null })
   expect(recordDecision).not.toHaveBeenCalled()
 
@@ -226,7 +231,7 @@ it('spends the event line, and lets the gate refuse it there when that line is f
       changeHash: `seed-${index}`, decision: 'queued', reasonCode: 'signal-high-triggered', snapshotHash: null, analysisRunId: null, createdAt: asOf
     })
   }
-  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, attemptLedgerId }))
+  expect(await gate.evaluate({ eventGroupId: ledger[0]!.eventGroupId, triggerKey: 'signal.open-interest.oi-liquidation-proxy', asOf, previousSnapshot: null, attemptLedgerId }))
     .toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
   expect(ledger.find(row => row.id === attemptLedgerId)).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
 })
