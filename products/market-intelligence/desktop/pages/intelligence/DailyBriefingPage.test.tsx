@@ -1856,6 +1856,44 @@ const rowOf = (availableLocales: readonly ('zh-CN' | 'en-US')[]) => ({
 })
 const enSettings = vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } }))
 
+it('shows the nine steps when the service is generating, even though this page never clicked', async () => {
+  // 07:00 scheduled run: nothing local says "generating", the left rail says so, and the pane said
+  // "not generated". One source of truth now includes the service's own answer.
+  const period = [{ date: '2026-11-04', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }]
+  const dom = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-11-04' } })),
+    getProgress: vi.fn(async () => ({ state: 'running' as const, progress: { attemptId: 'a1', startedAt: '2026-11-04T00:00:00.000Z', stages: [] } }))
+  }))
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')) break
+  }
+
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
+})
+
+it('shows the steps while the reader’s own run is in flight, before any edition exists', async () => {
+  const dom = await renderPage(fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }], today: '2026-10-30' } })),
+    getProgress: vi.fn(async () => ({ state: 'idle' as const })),
+    regenerate: vi.fn(() => new Promise(() => undefined))
+  }))
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('[data-briefing-no-edition]')) break
+  }
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve(); await Promise.resolve()
+  })
+
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
+})
+
 it('calls an issue with another language "missing this language", never "no edition"', async () => {
   const dom = await renderPage(fakeClient({
     getSettings: enSettings,

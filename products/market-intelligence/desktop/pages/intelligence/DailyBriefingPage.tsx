@@ -134,8 +134,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const wallClockToday = useMemo(() => localDate(timeZone), [timeZone])
   const [currentPeriodDate, setCurrentPeriodDate] = useState<string | undefined>(undefined)
   const todayDate = currentPeriodDate ?? wallClockToday
-  // Follows the run only while one is in flight: the hook stops and forgets on its own.
-  const generating = view.status === 'loading' || regenerating
+  // A run this page started, or one it is loading for. The service's own answer joins below.
+  const busyLocally = view.status === 'loading' || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
@@ -144,7 +144,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   useEffect(() => {
     if (view.status === 'ready') lastReadyRef.current = view.document
   }, [view])
-  const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
+  const progress = useDailyBriefingProgress({ client, running: busyLocally, locale, timeZone })
+  // One question, every source: what this page started, what it is loading for, and what the service
+  // says is running right now (a scheduled run, or one started in another window).
+  const generating = busyLocally || progress?.state === 'running'
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
   // must not pretend the run stopped either — the pipeline is still spending model calls.
@@ -209,6 +212,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           keptCachedToday = true
         }
       }
+      // Before saying "nothing was generated", ask whether something is being generated right now.
+      // The 07:00 scheduled run (or one started in another window) is invisible to local state, and
+      // its nine steps must be on screen while it works.
+      const serviceRunInFlight = async (): Promise<boolean> => {
+        const live = await client.getProgress({ locale: localeForLoad, timeZone: timeZoneRef.current }).catch(() => undefined)
+        return live?.state === 'running'
+      }
       const today = await todayPromise
       if (!active) return
       if (today?.state === 'available') {
@@ -253,7 +263,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           } else {
             setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
           }
-        } else setView({ status: 'no-edition', date: periodDate, failed: false })
+        } else if (await serviceRunInFlight()) setView({ status: 'loading' })
+        else setView({ status: 'no-edition', date: periodDate, failed: false })
       } else if (skipGenerate && !keptCachedToday) {
         // Nothing is left for that day — same sentence as any day that never generated.
         setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
@@ -472,12 +483,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
         </div> : null}
-        {view.status === 'loading' ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
-        {view.status === 'unavailable' && !failure
+        {/* A run in flight owns the pane, whatever local state says: the scheduled run and a run
+            started elsewhere land here too, and the nine steps must be visible while it works. */}
+        {view.status === 'loading' || (generating && view.status !== 'ready')
+          ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
+          : null}
+        {view.status === 'unavailable' && !failure && !generating
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
-        {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
-        {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
+        {view.status === 'locale-missing' && !generating ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
+        {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
