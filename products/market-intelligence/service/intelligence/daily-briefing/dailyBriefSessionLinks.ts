@@ -36,6 +36,8 @@ export type DailyBriefSessionLinkStore = Readonly<{
   put: (link: DailyBriefSessionLink) => Promise<void>
   remove: (sessionIds: readonly string[]) => Promise<void>
   listBefore: (date: string) => Promise<readonly DailyBriefSessionLink[]>
+  /** Every language of one issue; returns how many links were removed (0 when already clean). */
+  deletePeriod: (editionDate: string, periodId: string) => Promise<number>
 }>
 
 const TABLE = 'daily_brief_session_links'
@@ -58,6 +60,7 @@ export function createDailyBriefSessionLinkStore(filePath: string): DailyBriefSe
     on conflict(session_id) do update set state = excluded.state, updated_at = excluded.updated_at
   `)
   const remove = db.prepare(`delete from ${TABLE} where session_id = ?`)
+  const removePeriod = db.prepare(`delete from ${TABLE} where edition_date = ? and period_id = ?`)
   return Object.freeze({
     async findBySession(sessionId) { return row(getBySession.get(sessionId) as Row | undefined) },
     async listByEdition(editionDate, periodId, locale) {
@@ -67,7 +70,8 @@ export function createDailyBriefSessionLinkStore(filePath: string): DailyBriefSe
     async put(link) {
       put.run(link.editionDate, link.periodId, link.locale, link.attemptNo ?? null, link.sessionId, link.state, link.createdAt, link.updatedAt)
     },
-    async remove(sessionIds) { for (const id of sessionIds) remove.run(id) }
+    async remove(sessionIds) { for (const id of sessionIds) remove.run(id) },
+    async deletePeriod(editionDate, periodId) { return Number(removePeriod.run(editionDate, periodId).changes ?? 0) }
   })
 }
 

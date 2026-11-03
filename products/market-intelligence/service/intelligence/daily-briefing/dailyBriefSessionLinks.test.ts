@@ -16,6 +16,22 @@ const link = (date: string, locale: 'zh-CN' | 'en-US' = 'zh-CN', periodId = DEFA
 })
 
 describe('daily brief session links', () => {
+  it('deletes every language of one issue, leaves other dates alone, and is idempotent', async () => {
+    const store = createDailyBriefSessionLinkStore(join(dir(), 'links.sqlite'))
+    await store.put(link('2026-10-30', 'zh-CN'))
+    await store.put(link('2026-10-30', 'en-US'))
+    await store.put(link('2026-10-30', 'zh-CN', 'evening'))
+    await store.put(link('2026-10-29', 'zh-CN'))
+
+    expect(await store.deletePeriod('2026-10-30', DEFAULT_PERIOD_ID)).toBe(2)
+    expect(await store.findBySession('session-2026-10-30-default-en-US')).toBeUndefined()
+    // Another period of the same day, and another day, keep their links.
+    expect(await store.findBySession('session-2026-10-30-evening-zh-CN')).toBeDefined()
+    expect(await store.findBySession('session-2026-10-29-default-zh-CN')).toBeDefined()
+    // Retrying the same delete is how a partial failure is finished: it returns 0, not an error.
+    expect(await store.deletePeriod('2026-10-30', DEFAULT_PERIOD_ID)).toBe(0)
+  })
+
   it('finds by edition, lists before a date and removes only selected sessions', async () => {
     const store = createDailyBriefSessionLinkStore(join(dir(), 'links.sqlite'))
     await store.put(link('2026-10-30'))
