@@ -68,13 +68,8 @@ export async function createUpdateCheckService(ports: UpdateCheckServicePorts): 
   let state = normalizeUpdateCheckState(await readState(ports))
   let inFlight: Promise<UpdateCheckProjection> | null = null
 
-  if (ports.mode === 'development') {
-    // 这是一句设计说明，不是故障：源码启动没有更新能力，所以不记 error。
-    ports.log('info', 'update.check.disabled', { reason: 'development' })
-  }
-
   function projection(): UpdateCheckProjection {
-    return projectUpdateCheckState({ mode: ports.mode, currentVersion: ports.currentVersion, result: state.lastResult })
+    return projectUpdateCheckState({ currentVersion: ports.currentVersion, result: state.lastResult })
   }
 
   async function persist(): Promise<void> {
@@ -123,10 +118,14 @@ export async function createUpdateCheckService(ports: UpdateCheckServicePorts): 
   }
 
   async function perform(trigger: UpdateCheckTrigger): Promise<UpdateCheckProjection> {
-    if (ports.mode !== 'packaged') {
-      // 开发态这条通道根本不注册；真被调用是程序错，不装成「查不到」。
-      throw new Error('update check is not available in development mode')
-    }
+    /**
+     * `mode` 只决定一件事：**自动检查跑不跑**。
+     *
+     * 开发态手动点「检查更新」是**真查**（要能看到三种结论），打开链接也是真打开；
+     * 不跑自动的原因是风险点在「自己联网」——开发版不该在没人看着的时候发请求。
+     * 旧口径「开发态能力不存在、调用要抛错」已作废：用户要的是能点出结果，不是没有能力。
+     */
+    if (ports.mode === 'development' && trigger === 'auto') return projection()
 
     const now = ports.now()
     const nowIso = now.toISOString()

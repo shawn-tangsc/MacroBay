@@ -9301,9 +9301,19 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 .version-value {
+  /* 值就是值：字号、字重、行高与「未知」占位**完全一致**，只靠颜色区分真假。
+     版本 11-03 的教训：占位值被单独压了一档字重（500 对 600），读起来就是「小一号」，
+     同一个位置两个值必须同基线同号。改这条之前先看 `.version-value-unknown` 里**没有**
+     font-size / font-weight / line-height——那三条一旦出现，就是又犯一次。 */
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-strong);
-  font-weight: 600;
+}
+
+/* 「未知」不是另一种字号，只是「这不是真值」：只改颜色，其余一切继承 `.version-value`。 */
+.version-value-unknown {
+  color: var(--muted-strong);
 }
 
 .version-sep {

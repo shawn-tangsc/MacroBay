@@ -179,27 +179,21 @@ describe('the UTC day bucket', () => {
 })
 
 describe('what the settings row reads', () => {
-  it('keeps "no capability", "not checked yet" and "cannot tell" apart', () => {
-    const development = projectUpdateCheckState({ mode: 'development', currentVersion: '0.3.1', result: null })
-    const idle = projectUpdateCheckState({ mode: 'packaged', currentVersion: '0.3.1', result: null })
+  it('keeps "not checked yet" and "cannot tell" apart', () => {
+    const idle = projectUpdateCheckState({ currentVersion: '0.3.1', result: null })
     const unavailable = projectUpdateCheckState({
-      mode: 'packaged',
       currentVersion: '0.3.1',
       result: { status: 'unavailable', reason: 'offline', checkedAt, lastSuccessAt: null }
     })
 
-    expect(development).toEqual({ state: 'development', currentVersion: '0.3.1' })
+    // 「还没查」和「查了没查到」不许互相冒充：前者没有 checkedAt，后者一定有。
     expect(idle).toEqual({ state: 'idle', currentVersion: '0.3.1' })
-    // 开发态带版本号，但**不带结论**：版本号是一句事实，和有没有「查」这个能力无关；
-    // 两个状态仍是两个值，不靠「字段多一个少一个」区分。
-    expect(development).not.toHaveProperty('latestVersion')
     // 「上次检查」配的是这一次尝试的时刻；上一次成功的时刻不进界面（只留在结论里排查用）。
     expect(unavailable).toEqual({ state: 'unavailable', currentVersion: '0.3.1', checkedAt })
   })
 
   it('drops the internal reason code on the way to the row', () => {
     const projection = projectUpdateCheckState({
-      mode: 'packaged',
       currentVersion: '0.3.1',
       result: { status: 'unavailable', reason: 'proxy-failed', checkedAt, lastSuccessAt: null }
     })
@@ -210,7 +204,6 @@ describe('what the settings row reads', () => {
   it('projects the two settled conclusions with the versions the row shows', () => {
     expect(
       projectUpdateCheckState({
-        mode: 'packaged',
         currentVersion: '0.3.1',
         result: { status: 'available', latestVersion: '0.4.0', checkedAt }
       })
@@ -218,7 +211,6 @@ describe('what the settings row reads', () => {
 
     expect(
       projectUpdateCheckState({
-        mode: 'packaged',
         currentVersion: '0.3.1',
         result: { status: 'up-to-date', latestVersion: '0.3.1', checkedAt }
       })

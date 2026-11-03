@@ -211,18 +211,13 @@ export function utcDayKeyOf(instant: string): string | null {
 }
 
 /**
- * 界面读到的投影：三种查询结论 + 两个「不是结论」的状态。
+ * 界面读到的投影：三种查询结论 + 「不是结论」的 `idle`。
  *
- * `development` 与 `idle` 仍是**两个状态**，没有合并：开发态根本没有「查」这个能力，`idle` 是
- * 「有这个能力、只是还没用过」。合并之后主进程就再也分不出「这台机器没开这功能」和「开了、只是
- * 还没查」，界面上那句「开发版本不联网」也就无从判断。
- *
- * 用户 11-03 改了开发态的**画法**（不再是「只剩一句说明」）：整块照画、与安装版同形，只是点下去
- * 不联网、就地出一句提示。所以这个状态**带上了当前版本号**——版本号是一句事实，和能力无关；
- * 而「最新版本」在开发态永远是「未知」，因为没有查过。
+ * **没有 `development` 这一态**（11-03 用户改的口径）：开发态也能真查、真出结论，所以「开发态」
+ * 不是一种查询结果，`mode` 只决定**自动检查跑不跑**。界面因此只有一种画法，不再按「装没装」分叉——
+ * 分叉最容易变成「开发版里看不到、装好的包里第一次见」。
  */
 export type UpdateCheckProjection =
-  | { state: 'development'; currentVersion: string }
   | { state: 'idle'; currentVersion: string }
   | { state: 'up-to-date'; currentVersion: string; latestVersion: string; checkedAt: string }
   | { state: 'available'; currentVersion: string; latestVersion: string; checkedAt: string }
@@ -238,11 +233,9 @@ export type UpdateCheckProjection =
  * 原因码在这一步被丢掉——它只属于日志。
  */
 export function projectUpdateCheckState(input: Readonly<{
-  mode: 'packaged' | 'development'
   currentVersion: string
   result: UpdateCheckResult | null
 }>): UpdateCheckProjection {
-  if (input.mode === 'development') return { state: 'development', currentVersion: input.currentVersion }
   const { result, currentVersion } = input
   if (result === null) return { state: 'idle', currentVersion }
   switch (result.status) {

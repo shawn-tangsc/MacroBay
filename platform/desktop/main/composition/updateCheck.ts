@@ -74,7 +74,6 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
   })
 
   registerUpdateCheckIpc(ports.ipcMain, {
-    mode: ports.mode,
     getProjection: service.getProjection,
     checkNow: () => service.checkNow('manual'),
     getReleaseNotes: async () => {
@@ -98,7 +97,15 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
   return {
     getProjection: service.getProjection,
     startAutomaticCheck: () => {
-      // 闸门在服务里（开关、同一个 UTC 自然日最多一次）；这里只负责「什么时候试一次」。
+      /**
+       * **`mode` 在这里的唯一用处**：源码启动不挂自动检查。
+       *
+       * 开发态手动查是真的（能看到结论），只有「自己联网」这件事不许发生——所以门开在
+       * 「要不要挂这个定时器」上，而不是把能力藏起来。服务里还有第二道同向闸，两层都写是因为
+       * 这条一旦漏了，就是「开发版在没人看着的时候发请求」。
+       */
+      if (ports.mode === 'development') return
+      // 其余闸门在服务里（开关、同一个 UTC 自然日最多一次）；这里只负责「什么时候试一次」。
       setTimeout(() => {
         void service.checkNow('auto').catch(() => undefined)
       }, autoCheckDelayMs)

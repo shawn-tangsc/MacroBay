@@ -31,7 +31,6 @@ describe('registering the update check channels', () => {
   it('registers all three in a packaged build, with the agreed channel names', () => {
     const ipc = createIpcMain()
     registerUpdateCheckIpc(ipc.ipcMain, {
-      mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
       openUpdateLink: async () => ({ ok: true }),
@@ -46,25 +45,24 @@ describe('registering the update check channels', () => {
     ])
   })
 
-  it('leaves the two action channels unregistered in development, so no request can even be sent', () => {
+  it('registers every channel in both modes: a source run can still be checked by hand', async () => {
     const ipc = createIpcMain()
     const checkNow = vi.fn(async () => projection)
     const openUpdateLink = vi.fn(async () => ({ ok: true }))
     const getReleaseNotes = vi.fn(async () => ({ ok: false }))
 
-    registerUpdateCheckIpc(ipc.ipcMain, {
-      mode: 'development',
-      getProjection: () => ({ state: 'development', currentVersion: '0.3.1' }),
-      checkNow,
-      openUpdateLink,
-      getReleaseNotes
-    })
+    registerUpdateCheckIpc(ipc.ipcMain, { getProjection: () => projection, checkNow, openUpdateLink, getReleaseNotes })
 
-    expect(ipc.channels).toEqual([IpcChannels.updatesGetState])
-    // 不是「注册了再返回不可用」：通道根本不在，调用方拿到的是 Electron 的「没有 handler」。
-    expect(ipc.handlers.has(IpcChannels.updatesCheckNow)).toBe(false)
-    expect(ipc.handlers.has(IpcChannels.updatesOpenLink)).toBe(false)
-    expect(checkNow).not.toHaveBeenCalled()
+    // 11-03 起的口径：开发态也要能点出结果。旧写法「开发态只注册 get-state、另两条不注册」已作废——
+    // 「开发版不会自己联网」改由「不挂自动检查」保证（见组合根与服务的用例），不再靠通道缺席。
+    expect(ipc.channels).toEqual([
+      IpcChannels.updatesGetState,
+      IpcChannels.updatesCheckNow,
+      IpcChannels.updatesOpenLink,
+      IpcChannels.updatesGetReleaseNotes
+    ])
+    await ipc.handlers.get(IpcChannels.updatesCheckNow)?.({} as never, undefined)
+    expect(checkNow).toHaveBeenCalledTimes(1)
     expect(openUpdateLink).not.toHaveBeenCalled()
     expect(getReleaseNotes).not.toHaveBeenCalled()
   })
@@ -72,7 +70,6 @@ describe('registering the update check channels', () => {
   it('answers the state channel with the current projection', async () => {
     const ipc = createIpcMain()
     registerUpdateCheckIpc(ipc.ipcMain, {
-      mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
       openUpdateLink: async () => ({ ok: true }),
@@ -87,7 +84,6 @@ describe('registering the update check channels', () => {
     const opened: string[] = []
     const ipc = createIpcMain()
     registerUpdateCheckIpc(ipc.ipcMain, {
-      mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
       // 生产里这个端口就是 openUpdateLink：地址由常量拼出，入参里没有地址。
@@ -116,7 +112,6 @@ describe('registering the update check channels', () => {
   it('answers ok:false instead of throwing when the browser cannot be opened', async () => {
     const ipc = createIpcMain()
     registerUpdateCheckIpc(ipc.ipcMain, {
-      mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
       openUpdateLink: async () => ({ ok: false }),

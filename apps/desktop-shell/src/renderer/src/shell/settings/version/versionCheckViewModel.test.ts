@@ -136,30 +136,11 @@ describe('the version row', () => {
     })
   })
 
-  it('draws a development build exactly like the installed one, minus any conclusion', () => {
-    const development = describeVersionCheck({ ...base, state: { state: 'development', currentVersion: '0.3.1' } })
-    const notChecked = describeVersionCheck({ ...base, state: idle })
-
-    // 用户 11-03 定的口径：开发态整块照画（版本号、药丸、按钮、开关都在），初值是「还没检查」。
-    // 唯一没有的是结论——「最新版本」永远是未知，因为从没查过。
-    expect(development).toEqual({
-      development: true,
-      pill: 'notChecked',
-      pillTone: 'muted',
-      currentVersion: '0.3.1',
-      latestVersion: null,
-      showAutoToggle: true,
-      action: 'check',
-      checkLabel: 'check',
-      notice: null,
-      showOpenFailed: false,
-      showAutoOffHint: false
-    })
-    // 画法相同、状态不同：`development` 这个标志还在，点击后要不要说那句提示靠它。
-    expect(notChecked.pill).toBe(development.pill)
-    expect(notChecked.action).toBe(development.action)
-    expect(development.development).toBe(true)
-    expect(notChecked.development).toBe(false)
+  it('has no development variant left: a source run is an ordinary row', () => {
+    // 11-03 起「开发态」不是一种投影状态了——开发版也能真查，所以只有一种画法。
+    // 这条断言看着像废话，它守的是「别再造一个只有开发态才走的分支」：那类分支的结果
+    // 就是「开发版里看不见、装好的包里第一次见」。
+    expect(Object.keys(describeVersionCheck({ ...base, state: idle }))).not.toContain('development')
   })
 
   it('treats the first frame (no projection yet) as "not checked yet"', () => {

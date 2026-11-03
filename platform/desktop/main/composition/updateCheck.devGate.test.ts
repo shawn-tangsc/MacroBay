@@ -72,25 +72,50 @@ describe('the update check delivery gate', () => {
     expect(updateCheckModeFor(false)).toBe('development')
   })
 
-  it('development registers only get-state, says so, and never reaches the network', async () => {
+  it('development registers every channel, but never arms the automatic timer', async () => {
     const fetchSpy = vi.fn(async () => {
-      throw new Error('development must not fetch')
+      throw new Error('offline in this test')
     }) as unknown as typeof fetch
     const harness = recorder()
     const composition = await composeUpdateCheck(
       ports({ mode: 'development', directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
     )
 
-    // 「开发版本，不检查更新」这句话的来源：投影里就是 development，不是 idle / unavailable。
-    expect(composition.getProjection()).toEqual({ state: 'development' })
-    expect(harness.channels).toEqual([IpcChannels.updatesGetState])
+    // 用户 11-03 改的口径：开发态也能点出结果，所以通道**全都在**（旧写法「只注册 get-state」已作废）。
+    expect(harness.channels).toEqual([
+      IpcChannels.updatesGetState,
+      IpcChannels.updatesCheckNow,
+      IpcChannels.updatesOpenLink,
+      IpcChannels.updatesGetReleaseNotes
+    ])
 
-    // 另外三条通道**根本不存在**——零出网由「没有那条路」保证，不靠调用方自觉。
-    expect(harness.listeners.has(IpcChannels.updatesCheckNow)).toBe(false)
-    expect(harness.listeners.has(IpcChannels.updatesOpenLink)).toBe(false)
-    expect(harness.listeners.has(IpcChannels.updatesGetReleaseNotes)).toBe(false)
-    expect(harness.listeners.get(IpcChannels.updatesGetState)?.()).toEqual({ state: 'development' })
-    expect(fetchSpy).not.toHaveBeenCalled()
+    // 但初值是普通的「还没检查」——开发态不再是一种投影状态，画法与安装版完全一致。
+    expect(composition.getProjection()).toEqual({ state: 'idle', currentVersion: '0.3.1' })
+
+    // 手动查是真的：点一下发一次请求（这里让它离线，只为数调用次数）。
+    const checkNow = harness.listeners.get(IpcChannels.updatesCheckNow) as () => Promise<unknown>
+    await expect(checkNow()).resolves.toMatchObject({ state: 'unavailable' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('development arms no automatic check, so the source build never goes online on its own', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchSpy = vi.fn(async () => {
+        throw new Error('development must not fetch on its own')
+      }) as unknown as typeof fetch
+      const harness = recorder()
+      const composition = await composeUpdateCheck(
+        ports({ mode: 'development', directory: temporaryDirectory(), fetchSpy, ipcMain: harness.ipcMain })
+      )
+
+      // 这就是 `mode` 在开发态的唯一作用：**不挂自动检查**。15 秒是打包版的延迟，跑过去也不许发。
+      composition.startAutomaticCheck()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('packaged registers all four channels, so the gate only closes the source build', async () => {

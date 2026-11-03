@@ -8,15 +8,17 @@ import { IpcChannels } from '../../desktop/ipc/channels'
 /**
  * 更新提示的三条通道。
  *
- * **开发态只注册 `get-state`**：另外两条根本不注册，不是「注册了再返回不可用」。
- * 不存在的通道发不出请求——「零出网」由「没有那条路」保证，不靠调用方自觉。
- * `get-state` 必须留，否则界面拿不到「开发态」这个值，只能靠猜。
+ * **两种模式注册同一套通道**（11-03 用户改的口径）：开发态也要能点出结果——手动查真的发请求、
+ * 「立即更新」真的打开浏览器。旧写法「开发态只注册 `get-state`、另两条不注册」已作废。
+ *
+ * 所以「开发版不会自己联网」这件事**不靠通道缺席**，靠 `mode` 只决定「启动后挂不挂自动检查」
+ * （见 `updateCheckService` 的 `perform` 与组合根的 `startAutomaticCheck`）。
+ * 这也意味着零出网必须被**测试断言**（自动阶段 0 次请求），不能再靠「那条路不存在」。
  *
  * 载荷一律为空：`open-link` 的地址由主进程常量拼出，处理器**连地址参数都不接**，
  * 让「传地址」在类型层就不存在，而不是靠调用方守规矩。
  */
 export type UpdateCheckIpcPorts = Readonly<{
-  mode: 'packaged' | 'development'
   getProjection: () => UpdateCheckProjection
   checkNow: () => Promise<UpdateCheckProjection>
   /** `destination` 由渲染层传入，可能是任何东西——处理器原样交给端口，由端口做封闭校验。 */
@@ -27,10 +29,6 @@ export type UpdateCheckIpcPorts = Readonly<{
 
 export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: UpdateCheckIpcPorts): void {
   ipcMain.handle(IpcChannels.updatesGetState, () => ports.getProjection())
-
-  // 开发态到此为止：下面三条通道在源码启动时不存在。
-  if (ports.mode !== 'packaged') return
-
   ipcMain.handle(IpcChannels.updatesCheckNow, () => ports.checkNow())
   ipcMain.handle(IpcChannels.updatesOpenLink, (_event, destination: unknown) => ports.openUpdateLink(destination))
   ipcMain.handle(IpcChannels.updatesGetReleaseNotes, () => ports.getReleaseNotes())

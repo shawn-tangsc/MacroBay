@@ -310,20 +310,28 @@ describe('the single settlement exit', () => {
 })
 
 describe('development mode', () => {
-  it('projects "no capability" and logs it once as information', async () => {
+  it('checks for real when asked by hand, so the row can show an actual result', async () => {
     const harness = await makeHarness({ mode: 'development' })
 
-    expect(harness.service.getProjection()).toEqual({ state: 'development', currentVersion: '0.3.1' })
-    expect(harness.logs().filter((entry) => entry.event === 'update.check.disabled')).toHaveLength(1)
-    expect(harness.logs().every((entry) => entry.level !== 'error')).toBe(true)
+    // 用户 11-03：开发版也要能点出结果。手动查是**真查**，不是「假装不可用」。
+    const projection = await harness.service.checkNow('manual')
+    expect(projection).toEqual({
+      state: 'available',
+      currentVersion: '0.3.1',
+      latestVersion: '0.4.0',
+      checkedAt: '2026-11-03T00:10:00.000Z'
+    })
+    expect(harness.fetchCalls()).toBe(1)
   })
 
-  it('refuses to run a check instead of pretending there is one', async () => {
+  it('never checks on its own: the automatic trigger is a no-op in development', async () => {
     const harness = await makeHarness({ mode: 'development' })
 
-    // 开发态这条通道不注册；真被调用必须是响亮地失败，不是 resolve 一个「不可用」。
-    await expect(harness.service.checkNow('manual')).rejects.toThrow(/development/iu)
+    const projection = await harness.service.checkNow('auto')
+    // 「开发版不会自己联网」就靠这一条：自动那一路在服务层就返回，连记账都不写。
     expect(harness.fetchCalls()).toBe(0)
+    expect(projection).toEqual({ state: 'idle', currentVersion: '0.3.1' })
+    expect(harness.settled()).toEqual([])
   })
 })
 

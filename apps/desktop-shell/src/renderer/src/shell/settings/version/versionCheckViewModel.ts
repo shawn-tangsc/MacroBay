@@ -15,12 +15,6 @@ export type VersionCheckPill = 'upToDate' | 'available' | 'unavailable' | 'check
 export type VersionCheckNotice = 'available' | 'unavailable' | 'autoOff'
 
 export type VersionCheckView = {
-  /**
-   * 开发态（源码启动）。**不再是「整行只剩一句话」**：用户 11-03 要求整块照画、与安装版同形，
-   * 只是点「检查更新」不联网、就地出一句提示。这个标志用来决定**点击后**说不说那句，
-   * 不决定画不画版本号/药丸/按钮/开关。
-   */
-  development: boolean
   pill: VersionCheckPill | null
   pillTone: StatusPillTone
   /** `null` 表示不显示版本号（首帧投影还没到，或读不到投影）；`'unknown'` 表示显示「未知」。 */
@@ -63,8 +57,8 @@ export function resolvePillLabel(pills: Readonly<Record<string, string>>, key: s
 /**
  * 侧栏小点亮不亮：**只看结论的 `state`**。
  *
- * 查不到（`unavailable`）永远不亮——「拿失败当有新版」在结构上就不可能；`idle`/`development`
- * 也不亮。壳层不许拿版本号再算一遍，那是第二个来源。
+ * 查不到（`unavailable`）永远不亮——「拿失败当有新版」在结构上就不可能；`idle` 也不亮。
+ * 壳层不许拿版本号再算一遍，那是第二个来源。
  */
 export function shouldShowUpdateDot(projection: UpdateCheckProjection | null): boolean {
   return projection?.state === 'available'
@@ -82,31 +76,9 @@ const toneByPill: Record<VersionCheckPill, StatusPillTone> = {
 export function describeVersionCheck(input: VersionCheckInput): VersionCheckView {
   const { state, autoCheckEnabled, checking, justChecked, openFailed } = input
 
-  if (state?.state === 'development') {
-    // 开发态**与安装版同形**（用户 11-03 定的）：版本号、药丸、按钮、开关都在，初值是「还没检查」。
-    // 唯一差别在点击之后——那一下不联网，就地出一句提示（在组件里，不在这个视图模型里）。
-    // 这不是拿开发态冒充 idle：投影里仍是 `development`，只是这块必须长得和装好的包一样，
-    // 否则用户在自己的窗口里永远看不清这块究竟做成什么样。
-    return {
-      development: true,
-      pill: 'notChecked',
-      pillTone: toneByPill.notChecked,
-      currentVersion: state.currentVersion,
-      // 没查过就是「未知」：开发态不产生结论，这里不替远端猜一个版本号。
-      latestVersion: null,
-      action: 'check',
-      showAutoToggle: true,
-      checkLabel: 'check',
-      notice: null,
-      showOpenFailed: false,
-      showAutoOffHint: false
-    }
-  }
-
   const checkLabel: VersionCheckView['checkLabel'] = justChecked ? 'justChecked' : 'check'
   // 关掉自动检查只是不自动查：按钮照常可用，也不改写已经查到的结论的展示位置。
   const base = {
-    development: false,
     action: 'check',
     showAutoToggle: true,
     checkLabel
