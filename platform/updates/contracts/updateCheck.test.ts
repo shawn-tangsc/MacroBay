@@ -188,10 +188,11 @@ describe('what the settings row reads', () => {
       result: { status: 'unavailable', reason: 'offline', checkedAt, lastSuccessAt: null }
     })
 
-    expect(development).toEqual({ state: 'development' })
+    expect(development).toEqual({ state: 'development', currentVersion: '0.3.1' })
     expect(idle).toEqual({ state: 'idle', currentVersion: '0.3.1' })
-    // 开发态不能带出版本号：它就是靠「什么都没有」跟「还没检查」一眼分开的。
-    expect(development).not.toHaveProperty('currentVersion')
+    // 开发态带版本号，但**不带结论**：版本号是一句事实，和有没有「查」这个能力无关；
+    // 两个状态仍是两个值，不靠「字段多一个少一个」区分。
+    expect(development).not.toHaveProperty('latestVersion')
     // 「上次检查」配的是这一次尝试的时刻；上一次成功的时刻不进界面（只留在结论里排查用）。
     expect(unavailable).toEqual({ state: 'unavailable', currentVersion: '0.3.1', checkedAt })
   })

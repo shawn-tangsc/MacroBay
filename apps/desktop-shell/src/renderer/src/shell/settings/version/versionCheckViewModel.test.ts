@@ -136,26 +136,30 @@ describe('the version row', () => {
     })
   })
 
-  it('strips the whole row down in development, so it cannot look like "not checked yet"', () => {
-    const development = describeVersionCheck({ ...base, state: { state: 'development' } })
+  it('draws a development build exactly like the installed one, minus any conclusion', () => {
+    const development = describeVersionCheck({ ...base, state: { state: 'development', currentVersion: '0.3.1' } })
     const notChecked = describeVersionCheck({ ...base, state: idle })
 
+    // 用户 11-03 定的口径：开发态整块照画（版本号、药丸、按钮、开关都在），初值是「还没检查」。
+    // 唯一没有的是结论——「最新版本」永远是未知，因为从没查过。
     expect(development).toEqual({
       development: true,
-      pill: null,
+      pill: 'notChecked',
       pillTone: 'muted',
-      currentVersion: null,
+      currentVersion: '0.3.1',
       latestVersion: null,
-      showAutoToggle: false,
+      showAutoToggle: true,
       action: 'check',
       checkLabel: 'check',
       notice: null,
       showOpenFailed: false,
       showAutoOffHint: false
     })
-    // 两者必须一眼分得开：一个有药丸有按钮，一个什么都没有。
-    expect(notChecked.pill).not.toBeNull()
-    expect(notChecked.action).toBe('check')
+    // 画法相同、状态不同：`development` 这个标志还在，点击后要不要说那句提示靠它。
+    expect(notChecked.pill).toBe(development.pill)
+    expect(notChecked.action).toBe(development.action)
+    expect(development.development).toBe(true)
+    expect(notChecked.development).toBe(false)
   })
 
   it('treats the first frame (no projection yet) as "not checked yet"', () => {

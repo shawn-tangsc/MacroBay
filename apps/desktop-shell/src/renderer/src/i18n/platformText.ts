@@ -1039,7 +1039,8 @@ export type PlatformText = {
       justChecked: string
       autoCheck: string
       autoHint: string
-      devBuild: string
+      /** 开发态点「检查更新」之后那一句：解释「你刚点的那下为什么不联网」。只在这之后出现。 */
+      devCheckHint: string
       autoOffLine: string
       availableLine: (version: string) => string
       unavailableLine: string
@@ -2223,7 +2224,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         justChecked: '刚查过',
         autoCheck: '启动时检查更新',
         autoHint: '同一个 UTC 自然日最多查一次；应用不会自己下载或安装。',
-        devBuild: '开发版本，不检查更新',
+        devCheckHint: '开发版本不联网，检查功能不触发。',
         autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
         availableLine: (version) => `有新版本 ${version} 可以下载。`,
         // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
@@ -3411,7 +3412,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         justChecked: 'Just checked',
         autoCheck: 'Check for updates at startup',
         autoHint: 'At most once per UTC day; the app never downloads or installs anything on its own.',
-        devBuild: 'Development build — update checks are disabled',
+        devCheckHint: 'A development build does not go online, so the check does not run.',
         autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
         availableLine: (version) => `Version ${version} is available to download.`,
         unavailableLine: 'this does not mean there is no newer version.',

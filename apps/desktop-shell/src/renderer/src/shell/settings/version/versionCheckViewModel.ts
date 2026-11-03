@@ -15,13 +15,17 @@ export type VersionCheckPill = 'upToDate' | 'available' | 'unavailable' | 'check
 export type VersionCheckNotice = 'available' | 'unavailable' | 'autoOff'
 
 export type VersionCheckView = {
-  /** 开发态：整行只剩一句「开发版本，不检查更新」，没有版本号、药丸、按钮、开关。 */
+  /**
+   * 开发态（源码启动）。**不再是「整行只剩一句话」**：用户 11-03 要求整块照画、与安装版同形，
+   * 只是点「检查更新」不联网、就地出一句提示。这个标志用来决定**点击后**说不说那句，
+   * 不决定画不画版本号/药丸/按钮/开关。
+   */
   development: boolean
   pill: VersionCheckPill | null
   pillTone: StatusPillTone
-  /** `null` 表示不显示版本号（开发态）；`'unknown'` 表示显示「未知」。 */
+  /** `null` 表示不显示版本号（首帧投影还没到，或读不到投影）；`'unknown'` 表示显示「未知」。 */
   currentVersion: string | null
-  /** `null` 表示显示「未知」（还没查过、查不到、或开发态）。 */
+  /** `null` 表示显示「未知」（还没查过、查不到、或开发态没有结论）。 */
   latestVersion: string | null
   /** 更新块里唯一一颗动作按钮：`check` 查一次，`update` 去发布页拿包。**永远只有一颗**。 */
   action: 'check' | 'update'
@@ -79,15 +83,19 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
   const { state, autoCheckEnabled, checking, justChecked, openFailed } = input
 
   if (state?.state === 'development') {
-    // 「不查」和「还没检查」必须一眼分得开：这里什么都没有，正是分开的方式。
+    // 开发态**与安装版同形**（用户 11-03 定的）：版本号、药丸、按钮、开关都在，初值是「还没检查」。
+    // 唯一差别在点击之后——那一下不联网，就地出一句提示（在组件里，不在这个视图模型里）。
+    // 这不是拿开发态冒充 idle：投影里仍是 `development`，只是这块必须长得和装好的包一样，
+    // 否则用户在自己的窗口里永远看不清这块究竟做成什么样。
     return {
       development: true,
-      pill: null,
-      pillTone: 'muted',
-      currentVersion: null,
+      pill: 'notChecked',
+      pillTone: toneByPill.notChecked,
+      currentVersion: state.currentVersion,
+      // 没查过就是「未知」：开发态不产生结论，这里不替远端猜一个版本号。
       latestVersion: null,
       action: 'check',
-      showAutoToggle: false,
+      showAutoToggle: true,
       checkLabel: 'check',
       notice: null,
       showOpenFailed: false,

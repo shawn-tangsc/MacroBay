@@ -313,7 +313,7 @@ describe('development mode', () => {
   it('projects "no capability" and logs it once as information', async () => {
     const harness = await makeHarness({ mode: 'development' })
 
-    expect(harness.service.getProjection()).toEqual({ state: 'development' })
+    expect(harness.service.getProjection()).toEqual({ state: 'development', currentVersion: '0.3.1' })
     expect(harness.logs().filter((entry) => entry.event === 'update.check.disabled')).toHaveLength(1)
     expect(harness.logs().every((entry) => entry.level !== 'error')).toBe(true)
   })

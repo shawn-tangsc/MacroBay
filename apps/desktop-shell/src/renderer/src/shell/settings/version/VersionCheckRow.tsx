@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { Info } from 'lucide-react'
 import { Button, Switch } from 'antd'
 
@@ -43,6 +45,12 @@ export function VersionCheckRow(props: {
 }): React.ReactElement {
   const language: AppLanguage = props.settings.language
   const timeZone: TimeZoneSetting = props.settings.timeZone
+  /**
+   * 开发态点过「检查更新」：那一句提示**只在这之后出现**。
+   * 为什么是本地状态而不是一个新投影：它解释的是「你刚点的那下为什么没动静」，
+   * 不是一种查询结论，主进程那边也没有任何东西可记。
+   */
+  const [devCheckHint, setDevCheckHint] = useState(false)
   const text = platformText[language].preferences.version
   // 「打开下载页」与失败句属于关于页的链接文案（五颗按钮共用一句），不再留在更新块自己的键里。
   const linkText = platformText[language].about.links
@@ -90,82 +98,89 @@ export function VersionCheckRow(props: {
         <span>{text.title}</span>
       </div>
 
-      {view.development ? (
-        <p className="version-dev-build" data-version-state="development">
-          {text.devBuild}
+      {/*
+        开发态**不再单独画成一句说明**（用户 11-03 改的）：整块与安装版同形，版本号、药丸、按钮、
+        开关都在。差别只在点「检查更新」的那一下——不联网，就地出一句提示。
+        上一版把整行抽掉，用户在自己的窗口里永远看不清这块做成什么样。
+      */}
+      <div className="version-line">
+        <span className="version-key">{text.current}</span>
+        <b className="version-value">{view.currentVersion ?? text.unknown}</b>
+        <span className="version-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="version-key">{text.latest}</span>
+        <b className="version-value">{view.latestVersion ?? text.unknown}</b>
+        {view.pill === null ? null : (
+          <StatusPill tone={view.pillTone} labelKey={pillLabelKeys[view.pill]} resolveText={resolvePillText} />
+        )}
+        <span className="version-spacer" />
+        {/*
+          一颗按钮、按状态换字：有新版本时它是「立即更新」（去打开发布页），其余时候是「检查更新」。
+          永远只有一个动作在喊——两颗按钮并排就是两个动作抢注意力。
+        */}
+        <Button
+          className={view.action === 'update' ? 'ant-primary-button' : 'ant-secondary-button'}
+          size="small"
+          loading={row.checking}
+          disabled={row.checking}
+          aria-describedby={view.showAutoToggle ? FREQUENCY_HINT_ID : undefined}
+          onClick={() => (view.development ? setDevCheckHint(true) : void (view.action === 'update' ? row.openUpdateLink('download') : row.checkNow()))}>
+          {view.checkLabel === 'justChecked'
+            ? text.justChecked
+            : view.action === 'update'
+              ? actionText.update
+              : text.check}
+        </Button>
+      </div>
+
+      {/*
+        开发态那一句：**只在点过之后出现**，解释「你刚点的那下为什么不联网」。
+        不是常驻说明、不是错误态、不新增状态——点了没反应才是缺陷。
+      */}
+      {view.development && devCheckHint ? (
+        <p className="preference-hint version-notice" data-dev-check-hint role="status">
+          {text.devCheckHint}
+        </p>
+      ) : null}
+
+      {notice === null ? null : view.notice === 'unavailable' && checkedAtText !== null ? (
+        // 「暂时查不到」只有两层：药丸 + 这一行。时间在前（回答「到底试过没有」），解释并在这句后面。
+        // 分开两行会做出七态里最高的一档（实测 414，比带按钮的「有新版本」还高）。
+        <p className="preference-hint version-notice version-checked-line">
+          <span className="version-time">{checkedAtText}</span>
+          {` · ${text.unavailableLine}`}
         </p>
       ) : (
-        <>
-          <div className="version-line">
-            <span className="version-key">{text.current}</span>
-            <b className="version-value">{view.currentVersion ?? text.unknown}</b>
-            <span className="version-sep" aria-hidden="true">
-              ·
-            </span>
-            <span className="version-key">{text.latest}</span>
-            <b className="version-value">{view.latestVersion ?? text.unknown}</b>
-            {view.pill === null ? null : (
-              <StatusPill tone={view.pillTone} labelKey={pillLabelKeys[view.pill]} resolveText={resolvePillText} />
-            )}
-            <span className="version-spacer" />
-            {/*
-              一颗按钮、按状态换字：有新版本时它是「立即更新」（去打开发布页），其余时候是「检查更新」。
-              永远只有一个动作在喊——两颗按钮并排就是两个动作抢注意力。
-            */}
-            <Button
-              className={view.action === 'update' ? 'ant-primary-button' : 'ant-secondary-button'}
-              size="small"
-              loading={row.checking}
-              disabled={row.checking}
-              aria-describedby={view.showAutoToggle ? FREQUENCY_HINT_ID : undefined}
-              onClick={() => void (view.action === 'update' ? row.openUpdateLink('download') : row.checkNow())}>
-              {view.checkLabel === 'justChecked'
-                ? text.justChecked
-                : view.action === 'update'
-                  ? actionText.update
-                  : text.check}
-            </Button>
-          </div>
-
-          {notice === null ? null : view.notice === 'unavailable' && checkedAtText !== null ? (
-            // 「暂时查不到」只有两层：药丸 + 这一行。时间在前（回答「到底试过没有」），解释并在这句后面。
-            // 分开两行会做出七态里最高的一档（实测 414，比带按钮的「有新版本」还高）。
-            <p className="preference-hint version-notice version-checked-line">
-              <span className="version-time">{checkedAtText}</span>
-              {` · ${text.unavailableLine}`}
-            </p>
-          ) : (
-            <p className="preference-hint version-notice">{notice}</p>
-          )}
-
-          {view.showAutoOffHint ? <p className="preference-hint version-auto-off-hint">{text.autoOffLine}</p> : null}
-
-          {view.showOpenFailed ? (
-            // 读屏能念；不是弹窗、不着色、不新增按钮——原按钮再点就是重试。
-            <p className="preference-hint version-open-failed" role="status">
-              {linkText.openFailed}
-            </p>
-          ) : null}
-
-          {view.showAutoToggle ? (
-            <div className="version-auto-group">
-              <label className="version-auto-toggle">
-                <Switch
-                  size="small"
-                  checked={props.settings.updates.checkEnabled}
-                  aria-describedby={FREQUENCY_HINT_ID}
-                  onChange={(next) => void props.onUpdateSettings({ updates: { checkEnabled: next } })}
-                />
-                <span>{text.autoCheck}</span>
-              </label>
-              {/* 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。 */}
-              <p className="preference-hint" id={FREQUENCY_HINT_ID}>
-                {text.autoHint}
-              </p>
-            </div>
-          ) : null}
-        </>
+        <p className="preference-hint version-notice">{notice}</p>
       )}
+
+      {view.showAutoOffHint ? <p className="preference-hint version-auto-off-hint">{text.autoOffLine}</p> : null}
+
+      {view.showOpenFailed ? (
+        // 读屏能念；不是弹窗、不着色、不新增按钮——原按钮再点就是重试。
+        <p className="preference-hint version-open-failed" role="status">
+          {linkText.openFailed}
+        </p>
+      ) : null}
+
+      {view.showAutoToggle ? (
+        <div className="version-auto-group">
+          <label className="version-auto-toggle">
+            <Switch
+              size="small"
+              checked={props.settings.updates.checkEnabled}
+              aria-describedby={FREQUENCY_HINT_ID}
+              onChange={(next) => void props.onUpdateSettings({ updates: { checkEnabled: next } })}
+            />
+            <span>{text.autoCheck}</span>
+          </label>
+          {/* 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。 */}
+          <p className="preference-hint" id={FREQUENCY_HINT_ID}>
+            {text.autoHint}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

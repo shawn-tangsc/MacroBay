@@ -54,7 +54,7 @@ describe('registering the update check channels', () => {
 
     registerUpdateCheckIpc(ipc.ipcMain, {
       mode: 'development',
-      getProjection: () => ({ state: 'development' }),
+      getProjection: () => ({ state: 'development', currentVersion: '0.3.1' }),
       checkNow,
       openUpdateLink,
       getReleaseNotes

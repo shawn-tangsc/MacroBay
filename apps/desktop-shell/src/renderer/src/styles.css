@@ -9328,12 +9328,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 6px;
 }
 
-.version-dev-build {
-  /* 整行只剩这一句时不能再被 `preference-hint` 压成 11px/--muted：它是这个状态下唯一的信息。 */
-  font-size: 12px;
-  color: var(--muted-strong);
-}
-
 .version-checked-line {
   /* 「上次检查：{时刻} · 这不代表没有新版本」合成一行：时间在前，数字等宽，不跳位。 */
   color: var(--muted);

@@ -25,7 +25,7 @@ const unavailable: UpdateCheckProjection = {
   currentVersion: '0.3.1',
   checkedAt: '2026-11-03T00:10:00.000Z'
 }
-const development: UpdateCheckProjection = { state: 'development' }
+const development: UpdateCheckProjection = { state: 'development', currentVersion: '0.3.1' }
 
 let root: Root | undefined
 
@@ -186,17 +186,33 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain(text.pill.available)
   })
 
-  it('shows only one sentence in a development build: no version, no pill, no buttons, no switch', async () => {
-    const { client } = createClient({ state: development })
+  it('draws the whole row in a development build, and answers the click with one sentence', async () => {
+    const { client, calls } = createClient({ state: development })
     const container = await mount({ client })
 
-    // 整行只剩这一句：给它自己的类（12px / --muted-strong），不能复用被压到 11px 的 preference-hint。
-    expect(container.querySelector('.version-dev-build')?.textContent).toBe(text.devBuild)
-    // 和「还没检查」必须一眼分得开：这里一个控件都没有。
-    expect(container.querySelectorAll('button')).toHaveLength(0)
-    expect(container.textContent).not.toContain(text.current)
-    expect(container.textContent).not.toContain(text.pill.notChecked)
-    expect(container.textContent).not.toContain(text.autoCheck)
+    // 用户 11-03 改的口径：开发态**整块照画**，与安装版同形——版本号、药丸、按钮、开关都在。
+    // 上一版把它抽成一句说明，用户在自己的窗口里根本看不清这块做成什么样。
+    expect(container.textContent).toContain(text.current)
+    expect(container.textContent).toContain('0.3.1')
+    expect(container.textContent).toContain(text.pill.notChecked)
+    expect(container.textContent).toContain(text.autoCheck)
+    // 一颗动作按钮（开关本身也是 antd 的 button，所以只数版本行里的那颗）。
+    expect(container.querySelectorAll('.version-line button')).toHaveLength(1)
+    // 「立即更新」不会出现：开发态永远没有「有新版本」这个结论。
+    expect(container.textContent).not.toContain(actionText.update)
+    // 那句提示只在点过之后出现，不是常驻说明——一进来就有的话，它就成了「这页在报错」。
+    expect(container.querySelector('[data-dev-check-hint]')).toBeNull()
+
+    await act(async () => {
+      buttonWithText(container, text.check)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // 点了不能没反应：就地出一句，解释「你刚点的那下为什么不联网」。
+    expect(container.querySelector('[data-dev-check-hint]')?.textContent).toBe(text.devCheckHint)
+    // 而且真的不联网：一条 IPC 都不发（开发态那条通道根本不存在，界面也不该去敲它）。
+    expect(calls.checkNow).toBe(0)
+    // 药丸还是「还没检查」：这一下没有产生任何结论，也不许假装查过。
+    expect(container.textContent).toContain(text.pill.notChecked)
   })
 
   it('keeps the download entry when the switch is off but a newer version is known', async () => {

@@ -210,9 +210,19 @@ export function utcDayKeyOf(instant: string): string | null {
   return iso.slice(0, 10)
 }
 
-/** 界面读到的投影：三种查询结论 + 两个「不是结论」的状态。 */
+/**
+ * 界面读到的投影：三种查询结论 + 两个「不是结论」的状态。
+ *
+ * `development` 与 `idle` 仍是**两个状态**，没有合并：开发态根本没有「查」这个能力，`idle` 是
+ * 「有这个能力、只是还没用过」。合并之后主进程就再也分不出「这台机器没开这功能」和「开了、只是
+ * 还没查」，界面上那句「开发版本不联网」也就无从判断。
+ *
+ * 用户 11-03 改了开发态的**画法**（不再是「只剩一句说明」）：整块照画、与安装版同形，只是点下去
+ * 不联网、就地出一句提示。所以这个状态**带上了当前版本号**——版本号是一句事实，和能力无关；
+ * 而「最新版本」在开发态永远是「未知」，因为没有查过。
+ */
 export type UpdateCheckProjection =
-  | { state: 'development' }
+  | { state: 'development'; currentVersion: string }
   | { state: 'idle'; currentVersion: string }
   | { state: 'up-to-date'; currentVersion: string; latestVersion: string; checkedAt: string }
   | { state: 'available'; currentVersion: string; latestVersion: string; checkedAt: string }
@@ -232,7 +242,7 @@ export function projectUpdateCheckState(input: Readonly<{
   currentVersion: string
   result: UpdateCheckResult | null
 }>): UpdateCheckProjection {
-  if (input.mode === 'development') return { state: 'development' }
+  if (input.mode === 'development') return { state: 'development', currentVersion: input.currentVersion }
   const { result, currentVersion } = input
   if (result === null) return { state: 'idle', currentVersion }
   switch (result.status) {
