@@ -13,6 +13,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
+import { filesOutsideProjectInclude } from './pre-commit-scope.mts'
+
 const BUDGET_MS = Number(process.env.PRE_COMMIT_BUDGET_MS ?? 58_000)
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/
 /** 四条按目录扫的守卫：各自只扫自己那一块，不扫别人的业务代码。 */
@@ -135,7 +137,38 @@ if (timedOut(check)) {
   process.exit(0)
 }
 
-const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}`
+// ── 2b. 主 include 覆盖不到的文件（`products/`、`tools/` 等）单独补查 ────────────────────
+//
+// `tsconfig.json` 的 `products/**/*.{ts,tsx}` 里 TypeScript 不支持花括号，整个 `products/` 从来没被
+// 检查过（tsconfig 修正排在 tag 之后）。主路径跑的就是这份配置，于是**提交一个 `products/` 下的文件，
+// 全仓 typecheck 通过、实际一个字节都没查**；而超预算退一步用 `files: [本次文件]` 反而查得到——
+// 覆盖范围取决于机器忙闲，这是最难被发现的一种。补查只查本次提交的那几个文件，与那一步同形。
+let uncoveredOutput = ''
+const outsideInclude = filesOutsideProjectInclude(staged)
+if (outsideInclude.length > 0) {
+  const cacheDir = join(root, 'node_modules', '.cache')
+  mkdirSync(cacheDir, { recursive: true })
+  const uncoveredConfig = join(cacheDir, 'pre-commit-outside-include-tsconfig.json')
+  writeFileSync(
+    uncoveredConfig,
+    JSON.stringify({
+      extends: join(root, 'tsconfig.json'),
+      include: [],
+      files: outsideInclude.map((path) => join(root, path))
+    })
+  )
+  const uncovered = runTypecheck(['--noEmit', '-p', uncoveredConfig], remaining(8_000))
+  if (timedOut(uncovered)) {
+    say(
+      `本次有 ${outsideInclude.length} 个文件不在主 typecheck 覆盖内，补查超时——**未验证**，请手动跑 pnpm typecheck`
+    )
+  } else {
+    say(`补查了 ${outsideInclude.length} 个不在主 typecheck 覆盖内的文件（products/tools 等）`)
+    uncoveredOutput = `${uncovered.stdout ?? ''}${uncovered.stderr ?? ''}`
+  }
+}
+
+const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}${uncoveredOutput}`
 const ownErrors: string[] = []
 const foreignErrors: string[] = []
 for (const line of tscOutput.split('\n')) {
