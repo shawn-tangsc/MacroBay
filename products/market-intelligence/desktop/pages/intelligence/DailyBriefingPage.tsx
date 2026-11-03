@@ -29,6 +29,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
+import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingAside, DailyBriefingGeneratingStatus, DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
@@ -382,51 +383,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
         </div> : null}
         {view.status === 'loading' ? <DailyBriefingGeneratingView progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} /> : null}
-        {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
-          ? <StateView
-              state="empty"
-              reasonCode="never-created"
-              size="lg"
-              productReason={{
-                key: scheduledTime ? 'mi.dailyBriefing.noBriefAt' : 'mi.dailyBriefing.noBrief',
-                ...(scheduledTime ? { params: { time: scheduledTime, zone: formatShellTimeZoneLabel(timeZone) } } : {}),
-                resolve: (key, params) => resolveBriefingStateReason(text, key, params)
-              }}
-              action={{ labelKey: 'ui.state.action.create', onSelect: generateNow }}
-            />
-          : todayMissing
-            ? <StateView
-                state="empty"
-                reasonCode="never-created"
-                size="lg"
-                productReason={{
-                  key: 'mi.dailyBriefing.todayNotRun',
-                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
-                }}
-                action={{ labelKey: 'ui.state.action.create', onSelect: generateNow }}
-              />
-          : lastGeneratedAt
-            ? <StateView
-                state="error"
-                reasonCode="unreadable"
-                size="lg"
-                productReason={{
-                  key: 'mi.dailyBriefing.unreadableSince',
-                  params: { moment: formatTime(lastGeneratedAt, 'minute') },
-                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
-                }}
-                action={{ labelKey: 'ui.state.action.retry', onSelect: generateNow }}
-              />
-            : <StateView
-                state="error"
-                reasonCode="unreadable"
-                size="lg"
-                productReason={{
-                  key: 'mi.dailyBriefing.unreadable',
-                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
-                }}
-                action={{ labelKey: 'ui.state.action.retry', onSelect: generateNow }}
-              />) : null}
+        {view.status === 'unavailable' && !failure
+          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
+          : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
