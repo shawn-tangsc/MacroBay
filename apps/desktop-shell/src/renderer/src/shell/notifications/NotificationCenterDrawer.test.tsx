@@ -459,4 +459,28 @@ describe('长正文的展开/收起', () => {
     expect(toggle?.getAttribute('aria-expanded')).toBe('true')
     expect(toggle?.textContent).toBe(english.centerCollapse)
   })
+
+  it('never prints a key name when the copy table misses the key', async () => {
+    // 这条兜底曾经写成 `?? labelKey`：查不到就把 `notification.xxx` 印在按钮上，等于把内部标识
+    // 当文案给了读者。表是 `Record<语言, 表>`，类型上每个键两种语言都必须有值，所以那个回退
+    // 永远走不到——它唯一的作用是让缺键这件事看起来"有字"。
+    // 这里用 cast 绕开类型，模拟表被改坏/被绕过的那一种：
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({
+            id: 't3',
+            deeplink,
+            actions: [
+              { id: 'x', labelKey: 'notification.thisKeyDoesNotExist' as never, kind: 'open', deeplink }
+            ]
+          })
+        ]
+      })
+    })
+
+    // 抛错（开发期就红），而不是安静地渲染出键名。
+    await expect(mount(source)).rejects.toThrow(/notification copy missing/)
+    expect(document.body.textContent ?? '').not.toContain('notification.thisKeyDoesNotExist')
+  })
 })

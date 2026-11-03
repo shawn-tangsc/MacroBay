@@ -357,9 +357,24 @@ function NotificationRow(props: {
   )
 }
 
-/** 通知自带动作的文案解析：标签同样只存键，句子按当前语言取。 */
-function actionLabel(labelKey: string, language: NotificationCopyLanguage): string {
-  return notificationCopy[language][labelKey as NotificationCopyKey] ?? labelKey
+/**
+ * 通知自带动作的文案解析：标签只存键，句子按当前语言取。
+ *
+ * **不回退成键名。** 这条兜底曾经写成 `?? labelKey`：表里查不到就把 `notification.taskFailed.open`
+ * 原样印在按钮上，把内部标识当文案给了读者。而 `notificationCopy` 的类型是
+ * `Record<Language, NotificationCopyTable>`——**每个键两种语言都必须有值**，所以那个回退在类型上
+ * 永远走不到；它唯一的实际作用是：哪天真的缺键时，让界面看起来"有字"，而不是当场暴露。
+ *
+ * 参数类型也收成 `NotificationCopyKey`（原来收 `string` 再 `as` 断言）：断言把"传错键"这件
+ * 事从编译期挪到了运行期，而运行期正是它会被终端用户看见的地方。
+ */
+function actionLabel(labelKey: NotificationCopyKey, language: NotificationCopyLanguage): string {
+  const text = notificationCopy[language][labelKey]
+  if (typeof text !== 'string' || text === '') {
+    // 面向实现者：走到这里说明表被改坏或被人用 cast 绕过了，而不是"这个键还没翻译"。
+    throw new Error(`notification copy missing: ${language} ${labelKey}`)
+  }
+  return text
 }
 
 /**
