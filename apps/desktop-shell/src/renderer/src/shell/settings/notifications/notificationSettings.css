@@ -1,0 +1,178 @@
+/*
+ * 设置 → 通知（规范 v2.7 §6）。只用已定义 token，不新增硬编码色值。
+ * 尺寸：内容宽 ≤ 900；清单列 `1fr / 64 / 84 / 84`；通道行高约 66。
+ */
+.notification-settings-pane {
+  max-width: 900px;
+}
+
+.notification-rows {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.notification-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 66px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-row:last-child {
+  border-bottom: none;
+}
+
+.notification-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.notification-row-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.notification-row-desc,
+.notification-row-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notification-row-state {
+  font-size: 11.5px;
+  color: var(--muted-strong);
+}
+
+.notification-row-state--danger {
+  color: var(--danger);
+}
+
+/* 整行禁用（弹窗）：不靠降低透明度，原因本身就是内容。 */
+.notification-row--disabled .notification-row-copy strong,
+.notification-row--disabled .notification-row-desc {
+  color: var(--muted);
+}
+
+.notification-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.notification-channel-select {
+  min-width: 186px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* 订阅清单：三列固定宽，清单名字吃掉剩余宽度。 */
+.notification-subs {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.notification-subs-head,
+.notification-subs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 84px 84px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+
+.notification-subs-head {
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted-strong);
+}
+
+.notification-subs-head-reason {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--caution);
+  white-space: normal;
+}
+
+.notification-subs-row + .notification-subs-row {
+  border-top: 1px solid var(--border);
+}
+
+.notification-subs-name {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-subs-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.notification-subs-fixed {
+  font-size: 11px;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.notification-subs-recorded {
+  font-size: 11px;
+  color: var(--muted-strong);
+  white-space: normal;
+  text-align: center;
+}
+
+/* 未批准：灰色「—」，不是禁用的勾。 */
+.notification-subs-dash {
+  color: var(--muted);
+}
+
+.notification-subs-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  accent-color: var(--accent);
+}
+
+/* 读屏专用：不可见但可读，不能用 aria-hidden 把它一起消掉。 */
+.notification-subs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.notification-subs-section {
+  margin-top: 18px;
+}
+
+.notification-subs-title {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+}

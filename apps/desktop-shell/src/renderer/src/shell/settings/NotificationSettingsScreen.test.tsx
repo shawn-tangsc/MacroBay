@@ -1,0 +1,129 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import type { NotificationEventCatalogEntry } from '@platform/notifications/contracts/notificationEventCatalog'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+
+import { NotificationSettingsScreen } from './NotificationSettingsScreen'
+import type { NotificationSettingsClient } from './notifications/useNotificationSettingsData'
+
+let root: Root | undefined
+
+afterEach(async () => {
+  await act(async () => {
+    root?.unmount()
+  })
+  root = undefined
+  document.body.innerHTML = ''
+})
+
+function entry(overrides: Partial<NotificationEventCatalogEntry> = {}): NotificationEventCatalogEntry {
+  return {
+    id: 'platform.job.failed-terminal',
+    titleKey: 'notification.job.failed',
+    reasonKey: 'notification.reason.failed',
+    requiresUserAction: true,
+    requestedDisruptionLevels: ['desktop'],
+    dedupeUnit: 'occurrence',
+    notifyOnlyIfSubscribed: false,
+    productId: 'platform',
+    approvedDisruptionLevels: ['center', 'desktop'],
+    approvedBypassQuietHours: false,
+    ...overrides
+  }
+}
+
+async function mount(client: NotificationSettingsClient): Promise<HTMLElement> {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root!.render(
+      createElement(ShellTimeZoneProvider, {
+        timeZone: 'Asia/Shanghai',
+        children: createElement(NotificationSettingsScreen, {
+          title: '通知',
+          language: 'zh-CN',
+          client,
+          onOpenChannelPage: () => undefined
+        })
+      })
+    )
+  })
+  return container
+}
+
+describe('notification settings screen', () => {
+  it('waits with the platform loading surface instead of drawing an empty form', async () => {
+    const container = await mount({
+      listEventCatalog: () => new Promise(() => undefined),
+      getSubscriptions: () => new Promise(() => undefined),
+      getDeliverySettings: () => new Promise(() => undefined),
+      readDesktopPermission: () => new Promise(() => undefined)
+    })
+
+    expect(container.querySelector('[data-loading-state], .loading-state')).not.toBeNull()
+  })
+
+  it('says the read failed instead of saying there is nothing to subscribe to', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.reject(new Error('boom')),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({}),
+      readDesktopPermission: () => Promise.resolve('unknown' as const)
+    })
+
+    // 「读不到」与「没有」是两件事：这里绝不能说清单为空。
+    expect(container.textContent).not.toContain('现在还没有可以订阅的事件')
+    expect(container.querySelector('[data-state="error"]')).not.toBeNull()
+  })
+
+  it('draws the three cell forms: fixed label, unapproved dash, and a real checkbox', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([entry(), entry({ id: 'market-intelligence.briefing.analyzed', titleKey: 'notification.briefing.analyzed', productId: 'market-intelligence', notifyOnlyIfSubscribed: true })]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
+      readDesktopPermission: () => Promise.resolve('granted' as const)
+    })
+
+    // 无条件记录的事件：标签，不是控件。
+    expect(container.querySelectorAll('.notification-subs-fixed').length).toBeGreaterThan(1)
+    // 通道未批准 / 未接入：只出现「—」，绝不出现禁用的复选框以外的控件形态。
+    expect(container.querySelectorAll('.notification-subs-dash').length).toBeGreaterThan(0)
+    // 结果类事件的记录格是可勾的。
+    const recordBoxes = container.querySelectorAll('input[type="checkbox"][aria-label*="记录"]')
+    expect(recordBoxes.length).toBe(1)
+  })
+
+  it('keeps the four delivery rows and shows no selector when no channel is available', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
+      readDesktopPermission: () => Promise.resolve('unknown' as const)
+    })
+
+    expect(container.querySelector('[data-row="center"]')).not.toBeNull()
+    expect(container.querySelector('[data-row="toast"]')).not.toBeNull()
+    expect(container.querySelector('[data-row="desktop"]')).not.toBeNull()
+    expect(container.querySelector('[data-row="popup"]')).not.toBeNull()
+    expect(container.querySelector('[data-row="channel"]')?.getAttribute('data-channel-state')).toBe('none')
+    // 空下拉会让人以为列表没加载出来。
+    expect(container.querySelector('select')).toBeNull()
+  })
+
+  it('tells an empty catalog apart from a failed read', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false }),
+      readDesktopPermission: () => Promise.resolve('granted' as const)
+    })
+
+    expect(container.querySelector('[data-subs-empty]')).not.toBeNull()
+    // 空不等于错：这里不该出现错误视图。
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+  })
+})
