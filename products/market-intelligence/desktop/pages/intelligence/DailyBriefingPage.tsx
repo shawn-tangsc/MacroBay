@@ -29,6 +29,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
@@ -88,6 +89,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
+  // The language this reader asked for but this version cannot write in; a state, not an explanation.
+  const [languageFallback, setLanguageFallback] = useState<string | null>(null)
   // Automatic generation is paused when the stored zone cannot be read; a manual run still works,
   // but it then means the UTC clock, and the panel says so instead of letting the reader guess.
   const [zoneInvalid, setZoneInvalid] = useState<string | null>(null)
@@ -176,6 +179,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
+      const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
     }).catch(() => undefined)
     return () => { active = false }
   }, [client])
@@ -367,6 +371,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         locale={locale} text={text} formatTime={formatTime} resolveText={resolveProductText} onSelect={selectEdition}
         onLoadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} />
       <section className="mi-daily-briefing-page__content">
+        <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
         <DailyBriefingStorageNotice text={text.migration} />
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>

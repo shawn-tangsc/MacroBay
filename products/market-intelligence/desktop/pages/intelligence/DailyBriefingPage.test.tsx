@@ -781,3 +781,37 @@ describe('the exported image follows the edition, not the interface', () => {
     expect(poster!.querySelector('[data-completeness-note="true"]')).toBeNull()
   })
 })
+
+describe('language fallback on the brief page', () => {
+  const fallbackSentence = text.settings.periods.languageUnsupported.replace('{language}', 'ja-JP')
+
+  const fallbackView = {
+    settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
+    generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
+    language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } },
+    webSearchSupported: false,
+    resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
+  }
+
+  it('shows the reason as a visible status line, not behind a help trigger or a hidden container', async () => {
+    const container = await renderPage(fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: fallbackView }))
+    }) as ReturnType<typeof fakeClient>)
+    const statuses = [...container.querySelectorAll('[role="status"]')]
+    const line = statuses.find((node) => node.textContent === fallbackSentence)
+    expect(line, `status line with the reason; got ${statuses.map((node) => node.textContent).join(' | ')}`).toBeDefined()
+    // The same key the settings dialog shows; there is no second sentence for this state.
+    expect(line!.textContent).toBe(text.settings.periods.languageUnsupported.replace('{language}', 'ja-JP'))
+    // Not a popover trigger: nobody may reach this state by clicking a question mark.
+    expect(container.querySelector(`[aria-label="${fallbackSentence}"]`)).toBeNull()
+    // Visible: neither the node nor an ancestor is hidden from sight or from assistive tech.
+    expect(line!.closest('[aria-hidden="true"]')).toBeNull()
+    expect(line!.closest('.hidden')).toBeNull()
+  })
+
+  it('renders no status line for the reason when the interface language is supported', async () => {
+    const container = await renderPage(fakeClient())
+    expect([...container.querySelectorAll('[role="status"]')].some((node) => node.textContent === fallbackSentence)).toBe(false)
+  })
+})
+
