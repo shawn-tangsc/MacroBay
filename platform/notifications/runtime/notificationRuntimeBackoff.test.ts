@@ -82,11 +82,9 @@ let pushCalls = 0
 function request(key: string): NotificationSubmitRequest {
   return {
     eventTypeId: 'platform.push-probe',
-    owner: 'platform',
-    sourceId: key,
     dedupeVars: { builder: 'template', vars: { key } },
     actions: [],
-    requestedChannels: ['center']
+    occurredAt: new Date(nowMs).toISOString()
   }
 }
 
