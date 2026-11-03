@@ -1,5 +1,8 @@
 import { describeChannelManagementAudit } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
-import { describeChannelRuntimeAudit } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import {
+  describeChannelRuntimeAudit,
+  describeChannelRuntimeLifecycle
+} from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
 /**
@@ -46,7 +49,18 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     })
   }
   for (const entry of sources.runtime ?? []) {
-    // 级别与文案都由平台那张表决定：**查不到的码给 WARN + 兜底句**，宁可当提醒，不许当故障。
+    // 起停不是异常：走 INFO + 「运行：」前缀，与「运行异常：」分开。
+    const lifecycle = describeChannelRuntimeLifecycle(entry.code)
+    if (lifecycle !== undefined) {
+      rows.push({
+        id: `lifecycle-${entry.id}`,
+        at: entry.createdAt,
+        level: 'INFO',
+        text: `${labels.channelLogLifecyclePrefix}${labels.channelLogLifecycleText[lifecycle.copyKey]}`
+      })
+      continue
+    }
+    // 其余运行审计：级别与文案都由平台那张表决定：**查不到的码给 WARN + 兜底句**，宁可当提醒，不许当故障。
     const descriptor = describeChannelRuntimeAudit(entry.code)
     rows.push({
       id: `run-${entry.id}`,

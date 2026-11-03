@@ -8,6 +8,8 @@ import type { ChannelInboundAuditCode } from './ChannelInboundRepository'
  * 其余 4 个是「按规则忽略/跳过」这类正常处置，降 `WARN`。
  * 查不到的码由调用方按 `WARN` + 兜底句处理——**宁可当提醒，不许当故障**。
  */
+import type { ChannelRuntimeLifecycleCode } from './channelRuntimeLifecycle'
+
 export type ChannelRuntimeAuditLevel = 'INFO' | 'WARN' | 'ERROR'
 
 export type ChannelRuntimeAuditCopyKey =
@@ -39,6 +41,25 @@ export const channelRuntimeAuditDescriptors: Readonly<Record<ChannelInboundAudit
   'channel-content-rejected': { level: 'WARN', copyKey: 'runtimeContentRejected' },
   'channel-stale-generation': { level: 'WARN', copyKey: 'runtimeStaleGeneration' }
 })
+
+/**
+ * 连接起停：**不是异常**，所以级别 INFO、前缀「运行：」，与「运行异常：」分开。
+ * 这两条只反映「起来了 / 停了」，失败原因仍走上面的异常码。
+ */
+export type ChannelRuntimeLifecycleCopyKey = 'runtimeStarted' | 'runtimeStopped'
+
+export const channelRuntimeLifecycleDescriptors: Readonly<
+  Record<ChannelRuntimeLifecycleCode, { level: 'INFO'; copyKey: ChannelRuntimeLifecycleCopyKey }>
+> = Object.freeze({
+  'channel-runtime-started': { level: 'INFO', copyKey: 'runtimeStarted' },
+  'channel-runtime-stopped': { level: 'INFO', copyKey: 'runtimeStopped' }
+})
+
+export function describeChannelRuntimeLifecycle(
+  code: string
+): { level: 'INFO'; copyKey: ChannelRuntimeLifecycleCopyKey } | undefined {
+  return (channelRuntimeLifecycleDescriptors as Readonly<Record<string, { level: 'INFO'; copyKey: ChannelRuntimeLifecycleCopyKey }>>)[code]
+}
 
 export function describeChannelRuntimeAudit(
   code: string

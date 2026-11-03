@@ -78,6 +78,28 @@ describe('the channel log panel', () => {
     expect(container.querySelector('.channel-log-row')?.textContent).not.toContain('GMT')
   })
 
+  it('shows connection start and stop as INFO under the runtime prefix, not as errors', async () => {
+    const container = await mount({
+      ...ok,
+      listRuntimeAudits: vi.fn(async () => ({
+        rows: [
+          { id: 'l1', code: 'channel-runtime-started', createdAt: '2026-11-03T05:00:00.000Z' },
+          { id: 'l2', code: 'channel-runtime-stopped', createdAt: '2026-11-03T04:30:00.000Z' }
+        ],
+        nextCursor: null
+      }))
+    })
+
+    const rows = [...container.querySelectorAll('.channel-log-row')]
+    const started = rows.find((node) => node.textContent?.includes('连接已启动'))
+    const stopped = rows.find((node) => node.textContent?.includes('连接已停止'))
+    expect(started?.getAttribute('data-log-level')).toBe('INFO')
+    expect(stopped?.getAttribute('data-log-level')).toBe('INFO')
+    // 起停用「运行：」，不是「运行异常：」——它们不是异常。
+    expect(started?.textContent).toContain(labels.channelLogLifecyclePrefix)
+    expect(started?.textContent).not.toContain(labels.channelLogRuntimePrefix)
+  })
+
   it('names common management actions instead of leaving the fallback sentence', async () => {
     const container = await mount({
       ...ok,

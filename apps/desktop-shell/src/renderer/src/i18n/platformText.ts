@@ -1,7 +1,10 @@
 import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
-import type { ChannelRuntimeAuditCopyKey } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import type {
+  ChannelRuntimeAuditCopyKey,
+  ChannelRuntimeLifecycleCopyKey
+} from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { ChannelManagementAuditCopyKey } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
@@ -274,12 +277,15 @@ export type PlatformText = {
     channelLogsUnknownCode: string
     channelLogOperationPrefix: string
     channelLogRuntimePrefix: string
+    /** 起停不算异常：单独一个「运行：」前缀。 */
+    channelLogLifecyclePrefix: string
     channelLogDeliveryPrefix: string
     /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
     channelLogUncertainPrefix: string
     /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
     channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
     channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
+    channelLogLifecycleText: Readonly<Record<ChannelRuntimeLifecycleCopyKey, string>>
     channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
   taskAutomation: {
@@ -1614,11 +1620,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsEmptyHint: '开启、改动、发送失败都会记在这里。',
       channelLogsReadFailed: '日志没读出来。',
       channelLogsReadFailedHint: '已有的记录不会因此丢失，这次只是没读到。',
-      channelLogsFooter: '只显示这三类：操作记录、运行异常、最近一次发送失败。没有逐次轮询日志，也没有起停时间线。',
+      channelLogsFooter: '记录连接的启动与停止、引起中断的错误，以及最近一次发送失败；不记录每一次轮询。',
       channelLogsTimeZone: '时间均为 {zone}',
       channelLogsUnknownCode: '没有更多说明',
       channelLogOperationPrefix: '操作：',
       channelLogRuntimePrefix: '运行异常：',
+      channelLogLifecyclePrefix: '运行：',
       channelLogDeliveryPrefix: '发送失败：',
       channelLogUncertainPrefix: '不确定：',
       channelLogActionText: Object.freeze({
@@ -1644,6 +1651,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeWorkCapacityExhausted: '待处理的消息太多，暂停接收',
         runtimeLifecycleFenced: '运行的代际变了，这次处理被放弃',
         runtimeInboundFailed: '收到的消息没能处理成功'
+      }),
+      channelLogLifecycleText: Object.freeze({
+        runtimeStarted: '连接已启动',
+        runtimeStopped: '连接已停止'
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': '这一次没有发出去',
@@ -2871,11 +2882,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelLogsEmptyHint: 'Enabling, changes and failed sends are recorded here.',
       channelLogsReadFailed: 'The log could not be read.',
       channelLogsReadFailedHint: 'Existing records are not lost; this read just failed.',
-      channelLogsFooter: 'Only these three kinds: operations, runtime errors, and the last failed send. No per-poll log, no start/stop timeline.',
+      channelLogsFooter: 'Records when the connection starts and stops, the errors that interrupt it, and the last failed send; every poll is not recorded.',
       channelLogsTimeZone: 'All times are in {zone}',
       channelLogsUnknownCode: 'No further explanation',
       channelLogOperationPrefix: 'Operation: ',
       channelLogRuntimePrefix: 'Runtime error: ',
+      channelLogLifecyclePrefix: 'Runtime: ',
       channelLogDeliveryPrefix: 'Send failed: ',
       channelLogUncertainPrefix: 'Uncertain: ',
       channelLogActionText: Object.freeze({
@@ -2901,6 +2913,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeWorkCapacityExhausted: 'too many messages are waiting, so receiving paused',
         runtimeLifecycleFenced: 'the runtime generation changed, so this handling was dropped',
         runtimeInboundFailed: 'an incoming message could not be handled'
+      }),
+      channelLogLifecycleText: Object.freeze({
+        runtimeStarted: 'connection started',
+        runtimeStopped: 'connection stopped'
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': 'this one was not sent',
