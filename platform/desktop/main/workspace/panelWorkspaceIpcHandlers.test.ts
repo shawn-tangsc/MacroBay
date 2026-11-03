@@ -721,10 +721,18 @@ describe('composePanelWorkspace', () => {
     writeStoredDocument(layoutFilePath, document)
 
     let releaseRead: (value: PanelLayoutDocumentV1) => void = () => undefined
+    // 等「读已经发出」这件**事件**，不要等 10 毫秒：满负载时 10ms 内 restore 可能还没轮到，
+    // 后面的用户命令就会先落，竞态用例也就测不到它要测的那个顺序（这条曾因此在全量里红）。
+    let signalReadStarted: () => void = () => undefined
+    const readStarted = new Promise<void>((resolve) => { signalReadStarted = resolve })
     const layoutStore = createPanelLayoutStore({
       filePath: layoutFilePath,
       storage: {
-        read: () => new Promise<PanelLayoutDocumentV1>((resolve) => { releaseRead = resolve }),
+        read: () => {
+          const pending = new Promise<PanelLayoutDocumentV1>((resolve) => { releaseRead = resolve })
+          signalReadStarted()
+          return pending
+        },
         write: async () => undefined
       },
       timers: { schedule: () => () => undefined },
@@ -732,7 +740,7 @@ describe('composePanelWorkspace', () => {
     })
     const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore })
     const started = composition.start()
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await readStarted
 
     composition.registerMainWindow({ webContentsId: 12 })
     const event: WorkspaceIpcSenderEvent = { senderFrame: { parent: null }, sender: { id: 12, isDestroyed: () => false } }
