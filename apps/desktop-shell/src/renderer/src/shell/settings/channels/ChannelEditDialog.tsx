@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
-import { ChannelFields, type ChannelFieldValues } from './ChannelFields'
+import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues, type ChannelPolicyPresence } from './ChannelFields'
 import type { Agent, Channel } from './channelSettingsPresentation'
 
 /**
@@ -18,6 +18,8 @@ export function ChannelEditDialog(props: {
   channel: Channel
   agents: readonly Agent[]
   labels: PlatformText['settings']
+  /** 这个频道有没有显式放行名单：决定空列表的文案。 */
+  policyPresence: ChannelPolicyPresence
   saving: boolean
   onCancel: () => void
   onSave: (input: {
@@ -25,6 +27,7 @@ export function ChannelEditDialog(props: {
     agentId: string
     workspaceId: string | null
     permissionMode: ChannelFieldValues['permissionMode']
+    allowedChatIds: readonly string[]
   }) => void
 }): React.ReactElement {
   const { labels, channel } = props
@@ -33,7 +36,8 @@ export function ChannelEditDialog(props: {
     agentId: target.agentId,
     token: '',
     workspaceId: target.workspace?.type === 'user' ? target.workspace.workspaceId : null,
-    permissionMode: target.permissionMode ?? null
+    permissionMode: target.permissionMode ?? null,
+    allowedChatIdsText: (target.allowedChatIds ?? []).join('\n')
   })
   const [values, setValues] = useState<ChannelFieldValues>(fromChannel(channel))
 
@@ -62,7 +66,8 @@ export function ChannelEditDialog(props: {
                 name: values.name.trim(),
                 agentId: values.agentId,
                 workspaceId: values.workspaceId,
-                permissionMode: values.permissionMode
+                permissionMode: values.permissionMode,
+                allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
               })
             }
             type="primary">
@@ -75,6 +80,7 @@ export function ChannelEditDialog(props: {
         agents={props.agents}
         labels={labels}
         mode="edit"
+        policyPresence={props.policyPresence}
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
         values={values}
       />

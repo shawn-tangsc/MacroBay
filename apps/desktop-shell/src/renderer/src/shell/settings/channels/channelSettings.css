@@ -183,3 +183,15 @@
 .channel-row-actions:focus-within {
   opacity: 1;
 }
+
+/* 允许的会话 ID：空列表时的当前状态与风险。整块可见，不是小字；左侧用 --caution 提醒，
+   但不给正文上红色（红只属于状态点与错误图标）。 */
+.channel-allowed-chats-status {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--caution);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 12.5px;
+}

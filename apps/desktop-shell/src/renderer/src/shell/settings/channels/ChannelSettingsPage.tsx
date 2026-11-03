@@ -10,6 +10,7 @@ import { platformText } from '../../../i18n/platformText'
 import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import { ChannelEditDialog } from './ChannelEditDialog'
+import type { ChannelPolicyPresence } from './ChannelFields'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
@@ -41,6 +42,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [editor, setEditor] = useState<{ mode: 'create' } | { mode: 'edit'; channel: Channel } | null>(null)
+  // 编辑弹层里「空列表」到底是不是「允许所有」，取决于这个频道有没有显式放行名单。
+  const [policyPresence, setPolicyPresence] = useState<ChannelPolicyPresence>('unknown')
   const [savingEdit, setSavingEdit] = useState(false)
   const [deleting, setDeleting] = useState<Channel | null>(null)
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
@@ -105,12 +108,25 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const workspacePayload = (workspaceId: string | null): { type: 'system' } | { type: 'user'; workspaceId: string } =>
     workspaceId === null ? { type: 'system' } : { type: 'user', workspaceId }
 
+  /** 打开编辑弹层时先看有没有显式放行名单：查不到就记「未知」，不默认成任何一种。 */
+  const openEditor = async (channel: Channel): Promise<void> => {
+    setEditor({ mode: 'edit', channel })
+    setPolicyPresence('unknown')
+    try {
+      const policies = (await window.platform.channels.listPolicies({ id: channel.id, limit: 1 })) as unknown[]
+      setPolicyPresence(policies.length > 0 ? 'present' : 'none')
+    } catch {
+      setPolicyPresence('unknown')
+    }
+  }
+
   const createChannel = async (input: {
     name: string
     agentId: string
     token: string
     workspaceId: string | null
     permissionMode: ChannelPermissionMode | null
+    allowedChatIds: readonly string[]
   }): Promise<void> => {
     setSavingEdit(true)
     setError(null)
@@ -122,6 +138,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         workspace: workspacePayload(input.workspaceId),
         // `null` 就是继承助手；不传 `'default'`，两者必须分得开。
         permissionMode: input.permissionMode,
+        allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })) as { id?: string } | undefined
       if (typeof created?.id === 'string') await submitNewChannelCredential(created.id, input.token)
@@ -139,6 +156,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     agentId: string
     workspaceId: string | null
     permissionMode: ChannelPermissionMode | null
+    allowedChatIds: readonly string[]
   }): Promise<void> => {
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
@@ -150,6 +168,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         agentId: input.agentId,
         workspace: workspacePayload(input.workspaceId),
         permissionMode: input.permissionMode,
+        allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })
       setEditor(null)
@@ -254,7 +273,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     key={channel.id}
                     labels={labels}
                     onDelete={setDeleting}
-                    onEdit={(channel) => setEditor({ mode: 'edit', channel })}
+                    onEdit={(channel) => void openEditor(channel)}
                     onLogs={setLogsFor}
                     onToggle={toggle}
                   />
@@ -280,6 +299,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           agents={agents}
           channel={editor.channel}
           labels={labels}
+          policyPresence={policyPresence}
           onCancel={() => setEditor(null)}
           onSave={(input) => void saveEdit(input)}
           saving={savingEdit}

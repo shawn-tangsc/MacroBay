@@ -12,6 +12,19 @@ export type ChannelFieldValues = {
   workspaceId: string | null
   /** `null` = 继承助手设置（**不是** `'default'`，那是助手级默认值）。 */
   permissionMode: ChannelPermissionMode | null
+  /** 逗号或换行分隔的原始文本：保存时才解析成列表。 */
+  allowedChatIdsText: string
+}
+
+/** 这个频道有没有显式放行名单：决定「空列表」到底是不是「允许所有」。 */
+export type ChannelPolicyPresence = 'none' | 'present' | 'unknown'
+
+/** 解析读者粘进来的会话 ID：逗号、换行都算分隔，空行与空白丢掉。 */
+export function parseAllowedChatIds(text: string): string[] {
+  return text
+    .split(/[,\n]/u)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
 }
 
 /**
@@ -20,15 +33,19 @@ export type ChannelFieldValues = {
  *
  * **两个弹层共用这一个组件**，因为需求定的是「新建和编辑统一，别做两套」。
  *
- * 三个字段里已有两个能真正保存（工作目录、权限模式，接口 `64853a9` 起生效）；
- * 「允许的会话 ID」还在禁用并写明原因——后端那边的「留空＝允许所有」判定还没落，
- * 现在打开它并写「留空即放行」就是假话。接口到了只把 `disabled` 摘掉。
+ * 三个字段现在都能真正保存（工作目录、权限模式自 `64853a9`；允许的会话 ID 自 `3a0e262`，
+ * 那一笔把入站判定改成了「列表非空只放行名单内、空且无策略＝允许所有」）。
+ *
+ * 「允许的会话 ID」的文案必须**跟着真实状态**走：空列表在「没有显式名单」的频道上等于
+ * 允许所有，这一步有风险；而同一个空列表在「已有显式名单」的频道上并不放开任何人。
+ * 两种状态看起来一样，说法必须不同——判不出来就写「未知」，不许默认成其中一种。
  */
 export function ChannelFields(props: {
   mode: 'create' | 'edit'
   values: ChannelFieldValues
   agents: readonly Agent[]
   labels: PlatformText['settings']
+  policyPresence: ChannelPolicyPresence
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
@@ -94,9 +111,26 @@ export function ChannelFields(props: {
         )}
       </FieldShell>
 
-      <FieldShell hint={labels.channelFieldNotSavable} label={labels.channelFieldAllowedChats}>
-        <Input aria-label={labels.channelFieldAllowedChats} disabled placeholder={labels.channelFieldAllowedChats} />
+      <FieldShell hint={labels.channelAllowedChatsHint} label={labels.channelFieldAllowedChats}>
+        <Input.TextArea
+          aria-label={labels.channelFieldAllowedChats}
+          autoSize={{ minRows: 2, maxRows: 4 }}
+          onChange={(event) => props.onChange({ allowedChatIdsText: event.target.value })}
+          placeholder={labels.channelFieldAllowedChats}
+          value={values.allowedChatIdsText}
+        />
       </FieldShell>
+
+      {/* 空列表时**必须**说清现在是什么状态：只让输入框空着，读者会以为自己已经放开了。 */}
+      {parseAllowedChatIds(values.allowedChatIdsText).length > 0 ? null : (
+        <p className="channel-allowed-chats-status" data-allowed-chats-status={props.policyPresence} role="note">
+          {props.policyPresence === 'present'
+            ? labels.channelAllowedChatsPolicies
+            : props.policyPresence === 'unknown'
+              ? labels.channelAllowedChatsUnknown
+              : `${labels.channelAllowedChatsAll} ${labels.channelAllowedChatsRisk}`}
+        </p>
+      )}
 
       <FieldShell label={labels.channelFieldPermissionMode}>
         <Select

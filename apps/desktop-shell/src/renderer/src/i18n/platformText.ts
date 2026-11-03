@@ -242,6 +242,15 @@ export type PlatformText = {
     channelPermissionPlan: string
     /** 工作目录：读者已经指定过一个工作区时，那一项的名字（本版没有工作区目录接口，只能回显它）。 */
     channelWorkspaceCurrent: string
+    /** 允许的会话 ID：留空在「没有显式名单」的频道上等于允许所有，风险句要整块可见。 */
+    channelAllowedChatsHint: string
+    channelAllowedChatsRisk: string
+    /** 列表为空、且这个频道确实没有显式名单：当前状态就是「允许所有」。 */
+    channelAllowedChatsAll: string
+    /** 列表为空、但这个频道已有显式名单：留空不等于允许所有。 */
+    channelAllowedChatsPolicies: string
+    /** 判不出来：写「未知」，不许默认成其中一种。 */
+    channelAllowedChatsUnknown: string
   }
   taskAutomation: {
     title: string
@@ -1557,7 +1566,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelPermissionAcceptEdits: '自动接受修改',
       channelPermissionBypass: '完全放行',
       channelPermissionPlan: '只做计划',
-      channelWorkspaceCurrent: '当前工作区'
+      channelWorkspaceCurrent: '当前工作区',
+      channelAllowedChatsHint: '多个会话 ID 用逗号或换行分隔。',
+      channelAllowedChatsRisk: '留空＝允许所有会话——任何人都能用这个机器人。',
+      channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
+      channelAllowedChatsPolicies: '这个频道已有显式放行名单：留空不会放开所有人。',
+      channelAllowedChatsUnknown: '无法确认这个频道是否已有放行名单，留空的作用未知。'
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -2759,7 +2773,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelPermissionAcceptEdits: 'Accept edits automatically',
       channelPermissionBypass: 'Allow everything',
       channelPermissionPlan: 'Plan only',
-      channelWorkspaceCurrent: 'Current working folder'
+      channelWorkspaceCurrent: 'Current working folder',
+      channelAllowedChatsHint: 'Separate several chat IDs with commas or new lines.',
+      channelAllowedChatsRisk: 'Empty means every conversation is allowed — anyone can use this bot.',
+      channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
+      channelAllowedChatsPolicies: 'This channel already has an explicit allow list, so an empty box does not open it up.',
+      channelAllowedChatsUnknown: 'Cannot tell whether this channel already has an allow list, so what an empty box does is unknown.'
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',

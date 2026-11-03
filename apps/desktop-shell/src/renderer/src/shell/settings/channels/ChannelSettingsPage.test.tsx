@@ -32,6 +32,7 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     requestEnable: vi.fn(async () => ({})),
     disable: vi.fn(async () => ({})),
     remove: vi.fn(async () => ({})),
+    listPolicies: vi.fn(async () => []),
     ...overrides
   }
   Object.assign(globalThis, {
@@ -218,6 +219,64 @@ describe('the two fields that became saveable', () => {
     expect((save as HTMLButtonElement).disabled).toBe(true)
     expect(channels.create).not.toHaveBeenCalled()
   })
+})
+
+describe('the allowed chat IDs field', () => {
+  it('says the bot is open to everyone when the list is empty and no policy exists', async () => {
+    installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    await openEdit(container)
+    await act(async () => {})
+
+    const status = document.body.querySelector('[data-allowed-chats-status]')
+    expect(status?.getAttribute('data-allowed-chats-status')).toBe('none')
+    expect(status?.textContent).toContain(labels.channelAllowedChatsAll)
+    expect(status?.textContent).toContain(labels.channelAllowedChatsRisk)
+  })
+
+  it('does not claim everyone is allowed when the channel already has an explicit policy', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      listPolicies: vi.fn(async () => [{ id: 'policy-1' }])
+    })
+    const container = await mount()
+    await openEdit(container)
+    await act(async () => {})
+
+    const status = document.body.querySelector('[data-allowed-chats-status]')
+    expect(status?.getAttribute('data-allowed-chats-status')).toBe('present')
+    expect(status?.textContent).toContain(labels.channelAllowedChatsPolicies)
+    expect(status?.textContent).not.toContain(labels.channelAllowedChatsAll)
+  })
+
+  it('writes the parsed list back through update', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    await openEdit(container)
+    await act(async () => {})
+
+    const field = document.body.querySelector('textarea[aria-label="允许的会话 ID"]') as HTMLTextAreaElement
+    await act(async () => {
+      // React 会拦截直接赋值：走原型上的 setter，它才认这次变更。
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(field, '111, 222\n333')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const save = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelUpdate
+    )
+    await act(async () => save?.click())
+    await act(async () => {})
+
+    expect(channels.update).toHaveBeenCalledWith(expect.objectContaining({ allowedChatIds: ['111', '222', '333'] }))
+  })
+
+  async function openEdit(container: HTMLElement): Promise<void> {
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+  }
 })
 
 describe('platforms that are not implemented', () => {

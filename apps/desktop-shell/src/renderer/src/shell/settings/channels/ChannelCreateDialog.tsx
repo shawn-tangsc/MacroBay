@@ -5,11 +5,11 @@ import { useEffect, useState } from 'react'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
-import { ChannelFields, type ChannelFieldValues } from './ChannelFields'
+import { ChannelFields, parseAllowedChatIds, type ChannelFieldValues } from './ChannelFields'
 import type { Agent } from './channelSettingsPresentation'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
-const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', workspaceId: null, permissionMode: null }
+const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', workspaceId: null, permissionMode: null, allowedChatIdsText: '' }
 
 /**
  * 「＋ 添加」的弹层：六字段布局与编辑弹层共用（需求 v7 要求新建和编辑统一）。
@@ -28,6 +28,7 @@ export function ChannelCreateDialog(props: {
     token: string
     workspaceId: string | null
     permissionMode: ChannelFieldValues['permissionMode']
+    allowedChatIds: readonly string[]
   }) => void
 }): React.ReactElement {
   const { labels } = props
@@ -59,7 +60,8 @@ export function ChannelCreateDialog(props: {
                 agentId: values.agentId,
                 token: values.token,
                 workspaceId: values.workspaceId,
-                permissionMode: values.permissionMode
+                permissionMode: values.permissionMode,
+                allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
               })
             }
             type="primary">
@@ -72,6 +74,7 @@ export function ChannelCreateDialog(props: {
         agents={props.agents}
         labels={labels}
         mode="create"
+        policyPresence="none"
         onChange={(patch) => setValues((previous) => ({ ...previous, ...patch }))}
         values={values}
       />
