@@ -126,6 +126,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           rows={[{ labelKey: 'pages.intelligence.portal.dashboard.divergence.chipWhyLabel', value: text.chipWhy }]} />
       ) : null}
       <div className="mi-divergence__content">
+        {/* state-ternary: reviewed — 这一枝只画「正在读」这一块，不藏任何内容；扫描窗口里看到的列表属于下面 available 分支，与它无关。 */}
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
         {/* state-ternary: reviewed — 这一枝只输出一行「今天没有背离」，不渲染列表；列表见下面 available 分支。 */}
         {state.state === 'empty' ? (
