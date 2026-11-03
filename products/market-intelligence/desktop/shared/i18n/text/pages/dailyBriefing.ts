@@ -215,6 +215,14 @@ export const dailyBriefingText = {
       openAiSettings: 'AI 设置',
       openModelService: '打开模型服务'
     },
+    settingsDrawer: {
+      open: '日报设置', title: '日报设置',
+      sections: { generation: '生成', ai: 'AI 编辑' },
+      platformNote: '模型服务、网页搜索供应商属于平台设置，请到设置里改。',
+      openModelService: '模型服务', openWebSearch: '网页搜索供应商',
+      sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
+      saveFailed: '保存失败：{sections}'
+    },
     generationSettings: {
       open: '生成设置', title: '日报生成设置',
       generationTime: '生成时间', generationTimeHint: '按你的显示时区解释：填的时刻就是你所在时区的那个时刻。既是自动生成时刻，也是本期统计截止时间；没改过设置时跟随默认生成时间。',
@@ -440,6 +448,14 @@ export const dailyBriefingText = {
       detail: { 'default-unavailable': 'The platform default model is unavailable', 'custom-unavailable': 'The selected model is unavailable', selection: 'The model returned an invalid selection result' },
       openAiSettings: 'AI settings',
       openModelService: 'Open model service'
+    },
+    settingsDrawer: {
+      open: 'Brief settings', title: 'Brief settings',
+      sections: { generation: 'Generation', ai: 'AI editing' },
+      platformNote: 'Model service and web-search providers are platform settings — change them in Settings.',
+      openModelService: 'Model service', openWebSearch: 'Web-search providers',
+      sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },
+      saveFailed: 'Save failed: {sections}'
     },
     generationSettings: {
       open: 'Generation settings', title: 'Brief generation settings',

@@ -14,11 +14,10 @@ import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../.
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { openModelSettings } from '../../shared/navigation/productShellNavigation'
+import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
-import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
-import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
+import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
@@ -86,8 +85,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
+  // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
+  // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
+  const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -353,16 +353,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__copy" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </Button> : null}
-        <Button className="mi-daily-briefing__regenerate" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
-          {text.generationSettings.open}
+        {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
+            beside it opened a second dialog for half of the same form. */}
+        <Button className="mi-daily-briefing__settings-entry" data-briefing-settings-open="true" onClick={() => setSettingsSection('generation')}>
+          <Settings2 aria-hidden="true" size={14} />{text.settingsDrawer.open}
         </Button>
-        <IconButton
-          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.open"
-          icon={Settings2}
-          onSelect={() => setSettingsOpen(true)}
-          resolveText={resolveProductText}
-          size="md"
-        />
       </div>
     </header>
     <div className={bodyClass}>
@@ -373,9 +368,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <section className="mi-daily-briefing-page__content">
         <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
         <DailyBriefingStorageNotice text={text.migration} />
-        {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
+        {webSearchEnabled === false && settingsSection === null ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
-          <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
+          <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
         </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state">
           <div className="mi-daily-briefing-page__loading-head">
@@ -437,9 +432,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           formatTime={formatTime}
           regenerating={regenerating}
           onRetry={() => void regenerate()}
-          onOpenAiSettings={() => setSettingsOpen(true)}
-          onOpenModelSettings={openModelService}
-          onConfigureSources={onConfigureSources}
+          onOpenSettings={() => setSettingsSection('ai')}
         /> : null}
         {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
         {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <StateView
@@ -485,11 +478,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </aside> : null}
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
-    <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
-      setSettingsOpen(false)
-      void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
-    }} />
-    <DailyBriefingGenerationSettingsModal open={generationSettingsOpen} text={text} client={client} onClose={() => setGenerationSettingsOpen(false)} />
+    {/* Mounted only while open: both blocks read settings on mount, so a closed page reads none. */}
+    {settingsSection ? <DailyBriefingSettingsDrawer client={client} open section={settingsSection} text={text}
+      onConfigureWebSearch={onConfigureWebSearch ?? openWebSearchSettings}
+      onOpenModelSettings={openModelService}
+      onClose={() => {
+        setSettingsSection(null)
+        // The banner follows the saved value, so a save inside the drawer has to be re-read.
+        void client.getSettings().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
+      }} /> : null}
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         {/* The exported node only: rows that are just a fallback reading stay on the page above. */}

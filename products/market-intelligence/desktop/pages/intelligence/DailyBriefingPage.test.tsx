@@ -7,10 +7,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingPage } from './DailyBriefingPage'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+
+/** Both settings blocks read the same view; the drawer is what shows them side by side. */
+const settingsView: DailyBriefingSettingsView = {
+  settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: true },
+  generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
+  language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
+  webSearchSupported: false,
+  resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
+}
 
 const briefingDocument = (date = '2026-10-30', lede = 'CPI 超预期 · Ripple 获批'): DailyBriefingDocument => ({
   schemaVersion: 1,
@@ -439,10 +449,9 @@ describe('daily briefing page', () => {
     expect(state.querySelector('.state-view__action')).toBeNull()
   })
 
-  it('explains an editorial timeout and offers retry, AI settings and model service actions', async () => {
-    const onOpenModelSettings = vi.fn()
+  it('explains an editorial timeout and offers retry plus the one settings entry', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })) })
-    const dom = await renderPage(client, { onOpenModelSettings })
+    const dom = await renderPage(client)
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
 
     expect(panel).not.toBeNull()
@@ -452,15 +461,15 @@ describe('daily briefing page', () => {
     expect(panel.textContent).not.toContain('editorial-timeout')
     expect(panel.textContent).toContain(text.failurePanel.advice.retryOrModel)
     expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
-    expect(panel.querySelector('[data-failure-action="ai-settings"]')).not.toBeNull()
+    // Two actions only: retry, and the same settings drawer the header opens. A third button per
+    // advice code is what the reader saw as duplicated settings entries.
+    expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
     // One retry, in the panel under the reason: the toolbar's copy is hidden while the failure is
     // shown, so the reader never has to choose between two buttons that do the same thing.
     expect(dom.querySelector('[data-toolbar-action="regenerate"]')).toBeNull()
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
-
-    act(() => panel.querySelector<HTMLButtonElement>('[data-failure-action="model-service"]')!.click())
-    expect(onOpenModelSettings).toHaveBeenCalledTimes(1)
 
     await act(async () => {
       panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
@@ -471,7 +480,62 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('重新生成版')
   })
 
-  it('sends model and provider failures to model settings with a readable detail', async () => {
+  it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
+    const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })),
+      getSettings,
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client)
+
+    // The header entry, and nothing else that opens a settings surface of its own.
+    expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
+    expect(dom.querySelectorAll(`[aria-label="${text.aiSettings.open}"]`)).toHaveLength(0)
+    // The failure panel's button is the same entry, not a second one.
+    const failureAction = dom.querySelector<HTMLButtonElement>('[data-failure-action="settings"]')!
+    expect(failureAction.getAttribute('data-open-settings-section')).toBe('ai')
+
+    await act(async () => {
+      failureAction.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    const generation = document.querySelector('[data-settings-section="generation"]')
+    const ai = document.querySelector('[data-settings-section="ai"]')
+    expect(generation).not.toBeNull()
+    expect(ai).not.toBeNull()
+    // The platform-wide values are jumps, never a second editable copy.
+    expect(document.querySelector('[data-settings-platform="true"]')?.textContent).toContain(text.settingsDrawer.platformNote)
+    const globalLinks = [...document.querySelectorAll<HTMLElement>('[data-global-link]')]
+    expect(globalLinks).toHaveLength(2)
+    expect(globalLinks.every((link) => !link.matches('input, select, textarea'))).toBe(true)
+    // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
+    // the marker, so a control added outside them would show up as unscoped.
+    expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
+  })
+
+  it('opens the same drawer from the web-search banner and keeps one entry', async () => {
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({
+        state: 'available' as const,
+        view: { ...settingsView, settings: { ...settingsView.settings, webSearchEnabled: false } }
+      }))
+    })
+    const dom = await renderPage(client)
+
+    expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
+    const banner = dom.querySelector<HTMLElement>('[data-open-settings-section="ai"]')!
+    expect(banner.textContent).toBe(text.aiSettings.goEnable)
+
+    await act(async () => {
+      banner.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+  })
+
+  it('names a model failure and keeps the readable detail', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'custom-unavailable') })) })
     const dom = await renderPage(client)
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
@@ -483,7 +547,7 @@ describe('daily briefing page', () => {
     expect(panel.textContent).not.toContain('model-unavailable')
     expect(panel.textContent).not.toContain('custom-unavailable')
     expect(detail?.textContent).toContain(text.failurePanel.detailLabel)
-    expect(panel.querySelector('[data-failure-action="model-service"]')).not.toBeNull()
+    expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 
   it('shows a truncated-output reason, redacts credentials and truncates long detail', async () => {
@@ -511,22 +575,20 @@ describe('daily briefing page', () => {
     expect(panel.textContent).toContain(text.aiSettings.failure['unknown-number'])
     expect(panel.querySelector('[data-failure-detail]')?.textContent).toContain('42000')
     expect(panel.textContent).toContain(text.failurePanel.advice.retryOrSettings)
-    expect(panel.querySelector('[data-failure-action="ai-settings"]')).not.toBeNull()
+    expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 
-  it('treats a source failure as a data problem and sends the reader to the sources', async () => {
-    const onConfigureSources = vi.fn()
+  it('treats a source failure as a data problem and still offers only retry and settings', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'source-failed' as const })) })
-    const dom = await renderPage(client, { onConfigureSources })
+    const dom = await renderPage(client)
     const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
 
     expect(panel.textContent).toContain(text.failurePanel.generationTitle)
     expect(panel.textContent).toContain(text.aiSettings.failure['source-failed'])
     expect(panel.textContent).toContain(text.failurePanel.advice.data)
-    expect(panel.querySelector('[data-failure-action="model-service"]')).toBeNull()
-
-    act(() => panel.querySelector<HTMLButtonElement>('[data-failure-action="sources"]')!.click())
-    expect(onConfigureSources).toHaveBeenCalledTimes(1)
+    // The advice sentence names the source check; the buttons do not grow a third entry for it.
+    expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
+    expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
   })
 
   it('renders the failure panel in English', async () => {

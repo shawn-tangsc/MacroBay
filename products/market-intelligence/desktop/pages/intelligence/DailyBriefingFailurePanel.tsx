@@ -20,15 +20,13 @@ export type BriefFailure = Readonly<{
  * Kept out of the page for the same reason the live steps are: the page decides which run to
  * display and what its actions do, not how a failure is laid out.
  */
-export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, onRetry, onOpenAiSettings, onOpenModelSettings, onConfigureSources }: Readonly<{
+export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, onRetry, onOpenSettings }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   regenerating: boolean
   onRetry: () => void
-  onOpenAiSettings: () => void
-  onOpenModelSettings: () => void
-  onConfigureSources?: () => void
+  onOpenSettings: () => void
 }>): React.ReactElement {
   const advice = failureAdvice(failure.code)
   const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
@@ -46,9 +44,9 @@ export function DailyBriefingFailurePanel({ failure, text, formatTime, regenerat
       <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
         {regenerating ? text.regenerating : text.regenerate}
       </Button>
-      <Button data-failure-action="ai-settings" onClick={onOpenAiSettings}>{text.failurePanel.openAiSettings}</Button>
-      {advice !== 'data' ? <Button data-failure-action="model-service" onClick={onOpenModelSettings}>{text.failurePanel.openModelService}</Button> : null}
-      {advice === 'data' && onConfigureSources ? <Button data-failure-action="sources" onClick={onConfigureSources}>{text.configureSources}</Button> : null}
+      {/* Two actions only: retry here, or the same settings drawer the header opens. The advice
+          paragraph above already names what to check, so a third button per advice would repeat it. */}
+      <Button data-failure-action="settings" data-open-settings-section="ai" onClick={onOpenSettings}>{text.settingsDrawer.open}</Button>
     </div>
   </div>
 }
