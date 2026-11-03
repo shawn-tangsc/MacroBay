@@ -6,7 +6,7 @@ import {
 } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
 import type { PlatformText } from '../../../i18n/platformText'
 
-import { smokeReasonSentence } from './channelSettingsPresentation'
+import { channelFailureReason } from './channelSettingsPresentation'
 
 /**
  * 日志面板的行模型：三类来源合并成一条时间线，**每条正文都带类别前缀**。
@@ -51,7 +51,9 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
       at: entry.createdAt,
       level: 'INFO',
       text: failedEnable
-        ? `${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}${smokeReasonSentence(entry.code, labels)}`
+        ? `${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}${
+            channelFailureReason(entry.code, labels) ?? labels.channelFailureReasonUnknown
+          }`
         : `${labels.channelLogOperationPrefix}${
             copyKey === undefined ? labels.channelLogsUnknownCode : labels.channelLogActionText[copyKey]
           }`

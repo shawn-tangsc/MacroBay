@@ -15,7 +15,7 @@ import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import { enableFailureSentence } from './channelSettingsPresentation'
+import { enableFailureSentence, mutationFailureSentence } from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 
 type CatalogType = 'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack'
@@ -96,7 +96,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setBusyId(channel.id)
     setError(null)
     try {
-      await action()
+      // 这些接口失败时**正常返回** `{ ok:false, code }`，不抛错：不看 `ok` 就会把「没停成」
+      // 显示成成功。删除也一样——用户现在库里有一堆重复频道，正靠这一步逐条删。
+      const result = (await action()) as { ok?: boolean; code?: string } | undefined
+      if (result !== undefined && result?.ok !== true) setError(mutationFailureSentence(result, labels))
       await reload()
     } catch {
       setError(labels.channelOperationFailed)
@@ -190,6 +193,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setSaveError(null)
     let createdId: string | null = null
     try {
+      // 返回形状是 `{ ok, code, channel }`——**id 在 `channel.id` 里，不在顶层**。
+      // 上一版按 `{ id }` 取，于是「建成了」也被判成「操作失败」，用户再点一次就多一条频道。
       const created = (await window.platform.channels.create({
         type: selectedType,
         name: input.name,
@@ -199,15 +204,17 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
-      })) as { id?: string } | undefined
-      if (typeof created?.id !== 'string') {
-        setError(labels.channelOperationFailed)
+      })) as { ok?: boolean; code?: string; channel?: { id?: string } } | undefined
+      const createdIdValue = created?.ok === true ? created.channel?.id : undefined
+      if (typeof createdIdValue !== 'string') {
+        // 失败码要说人话（助手不在了、凭据不对……），不许一律「操作失败，请重试」。
+        setSaveError(mutationFailureSentence(created, labels))
         return
       }
-      createdId = created.id
-      const submitted = await submitNewChannelCredential(created.id, input.token)
+      createdId = createdIdValue
+      const submitted = await submitNewChannelCredential(createdIdValue, input.token)
       // 返回 `ok: false` 也是失败（它不抛错），一样不许当成存好了。
-      const stored = submitted?.ok === false ? false : await readCredentialConfigured(created.id)
+      const stored = submitted?.ok === false ? false : await readCredentialConfigured(createdIdValue)
       // 建好了也要回读：频道的存在不等于凭据落库。两种结局分开说，且都关掉弹层——
       // 留着弹层让用户再点一次「创建」只会建出第二条重复频道。
       setError(
@@ -249,7 +256,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     setSaveError(null)
     const tokenProvided = input.token.trim().length > 0
     try {
-      await window.platform.channels.update({
+      const updated = (await window.platform.channels.update({
         id: editor.channel.id,
         name: input.name,
         agentId: input.agentId,
@@ -257,7 +264,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
-      })
+      })) as { ok?: boolean; code?: string } | undefined
+      // 改都没改成（频道不在了、助手不在了）：就地报错，别继续往下写凭据。
+      if (updated?.ok !== true) {
+        setSaveError(mutationFailureSentence(updated, labels))
+        await reload()
+        return
+      }
       // 空串＝不修改旧 Token；非空＝整串替换（旧值全程不可读，走同一套加密交接）。
       let tokenWrite: { ok?: boolean } | undefined
       if (tokenProvided) {
@@ -424,6 +437,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           labels={labels}
           onCancel={() => setEditor(null)}
           onCreate={(input) => void createChannel(input)}
+          saveError={saveError}
           saving={savingEdit}
         />
       ) : null}

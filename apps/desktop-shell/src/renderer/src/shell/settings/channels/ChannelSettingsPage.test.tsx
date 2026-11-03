@@ -29,11 +29,11 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     list: vi.fn(async () => [channel]),
     // 保存后回读用的就是这一口：默认「已配置」，只有需要演「没存上」的用例才覆盖它。
     get: vi.fn(async () => ({ ...channel, id: 'channel-1' })),
-    create: vi.fn(async () => ({})),
-    update: vi.fn(async () => ({})),
+    create: vi.fn(async () => ({ ok: true, code: 'configuration-ready', channel: { id: 'channel-1' } })),
+    update: vi.fn(async () => ({ ok: true, code: 'updated' })),
     requestEnable: vi.fn(async () => ({ ok: true, code: 'runtime-ready' })),
-    disable: vi.fn(async () => ({})),
-    remove: vi.fn(async () => ({})),
+    disable: vi.fn(async () => ({ ok: true, code: 'disabled' })),
+    remove: vi.fn(async () => ({ ok: true, code: 'deleted' })),
     listPolicies: vi.fn(async () => []),
     beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
     submitCredential: vi.fn(async () => ({})),
@@ -665,7 +665,7 @@ describe('saving a credential has to prove itself', () => {
     stubWebCrypto()
     const channels = installPlatform({
       list: vi.fn(async () => []),
-      create: vi.fn(async () => ({ id: 'channel-9' })),
+      create: vi.fn(async () => ({ ok: true, code: 'configuration-ready', channel: { id: 'channel-9' } })),
       get: vi.fn(async () => ({ ...channel, id: 'channel-9', credential: { status: 'missing', hasCredential: false } }))
     })
     const container = await mount()
@@ -700,5 +700,127 @@ describe('saving a credential has to prove itself', () => {
     // 建好了但 Token 没落库：页面级那句必须说清「频道已建好、Token 要重填」。
     expect(container.textContent).toContain(labels.channelCreatedWithoutCredential)
     expect(document.body.querySelector('[data-current-token]')).toBeNull()
+  })
+})
+
+/**
+ * 新建的返回形状是 `{ ok, code, channel }`，id 在 `channel.id` 里。
+ *
+ * 上一版按 `{ id }` 取顶层，于是「真的建成了」也被判成「操作失败，请重试」；用户再点一次
+ * 就又建一条——用户库里那 8 条重复频道就是这么来的。这两条用例把「读到 id 就继续」和
+ * 「失败要说人话、且不许再提交凭据」钉住。
+ */
+describe('creating a channel reads the real result', () => {
+  function stubWebCrypto(): void {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (array: Uint8Array) => array,
+      subtle: {
+        deriveBits: vi.fn(async () => new ArrayBuffer(32)),
+        encrypt: vi.fn(async () => new ArrayBuffer(4)),
+        exportKey: vi.fn(async () => ({})),
+        generateKey: vi.fn(async () => ({ privateKey: {}, publicKey: {} })),
+        importKey: vi.fn(async () => ({}))
+      }
+    })
+  }
+
+  function typeInto(field: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  /** 走完新建弹层：名称 + 助手 + Token，然后点「创建频道」。 */
+  async function fillCreateDialog(container: HTMLElement): Promise<void> {
+    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+    await act(async () => add?.click())
+    await act(async () => {})
+
+    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
+    await act(async () => typeInto(name, 'Telegram 9'))
+
+    const select = document.body.querySelector('.ant-select') as HTMLElement
+    const trigger = select.querySelector('.ant-select-selector') ?? select
+    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await vi.waitFor(() => {
+      const options = [...document.querySelectorAll('.ant-select-item-option')]
+      expect(options.some((option) => option.textContent?.trim() === '助手一')).toBe(true)
+    })
+    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === '助手一'
+    ) as HTMLElement
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(token, '123:new-token'))
+
+    const submit = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelCreate
+    )
+    await act(async () => submit?.click())
+    await act(async () => {})
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('takes the id from channel.id and keeps going instead of reporting a failure', async () => {
+    stubWebCrypto()
+    const channels = installPlatform({
+      list: vi.fn(async () => []),
+      create: vi.fn(async () => ({ ok: true, code: 'configuration-ready', channel: { id: 'channel-9' } })),
+      get: vi.fn(async () => ({
+        ...channel,
+        id: 'channel-9',
+        credential: { status: 'configured', hasCredential: true, maskedFields: { bot_token: '6050…xAA' } }
+      }))
+    })
+    const container = await mount()
+    await fillCreateDialog(container)
+
+    expect(channels.submitCredential).toHaveBeenCalledWith(expect.objectContaining({ id: 'channel-9' }))
+    // 建成了就不该出现「操作失败」。
+    expect(container.textContent).not.toContain(labels.channelOperationFailed)
+    expect(container.textContent).not.toContain(labels.channelOperationFailedUnknown)
+  })
+
+  it('names the failure code in plain words and stops before submitting a credential', async () => {
+    stubWebCrypto()
+    const channels = installPlatform({
+      list: vi.fn(async () => []),
+      create: vi.fn(async () => ({ ok: false, code: 'channel-agent-missing' }))
+    })
+    const container = await mount()
+    await fillCreateDialog(container)
+
+    expect(channels.submitCredential).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain(labels.channelFailureReason['channel-agent-missing'])
+    // 不许出现内部码，也不许一律「操作失败，请重试」。
+    expect(document.body.textContent).not.toContain('channel-agent-missing')
+  })
+
+  it('reports a failed delete in plain words instead of pretending the row is gone', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      remove: vi.fn(async () => ({ ok: false, code: 'channel-not-found' }))
+    })
+    const container = await mount()
+    const remove = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelDelete
+    )
+    await act(async () => remove?.click())
+    await act(async () => {})
+    const confirm = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelDelete && node.closest('[role="dialog"]') !== null
+    ) as HTMLButtonElement | undefined
+    await act(async () => (confirm ?? [...document.body.querySelectorAll('button')].pop())?.click())
+    await act(async () => {})
+
+    expect(channels.remove).toHaveBeenCalled()
+    expect(container.textContent).toContain(labels.channelFailureReason['channel-not-found'])
   })
 })

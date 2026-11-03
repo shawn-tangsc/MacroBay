@@ -20,6 +20,8 @@ const EMPTY: ChannelFieldValues = { name: '', agentId: '', token: '', workspaceI
 export function ChannelCreateDialog(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
+  /** 创建失败/凭据没存上时的就地一句话：页面级那句在遮罩后面，读者看不见。 */
+  saveError?: string | null
   saving: boolean
   onCancel: () => void
   onCreate: (input: {
@@ -70,6 +72,11 @@ export function ChannelCreateDialog(props: {
         </>
       }
     >
+      {props.saveError ? (
+        <p className="channel-inline-error" data-channel-save-error role="alert">
+          {props.saveError}
+        </p>
+      ) : null}
       <ChannelFields
         agents={props.agents}
         labels={labels}

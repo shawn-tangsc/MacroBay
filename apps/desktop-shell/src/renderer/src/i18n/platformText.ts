@@ -224,9 +224,12 @@ export type PlatformText = {
     channelNeedsEvidence: string
     /** 启用不再要求先交验收记录：点一下，应用现场检查连接。 */
     channelEnableSelfCheckHint: string
-    /** 现场检查没过时的 5 个原因 + 兜底，都是大白话，不出现内部码。 */
-    channelSmokeReason: Readonly<Record<string, string>>
-    channelSmokeReasonUnknown: string
+    /** 失败原因表（启用自检 + 新建/编辑/删除共用）：码 → 大白话，不出现内部码。 */
+    channelFailureReason: Readonly<Record<string, string>>
+    /** 启用/自检这条路上表里没有的码：说「没通过、说不出具体原因」，不把空值包装成解释。 */
+    channelFailureReasonUnknown: string
+    /** 其它操作（新建、编辑、删除、启停）上表里没有的码：同一件事，换个说法。 */
+    channelOperationFailedUnknown: string
     /** 行内四个动作的读屏名与提示。 */
     channelLogs: string
     channelEdit: string
@@ -1613,19 +1616,25 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelUnsupportedPane: '这一版还接不了，先把 Telegram 接上。',
       channelNeedsEvidence: '这个平台还没有通过真机验收；不影响你启用，应用会现场检查一次连接。',
       channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
-      channelSmokeReason: Object.freeze({
+      channelFailureReason: Object.freeze({
         'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
         'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
         'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
         'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
         'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
         'channel-credential-missing': '还没有存 Token，先在「编辑」里填一把再启用',
-        'channel-agent-missing': '这条频道没有绑上可用的助手，重新创建一条再试',
+        'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
         'adapter-not-supported': '这个平台还没接上，这一版启用不了',
         'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
-        'channel-not-found': '这条频道已经不在了，刷新一下列表'
+        'channel-not-found': '这条频道已经不在了，刷新一下列表',
+        'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
+        'channel-credential-unavailable': '凭据读不出来，重新填一次',
+        'channel-delete-pending': '这条频道正在删除，等它删完再改',
+        'channel-management-metadata-failed': '这条频道的状态没存上，可以再试一次',
+        'channel-policy-invalid': '访问策略填得不对，检查一下再存'
       }),
-      channelSmokeReasonUnknown: '这次没有通过检查，暂时说不出具体原因，可以再试一次',
+      channelFailureReasonUnknown: '这次没有通过检查，暂时说不出具体原因，可以再试一次',
+      channelOperationFailedUnknown: '这次没有成功，具体原因没说清楚，可以再试一次',
       channelLogs: '日志',
       channelEdit: '编辑',
       channelTokenMask: '********',
@@ -2909,19 +2918,25 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelUnsupportedPane: 'This version cannot connect it yet — start with Telegram.',
       channelNeedsEvidence: 'This platform has no real-device acceptance record yet; that does not block you — the app checks the connection when you enable it.',
       channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
-      channelSmokeReason: Object.freeze({
+      channelFailureReason: Object.freeze({
         'telegram-credential-missing': 'no token is stored yet; add one in Edit',
         'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
         'telegram-conflict': 'another program is using the same bot; stop that one first',
         'telegram-network-unavailable': 'the network or proxy cannot be reached; check the proxy and retry',
         'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
         'channel-credential-missing': 'no token is stored yet; add one in Edit and enable again',
-        'channel-agent-missing': 'this channel has no usable assistant bound; create it again',
+        'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
         'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
         'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
-        'channel-not-found': 'this channel is gone now; refresh the list'
+        'channel-not-found': 'this channel is gone now; refresh the list',
+        'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',
+        'channel-credential-unavailable': 'the credential cannot be read; enter it again',
+        'channel-delete-pending': 'this channel is being deleted; wait for that to finish',
+        'channel-management-metadata-failed': 'this channel state was not stored; retry',
+        'channel-policy-invalid': 'the access policy is not valid; check it and save again'
       }),
-      channelSmokeReasonUnknown: 'the check did not pass and this time the reason is unclear; try again',
+      channelFailureReasonUnknown: 'the check did not pass and this time the reason is unclear; try again',
+      channelOperationFailedUnknown: 'that did not go through, and the reason is unclear; try again',
       channelLogs: 'Logs',
       channelEdit: 'Edit',
       channelTokenMask: '********',

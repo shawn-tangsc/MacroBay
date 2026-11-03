@@ -184,7 +184,7 @@ describe('the channel log panel', () => {
     const enabled = rows.find((node) => node.textContent?.includes('启用了推送'))
     // 失败那行：动作 + 原因，同一行里能看出「为什么没开」。
     expect(failed?.textContent).toContain(`${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}`)
-    expect(failed?.textContent).toContain(labels.channelSmokeReason['telegram-conflict'])
+    expect(failed?.textContent).toContain(labels.channelFailureReason['telegram-conflict'])
     expect(failed?.textContent).not.toContain(labels.channelLogsUnknownCode)
     expect(failed?.textContent).not.toContain('telegram-conflict')
     // 成功那行不带 code，仍只说动作。
@@ -201,7 +201,7 @@ describe('the channel log panel', () => {
     })
 
     const row = container.querySelector('.channel-log-row')
-    expect(row?.textContent).toContain(labels.channelSmokeReasonUnknown)
+    expect(row?.textContent).toContain(labels.channelFailureReasonUnknown)
     expect(row?.textContent).not.toContain('some-new-code')
     expect(row?.textContent).not.toContain('没有上报')
   })

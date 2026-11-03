@@ -86,13 +86,12 @@ export function credentialStatusLabel(
 }
 
 /**
- * 启用失败的**闭集**：`ChannelManagementResult.code` 与自检那支的 `reason` 合起来就这些
- * （凭据没存、频道不在了、运行时没起来、平台还没接上、Telegram 那五种自检失败）。
- *
- * 以前只映射了自检的 5 个码，别的码一律落进兜底句「原因没有上报」——那等于告诉用户「不知道」，
- * 却包装成一句解释。现在**每一个码都有话**；闭集外也有一句实话，且原始码永不上屏。
- * 这张表与文案表一一对应，`channelSettingsPresentation.test.ts` 两边各钉一条。
+ * 失败码的**两张闭集**。两处都按「码 → 大白话」走同一张文案表，闭集外也有一句实话，
+ * 原始码永不上屏——上一版只映射了自检的 5 个码，别的码全落进「原因没有上报」，
+ * 用户看到的就是「失败了但不知道为什么」。
  */
+
+/** 启用/自检这条路上的码（`reason` 与 `code` 合起来）。 */
 export const CHANNEL_ENABLE_FAILURE_REASONS = [
   'telegram-credential-missing',
   'telegram-provider-rejected',
@@ -106,16 +105,38 @@ export const CHANNEL_ENABLE_FAILURE_REASONS = [
   'channel-not-found'
 ] as const
 
+/** 新建/编辑/删除/启停这条路上的码（`ChannelManagementCode` 里用户能看到的那些）。 */
+export const CHANNEL_MUTATION_FAILURE_REASONS = [
+  'channel-agent-missing',
+  'channel-credential-invalid',
+  'channel-credential-missing',
+  'channel-credential-unavailable',
+  'channel-delete-pending',
+  'channel-management-metadata-failed',
+  'channel-not-found',
+  'channel-policy-invalid',
+  'adapter-not-supported'
+] as const
+
 export type ChannelEnableFailureReason = (typeof CHANNEL_ENABLE_FAILURE_REASONS)[number]
+export type ChannelMutationFailureReason = (typeof CHANNEL_MUTATION_FAILURE_REASONS)[number]
 
-type EnableFailureLabels = Pick<typeof platformText['en-US']['settings'], 'channelSmokeReason' | 'channelSmokeReasonUnknown'>
+type FailureLabels = Pick<
+  typeof platformText['en-US']['settings'],
+  'channelFailureReason' | 'channelFailureReasonUnknown' | 'channelOperationFailedUnknown'
+>
 
-/** 码 → 人话；闭集外（或根本没有码）走那句实话，绝不把空值包装成解释。 */
-export function smokeReasonSentence(code: string | null | undefined, labels: EnableFailureLabels): string {
-  if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(labels.channelSmokeReason, code)) {
-    return labels.channelSmokeReason[code]
-  }
-  return labels.channelSmokeReasonUnknown
+/**
+ * 码 → 人话；表里没有就 `null`，由调用方决定用哪句兜底。
+ *
+ * 为什么不让这个函数自己挑兜底句：启用那一路要写「没有通过检查」，新建那一路要写
+ * 「这次没有成功」——同一件事两种语境，硬塞成一句必然有一边别扭。
+ */
+export function channelFailureReason(code: string | null | undefined, labels: FailureLabels): string | null {
+  if (typeof code !== 'string' || code === '') return null
+  return Object.prototype.hasOwnProperty.call(labels.channelFailureReason, code)
+    ? labels.channelFailureReason[code]
+    : null
 }
 
 /**
@@ -127,9 +148,24 @@ export function smokeReasonSentence(code: string | null | undefined, labels: Ena
  */
 export function enableFailureSentence(
   result: { ok?: boolean; code?: string; reason?: string } | null | undefined,
-  labels: EnableFailureLabels
+  labels: FailureLabels
 ): string | null {
   if (result?.ok === true) return null
   const code = typeof result?.reason === 'string' && result.reason !== '' ? result.reason : result?.code
-  return smokeReasonSentence(code, labels)
+  return channelFailureReason(code, labels) ?? labels.channelFailureReasonUnknown
+}
+
+/**
+ * 新建/编辑/删除这类操作的返回值 → 错误那句；`null` 表示成功。
+ *
+ * **`ok` 必须显式判**：这些接口失败时是正常返回 `{ ok: false, code }`，不抛错；不看 `ok`
+ * 就会把「建好了但没拿到」当成「操作失败」，用户再点一次就多出一条频道——库里那 8 条重复
+ * 频道就是这么来的。所以这里也接受「没有 ok 字段」，但那种情况一律按失败说。
+ */
+export function mutationFailureSentence(
+  result: { ok?: boolean; code?: string } | null | undefined,
+  labels: FailureLabels
+): string | null {
+  if (result?.ok === true) return null
+  return channelFailureReason(result?.code, labels) ?? labels.channelOperationFailedUnknown
 }
