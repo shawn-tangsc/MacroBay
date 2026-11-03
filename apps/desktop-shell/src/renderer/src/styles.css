@@ -9158,22 +9158,32 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
  */
 .about-page {
   display: grid;
+  /* 卡片之间 12：比原来的 36 紧，因为卡片自己还各有一圈 16 内边距（18+18 的「分段呼吸」换成卡片间距）。 */
+  gap: 12px;
   max-width: 720px;
   /* 不设高度、不设 overflow：滚动由外层 `.settings-detail-pane` 的 `overflow: auto` 负责。
      任何一层写出 `overflow: hidden` 或固定高度，长正文就滚不到底。 */
   align-content: start;
 }
 
-/* 关于页的区块**直接用 `.preference-section`**（上下 18 + 底部分隔线），
-   和基础设置同一套长相；不新造卡片——同一片设置里出现第三种长相，比空着更怪。 */
+/*
+ * 关于页用**圆角卡片分块**（用户 11-03 定；Chief 拍「这页例外」）。
+ *
+ * 为什么这页可以例外：其它设置页是纯表单（几行开关、几个下拉），没有分组需求；这页是三段实内容
+ * 加一整块长正文，**有**分组需求。这不代表设置页整体改版——那件事单独排期。
+ *
+ * 为什么只写 `.about-page` 作用域：语言、时区、通知仍然是「平铺 + 下边框」，一行都不动。
+ *
+ * 数值：卡底 `--surface`、描边 `--border-strong`、圆角 8、内边距 16、卡片间距 12（见 `.about-page`）。
+ * **没有新造 token**——深色下 `--border-strong` 对页面底只有 1.59:1，凑近才看得出；用户要是说
+ * 「还是看不出」，那要走「新增一档更亮的描边」，得架构师批，不在这一笔里偷偷加。
+ */
 .about-page .preference-section {
   gap: 12px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.about-page .preference-section:last-child {
-  border-bottom: none;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
 }
 
 .about-identity {
