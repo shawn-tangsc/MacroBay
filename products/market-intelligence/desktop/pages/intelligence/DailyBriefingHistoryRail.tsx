@@ -13,7 +13,7 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
  * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
  * stays one line of facts.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, selectedLocale, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -22,7 +22,6 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   /** Reads the list again; only used by the failure state. */
   onRetry?: () => void
   selectedDate?: string
-  selectedLocale?: DailyBriefingLocale
   todayDate: string
   locale: DailyBriefingLocale
   text: DailyBriefingText
@@ -32,7 +31,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   generatingStage?: string
   /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
-  onSelect: (date: string, locale?: DailyBriefingLocale) => void
+  onSelect: (date: string) => void
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
@@ -57,13 +56,12 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         // One row is one issue, whatever language of it is on screen: the row stays current when the
         // reader switches language in place, and the pressed language follows what is shown.
         const selected = edition.date === selectedDate
-        const shownLocale = selected ? (selectedLocale ?? edition.locale) : edition.locale
         const key = `${edition.date}:${edition.periodId}:${edition.locale}`
         return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
           <button type="button" disabled={missing}
             aria-current={selected ? 'true' : undefined}
             data-date={edition.date} data-state={edition.state}
-            className="mi-daily-briefing__rail-row" onClick={() => onSelect(edition.date, edition.locale)}>
+            className="mi-daily-briefing__rail-row" onClick={() => onSelect(edition.date)}>
             <span className="mi-daily-briefing__rail-line">
               <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
               {edition.date === todayDate ? <em>{text.history.today}</em> : null}
@@ -104,14 +102,6 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
               </span> : null}
             </>}
           </button>
-          <div className="mi-daily-briefing__rail-side">
-            {!missing && edition.availableLocales.length > 1 ? edition.availableLocales.map((available) =>
-              <button key={available} type="button" aria-pressed={available === shownLocale}
-                className="mi-daily-briefing__rail-lang" data-locale={available}
-                onClick={() => onSelect(edition.date, available)}>
-                {text.history.languages[available]}
-              </button>) : null}
-          </div>
         </div>
       })}
     </div>

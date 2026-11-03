@@ -197,8 +197,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
   }, [])
 
-  const selectEdition = (date: string, language?: 'zh-CN' | 'en-US'): void => {
-    const target = language ?? locale
+  const selectEdition = (date: string): void => {
+    const target = contentLocale
     const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
     if (!row || row.state === 'missing') return
     if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return
@@ -386,7 +386,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </header>
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedLocale={selectedLocale} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">

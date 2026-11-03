@@ -121,27 +121,17 @@ describe('daily briefing history rail', () => {
     expect(row.textContent).not.toContain(text.history.missingRun)
   })
 
-  it('shows one row per issue and switches language in place', () => {
+  it('keeps one row per issue and offers no language switch of its own', () => {
+    // Contract change: the edition language is chosen from the top tab, so a row that had two
+    // languages no longer renders a pair of buttons.
     const onSelect = vi.fn()
     render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })], onSelect })
     expect(host.querySelectorAll('.mi-daily-briefing__rail-item')).toHaveLength(1)
-    const english = host.querySelector('[data-locale="en-US"]') as HTMLButtonElement
-    act(() => english.click())
-    expect(onSelect).toHaveBeenCalledWith('2026-11-02', 'en-US')
-  })
+    expect(host.querySelectorAll('[data-locale]')).toHaveLength(0)
+    expect(host.querySelectorAll('.mi-daily-briefing__rail-lang')).toHaveLength(0)
 
-  it('marks the language the reader is reading, not the one the list row happens to carry', () => {
-    // The row summary carries the issue's primary language. After switching in place the page shows
-    // another language of the same issue, so the pressed button has to follow what is shown.
-    render({
-      editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })],
-      selectedDate: '2026-11-02',
-      selectedLocale: 'en-US'
-    })
-    expect((host.querySelector('[data-locale="en-US"]') as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true')
-    expect((host.querySelector('[data-locale="zh-CN"]') as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
-    // The issue is still the current row even though its primary language is not the shown one.
-    expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('aria-current')).toBe('true')
+    act(() => host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.click())
+    expect(onSelect).toHaveBeenCalledWith('2026-11-02')
   })
 
   it('marks an incomplete issue with the status pill, not a hand-made chip', () => {

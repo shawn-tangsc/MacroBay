@@ -215,6 +215,8 @@ let container: HTMLDivElement | null = null
 // The fixture editions are dated 2026-10-30, and the rail marks "today" from the wall clock.
 // Without a frozen clock this test passes only before midnight and fails on the next calendar day.
 beforeEach(() => {
+  // The content language is remembered; a test must not inherit the previous test's choice.
+  window.localStorage.clear()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-10-30T04:00:00.000Z'))
 })
@@ -286,10 +288,7 @@ describe('daily briefing page', () => {
     expect(client.get).toHaveBeenCalledTimes(2)
   })
 
-  it('moves the pressed language with the edition it loads in place', async () => {
-    // The row summary carries the issue's primary language (Chinese). Reading the English version
-    // of the same issue must move the pressed button, or the reader sees English text under a
-    // Chinese button.
+  it('loads the chosen edition language from the top tab, keeping the row current', async () => {
     const chinese = briefingDocument('2026-10-30')
     const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const } }
     const client = fakeClient({
@@ -301,15 +300,15 @@ describe('daily briefing page', () => {
         ({ state: 'available' as const, document: locale === 'en-US' ? english : chinese }))
     })
     const dom = await renderPage(client)
-    const englishButton = dom.querySelector<HTMLButtonElement>('[data-locale="en-US"]')!
-    expect(englishButton.getAttribute('aria-pressed')).toBe('false')
+    const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
 
-    await act(async () => { englishButton.click() })
+    await act(async () => { tabs[1].click() })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
-    expect(dom.querySelector('[data-locale="en-US"]')?.getAttribute('aria-pressed')).toBe('true')
-    expect(dom.querySelector('[data-locale="zh-CN"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(dom.querySelectorAll('[data-locale]')).toHaveLength(0)
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
