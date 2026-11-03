@@ -5,7 +5,6 @@ import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useId, useState } from 'react'
 
@@ -73,21 +72,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       }]
     }]
   })
-  /**
-   * The product's own sentence for the reason line, and only that line.
-   *
-   * `StateView` owns the title, the icon and the announcement; the one thing it cannot know is
-   * which reading failed and what the reader can do about it. That sentence stays ours, resolved
-   * from the text table by key, never passed as a literal.
-   */
-  const productReason = (spec: Readonly<{ key: string; params?: Record<string, string> }>) => ({
-    ...spec,
-    resolve: (key: string, params?: Record<string, string>) => {
-      const sentence = resolveProductKey(key)
-      if (!sentence || !params) return sentence
-      return Object.entries(params).reduce((line, [name, value]) => line.split(`{${name}}`).join(value), sentence)
-    }
-  })
+
+  // While the collectors upstream are down this card's only content is a constant apology: the
+  // same "nothing could be compared" block, naming the same missing legs, every time the page
+  // opens. The reader asked for it to be hidden rather than repeated — the card above already
+  // says 数据已滞后, which is the actual fact. It returns when the legs come back, and the
+  // reasons stay in the DTO for the analysis and for the panel that computes them.
+  if (nothingCompared || state.state === 'unavailable') return <></>
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
@@ -128,34 +119,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       ) : null}
       <div className="mi-divergence__content">
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
-        {state.state === 'unavailable' ? (
-          <StateView state="error" size="md"
-            // A failed read is retryable; "six sources said nothing" is the same read failing one
-            // layer earlier, so both keep the same next step instead of sending the reader to
-            // settings that may be perfectly configured.
-            reasonCode={unavailableReasonCode(state.reason)}
-            // The action is not conditional: the same state must give the reader the same next
-            // step wherever it appears. A button that sometimes disappears teaches nothing.
-            action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
-            productReason={productReason(state.missing.length > 0
-              ? { key: 'pages.intelligence.portal.dashboard.divergence.missingLegs',
-                  params: { legs: state.missing.map(leg => text.legs[leg]).join(text.withheldListSep) } }
-              : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
-        ) : null}
         {/* state-ternary: reviewed — 这一枝只输出一行「今天没有背离」，不渲染列表；列表见下面 available 分支。 */}
-        {state.state === 'empty' && !nothingCompared ? (
+        {state.state === 'empty' ? (
           // One line, no block: a card with nothing to report must not take half a screen to say so,
           // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
           <p className="mi-divergence__quiet">{text.empty}</p>
-        ) : null}
-        {nothingCompared ? (
-          <>
-            <StateView state="error" reasonCode="unavailable" size="md"
-              action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
-              productReason={productReason({ key: 'pages.intelligence.portal.dashboard.divergence.nothingCompared' })} />
-            {/* Which pairs were withheld is data, not a state: it stays one line under the state. */}
-            <p className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</p>
-          </>
         ) : null}
         {/* state-ternary: reviewed — 仍是迁移前自己那套三态：`available` 才带 `rows`，读失败由上面的 error 分支单独处理。
             R161 迁到 `AsyncState` 时连同「按 rows.length 判」一起改，那时这条注释随之删掉。 */}

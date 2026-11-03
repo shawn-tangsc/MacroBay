@@ -160,7 +160,7 @@ describe('states that must not be confused', () => {
     expect(markup).not.toContain(text.nothingCompared)
   })
 
-  it('says nothing was compared, in the error tone, when every pair was withheld', () => {
+  it('draws nothing at all while nothing can be compared', () => {
     const markup = render({
       state: 'empty',
       withheld: [
@@ -169,11 +169,15 @@ describe('states that must not be confused', () => {
         { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'stablecoin' }
       ]
     })
-    // The state surface is the shared one now: it owns the title, the icon and the announcement,
-    // and the product still supplies the sentence naming which pairs were withheld.
-    expect(markup).toContain('data-state="error"')
-    expect(markup).toContain(text.nothingCompared)
-    expect(markup).not.toContain(text.empty)
+    // The reader asked for this: a refusal that never changes is noise, and the card above already
+    // carries the stale-data badge. Nothing is drawn — not an empty block, not a container.
+    expect(markup).toBe('')
+    expect(markup).not.toContain(text.nothingCompared)
+  })
+
+  it('draws nothing when the read itself failed', () => {
+    const markup = render({ state: 'unavailable', reason: 'query-failed', missing: [] })
+    expect(markup).toBe('')
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
