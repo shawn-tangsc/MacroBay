@@ -28,13 +28,21 @@ export type DailyBriefingNotice =
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
 /**
- * 失败类只有一个动作：打开日报页重试。动作键是平台的（`notification.action.open-briefing`），
- * 产品不往动作位塞自己的文案键；壳层今天只解析 `settingsSectionId`，所以这里不写页跳转。
+ * 失败类的落点：日报页。产品位给 `pageId`，壳层负责解析到那一屏。壳层补上 `pageId` 之前
+ * 这个动作点了还不会走——按本版口径，那一天之前它不算完成。
  */
+const OPEN_BRIEFING_DEEPLINK = Object.freeze({
+  scope: 'product' as const,
+  productId: 'market-intelligence',
+  pageId: 'daily-briefing'
+})
+
+/** 失败类只有一个动作：打开日报页重试。动作键是平台的（`notification.action.open-briefing`）。 */
 const OPEN_BRIEFING_ACTION = Object.freeze({
   id: 'open-briefing',
   labelKey: 'notification.action.open-briefing' as const,
-  kind: 'open' as const
+  kind: 'open' as const,
+  deeplink: OPEN_BRIEFING_DEEPLINK
 })
 
 /** 「去设置改时区」落在**偏好设置**（时区就在这里）。 */
@@ -89,6 +97,8 @@ export function buildBriefingNoticeRequest(
       dedupeVars: { builder: 'template', vars: { date: notice.date, period: notice.periodId } },
       bodyVariant: notice.variant,
       actions: [{ ...OPEN_BRIEFING_ACTION }],
+      // 整行点开也落到日报页：读者从列表里点，和点按钮是同一件事。
+      deeplink: { ...OPEN_BRIEFING_DEEPLINK },
       occurredAt
     }
   }

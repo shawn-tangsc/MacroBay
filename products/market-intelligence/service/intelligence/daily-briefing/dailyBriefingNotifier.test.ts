@@ -103,8 +103,14 @@ describe('daily briefing notifier', () => {
     for (const request of [notGenerated, editorial]) {
       expect(request).not.toHaveProperty('dedupeKey')
       expect(request.actions).toEqual([
-        expect.objectContaining({ labelKey: 'notification.action.open-briefing', kind: 'open' })
+        expect.objectContaining({
+          labelKey: 'notification.action.open-briefing',
+          kind: 'open',
+          // 动作与整行都指向日报页：壳层按 pageId 解析，产品不自己拼路由。
+          deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' }
+        })
       ])
+      expect(request.deeplink).toEqual({ scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' })
     }
   })
 
