@@ -512,6 +512,10 @@ describe('daily briefing page', () => {
     // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
     // the marker, so a control added outside them would show up as unscoped.
     expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
+    // The form-wide note lives in the block now, so the drawer shows it too — it used to exist only
+    // in the dialog shell, which meant this surface silently lost it.
+    expect(document.querySelector('[data-settings-section="generation"]')?.textContent)
+      .toContain(text.generationSettings.noteLabel)
   })
 
   it('opens the same drawer from the web-search banner and keeps one entry', async () => {
@@ -623,6 +627,30 @@ describe('daily briefing page', () => {
     // The advice sentence names the source check; the buttons do not grow a third entry for it.
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
+  })
+
+  it('names the block that failed to save and keeps the drawer open', async () => {
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => {
+      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    const save = document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
+    expect(save.disabled).toBe(false)
+
+    await act(async () => {
+      save.click()
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    })
+    const failed = document.querySelector<HTMLElement>('[data-settings-save-failed]')!
+    // Two forms, one save: a bare "save failed" would leave the reader guessing which block to fix.
+    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.generation)
+    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.ai)
+    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
   })
 
   it('renders the failure panel in English', async () => {
