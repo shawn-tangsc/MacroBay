@@ -1504,3 +1504,78 @@ describe('Slack enable chain (evidence -> canEnable -> in-app enable)', () => {
     expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
   })
 })
+
+describe('in-app smoke on enable (unsupported adapter)', () => {
+  function harnessWithSmoke(
+    smoke: (channel: { id: string; type: string }) => Promise<{ ok: true } | { ok: false; code: string }>,
+    supported = false
+  ) {
+    const base = harness()
+    const started: string[] = []
+    const registry = new ChannelAdapterAcceptanceRegistry(supported ? [supportedTelegramEntry()] : [])
+    const service = new ChannelManagementService({
+      repository: new ChannelManagementRepository(base.database),
+      vault: base.vault,
+      cipher: base.cipher,
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      smoke,
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} },
+      now: () => new Date('2026-11-04T00:00:00.000Z')
+    })
+    return { ...base, service, started }
+  }
+
+  function configuredSlack(database: ReturnType<typeof harness>['database'], service: ChannelManagementService): string {
+    const id = service.create({ type: 'slack', name: 'Slack', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    return id
+  }
+
+  it('enables the channel when the smoke passes, without flipping the platform to supported', async () => {
+    const { database, service, started } = harnessWithSmoke(async () => ({ ok: true }))
+    const id = configuredSlack(database, service)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({ ok: true, code: 'runtime-ready' })
+    expect(started).toEqual([id])
+    expect(database.connection.prepare('select requested_enabled, lifecycle_state from agent_channels where id = ?').get(id)).toEqual({
+      requested_enabled: 1,
+      lifecycle_state: 'enabled'
+    })
+    // 平台整体仍是未声明支持：七项真机验收照旧决定这一格。
+    expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
+    // 没有写任何 support 证据行。
+    expect(database.connection.prepare("select count(*) as count from channel_adapter_support where adapter_key = 'slack' and status = 'supported'").get()).toEqual({ count: 0 })
+  })
+
+  it('stays disabled and explains the reason when the smoke fails', async () => {
+    const { database, service, started } = harnessWithSmoke(async () => ({ ok: false, code: 'telegram-conflict' }))
+    const id = configuredSlack(database, service)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+      ok: false,
+      code: 'channel-smoke-failed',
+      reason: 'telegram-conflict'
+    })
+    expect(started).toEqual([])
+    expect(database.connection.prepare('select requested_enabled from agent_channels where id = ?').get(id)).toEqual({ requested_enabled: 0 })
+    // 失败按现有审计链记一行，动作沿用 request-enable，原因写进 code。
+    expect(database.connection.prepare(
+      "select action, code from channel_management_audits where channel_id = ? order by created_at desc, id desc limit 1"
+    ).get(id)).toEqual({ action: 'request-enable', code: 'telegram-conflict' })
+  })
+
+  it('does not run the smoke when the platform is already supported', async () => {
+    const smoke = vi.fn(async () => ({ ok: true as const }))
+    const { database, service } = harnessWithSmoke(smoke, true)
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({ ok: true })
+    expect(smoke).not.toHaveBeenCalled()
+  })
+})

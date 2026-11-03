@@ -144,6 +144,8 @@ export type ChannelManagementResult = {
   ok: boolean
   code: ChannelManagementCode
   channel?: ChannelManagementSafeView
+  /** 只有 `channel-smoke-failed` 带：失败的具体码（`telegram-conflict` 这类），给界面说人话。 */
+  reason?: string
 }
 
 export type ChannelManagementCode =
@@ -153,6 +155,8 @@ export type ChannelManagementCode =
   | 'channel-credential-invalid'
   | 'channel-credential-missing'
   | 'channel-credential-unavailable'
+  /** 用户点启用时现场自检没通过：凭据/网络/限流/被别人占用，`reason` 给具体码。 */
+  | 'channel-smoke-failed'
   | 'channel-delete-pending'
   | 'channel-management-metadata-failed'
   | 'channel-not-found'

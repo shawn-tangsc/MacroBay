@@ -15,6 +15,8 @@ import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
 import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
+import { requestSmokeEnabledChannel } from './channelSmokeEnable'
+import { listDeliveryAttemptsFor, listDeliveryAuditsFor } from './channelDeliveryQueries'
 import { createManagedChannel, updateManagedChannel } from './channelSettingsMutations'
 import { assertManagedChannelType } from './channelSettingsInputs'
 import { clampAuditLimit, readAuditCursor } from './channelRuntimeAuditPage'
@@ -32,6 +34,11 @@ type ManagementDependencies = {
   handoff: ChannelSecureHandoff
   /** 出站投递（『发一条测试消息』用）；组合根装上才有，没装则回执 `not-ready`。 */
   delivery?: { deliver(request: import('./ChannelDeliveryContracts').ChannelDeliveryRequest): Promise<import('./ChannelDeliveryContracts').ChannelDeliveryResult> }
+  /**
+   * 用户点「启用」时的现场自检：用已存凭据真做一次握手与一次接收往返。
+   * 平台的七项真机验收照旧决定「对外是否声明支持」，这条只决定「这位用户现在能不能用」。
+   */
+  smoke?: (channel: { id: string; type: AgentChannelType }) => Promise<{ ok: true } | { ok: false; code: string }>
   runtime?: {
     start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean>
     stop: (channelId: string, ownerToken?: string) => void
@@ -57,9 +64,7 @@ export class ChannelManagementService {
     })
   }
 
-  setDelivery(delivery: NonNullable<ManagementDependencies['delivery']>): void {
-    this.deps.delivery = delivery
-  }
+  setDelivery(delivery: NonNullable<ManagementDependencies['delivery']>): void { this.deps.delivery = delivery }
 
   setRuntime(runtime: NonNullable<ManagementDependencies['runtime']>): void {
     this.deps.runtime = runtime
@@ -118,23 +123,11 @@ export class ChannelManagementService {
   }
 
   listDeliveryAttempts(input: { id: unknown; limit?: unknown; offset?: unknown }) {
-    const id = this.requireChannel(input.id)
-    if (this.deps.repository.channelType(id) === 'wechat') return []
-    return this.deps.repository.query.deliveryAttempts(
-      id,
-      assertBoundedInteger(input.limit, 50, 100) || 1,
-      assertBoundedInteger(input.offset, 0, 10_000)
-    )
+    return listDeliveryAttemptsFor(this.deps.repository, this.requireChannel(input.id), input)
   }
 
   listDeliveryAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) {
-    const id = this.requireChannel(input.id)
-    if (this.deps.repository.channelType(id) === 'wechat') return []
-    return this.deps.repository.query.deliveryAudits(
-      id,
-      assertBoundedInteger(input.limit, 50, 100) || 1,
-      assertBoundedInteger(input.offset, 0, 10_000)
-    )
+    return listDeliveryAuditsFor(this.deps.repository, this.requireChannel(input.id), input)
   }
 
   /** 设置页日志面板的「运行异常」：只读、keyset 分页；`limit` 由服务端夹到 200（见 `channelRuntimeAuditPage`）。 */
@@ -189,13 +182,34 @@ export class ChannelManagementService {
     const id = this.requireMutableChannel(input.id)
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
-    if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
-    if (!this.deps.repository.credentialMetadata(id)) return this.enableRejected(id, input.actorId, channel, 'channel-credential-missing')
+    if (!this.canEnableAdapter(channel.type)) {
+      // 平台整体还没「对外声明支持」不等于这位用户不能用：用他刚填的凭据现场自检一次，
+      // 过了就只在这条通道上启用（进程内、不写库、不翻 supported），没过就把原因说清楚。
+      const smoke = this.deps.smoke
+      if (!smoke) return this.enableRejected(id, input.actorId, channel)
+      return requestSmokeEnabledChannel(
+        {
+          smoke,
+          audit: (code) => this.deps.repository.audit(id, assertIdentifier(input.actorId), 'request-enable', code, this.now()),
+          enable: () => this.enableKnownChannel(id, channel, input.actorId)
+        },
+        { channel }
+      )
+    }
+    return this.enableKnownChannel(id, channel, input.actorId)
+  }
+
+  private enableKnownChannel(
+    id: string,
+    channel: NonNullable<ReturnType<ChannelManagementService['get']>>,
+    actorId: unknown
+  ): ChannelManagementResult | Promise<ChannelManagementResult> {
+    if (!this.deps.repository.credentialMetadata(id)) return this.enableRejected(id, actorId, channel, 'channel-credential-missing')
     const owner = this.deps.repository.beginLifecycleOwner(id, 'enable', randomUUID(), this.now())
-    if (owner) return this.enableRuntime(id, input.actorId, channel, owner)
+    if (owner) return this.startOwnedRuntime(id, actorId, channel, owner, false)
     // A running Channel keeps its existing runtime owner; repeated enable is intentionally idempotent.
     if (channel.state === 'runtime-ready' && channel.requestedEnabled) return { ok: true, code: 'runtime-ready', channel }
-    return this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
+    return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
   }
 
   restart(input: MutationInput): ChannelManagementResult | Promise<ChannelManagementResult> {
@@ -205,15 +219,7 @@ export class ChannelManagementService {
     if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
     const owner = this.deps.repository.beginLifecycleOwner(id, 'restart', randomUUID(), this.now())
     if (owner) this.deps.runtime?.stop(id)
-    return owner ? this.startRestart(id, input.actorId, channel, owner) : this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
-  }
-
-  private enableRuntime(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
-    return this.startOwnedRuntime(id, actorId, channel, owner, false)
-  }
-
-  private startRestart(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
-    return this.startOwnedRuntime(id, actorId, channel, owner, true)
+    return owner ? this.startOwnedRuntime(id, input.actorId, channel, owner, true) : this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
   }
 
   private async startOwnedRuntime(
