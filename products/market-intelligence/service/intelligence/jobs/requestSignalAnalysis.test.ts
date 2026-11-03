@@ -5,6 +5,7 @@ import type { ModuleSignal, SignalWindow } from '../../../contracts/moduleSignal
 import { createAnalysisSignificanceGate } from '../analysis/analysisSignificanceGate'
 import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 import { analysisRunLineOf } from '../analysis/analysisTriggerSourcePolicy'
+import { SignalLedgerError, signalLedgerErrorCodes } from '../../../contracts/signalLedgerErrors'
 import { createSignalAnalysisRequest, signalGroupMergeKey, type SignalAnalysisRequest } from './requestSignalAnalysis'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
@@ -243,7 +244,7 @@ it('answers duplicate when another caller won the retry', async () => {
   ledger[0]!.decision = 'skipped'
   ledger[0]!.reasonCode = 'signal-freeze-unavailable'
 
-  const raced = wiring(() => { throw new Error('signal-trigger-rewrite-refused') })
+  const raced = wiring(() => { throw new SignalLedgerError(signalLedgerErrorCodes.rewriteRefused) })
   expect(await raced(request())).toMatchObject({ state: 'duplicate', attemptLedgerId: ledger[0]!.id })
 })
 
@@ -258,7 +259,7 @@ it('lets a malformed evidence shape fail loudly instead of looking like a duplic
   ledger[0]!.decision = 'skipped'
   ledger[0]!.reasonCode = 'signal-freeze-unavailable'
 
-  const broken = wiring(() => { throw new Error('signal-evidence-shape-mismatch') })
+  const broken = wiring(() => { throw new SignalLedgerError(signalLedgerErrorCodes.shapeMismatch) })
   // A shape mismatch is our bug: swallowing it would let it live on as "dedupe worked".
   await expect(broken(request())).rejects.toThrow('signal-evidence-shape-mismatch')
 })
