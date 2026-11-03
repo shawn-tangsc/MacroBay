@@ -196,6 +196,19 @@ export type BriefingNewsItem = Readonly<{
   visibilityReason?: string
 }>
 
+/**
+ * The headline to draw for one edition. A translated title is used only when it belongs to that
+ * edition's language; an English edition falls back to the source (English) title rather than print
+ * Chinese. This is a display fallback for documents written before the language gate — it never
+ * infers a source language, never drops an item, and never affects a Chinese edition.
+ */
+export function editionNewsTitle(item: Readonly<{ title: string; translatedTitle?: string }>, editionLocale: DailyBriefingLocale): string {
+  const translated = item.translatedTitle
+  if (!translated) return item.title
+  if (editionLocale === 'en-US' && /[\u3400-\u9fff]/.test(translated)) return item.title
+  return translated
+}
+
 export type BriefingMacroItem = Readonly<{
   eventKey: string
   title: string

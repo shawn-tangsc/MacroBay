@@ -51,6 +51,7 @@ import type {
 } from './dailyBriefing/readings'
 
 export { briefingCadencePolicy, briefingNextRelevanceRoles }
+export { editionNewsTitle } from './dailyBriefing/readings'
 export type {
   DailyBriefingLocale,
   DailyBriefLedePattern,

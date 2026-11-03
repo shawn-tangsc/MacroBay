@@ -1,3 +1,4 @@
+import { editionNewsTitle } from './dailyBriefing/readings'
 import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, BriefingRowChange, DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
 
@@ -194,7 +195,7 @@ function publicationSpan(
 }
 
 function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions): string {
-  const title = escapeMarkdown(item.translatedTitle ?? item.title)
+  const title = escapeMarkdown(editionNewsTitle(item, options.locale))
   return `- **${title}** — ${escapeMarkdown(item.sourceName)} · ${options.formatTime(item.publishedAt)} · ${item.polarity}`
 }
 

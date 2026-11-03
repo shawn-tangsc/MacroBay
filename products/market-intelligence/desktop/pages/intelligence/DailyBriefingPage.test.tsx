@@ -350,6 +350,28 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  it('keeps a stored Chinese headline out of an English edition, and keeps it in the Chinese one', async () => {
+    const base = briefingDocument()
+    const stored = {
+      ...base,
+      edition: { ...base.edition, locale: 'en-US' as const },
+      // A document written before the language gate: the translated title is Chinese.
+      news: { ...base.news, items: [{ ...base.news.items[0]!, title: 'Bitcoin ETFs saw outflows', translatedTitle: '比特币 ETF 资金流出' }] }
+    } as DailyBriefingDocument
+    const english = await renderPage(fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: stored })) }))
+    const paper = english.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+
+    // Display fallback for old data: the English edition shows the English source headline.
+    expect(paper.textContent).toContain('Bitcoin ETFs saw outflows')
+    expect(paper.textContent).not.toContain('比特币 ETF 资金流出')
+
+    const chinese = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: { ...stored, edition: { ...stored.edition, locale: 'zh-CN' as const } } }))
+    }))
+    // A Chinese edition is untouched: the same stored title still renders.
+    expect(chinese.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('比特币 ETF 资金流出')
+  })
+
   it('copies the current edition as text and reports success', async () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
