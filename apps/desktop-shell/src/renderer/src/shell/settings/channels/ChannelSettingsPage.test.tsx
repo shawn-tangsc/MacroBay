@@ -281,7 +281,7 @@ describe('showing which token is stored', () => {
         {
           ...channel,
           allowedChatIds: [],
-          credential: { status: 'configured', hasCredential: true, maskedFields: { bot_token: '6050…xAA' } }
+          credential: { status: 'configured', hasCredential: true, revision: 3, maskedFields: { bot_token: '6050…xAA' } }
         }
       ])
     })
@@ -300,6 +300,8 @@ describe('showing which token is stored', () => {
     expect(current?.textContent).toContain('6050…xAA')
     // 不显示「最近更新」：安全视图没有凭据时间戳，拿频道更新时间冒充它是说假话。
     expect(current?.textContent).not.toContain('最近更新')
+    // 第二条凭据是「第 N 次保存」，不是时间。
+    expect(current?.textContent).toContain('第 3 次保存')
     // 输入框仍为空：旧值不被回显。
     const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     expect(field.value).toBe('')

@@ -86,6 +86,10 @@ export function ChannelEditDialog(props: {
           '{mask}',
           channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask
         )}
+        {/* 「改没改成功」的第二条凭据：保存次数。不是时间——没有凭据时间戳，写时间就是假话。 */}
+        {typeof channel.credential.revision === 'number'
+          ? ` · ${labels.channelTokenRevision.replace('{count}', String(channel.credential.revision))}`
+          : ''}
       </p>
       <ChannelFields
         agents={props.agents}

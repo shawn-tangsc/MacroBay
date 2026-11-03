@@ -244,6 +244,8 @@ export type PlatformText = {
     channelTokenReplaceHint: string
     /** 编辑弹层顶部：当前已存的掩码 + 最近更新时间，用来确认「改没改成功」。 */
     channelTokenCurrent: string
+    /** 保存次数（revision）：合法且不会说谎，别写成时间。 */
+    channelTokenRevision: string
     /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
     channelPermissionDefault: string
     channelPermissionAcceptEdits: string
@@ -1605,6 +1607,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
       channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
       channelTokenCurrent: '当前已存：{mask}',
+      channelTokenRevision: '第 {count} 次保存',
       channelPermissionDefault: '每次都要问',
       channelPermissionAcceptEdits: '自动接受修改',
       channelPermissionBypass: '完全放行',
@@ -2878,6 +2881,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',
       channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
       channelTokenCurrent: 'Currently stored: {mask}',
+      channelTokenRevision: 'saved {count} times',
       channelPermissionDefault: 'Ask every time',
       channelPermissionAcceptEdits: 'Accept edits automatically',
       channelPermissionBypass: 'Allow everything',

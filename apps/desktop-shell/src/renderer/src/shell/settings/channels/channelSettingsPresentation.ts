@@ -23,6 +23,8 @@ export type Channel = {
     hasCredential: boolean
     /** 主进程算好的掩码（头尾各几位 + 省略号）；渲染层只显示，不拿完整值再切。 */
     maskedFields?: Readonly<Record<string, string>>
+    /** 凭据修订号：只用来显示「第 N 次保存」，不是时间。 */
+    revision?: number | null
   }
   /** 系统默认目录或读者指定的工作区；老视图没有这一项时按系统默认处理。 */
   workspace?: ChannelWorkspace
