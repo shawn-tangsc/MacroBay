@@ -452,7 +452,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </div> : null}
       </section>
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
-        <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />
+        <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
+        <section data-briefing-gaps="true">
         {issues.length > 0 ? <>
           <header className="mi-daily-briefing-page__appendix-head">
             <h2>{text.sections.limits}</h2>
@@ -477,7 +478,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
               </Button>
             </li>)}
           </ol> : null}
-        </> : null}
+        </> : null}</section>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
       </aside> : null}
     </div>

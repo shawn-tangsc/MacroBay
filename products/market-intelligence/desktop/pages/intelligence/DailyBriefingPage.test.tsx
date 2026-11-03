@@ -748,11 +748,17 @@ describe('daily briefing page', () => {
     const dom = await renderPage(fakeClient({ listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })) }))
     const column = dom.querySelector<HTMLElement>('[data-briefing-detail="true"]')!
 
+    // One container, three marked blocks, exactly once each.
     expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
-    const order = [...column.children].map((child) => child.getAttribute('class') ?? '')
-    const stages = order.findIndex((name) => name.includes('mi-generation-trace'))
-    const gaps = order.findIndex((name) => name.includes('appendix-head') || name.includes('groups'))
-    const attempts = order.findIndex((name) => name.includes('mi-briefing-attempts'))
+    expect(dom.querySelectorAll('[data-briefing-stages]')).toHaveLength(1)
+    expect(dom.querySelectorAll('[data-briefing-gaps]')).toHaveLength(1)
+    expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
+
+    // The order is a fact the guard can compare, not a promise in a comment.
+    const children = [...column.children]
+    const stages = children.findIndex((child) => child.hasAttribute('data-briefing-stages'))
+    const gaps = children.findIndex((child) => child.hasAttribute('data-briefing-gaps'))
+    const attempts = children.findIndex((child) => child.hasAttribute('data-briefing-attempts'))
     expect(stages).toBeGreaterThanOrEqual(0)
     expect(gaps).toBeGreaterThan(stages)
     expect(attempts).toBeGreaterThan(gaps)
@@ -970,7 +976,7 @@ describe('daily briefing page', () => {
 
     expect(aside).not.toBeNull()
     // The timeline is the first block; this edition has no trace, so it says so without guessing.
-    expect(aside.firstElementChild?.classList.contains('mi-generation-trace')).toBe(true)
+    expect(aside.querySelector('[data-briefing-stages] .mi-generation-trace')).not.toBeNull()
     expect(aside.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
     expect(aside.textContent).toContain(text.sections.limits)
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
@@ -1082,7 +1088,7 @@ describe('daily briefing page', () => {
     expect(trace.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(trace.textContent).toContain('耗时 30 秒')
     expect(trace.querySelector('.mi-generation-trace__toggle')).toBeNull()
-    expect(dom.querySelector<HTMLElement>('[data-briefing-issues]')?.firstElementChild?.classList.contains('mi-generation-trace')).toBe(true)
+    expect(dom.querySelector('[data-briefing-issues] [data-briefing-stages] .mi-generation-trace')).not.toBeNull()
   })
 
   it('shows where a failed generation stopped and renders the same trace on a fresh read', async () => {
@@ -1267,7 +1273,7 @@ describe('the edition language and the interface language are two different thin
   const englishEdition = (): DailyBriefingDocument =>
     withoutChinese(asEdition(briefingDocument('2026-10-30', 'CPI beats expectations'), 'en-US'))
 
-  it('renders an English edition without Chinese in the document, while the page stays Chinese', async () => {
+  it('keeps CJK out of the document area when the edition is English (the page stays Chinese)', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: englishEdition() })) })
     const dom = await renderPage(client, { locale: 'zh-CN' })
     const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
@@ -1282,7 +1288,7 @@ describe('the edition language and the interface language are two different thin
     expect(dom.textContent).not.toContain(englishText.regenerate)
   })
 
-  it('is not vacuously green: a Chinese document in a Chinese page still reads Chinese', async () => {
+  it('is not vacuously green: writing the document back in Chinese turns the same scan red', async () => {
     const dom = await renderPage(fakeClient(), { locale: 'zh-CN' })
     expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toMatch(cjk)
   })
