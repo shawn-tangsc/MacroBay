@@ -227,12 +227,13 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
       <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
       {rows.length > 0
         ? <AnchoredPanel anchor={sectionRef} labelKey={key('dailyPanelTitle')} resolveText={resolveText}
-            trigger={(triggerProps) => <button type="button" className="text-action mi-capital-conditions__daily-button"
-              ref={triggerProps.ref} onClick={triggerProps.onSelect} onKeyDown={triggerProps.onKeyDown}
+            trigger={(triggerProps) => <Button className="mi-capital-conditions__daily-button" size="small"
+              ref={(node) => { triggerProps.ref(node ?? null) }}
+              onClick={triggerProps.onSelect} onKeyDown={triggerProps.onKeyDown}
               aria-expanded={triggerProps.expanded} aria-haspopup={triggerProps.hasPopup}
               {...(triggerProps.controls === undefined ? {} : { 'aria-controls': triggerProps.controls })}>
               {triggerProps.expanded ? text.collapseDaily : text.expandDaily}
-            </button>}>
+            </Button>}>
             <CapitalFlowDailyTable rows={rows} text={text} />
           </AnchoredPanel>
         : <p className="mi-capital-conditions__daily-empty">{text.dailyEmpty}</p>}

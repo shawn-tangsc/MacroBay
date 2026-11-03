@@ -193,6 +193,15 @@ describe('daily table', () => {
     expect(dateCell.getAttribute('data-trading-date')).toBe('2026-10-26')
   })
 
+  it('draws the trigger as a bordered small button, not a text link', () => {
+    const container = mount()
+    const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
+    expect(button.className).toContain('ant-btn')
+    expect(button.className).toContain('ant-btn-sm')
+    expect(button.className).not.toContain('text-action')
+    expect(button.closest('header')).not.toBeNull()
+  })
+
   it('gives no button when there is nothing to show', () => {
     const container = mount(cardText(), [])
     expect(container.querySelector('.mi-capital-conditions__daily-button')).toBeNull()
