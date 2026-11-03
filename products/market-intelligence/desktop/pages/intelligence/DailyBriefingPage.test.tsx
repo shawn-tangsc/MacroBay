@@ -1187,3 +1187,43 @@ describe('language fallback on the brief page', () => {
   })
 })
 
+
+describe('the edition language and the interface language are two different things', () => {
+  const cjk = /[\u4e00-\u9fff]/
+
+  /** Every Chinese string in the document replaced: the paper has to be English on its own. */
+  const withoutChinese = <T,>(value: T): T => {
+    if (typeof value === 'string') return (cjk.test(value) ? 'English text' : value) as T
+    if (Array.isArray(value)) return value.map((item) => withoutChinese(item)) as T
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, withoutChinese(item)])) as T
+    }
+    return value
+  }
+
+  const asEdition = (document: DailyBriefingDocument, locale: DailyBriefingDocument['edition']['locale']): DailyBriefingDocument =>
+    ({ ...document, edition: { ...document.edition, locale } })
+
+  const englishEdition = (): DailyBriefingDocument =>
+    withoutChinese(asEdition(briefingDocument('2026-10-30', 'CPI beats expectations'), 'en-US'))
+
+  it('renders an English edition without Chinese in the document, while the page stays Chinese', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: englishEdition() })) })
+    const dom = await renderPage(client, { locale: 'zh-CN' })
+    const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+
+    // The document itself: English, no leftover shell sentence inside it.
+    expect(paper.textContent).not.toMatch(cjk)
+    expect(paper.textContent).toContain(englishText.sections.conclusion)
+    // The page around it: still the interface language. The rail is part of the page, not the document.
+    expect(dom.textContent).toContain(text.history.title)
+    expect(dom.textContent).toContain(text.regenerate)
+    expect(dom.textContent).not.toContain(englishText.history.title)
+    expect(dom.textContent).not.toContain(englishText.regenerate)
+  })
+
+  it('is not vacuously green: a Chinese document in a Chinese page still reads Chinese', async () => {
+    const dom = await renderPage(fakeClient(), { locale: 'zh-CN' })
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toMatch(cjk)
+  })
+})

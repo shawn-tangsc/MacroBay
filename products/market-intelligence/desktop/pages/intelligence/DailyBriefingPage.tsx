@@ -15,7 +15,7 @@ import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdow
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
-import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
+import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
 import { withWindowHours } from './dailyBriefingWindowText'
@@ -328,6 +328,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
   const poster = posterProps({ document: view.status === 'ready' ? view.document : undefined, editions, fallbackText: text })
+  // Content follows the edition, chrome follows the interface: the rail, buttons and counts stay.
+  const editionText = view.status === 'ready' ? briefingTextForLocale(view.document.edition.locale) : text
+  const editionLocale = view.status === 'ready' ? view.document.edition.locale : locale
 
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
@@ -445,7 +448,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           action={{ labelKey: 'ui.state.action.open-settings', onSelect: onConfigureSources }}
         /> : null}
         {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-page__paper">
-          <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+          <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>

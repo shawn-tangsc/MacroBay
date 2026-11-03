@@ -1,4 +1,4 @@
-import type { productText } from '../../shared/i18n/productText'
+import { productText } from '../../shared/i18n/productText'
 
 type DashboardText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']
 
@@ -36,4 +36,9 @@ export function resolveBriefingStateReason(
     return value
   })
   return missing ? '' : sentence
+}
+
+/** The brief's own words for one edition language: the page follows the edition it shows. */
+export function briefingTextForLocale(locale: 'zh-CN' | 'en-US'): DailyBriefingText {
+  return productText[locale].pages.intelligence.portal.dashboard.dailyBriefing
 }
