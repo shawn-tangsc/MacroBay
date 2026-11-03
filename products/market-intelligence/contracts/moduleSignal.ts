@@ -165,6 +165,21 @@ export function buildSignalDedupeKey(input: Readonly<{
 }
 
 /**
+ * The analysis trigger key a signal asks for: `signal.<moduleId>.<ruleId>`.
+ *
+ * One rule, one key: the asset is **not** part of it, because the trigger names the rule rather than
+ * the reading — two assets of the same rule on the same trading day are two readings of one trigger,
+ * told apart by their own `dedupeKey`. Built here, next to the dedupe key, so a producer cannot
+ * assemble a key that the budget does not recognise (the analysis policy accepts exactly this
+ * shape: two kebab segments, nothing else).
+ */
+export function signalTriggerKey(moduleId: ModuleSignalModuleId, ruleId: string): string | undefined {
+  if (!moduleSignalPolicy.modules.includes(moduleId)) return undefined
+  if (!moduleSignalPolicy.ruleIdPattern.test(ruleId)) return undefined
+  return `signal.${moduleId}.${ruleId}`
+}
+
+/**
  * Whether a window's data is complete.
  *
  * The one place the "two numbers instead of a boolean" decision lives: a caller passes the signal's

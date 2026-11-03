@@ -119,7 +119,7 @@ describe('the refresh hand-off', () => {
     const submit = vi.fn(async () => ({ kind: 'accepted' as const, recordId: 'record-1', levels: [] }))
     const handoff = etfOutflowSignalHandoff(submit)
 
-    await handoff.notifySignals!([outflowSignal()])
+    await handoff.handOffSignals!([outflowSignal()])
 
     expect(submit).toHaveBeenCalledTimes(1)
     expect(submit.mock.calls[0]![0]).toMatchObject({ eventTypeId: 'market-intelligence.signal.triggered' })

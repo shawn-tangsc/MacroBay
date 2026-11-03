@@ -107,7 +107,7 @@ export async function notifyEtfOutflowSignals(
  * 通知层自己读同一份开关，装配处也就不会顺手再判一次、长出第二个真相。
  */
 export function etfOutflowSignalHandoff(submit: SignalNoticeSubmit | undefined): Readonly<{
-  notifySignals?: (signals: readonly ModuleSignal[]) => Promise<void>
+  handOffSignals?: (signals: readonly ModuleSignal[]) => Promise<void>
 }> {
-  return submit ? { notifySignals: signals => notifyEtfOutflowSignals(submit, signals) } : {}
+  return submit ? { handOffSignals: signals => notifyEtfOutflowSignals(submit, signals) } : {}
 }

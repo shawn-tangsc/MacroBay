@@ -70,19 +70,19 @@ describe('ETF current-state refresh service', () => {
   // incomplete window must not ring.
   it("hands the rule's own signals to the outlet after a write, one per flowing asset", async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
-    const notifySignals = vi.fn(async () => undefined)
+    const handOffSignals = vi.fn(async () => undefined)
     const service = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: outflowRows('BTC'), eth: outflowRows('ETH', [1, 2, 3, 4, 5]) }),
       store,
       now: () => '2026-09-01T12:00:00.000Z',
-      notifySignals
+      handOffSignals
     })
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
-    expect(notifySignals).toHaveBeenCalledTimes(1)
-    const handed = notifySignals.mock.calls[0]![0] as readonly { moduleId: string; ruleId: string; asset: string; readiness: string }[]
+    expect(handOffSignals).toHaveBeenCalledTimes(1)
+    const handed = handOffSignals.mock.calls[0]![0] as readonly { moduleId: string; ruleId: string; asset: string; readiness: string }[]
     // Only the asset whose three days really cleared the threshold; a quiet asset says nothing.
     expect(handed).toHaveLength(1)
     expect(handed[0]).toMatchObject({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', readiness: 'available' })
@@ -92,18 +92,18 @@ describe('ETF current-state refresh service', () => {
   // opens or closes notifications, otherwise a switch flip would look like a broken refresh.
   it('still hands out nothing when the window is too short to judge, even though the write succeeds', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
-    const notifySignals = vi.fn()
+    const handOffSignals = vi.fn()
     const service = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
       store,
       now: () => '2026-09-01T12:00:00.000Z',
-      notifySignals
+      handOffSignals
     })
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
-    expect(notifySignals).not.toHaveBeenCalled()
+    expect(handOffSignals).not.toHaveBeenCalled()
   })
 
   it('fails closed without a write for a future or non-common asset date', async () => {

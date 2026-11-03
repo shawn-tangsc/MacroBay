@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts/moduleSignal'
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
-import { buildEtfOutflowSignal, etfOutflowSignalPolicy } from './etfOutflowSignal'
+import { buildEtfOutflowSignal, etfOutflowAnalysisRequests, etfOutflowSignalPolicy } from './etfOutflowSignal'
+import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
 
 const threshold = etfFlowPolicy.signalOutflowUsd
 
@@ -118,5 +119,39 @@ describe('ETF outflow signal', () => {
   it('keeps the rule name independent of its module', () => {
     expect(etfOutflowSignalPolicy.ruleId).toBe('etf-outflow-3d')
     expect(etfOutflowSignalPolicy.moduleId).toBe('etf-flows')
+  })
+})
+
+describe('handing a signal to the analysis entry', () => {
+  const readingAt = '2026-10-28T12:00:00.000Z'
+  // 一条成立的三日净流出，必须带着「谁能花额度」的那个键递出去：`signal.<module>.<rule>`。
+  it('turns each available signal into one request with a registered trigger key', () => {
+    const btc = buildEtfOutflowSignal({ asset: 'btc', rows: flows([-40_000_000, -50_000_000, -60_000_000]), asOf: readingAt })!
+    const eth = buildEtfOutflowSignal({ asset: 'eth', rows: flows([-10_000_000, -40_000_000, -120_000_000]), asOf: readingAt })!
+    const requests = etfOutflowAnalysisRequests([btc, eth])
+
+    expect(requests).toHaveLength(2)
+    for (const request of requests) {
+      expect(request.triggerKey).toBe('signal.etf-flows.etf-outflow-3d')
+      // 键必须是预算认得的形状，否则这次分析会匿名花掉事件线额度。
+      expect(isSignalTriggerKey(request.triggerKey)).toBe(true)
+      // 标签是数据所属交易日，不是这次计算的时刻。
+      expect(request.observedAt).toBe('2026-10-28T00:00:00.000Z')
+      expect(request.moduleId).toBe('etf-flows')
+      expect(request.groupType).toBe('capital')
+      expect(['medium', 'high']).toContain(request.severity)
+      // 同一天两个资产靠各自的去重键分开，账本按它挡第二次。
+      expect(request.changeHash).toMatch(/^etf-flows:etf-outflow-3d:(btc|eth):2026-10-28$/)
+    }
+    expect(new Set(requests.map(request => request.changeHash))).toEqual(new Set([
+      'etf-flows:etf-outflow-3d:btc:2026-10-28',
+      'etf-flows:etf-outflow-3d:eth:2026-10-28'
+    ]))
+  })
+
+  it('asks for no analysis while the window is not complete', () => {
+    const short = buildEtfOutflowSignal({ asset: 'btc', rows: flows([-40_000_000, -50_000_000]), asOf: readingAt })!
+    expect(short.readiness).toBe('unavailable')
+    expect(etfOutflowAnalysisRequests([short])).toEqual([])
   })
 })

@@ -27,13 +27,13 @@ export function createEtfCurrentStateRefreshService(deps: {
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
   /**
-   * 信号出口。**只在**这一轮真的写入了新流水（`updated`）、且规则给出了成立的信号时才调用。
+   * 本轮信号的交接点。**只在**这一轮真的写入了新流水（`updated`）、且规则给出了成立的信号时才调用。
    *
-   * 这里交出去的是「本轮判定出的信号」，不是「提交到平台的请求」：出口开关、去重参数、
-   * 事件 id 都归通知层，装配处把两者接起来。这样这一层的用例钉的是「刷新把信号交给了
-   * 通知层」，不会因为生产把通知开关关掉就变红——那两件事必须能分别断。
+   * 交出去的是「本轮判定出的信号」，不是「提交到平台的请求」：通知与自动分析是两个消费者，
+   * 各自的开关、去重参数、额度都归它们自己，装配处把这条交接接过去再分。这样这一层的用例
+   * 钉的是「刷新把信号交了出去」，不会因为生产把通知关掉、或分析还没接上就变红。
    */
-  notifySignals?: (signals: readonly ModuleSignal[]) => Promise<void>
+  handOffSignals?: (signals: readonly ModuleSignal[]) => Promise<void>
 }) {
   return {
     async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
@@ -55,7 +55,11 @@ export function createEtfCurrentStateRefreshService(deps: {
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
         // made "did it go out?" depend on scheduling — the one thing a refresh result should not
         // depend on. The outlet swallows a failed submit, so this cannot turn into a failed read.
-        if (replaced.state === 'updated') await notifySignals(deps.notifySignals, built, fetchedAt)
+        if (replaced.state === 'updated') {
+          const signals = judgeSignals(built, fetchedAt)
+          // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
+          if (signals.length > 0) await deps.handOffSignals?.(signals)
+        }
         return replaced
       } catch {
         return unavailable()
@@ -68,22 +72,17 @@ export function createEtfCurrentStateRefreshService(deps: {
  * 两个资产各自的信号，读的是刚写进 store 的同一份窗口。
  *
  * 只有完整窗口才会被 `buildEtfOutflowSignal` 判成 `available`；不足三日的信息是
- * `unavailable`（还没轮到它说话），通知层会把它挡掉，这里不另判一次。
+ * `unavailable`（还没轮到它说话），消费者会把它挡掉，这里不另判一次——规则只说一次。
  */
-async function notifySignals(
-  notify: ((signals: readonly ModuleSignal[]) => Promise<void>) | undefined,
+function judgeSignals(
   window: Readonly<{ btc: readonly EtfDailyFlow[]; eth: readonly EtfDailyFlow[] }>,
   // 这一轮采集的时刻：信号描述的是刚写进去的那份窗口，不是「现在」。
   asOf: string
-): Promise<void> {
-  if (!notify) return
-  const signals = (['btc', 'eth'] as const).flatMap((asset) => {
+): readonly ModuleSignal[] {
+  return (['btc', 'eth'] as const).flatMap((asset) => {
     const signal = buildEtfOutflowSignal({ asset, rows: window[asset], asOf })
     return signal ? [signal] : []
   })
-  // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
-  if (signals.length === 0) return
-  await notify(signals)
 }
 
 async function enabled(read: () => Promise<boolean>): Promise<boolean> {
