@@ -220,7 +220,7 @@ describe('the send-to-channel row', () => {
     const row = container.querySelector('[data-row="channel"]')
     // 空下拉会把「没有」说成「挑一个」。
     expect(row?.querySelector('select')).toBeNull()
-    expect(row?.textContent).toContain('还没有可用通道')
+    expect(row?.textContent).toContain('还没有可用频道')
     expect(row?.textContent).toContain('需要一条真机验证记录才能启用')
     expect(row?.querySelector('.status-pill')?.textContent).toBe('未接入')
     expect([...row!.querySelectorAll('button')].map((node) => node.textContent)).toEqual(['去接入'])
@@ -271,8 +271,8 @@ describe('the send-to-channel row', () => {
     expect(options).toContain('Telegram · 观潮播报')
     expect(options).not.toContain('Slack · 实验室')
     // 有通道但没选 ≠ 未接入。
-    expect(row.textContent).toContain('还没有选通道')
-    expect(row.textContent).not.toContain('还没有可用通道')
+    expect(row.textContent).toContain('还没有选频道')
+    expect(row.textContent).not.toContain('还没有可用频道')
   })
 
   it('shows the bound target read-only and stays quiet when the channel is ready', async () => {
@@ -307,7 +307,7 @@ describe('the send-to-channel row', () => {
     const row = container.querySelector('[data-row="channel"]')!
     expect(row.querySelector('.status-pill')?.textContent).toBe('推送失败')
     // 原因说人话、时刻带时区（GMT+8）：都是这一行要回答的问题，不是原始 ISO 也不是原因码。
-    expect(row.textContent).toContain('通道拒收了这条')
+    expect(row.textContent).toContain('频道拒收了这条')
     expect(row.textContent).toContain('11-02 21:37 GMT+8')
     expect(row.textContent).not.toContain('2026-11-02T13:37')
     expect(row.textContent).not.toContain('channel-rejected')
@@ -411,7 +411,7 @@ describe('the channel column', () => {
     })
 
     const line = container.querySelector('[data-channel-column-pending]')
-    expect(line?.textContent).toContain('已勾过通道的 1 条')
+    expect(line?.textContent).toContain('已勾过频道的 1 条')
     expect(line?.textContent).toContain('不代表订阅被取消')
   })
 
@@ -452,7 +452,7 @@ describe('the channel column', () => {
     })
 
     expect(container.querySelector('[data-channel-column]')?.getAttribute('data-channel-column')).toBe('shown')
-    const channelBoxes = container.querySelectorAll('input[type="checkbox"][aria-label*="通道"]')
+    const channelBoxes = container.querySelectorAll('input[type="checkbox"][aria-label*="频道"]')
     // 只有批准含 channel 的那一行是控件；另一行是灰色「—」。
     expect(channelBoxes.length).toBe(1)
     expect(container.querySelectorAll('.notification-subs-dash').length).toBeGreaterThan(0)
