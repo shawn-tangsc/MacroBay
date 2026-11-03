@@ -10,13 +10,12 @@ type DailyTableText = FlowAccessibleText & {
   etfScope: string
   dailyCaption: string
   dailyUnits: string
-  dailyPanelTitle: string
   dateColumn: string
 }
 
 /**
  * The daily numbers, as a table. It is content, not a control: the trigger lives in the card's
- * title row and the panel that shows this table belongs to `AnchoredPanel`, so nothing here
+ * title row and the dialog that shows this table is the platform `Modal`, so nothing here
  * positions, closes or focuses anything.
  *
  * Column heads stay short (日期 / 稳定币 / BTC / ETH) because the panel is narrow; the full
@@ -29,7 +28,6 @@ export function CapitalFlowDailyTable({ rows, text }: Readonly<{
 }>): React.ReactElement {
   return <div className="mi-capital-conditions__daily">
     <div className="mi-capital-conditions__daily-head">
-      <h4>{text.dailyPanelTitle}</h4>
       <span className="mi-capital-conditions__daily-units">{text.dailyUnits}</span>
     </div>
     {/* The visible head already says what this is; the caption stays for the table's own name. */}

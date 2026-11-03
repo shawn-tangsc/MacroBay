@@ -40,7 +40,7 @@
   --mi-reading-note-line-height: 1.6;
   --mi-reading-note-max-height: 320px;
   --mi-dashboard-etf-funds: #63c9ff;
-  --mi-dashboard-etf-btc: var(--mi-dashboard-caution);
+  --mi-dashboard-etf-btc: #e5ae43;
   --mi-dashboard-etf-eth: #b994ff;
   /*
     同起点收益率那张图的五条线：这一份是**唯一 owner**（面板只命名它们，不就地写颜色）。
@@ -213,6 +213,14 @@
    focus come from the antd button tokens, so only the geometry and the pushed-right placement are
    set here. */
 .mi-capital-conditions__daily-button { margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
+/* The trigger is a bordered button in both themes. antd's default variant reads its surface and
+   border from the window theme, which left a filled block on the light card; these declarations
+   come from the portal tokens instead, so the same button shows in either theme. */
+.mi-capital-conditions__daily-button { border: 1px solid var(--border-strong); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; }
+.mi-capital-conditions__daily-button:hover { border-color: var(--accent); color: var(--text-strong); }
+.mi-capital-conditions__daily-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Dialog interior: the chart, then the numbers it labels. */
+.mi-capital-conditions__dialog { display: grid; gap: 12px; min-width: 0; }
 /* Panel interior: a fixed head (title + unit line) and a scrolling body, so the unit line never
    slides away from the numbers it explains. */
 .mi-capital-conditions__daily { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

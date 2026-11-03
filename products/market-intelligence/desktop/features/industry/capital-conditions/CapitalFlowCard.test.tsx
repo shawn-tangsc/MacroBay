@@ -197,33 +197,24 @@ describe('labels versus the date band', () => {
   })
 })
 
-describe('daily table', () => {
-  it('keeps the table out of the card until the title-row button is pressed', async () => {
+describe('daily values dialog', () => {
+  it('opens the platform dialog from the title row', async () => {
     const container = mount()
-    const card = container.querySelector('.mi-capital-conditions')!
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
-    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(button.hasAttribute('aria-expanded')).toBe(false)
     expect(button.hasAttribute('aria-controls')).toBe(false)
+    expect(button.closest('header')).not.toBeNull()
     expect(document.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
-    // The trigger sits in the title row, above the chart.
-    expect(button.closest('header')).toBe(container.querySelector('header'))
-
-    button.focus()
-    await act(async () => clickLikeMouse(button))
-    const table = document.querySelector<HTMLElement>('.mi-capital-conditions__daily-table')!
-    expect(table).not.toBeNull()
-    expect(card.contains(table)).toBe(false)
-    expect(button.getAttribute('aria-expanded')).toBe('true')
-    expect(button.getAttribute('aria-controls')).toBe(table.closest('[id]')?.id ?? '')
-    expect(document.activeElement).toBe(button)
 
     await act(async () => clickLikeMouse(button))
-    expect(document.querySelector('.mi-capital-conditions__daily-table')).toBeNull()
-    expect(button.getAttribute('aria-expanded')).toBe('false')
-    expect(button.hasAttribute('aria-controls')).toBe(false)
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(dialog).not.toBeNull()
+    expect(dialog.querySelector('.mi-capital-conditions__chart')).not.toBeNull()
+    expect(dialog.querySelector('.mi-capital-conditions__daily-table')).not.toBeNull()
   })
 
-  it('shows the same amount in the label and in the cell', async () => {
+  it('shows the same amount in a bar label and in its table cell', async () => {
     const container = mount()
     const labels = [...container.querySelectorAll<HTMLElement>('[data-flow-label]')].map((node) => node.textContent)
     await act(async () => clickLikeMouse(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!))
@@ -243,13 +234,14 @@ describe('daily table', () => {
     expect(dateCell.getAttribute('data-trading-date')).toBe('2026-10-26')
   })
 
-  it('draws the trigger as a bordered small button, not a text link', () => {
+  it('draws the trigger as its own bordered button, not a text link', () => {
     const container = mount()
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!
-    expect(button.className).toContain('ant-btn')
-    expect(button.className).toContain('ant-btn-sm')
+    expect(button.tagName).toBe('BUTTON')
     expect(button.className).not.toContain('text-action')
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog')
     expect(button.closest('header')).not.toBeNull()
+    expect(button.textContent).toBe('查看逐日数据')
   })
 
   it('says how many days are missing instead of calling it a failure', () => {
@@ -257,7 +249,6 @@ describe('daily table', () => {
     expect(container.querySelector('.mi-capital-conditions__daily-button')).toBeNull()
     expect(container.querySelector('.mi-capital-conditions__daily-not-yet')?.textContent)
       .toBe('最近 7 天里只有 3 天有数据。')
-    expect(container.textContent).not.toContain('不可用</') // not the retry surface
   })
 
   it('says there is no usable data when no day lines up', () => {

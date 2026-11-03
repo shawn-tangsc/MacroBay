@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useState } from 'react'
 
 import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
@@ -12,7 +12,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
-import { AnchoredPanel } from './anchored-panel'
+import { CapitalFlowDialog } from './CapitalFlowDialog'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
 
@@ -41,7 +41,6 @@ type Text = {
   chartScopeNoteMain: string
   chartScopeNoteEtf: string
   columnScopeNote: string
-  dailyPanelTitle: string
   dailyUnits: string
   dailyFundsShort: string
   fundsColumn: string
@@ -52,7 +51,6 @@ type Text = {
   /** One template: both notes quote `stablecoin` through `{row}`, so they cannot drift apart. */
   notComparable: string
   expandDaily: string
-  collapseDaily: string
   dailyCaption: string
   dateColumn: string
   flowNotEnoughDays: string
@@ -61,6 +59,7 @@ type Text = {
   a11yLabel: string
   a11yCell: string
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
+  shortFlowDirections: Record<'inflow' | 'outflow' | 'zero', string>
   refresh: string
   refreshFailed: string
   /** The last readings that did read, kept after a failed re-read. */
@@ -177,7 +176,7 @@ function EtfRow({ asset, label, text }: { asset: DashboardEtfFlowAsset; label: s
   const latest = asset.rows.at(-1)
   const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
   const streak = latest && days > 0
-    ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.flowDirections[latest.direction], count: days })
+    ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.shortFlowDirections[latest.direction], count: days })
     : ''
   return <tr>
     <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}</th>
@@ -205,7 +204,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
   text: Text
   onRetry: () => void
 }): React.ReactElement {
-  const sectionRef = useRef<HTMLElement>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const resolveText = useProductTextKey()
   // "The sources did not answer" stays an error with a retry; "they answered with too few days"
   // is a not-yet with the count, so the two never share a sentence.
@@ -223,7 +222,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
   }
   const rows = flowHistory.rows
   const key = (name: string): string => `pages.intelligence.portal.dashboard.capitalConditions.${name}`
-  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available" ref={sectionRef}>
+  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available">
     <header>
       <h3>{text.etfFlow}</h3>
       {/* Everything the numbers cannot carry themselves lives here: what the series are, which row
@@ -239,16 +238,8 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
         trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
           icon={Info} size="sm" resolveText={resolveText} />} />
       <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
-      <AnchoredPanel anchor={sectionRef} labelKey={key('dailyPanelTitle')} resolveText={resolveText}
-            trigger={(triggerProps) => <Button className="mi-capital-conditions__daily-button" size="small"
-              ref={(node) => { triggerProps.ref(node ?? null) }}
-              onClick={triggerProps.onSelect} onKeyDown={triggerProps.onKeyDown}
-              aria-expanded={triggerProps.expanded} aria-haspopup={triggerProps.hasPopup}
-              {...(triggerProps.controls === undefined ? {} : { 'aria-controls': triggerProps.controls })}>
-              {triggerProps.expanded ? text.collapseDaily : text.expandDaily}
-            </Button>}>
-        <CapitalFlowDailyTable rows={rows} text={text} />
-      </AnchoredPanel>
+      <button type="button" className="mi-capital-conditions__daily-button"
+        aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>
     </header>
     <div className="mi-capital-conditions__chart-legend">
       <span><i data-series="funds" />{text.fundsColumn}</span>
@@ -256,6 +247,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
       <span><i data-series="eth" />{text.eth}</span>
     </div>
     <CapitalFlowChart rows={rows} text={text} />
+    <CapitalFlowDialog open={dialogOpen} onClose={() => setDialogOpen(false)} rows={rows} text={text} resolveText={resolveText} />
   </section>
 }
 
