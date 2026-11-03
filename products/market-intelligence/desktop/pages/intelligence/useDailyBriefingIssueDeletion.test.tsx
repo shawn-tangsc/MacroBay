@@ -57,6 +57,16 @@ describe('briefing issue deletion', () => {
     expect(deletion().takeSkipGenerate()).toBe(false)
   })
 
+  it('does not report a delete that removed nothing', async () => {
+    const empty = vi.fn(async () => ({ editions: 0, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: 0, allDone: true }))
+    const deletion = render({ deletePeriod: empty }, vi.fn())
+
+    await act(async () => { await deletion().deletePeriod({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }) })
+
+    // The reply removed no edition: the note must say so, not "deleted".
+    expect(deletion().outcome).toEqual({ target: { date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }, kind: 'nothing', remaining: 0 })
+  })
+
   it('reports a finished delete once, and does nothing without a port', async () => {
     const done = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 0, remaining: 0, allDone: true }))
     const withPort = render({ deletePeriod: done }, vi.fn())

@@ -57,7 +57,6 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
       text={text}
       timeZone="Asia/Shanghai"
       onSelect={() => undefined}
-      deleteLocale="zh-CN"
       {...props}
     />
     </ConfirmProvider></ConfigProvider>)
@@ -216,6 +215,33 @@ describe('daily briefing history rail', () => {
 
     render({ editions: [edition()], generatingStage: 'AI 选择' })
     expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(1)
+  })
+
+  it('offers only the languages this issue actually has', () => {
+    // A menu that names a language the issue does not have is how "deleted the Chinese edition"
+    // happened for an issue with only an English one.
+    const onlyEnglish = (key: string) => key.endsWith('history.deleteEdition.en-US') ? '删除英文版…' : key.endsWith('history.deleteEdition.zh-CN') ? '删除中文版…' : key
+    render({ editions: [edition({ availableLocales: ['en-US'] })], resolveText: onlyEnglish })
+    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(items).toHaveLength(1)
+    expect(items[0].textContent).toContain('删除英文版…')
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+
+    render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })], resolveText: onlyEnglish })
+    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(2)
+  })
+
+  it('says there is nothing to delete when the issue has no edition', () => {
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      resolveText: (key: string) => key.endsWith('history.deleteNoEdition') ? '这一期没有可删除的版本' : key
+    })
+    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(items).toHaveLength(1)
+    expect(items[0].textContent).toContain('这一期没有可删除的版本')
   })
 
   it('marks an incomplete issue with the status pill, not a hand-made chip', () => {

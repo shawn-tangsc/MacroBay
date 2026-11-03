@@ -15,6 +15,13 @@ export function DailyBriefingDeleteOutcomeNote({ outcome, text, onRetry }: Reado
   text: DailyBriefingText
   onRetry: (outcome: BriefingDeleteOutcome) => void
 }>): React.ReactElement {
+  if (outcome.kind === 'nothing') {
+    // The reply removed nothing. Reporting the delete anyway is the one thing this line must not do.
+    const language = text.history.editionLanguages[outcome.target.locale === 'en-US' ? 'en' : 'zh']
+    return <p className="mi-daily-briefing-page__loading-hint" role="alert" data-delete-outcome="nothing">
+      {text.history.deleteNothing.replace('{language}', language)}
+    </p>
+  }
   if (outcome.kind === 'done') {
     const language = text.history.editionLanguages[outcome.target.locale === 'en-US' ? 'en' : 'zh']
     return <p className="mi-daily-briefing-page__loading-hint" role="status" data-delete-outcome="done">

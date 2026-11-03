@@ -25,7 +25,8 @@ export type BriefingDeleteOutcome = Readonly<{
    * `done` is the one-time "what you just did" note; `partial` is a delete that must be finished or
    * looked at. The pane never records history — the empty state it lands on is the ordinary one.
    */
-  kind: 'done' | 'partial'
+  /** `nothing`: the reply removed no edition - saying 'deleted' there would be a lie. */
+  kind: 'done' | 'partial' | 'nothing'
   /** Rows left behind; null means this path cannot tell, which is not the same as zero. */
   remaining: number | null
 }>
@@ -51,9 +52,11 @@ export function useDailyBriefingIssueDeletion(deps: Readonly<{
       skipGenerateOnce.current = true
       // A finished delete still says what happened, once: the pane it lands on is the ordinary
       // empty state and must not double as a record of the reader's action.
-      setOutcome(result.allDone
-        ? { target, kind: 'done', remaining: 0 }
-        : { target, kind: 'partial', remaining: result.remaining })
+      setOutcome(result.editions === 0 && result.sessionLinks === 0
+        ? { target, kind: 'nothing', remaining: 0 }
+        : result.allDone
+          ? { target, kind: 'done', remaining: 0 }
+          : { target, kind: 'partial', remaining: result.remaining })
     } catch {
       // The call itself failed: which rows remain is unknown, and "unknown" is not zero.
       setOutcome({ target, kind: 'partial', remaining: null })
