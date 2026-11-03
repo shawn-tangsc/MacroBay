@@ -107,8 +107,11 @@ export function createSignalAnalysisRequest(deps: Readonly<{
       if (!retryable) return { state: 'duplicate', groupId: group.id, attemptLedgerId: claimed.id }
       try {
         deps.repository.rewriteSignalTrigger(claimed.id, { decision: 'queued', reasonCode, evidence })
-      } catch {
-        // 守卫拒绝 = 另一个调用方已经抢到这次重试（CAS），这一次按重复处理。
+      } catch (error) {
+        // 只吞「守卫拒绝」这一种：另一个调用方已经抢到这次重试（CAS），按重复处理。
+        // 其余一律往上抛——最要紧的是 evidence 形状不符，那是我们拼错了，绝不能伪装成
+        // 「去重生效」：一旦被吞掉，真 bug 会以正常分支的样子活下去，谁也不报错。
+        if (!isRefusedRewrite(error)) throw error
         return { state: 'duplicate', groupId: group.id, attemptLedgerId: claimed.id }
       }
     }
@@ -188,6 +191,18 @@ function assertSignalRequest(request: SignalAnalysisRequest): void {
   // 扫描层本来会先滤掉这两种，这里是最后一道：漏一次就等于白花一次事件线额度。
   if (request.signal.readiness !== 'available') throw new Error('analysis-invalid-request')
   if (request.signal.triggerOwner !== 'module-signal') throw new Error('analysis-invalid-request')
+}
+
+/**
+ * The store refuses a rewrite when the row is no longer the failed-enqueue attempt (its CAS guard).
+ *
+ * The store raises two errors from that call: the guard (`signal-trigger-rewrite-refused`, a normal
+ * race we answer as `duplicate`) and the evidence shape check (`signal-evidence-shape-mismatch`, a
+ * bug on our side). Only the first is swallowed here; matching the message keeps this a one-line
+ * rule until the store gives those errors stable codes.
+ */
+function isRefusedRewrite(error: unknown): boolean {
+  return error instanceof Error && error.message === 'signal-trigger-rewrite-refused'
 }
 
 /** The one key the signal is queued under; a signal without a complete key cannot be queued. */

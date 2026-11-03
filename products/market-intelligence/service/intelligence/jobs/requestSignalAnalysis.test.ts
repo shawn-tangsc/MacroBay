@@ -231,6 +231,38 @@ it('retries only the attempt that never reached the queue, reusing its row', asy
   expect(enqueued).toHaveLength(2)
 })
 
+it('answers duplicate when another caller won the retry', async () => {
+  const { repository, ledger } = fakeRepository()
+  const wiring = (rewrite?: () => never) => createSignalAnalysisRequest({
+    repository: { ...repository, ...(rewrite ? { rewriteSignalTrigger: rewrite } : {}) } as never,
+    jobRuntime: fakeJobs().jobRuntime as never,
+    now: () => asOf, idFactory: () => '1', isEnabled: async () => true
+  })
+  // The first attempt leaves the row a failed enqueue produced, then a second caller wins the retry.
+  await wiring()(request())
+  ledger[0]!.decision = 'skipped'
+  ledger[0]!.reasonCode = 'signal-freeze-unavailable'
+
+  const raced = wiring(() => { throw new Error('signal-trigger-rewrite-refused') })
+  expect(await raced(request())).toMatchObject({ state: 'duplicate', attemptLedgerId: ledger[0]!.id })
+})
+
+it('lets a malformed evidence shape fail loudly instead of looking like a duplicate', async () => {
+  const { repository, ledger } = fakeRepository()
+  const wiring = (rewrite?: () => never) => createSignalAnalysisRequest({
+    repository: { ...repository, ...(rewrite ? { rewriteSignalTrigger: rewrite } : {}) } as never,
+    jobRuntime: fakeJobs().jobRuntime as never,
+    now: () => asOf, idFactory: () => '1', isEnabled: async () => true
+  })
+  await wiring()(request())
+  ledger[0]!.decision = 'skipped'
+  ledger[0]!.reasonCode = 'signal-freeze-unavailable'
+
+  const broken = wiring(() => { throw new Error('signal-evidence-shape-mismatch') })
+  // A shape mismatch is our bug: swallowing it would let it live on as "dedupe worked".
+  await expect(broken(request())).rejects.toThrow('signal-evidence-shape-mismatch')
+})
+
 it('leaves an existing row exactly as it was when the bucket repeats', async () => {
   const { service, ledger } = entry()
   await service(request())
