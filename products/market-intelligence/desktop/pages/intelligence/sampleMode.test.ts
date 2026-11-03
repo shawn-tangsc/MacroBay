@@ -10,6 +10,11 @@ import { describe, expect, it } from 'vitest'
  * 1.83:1 and looked washed out. Reading the file is cruder than looking at a screenshot, but it
  * is the only check that cannot miss it again — a missing line fails here.
  */
+const dashboardCss = readFileSync(
+  resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'),
+  'utf8'
+)
+
 const portalCss = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/sampleMode.css'),
   'utf8'
@@ -52,8 +57,22 @@ describe('portal palette in the light theme', () => {
     }
   })
 
-  it('carries no literal colour left in the light remap', () => {
-    const declarations = lightBlock.replace(/\/\*[\s\S]*?\*\//g, '')
+  it('gives every chart series a colour, and remaps the one that differs by theme', () => {
+    // Funds and ETH read the same in both themes; BTC changes, so it needs a light value.
+    for (const series of ['--mi-dashboard-etf-funds', '--mi-dashboard-etf-btc', '--mi-dashboard-etf-eth']) {
+      expect(dashboardCss, `${series} is not defined`).toContain(`${series}:`)
+    }
+    expect(lightBlock).toContain('--mi-dashboard-etf-btc:')
+  })
+
+  it('carries no literal colour in the semantic remap', () => {
+    // The eight semantic names must resolve to platform tokens. Chart series are allowed their
+    // own values: there is no platform token for a chart hue, and the design fixes them.
+    const declarations = lightBlock
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--mi-dashboard-etf-'))
+      .join('\n')
     expect(declarations).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 })

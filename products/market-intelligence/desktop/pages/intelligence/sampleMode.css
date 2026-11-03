@@ -73,6 +73,9 @@
   --mi-dashboard-positive: var(--success);
   --mi-dashboard-caution: var(--caution);
   --mi-dashboard-negative: var(--danger);
+  /* The chart's BTC series used to borrow `--mi-dashboard-caution`, so it turned brown the moment
+     that semantic colour was remapped. It has its own value now: same hue, darker, 3.72:1 on white. */
+  --mi-dashboard-etf-btc: #b07a1a;
 }
 
 /* 示例水印是覆盖层，不参与布局。 */
