@@ -40,6 +40,16 @@ export type SignalAnalysisOutcome =
   | Readonly<{ state: 'queued'; groupId: string; attemptLedgerId: string; jobRunId: string }>
   | Readonly<{ state: 'disabled' }>
   | Readonly<{ state: 'in-flight'; groupId: string }>
+  /**
+   * 这个桶已经有过一条记录，且不允许重试：同一件事不再入队。
+   *
+   * 账本唯一键 (group, triggerKey, changeHash) 才是这件事的判据：它挡住了第二行，但入队发生在
+   * 写行之后，所以只靠它挡不住第二次入队；单飞又只在第一次还没跑完时有效。缺了这一道，同一
+   * 桶迟到一条修订数据就会跑第二次分析，而账本仍只有一行——花了两次钱算了不到两次。
+   *
+   * 判据读的是**库里的行**，不是进程内的集合：重启后同一个桶再被读到，仍然要拦住。
+   */
+  | Readonly<{ state: 'duplicate'; groupId: string; attemptLedgerId: string }>
 
 export type SignalAnalysisService = (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
 
@@ -65,6 +75,14 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     assertSignalRequest(request)
     if (!await deps.isEnabled()) return { state: 'disabled' }
     const group = findOrCreateGroup(request)
+    const triggerKey = requestTriggerKey(request)
+    // 同桶只叫一次分析：账本里已有这个 (triggerKey, changeHash) 的行，就只有一种情况还能重试——
+    // 上次是**入队失败**（那一行没花出去）。被预算/门拒绝的、已经排过队的，一律不再入队。
+    // 这一步必须在写行之前：写行之后唯一键只会把同一行改写一遍，看起来像成功。
+    const existing = deps.repository.listTriggerLedger(group.id)
+      .find(row => row.triggerKey === triggerKey && row.changeHash === request.signal.dedupeKey)
+    const retryable = existing?.decision === 'skipped' && existing.reasonCode === signalAnalysisPolicy.freezeUnavailableReasonCode
+    if (existing && !retryable) return { state: 'duplicate', groupId: group.id, attemptLedgerId: existing.id }
     // 单飞：同一组已有在跑的 freeze 或 run，就不重复入队。信号每次采样都会重算一次，
     // 没有这道，同一个桶会进两次。
     const activeFreeze = deps.jobRuntime.listRuns({
@@ -76,7 +94,6 @@ export function createSignalAnalysisRequest(deps: Readonly<{
     const inFlightRun = deps.repository.listRuns().some((run: AnalysisRun) =>
       run.eventGroupId === group.id && (run.status === 'queued' || run.status === 'running'))
     if (activeFreeze.length > 0 || inFlightRun) return { state: 'in-flight', groupId: group.id }
-    const triggerKey = requestTriggerKey(request)
     const attemptLedgerId = deps.repository.appendTriggerLedger({
       id: `mi-ledger-${deps.idFactory()}`,
       eventGroupId: group.id,

@@ -152,6 +152,70 @@ it('anchors the signal on its own group, writes the attempt row, then queues the
 })
 
 /**
+ * The duplicate the funds line reproduced: the ledger's unique key stopped the second *row*, but the
+ * queue decision came after that row was written, so the same bucket queued twice — two analyses
+ * for one event, counted once.
+ */
+it('queues one run per bucket, so the same signal does not call the model twice', async () => {
+  const { service, ledger, enqueued } = entry()
+
+  expect((await service(request())).state).toBe('queued')
+  expect((await service(request())).state).toBe('duplicate')
+
+  expect(ledger).toHaveLength(1)
+  expect(enqueued).toHaveLength(1)
+})
+
+it('still refuses the bucket after a restart: the judgement reads the ledger, not memory', async () => {
+  const { ledger, repository } = fakeRepository()
+  // Two wirings over the same ledger: the second is what a restart builds, with nothing in memory.
+  const wiring = () => {
+    const { enqueued, jobRuntime } = fakeJobs()
+    const service = createSignalAnalysisRequest({
+      repository: repository as never, jobRuntime: jobRuntime as never,
+      now: () => asOf, idFactory: () => '1', isEnabled: async () => true
+    })
+    return { service, enqueued }
+  }
+  const before = wiring()
+  const after = wiring()
+
+  expect((await before.service(request())).state).toBe('queued')
+  expect((await after.service(request())).state).toBe('duplicate')
+
+  expect(ledger).toHaveLength(1)
+  expect(before.enqueued).toHaveLength(1)
+  expect(after.enqueued).toHaveLength(0)
+})
+
+it('does not retry a bucket the budget refused', async () => {
+  const { service, ledger, enqueued } = entry()
+  const first = await service(request())
+  const attemptLedgerId = first.state === 'queued' ? first.attemptLedgerId : ''
+  ledger[0]!.decision = 'skipped'
+  ledger[0]!.reasonCode = 'hour-budget-exhausted'
+
+  expect((await service(request())).state).toBe('duplicate')
+  expect(ledger[0]!.id).toBe(attemptLedgerId)
+  expect(enqueued).toHaveLength(1)
+})
+
+it('retries only the attempt that never reached the queue, reusing its row', async () => {
+  const { service, ledger, enqueued } = entry()
+  const first = await service(request())
+  const attemptLedgerId = first.state === 'queued' ? first.attemptLedgerId : ''
+  // The queue refused the work: that call was never spent, so the same bucket may try again.
+  ledger[0]!.decision = 'skipped'
+  ledger[0]!.reasonCode = 'signal-freeze-unavailable'
+
+  expect((await service(request())).state).toBe('queued')
+  expect(ledger).toHaveLength(1)
+  expect(ledger[0]!.id).toBe(attemptLedgerId)
+  expect(ledger[0]!.decision).toBe('queued')
+  expect(enqueued).toHaveLength(2)
+})
+
+/**
  * The architect's catch: a row without readings keeps the counts and the "why" blank, and nothing
  * fails. The one column that can answer both is written with the row.
  */
