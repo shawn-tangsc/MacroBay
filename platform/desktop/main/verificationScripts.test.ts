@@ -14,15 +14,22 @@ import { VERIFY_CHECKS } from '../../../scripts/verify-sample'
  * 今晚就是这么发现三个孤儿的：`check:boot-page`、`demo:verify`、`channel:acceptance`——定义在，
  * 却不在 `verify`、不在 CI、不在发布流程里。它们不是"备用"，是**写完之后没人跑**。
  *
- * 判据只有一句：**每个检查要么在 `verify` 链里，要么在 manual-only 清单里**。
- * 第三种状态（写了、既没进链也没进清单）就是这次要禁掉的。
+ * 判据只有一句，而且它**不随新增漂移**：`package.json` 里的每个 script 都必须有一个落点。
+ *
+ *   ① `verify` 链里（含起点/终点采样与执行器）
+ *   ② 发布流水线里直接调（`.github/workflows/*.yml`）
+ *   ③ `scripts/manual-only-checks.md` 里（人工跑，写明为什么不能自动）
+ *   ④ 开发入口白名单（真正每天手敲的那几个，**只减不增**）
+ *
+ * 外加两条自动规则：被已接上的脚本调用（`pnpm <key>` 出现在它的命令里）跟着一起算接上；
+ * `pre<x>` 是 npm 的生命周期钩子，`x` 接上了它就接上了。
+ *
+ * 为什么不再按前缀（`check:` / `docs:` …）判：前缀每加一个就得回来改一次正则，而且"哪些前缀该管"
+ * 永远说不清。按落点判，新增任何前缀都不需要改守卫——**没有落点就红**。
  */
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePath}`, 'utf8')
-
-/** 与 `package.json` 里的命名约定一致：这三类都算「一个检查」。 */
-const CHECK_PREFIXES = ['check:', 'verify', 'demo:verify', 'acceptance']
 
 /**
  * 清单的位置**必须在版本库里**：它住在 `docs-private/`（gitignore）时，本机绿、干净快照红——
@@ -38,12 +45,43 @@ const MANUAL_ONLY_DOC = 'scripts/manual-only-checks.md'
  */
 const ENTRY_KEYS = new Set(['verify', 'verify:sole'])
 
-function isCheckKey(key: string): boolean {
-  if (ENTRY_KEYS.has(key)) return false
-  if (key.startsWith('check:')) return true
-  if (key.startsWith('verify:')) return true
-  if (key === 'demo:verify') return true
-  return key.includes('acceptance')
+const WORKFLOWS = ['.github/workflows/ci.yml', '.github/workflows/release.yml']
+
+/**
+ * ④ 开发入口白名单：**真正每天手敲的那几个**，它们不需要"谁来跑"，因为人就在敲。
+ *
+ * 判据不是"它看起来像开发命令"，而是：**它不进链、不进流水线、也不是需要证据的手动检查，
+ * 但有人会主动敲它**。一个没人敲的条目留在这里，就是给孤儿开后门。
+ *
+ * **这份名单只减不增。** 下面有一条断言把上限钉死：加一行必须同时把那个数字加一，
+ * 于是评审一定看得见"我们又给了谁一个不用被调用的资格"。
+ */
+const DEV_ENTRIES: ReadonlyArray<readonly [key: string, why: string]> = [
+  ['dev', '每天都开：起开发窗口'],
+  ['lint', '公开文档写明的别名，等价于 typecheck（链里已经有 typecheck），留给人手敲'],
+  ['dist:mac', '维护者手敲的打包命令'],
+  ['dist:mac:dir', '维护者手敲的打包命令（只出目录，不打包）'],
+  ['dist:win', '维护者手敲的打包命令'],
+  ['dist:win:dir', '维护者手敲的打包命令（只出目录，不打包）'],
+  ['release:bump', '发版第一步，发布流程里写死'],
+  ['seed:briefing-history', '一次性灌历史数据，不进任何链']
+]
+const DEV_ENTRIES_CEILING = DEV_ENTRIES.length
+
+/** 别的脚本里怎么调用另一个脚本：`pnpm <key>` 或 `pnpm run <key>`。 */
+const PNPM_CALL = /\bpnpm\s+(?:run\s+)?([a-zA-Z][\w:-]*)/gu
+
+function calledBy(text: string): string[] {
+  return [...text.matchAll(PNPM_CALL)].map((match) => match[1])
+}
+
+/** ② 流水线里直接调的脚本；只认 `package.json` 里真实存在的键，忽略 `pnpm install` 这类。 */
+function workflowKeys(scriptKeys: ReadonlySet<string>): string[] {
+  const found = new Set<string>()
+  for (const file of WORKFLOWS) {
+    for (const key of calledBy(read(file))) if (scriptKeys.has(key)) found.add(key)
+  }
+  return [...found]
 }
 
 /** 执行器：链、起点采样、终点采样都在它里面，`package.json` 只指向它。 */
@@ -73,20 +111,72 @@ function manualOnlyKeys(): string[] {
 }
 
 describe('verification scripts are all wired somewhere', () => {
-  it('has no check script that neither runs in verify nor is declared manual-only', () => {
+  it('gives every script a landing, so none of them runs nowhere', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
-    const keys = Object.keys(pkg.scripts ?? {}).filter(isCheckKey)
-    // 链的唯一来源是 `VERIFY_CHECKS`：`package.json` 里已经没有那条 `&&` 长串了。
-    const wired = new Set<string>([...VERIFY_CHECKS, ...runnerSteps(), ...manualOnlyKeys()])
+    const scripts = pkg.scripts ?? {}
+    const keys = new Set(Object.keys(scripts))
 
-    // 差集要能直接读：说清楚是哪些键、以及两条出路各自是什么。
-    const orphans = keys.filter((key) => !wired.has(key)).sort()
+    // 链的唯一来源是 `VERIFY_CHECKS`：`package.json` 里已经没有那条 `&&` 长串了。
+    const wired = new Set<string>([
+      ...VERIFY_CHECKS,
+      ...ENTRY_KEYS,
+      ...runnerSteps(),
+      ...workflowKeys(keys),
+      ...manualOnlyKeys(),
+      ...DEV_ENTRIES.map(([key]) => key)
+    ])
+
+    // 传递闭包：被已接上的脚本调用的，也算接上；`pre<x>` 跟着 `x`。跑到不再变化为止。
+    for (let changed = true; changed;) {
+      changed = false
+      const calls = new Set<string>()
+      for (const key of wired) for (const called of calledBy(scripts[key] ?? '')) calls.add(called)
+      for (const key of keys) {
+        if (wired.has(key)) continue
+        const hookBase = key.startsWith('pre') ? key.slice('pre'.length) : null
+        if (calls.has(key) || (hookBase !== null && wired.has(hookBase))) {
+          wired.add(key)
+          changed = true
+        }
+      }
+    }
+
+    // 差集要能直接读：说清楚是哪些键、以及四条出路分别是什么。
+    const orphans = [...keys].filter((key) => !wired.has(key)).sort()
     expect(
       orphans,
-      `这些脚本写了，但既不在 \`verify\` 链里、也不在 ${MANUAL_ONLY_DOC} 里：\n` +
+      `这些脚本没有任何落点（写了、没人跑、也没人能发现它没人跑）：\n` +
         `${orphans.map((key) => `  - ${key}`).join('\n')}\n` +
-        '给它们一条出路：能进 verify 的进 verify；需要真机/产物/凭据的，写进 manual-only 清单。'
+        '四条出路：① 进 verify 链；② 让流水线直接调它；③ 写进 ' +
+        `${MANUAL_ONLY_DOC}；④ 它是真的每天手敲的开发入口，进 DEV_ENTRIES。`
     ).toEqual([])
+  })
+
+  it('keeps the dev-entry allowlist honest: real scripts, no overlap, and it only shrinks', () => {
+    const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+    const scripts = pkg.scripts ?? {}
+    const keys = new Set(Object.keys(scripts))
+
+    // ① 名单里的每个键必须真的存在，否则它守的是一个已经不存在的命令。
+    const missing = DEV_ENTRIES.map(([key]) => key).filter((key) => !keys.has(key))
+    expect(missing, `DEV_ENTRIES 里这些键在 package.json 里已经不存在：\n${missing.join('\n')}`).toEqual([])
+
+    // ② 已经被别处接上的，不许再进白名单：那等于用白名单给孤儿发通行证。
+    const wiredElsewhere = new Set<string>([
+      ...VERIFY_CHECKS,
+      ...ENTRY_KEYS,
+      ...runnerSteps(),
+      ...workflowKeys(keys),
+      ...manualOnlyKeys()
+    ])
+    const redundant = DEV_ENTRIES.map(([key]) => key).filter((key) => wiredElsewhere.has(key))
+    expect(redundant, `这些键已经有落点了，不该再算「开发入口」：\n${redundant.join('\n')}`).toEqual([])
+
+    // ③ 上限钉死：加一行必须同时改这个数字，评审看得见。
+    expect(
+      DEV_ENTRIES.length,
+      'DEV_ENTRIES 只减不增：确实要加一个开发入口，就把这个上限一起加一，并写清为什么它不需要落点。'
+    ).toBeLessThanOrEqual(DEV_ENTRIES_CEILING)
   })
 
   it('keeps every manual-only key a real script, so the list cannot rot', () => {

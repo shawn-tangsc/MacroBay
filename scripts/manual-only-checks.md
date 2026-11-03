@@ -14,6 +14,7 @@
 | `pnpm demo:verify` | 改动涉及示例模式（`sample mode`）或它的示例数据时；发布前若有涉及则跑一次 | 改这块的实现方 | 退出码 0 + 报告里"示例场景与断言条数"那一行 |
 | `pnpm channel:acceptance` | 改动涉及真实通道投递（绑定、鉴权、出站限流）时；需要真机与真实凭据 | 通道线实现方 | 退出码 0 + 一份"哪个通道、哪条消息、落到了哪个设备/会话"的记录 |
 | `pnpm check:boot-page` | 改动或审查启动失败页（`bootFailurePage`）的布局时 | 改这块的实现方 | 五条通过行（每行含卡片宽度与三个按钮高度）+ 退出码 0 |
+| `pnpm docs:event-ids` | 改动通知事件 id、或改文档里引用这些 id 的段落时 | 改这块的实现方 | 报告里 `197 篇文档 / N 个已声明事件 id / 零处对不上` 那一行 + 退出码 0（**不接受 `skipped`**） |
 
 ## `check:boot-page` 为什么不进 `verify`
 
@@ -32,6 +33,14 @@
 **跑不起来时的报错也要是人话**：`CHROME_BIN` 未设且默认路径不存在时，脚本打
 `check:boot-page: set CHROME_BIN to a Chrome/Chromium binary` 并 **退出码 2**（与"布局真的溢出"的 1
 分开）。它现在是唯一能跑到它的路径，抛一段 `execFileSync` 的 ENOENT 堆栈就是它变孤儿的第 0 天。
+
+## `docs:event-ids` 为什么也不进 `verify`
+
+它扫的是 `docs-private/`——**那个目录是 gitignore 的，CI 上不存在**。脚本自己写着
+「为什么不在 verify 链里」，并且在没有 `docs-private` 时打一行 `skipped` 然后**退出码 0**。
+
+所以它的证据形式里有一条硬要求：**看到 `skipped` 不算通过**。一个"跳过 = 绿"的检查放进
+`verify`，等于给链上加一个永远为真的成员；放在这里至少有人看得见它跳过了。
 
 ## 与发布的关系
 
