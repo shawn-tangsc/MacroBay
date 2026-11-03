@@ -192,6 +192,43 @@ describe('writing attempts', () => {
 })
 
 
+describe('deleting one language', () => {
+  it('leaves the attempt trail and the run count untouched, and keeps the other edition readable', async () => {
+    // The failure mode this catches: a delete that forgot `where ... and locale = ?` removes the
+    // whole issue and still reports success. Only the other edition's absence would show it — so the
+    // assertions below are counts before/after and a read of the edition that must survive.
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const englishDocument = document('2026-11-03')
+    await store.put(edition('2026-11-03'))
+    await store.put({
+      ...edition('2026-11-03'),
+      locale: 'en-US',
+      document: { ...englishDocument, edition: { ...englishDocument.edition, locale: 'en-US' } }
+    })
+    await store.beginAttempt!({ date: '2026-11-03', locale: 'zh-CN', startedAt: '2026-11-03T00:00:00.000Z' })
+    await store.beginAttempt!({ date: '2026-11-03', locale: 'en-US', startedAt: '2026-11-03T00:01:00.000Z' })
+    await store.openPeriodRun!({
+      date: '2026-11-03', periodId: 'default', expectedLocales: ['zh-CN', 'en-US'],
+      primaryRequested: 'zh-CN', primaryUsed: 'zh-CN', snapshotId: 'bs_x', snapshotHash: 'h',
+      contentVersion: 1, writingRounds: 1, direction: 'bearish', editionRows: [], state: 'published',
+      startedAt: '2026-11-03T00:00:00.000Z'
+    })
+    const attemptsBefore = (await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length
+    const runBefore = await store.getPeriodRun!('2026-11-03', 'default')
+
+    const removed = await store.deletePeriod!('2026-11-03', 'default', 'zh-CN')
+
+    // 1. The deleted language's edition is gone.
+    expect(removed.editions).toBe(1)
+    expect(await store.get('2026-11-03', 'zh-CN')).toBeUndefined()
+    // 2. The other edition is still there and still readable.
+    expect((await store.get('2026-11-03', 'en-US'))?.document.edition.locale).toBe('en-US')
+    // 3. The attempt trail and the run are untouched — they belong to the issue, not to a language.
+    expect((await store.listAttempts!('2026-11-03', 'zh-CN', 'default')).length).toBe(attemptsBefore)
+    expect(await store.getPeriodRun!('2026-11-03', 'default')).toEqual(runBefore)
+  })
+})
+
 describe('period runs', () => {
   const run = (snapshotId: string, snapshotHash: string) => ({
     date: '2026-11-02',
