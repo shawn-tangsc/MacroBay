@@ -152,6 +152,8 @@ export type ChannelManagementCode =
   | 'adapter-not-supported'
   | 'adapter-runtime-start-failed'
   | 'channel-agent-missing'
+  /** 启用最后一跳没落成：owner/代际/状态被别处改动抢走，与「助手不在了」是两件事。 */
+  | 'channel-runtime-owner-conflict'
   | 'channel-credential-invalid'
   | 'channel-credential-missing'
   /** 上次更换没走完：库里的 revision 已经不是这次读到的那一版，重新打开编辑保存一次即可继续。 */

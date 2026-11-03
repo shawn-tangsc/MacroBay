@@ -189,8 +189,17 @@ export class ChannelManagementService {
     }
     const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
     if (!activeOwner?.generation) {
+      // 先把真实原因问出来，再放掉 pending owner（放了就查不到 owner 那一档了）。
+      // 以前这里非 restart 一律报 `channel-agent-missing`：拿「助手不在了」当兜底，
+      // 用户从列表里明明看得见那个助手，却被告知刷新重选——错误码在说谎。
+      const blockReason = this.deps.repository.enableBlockReason(id, owner)
       this.deps.repository.clearPendingLifecycleOwner(id, owner)
-      return this.enableRejected(id, actorId, channel, restart ? 'adapter-runtime-start-failed' : 'channel-agent-missing')
+      return this.enableRejected(
+        id,
+        actorId,
+        channel,
+        blockReason ?? (restart ? 'adapter-runtime-start-failed' : 'channel-runtime-owner-conflict')
+      )
     }
     this.deps.runtime?.stop(id)
     let started = false

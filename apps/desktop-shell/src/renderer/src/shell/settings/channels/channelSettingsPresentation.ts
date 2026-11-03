@@ -97,6 +97,7 @@ export function credentialStatusLabel(
 
 /** 启用/自检这条路上的码（`reason` 与 `code` 合起来）。 */
 export const CHANNEL_ENABLE_FAILURE_REASONS = [
+  'channel-runtime-owner-conflict',
   'telegram-credential-missing',
   'telegram-provider-rejected',
   'telegram-conflict',

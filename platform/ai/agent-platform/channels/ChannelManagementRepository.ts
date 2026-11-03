@@ -4,8 +4,12 @@ import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
-import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
+import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
+import {
+  activateOwnedChannelRuntime,
+  explainEnableBlock
+} from './channelRuntimeActivation'
 import {
   abandonCredentialOperation,
   insertManagedChannel,
@@ -22,10 +26,8 @@ import {
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
 const MANAGED_CHANNEL_CH_SQL = managedChannelSql('ch')
-const SUPPORTED_CHANNEL_SQL = supportedChannelSql()
 const ISOLATED_LARK_C_SQL = isolatedLarkSql('c')
 const ISOLATED_WECHAT_C_SQL = isolatedWechatSql('c')
-const BLOCKED_RUNTIME_C_SQL = blockedRuntimeChannelSql('c')
 
 export type ChannelManagementOperation = {
   id: string
@@ -705,34 +707,14 @@ export class ChannelManagementRepository {
   }
 
   activateOwnedRuntime(channelId: string, owner: TelegramLifecycleOwner, now: string): TelegramLifecycleOwner | null {
-    return this.database.transact(() => {
-      const current = this.database.connection.prepare(
-        `select 1 from channel_telegram_lifecycle_operations where channel_id = ? and owner_token = ? and purpose = ? and generation is null`
-      ).get(channelId, owner.token, owner.purpose)
-      if (!current) return null
-      if (owner.purpose === 'mutation') return null
-      const states = owner.purpose === 'enable' ? "('ready', 'disabled')" : "('enabled')"
-      const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled = 1, lifecycle_state = 'enabled', updated_at = ?
-         where id = ? and ${SUPPORTED_CHANNEL_SQL} and lifecycle_state in ${states}
-           and credential_ref is not null and credential_revision is not null and credential_health = 'configured'
-           and exists (select 1 from agent_entities a where a.id = agent_channels.agent_id)
-           and not exists (select 1 from channel_management_operations o where o.channel_id = agent_channels.id
-             and o.purpose in ('provision', 'rotate') and o.state in ('reserved', 'needs-recovery'))`
-      ).run(now, channelId).changes
-      if (changed !== 1) return null
-      const prior = this.database.connection.prepare('select generation from channel_runtime_generations where channel_id = ?').get(channelId) as { generation: number } | undefined
-      const generation = (prior?.generation ?? 0) + 1
-      this.database.connection.prepare(
-        `insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,?, 'active',?)
-         on conflict(channel_id) do update set generation=excluded.generation,lifecycle_state='active',updated_at=excluded.updated_at`
-      ).run(channelId, generation, now)
-      const owned = this.database.connection.prepare(
-        `update channel_telegram_lifecycle_operations set generation = ?, updated_at = ? where channel_id = ? and owner_token = ? and purpose = ? and generation is null`
-      ).run(generation, now, channelId, owner.token, owner.purpose).changes
-      return owned === 1 ? { ...owner, generation } : null
-    })
+    return activateOwnedChannelRuntime(this.database, channelId, owner, now)
   }
+
+  /** 启用被挡住的**真实**原因：只有助手行真的不在时才允许说「助手不在了」。 */
+  enableBlockReason(channelId: string, owner: TelegramLifecycleOwner) {
+    return explainEnableBlock(this.database, channelId, owner)
+  }
+
 
   ownsLifecycleOwner(channelId: string, owner: TelegramLifecycleOwner): boolean {
     return owner.generation !== null && Boolean(this.database.connection.prepare(
@@ -1066,7 +1048,7 @@ export class ChannelManagementRepository {
       `select distinct c.id from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-       where ${BLOCKED_RUNTIME_C_SQL} and (
+       where ${blockedRuntimeChannelSql('c')} and (
          o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
     ).all().map((row) => (row as { id: string }).id)
