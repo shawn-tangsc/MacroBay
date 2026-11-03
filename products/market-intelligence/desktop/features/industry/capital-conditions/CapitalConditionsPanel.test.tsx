@@ -395,6 +395,27 @@ describe('CapitalConditionsPanel', () => {
     expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
   })
 
+  it('closes the readings when the chip stops being an alert, so the next hit does not open itself', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const alert = { state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M', coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z' }
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
+    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.click())
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).not.toBeNull()
+
+    // 刷新后这一路变成「数据不齐」：读数块与牌子一起消失。
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } } })))
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+
+    // 下一次真的命中：读者没点过，就不能自己弹开。
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('keeps the initial loading state short and free of diagnostic data', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' } }))

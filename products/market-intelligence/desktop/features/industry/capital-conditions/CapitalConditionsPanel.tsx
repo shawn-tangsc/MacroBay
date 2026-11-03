@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
@@ -83,6 +83,14 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   // 牌子的开合、`aria-expanded` / `aria-controls` 与区域语义都来自共用的 `useSignalDetail`：
   // 四块牌子同一条规矩，抄四份必然有一份漏。读数的落点在标题行下，卡片与日流表不被盖住。
   const signalDetail = useSignalDetail(ETF_SIGNAL_DETAIL_ID)
+  // 牌子从「有事」变回「不齐/没有」时收起它：读者没点过展开，就不能在下一次命中时自己弹开。
+  // 共用件只给 `toggle`，所以这里只在自己持有「上一版是不是有事」时补一次收起。
+  const alertChip = state.state === 'available' && state.etfSignal?.state === 'alert' ? state.etfSignal : undefined
+  const wasAlert = useRef(false)
+  useEffect(() => {
+    if (wasAlert.current && !alertChip && signalDetail.open) signalDetail.toggle()
+    wasAlert.current = Boolean(alertChip)
+  }, [alertChip, signalDetail])
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
