@@ -79,6 +79,14 @@ export function ChannelEditDialog(props: {
         </>
       }
     >
+      <p className="channel-edit-current" data-current-token>
+        {/* 只显示头尾掩码（主进程算好送来的），不显示「最近更新」：安全视图里没有凭据时间戳，
+            拿频道记录的 updated_at 冒充它，就是另一种说假话。改没改成功，看这串变没变。 */}
+        {labels.channelTokenCurrent.replace(
+          '{mask}',
+          channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask
+        )}
+      </p>
       <ChannelFields
         agents={props.agents}
         labels={labels}

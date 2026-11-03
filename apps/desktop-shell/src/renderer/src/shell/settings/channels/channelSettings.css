@@ -315,3 +315,12 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+/* 编辑弹层里「当前已存」的掩码：与行内一样的等宽、不可选中（没有任何复制入口）。 */
+.channel-edit-current {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  user-select: none;
+}

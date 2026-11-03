@@ -18,7 +18,12 @@ export type Channel = {
   name: string
   agentId: string
   state: 'credential-missing' | 'configuration-ready' | 'disabled' | 'deleting' | 'runtime-ready'
-  credential: { status: 'configured' | 'missing' | 'unavailable'; hasCredential: boolean }
+  credential: {
+    status: 'configured' | 'missing' | 'unavailable'
+    hasCredential: boolean
+    /** 主进程算好的掩码（头尾各几位 + 省略号）；渲染层只显示，不拿完整值再切。 */
+    maskedFields?: Readonly<Record<string, string>>
+  }
   /** 系统默认目录或读者指定的工作区；老视图没有这一项时按系统默认处理。 */
   workspace?: ChannelWorkspace
   /** `null` = 继承助手；不落 `'default'`。老视图缺这一项时同样按「继承」处理。 */

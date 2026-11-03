@@ -274,6 +274,38 @@ describe('replacing the token without revealing it', () => {
   })
 })
 
+describe('showing which token is stored', () => {
+  it('shows the main-process mask on the row and in the dialog, with the last update', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        {
+          ...channel,
+          allowedChatIds: [],
+          credential: { status: 'configured', hasCredential: true, maskedFields: { bot_token: '6050…xAA' } }
+        }
+      ])
+    })
+    const container = await mount()
+
+    // 列表行直接显示主进程给的掩码（不是渲染层自己切）。
+    expect(container.querySelector('[data-channel-id="channel-1"] .channel-row-mask')?.textContent).toBe('6050…xAA')
+
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    const current = document.body.querySelector('[data-current-token]')
+    expect(current?.textContent).toContain('6050…xAA')
+    // 不显示「最近更新」：安全视图没有凭据时间戳，拿频道更新时间冒充它是说假话。
+    expect(current?.textContent).not.toContain('最近更新')
+    // 输入框仍为空：旧值不被回显。
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    expect(field.value).toBe('')
+  })
+})
+
 describe('the allowed chat IDs field', () => {
   it('says the bot is open to everyone when the list is empty and no policy exists', async () => {
     installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })

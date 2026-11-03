@@ -43,7 +43,8 @@ export function ChannelRow(props: {
       <span className={`channel-row-dot channel-row-dot--${dot}`} aria-hidden="true" />
       <span className="channel-row-name">{channel.name}</span>
       <span className="channel-row-mask" aria-label={labels.channelCredential}>
-        {labels.channelTokenMask}
+        {/* 掩码由主进程算好（头尾各几位 + 省略号）；渲染层只显示，不拿完整值再切。 */}
+        {channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask}
       </span>
       {failure === null ? null : (
         <span className="channel-row-error" role="note">
