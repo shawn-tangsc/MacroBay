@@ -5,7 +5,6 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   title: string
   window: string
   edition: string
-  readings: string
   readingsAllMissing: string
   noValue: string
   sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string }>
@@ -59,7 +58,10 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const lines: string[] = []
   lines.push(`# ${escapeMarkdown(labels.title)} — ${document.edition.date}`)
   lines.push('')
-  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))} · ${readingsLabel(document, labels)}`)
+  // The header says when this edition covers, not how many items it holds: the body lists them, so a
+  // count here repeated a fact the reader can already see (and named no unit).
+  const allMissing = document.status.readingsAvailable === 0 ? ` · ${labels.readingsAllMissing}` : ''
+  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${allMissing}`)
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
@@ -189,12 +191,6 @@ function publicationSpan(
   const to = row.observedAt.slice(5, 10)
   if (!from || !to || from === to) return ''
   return labels.changeBaselineSpan.replace('{from}', from).replace('{to}', to)
-}
-
-function readingsLabel(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
-  return document.status.readingsAvailable === 0
-    ? labels.readingsAllMissing
-    : labels.readings.replace('{available}', String(document.status.readingsAvailable)).replace('{total}', String(document.status.readingsTotal))
 }
 
 function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions): string {

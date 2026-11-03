@@ -76,6 +76,16 @@ const options = {
 }
 
 describe('daily briefing markdown', () => {
+  it('leaves the readings count out of the copy header', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    // The header block only: the body may legitimately say "5 项" about its own rows, so scanning
+    // the whole document would turn this into a rule about wording rather than about the header.
+    const header = markdown.split('\n').filter((line) => line.startsWith('> '))
+    expect(header).toHaveLength(1)
+    expect(header[0]).not.toMatch(/\d+\s*项/)
+    expect(header[0]).toContain('2026-10-30')
+  })
+
   it('keeps every source and fallback word out of the exported copy', () => {
     // The reader decided: the brief text and the exported image carry the reading, not the
     // provenance. Trace lives in the trace column.
