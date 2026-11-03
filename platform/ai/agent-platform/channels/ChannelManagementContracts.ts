@@ -105,6 +105,26 @@ export type ChannelDeliveryTargetView = {
     | { kind: 'ambiguous'; count: number }
 }
 
+/**
+ * 运行审计的只读一行：谁在什么时候被什么原因挡下。
+ *
+ * `generation` **不在这里**：它是内部代际账，读者看不懂也用不上，返回给渲染层只会多一个
+ * 能被截图带出去的内部字段。
+ */
+export type ChannelRuntimeAuditSafeView = {
+  id: string
+  code: string
+  createdAt: string
+}
+
+/** keyset 游标：`createdAt|id`，不用下标。索引就是 `(channel_id, created_at desc, id asc)`。 */
+export type ChannelRuntimeAuditCursor = { createdAt: string; id: string }
+
+export type ChannelRuntimeAuditPage = {
+  rows: readonly ChannelRuntimeAuditSafeView[]
+  nextCursor: ChannelRuntimeAuditCursor | null
+}
+
 export type ChannelManagementResult = {
   ok: boolean
   code: ChannelManagementCode

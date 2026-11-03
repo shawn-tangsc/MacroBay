@@ -6,6 +6,7 @@ import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegi
 import { seedChannelAdapterSupport } from './channelTestSupport'
 import { assertLarkSecret, assertSlackSecret } from './ChannelManagementContracts'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
+import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelManagementService } from './ChannelManagementService'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 
@@ -1245,5 +1246,72 @@ describe('read-only delivery targets projection', () => {
       deliverable: false,
       reason: 'adapter-not-supported'
     })
+  })
+})
+
+describe('channel runtime audits', () => {
+  function seededChannel() {
+    const { database, service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    return { database, service, id }
+  }
+
+  function insertAudit(
+    database: ReturnType<typeof harness>['database'],
+    channelId: string,
+    id: string,
+    code: string,
+    createdAt: string
+  ): void {
+    database.connection.prepare(
+      'insert into channel_runtime_audits (id, channel_id, generation, code, created_at) values (?, ?, ?, ?, ?)'
+    ).run(id, channelId, 7, code, createdAt)
+  }
+
+  it('pages by (createdAt, id) so rows sharing a timestamp are not skipped or repeated', () => {
+    const { database, service, id } = seededChannel()
+    for (const suffix of ['a', 'b', 'c', 'd', 'e']) insertAudit(database, id, `audit-${suffix}`, 'channel-content-rejected', '2026-11-03T00:00:00.000Z')
+
+    const first = service.listRuntimeAudits({ id, limit: 2 })
+    expect(first.rows.map((row) => row.id)).toEqual(['audit-a', 'audit-b'])
+    expect(first.nextCursor).toEqual({ createdAt: '2026-11-03T00:00:00.000Z', id: 'audit-b' })
+
+    const second = service.listRuntimeAudits({ id, limit: 2, cursor: first.nextCursor })
+    expect(second.rows.map((row) => row.id)).toEqual(['audit-c', 'audit-d'])
+
+    const third = service.listRuntimeAudits({ id, limit: 2, cursor: second.nextCursor })
+    expect(third.rows.map((row) => row.id)).toEqual(['audit-e'])
+    expect(third.nextCursor).toBeNull()
+  })
+
+  it('never returns the internal generation and clamps the server-side limit to 200', () => {
+    const { database, service, id } = seededChannel()
+    for (let index = 0; index < 250; index += 1) {
+      const suffix = String(index).padStart(3, '0')
+      insertAudit(database, id, `audit-${suffix}`, 'channel-lifecycle-fenced', `2026-11-03T00:00:${suffix.slice(0, 2)}.000Z`)
+    }
+
+    const page = service.listRuntimeAudits({ id, limit: 500 })
+    expect(page.rows).toHaveLength(200)
+    expect(JSON.stringify(page.rows)).not.toContain('generation')
+    expect(Object.keys(page.rows[0]!)).toEqual(['id', 'code', 'createdAt'])
+
+    // 非法 limit 退回默认值，不抛错：翻页失败不该把面板变成「没读出来」。
+    expect(service.listRuntimeAudits({ id, limit: -3 }).rows).toHaveLength(50)
+    expect(service.listRuntimeAudits({ id, limit: Number.NaN }).rows).toHaveLength(50)
+  })
+
+  it('keeps only the newest 500 rows per channel, trimmed inside the same insert transaction', () => {
+    const { database, service, id } = seededChannel()
+    const inbound = new ChannelInboundRepository(database)
+    for (let index = 0; index < 505; index += 1) {
+      const seconds = String(index % 60).padStart(2, '0')
+      const minutes = String(Math.floor(index / 60)).padStart(2, '0')
+      inbound.recordInboundFailure(id, 1, new Date(`2026-11-03T${minutes}:${seconds}:00.000Z`))
+    }
+
+    const kept = database.connection.prepare('select count(*) as count from channel_runtime_audits where channel_id = ?').get(id) as { count: number }
+    expect(kept.count).toBe(500)
+    expect(service.listRuntimeAudits({ id, limit: 200 }).rows).toHaveLength(200)
   })
 })

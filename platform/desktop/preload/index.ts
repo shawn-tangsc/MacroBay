@@ -112,6 +112,8 @@ const api = {
     runtimeStatus: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRuntimeStatus, input),
     listDeliveryAttempts: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAttempts, input),
     listDeliveryAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input),
+    /** 运行审计一页（只读）：`{ id, limit?, cursor? }`；游标形状 `{ createdAt, id }`。 */
+    listRuntimeAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input),
     listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input),
     deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input),

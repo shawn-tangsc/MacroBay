@@ -69,6 +69,11 @@ export const IpcChannels = {
   channelsRuntimeStatus: 'platform:channels-runtime-status',
   channelsListDeliveryAttempts: 'platform:channels-list-delivery-attempts',
   channelsListDeliveryAudits: 'platform:channels-list-delivery-audits',
+  /**
+   * 只读：设置页日志面板的「运行异常」按频道分页读（keyset 游标，服务端夹 limit ≤ 200）。
+   * 面板不新增第二份存储——数据就是运行审计表本身，随频道删除级联。
+   */
+  channelsListRuntimeAudits: 'platform:channels-list-runtime-audits',
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',

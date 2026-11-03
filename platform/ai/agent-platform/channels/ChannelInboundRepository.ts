@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
+import { recordRuntimeAudit } from './channelRuntimeAuditRetention'
 import type { ChannelConversationKind } from './channelContracts'
 import type { ChannelDispatchAdmission, ChannelDispatchFinalStatus, ChannelExecutionClaim } from './ChannelInboundContracts'
 
@@ -879,10 +880,9 @@ export class ChannelInboundRepository {
     this.database.connection.prepare('update channel_receipts set status = ?, updated_at = ? where id = ?').run(status, now.toISOString(), receiptId)
   }
 
+  /** 写一条运行审计；插入与裁到 500 行在同一个事务里（见 `channelRuntimeAuditRetention`）。 */
   private audit(channelId: string, generation: number, code: ChannelInboundAuditCode, now: Date): void {
-    this.database.connection.prepare(
-      'insert into channel_runtime_audits (id, channel_id, generation, code, created_at) values (?, ?, ?, ?, ?)'
-    ).run(randomUUID(), channelId, generation, code, now.toISOString())
+    recordRuntimeAudit(this.database, channelId, generation, code, now)
   }
 }
 

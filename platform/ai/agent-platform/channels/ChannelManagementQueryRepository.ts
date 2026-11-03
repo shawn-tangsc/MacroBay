@@ -8,6 +8,8 @@ import type {
   ChannelManagementSafeView,
   ChannelManagementState,
   ChannelPolicySafeView,
+  ChannelRuntimeAuditCursor,
+  ChannelRuntimeAuditPage,
   ChannelRuntimeSafeView
 } from './ChannelManagementContracts'
 
@@ -125,6 +127,38 @@ export class ChannelManagementQueryRepository {
       id: row.id, source: row.source_type, status: row.status, code: row.stable_error_code,
       createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at
     }))
+  }
+
+  /**
+   * 运行审计的一页（设置页日志面板的「运行异常」那一类）。
+   *
+   * 分页用 keyset 而不是 offset：`created_at` 相同的行很多（一次失败会连写几条），
+   * offset 在插入并发下会漏行或重复。索引就是 `(channel_id, created_at desc, id asc)`，
+   * 所以排序必须与之相同，游标也按 `(createdAt, id asc)` 往后走。
+   */
+  runtimeAudits(channelId: string, limit: number, cursor: ChannelRuntimeAuditCursor | null): ChannelRuntimeAuditPage {
+    const rows = (cursor === null
+      ? this.database.connection.prepare(
+        `select id, code, created_at from channel_runtime_audits
+         where channel_id = ? and exists (
+           select 1 from agent_channels where id = channel_runtime_audits.channel_id
+             and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
+         ) order by created_at desc, id asc limit ?`
+      ).all(channelId, limit)
+      : this.database.connection.prepare(
+        `select id, code, created_at from channel_runtime_audits
+         where channel_id = ? and (created_at < ? or (created_at = ? and id > ?)) and exists (
+           select 1 from agent_channels where id = channel_runtime_audits.channel_id
+             and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
+         ) order by created_at desc, id asc limit ?`
+      ).all(channelId, cursor.createdAt, cursor.createdAt, cursor.id, limit)) as Array<{
+      id: string; code: string; created_at: string
+    }>
+    const last = rows.at(-1)
+    return {
+      rows: rows.map((row) => ({ id: row.id, code: row.code, createdAt: row.created_at })),
+      nextCursor: last === undefined || rows.length < limit ? null : { createdAt: last.created_at, id: last.id }
+    }
   }
 
   deliveryAudits(channelId: string, limit: number, offset: number): ChannelDeliveryAuditSafeView[] {

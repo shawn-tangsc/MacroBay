@@ -13,6 +13,7 @@ import {
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
+import { clampAuditLimit, readAuditCursor } from './channelRuntimeAuditPage'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 import { channelAdapterDescriptor } from './channelAdapterDescriptors'
@@ -130,6 +131,19 @@ export class ChannelManagementService {
       assertBoundedInteger(input.limit, 50, 100) || 1,
       assertBoundedInteger(input.offset, 0, 10_000)
     )
+  }
+
+  /**
+   * 设置页日志面板的「运行异常」：只读、按频道、keyset 分页。
+   *
+   * `limit` 由**服务端**夹到 200 以内（不是只靠界面传小值）：这里是给渲染层用的只读面，
+   * 一旦有人传个 10 万，读的就是整张表。非法值不抛错、退回默认 50——分页器一旦抛错，
+   * 面板只剩一句「没读出来」，而它本来只是想翻页。
+   */
+  listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) {
+    const id = this.requireChannel(input.id)
+    if (this.deps.repository.channelType(id) === 'wechat') return { rows: [], nextCursor: null }
+    return this.deps.repository.query.runtimeAudits(id, clampAuditLimit(input.limit), readAuditCursor(input.cursor))
   }
 
   get(id: unknown) {

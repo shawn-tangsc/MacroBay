@@ -74,6 +74,11 @@ export function registerChannelIpc(
     const value = asChannelInput(input)
     return channelManagementService.listDeliveryAudits({ id: value.id, limit: value.limit, offset: value.offset })
   })
+  // 只读：设置页日志面板的「运行异常」那一类。分页用 keyset 游标，服务端把 limit 夹到 200。
+  ipcMain.handle(IpcChannels.channelsListRuntimeAudits, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelManagementService.listRuntimeAudits({ id: value.id, limit: value.limit, cursor: value.cursor })
+  })
   ipcMain.handle(IpcChannels.channelsListPolicies, (_event: IpcMainInvokeEvent, input: unknown) => {
     const value = asChannelInput(input)
     return channelManagementService.listPolicies({ id: value.id, limit: value.limit })

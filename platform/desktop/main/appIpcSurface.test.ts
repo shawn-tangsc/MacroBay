@@ -97,6 +97,14 @@ describe('desktop main IPC surface', () => {
     // 只读面：这条投影不许长出现在时之外的写入入口。
     expect(preloadSource).not.toContain('channelsListDeliveryTargets, write')
   })
+  it('keeps the read-only runtime-audit page wired on both halves of the seam', () => {
+    // 设置页日志面板的「运行异常」全靠这一条；两半缺一条，面板只会诚实地说「没读出来」。
+    expect(channelIpcSource).toContain('IpcChannels.channelsListRuntimeAudits')
+    expect(channelIpcSource).toContain('channelManagementService.listRuntimeAudits(')
+    expect(preloadSource).toContain('listRuntimeAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input)')
+    // 只读：这条面不许出现写通道配置的调用。
+    expect(preloadSource).not.toContain('channelsListRuntimeAudits, write')
+  })
 
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
