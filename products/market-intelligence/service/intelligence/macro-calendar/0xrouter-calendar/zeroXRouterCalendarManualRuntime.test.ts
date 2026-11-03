@@ -13,7 +13,7 @@ afterEach(() => { disposals.splice(0).reverse().forEach(dispose => dispose()) })
 const scope = { month: '2026-09', locale: 'zh' } as const
 const time = '2026-09-10T01:00:00.000Z'
 async function setup(options: { enabled?: boolean; hasCredential?: boolean; evidenceReady?: boolean;
-  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean } = {}) {
+  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean; monotonicNow?: () => number } = {}) {
   expect(existsSync(new URL('./zeroXRouterCalendarManualRuntime.ts', import.meta.url)), 'manual composition is implemented').toBe(true)
   const { createZeroXRouterCalendarManualRuntime } = await import('./zeroXRouterCalendarManualRuntime')
   const directory = mkdtempSync(join(tmpdir(), 'mc-v1-manual-'))
@@ -38,10 +38,15 @@ async function setup(options: { enabled?: boolean; hasCredential?: boolean; evid
     requestGovernanceQueue: queue, requestJsonBody, getApiKey: async () => 'derived-safe-key',
     readReadiness: async () => ({ enabled: options.enabled ?? true, hasCredential: options.hasCredential ?? true }),
     readCapacity: () => ({ marketBytes: 0, walBytes: 0, freeBytes: 10 * 1024 ** 3, archiveAvailable: !options.pressure }),
-    now: () => new Date(clock), createCollectionId: () => `derived-${++sequence}`, cursorKey: Buffer.alloc(32, 1) })
+    now: () => new Date(clock), monotonicNow: options.monotonicNow,
+    createCollectionId: () => `derived-${++sequence}`, cursorKey: Buffer.alloc(32, 1) })
   disposals.push(() => { database.close(); queue.close(); rmSync(directory, { recursive: true, force: true }) })
   return { runtime, database, archive, requestJsonBody, queue, rawRecords, setTime: (value: string) => { clock = value } }
 }
+// One month's worth of provider rows, shared by the two write-budget cases: one proves the rows
+// survive, the other proves what happens when the budget runs out halfway through them.
+const largeMonthData = () => Array.from({ length: 600 }, (_, id) => ({ id: id + 1, calendarId: `derived-${id}`, locale: 'zh', star: 3, calendarName: 'Derived '.repeat(60),
+  pubTimestamp: Date.parse(time), estimateValue: '0', preValue: '2', pubValue: '3' }))
 
 describe('MC-V1 manual archive and SQLite composition', () => {
   it('keeps per-endpoint attempts distinct from stored success and clears a failure only after that source succeeds', async () => {
@@ -112,16 +117,36 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({
       state: 'succeeded', attemptedAt: '2026-09-10T03:00:00.000Z', trigger: 'manual' })
   })
+  // Data integrity, not the write budget: the clock is frozen so the one-second deadline cannot
+  // decide this case's colour on a busy machine. What it proves is that 600 rows above 256 KiB are
+  // all stored with their values intact; the deadline has its own case below.
   it('archives and stores a complete 600-row month above 256 KiB without dropping economic values', async () => {
-    const data = Array.from({ length: 600 }, (_, id) => ({ id: id + 1, calendarId: `derived-${id}`, locale: 'zh', star: 3, calendarName: 'Derived '.repeat(60),
-      pubTimestamp: Date.parse(time), estimateValue: '0', preValue: '2', pubValue: '3' }))
-    const h = await setup({ data })
+    const h = await setup({ data: largeMonthData(), monotonicNow: () => 0 })
     expect((await h.runtime.refreshManual(scope)).state).toBe('completed')
     expect(h.archive.inspect().committedBytes).toBeGreaterThan(256 * 1024)
     expect(h.archive.inspect().activeReservations).toBe(0)
     const row = h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'economic-indicator' and consensus_json = ? and provider_actual_json = ?")
       .get('{"displayValue":"0"}', '{"displayValue":"3"}')
     expect(row?.n).toBe(600)
+  })
+  // The clock is the only judge of the deadline, so this case jumps past it once instead of waiting
+  // a real second: whatever the machine is doing, the first source trips the budget and the two the
+  // batch reaches afterwards start their own window and finish. That is the reader's `partial` -
+  // one source failed, the other two are new - not a case that did not wait long enough.
+  it('spends the write budget mid-batch, stores nothing for that source and reports partial', async () => {
+    let ticks = 0
+    const h = await setup({ data: largeMonthData(), monotonicNow: () => { ticks += 1; return ticks < 20 ? ticks : 5_000 } })
+    const result = await h.runtime.refreshManual(scope)
+    expect(result.state).toBe('partial')
+    const failed = result.items.filter(item => item.state === 'unavailable')
+    expect(failed).toHaveLength(1)
+    // The deadline verdict is folded into `storage-unavailable` at the collection boundary. Whether
+    // the panel should tell "too slow" from "storage is down" is a separate question, not this case's.
+    expect(failed[0]).toMatchObject({ descriptorId: 'macro-calendar-0xrouter-economic-data', failureCode: 'storage-unavailable' })
+    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toMatchObject({ state: 'failed', failureCode: 'storage-unavailable' })
+    expect(h.archive.inspect().activeReservations).toBe(0)
+    expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'economic-indicator'").get()?.n).toBe(0)
+    expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'financial-event'").get()?.n).toBe(600)
   })
   it('rejects calendar over-budget responses before archive or storage and leaves no reservations', async () => {
     const h = await setup({ data: [{ payload: 'x'.repeat(2 * 1024 * 1024) }] })

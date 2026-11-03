@@ -35,12 +35,19 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
   evidenceReady: boolean
   readReadiness: RefreshDependencies['readReadiness']
   readEnabledFeeds?: RefreshDependencies['readEnabledFeeds']
+  /**
+   * Clock the storage deadline is measured on. Production passes nothing and gets `performance.now`,
+   * so the one-second budget still governs real writes; passing a clock lets a case decide the budget
+   * itself instead of letting the machine's load decide whether the case passes.
+   */
+  monotonicNow?: () => number
 }) {
   let repository!: ReturnType<typeof createMarketCalendarEventRepository>
   const collection = createZeroXRouterCalendarCollectionService({ ...deps,
     createRepository: resolveCollectionContext => {
       repository = createMarketCalendarEventRepository({ database: deps.database, resolveCollectionContext,
-        readCapacity: deps.readCapacity, cursorKey: deps.cursorKey, now: () => deps.now().toISOString(), manualCapacityAdmission: true })
+        readCapacity: deps.readCapacity, cursorKey: deps.cursorKey, now: () => deps.now().toISOString(),
+        monotonicNow: deps.monotonicNow, manualCapacityAdmission: true })
       return repository
     }
   })
