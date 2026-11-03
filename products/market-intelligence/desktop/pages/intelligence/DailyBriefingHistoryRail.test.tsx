@@ -200,6 +200,24 @@ describe('daily briefing history rail', () => {
     expect(host.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
   })
 
+  it('carries the acceptance anchor on the language tag, and only where a tag exists', () => {
+    // `02` finds this label by anchor: a tag without it fails the gate, and an anchor without a
+    // tag would let a machine "find" a label the reader cannot see.
+    render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })] })
+    const tag = host.querySelector('[data-briefing-locale-tag]')
+    expect(tag).not.toBeNull()
+    expect(tag?.textContent).toBe(text.history.editionLanguages.both)
+
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
+    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(0)
+
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })], resolveText: (key: string) => key })
+    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(0)
+
+    render({ editions: [edition()], generatingStage: 'AI 选择' })
+    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(1)
+  })
+
   it('marks an incomplete issue with the status pill, not a hand-made chip', () => {
     render({ editions: [edition({ state: 'partial' })], resolveText: () => '未完整' })
     expect(host.querySelector('.status-pill--warn')).not.toBeNull()

@@ -133,7 +133,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                   </>}
               </small>
               {/* Read-only fact about this issue, not a control: it stays flat and out of Tab order. */}
-              {languageTag(edition.availableLocales) ? <span className="mi-daily-briefing__rail-edition-lang" data-edition-languages={languageTag(edition.availableLocales)}>
+              {languageTag(edition.availableLocales) ? <span className="mi-daily-briefing__rail-edition-lang" data-briefing-locale-tag="true" data-edition-languages={languageTag(edition.availableLocales)}>
                 {text.history.editionLanguages[languageTag(edition.availableLocales)!]}
               </span> : null}
             </>}
