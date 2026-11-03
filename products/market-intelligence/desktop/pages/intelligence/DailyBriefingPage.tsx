@@ -315,7 +315,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const generationTrace = view.status === 'ready'
     ? readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     : undefined
-  const showAppendix = view.status === 'ready' && !contentBlocked
+  // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
+  // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
+  const hasTodayEdition = editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
+  const showAppendix = hasTodayEdition && !contentBlocked
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt

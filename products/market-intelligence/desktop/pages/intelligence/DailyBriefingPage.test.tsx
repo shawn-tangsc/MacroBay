@@ -1335,10 +1335,26 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(panel.querySelectorAll('[data-loading-state]')).toHaveLength(1)
   expect(panel.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
   // No third layout: the right-hand column is absent while generating, like after a failure.
-  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  // Today already has an edition here, so the archive stays while the new run is in flight.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
   expect(dom.textContent!.match(/正在生成今天的日报/g)).toHaveLength(1)
   const todayRow = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
   expect(todayRow.textContent).toMatch(/生成中 · /)
+})
+
+it('leaves the archive out while generating a day that never produced one', async () => {
+  const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const client = fakeClient({
+    getToday: vi.fn(() => new Promise(() => undefined)),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } })),
+    getProgress: vi.fn(async () => ({ state: 'idle' as const }))
+  })
+  const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  // No edition to keep: no archive column, and the run's panel is still in the body.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  expect(dom.querySelector('[data-daily-brief-generating="true"]')).not.toBeNull()
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {
