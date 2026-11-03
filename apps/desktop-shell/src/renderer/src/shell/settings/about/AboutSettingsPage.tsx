@@ -112,9 +112,12 @@ export function AboutSettingsPage(props: {
           {/* 「有这行」和「有那块」是两件事：只有内容被截断才出这一行。 */}
           {notesTruncated ? <p className="preference-hint about-notes-truncated">{text.notes.truncated}</p> : null}
           {notes.length > 7 ? (
-            <Button className="ant-secondary-button" size="small" onClick={() => setNotesExpanded((value) => !value)}>
-              {notesExpanded ? text.notes.collapse : text.notes.expand}
-            </Button>
+            // 「收起」只是收起说明，不是主操作：靠右、宽度按内容，不横跨整行。
+            <div className="about-notes-toggle">
+              <Button className="ant-secondary-button" size="small" onClick={() => setNotesExpanded((value) => !value)}>
+                {notesExpanded ? text.notes.collapse : text.notes.expand}
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : null}

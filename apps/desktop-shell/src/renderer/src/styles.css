@@ -520,6 +520,7 @@ button {
 
 .topbar-actions {
   display: flex;
+  gap: 4px;
   height: 100%;
   /* 右侧光学留白由容器给，不由按钮给：原来最后一颗是 38px 按钮（15px 图标居中，天然留 11.5px），
      换成 24px 的铃铛后自身只留 4px，若不再补这一笔，图标会贴到窗口边。
@@ -9128,6 +9129,9 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .about-page {
   display: grid;
   max-width: 720px;
+  /* 不设高度、不设 overflow：滚动由外层 `.settings-detail-pane` 的 `overflow: auto` 负责。
+     任何一层写出 `overflow: hidden` 或固定高度，长正文就滚不到底。 */
+  align-content: start;
 }
 
 /* 关于页的区块**直接用 `.preference-section`**（上下 18 + 底部分隔线），
