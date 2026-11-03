@@ -1,9 +1,9 @@
-import { openInterestHistoryPolicy } from '../../../contracts/openInterestHistory'
+import { openInterestBucketPolicy, openInterestHistoryPolicy } from '../../../contracts/openInterestHistory'
 import type { OpenInterestClient } from './binanceOpenInterestClient'
 import type { PerpetualPositioningStore, PositioningRow, PositioningVolumeRow } from '../store/perpetualPositioningStore'
 
 export const openInterestCollectionPolicy = Object.freeze({
-  bucketMs: 900_000,
+  bucketMs: openInterestBucketPolicy.bucketMs,
   assets: Object.freeze({
     btc: Object.freeze({ asset: 'btc' as const, symbol: 'BTCUSDT' }),
     eth: Object.freeze({ asset: 'eth' as const, symbol: 'ETHUSDT' })

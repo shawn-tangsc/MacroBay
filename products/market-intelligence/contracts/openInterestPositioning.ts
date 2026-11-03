@@ -1,3 +1,5 @@
+import { bucketsInSpan } from './openInterestHistory'
+
 /**
  * Turns notional open interest and the funding rate into one of six named states.
  *
@@ -102,12 +104,20 @@ export type LiquidationHintsResult = Readonly<{
   truncated: boolean
 }>
 
+/**
+ * The volume baseline is a **duration**, not a count of bars: "the previous day's average
+ * volume" must stay a day when the bucket gets finer. The bar count is derived from the bucket
+ * width above, so `96` at fifteen minutes and `288` at five are the same 24 hours.
+ */
+const LIQUIDATION_LOOKBACK_MS = 24 * 3_600_000
+
 export const liquidationHintPolicy = Object.freeze({
   dropPct: -1.5,
   strongDropPct: -2.5,
   priceDropPct: -0.8,
   volumeMultiple: 2,
-  lookbackBars: 96,
+  lookbackMs: LIQUIDATION_LOOKBACK_MS,
+  lookbackBars: bucketsInSpan(LIQUIDATION_LOOKBACK_MS),
   maximumHints: 8,
   /**
    * Below this share of closed buckets carrying volume, the whole window reports

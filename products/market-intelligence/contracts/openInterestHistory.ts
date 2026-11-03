@@ -5,9 +5,31 @@
  * windows. The window is a query parameter rather than a second history: the 7-day view is
  * the 15-minute rows folded to one point per hour, computed at read time and never stored.
  */
+/**
+ * The one bucket width for notional open interest.
+ *
+ * Every count and every name in this domain that used to encode it — the volume lookback, the
+ * kline request limit, the stored period label — is derived from here. A second copy is how the
+ * reference window silently shrinks when the bucket gets finer: `96 bars` is 24 hours at fifteen
+ * minutes and 8 hours at five, and no assertion would notice.
+ */
+export const openInterestBucketPolicy = Object.freeze({
+  bucketMs: 900_000
+})
+
+/** Buckets that fit in a span. The only division by the bucket width in this domain. */
+export function bucketsInSpan(spanMs: number, bucketMs: number = openInterestBucketPolicy.bucketMs): number {
+  return Math.round(spanMs / bucketMs)
+}
+
+/** The provider's period label for a bucket width (`15m`, `5m`), derived rather than spelled twice. */
+export function bucketPeriodLabel(bucketMs: number = openInterestBucketPolicy.bucketMs): string {
+  return `${Math.round(bucketMs / 60_000)}m`
+}
+
 export const openInterestHistoryPolicy = Object.freeze({
   sourceId: 'binance-futures-positioning',
-  storedPeriod: '15m' as const,
+  storedPeriod: bucketPeriodLabel(),
   windows: Object.freeze({
     '7d': Object.freeze({ spanMs: 7 * 86_400_000, resolution: '1h' as const, maximumPointsPerAsset: 172 }),
     '24h': Object.freeze({ spanMs: 86_400_000, resolution: '15m' as const, maximumPointsPerAsset: 100 })
@@ -23,7 +45,13 @@ export const openInterestHistoryPolicy = Object.freeze({
   endpoint: 'https://fapi.binance.com/futures/data/openInterestHist',
   klinesEndpoint: 'https://fapi.binance.com/fapi/v1/klines',
   /** `openInterestHist` rejects limit > 500, so a cold start is always two requests. */
-  requestLimit: Object.freeze({ openInterest: 500, klines: 672 }),
+  /**
+   * `openInterestHist` rejects limit > 500, so a cold start is always two requests. The kline
+   * allowance is the 7-day window in buckets — derived, so a finer bucket widens it instead of
+   * quietly shortening the backfill. A finer bucket may need to respect the endpoint's own cap
+   * when it lands; that is a request-shape question for the step that changes the bucket width.
+   */
+  requestLimit: Object.freeze({ openInterest: 500, klines: bucketsInSpan(7 * 86_400_000) }),
   timeoutMs: 15_000,
   maximumResponseBytes: 256 * 1024,
   unavailableFailureCode: 'open-interest-history-query-unavailable' as const,

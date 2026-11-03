@@ -2,6 +2,7 @@ import { isWithinUtf8JsonBudget } from '../../../contracts/intelligenceQueryCont
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestChange,
+  openInterestBucketPolicy,
   isOpenInterestSeries,
   isOpenInterestWindow,
   openInterestHistoryPolicy,
@@ -14,7 +15,8 @@ import {
 import { detectLiquidationHints, liquidationHintPolicy, type PositioningBar } from '../../../contracts/openInterestPositioning'
 import type { PerpetualPositioningStore, PositioningStoredBar } from '../store/perpetualPositioningStore'
 
-const BUCKET_MS = 900_000
+/** Read from the one bucket source; a second literal here would drift silently. */
+const BUCKET_MS = openInterestBucketPolicy.bucketMs
 
 /**
  * Reads the positioning series and shapes it for one window.

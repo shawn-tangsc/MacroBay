@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  bucketPeriodLabel,
+  bucketsInSpan,
+  openInterestBucketPolicy,
   isCanonicalOpenInterestTime,
   isOpenInterestChange,
   isOpenInterestNotional,
@@ -23,6 +26,18 @@ describe('open interest policy', () => {
     expect(openInterestHistoryPolicy.maximumDtoBytes).toBe(32 * 1024)
     expect(Object.isFrozen(openInterestHistoryPolicy)).toBe(true)
     expect([...openInterestWindows]).toEqual(['7d', '24h'])
+  })
+
+  it('derives the lookback and the request limits from the bucket width, not from a count', () => {
+    // The assertion that would have caught the regression: `96 bars` is a day at fifteen minutes
+    // and eight hours at five. A count encodes the bucket width it was written for.
+    expect(openInterestBucketPolicy.bucketMs).toBe(900_000)
+    expect(bucketsInSpan(86_400_000)).toBe(96)
+    expect(bucketsInSpan(86_400_000, 5 * 60_000)).toBe(288)
+    expect(bucketsInSpan(7 * 86_400_000)).toBe(672)
+    expect(bucketsInSpan(7 * 86_400_000, 5 * 60_000)).toBe(2016)
+    expect(bucketPeriodLabel()).toBe('15m')
+    expect(bucketPeriodLabel(5 * 60_000)).toBe('5m')
   })
 
   it('allows 172 points on the 7-day window, because the fold yields 168 or 169', () => {
