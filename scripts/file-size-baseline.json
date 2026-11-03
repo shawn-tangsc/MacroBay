@@ -5,7 +5,7 @@
   "apps/desktop-shell/src/renderer/src/shell/workspace/workspaceClient.ts": 911,
   "platform/ai/agent-platform/channels/ChannelInboundRepository.ts": 921,
   "platform/ai/agent-platform/channels/ChannelManagementRepository.ts": 1198,
-  "platform/ai/agent-platform/db/createAgentPlatformDatabase.ts": 1602,
+  "platform/ai/agent-platform/db/createAgentPlatformDatabase.ts": 1622,
   "platform/ai/agent-platform/mcp/McpRuntimeService.ts": 963,
   "platform/ai/agent-platform/repositories/createAgentPlatformRepositories.ts": 2480,
   "platform/ai/agent-platform/runtime/AgentSessionRuntimeService.ts": 1031,

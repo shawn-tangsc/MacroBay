@@ -1519,6 +1519,26 @@ const migrations: AgentPlatformMigration[] = [
       alter table agent_channels add column active_chat_ids_json text;
       alter table agent_channels add column permission_mode text;
     `
+  },
+  {
+    id: '0049_channel_allowed_chat_ids_repair',
+    up: (connection) => {
+      // 0048 在落地前被本地改过一次列名：先按 allowed_chat_ids_json 跑过、库已记 0048 执行过，
+      // 随后代码改成 active_chat_ids_json 才提交。于是老库里 0048 永远不再跑，列名对不上，
+      // 启动读 channel 时直接 no such column。这里只做「补到当前列名」，不改 0048 一个字。
+      const columns = connection.prepare('pragma table_info(agent_channels)').all() as Array<{ name: string }>
+      const has = (name: string): boolean => columns.some((column) => column.name === name)
+
+      if (!has('active_chat_ids_json')) {
+        if (has('allowed_chat_ids_json')) {
+          connection.exec('alter table agent_channels rename column allowed_chat_ids_json to active_chat_ids_json')
+        } else {
+          connection.exec('alter table agent_channels add column active_chat_ids_json text')
+        }
+      }
+      if (!has('workspace_json')) connection.exec('alter table agent_channels add column workspace_json text')
+      if (!has('permission_mode')) connection.exec('alter table agent_channels add column permission_mode text')
+    }
   }
 ]
 
