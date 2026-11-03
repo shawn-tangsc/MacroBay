@@ -7,9 +7,9 @@
 
 宽度是闭集，不是数字：`compact` 420 / `standard` 520 / `expanded` 720 / `maximum` 860。
 名字故意既不用 `StateSize` 的密度词、也不用 `Drawer` 的宽度词——那两套都会让写错的赋值编译通过。
-调用点盘点在 `docs-private/05-desktop/ui-audit/modal-call-site-requirements-2026-11-02.md`
+调用点盘点在 `docs-private/05-desktop/ui-audit/modal-call-site-requirements-2026-11-02.md`。
 
-关闭弹窗可能丢掉读者输入时，关闭行为是一张矩阵而不是一句话：见[关闭一个装着未保存输入的容器](unsaved-changes.zh-CN.md)。。
+关闭弹窗可能丢掉读者输入时，关闭行为是一张矩阵而不是一句话：见[关闭一个装着未保存输入的容器](unsaved-changes.zh-CN.md)。
 
 ## 组件
 
