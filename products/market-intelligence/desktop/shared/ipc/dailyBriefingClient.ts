@@ -197,7 +197,8 @@ export const dailyBriefingClient: DailyBriefingClient = {
       }
       const editions = value.result.editions.map(parseSummary)
       if (editions.some((edition) => edition === undefined)) return unavailable()
-      return { state: 'available', result: { editions: editions as readonly DailyBriefingEditionSummary[] } }
+      const today = typeof value.result.today === 'string' ? value.result.today : undefined
+      return { state: 'available', result: { editions: editions as readonly DailyBriefingEditionSummary[], ...(today ? { today } : {}) } }
     } catch {
       return unavailable()
     }

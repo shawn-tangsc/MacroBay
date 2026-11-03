@@ -125,7 +125,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [issuesOpen, setIssuesOpen] = useState(true)
   const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
-  const todayDate = useMemo(() => localDate(timeZone), [timeZone])
+  // The issue day ("current period") is the service's, not the wall clock's: before the generation
+  // hour the current period is still the previous calendar day, and two definitions make a past day
+  // look like today. The wall clock is only the fallback before the list answers.
+  const wallClockToday = useMemo(() => localDate(timeZone), [timeZone])
+  const [currentPeriodDate, setCurrentPeriodDate] = useState<string | undefined>(undefined)
+  const todayDate = currentPeriodDate ?? wallClockToday
   // Follows the run only while one is in flight: the hook stops and forgets on its own.
   const generating = view.status === 'loading' || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
@@ -162,6 +167,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
+      if (listed?.state === 'available' && typeof listed.result.today === 'string') setCurrentPeriodDate(listed.result.today)
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
@@ -194,6 +200,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active) return
       if (today?.state === 'available') {
         const date = today.document.edition.date
+        setCurrentPeriodDate(date)
         rows = rows.some((row) => row.date === date)
           ? rows.map((row) => row.date === date
             // The fresh document knows the text; the list row knows which languages this period
@@ -387,6 +394,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         regenerating={regenerating}
         todayReady={view.status === 'ready' && view.kind === 'today'}
         hasTodayEdition={hasTodayEdition}
+        targetDate={todayDate}
         zoneInvalid={zoneInvalid !== null}
         systemZone={view.status === 'ready' && view.timeZoneSource === 'system'}
         exportable={view.status === 'ready' && !contentBlocked}
@@ -421,7 +429,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
           : null}
         {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
-        {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
+        {view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}

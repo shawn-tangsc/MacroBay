@@ -6,11 +6,13 @@ import { DailyBriefingFailurePanel } from './DailyBriefingFailurePanel'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 /** What the pane says for one day the reader selected that has nothing to read. */
-export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, formatTime, onOpenSettings }: Readonly<{
+export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, currentPeriodDate, formatTime, onOpenSettings }: Readonly<{
   view: Extract<DailyBriefingPageViewState, { status: 'no-edition' }>
   text: DailyBriefingText
   timeZone: string
   scheduledTime?: string
+  /** The issue day the page is on: the same value the list and the generate action use. */
+  currentPeriodDate?: string
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   onOpenSettings: () => void
 }>): React.ReactElement {
@@ -33,11 +35,17 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
     />
   }
 
-  return <div className="mi-daily-briefing-page__no-edition" data-briefing-no-edition={view.date} role="status">
-    <h2>{labels.notRunTitle}</h2>
-    <p>{scheduledTime
-      ? labels.notRunPlanned.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
-      : labels.notRunUnknownPlanned}</p>
+  // The current issue is not a past day: it says which issue it is and when that issue closes,
+  // instead of the historical "backfill is not supported" framing.
+  const currentIssue = view.date === currentPeriodDate && scheduledTime !== undefined
+  return <div className="mi-daily-briefing-page__no-edition" data-briefing-no-edition={view.date}
+    {...(currentIssue ? { 'data-current-period': 'true' } : {})} role="status">
+    <h2>{currentIssue ? labels.currentPeriod : labels.notRunTitle}</h2>
+    <p>{currentIssue
+      ? labels.currentPeriodNotRun.replace('{date}', view.date).replace('{time}', scheduledTime ?? '').replace('{zone}', formatShellTimeZoneLabel(timeZone))
+      : scheduledTime
+        ? labels.notRunPlanned.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
+        : labels.notRunUnknownPlanned}</p>
     {backfill}
   </div>
 }

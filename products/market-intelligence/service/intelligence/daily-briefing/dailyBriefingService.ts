@@ -599,7 +599,7 @@ export function createDailyBriefingService(deps: Readonly<{
       retentionDays: dailyBriefingPolicy.retentionDays,
       scheduledTime: schedule.generationTime
     })
-    return { state: 'available', result: { editions } }
+    return { state: 'available', result: { editions, today: window.date } }
   }
 
   async function getProgress(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingProgressResult> {

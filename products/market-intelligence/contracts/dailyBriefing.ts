@@ -242,6 +242,12 @@ export type DailyBriefingEditionSummary = Readonly<{
 
 export type DailyBriefingListResult = Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
+  /**
+   * The issue day the list is built around — the same rule the service uses to open today's edition
+   * (before the generation hour it is still the previous day). The page must not re-derive "today"
+   * from the wall clock: two definitions make a past day look like today and vice versa.
+   */
+  today?: string
 }>
 
 /** One writing attempt of an edition, as the history rail lists it. */

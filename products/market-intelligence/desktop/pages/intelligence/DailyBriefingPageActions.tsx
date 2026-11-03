@@ -14,7 +14,7 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
  * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
  * not layout, and the page is a layout.
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -32,6 +32,8 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   onExport: () => void
   onCopy: () => void
   onOpenSettings: () => void
+  /** The issue day the action writes: its accessible name says it, so the target is never guessed. */
+  targetDate: string
   onGenerate: () => void
   onRegenerate: () => void | Promise<void>
 }>): React.ReactElement {
@@ -43,7 +45,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
     <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
       {...(generating
         ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
-        : { 'aria-label': text.headerGenerate })}
+        : { 'aria-label': text.headerGenerateTarget.replace('{date}', targetDate) })}
       onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
       {regenerating ? text.regenerating : hasTodayEdition ? text.regenerateToday : text.generateToday}
     </Button>

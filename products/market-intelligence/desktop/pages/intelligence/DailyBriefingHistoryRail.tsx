@@ -97,7 +97,9 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
             onClick={() => onSelect(edition.date)}>
             <span className="mi-daily-briefing__rail-line">
               <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
-              {edition.date === todayDate ? <em>{text.history.today}</em> : null}
+              {/* The current issue, not the calendar day: before the generation hour this row is
+                  still yesterday's date, so calling it "today" would mislead the reader. */}
+              {edition.date === todayDate ? <em data-current-period="true">{text.history.currentPeriod}</em> : null}
               {edition.state === 'partial' && resolveText
                 ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
                 : null}

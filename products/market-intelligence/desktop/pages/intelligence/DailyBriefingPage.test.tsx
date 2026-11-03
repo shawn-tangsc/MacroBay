@@ -268,7 +268,7 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('CPI 超预期')
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
-    expect(dom.querySelector('[data-date="2026-10-30"]')?.textContent).toContain(text.history.today)
+    expect(dom.querySelector('[data-date="2026-10-30"]')?.textContent).toContain(text.history.currentPeriod)
     expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(false)
 
     act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__back')!.click())
@@ -317,7 +317,7 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
     expect(client.regenerate).not.toHaveBeenCalled()
     // 4. The header keeps today as its target, so the two entries cannot be confused.
-    expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.headerGenerate)
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
   })
 
   it('loads a historical edition read-only and leaves a missing day disabled', async () => {
@@ -1035,7 +1035,7 @@ describe('daily briefing page', () => {
     const headerAction = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(headerAction).not.toBeNull()
     expect(headerAction.disabled).toBe(false)
-    expect(headerAction.getAttribute('aria-label')).toBe(text.headerGenerate)
+    expect(headerAction.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     await act(async () => {
@@ -1807,6 +1807,44 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
+it('takes the current issue from the service, not from the wall clock', async () => {
+  // Before the generation hour the current issue is still the previous calendar day. The list says
+  // so (today: 2026-10-29 while the wall clock is 10-30); the page must use that one value for the
+  // marker, the empty-state framing and the header target — two definitions is what made "generate
+  // today" land on a day the reader thought was history.
+  const period = [0, 1, 2, 3].map((back) => {
+    const date = new Date(Date.parse('2026-10-29T00:00:00.000Z') - back * 86_400_000).toISOString().slice(0, 10)
+    return { date, periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }
+  })
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-10-29' } })),
+    get: vi.fn(async () => ({ state: 'missing' as const }))
+  })
+  const dom = await renderPage(client)
+
+  // The current issue is the first row, marked as the issue — not "today", which it is not.
+  const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+  expect(first.getAttribute('data-date')).toBe('2026-10-29')
+  expect(first.querySelector('[data-current-period]')?.textContent).toBe(text.history.currentPeriod)
+  expect(first.hasAttribute('disabled')).toBe(false)
+
+  await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
+  const pane = dom.querySelector('[data-briefing-no-edition="2026-10-29"]')!
+  expect(pane.getAttribute('data-current-period')).toBe('true')
+  expect(pane.textContent).toContain('本期（2026-10-29）')
+  // Not the historical framing, and the action stays clickable.
+  const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+  expect(action.disabled).toBe(false)
+  expect(action.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-29'))
+
+  // Another day without an edition is history: there the backfill reason does appear.
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
+  const backfill = dom.querySelector<HTMLButtonElement>('[data-briefing-no-edition="2026-10-28"] button')!
+  expect(backfill.disabled).toBe(true)
+  expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+})
+
 it('labels the header action by whether today already has an edition', async () => {
   const ready = await renderPage(fakeClient())
   expect(ready.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.regenerateToday)
@@ -1996,7 +2034,7 @@ describe('the edition language and the interface language are two different thin
     expect(action).not.toBeNull()
     expect(action!.disabled).toBe(expectedDisabled)
     // The label always names today, so nobody has to guess which day it writes.
-    expect(action!.getAttribute('aria-label')).toBe(text.headerGenerate)
+    expect(action!.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
     expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
   })
 
