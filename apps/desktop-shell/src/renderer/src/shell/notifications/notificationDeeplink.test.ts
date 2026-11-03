@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { toWorkspacePageMenuKey } from '@platform/workspace/registry/workspacePageRegistry'
+import { productMenuEntries } from '@products/generated/shellRegistry'
+
 import { resolveNotificationNavigation } from './notificationDeeplink'
 
 /**
@@ -37,11 +40,6 @@ describe('resolveNotificationNavigation', () => {
     expect(resolveNotificationNavigation({ pageId: 'daily-briefing', productId: 'market-intelligence' }, two)).toBeNull()
   })
 
-  it('only ever returns a navKey the shell can actually open', () => {
-    const target = resolveNotificationNavigation({ pageId: 'daily-briefing', productId: 'market-intelligence' }, products)
-    expect(products.map((entry) => entry.routePath)).toContain(target?.navKey)
-  })
-
   it('refuses an entity type it does not know, instead of guessing a panel', () => {
     expect(resolveNotificationNavigation({ entityType: 'mystery', entityId: 'x' }, products)).toBeNull()
   })
@@ -55,5 +53,31 @@ describe('resolveNotificationNavigation', () => {
   it('returns null when the target does not exist, instead of guessing a page', () => {
     expect(resolveNotificationNavigation({}, products)).toBeNull()
     expect(resolveNotificationNavigation({ settingsSectionId: undefined }, products)).toBeNull()
+  })
+})
+
+/**
+ * 判据不是「解析器和自己一致」，而是「解析出来的 key 是注册表真发布的那个」。
+ *
+ * 上面那份 `products` 是手写 fixture：它只能证明函数没违背自己的假设。上一版正是这样绿的——
+ * fixture 里写着 `'intelligence'`，注册表里没有这个 menuKey，于是 `openTab` 拒、高亮变、
+ * 页面不开。所以这一组读**真的生成产物**，并把 routePath 与主进程的 menuKey 规则逐字对一遍。
+ */
+describe('the resolved page key exists in the registry main actually serves', () => {
+  const briefing = { pageId: 'daily-briefing', productId: 'market-intelligence' } as const
+
+  it('lands on the route path the generator publishes, not on a hand-written key', () => {
+    const entries = productMenuEntries.filter((entry) => entry.productId === briefing.productId)
+    expect(entries).toHaveLength(1)
+    expect(resolveNotificationNavigation(briefing, productMenuEntries)).toEqual({ navKey: entries[0]!.routePath })
+  })
+
+  it('agrees with the main-process menu-key rule for every generated product page', () => {
+    // 主进程按 `/productId/localPageId` 生成 menuKey（`toWorkspacePageMenuKey`），生成器给的
+    // routePath 必须逐字相同；不同就意味着 `openTab` 会拿到一个没注册的 key。
+    for (const entry of productMenuEntries) {
+      const localPageId = entry.id.slice(entry.productId.length + 1)
+      expect(toWorkspacePageMenuKey(entry.productId, localPageId)).toBe(entry.routePath)
+    }
   })
 })
