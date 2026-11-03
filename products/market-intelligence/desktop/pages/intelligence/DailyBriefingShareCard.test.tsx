@@ -472,3 +472,45 @@ describe('daily brief share card in English', () => {
     expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
   })
 })
+
+describe('news titles follow the edition language', () => {
+  const SOURCE = 'JPMorgan says AI labels no longer win lenders'
+  const TRANSLATED = '摩根大通表示，AI 标签不再能赢得贷款方'
+  const SECOND = 'Spot ETF inflows hit a record'
+
+  const newsItem = (overrides: Partial<DailyBriefingDocument['news']['items'][number]>) => ({
+    itemId: 'n1', title: SOURCE, sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T00:00:00.000Z',
+    polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+    ...overrides
+  })
+
+  const withNews = (locale: 'zh-CN' | 'en-US', items: DailyBriefingDocument['news']['items']): DailyBriefingDocument => {
+    const base = briefing()
+    return { ...base, edition: { ...base.edition, locale }, news: { ...base.news, items } }
+  }
+
+  it('falls back to the source title on an English card', async () => {
+    const rendered = await renderWith(withNews('en-US', [newsItem({ translatedTitle: TRANSLATED })]), text, 'en-US')
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    expect(poster).toContain(SOURCE)
+    expect(poster).not.toContain(TRANSLATED)
+  })
+
+  it('keeps the translated title on a Chinese card', async () => {
+    const rendered = await renderWith(withNews('zh-CN', [newsItem({ translatedTitle: TRANSLATED })]), zhText, 'zh-CN')
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    expect(poster).toContain(TRANSLATED)
+    expect(poster).not.toContain(SOURCE)
+  })
+
+  it('keeps both items, in order, and drops none', async () => {
+    const rendered = await renderWith(withNews('en-US', [
+      newsItem({ itemId: 'n1', translatedTitle: TRANSLATED }),
+      newsItem({ itemId: 'n2', title: SECOND, polarity: 'bullish' })
+    ]), text, 'en-US')
+    const titles = [...rendered.querySelectorAll('.mi-brief-poster__news p')].map((node) => node.textContent ?? '')
+    expect(titles).toHaveLength(2)
+    expect(titles[0]).toContain(SOURCE)
+    expect(titles[1]).toContain(SECOND)
+  })
+})

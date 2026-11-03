@@ -243,3 +243,52 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('A \\*star\\* \\[link\\]')
   })
 })
+
+describe('daily briefing markdown news titles', () => {
+  const SOURCE = 'JPMorgan says AI labels no longer win lenders'
+  const TRANSLATED = '摩根大通表示，AI 标签不再能赢得贷款方'
+  const SECOND = 'Spot ETF inflows hit a record'
+
+  const newsItem = (overrides: Partial<DailyBriefingDocument['news']['items'][number]>) => ({
+    itemId: 'n1', title: SOURCE, sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T00:00:00.000Z',
+    polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+    ...overrides
+  })
+
+  const withNews = (locale: 'zh-CN' | 'en-US', items: DailyBriefingDocument['news']['items']): DailyBriefingDocument => {
+    const base = document()
+    return { ...base, edition: { ...base.edition, locale }, news: { ...base.news, items } }
+  }
+
+  it('draws the source title in an English edition when the translation is Chinese', () => {
+    const markdown = dailyBriefingToMarkdown(
+      withNews('en-US', [newsItem({ translatedTitle: TRANSLATED })]),
+      { ...options, locale: 'en-US' }
+    )
+    expect(markdown).toContain(SOURCE)
+    expect(markdown).not.toContain(TRANSLATED)
+  })
+
+  it('keeps the translated title in a Chinese edition', () => {
+    const markdown = dailyBriefingToMarkdown(
+      withNews('zh-CN', [newsItem({ translatedTitle: TRANSLATED })]),
+      { ...options, locale: 'zh-CN' }
+    )
+    expect(markdown).toContain(TRANSLATED)
+    expect(markdown).not.toContain(`**${SOURCE}**`)
+  })
+
+  it('keeps every news item, in order, on both paths', () => {
+    const items = [
+      newsItem({ itemId: 'n1', translatedTitle: TRANSLATED }),
+      newsItem({ itemId: 'n2', title: SECOND, polarity: 'bullish' })
+    ]
+    const english = dailyBriefingToMarkdown(withNews('en-US', items), { ...options, locale: 'en-US' })
+    const chinese = dailyBriefingToMarkdown(withNews('zh-CN', items), { ...options, locale: 'zh-CN' })
+    for (const [markdown, first] of [[english, SOURCE], [chinese, TRANSLATED]] as const) {
+      expect(markdown).toContain(first)
+      expect(markdown).toContain(SECOND)
+      expect(markdown.indexOf(first)).toBeLessThan(markdown.indexOf(SECOND))
+    }
+  })
+})
