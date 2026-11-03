@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
@@ -202,13 +203,13 @@ describe('daily briefing generation settings modal', () => {
       getProgress: async () => ({ state: 'idle' as const })
     }
     await act(async () => {
-      pageRoot.render(createElement(DailyBriefingPage, {
+      pageRoot.render(createElement(ConfirmProvider, null, createElement(DailyBriefingPage, {
         locale: 'zh-CN', text, onBack: () => undefined, onConfigureSources: () => undefined,
         client: {
           ...pageClient,
           getSettings: async () => ({ state: 'available' as const, view: { ...view, language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } } } })
         } as never
-      }))
+      })))
     })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const pageLine = [...pageHost.querySelectorAll('[role="status"]')].find((node) => node.textContent === sentence)
