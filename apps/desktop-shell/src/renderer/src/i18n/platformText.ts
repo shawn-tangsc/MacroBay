@@ -1059,7 +1059,12 @@ export type PlatformText = {
     title: string
     tagline: string
     settingsWithUpdate: string
-    /** 更新块里那颗唯一动作按钮（有新版时写「立即更新」）——它不属于链接块，键就挂在 action 下。 */
+    /**
+     * 更新块里那颗唯一动作按钮——它不属于链接块，键就挂在 action 下。
+     *
+     * 名字说的是**点下去真的会发生的事**：打开下载页。原来写「立即更新 / Update now」，
+     * 而 dmg 不会自己装——那是文案比能力跑得快，读者会以为已经装上了。
+     */
     action: {
       update: string
       /** 顶栏那颗动作按钮的读屏名：动作不变，失败时也不改。 */
@@ -2247,11 +2252,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
       settingsWithUpdate: '设置，有新版本可用',
       action: {
-        update: '立即更新',
+        update: '打开下载页',
         updateAvailable: '有新版本可用，打开下载页',
-        updateToVersion: (version) => `更新到 ${version}`,
+        updateToVersion: (version) => `下载 ${version}`,
         updateNoVersion: '有新版本',
-        updateToVersionLabel: (version) => `更新到 ${version}，打开下载页`,
+        updateToVersionLabel: (version) => `下载 ${version}，打开下载页`,
         openFailedNote: '没能打开浏览器，可再点一次重试'
       },
       links: {
@@ -3431,11 +3436,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tagline: 'A local-first AI workspace: platform plus removable modules',
       settingsWithUpdate: 'Settings, an update is available',
       action: {
-        update: 'Update now',
+        update: 'Open the download page',
         updateAvailable: 'An update is available; open the download page',
-        updateToVersion: (version) => `Update to ${version}`,
+        updateToVersion: (version) => `Download ${version}`,
         updateNoVersion: 'Update available',
-        updateToVersionLabel: (version) => `Update to ${version}; open the download page`,
+        updateToVersionLabel: (version) => `Download ${version}; open the download page`,
         openFailedNote: 'The browser did not open. Click again to retry'
       },
       links: {

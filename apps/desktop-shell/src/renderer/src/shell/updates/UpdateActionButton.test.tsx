@@ -58,9 +58,9 @@ describe('the update action button in the top bar', () => {
     const button = container.querySelector('button')
     expect(button).not.toBeNull()
     // 用户 11-03：「一点都不醒目」——现在是实心按钮 + 文字，文字带目标版本号。
-    expect(button?.textContent).toBe('更新到 0.3.1')
+    expect(button?.textContent).toBe('下载 0.3.1')
     // 可读名**以可见文字开头**（label-in-name），后半句补动作。
-    expect(button?.getAttribute('aria-label')).toBe('更新到 0.3.1，打开下载页')
+    expect(button?.getAttribute('aria-label')).toBe('下载 0.3.1，打开下载页')
 
     await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(opened).toEqual(['download'])
@@ -89,7 +89,7 @@ describe('the update action button in the top bar', () => {
     // 和版本行「最新版本」那一格同源，否则会出现「按钮说更新到 A、行里写最新 B」。
     const { client } = clientFor(available, true)
     const container = await mount(client)
-    expect(container.querySelector('button')?.textContent).toBe(`更新到 ${available.state === 'available' ? available.latestVersion : ''}`)
+    expect(container.querySelector('button')?.textContent).toBe(`下载 ${available.state === 'available' ? available.latestVersion : ''}`)
   })
 
   it('stays hidden when there is nothing newer', async () => {
@@ -107,8 +107,8 @@ describe('the update action button in the top bar', () => {
     await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     // 失败：播报一句（role=status），**文字与可读名都不变**——它做的事没变，只换图标。
     expect(container.querySelector('[role="status"]')?.textContent).toBe('没能打开浏览器，可再点一次重试')
-    expect(button.getAttribute('aria-label')).toBe('更新到 0.3.1，打开下载页')
-    expect(button.textContent).toBe('更新到 0.3.1')
+    expect(button.getAttribute('aria-label')).toBe('下载 0.3.1，打开下载页')
+    expect(button.textContent).toBe('下载 0.3.1')
 
     // 4 秒后回到正常态，播报消失。
     await act(async () => {

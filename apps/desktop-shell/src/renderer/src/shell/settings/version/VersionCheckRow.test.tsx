@@ -110,7 +110,7 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain('0.4.0')
     expect(container.textContent).toContain(text.pill.available)
     expect(buttonWithText(container, actionText.update)).not.toBeNull()
-    // 永远只有一颗动作按钮：有新版时它叫「立即更新」，不再有第二颗「检查更新」。
+    // 永远只有一颗动作按钮：有新版时它叫「打开下载页」，不再有第二颗「检查更新」。
     expect(container.querySelectorAll('button')).toHaveLength(2)
   })
 
@@ -271,7 +271,7 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     const focusable = [...container.querySelectorAll('button')].map((button) => button.textContent ?? '')
-    // 一颗动作按钮（有新版时叫「立即更新」）+ 开关，顺序固定。
+    // 一颗动作按钮（有新版时叫「打开下载页」）+ 开关，顺序固定。
     expect(focusable).toEqual([actionText.update, ''])
     expect(container.querySelector('[role="switch"]')).not.toBeNull()
   })
@@ -285,7 +285,7 @@ describe('the version row in the settings page', () => {
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-describedby')).toBe(
       'version-check-frequency-hint'
     )
-    // 那一颗动作按钮挂着频率说明（有新版时它叫「立即更新」，仍是同一个位置）。
+    // 那一颗动作按钮挂着频率说明（有新版时它叫「打开下载页」，仍是同一个位置）。
     expect(buttonWithText(container, actionText.update)?.getAttribute('aria-describedby')).toBe(
       'version-check-frequency-hint'
     )
