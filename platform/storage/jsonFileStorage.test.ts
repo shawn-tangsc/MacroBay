@@ -47,6 +47,29 @@ describe('json file storage', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it('keeps two concurrent writes in the same process apart', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'platform-storage-'))
+    const file = join(directory, 'state.json')
+    // 同进程、同一文件、两次并发写：临时名只按 PID 时两者会写同一个 tmp，一个刚 truncate、
+    // 另一个写到一半，先 rename 的那个把半成品发布出去——正是「完整文档 + 残片」的来源。
+    const first = { values: Array.from({ length: 4000 }, (_, index) => `first-${index}`) }
+    const second = { values: Array.from({ length: 4000 }, (_, index) => `second-${index}`) }
+
+    await Promise.all([writeJsonFileAtomically(file, first), writeJsonFileAtomically(file, second)])
+
+    const raw = await readFile(file, 'utf8')
+    // 最终文件必须是一份完整文档，且就是其中一次写的全部内容——不是两份混在一起。
+    const parsed = JSON.parse(raw) as unknown
+    expect(parsed).toEqual(expect.objectContaining({ values: expect.any(Array) }))
+    const written = (parsed as { values: string[] }).values
+    expect(written.length).toBe(4000)
+    expect(written[0] === 'first-0' || written[0] === 'second-0').toBe(true)
+    expect(written.every((entry) => entry.startsWith(written[0].split('-')[0]))).toBe(true)
+    expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
+
+    await rm(directory, { recursive: true, force: true })
+  })
+
   it('recovers the array from a file that has a second fragment after it', async () => {
     const raw = '[\n  {\n    "id": 1\n  }\n]\n\n  }\n]\n'
 

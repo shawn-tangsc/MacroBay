@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises'
-
-import { writeJsonFileAtomically } from '../../storage/jsonFileStorage'
+import { readJsonFileRecovering, writeJsonFileAtomically } from '../../storage/jsonFileStorage'
 
 
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
@@ -66,13 +64,17 @@ export function createNotificationJsonStorage(filePath: string): NotificationSto
 
 
   return {
+    /**
+     * 读回整份状态。**走恢复读**：这一份 JSON 是整份读—改—写的目标，历史上被写成过
+     * 「完整文档 + 上一版残片」；裸 `JSON.parse` 会把这种文件变成启动期的未处理拒绝，
+     * 而 `readJsonFileRecovering` 会取回最长可解析前缀、留一份 `.corrupt-*` 再把干净内容写回。
+     *
+     * 文件不存在（首次启动）仍然是默认态，不当作损坏。
+     */
     async read() {
-      try {
-        return normalizeNotificationStoreState(JSON.parse(await readFile(filePath, 'utf8')))
-      } catch (error) {
-        if (isMissingFileError(error)) return createDefaultNotificationStoreState()
-        throw error
-      }
+      const value = await readJsonFileRecovering(filePath)
+      if (value === undefined) return createDefaultNotificationStoreState()
+      return normalizeNotificationStoreState(value)
     },
     async write(value) {
       await writeJsonFileAtomically(filePath, value)
@@ -131,13 +133,27 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     return normalized
   }
 
+  /**
+   * 变更串行化：整份 JSON 的「读—改—写」必须**整段**排队，而不是只给 write 排队。
+   *
+   * 两条提交只差几毫秒时，各自 `load()` 拿到同一份 cache、各自基于它整份重写；只锁 write 的话，
+   * 后写的那次仍然带着旧的底稿，前一条记录照样被抹掉。所以锁的是整段变更：
+   * submit / prune / markAllRead / deleteRead / 单条状态迁移 / 订阅写入都排在这一条链上。
+   */
+  let mutationQueue: Promise<unknown> = Promise.resolve()
+  function exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const run = mutationQueue.then(operation, operation)
+    mutationQueue = run.catch(() => undefined)
+    return run
+  }
+
   async function persist(state: NotificationStoreState): Promise<void> {
     cache = state
     await deps.storage.write(state)
   }
 
   async function submit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> {
-    return submitEvent(request)
+    return exclusive(() => submitEvent(request))
   }
 
   async function persistWithDiagnostics(state: NotificationStoreState): Promise<void> {
@@ -258,6 +274,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     getPushTargets: deps.getPushTargets,
     pushWired: () => deps.deliveryHooks?.push !== undefined,
     load,
+    exclusive,
     persistWithDiagnostics,
     notifyChanged
   })
@@ -283,6 +300,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 清理任务（`@platform/jobs`）与启动恢复都只调这一处，避免两条清理路径各剪一半。
      */
     async prune(): Promise<{ removedRecords: number; removedCounters: number }> {
+      return exclusive(async () => {
       const state = await load()
       const settings = await deps.getSettings()
       const now = nowIso()
@@ -294,6 +312,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       await persist({ ...state, records: pruned.records, dailyCounters: counters })
       notifyChanged()
       return { removedRecords, removedCounters }
+      })
     },
 
     /**
@@ -338,6 +357,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 把 `desktop` 那条的 `ok` / `reason` 丢掉，这次测试就白点了。不占熔断额度仍由调用方负责。
      */
     async submitSelfTest(request: NotificationRequest): Promise<{ record: SafeNotificationRecord; delivery: DeliveryAttempt[] }> {
+      return exclusive(async () => {
       const state = await load()
       const settings = await deps.getSettings()
       const now = nowIso()
@@ -352,6 +372,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       notifyChanged()
       const delivery = await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
       return { record: toSafeNotificationRecord(record), delivery }
+      })
     },
 
     async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
@@ -368,6 +389,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 只清当前页会让角标残留，用户会以为没生效。幂等：没有未读时返回 0，不报错。
      */
     async markAllRead(productId?: string): Promise<NotificationUnreadState> {
+      return exclusive(async () => {
       const state = await load()
       const now = nowIso()
       let changed = false
@@ -382,6 +404,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         notifyChanged()
       }
       return unreadStateOf(records, now, productId, version)
+      })
     },
 
     /**
@@ -393,6 +416,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 用户会看到「删了但数字还在」。计数桶与保留期剪枝都不受影响。
      */
     async deleteRead(): Promise<{ deleted: number }> {
+      return exclusive(async () => {
       const state = await load()
       const kept = state.records.filter((record: NotificationRecord) => record.state !== 'read')
       const deleted = state.records.length - kept.length
@@ -400,6 +424,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       await persist({ ...state, records: kept })
       notifyChanged()
       return { deleted }
+      })
     },
 
     async markRead(id: string): Promise<SafeNotificationRecord> {
@@ -444,6 +469,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     id: string,
     transform: (record: NotificationRecord) => NotificationRecord
   ): Promise<SafeNotificationRecord> {
+    return exclusive(async () => {
     const state = await load()
     const index = state.records.findIndex((record: NotificationRecord) => record.id === id)
     if (index < 0) throw new Error(`Notification "${id}" was not found.`)
@@ -454,6 +480,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     await persist({ ...state, records: nextRecords })
     notifyChanged()
     return toSafeNotificationRecord(nextRecord)
+    })
   }
 }
 
@@ -464,10 +491,6 @@ export type NotificationRuntime = ReturnType<typeof createNotificationRuntime>
  * 归一化放在这里一处，**不靠四个生产者各自记得传**——靠调用点记得，等于有四个地方会忘。
  * 这条不为「要不要响」负责：免打扰和通道开关仍由路由决定，它只保证「响过的东西一定能回看」。
  */
-function isMissingFileError(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
-}
-
 /** 未读优先时未读组在前；组内按 `createdAt` 倒序，同一毫秒用 `id` 兜底保证顺序稳定。 */
 /** 键游标 `createdAt|id`：同一毫秒的多条各有不同 id，因此不会丢；也是排序位置，插入不影响已翻过的页。 */
 /**

@@ -26,6 +26,8 @@ export type NotificationSettingsSurfaceInput = {
   /** 端口真的装配好才为 true；不再读一个永远 false 的常量。 */
   pushWired?: () => boolean
   load: () => Promise<NotificationStoreState>
+  /** 整段变更排进 runtime 的队列：订阅与记录同一份 JSON，绕开队列就会互相覆盖。 */
+  exclusive: <T>(operation: () => Promise<T>) => Promise<T>
   persistWithDiagnostics: (state: NotificationStoreState) => Promise<void>
   notifyChanged: () => void
 }
@@ -49,6 +51,7 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       patch: NotificationSubscriptionPatch,
       actor: 'platform' | { productId: string } = 'platform'
     ): Promise<{ ok: true; subscription: NotificationSubscription | null } | { ok: false; reasonCode: string }> {
+      return input.exclusive(async () => {
       const entry = input.getCatalog()?.get(eventTypeId)
       if (!entry) return { ok: false, reasonCode: 'unknown-event-type' }
       if (actor !== 'platform' && !eventTypeId.startsWith(`${actor.productId}.`)) {
@@ -63,6 +66,7 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       await input.persistWithDiagnostics({ ...state, subscriptions })
       input.notifyChanged()
       return result
+      })
     },
 
     /** 设置页首帧要的三个当前值：提示开关、通道选择、通道接线状态（契约 §5.2）。 */
