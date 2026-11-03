@@ -101,20 +101,20 @@ describe('daily briefing banner', () => {
     await renderBanner({ editions: [edition('2026-10-30')], now: '2026-10-30T12:00:00.000Z' })
 
     expect(bannerState()).toBe('generated')
-    expect(host.textContent).toContain('今日简报已生成')
+    expect(host.textContent).toContain(bannerText('zh-CN').title)
     expect(host.textContent).toContain(formatShellInstant(generatedAt, {
       timeZone: 'UTC', locale: 'zh-CN', precision: 'minute'
     }))
-    expect(host.textContent).toContain('知道了')
+    expect(host.textContent).toContain(bannerText('zh-CN').dismiss)
   })
 
   it('tells the reader today’s briefing is not generated and that opening the brief fills it in', async () => {
     await renderBanner({ editions: [edition('2026-10-30', 'zh-CN', 'missing')], now: '2026-10-30T12:00:00.000Z' })
 
     expect(bannerState()).toBe('pending')
-    expect(host.textContent).toContain('今日简报未生成')
-    expect(host.textContent).toContain('打开日报会补生成')
-    expect(host.textContent).not.toContain('今日简报已生成')
+    expect(host.textContent).toContain(bannerText('zh-CN').pendingTitle)
+    expect(host.textContent).toContain(bannerText('zh-CN').pendingHint)
+    expect(host.textContent).not.toContain(bannerText('zh-CN').title)
   })
 
   it('uses the reader’s language for the not-generated notice', async () => {
@@ -184,7 +184,7 @@ describe('daily briefing banner', () => {
     // 同一天后来补生成了：已生成是另一条提示，不该被「未生成」的确认一并压掉。
     await renderBanner({ editions: [edition('2026-10-30')], now: '2026-10-30T15:00:00.000Z' })
     expect(bannerState()).toBe('generated')
-    expect(host.textContent).toContain('今日简报已生成')
+    expect(host.textContent).toContain(bannerText('zh-CN').title)
   })
 
   it('shows again on a new day and in a new language', async () => {
@@ -196,7 +196,7 @@ describe('daily briefing banner', () => {
     // 新的一天是新的版次，即使同一语言也再次提示。
     await renderBanner({ editions, now: '2026-10-31T12:00:00.000Z' })
     expect(banner()).not.toBeNull()
-    expect(host.textContent).toContain('今日简报已生成')
+    expect(host.textContent).toContain(bannerText('zh-CN').title)
 
     await dismiss()
     // 同一天的另一语言是另一份版次。
@@ -217,6 +217,6 @@ describe('daily briefing banner', () => {
 
     await renderBanner({ editions, now: '2026-10-31T12:00:00.000Z' })
     expect(bannerState()).toBe('pending')
-    expect(host.textContent).toContain('今日简报未生成')
+    expect(host.textContent).toContain(bannerText('zh-CN').pendingTitle)
   })
 })

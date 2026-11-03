@@ -261,7 +261,7 @@ describe('daily briefing page', () => {
   it('renders today, the 14-day rail and goes back to the dashboard', async () => {
     const onBack = vi.fn()
     const dom = await renderPage(fakeClient(), { onBack })
-    expect(dom.textContent).toContain('每日简报')
+    expect(dom.textContent).toContain(text.title)
     expect(dom.textContent).toContain('CPI 超预期')
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
@@ -279,7 +279,6 @@ describe('daily briefing page', () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     expect(client.get).toHaveBeenCalledWith({ date: '2026-10-29', locale: 'zh-CN' })
-    expect(dom.textContent).toContain('历史版次')
     expect(dom.textContent).toContain(text.history.readOnly)
     expect(dom.querySelector('[data-date="2026-10-29"]')?.getAttribute('aria-current')).toBe('true')
 
@@ -295,7 +294,7 @@ describe('daily briefing page', () => {
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(writeText).toHaveBeenCalledTimes(1)
     const markdown = writeText.mock.calls[0]?.[0] as string
-    expect(markdown).toContain('# 每日简报')
+    expect(markdown).toContain(`# ${text.title}`)
     expect(markdown).toContain('CPI 超预期')
     expect(dom.textContent).toContain(text.copied)
   })
@@ -310,6 +309,7 @@ describe('daily briefing page', () => {
     const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(dom.textContent).toContain(text.copyFailed)
+    // 这一句是夹具文档自己的正文（`briefingDocument(..., '历史版次')`），不是文案表里的句子。
     expect(writeText.mock.calls[0]?.[0]).toContain('历史版次')
   })
 
@@ -404,7 +404,7 @@ describe('daily briefing page', () => {
     const retry = state.querySelector<HTMLButtonElement>('.state-view__action')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getToday).toHaveBeenCalledTimes(2)
-    expect(dom.textContent).toContain('每日简报')
+    expect(dom.textContent).toContain(text.title)
   })
 
   it('tells a first run apart from an unreadable read', async () => {

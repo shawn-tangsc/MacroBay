@@ -129,7 +129,10 @@ describe('daily briefing generation settings modal', () => {
     await act(async () => { tick.click(); await Promise.resolve() })
     const trigger = costTrigger()!
     await act(async () => { trigger.click(); await Promise.resolve(); await Promise.resolve() })
-    expect(document.body.textContent).toContain('写作 2 次')
+    // 这句话的数字来自生成计划（主语言 1 次 + 勾了 1 个附加语言），断言从文案表取，不写死句子。
+    expect(document.body.textContent).toContain(
+      text.settings.periods.cost.replace('{count}', '2').replace('{extra}', '1')
+    )
 
     await act(async () => { trigger.click(); await Promise.resolve() })
     await act(async () => {
