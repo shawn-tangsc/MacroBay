@@ -298,16 +298,38 @@ describe('the send-to-channel row', () => {
           channels: [channelTarget()],
           channelId: 'telegram-1',
           lastPushFailureAt: '2026-11-02T13:37:00.000Z',
+          lastPushFailureReason: 'channel-rejected',
           toastEnabled: false
         })
     })
 
     const row = container.querySelector('[data-row="channel"]')!
     expect(row.querySelector('.status-pill')?.textContent).toBe('推送失败')
-    // 时刻带时区（GMT+8），不是原始 ISO。
+    // 原因说人话、时刻带时区（GMT+8）：都是这一行要回答的问题，不是原始 ISO 也不是原因码。
+    expect(row.textContent).toContain('通道拒收了这条')
     expect(row.textContent).toContain('11-02 21:37 GMT+8')
     expect(row.textContent).not.toContain('2026-11-02T13:37')
+    expect(row.textContent).not.toContain('channel-rejected')
     expect(row.textContent).not.toContain('已送达')
+  })
+
+  it('says the reason was not reported instead of printing an unknown code', async () => {
+    const container = await mount({
+      listEventCatalog: () => Promise.resolve([]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () =>
+        Promise.resolve({
+          channels: [channelTarget()],
+          channelId: 'telegram-1',
+          lastPushFailureAt: '2026-11-02T13:37:00.000Z',
+          lastPushFailureReason: 'some-new-code',
+          toastEnabled: false
+        })
+    })
+
+    const row = container.querySelector('[data-row="channel"]')!
+    expect(row.textContent).toContain('原因没有上报')
+    expect(row.textContent).not.toContain('some-new-code')
   })
 
   it('goes to the channel page for a target that is missing or ambiguous', async () => {
@@ -342,6 +364,43 @@ describe('the channel column', () => {
 
     expect(container.querySelector('[data-channel-column]')?.getAttribute('data-channel-column')).toBe('hidden')
     expect(container.textContent).not.toContain('这条不会到手机')
+  })
+
+  it('leaves a sentence behind when it hides, so nobody thinks a tick was lost', async () => {
+    const container = await mount({
+      listEventCatalog: () =>
+        Promise.resolve([entry({ id: 'platform.signal', approvedDisruptionLevels: ['center', 'desktop', 'channel'] })]),
+      // 读者早先勾过通道，现在通道没就绪：列不出现，但订阅还在。
+      getSubscriptions: () => Promise.resolve({ 'platform.signal': { channel: true } }),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+
+    const line = container.querySelector('[data-channel-column-pending]')
+    expect(line?.textContent).toContain('已勾过通道的 1 条')
+    expect(line?.textContent).toContain('不代表订阅被取消')
+  })
+
+  it('does not apologise for a column that is on screen, nor when nothing was ticked', async () => {
+    const shown = await mount({
+      listEventCatalog: () => Promise.resolve([entry({ approvedDisruptionLevels: ['center', 'desktop', 'channel'] })]),
+      getSubscriptions: () => Promise.resolve({ 'platform.job.failed-terminal': { channel: true } }),
+      getDeliverySettings: () =>
+        Promise.resolve({ channels: [channelTarget()], channelId: 'telegram-1', toastEnabled: false })
+    })
+    // 列在页面上时订阅看得见，不需要这句解释。
+    expect(shown.querySelector('[data-channel-column-pending]')).toBeNull()
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.innerHTML = ''
+
+    const empty = await mount({
+      listEventCatalog: () => Promise.resolve([entry()]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+    // 没有勾过通道：没有东西要解释。
+    expect(empty.querySelector('[data-channel-column-pending]')).toBeNull()
   })
 
   it('appears with a real tick for approved events and a dash for the rest', async () => {

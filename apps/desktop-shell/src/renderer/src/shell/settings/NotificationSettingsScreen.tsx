@@ -40,9 +40,17 @@ export function NotificationSettingsScreen(props: {
       ? buildChannelRowState({
         channels: state.data.channels,
         channelId: state.data.channelId,
-        lastPushFailureAt: state.data.lastPushFailureAt
+        lastPushFailureAt: state.data.lastPushFailureAt,
+        lastPushFailureReason: state.data.lastPushFailureReason
       })
       : ({ kind: 'not-wired' } as const)
+
+  const channelReady = channelColumnReady(channelRow)
+  // 列会消失、订阅不会：把「已经勾过通道、但现在这列看不到」的条数字出来，页脚替它说一句话。
+  const pendingChannelCount =
+    state.status === 'ready'
+      ? state.data.catalog.filter((entry) => state.data.subscriptions[entry.id]?.channel === true).length
+      : 0
 
   return (
     <section className="settings-detail-pane preferences-pane notification-settings-pane">
@@ -100,12 +108,18 @@ export function NotificationSettingsScreen(props: {
                   entries: state.data.catalog,
                   subscriptions: state.data.subscriptions,
                   // 通道列只在「已接入 + 已选 + 目标已绑定」时出现；否则整列不画（规范 §2.2）。
-                  channelReady: channelColumnReady(channelRow)
+                  channelReady
                 })}
                 text={text}
                 onToggle={(id, level, next) => void setSubscription(id, level, next)}
               />
             )}
+            {/* 列消失 ≠ 订阅消失：不写这句，读者会以为勾丢了，回头再勾一遍。 */}
+            {!channelReady && pendingChannelCount > 0 ? (
+              <p className="notification-settings-footnote" role="note" data-channel-column-pending>
+                {text.channelPendingEffective(pendingChannelCount)}
+              </p>
+            ) : null}
             <p className="notification-settings-footnote">{text.subsScope}</p>
           </div>
         </>

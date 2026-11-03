@@ -27,6 +27,8 @@ export type NotificationSettingsData = {
   channelId: string | null
   channels: readonly ChannelDeliveryTargetView[]
   lastPushFailureAt: string | null
+  /** 与 `lastPushFailureAt` 取自**同一条记录**：拼两处的值会得到「这条的时刻 + 那条的原因」。 */
+  lastPushFailureReason: string | null
 }
 
 export type NotificationSettingsClient = {
@@ -37,6 +39,7 @@ export type NotificationSettingsClient = {
     channelId?: string | null
     channels?: readonly ChannelDeliveryTargetView[]
     lastPushFailureAt?: string | null
+    lastPushFailureReason?: string | null
   }>
   setSubscription?: (id: string, patch: Record<string, unknown>) => Promise<unknown>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
@@ -70,6 +73,7 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
         channelId?: string | null
         channels?: readonly ChannelDeliveryTargetView[]
         lastPushFailureAt?: string | null
+        lastPushFailureReason?: string | null
       }
       const readAll: Promise<
         [readonly NotificationEventCatalogEntry[], NotificationSubscriptionTable, DeliveryShape]
@@ -91,7 +95,9 @@ export function useNotificationSettingsData(client: NotificationSettingsClient):
               // 不是数组就当作「没有任何可投递通道」：宁可少一条选择项，也不把形状不明的数据画出来。
               channels: Array.isArray(delivery.channels) ? delivery.channels : [],
               lastPushFailureAt:
-                typeof delivery.lastPushFailureAt === 'string' ? delivery.lastPushFailureAt : null
+                typeof delivery.lastPushFailureAt === 'string' ? delivery.lastPushFailureAt : null,
+              lastPushFailureReason:
+                typeof delivery.lastPushFailureReason === 'string' ? delivery.lastPushFailureReason : null
             }
           })
         })

@@ -155,7 +155,8 @@ describe('notification settings surface', () => {
       channelId: 'telegram',
       pushWired: false,
       channels: [],
-      lastPushFailureAt: null
+      lastPushFailureAt: null,
+      lastPushFailureReason: null
     })
     const withPush = createRuntime({ push: async () => ({ ok: true }) })
     expect((await withPush.runtime.getDeliverySettings()).pushWired).toBe(true)
@@ -194,6 +195,8 @@ describe('notification settings surface', () => {
       state().records.some((record: any) => record.eventTypeId === 'platform.channel.push-suspended')
     ).toBe(true)
     expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBe('2026-11-03T00:00:00.000Z')
+    // 原因与时刻来自同一条记录：这条最近失败是 `push-backoff`，不是前面那次的 `channel-rejected`。
+    expect((await runtime.getDeliverySettings()).lastPushFailureReason).toBe('push-backoff')
   })
 
   it('keeps subscriptions and records when they alternate twenty times', async () => {

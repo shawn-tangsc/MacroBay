@@ -36,6 +36,8 @@ export type ChannelRowState =
     channelName: string
     target: ChannelBoundTargetKind
     failedAt: string
+    /** 失败原因码（闭集，`ChannelPushReason`）；`null` = 记录里没写原因，界面就说「原因没有上报」。 */
+    failedReason: string | null
   }>
   /** 可用且没在失败态：**成功不打标**，一行都不写。 */
   | Readonly<{
@@ -50,6 +52,7 @@ export type ChannelRowInput = Readonly<{
   channels: readonly ChannelDeliveryTargetView[]
   channelId: string | null
   lastPushFailureAt: string | null
+  lastPushFailureReason: string | null
 }>
 
 export function buildChannelRowState(input: ChannelRowInput): ChannelRowState {
@@ -78,7 +81,7 @@ export function buildChannelRowState(input: ChannelRowInput): ChannelRowState {
   }
   return input.lastPushFailureAt === null
     ? { kind: 'ready', ...base }
-    : { kind: 'failed', ...base, failedAt: input.lastPushFailureAt }
+    : { kind: 'failed', ...base, failedAt: input.lastPushFailureAt, failedReason: input.lastPushFailureReason }
 }
 
 /**

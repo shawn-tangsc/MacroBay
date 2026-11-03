@@ -19,11 +19,13 @@ const build = (input: {
   channels: readonly ChannelDeliveryTargetView[]
   channelId?: string | null
   lastPushFailureAt?: string | null
+  lastPushFailureReason?: string | null
 }) =>
   buildChannelRowState({
     channels: input.channels,
     channelId: input.channelId ?? null,
-    lastPushFailureAt: input.lastPushFailureAt ?? null
+    lastPushFailureAt: input.lastPushFailureAt ?? null,
+    lastPushFailureReason: input.lastPushFailureReason ?? null
   })
 
 describe('the channel row tells four different situations apart', () => {
@@ -81,11 +83,18 @@ describe('the channel row tells four different situations apart', () => {
   })
 
   it('reports the last failed push as a past fact, not as a current switch', () => {
-    const state = build({ channels: [target()], channelId: 'telegram-1', lastPushFailureAt: '2026-11-02T13:37:00.000Z' })
+    const state = build({
+      channels: [target()],
+      channelId: 'telegram-1',
+      lastPushFailureAt: '2026-11-02T13:37:00.000Z',
+      lastPushFailureReason: 'channel-rejected'
+    })
     expect(state).toMatchObject({
       kind: 'failed',
       target: 'direct',
-      failedAt: '2026-11-02T13:37:00.000Z'
+      failedAt: '2026-11-02T13:37:00.000Z',
+      // 原因跟时刻一起带出来，界面才不用去猜：这条行里「为什么没发出去」和「什么时候」是同一件事。
+      failedReason: 'channel-rejected'
     })
   })
 

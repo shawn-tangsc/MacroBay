@@ -72,10 +72,15 @@ function ChannelStatusLine(props: {
   if (state.kind === 'failed') {
     // 时刻由统一格式化产出（带时区），这里只放进模板，不自己拼、不自己 slice。
     const at = formatShellCompactInstant(state.failedAt, { timeZone: props.timeZone })
+    // 原因码是闭集：查得到翻译，查不到就说「原因没有上报」，绝不把码或原始错误印给读者。
+    const reason =
+      state.failedReason === null
+        ? text.pushFailureReasonUnknown
+        : text.pushFailureReason[state.failedReason] ?? text.pushFailureReasonUnknown
     return (
       <span className="notification-row-state-row" role="note" data-channel-state>
         <StatusPill tone="bad" labelKey="notificationSettings.channelPushFailedPill" resolveText={pillResolver(text)} />
-        <span>{text.channelPushFailed(at)}</span>
+        <span>{text.channelPushFailed(reason, at)}</span>
       </span>
     )
   }

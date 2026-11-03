@@ -37,7 +37,13 @@ export type NotificationSettingsText = {
   channelUnbound: string
   channelAmbiguous: string
   /** 失败句：时刻由 `formatShellCompactInstant` 产出，调用点只把它放进模板。 */
-  channelPushFailed: (at: string) => string
+  /**
+   * 失败行：**原因的人话 + 时刻**。原因码是闭集（`ChannelPushReason`），查不到就说「原因没有上报」，
+   * 绝不把码或原始错误当读者文字印上去。
+   */
+  channelPushFailed: (reason: string, at: string) => string
+  pushFailureReason: Readonly<Record<string, string>>
+  pushFailureReasonUnknown: string
   channelTargetLabel: string
   channelTargetDirect: string
   channelTargetGroup: string
@@ -52,6 +58,11 @@ export type NotificationSettingsText = {
   pillUnavailable: string
   subsColChannel: string
   notApprovedChannel: string
+  /**
+   * 通道列消失时的那一句：列的条件含「已选通道」，读者一取消选择或目标被解绑，整列就不出现了，
+   * **但订阅还在**。没有这句，读者会以为自己的勾丢了，回头再勾一遍。
+   */
+  channelPendingEffective: (count: number) => string
   /** 「已记录（因勾了桌面、通道）」的连接词：两种语言的分隔规则不同，不能在这里写死。 */
   surfaceJoin: string
   /** 失败这个**结论**用 StatusPill 说：红只落在圆点与边框上，不落在句子上（见下方说明）。 */
@@ -105,7 +116,16 @@ const zh: NotificationSettingsText = {
   channelUnselected: '还没有选通道：推送现在是关着的，选一条才会发到手机',
   channelUnbound: '目标未绑定：还看不出会发到哪个会话',
   channelAmbiguous: '这个通道绑了多个会话，请到通道页只保留一个；现在不发，也不替你挑',
-  channelPushFailed: (at) => `最近一次推送没发出去 · ${at}`,
+  channelPushFailed: (reason, at) => `最近一次推送没发出去：${reason} · ${at}`,
+  pushFailureReason: Object.freeze({
+    'push-unavailable': '通道还没有接通',
+    'delivery-no-target-bound': '通道还没有绑定会话',
+    'delivery-ambiguous-target': '通道绑了不止一个会话',
+    'push-backoff': '连续失败后暂停了一会儿',
+    'channel-rejected': '通道拒收了这条',
+    'unknown-after-send': '已交给通道，但没拿到回执'
+  }),
+  pushFailureReasonUnknown: '原因没有上报',
   channelTargetLabel: '目标',
   channelTargetDirect: '私聊',
   channelTargetGroup: '群聊',
@@ -118,6 +138,7 @@ const zh: NotificationSettingsText = {
   pillUnavailable: '状态读不出来',
   subsColChannel: '通道',
   notApprovedChannel: '这条不会到手机',
+  channelPendingEffective: (count) => `已勾过通道的 ${count} 条会在通道就绪后继续生效；这一列不出现，不代表订阅被取消。`,
   surfaceJoin: '、',
   // 「失败」是结论，交给 StatusPill；句子本身用中性文字——`--danger` 在深色底上只有 3.25–3.94，
   // 一整句红字读不清，那不是风格问题而是可读性问题。
@@ -184,7 +205,16 @@ const en: NotificationSettingsText = {
   channelUnbound: 'No target bound: it is not clear which conversation it would post to',
   channelAmbiguous:
     'This channel has several conversations bound; keep only one on the Channels page. Nothing is sent, and we do not pick for you.',
-  channelPushFailed: (at) => `The last push did not go out · ${at}`,
+  channelPushFailed: (reason, at) => `The last push did not go out: ${reason} · ${at}`,
+  pushFailureReason: Object.freeze({
+    'push-unavailable': 'no channel is connected yet',
+    'delivery-no-target-bound': 'the channel has no conversation bound',
+    'delivery-ambiguous-target': 'the channel has more than one conversation bound',
+    'push-backoff': 'paused for a while after repeated failures',
+    'channel-rejected': 'the channel rejected this message',
+    'unknown-after-send': 'handed to the channel, but no receipt came back'
+  }),
+  pushFailureReasonUnknown: 'the reason was not reported',
   channelTargetLabel: 'Target',
   channelTargetDirect: 'Direct message',
   channelTargetGroup: 'Group chat',
@@ -197,6 +227,8 @@ const en: NotificationSettingsText = {
   pillUnavailable: 'Status cannot be read',
   subsColChannel: 'Channel',
   notApprovedChannel: 'This never goes to the phone',
+  channelPendingEffective: (count) =>
+    `The ${count} ${count === 1 ? 'event' : 'events'} you ticked for the phone stay subscribed and take effect once a channel is ready; a missing column does not cancel them.`,
   surfaceJoin: ' and ',
   subsHeading: 'Subscriptions',
   subsColRecord: 'Record',
