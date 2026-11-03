@@ -13,7 +13,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
-import { filesOutsideProjectInclude } from './pre-commit-scope.mts'
+import { filesOutsideProjectInclude, withAmbientDeclarations } from './pre-commit-scope.mts'
 
 const BUDGET_MS = Number(process.env.PRE_COMMIT_BUDGET_MS ?? 58_000)
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/
@@ -125,7 +125,7 @@ if (timedOut(check)) {
     JSON.stringify({
       extends: join(root, 'tsconfig.json'),
       include: [],
-      files: codeStaged.map((path) => join(root, path))
+      files: withAmbientDeclarations(codeStaged).map((path) => join(root, path))
     })
   )
   say('全仓 typecheck 超出预算，改为只查本次提交的文件（跨文件破坏留给 runner 的全量）。')
@@ -154,7 +154,7 @@ if (outsideInclude.length > 0) {
     JSON.stringify({
       extends: join(root, 'tsconfig.json'),
       include: [],
-      files: outsideInclude.map((path) => join(root, path))
+      files: withAmbientDeclarations(outsideInclude).map((path) => join(root, path))
     })
   )
   const uncovered = runTypecheck(['--noEmit', '-p', uncoveredConfig], remaining(8_000))

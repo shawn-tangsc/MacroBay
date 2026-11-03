@@ -25,3 +25,24 @@ export function filesOutsideProjectInclude(staged: readonly string[]): string[] 
     (path) => CODE_FILE.test(path) && OUTSIDE_PROJECT_INCLUDE.some((prefix) => path.startsWith(prefix))
   )
 }
+
+/**
+ * 环境声明：`window.platform`、`import.meta.glob`、资源导入、SDK 模块这些全局都靠它们提供。
+ *
+ * 钩子超预算时退一步用 `files: [本次文件]`，那份临时 tsconfig 只列了本次文件，**这些声明一个都不在**
+ * ——于是每提交一个用到 `window.platform` 的文件，都会报 `Property 'platform' does not exist on type
+ * 'Window'`，一个和改动毫无关系的假红。今晚已经有人因此跳过一次预检；跳过一次就等于这道闸废一次。
+ * 所以临时配置必须把这几个声明一起带上，让小程序和全仓程序看到同一套全局。
+ */
+export const AMBIENT_DECLARATIONS: readonly string[] = [
+  'apps/desktop-shell/src/renderer/shared/types/platform-api.d.ts',
+  'apps/desktop-shell/src/renderer/shared/types/assets.d.ts',
+  'apps/desktop-shell/src/renderer/src/vite-env.d.ts',
+  'platform/desktop/main/claudeSdkModules.d.ts',
+  'products/market-intelligence/service/demo/importMetaGlob.d.ts'
+]
+
+/** 临时 tsconfig 的 `files`：本次文件 + 环境声明，去重且保持原顺序。 */
+export function withAmbientDeclarations(files: readonly string[]): string[] {
+  return [...new Set([...AMBIENT_DECLARATIONS, ...files])]
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { filesOutsideProjectInclude } from './pre-commit-scope.mts'
+import { AMBIENT_DECLARATIONS, filesOutsideProjectInclude, withAmbientDeclarations } from './pre-commit-scope.mts'
 
 /**
  * 判据只有一句：**主 `typecheck` 查不到的文件，必须在预检里被单独列出来补查**。
@@ -38,5 +38,13 @@ describe('预检补查范围', () => {
 
   it('非代码文件不进补查（列出来只会制造噪音）', () => {
     expect(filesOutsideProjectInclude(['products/market-intelligence/README.md', 'products/x/panel.css'])).toEqual([])
+  })
+
+  it('环境声明跟着临时配置一起查，否则 window.platform 会被报成不存在', () => {
+    const files = withAmbientDeclarations(['products/market-intelligence/desktop/shared/ipc/dailyBriefingClient.ts'])
+    for (const declaration of AMBIENT_DECLARATIONS) expect(files).toContain(declaration)
+    expect(files[files.length - 1]).toBe('products/market-intelligence/desktop/shared/ipc/dailyBriefingClient.ts')
+    // A staged file that is itself an ambient declaration must not be listed twice.
+    expect(withAmbientDeclarations([AMBIENT_DECLARATIONS[0]!])).toHaveLength(AMBIENT_DECLARATIONS.length)
   })
 })
