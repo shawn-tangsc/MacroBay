@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
 
+import { etfOutflowOutletPolicy } from '../../../contracts/etfFlows'
 import { buildEtfOutflowSignal } from './etfOutflowSignal'
 import { buildEtfOutflowSignalRequest, notifyEtfOutflowSignals } from './etfOutflowNotifier'
 
@@ -58,6 +59,22 @@ describe('ETF outflow signal notification', () => {
   it('ignores signals from another rule: this notifier owns one event, not every signal', () => {
     const foreign = { ...outflowSignal(), ruleId: 'open-interest-spike' }
     expect(buildEtfOutflowSignalRequest(foreign)).toBeUndefined()
+  })
+
+  // The outlet table is pinned here, not borrowed from production: the switch says whether the
+  // reader may be told, and that answer must not be decided by whoever last edited the refresh.
+  it('stays shut when the panel outlet is closed, whatever the notification flag says', async () => {
+    const submit = vi.fn(async () => ({ kind: 'recorded' } as never))
+    await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: false, notification: true })
+    expect(submit).not.toHaveBeenCalled()
+
+    await notifyEtfOutflowSignals(submit, [outflowSignal()], { panel: true, notification: true })
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  // One case pins what ships: the chip and the notification open and close together.
+  it('ships both outlets open together', () => {
+    expect(etfOutflowOutletPolicy).toEqual({ panel: true, notification: true })
   })
 
   it('submits at most one request per signal and never lets a submit failure reach the refresh', async () => {

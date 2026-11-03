@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
+import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
-import { notifyEtfOutflowSignals, type SignalNoticeSubmit } from '../signals/etfOutflowNotifier'
 import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
@@ -27,10 +27,13 @@ export function createEtfCurrentStateRefreshService(deps: {
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
   /**
-   * 通知入口。只在**这一轮真的写入了新流水**（`updated`）之后才问信号，且不 await：
-   * 一条通知发不出去不该把已经落库的行情判成失败，也不该让采集任务等它。
+   * 信号出口。**只在**这一轮真的写入了新流水（`updated`）、且规则给出了成立的信号时才调用。
+   *
+   * 这里交出去的是「本轮判定出的信号」，不是「提交到平台的请求」：出口开关、去重参数、
+   * 事件 id 都归通知层，装配处把两者接起来。这样这一层的用例钉的是「刷新把信号交给了
+   * 通知层」，不会因为生产把通知开关关掉就变红——那两件事必须能分别断。
    */
-  submitSignal?: SignalNoticeSubmit
+  notifySignals?: (signals: readonly ModuleSignal[]) => Promise<void>
 }) {
   return {
     async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
@@ -51,8 +54,8 @@ export function createEtfCurrentStateRefreshService(deps: {
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
         // made "did it go out?" depend on scheduling — the one thing a refresh result should not
-        // depend on. The notifier swallows a failed submit, so this cannot turn into a failed read.
-        if (replaced.state === 'updated') await notifySignals(deps.submitSignal, built, fetchedAt)
+        // depend on. The outlet swallows a failed submit, so this cannot turn into a failed read.
+        if (replaced.state === 'updated') await notifySignals(deps.notifySignals, built, fetchedAt)
         return replaced
       } catch {
         return unavailable()
@@ -67,16 +70,20 @@ export function createEtfCurrentStateRefreshService(deps: {
  * 只有完整窗口才会被 `buildEtfOutflowSignal` 判成 `available`；不足三日的信息是
  * `unavailable`（还没轮到它说话），通知层会把它挡掉，这里不另判一次。
  */
-function notifySignals(
-  submit: SignalNoticeSubmit | undefined,
+async function notifySignals(
+  notify: ((signals: readonly ModuleSignal[]) => Promise<void>) | undefined,
   window: Readonly<{ btc: readonly EtfDailyFlow[]; eth: readonly EtfDailyFlow[] }>,
+  // 这一轮采集的时刻：信号描述的是刚写进去的那份窗口，不是「现在」。
   asOf: string
 ): Promise<void> {
+  if (!notify) return
   const signals = (['btc', 'eth'] as const).flatMap((asset) => {
     const signal = buildEtfOutflowSignal({ asset, rows: window[asset], asOf })
     return signal ? [signal] : []
   })
-  return notifyEtfOutflowSignals(submit, signals)
+  // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
+  if (signals.length === 0) return
+  await notify(signals)
 }
 
 async function enabled(read: () => Promise<boolean>): Promise<boolean> {

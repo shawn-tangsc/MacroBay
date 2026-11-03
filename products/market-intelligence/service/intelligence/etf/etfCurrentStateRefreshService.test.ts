@@ -68,40 +68,42 @@ describe('ETF current-state refresh service', () => {
   // The ETF leg's trigger point: the rule is asked only after this source actually wrote new
   // flows, and the answer goes out through the platform. A quiet window, a failed write or an
   // incomplete window must not ring.
-  it('asks the three-day rule after a write and submits one notification per flowing asset', async () => {
+  it("hands the rule's own signals to the outlet after a write, one per flowing asset", async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
-    const submitSignal = vi.fn(async () => ({ kind: 'recorded' } as never))
+    const notifySignals = vi.fn(async () => undefined)
     const service = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: outflowRows('BTC'), eth: outflowRows('ETH', [1, 2, 3, 4, 5]) }),
       store,
       now: () => '2026-09-01T12:00:00.000Z',
-      submitSignal
+      notifySignals
     })
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
-    expect(submitSignal).toHaveBeenCalledTimes(1)
-    expect(submitSignal.mock.calls[0]![0]).toMatchObject({
-      eventTypeId: 'market-intelligence.signal.triggered',
-      dedupeVars: { builder: 'moduleSignal', moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc' }
-    })
+    expect(notifySignals).toHaveBeenCalledTimes(1)
+    const handed = notifySignals.mock.calls[0]![0] as readonly { moduleId: string; ruleId: string; asset: string; readiness: string }[]
+    // Only the asset whose three days really cleared the threshold; a quiet asset says nothing.
+    expect(handed).toHaveLength(1)
+    expect(handed[0]).toMatchObject({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', readiness: 'available' })
   })
 
-  it('does not submit when the window is too short to judge, even though the write succeeds', async () => {
+  // The outlet's own switch is not this layer's business: this must stay green whether production
+  // opens or closes notifications, otherwise a switch flip would look like a broken refresh.
+  it('still hands out nothing when the window is too short to judge, even though the write succeeds', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
-    const submitSignal = vi.fn()
+    const notifySignals = vi.fn()
     const service = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
       store,
       now: () => '2026-09-01T12:00:00.000Z',
-      submitSignal
+      notifySignals
     })
 
     await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
-    expect(submitSignal).not.toHaveBeenCalled()
+    expect(notifySignals).not.toHaveBeenCalled()
   })
 
   it('fails closed without a write for a future or non-common asset date', async () => {
