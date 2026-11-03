@@ -13,6 +13,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CapitalFlowChart } from './CapitalFlowChart'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import { CapitalFlowDialog } from './CapitalFlowDialog'
+import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
 
@@ -241,11 +242,7 @@ function EtfFlow({ etf, flowHistory, text, onRetry }: {
       <button type="button" className="mi-capital-conditions__daily-button"
         aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>
     </header>
-    <div className="mi-capital-conditions__chart-legend">
-      <span><i data-series="funds" />{text.fundsColumn}</span>
-      <span><i data-series="btc" />{text.btc}</span>
-      <span><i data-series="eth" />{text.eth}</span>
-    </div>
+    <CapitalFlowLegend text={text} />
     <CapitalFlowChart rows={rows} text={text} />
     <CapitalFlowDialog open={dialogOpen} onClose={() => setDialogOpen(false)} rows={rows} text={text} resolveText={resolveText} />
   </section>

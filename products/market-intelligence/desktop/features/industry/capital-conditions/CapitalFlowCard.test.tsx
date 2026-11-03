@@ -248,6 +248,17 @@ describe('daily values dialog', () => {
     expect(card.outerHTML).toBe(before)
   })
 
+  it('names the three series inside the dialog, in the same order as the card', async () => {
+    const container = mount()
+    const cardOrder = [...container.querySelectorAll('.mi-capital-conditions__chart-legend span')].map((node) => node.textContent)
+    expect(cardOrder).toEqual([zhText.fundsColumn, zhText.btc, zhText.eth])
+
+    await act(async () => clickLikeMouse(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!))
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    const dialogOrder = [...dialog.querySelectorAll('.mi-capital-conditions__chart-legend span')].map((node) => node.textContent)
+    expect(dialogOrder).toEqual(cardOrder)
+  })
+
   it('draws the trigger as its own bordered button, not a text link', () => {
     const container = mount()
     const button = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__daily-button')!

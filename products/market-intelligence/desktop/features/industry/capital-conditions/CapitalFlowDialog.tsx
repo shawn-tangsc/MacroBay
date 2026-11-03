@@ -1,6 +1,7 @@
 import { Modal } from '@platform/ui/components/modal'
 
 import { CapitalFlowChart } from './CapitalFlowChart'
+import { CapitalFlowLegend } from './CapitalFlowLegend'
 import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
 import type { FlowChartRow } from './capitalFlowRows'
 
@@ -24,6 +25,7 @@ export function CapitalFlowDialog({ open, onClose, rows, text, resolveText }: Re
   const titleKey = 'pages.intelligence.portal.dashboard.capitalConditions.dailyDialogTitle'
   return <Modal open={open} onClose={onClose} width="expanded" titleKey={titleKey} resolveText={resolveText}>
     <div className="mi-sample-surface mi-capital-conditions__dialog">
+      <CapitalFlowLegend text={text} />
       <CapitalFlowChart rows={rows} text={text} />
       <CapitalFlowDailyTable rows={rows} text={text} />
     </div>
