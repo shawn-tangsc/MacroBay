@@ -1,4 +1,6 @@
-import { Modal } from 'antd'
+import { Button } from 'antd'
+
+import { Modal } from '@platform/ui/components/modal'
 import { useEffect, useState } from 'react'
 
 import type { PlatformText } from '../../../i18n/platformText'
@@ -31,13 +33,26 @@ export function ChannelCreateDialog(props: {
 
   return (
     <Modal
-      cancelText={labels.channelCancel}
-      okButtonProps={{ disabled: !ready, loading: props.saving }}
-      okText={labels.channelCreate}
-      onCancel={props.onCancel}
-      onOk={() => props.onCreate({ name: values.name.trim(), agentId: values.agentId, token: values.token })}
       open
-      title={labels.channelCreate}
+      width="standard"
+      onClose={props.onCancel}
+      titleKey="settings.channels.create"
+      resolveText={(key) => (key === 'settings.channels.create' ? labels.channelCreate : '')}
+      footer={
+        <>
+          <Button key="cancel" onClick={props.onCancel}>
+            {labels.channelCancel}
+          </Button>
+          <Button
+            disabled={!ready}
+            key="create"
+            loading={props.saving}
+            onClick={() => props.onCreate({ name: values.name.trim(), agentId: values.agentId, token: values.token })}
+            type="primary">
+            {labels.channelCreate}
+          </Button>
+        </>
+      }
     >
       <ChannelFields
         agents={props.agents}

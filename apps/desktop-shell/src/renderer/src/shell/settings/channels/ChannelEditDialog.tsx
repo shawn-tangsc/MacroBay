@@ -1,4 +1,6 @@
-import { Modal } from 'antd'
+import { Button } from 'antd'
+
+import { Modal } from '@platform/ui/components/modal'
 import { useEffect, useState } from 'react'
 
 import type { PlatformText } from '../../../i18n/platformText'
@@ -29,13 +31,26 @@ export function ChannelEditDialog(props: {
 
   return (
     <Modal
-      cancelText={labels.channelCancel}
-      okButtonProps={{ disabled: values.name.trim().length === 0 || values.agentId.length === 0, loading: props.saving }}
-      okText={labels.channelUpdate}
-      onCancel={props.onCancel}
-      onOk={() => props.onSave({ name: values.name.trim(), agentId: values.agentId })}
       open
-      title={labels.channelEdit}
+      width="standard"
+      onClose={props.onCancel}
+      titleKey="settings.channels.edit"
+      resolveText={(key) => (key === 'settings.channels.edit' ? labels.channelEdit : '')}
+      footer={
+        <>
+          <Button key="cancel" onClick={props.onCancel}>
+            {labels.channelCancel}
+          </Button>
+          <Button
+            disabled={values.name.trim().length === 0 || values.agentId.length === 0}
+            key="save"
+            loading={props.saving}
+            onClick={() => props.onSave({ name: values.name.trim(), agentId: values.agentId })}
+            type="primary">
+            {labels.channelUpdate}
+          </Button>
+        </>
+      }
     >
       <ChannelFields
         agents={props.agents}

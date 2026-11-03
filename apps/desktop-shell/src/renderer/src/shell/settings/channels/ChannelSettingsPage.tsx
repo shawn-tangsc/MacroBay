@@ -1,7 +1,8 @@
-import { Button, Modal } from 'antd'
+import { Button } from 'antd'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
@@ -259,22 +260,32 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       ) : null}
 
       <Modal
-        cancelText={labels.channelCancel}
-        okButtonProps={{ danger: true }}
-        okText={labels.channelDelete}
-        onCancel={() => setDeleting(null)}
-        onOk={() => void confirmDelete()}
         open={deleting !== null}
-        title={labels.channelDelete}
+        width="compact"
+        onClose={() => setDeleting(null)}
+        titleKey="settings.channels.delete"
+        resolveText={(key) => (key === 'settings.channels.delete' ? labels.channelDelete : '')}
+        footer={
+          <>
+            <Button key="cancel" onClick={() => setDeleting(null)}>
+              {labels.channelCancel}
+            </Button>
+            <Button danger key="delete" onClick={() => void confirmDelete()} type="primary">
+              {labels.channelDelete}
+            </Button>
+          </>
+        }
       >
         <p>{labels.channelDeleteConfirm}</p>
       </Modal>
 
       <Modal
-        footer={null}
-        onCancel={() => setLogsFor(null)}
         open={logsFor !== null}
-        title={logsFor === null ? labels.channelLogs : `${labels.channelLogs} · ${logsFor.name}`}
+        width="expanded"
+        onClose={() => setLogsFor(null)}
+        titleKey="settings.channels.logs"
+        titleParams={{ name: logsFor?.name ?? '' }}
+        resolveText={(key) => (key === 'settings.channels.logs' ? `${labels.channelLogs} · {name}` : '')}
       >
         <p className="channel-logs-empty">{labels.channelLogsEmpty}</p>
       </Modal>

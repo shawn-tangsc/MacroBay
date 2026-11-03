@@ -25,10 +25,11 @@ export function ChannelRow(props: {
   onLogs: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
+  // 读屏名收的是**键**（点分路径），不是词：键形状守卫只认这两种之一。
   const resolveText = (key: string): string => {
-    if (key === 'channelLogs') return labels.channelLogs
-    if (key === 'channelEdit') return labels.channelEdit
-    if (key === 'channelDelete') return labels.channelDelete
+    if (key === 'settings.channels.logs') return labels.channelLogs
+    if (key === 'settings.channels.edit') return labels.channelEdit
+    if (key === 'settings.channels.delete') return labels.channelDelete
     return labels.channelEnableSwitch
   }
   // 凭据取不到是「这条频道现在不能用」，红点 + 行内原因；其余状态只用点色区分，不写句子。
@@ -49,21 +50,21 @@ export function ChannelRow(props: {
       )}
       <span className="channel-row-actions">
         <IconButton
-          ariaLabelKey="channelLogs"
+          ariaLabelKey="settings.channels.logs"
           icon={FileText}
           onSelect={() => props.onLogs(channel)}
           resolveText={resolveText}
           size="sm"
         />
         <IconButton
-          ariaLabelKey="channelEdit"
+          ariaLabelKey="settings.channels.edit"
           icon={Pencil}
           onSelect={() => props.onEdit(channel)}
           resolveText={resolveText}
           size="sm"
         />
         <IconButton
-          ariaLabelKey="channelDelete"
+          ariaLabelKey="settings.channels.delete"
           icon={Trash2}
           onSelect={() => props.onDelete(channel)}
           resolveText={resolveText}
