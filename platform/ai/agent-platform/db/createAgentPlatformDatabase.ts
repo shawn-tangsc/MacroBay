@@ -1,8 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
+
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
-type AgentPlatformMigration = {
+export type AgentPlatformMigration = {
   id: string
   up: string | ((connection: DatabaseSync) => void)
 }
@@ -1508,38 +1510,7 @@ const migrations: AgentPlatformMigration[] = [
       drop table if exists agent_session_messages_fts;
     `
   },
-  {
-    id: '0048_channel_settings_overrides',
-    up: `
-      -- 频道级三项覆盖（需求 v7）：工作目录、允许的会话 ID、权限模式。
-      -- 0004 那版读模型表曾有这三列，0011 换成正典表时丢了；现在补回同一张表，
-      -- 管理服务写、旧读模型读同一行——不另开第二处存储。
-      -- 允许列表为空存 null（＝允许所有）；权限模式 null＝继承助手，不是 'default'。
-      alter table agent_channels add column workspace_json text;
-      alter table agent_channels add column active_chat_ids_json text;
-      alter table agent_channels add column permission_mode text;
-    `
-  },
-  {
-    id: '0049_channel_allowed_chat_ids_repair',
-    up: (connection) => {
-      // 0048 在落地前被本地改过一次列名：先按 allowed_chat_ids_json 跑过、库已记 0048 执行过，
-      // 随后代码改成 active_chat_ids_json 才提交。于是老库里 0048 永远不再跑，列名对不上，
-      // 启动读 channel 时直接 no such column。这里只做「补到当前列名」，不改 0048 一个字。
-      const columns = connection.prepare('pragma table_info(agent_channels)').all() as Array<{ name: string }>
-      const has = (name: string): boolean => columns.some((column) => column.name === name)
-
-      if (!has('active_chat_ids_json')) {
-        if (has('allowed_chat_ids_json')) {
-          connection.exec('alter table agent_channels rename column allowed_chat_ids_json to active_chat_ids_json')
-        } else {
-          connection.exec('alter table agent_channels add column active_chat_ids_json text')
-        }
-      }
-      if (!has('workspace_json')) connection.exec('alter table agent_channels add column workspace_json text')
-      if (!has('permission_mode')) connection.exec('alter table agent_channels add column permission_mode text')
-    }
-  }
+  ...channelSettingsOverrides
 ]
 
 export type AgentPlatformDatabase = {
