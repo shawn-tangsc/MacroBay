@@ -226,6 +226,16 @@ mi: miText['zh-CN'],
             eventGroup: '事件组', analysisRun: '分析运行', summaryVersion: '摘要版本', evidenceCount: '证据数量', asOf: '分析时点', dataCutoff: '数据限制', conclusion: 'AI 结论', confirmedFacts: '已确认事实', transmission: '传导判断', marketReaction: '市场反应', noMarketReaction: '当前没有可比行情证据，暂不判断市场方向。', supportingEvidence: '支撑证据', counterEvidence: '反向证据', catalysts: '后续关注', auditInfo: '查看审计信息', prediction: '预测', noPrediction: '该摘要暂无预测。', conditions: '条件', invalidation: '失效条件', verificationDue: '验证截止', agentUnavailable: '追问 Agent 将在下一阶段启用。',
             status: { published: '已发布', stale: '已过期', superseded: '已替代', pending: '待验证', confirmed: '已确认', 'partially-confirmed': '部分确认', invalidated: '已失效', expired: '已到期', 'insufficient-data': '数据不足' }
           },
+          /**
+           * 看板底部「本次运行」横条。三种「没有」各有各的句子，不许互相冒充：
+           * `empty` 是确实没有（读成功、今天没跑）；`unavailable` 是读不到（留痕读投影还没接）；
+           * `unattributed` 是跑过但没留原因（它不算「没分析」）。
+           */
+          analysisRunBar: {
+            title: '本次运行', latestPrefix: '最近一次',
+            loading: '正在读取运行记录…', unavailable: '记录没拿到', empty: '今天还没有分析跑过。',
+            ranTitle: '为什么分析了', skippedTitle: '哪些没分析', unattributed: '原因没记录'
+          },
           newsSentiment: {
             title: '重点舆情',
             // 原来这里叫「全部」，但查询一次最多返回 100 条：窗口名必须说出上限，否则读者以为
@@ -1496,6 +1506,17 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             workspaceLabel: '— MARKET ANALYSIS', title: 'AI intelligence analysis', back: 'Back to Agents', loading: 'Loading message analysis…', unavailable: 'Analysis detail is unavailable.', empty: 'No published message analysis yet.', requestInitialAnalysis: 'Generate first analysis', refreshAnalysis: 'Analyze now', initialAnalysisQueued: 'First analysis queued; this panel updates when it finishes.', initialAnalysisUnavailable: 'No eligible published intelligence is available for analysis.', initialAnalysisFailed: 'The first-analysis job failed to start. Refresh and try again.', analysisRefreshAlreadyAvailable: 'The latest analysis is already available.', analysisStillRunning: 'The analysis is still running. Stopped waiting; it will appear here when it finishes.', analysisRefreshFailed: 'The re-analysis request did not go through. Try again.', analysisServiceNotReady: 'The analysis service is still starting up. Try again shortly.', timeline: 'Analysis timeline', detail: 'Analysis detail', dismissError: 'Dismiss message',
             eventGroup: 'Event group', analysisRun: 'Analysis run', summaryVersion: 'Summary version', evidenceCount: 'Evidence count', asOf: 'As of', dataCutoff: 'Data limits', conclusion: 'AI conclusion', confirmedFacts: 'Confirmed facts', transmission: 'Transmission view', marketReaction: 'Market reaction', noMarketReaction: 'No comparable market evidence is available; direction is not judged.', supportingEvidence: 'Supporting evidence', counterEvidence: 'Counter-evidence', catalysts: 'Next catalysts', auditInfo: 'View audit information', prediction: 'Predictions', noPrediction: 'This summary has no predictions.', conditions: 'Conditions', invalidation: 'Invalidation', verificationDue: 'Verification due', agentUnavailable: 'The follow-up Agent will be enabled in the next phase.',
             status: { published: 'Published', stale: 'Stale', superseded: 'Superseded', pending: 'Pending', confirmed: 'Confirmed', 'partially-confirmed': 'Partially confirmed', invalidated: 'Invalidated', expired: 'Expired', 'insufficient-data': 'Insufficient data' }
+          },
+          /**
+           * The runs bar under the dashboard. The three kinds of "nothing" each keep their own
+           * sentence: `empty` is proven (the read succeeded, nothing ran), `unavailable` is a read
+           * we do not have yet, and `unattributed` is a run that happened without a recorded reason
+           * — never counted as "not analysed".
+           */
+          analysisRunBar: {
+            title: 'This run', latestPrefix: 'Latest',
+            loading: 'Reading run records…', unavailable: 'Records unavailable', empty: 'No analysis has run today.',
+            ranTitle: 'Why it ran', skippedTitle: 'Not analysed', unattributed: 'Reason not recorded'
           },
           newsSentiment: {
             title: 'Key sentiment',

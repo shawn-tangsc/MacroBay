@@ -62,15 +62,33 @@
   --mi-dashboard-sentiment-extreme-greed: #55d69b;
   height: 100%;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  container-type: inline-size;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+  /*
+   * 页面根是 flex 列：滚动区在上、页脚（本次运行横条）在下。
+   *
+   * 滚动与 padding 一起挪进 `.mi-crypto-dashboard__scroll`，容器查询的声明也跟着它走——
+   * 容器查询量的是内容盒宽度，padding 留在根上会把这层量宽多算 64px，窄屏堆叠的翻转点就会挪位。
+   * 滚动条现在贴着内容区右缘，页脚不随内容移动。
+   */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
     var(--bg);
   color: var(--text);
 }
+
+.mi-crypto-dashboard__scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  container-type: inline-size;
+  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+}
+
+/* 页脚只放一行横条；它不吸顶、不覆盖内容，滚到底时来源状态区整行可见。 */
+.mi-crypto-dashboard__footer { flex: 0 0 auto; padding: 0 var(--mi-dashboard-page-inline) var(--mi-dashboard-page-block); }
 
 .mi-crypto-dashboard *,
 .mi-crypto-dashboard *::before,

@@ -537,10 +537,15 @@ describe('crypto intelligence dashboard', () => {
     expect(pageStyles).not.toContain('--mi-dashboard-page-block')
 
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
+    const scrollRule = cssBlock(styles, '.mi-crypto-dashboard__scroll {')
     expect(dashboardRootRule).toContain('--mi-dashboard-page-inline: 32px')
     expect(dashboardRootRule).toContain('--mi-dashboard-page-block: 32px')
-    expect(dashboardRootRule).toContain('padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline)')
-    expect(dashboardRootRule).toContain('container-type: inline-size')
+    // 页边距与容器查询跟着滚动区走：根上留着 padding，容器查询量的内容盒就会宽出 64px，
+    // 窄屏堆叠的翻转点随之挪位。
+    expect(scrollRule).toContain('padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline)')
+    expect(scrollRule).toContain('container-type: inline-size')
+    expect(dashboardRootRule).not.toContain('padding: var(--mi-dashboard-page-block)')
+    expect(dashboardRootRule).not.toContain('container-type')
 
     // 阶梯两端成对移动：只缩 inline 会让数据带一头 32 一头 24。
     const ladder = styles.slice(styles.indexOf('@media (max-width: 1279px)'))
@@ -554,8 +559,10 @@ describe('crypto intelligence dashboard', () => {
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
     const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
+    const scrollRule = cssBlock(styles, '.mi-crypto-dashboard__scroll {')
     expect(rowRule).not.toContain('overflow-x: hidden')
-    expect(dashboardRootRule).toContain('container-type: inline-size')
+    expect(scrollRule).toContain('container-type: inline-size')
+    expect(dashboardRootRule).not.toContain('container-type')
     expect(rowRule).toContain('border-top: 1px solid var(--mi-dashboard-line)')
     expect(rowRule).toContain('border-bottom: 1px solid var(--mi-dashboard-line)')
     // 资金面带现在是「情绪 | 资金面」两列；资金面内部的 content-row 仍是它自己的两列。
@@ -819,13 +826,40 @@ describe('crypto intelligence dashboard', () => {
     expect(onOpenBriefing).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the dashboard root constrained so its lower checklist sections can scroll inside the product host', () => {
+  it('renders the runs bar as a footer of the column, outside the scroll region', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
+      runBar: createElement('div', { 'data-testid': 'runs-bar' }, '本次运行')
+    })))
+    await flush()
+
+    const scroll = container.querySelector('.mi-crypto-dashboard__scroll')
+    const footer = container.querySelector('footer.mi-crypto-dashboard__footer')
+    expect(footer).not.toBeNull()
+    // A footer inside the scroll region would travel with the cards; it is a sibling on purpose.
+    expect(scroll?.contains(footer as Node)).toBe(false)
+    expect(container.querySelector('main')?.lastElementChild).toBe(footer)
+    expect(footer?.querySelector('[data-testid="runs-bar"]')).not.toBeNull()
+  })
+
+  it('keeps the dashboard shell constrained so its cards scroll above a footer that does not move', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
+    const scrollRule = cssBlock(styles, '.mi-crypto-dashboard__scroll {')
 
     expect(dashboardRootRule).toContain('height: 100%')
     expect(dashboardRootRule).toContain('min-height: 0')
-    expect(dashboardRootRule).toContain('overflow-y: auto')
-    expect(dashboardRootRule).toContain('overflow-x: hidden')
+    // 根是列：滚动区吃掉剩余高度，页脚自己占一份，滚动条不会伸到页脚上。
+    expect(dashboardRootRule).toContain('display: flex')
+    expect(dashboardRootRule).toContain('flex-direction: column')
+    expect(dashboardRootRule).toContain('overflow: hidden')
+    expect(scrollRule).toContain('flex: 1 1 0')
+    expect(scrollRule).toContain('overflow-y: auto')
+    expect(scrollRule).toContain('overflow-x: hidden')
     expect(dashboardRootRule).not.toContain('min-height: 100%')
   })
 })
