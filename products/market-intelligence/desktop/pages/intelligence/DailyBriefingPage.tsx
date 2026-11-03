@@ -226,8 +226,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday
         && rows.some((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))) {
         // The list says this language exists, so the answer "nothing written" is the read's miss, not
-        // the truth. Read that edition by its date before telling the reader anything.
-        openEditionRef.current(periodDate, localeForLoad, rows.find((edition) => edition.date === periodDate))
+        // the truth. Read that edition by its date and put the answer on screen here — handing it to
+        // the row path made the result depend on state that was still settling after a delete.
+        const again = await client.get({ date: periodDate, locale: localeForLoad }).catch(() => undefined)
+        if (!active) return
+        if (again?.state === 'available') {
+          setView({ status: 'ready', document: again.document, kind: periodDate === todayDate ? 'today' : 'history' })
+          setRegenerateFailure(null)
+        } else {
+          setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
+        }
       } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated' && !keptCachedToday) {
         // Nothing is written in this language. Whether that means "the issue has no content" or
         // "this issue has the other language" is the list's answer, not this branch's guess.

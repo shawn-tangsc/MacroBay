@@ -61,7 +61,9 @@ export function openBriefingEdition(input: Readonly<{
           ...(result.state === 'unavailable' ? { failureCode: result.failureCode } : {})
         })
       } else if (result.state === 'missing') {
-        setView({ status: 'locale-missing', locale, ...(date !== todayDate ? { date, historical: true } : {}) })
+        // The day is always carried: the sentence's subject ("this issue" / "this day") is decided
+        // from it, so leaving it out let a past day be described as today.
+        setView({ status: 'locale-missing', locale, date, ...(date !== todayDate ? { historical: true } : {}) })
       } else {
         setView({ status: 'unavailable', failureCode: result.failureCode })
       }

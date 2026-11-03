@@ -940,7 +940,7 @@ describe('daily briefing page', () => {
     // The state belongs to that language; only a click starts the run.
     const missing = dom.querySelector('[data-briefing-locale-missing]')
     expect(missing?.getAttribute('data-briefing-locale-missing')).toBe('en-US')
-    expect(missing?.textContent).toContain(text.languageTabs.missing.replace('{language}', text.languageTabs['en-US']))
+    expect(missing?.textContent).toContain(text.languageTabs.missingCurrentPeriod.replace('{language}', text.languageTabs['en-US']))
 
     const generate = dom.querySelector<HTMLElement>('[data-generate-missing-locale="en-US"]')!
     await act(async () => {
@@ -1901,6 +1901,72 @@ it('never lets the first read contradict the list about which languages exist', 
   // No clicks: the pane already shows the Chinese edition the list reported.
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+})
+
+it('puts the surviving edition into the pane after a delete, not just into the switch', async () => {
+  // Walkthrough: after deleting the Chinese edition the switch moved to English and the row tag
+  // said English, but the pane said "this issue has not been generated". The language was chosen
+  // correctly; the read that followed never reached the pane.
+  const chinese = briefingDocument('2026-11-03')
+  const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English body after the delete' } }
+  let deleted = false
+  const client = fakeClient({
+    getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+    getToday: vi.fn(async () => deleted
+      ? { state: 'unavailable' as const, failureCode: 'not-generated' as const }
+      : { state: 'available' as const, document: chinese }),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-11-03', periodId: 'default', locale: 'zh-CN' as const, availableLocales: (deleted ? ['en-US'] : ['zh-CN', 'en-US']) as readonly ('zh-CN' | 'en-US')[], state: 'generated' as const, generatedAt: '2026-11-03T00:30:00.000Z', windowEnd: '2026-11-03T00:30:00.000Z', readingsAvailable: 4 }], today: '2026-11-03' } })),
+    get: vi.fn(async ({ locale }: { locale: string }) => locale === 'en-US'
+      ? { state: 'available' as const, document: english }
+      : deleted ? { state: 'missing' as const } : { state: 'available' as const, document: chinese }),
+    deletePeriod: vi.fn(async () => { deleted = true; return { editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true } })
+  })
+  const dom = await renderPage(client)
+  for (let round = 0; round < 20; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelectorAll('[data-content-language-tabs] [role="tab"]').length === 2) break
+  }
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-11-03"]')!
+  act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((node) => node.textContent?.includes('中文'))!
+  act(() => { item.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+  const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+  await act(async () => { confirm.click() })
+  for (let round = 0; round < 40; round += 1) {
+    await act(async () => { await Promise.resolve() })
+    if (dom.querySelector('.mi-daily-briefing-page__paper')?.textContent?.includes('English body after the delete')) break
+  }
+
+  const paper = dom.querySelector('.mi-daily-briefing-page__paper')
+  expect(paper).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
+  expect(paper?.textContent).toContain('English body after the delete')
+  expect(dom.querySelector('[data-content-language-tabs] [aria-selected="true"]')?.textContent).toContain(text.languageTabs['en-US'])
+})
+
+it('describes the current issue as the issue, never as today, when a language is missing', async () => {
+  // 03:00 is still the previous issue, so "today has no Chinese edition" is the wrong subject: the
+  // reader is inside the issue that was generated yesterday.
+  const period = [0, 1].map((back) => {
+    const date = new Date(Date.parse('2026-11-03T00:00:00.000Z') - back * 86_400_000).toISOString().slice(0, 10)
+    return { date, periodId: 'default', locale: 'zh-CN' as const, availableLocales: back === 0 ? ['en-US'] as const : [] , state: back === 0 ? 'generated' as const : 'missing' as const, generatedAt: '2026-11-03T00:30:00.000Z', windowEnd: '2026-11-03T00:30:00.000Z', readingsAvailable: 4 }
+  })
+  const dom = await renderPage(fakeClient({
+    getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-11-03' } })),
+    get: vi.fn(async ({ locale }: { locale: string }) => locale === 'en-US'
+      ? { state: 'available' as const, document: { ...briefingDocument('2026-11-03'), edition: { ...briefingDocument('2026-11-03').edition, locale: 'en-US' as const } } }
+      : { state: 'missing' as const })
+  }))
+  for (let round = 0; round < 20; round += 1) await act(async () => { await Promise.resolve() })
+
+  const pane = dom.querySelector('[data-briefing-locale-missing="zh-CN"]')
+  expect(pane).not.toBeNull()
+  expect(pane?.textContent).toContain(text.languageTabs.missingCurrentPeriod.replace('{language}', text.languageTabs['zh-CN']))
+  expect(pane?.textContent).not.toContain('今天还没有')
 })
 
 it('switches to the surviving language when the edition on screen is deleted', async () => {
