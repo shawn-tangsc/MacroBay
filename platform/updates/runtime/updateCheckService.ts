@@ -34,7 +34,8 @@ export type UpdateCheckTrigger = 'auto' | 'manual'
  * 为什么是硬要求：只要一样从系统直接问来，单测就只能测出「已是最新」，
  * 「有新版本」那条主路径永远没人走过（改一版也测不出来）。
  *
- * 这个模块**不 import electron**：模式由组合根判一次传进来，判据只有 `app.isPackaged`。
+ * 这个模块**不 import electron、也不读 `app.isPackaged`**：没有「开发态 / 打包态」这条分支，
+ * 只有一条路。
  */
 export type UpdateCheckServicePorts = Readonly<{
   /** 当前应用版本（`app.getVersion()` 由组合根取来传入）。 */

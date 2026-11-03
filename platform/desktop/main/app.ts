@@ -939,8 +939,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   )
   registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
 
-  // 更新检查：**源码启动与装好的包同一套逻辑**（11-03 用户定的），没有「开发态只注册一部分通道」那种门。
-  // 每天最多一次的封顶在服务里，不在这个接缝上。
+  // 更新检查：源码启动与装好的包同一套逻辑，没有「开发态」分支；每天最多一次在服务里封顶。
   const updateCheck = await composeUpdateCheck({
     ipcMain,
     currentVersion: app.getVersion(), platform: process.platform,
