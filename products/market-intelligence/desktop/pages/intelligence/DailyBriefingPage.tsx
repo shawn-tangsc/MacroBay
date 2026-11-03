@@ -27,6 +27,7 @@ import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
+import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -366,8 +367,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedLocale={selectedLocale} todayDate={todayDate}
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
-        locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
-        onLoadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} />
+        locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
         <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
         <DailyBriefingStorageNotice text={text.migration} />
@@ -451,7 +451,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+      {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />
         {issues.length > 0 ? <>
           <header className="mi-daily-briefing-page__appendix-head">
@@ -478,6 +478,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
             </li>)}
           </ol> : null}
         </> : null}
+        {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
       </aside> : null}
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
@@ -491,10 +492,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         void client.getSettings().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
       }} /> : null}
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
-      <div ref={shareRef}>
-        {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-        <DailyBriefingShareCard document={view.document} text={poster.text} locale={poster.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
-      </div>
+      {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
+      <div ref={shareRef}><DailyBriefingShareCard document={view.document} text={poster.text} locale={poster.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
     </div> : null}
   </main>
 }

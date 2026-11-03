@@ -725,21 +725,37 @@ describe('daily briefing page', () => {
     expect(paper.textContent).not.toMatch(/\d+\s*项/)
   })
 
-  it('never repeats an attempt count on the period row', async () => {
+  it('keeps the row free of attempt counts and puts the one attempt trail in the detail column', async () => {
     const dom = await renderPage(fakeClient({ listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })) }))
-    const row = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!
-    const item = row.closest('.mi-daily-briefing__rail-item')!
-    const toggle = item.querySelector<HTMLElement>('[data-attempts-toggle]')!
-    // The toggle opens the attempts list; it must say what it does, not how many attempts there were.
-    expect(toggle.textContent).toBe(text.history.attempts.show)
-    expect(toggle.textContent).not.toMatch(/\d|次/)
+    const row = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
 
-    // The row's meta is exactly two segments: the item count and the clock.
-    const meta = item.querySelector<HTMLElement>('.mi-daily-briefing__rail-meta')!.textContent!
+    // The row is the clock and the item count; no expander, no "N attempts".
+    expect(row.querySelector('[data-attempts-toggle]')).toBeNull()
+    const meta = row.querySelector<HTMLElement>('.mi-daily-briefing__rail-meta')!.textContent!
     const segments = meta.split('·').map((segment) => segment.trim())
     expect(segments).toHaveLength(2)
     expect(segments[0]).toMatch(/^\d+ 项$/)
     expect(segments[1]).toMatch(/^\d{2}:\d{2}$/)
+
+    // The trail lives in the one detail column, and only there.
+    expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
+    const toggle = dom.querySelector<HTMLButtonElement>('[data-briefing-attempts] [data-attempts-toggle]')!
+    expect(toggle.textContent).toBe(text.history.attempts.show)
+    expect(toggle.textContent).not.toMatch(/\d|次/)
+  })
+
+  it('keeps the detail column as one scroll container ordered stages → gaps → attempts', async () => {
+    const dom = await renderPage(fakeClient({ listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })) }))
+    const column = dom.querySelector<HTMLElement>('[data-briefing-detail="true"]')!
+
+    expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+    const order = [...column.children].map((child) => child.getAttribute('class') ?? '')
+    const stages = order.findIndex((name) => name.includes('mi-generation-trace'))
+    const gaps = order.findIndex((name) => name.includes('appendix-head') || name.includes('groups'))
+    const attempts = order.findIndex((name) => name.includes('mi-briefing-attempts'))
+    expect(stages).toBeGreaterThanOrEqual(0)
+    expect(gaps).toBeGreaterThan(stages)
+    expect(attempts).toBeGreaterThan(gaps)
   })
 
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {

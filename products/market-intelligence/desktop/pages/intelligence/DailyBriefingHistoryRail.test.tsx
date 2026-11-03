@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
-import type { DailyBriefingClientAttemptsResult } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -57,7 +56,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
 
 describe('daily briefing history rail', () => {
   it('keeps the meta in unbreakable facts and leaves the attempt count to the list', () => {
-    render({ editions: [edition({ attemptCount: 2 })], onLoadAttempts: async () => ({ state: 'available', attempts: [] }) })
+    render({ editions: [edition({ attemptCount: 2 })] })
     const meta = host.querySelector('.mi-daily-briefing__rail-meta')
     expect(meta?.textContent).toContain('4')
     expect(meta?.textContent).toContain('项')
@@ -69,10 +68,10 @@ describe('daily briefing history rail', () => {
     expect(meta?.textContent).not.toContain('2026-11-02')
     expect(meta?.textContent).not.toContain('GMT')
     expect(meta?.textContent).toContain('08:00')
-    // The row is the clock and the item count; the attempts list below already numbers every try, so
-    // repeating "2 attempts" up here said the same fact twice.
+    // The row is the clock and the item count; the attempt trail lives in the detail column, so a row
+    // here carries no expander and no count.
     expect(meta?.textContent).not.toContain(text.history.attempts.times)
-    expect(host.querySelector('[data-attempts-toggle]')?.textContent).toBe(text.history.attempts.show)
+    expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
   })
 
   it('says "not run" once, with the scheduled time only for today, and keeps the direction word for screen readers', () => {
@@ -115,33 +114,6 @@ describe('daily briefing history rail', () => {
     expect((host.querySelector('[data-locale="zh-CN"]') as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false')
     // The issue is still the current row even though its primary language is not the shown one.
     expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('aria-current')).toBe('true')
-  })
-
-  it('expands an issue into its attempts and says which one was cleaned', async () => {
-    const attempts: DailyBriefingClientAttemptsResult = {
-      state: 'available',
-      attempts: [
-        { attemptNo: 2, state: 'succeeded', startedAt: '2026-10-30T08:00:00.000Z', finishedAt: '2026-10-30T08:05:00.000Z', cleanedAt: '2026-10-30T08:10:00.000Z' },
-        { attemptNo: 1, state: 'failed', failureCode: 'source-failed', startedAt: '2026-10-30T07:00:00.000Z', finishedAt: '2026-10-30T07:01:00.000Z' }
-      ]
-    }
-    const onLoadAttempts = vi.fn(async () => attempts)
-    render({ onLoadAttempts })
-    const toggle = host.querySelector('[data-attempts-toggle]') as HTMLButtonElement
-    act(() => toggle.click())
-    await flush()
-    expect(onLoadAttempts).toHaveBeenCalledWith('2026-11-02', 'default', 'zh-CN')
-    expect(host.textContent).toContain('第 2 次')
-    expect(host.textContent).toContain(text.history.attempts.cleaned)
-    expect(host.querySelectorAll('[data-attempt]')).toHaveLength(2)
-  })
-
-  it('states an unreadable attempt list instead of drawing "no attempts"', async () => {
-    render({ onLoadAttempts: async () => ({ state: 'unavailable' }) })
-    act(() => (host.querySelector('[data-attempts-toggle]') as HTMLButtonElement).click())
-    await flush()
-    expect(host.textContent).toContain(text.history.attempts.unreadable)
-    expect(host.textContent).not.toContain(text.history.attempts.none)
   })
 
   it('marks an incomplete issue with the status pill, not a hand-made chip', () => {

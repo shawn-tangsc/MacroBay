@@ -1,27 +1,19 @@
-import { useState } from 'react'
-
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
-import type { DailyBriefingAttemptRecord, DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingClientAttemptsResult } from '../../shared/ipc/dailyBriefingClient'
+import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
-
-type AttemptsState =
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'ready'; attempts: readonly DailyBriefingAttemptRecord[] }>
-  | Readonly<{ status: 'unavailable' }>
 
 /**
  * The history rail: one row per (day, issue), the languages of that issue switching in place.
  *
  * The grouping is done by the service — this component never decides which rows belong together,
- * which languages an issue has, or whether an issue is incomplete. It renders what the list says,
- * and when a row is expanded it asks for that issue's attempts; a failed read is stated, not drawn
- * as "no attempts".
+ * which languages an issue has, or whether an issue is incomplete. It renders what the list says;
+ * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
+ * stays one line of facts.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, selectedLocale, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onLoadAttempts }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, selectedLocale, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -41,28 +33,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
   onSelect: (date: string, locale?: DailyBriefingLocale) => void
-  /** Reads one issue's attempts on expand; absent means the rail offers no attempt history. */
-  onLoadAttempts?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<DailyBriefingClientAttemptsResult>
 }>): React.ReactElement {
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [attempts, setAttempts] = useState<Readonly<Record<string, AttemptsState>>>({})
-
-  const expand = (key: string, date: string, periodId: string): void => {
-    if (expanded === key) {
-      setExpanded(null)
-      return
-    }
-    setExpanded(key)
-    if (attempts[key]?.status === 'ready' || !onLoadAttempts) return
-    setAttempts((current) => ({ ...current, [key]: { status: 'loading' } }))
-    void onLoadAttempts(date, periodId, locale)
-      .then((result) => setAttempts((current) => ({
-        ...current,
-        [key]: result.state === 'available' ? { status: 'ready', attempts: result.attempts } : { status: 'unavailable' }
-      })))
-      .catch(() => setAttempts((current) => ({ ...current, [key]: { status: 'unavailable' } })))
-  }
-
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
     {loading && editions.length === 0 ? <LoadingState label={text.history.loading} /> : failed && editions.length === 0 && onRetry ? <StateView
@@ -88,8 +59,6 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         const selected = edition.date === selectedDate
         const shownLocale = selected ? (selectedLocale ?? edition.locale) : edition.locale
         const key = `${edition.date}:${edition.periodId}:${edition.locale}`
-        const open = expanded === key
-        const shown = attempts[key]
         return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
           <button type="button" disabled={missing}
             aria-current={selected ? 'true' : undefined}
@@ -131,25 +100,6 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 {text.history.languages[available]}
               </button>) : null}
           </div>
-          {!missing && onLoadAttempts ? <button type="button" className="mi-daily-briefing__rail-attempts-toggle"
-            aria-expanded={open} data-attempts-toggle={edition.date}
-            onClick={() => expand(key, edition.date, edition.periodId)}>
-            {/* The count belongs to the attempt list below it: repeating it on the row was the same
-                fact twice, and the row's own meta is the item count and the clock. */}
-            {open ? text.history.attempts.hide : text.history.attempts.show}
-          </button> : null}
-          {open ? <div className="mi-daily-briefing__rail-attempts" role="group" aria-label={text.history.attempts.title}>
-            {shown?.status !== 'ready' && shown?.status !== 'unavailable' ? <LoadingState label={text.history.loading} minHeight={40} /> : null}
-            {shown?.status === 'unavailable' ? <small data-attempts-unreadable="true">{text.history.attempts.unreadable}</small> : null}
-            {shown?.status === 'ready' && shown.attempts.length === 0 ? <small>{text.history.attempts.none}</small> : null}
-            {shown?.status === 'ready' ? shown.attempts.map((attempt) =>
-              <p key={attempt.attemptNo} className="mi-daily-briefing__rail-attempt" data-attempt={attempt.attemptNo} data-state={attempt.state}>
-                <span>{text.history.attempts.nth.replace('{n}', String(attempt.attemptNo))}</span>
-                <span>{attempt.state === 'failed' ? text.history.attempts.failed : attempt.state === 'running' ? text.history.attempts.running : text.history.attempts.succeeded}</span>
-                {attempt.cleanedAt ? <em>{text.history.attempts.cleaned}</em> : null}
-                {attempt.failureCode ? <small>{(text.aiSettings.failure as Readonly<Record<string, string>>)[attempt.failureCode] ?? attempt.failureCode}</small> : null}
-              </p>) : null}
-          </div> : null}
         </div>
       })}
     </div>

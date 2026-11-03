@@ -193,10 +193,9 @@
 /* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
 .mi-daily-briefing__rail-item { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; align-items: start; }
 .mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
-.mi-daily-briefing__rail-lang, .mi-daily-briefing__rail-attempts-toggle { padding: 2px 6px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; background: transparent; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.4; cursor: pointer; }
+.mi-daily-briefing__rail-lang { padding: 2px 6px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; background: transparent; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.4; cursor: pointer; }
 .mi-daily-briefing__rail-lang[aria-pressed="true"] { border-color: var(--mi-dashboard-lime); color: var(--mi-dashboard-text); }
-.mi-daily-briefing__rail-lang:hover, .mi-daily-briefing__rail-attempts-toggle:hover { color: var(--mi-dashboard-text); }
-.mi-daily-briefing__rail-attempts { grid-column: 1 / -1; margin: 2px 0 6px 6px; padding-left: 8px; border-left: 2px solid var(--mi-dashboard-line); display: flex; flex-direction: column; gap: 3px; color: var(--mi-dashboard-muted); font-size: 11px; }
+.mi-daily-briefing__rail-lang:hover { color: var(--mi-dashboard-text); }
 .mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
 .mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }
 
@@ -206,7 +205,6 @@
 .mi-daily-briefing__rail-sep { opacity: .6; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
 /* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
-.mi-daily-briefing__rail-attempts-toggle { grid-column: 2; justify-self: end; margin-top: 2px; }
 
 /* 回退到英语是状态，不是说明：一行灰字、无边框、无图标，常驻可见（规范 §7 第三档）。 */
 .mi-daily-briefing-page__language-fallback { margin: 0 0 10px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.5; }
@@ -214,3 +212,38 @@
 /* 步骤面板：问号在标题前、同一行最左；它是标题的帮助，不是列表的孤儿。 */
 .mi-brief-steps__head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .mi-brief-steps__title { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
+
+/* The right-hand detail column: one scroll container, three sections in order
+   (generation stages → data gaps & limits → attempts), and three text sizes. Sizes below 11px are
+   gone from this column on purpose: seven fragments between 7px and 10.5px read as "uneven". */
+[data-briefing-detail] { font-size: 12px; line-height: 1.5; }
+[data-briefing-detail] h2, [data-briefing-detail] h3 { margin: 0; color: var(--mi-dashboard-muted); font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 18px; }
+[data-briefing-detail] section + section { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
+[data-briefing-detail] .mi-generation-trace { margin: 0; padding-bottom: 0; border-bottom: 0; }
+[data-briefing-detail] .mi-generation-trace__head > span,
+[data-briefing-detail] .mi-daily-briefing-page__appendix-counts,
+[data-briefing-detail] .mi-daily-briefing-page__appendix-toggle,
+[data-briefing-detail] .mi-generation-trace__summary,
+[data-briefing-detail] .mi-generation-trace__failed,
+[data-briefing-detail] .mi-generation-trace__missing,
+[data-briefing-detail] .mi-generation-trace__stage-time,
+[data-briefing-detail] .mi-generation-trace__stage-failure,
+[data-briefing-detail] .mi-briefing-attempts__row em,
+[data-briefing-detail] .mi-briefing-attempts__row small { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 400; line-height: 16px; }
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-title,
+[data-briefing-detail] .mi-daily-briefing-page__group-label,
+[data-briefing-detail] .mi-daily-briefing-page__group-tags span,
+[data-briefing-detail] .mi-daily-briefing-page__group-count,
+[data-briefing-detail] .mi-briefing-attempts__row span { font-size: 12px; font-weight: 600; line-height: 18px; }
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-description,
+[data-briefing-detail] .mi-daily-briefing-page__group-example,
+[data-briefing-detail] .mi-briefing-attempts__list p { font-size: 12px; font-weight: 400; line-height: 18px; }
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon { height: 16px; width: 16px; }
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon,
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon .ant-steps-icon { font-size: 11px; line-height: 14px; }
+[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item { padding-bottom: 6px; }
+[data-briefing-detail] .mi-daily-briefing-page__group { padding: 6px 0; }
+[data-briefing-detail] .mi-briefing-attempts__row { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; padding: 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); }
+[data-briefing-detail] .mi-briefing-detail__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+[data-briefing-detail] .mi-briefing-detail__action { flex: none; padding: 2px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; background: transparent; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; cursor: pointer; }
+[data-briefing-detail] .mi-briefing-attempts__list { display: flex; flex-direction: column; }
