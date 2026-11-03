@@ -731,6 +731,36 @@ describe('daily briefing page', () => {
     }
   })
 
+  it('says "this day" for a past day that lacks the language, and reads the other one back', async () => {
+    // The screenshot's case: 11/03 has a Chinese edition only. Switching to English there must talk
+    // about that day (not today), offer no action this version cannot honour, and switching back
+    // must read the Chinese edition again.
+    const chinese = briefingDocument('2026-11-03')
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-11-03', periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: '2026-11-03T00:30:00.000Z', windowEnd: '2026-11-03T00:30:00.000Z', readingsAvailable: 0 }] } })),
+      get: vi.fn(async ({ locale }: { locale: string }) => locale === 'zh-CN'
+        ? { state: 'available' as const, document: chinese }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-11-03"]')!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    const missing = dom.querySelector('[data-briefing-locale-missing="en-US"]')!
+    expect(missing).not.toBeNull()
+    expect(missing.hasAttribute('data-locale-missing-historical')).toBe(true)
+    expect(missing.textContent).toContain(text.languageTabs.missingHistorical.replace('{language}', text.languageTabs['en-US']))
+    // No action offered: the missing edition is a past day, and this version cannot backfill it.
+    expect(missing.querySelector('button')!.disabled).toBe(true)
+
+    await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
+  })
+
   it('keeps the surviving language on screen while the switch moves after a delete', async () => {
     const chinese = briefingDocument('2026-10-30')
     const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English survives the delete' } }

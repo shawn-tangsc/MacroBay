@@ -123,7 +123,7 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                   : <>
                 {/* Segments never break mid-word: the width is the fix, these keep each fact whole.
                     A count nobody recorded is not zero: print it only when the list carries one. */}
-                {typeof edition.readingsAvailable === 'number'
+                {typeof edition.readingsAvailable === 'number' && edition.readingsAvailable > 0
                   ? <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable} {text.readingsUnit}</span>
                   : null}
                 {edition.generatedAt ? <>

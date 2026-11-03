@@ -18,7 +18,7 @@ export function DailyBriefingLocaleMissing({ locale, historical = false, text, o
   const languageName = text.languageTabs[locale]
   return <div className="mi-daily-briefing-page__locale-missing" data-briefing-locale-missing={locale}
     {...(historical ? { 'data-locale-missing-historical': 'true' } : {})} role="status">
-    <p>{text.languageTabs.missing.replace('{language}', languageName)}</p>
+    <p>{(historical ? text.languageTabs.missingHistorical : text.languageTabs.missing).replace('{language}', languageName)}</p>
     {historical
       ? <Button className="mi-daily-briefing__generate-missing" disabled
         aria-label={text.history.backfillBlocked} title={text.history.backfillBlocked}>

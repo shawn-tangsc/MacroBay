@@ -194,6 +194,9 @@ describe('daily briefing history rail', () => {
     // "0 项" was shown for editions whose count the list does not carry: unknown is not zero.
     render({ editions: [{ ...edition(), readingsAvailable: undefined }] })
     expect(host.textContent).not.toContain('0 项')
+    // A real zero says nothing either: it is not a fact worth a column.
+    render({ editions: [{ ...edition(), readingsAvailable: 0 }] })
+    expect(host.textContent).not.toContain('0 项')
     expect(host.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
   })
 
