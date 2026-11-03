@@ -119,12 +119,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
   // Follows the run only while one is in flight: the hook stops and forgets on its own.
   const generating = view.status === 'loading' || regenerating
-  // With English editions off there is no switch, so a stored choice must not trap the reader in it:
-  // the page falls back to the interface language instead of showing an edition it cannot leave.
-  useEffect(() => {
-    if (!languageSettingsKnown || englishEditionsEnabled || contentLocale === locale) return
-    setContentLocale(locale)
-  }, [languageSettingsKnown, englishEditionsEnabled, contentLocale, locale, setContentLocale])
+  // With the switch unavailable the stored choice must not decide anything: rendering and requests use
+  // the interface language, while the stored preference itself is left untouched for when it returns.
+  const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
   const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
@@ -139,8 +136,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setEditionsFailed(false)
     setRegenerateFailure(null)
     void (async () => {
-      const todayPromise = withDeadline(client.getToday({ locale: contentLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale: contentLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
+      const todayPromise = withDeadline(client.getToday({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale: effectiveLocale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
@@ -149,7 +146,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setEditionsFailed(listed?.state !== 'available')
       const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
       if (cachedRow) {
-        const cached = await client.get({ date: cachedRow.date, locale: contentLocale }).catch(() => undefined)
+        const cached = await client.get({ date: cachedRow.date, locale: effectiveLocale }).catch(() => undefined)
         if (active && cached?.state === 'available' && view.status === 'loading') {
           setView({ status: 'ready', document: cached.document, kind: 'today' })
         }
@@ -191,7 +188,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setRegenerating(false)
     })()
     return () => { active = false }
-  }, [contentLocale, client, reloadKey])
+  }, [effectiveLocale, client, reloadKey])
 
   useEffect(() => {
     let active = true
@@ -214,11 +211,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // A setting changed in the drawer (or in another window) takes effect without a reload.
   useEffect(() => {
     const bump = (): void => setSettingsReloadKey((key) => key + 1)
+    const onVisibility = (): void => { if (document.visibilityState === 'visible') bump() }
     window.addEventListener('focus', bump)
-    document.addEventListener('visibilitychange', bump)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('focus', bump)
-      document.removeEventListener('visibilitychange', bump)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 
@@ -228,7 +226,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }, [])
 
   const selectEdition = (date: string): void => {
-    const target = contentLocale
+    const target = effectiveLocale
     const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
     if (!row || row.state === 'missing') return
     if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return

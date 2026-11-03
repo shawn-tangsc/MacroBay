@@ -508,8 +508,12 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
 
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    // No switch, so no way back: the page must not open in a language it cannot leave.
+    // No switch, so no way back: the page must not open in a language it cannot leave — and it must
+    // not fetch once in English and then again in Chinese, which is the flash the reader complained about.
+    expect(client.getToday).toHaveBeenCalledTimes(1)
     expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    // The stored preference stays put for when the switch comes back.
+    expect(window.localStorage.getItem(CONTENT_LOCALE_STORAGE_KEY)).toBe('en-US')
     expect(dom.textContent).not.toContain(englishText.history.title)
   })
 
