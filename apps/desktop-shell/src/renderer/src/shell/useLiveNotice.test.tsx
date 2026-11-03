@@ -39,13 +39,14 @@ describe('save notice follows the interface language', () => {
       root!.render(createElement(Harness, { text: platformText['zh-CN'], expose: (next) => (api = next) }))
     })
     await act(async () => api!.showSaved())
-    expect(container.querySelector('#notice')?.textContent).toBe('已保存')
+    // 期望值取当前语言那份文案表，不写字面量：写死句子等于把「语言冻结」钉进测试。
+    expect(container.querySelector('#notice')?.textContent).toBe(platformText['zh-CN'].status.saved)
 
     // 切语言只是换了一份文案表：状态里没有句子，所以这句话跟着变。
     await act(async () => {
       root!.render(createElement(Harness, { text: platformText['en-US'], expose: (next) => (api = next) }))
     })
-    expect(container.querySelector('#notice')?.textContent).toBe('Saved')
+    expect(container.querySelector('#notice')?.textContent).toBe(platformText['en-US'].status.saved)
   })
 
   it('does the same for a failed save', async () => {
@@ -58,11 +59,11 @@ describe('save notice follows the interface language', () => {
       root!.render(createElement(Harness, { text: platformText['en-US'], expose: (next) => (api = next) }))
     })
     await act(async () => api!.showSaveFailed(new Error('disk full')))
-    expect(container.querySelector('#notice')?.textContent).toContain('Save failed')
+    expect(container.querySelector('#notice')?.textContent).toContain(platformText['en-US'].status.failed)
 
     await act(async () => {
       root!.render(createElement(Harness, { text: platformText['zh-CN'], expose: (next) => (api = next) }))
     })
-    expect(container.querySelector('#notice')?.textContent).toContain('保存失败')
+    expect(container.querySelector('#notice')?.textContent).toContain(platformText['zh-CN'].status.failed)
   })
 })
