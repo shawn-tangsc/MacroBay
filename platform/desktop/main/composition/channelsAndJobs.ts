@@ -27,6 +27,7 @@ import {
   WechatRuntimeManager,
   createChannelInboundContentGuard
 } from '../../../ai/agent-platform/channels'
+import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createPlatformWebSocketFactory } from '../../../network/platformWebSocket'
 import { createTaskAutomationMaintenance } from '../taskAutomationMaintenance'
@@ -186,7 +187,9 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     delivery: telegramDeliveryTransport,
     getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
+      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
+    // 起/停各一条进运行审计表：面板的「状态变化」就靠它，失败仍走已有异常码。
+    recordLifecycle: (channelId, generation, state) => recordRuntimeLifecycle(agentDatabase, channelId, state, generation)
   })
   const slackRuntimeManager = new SlackRuntimeManager({
     inbound: channelInboundService,
@@ -199,7 +202,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
     isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
+      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
   })
   const larkRuntimeManager = new LarkRuntimeManager({
     inbound: channelInboundService,
@@ -212,7 +215,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     keyedHash: (channelId, value) => channelCredentialVault.payloadCipher.keyedHash(channelId, value),
     isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
+      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
   })
   const qqRuntimeManager = new QqRuntimeManager({
     inbound: channelInboundService,
@@ -224,7 +227,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
     isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
+      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
   })
   const discordRuntimeManager = new DiscordRuntimeManager({
     inbound: channelInboundService,
@@ -236,7 +239,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     getCredential: (channelId) => channelManagementRepository.credentialMetadata(channelId),
     isCurrentActive: (channelId, generation) => channelInboundRepository.isCurrentActive(channelId, generation),
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
-      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation })
+      channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
   })
   const wechatRuntimeManager = new WechatRuntimeManager({
     inbound: channelInboundService,

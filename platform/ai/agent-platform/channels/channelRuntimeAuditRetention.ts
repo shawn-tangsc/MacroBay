@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { ChannelInboundAuditCode } from './ChannelInboundRepository'
+import type { ChannelRuntimeLifecycleCode } from './channelRuntimeLifecycle'
 
 /** 每个频道保留的行数。 */
 export const CHANNEL_RUNTIME_AUDIT_KEEP = 500
@@ -18,7 +19,7 @@ export function recordRuntimeAudit(
   database: AgentPlatformDatabase,
   channelId: string,
   generation: number,
-  code: ChannelInboundAuditCode,
+  code: ChannelInboundAuditCode | ChannelRuntimeLifecycleCode,
   now: Date
 ): void {
   database.transact(() => {

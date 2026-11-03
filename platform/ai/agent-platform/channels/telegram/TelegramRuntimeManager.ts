@@ -9,6 +9,8 @@ import { TelegramPollingHost } from './TelegramPollingHost'
 /** Owns only C03-enabled Telegram pollers; legacy runtime hosts never enter this map. */
 export class TelegramRuntimeManager {
   private readonly hosts = new Map<string, TelegramPollingHost>()
+  /** 每个在跑的频道当前代际：写「停了」时要用它，hosts 删掉之后就没有别的来源了。 */
+  private readonly hostGenerations = new Map<string, number>()
   private readonly lifetimes = new Map<string, { controller: AbortController; ownerToken?: string }>()
 
   constructor(private readonly deps: {
@@ -20,6 +22,8 @@ export class TelegramRuntimeManager {
     delivery: TelegramDeliveryTransport
     getCredential: (channelId: string) => { ref: string; revision: number } | null
     ownsLifecycleOwner?: (channelId: string, token: string, generation: number) => boolean
+    /** 连接真的起来/停下时写一条运行审计（面板的「状态变化」那一类）。只在状态变化时被调用。 */
+    recordLifecycle?: (channelId: string, generation: number, state: 'started' | 'stopped') => void
   }) {}
 
   async start(channelId: string, generation: number, ownerToken: string): Promise<boolean> {
@@ -48,7 +52,9 @@ export class TelegramRuntimeManager {
         isCurrent, signal: lifetime.signal, botUsername: identity.value
       })
       this.hosts.set(channelId, host)
+      this.hostGenerations.set(channelId, generation)
       host.start()
+      this.deps.recordLifecycle?.(channelId, generation, 'started')
       return true
     } catch {
       this.stopOwned(channelId, lifetime)
@@ -65,9 +71,14 @@ export class TelegramRuntimeManager {
     lifetime.abort()
     // A superseded async handshake must never tear down the newer generation's client/host.
     if (this.lifetimes.get(channelId)?.controller !== lifetime) return
+    // 只有真的在跑的那一个才写「停了」：握手失败/被替换的那次不算一次状态变化。
+    const wasRunning = this.hosts.has(channelId)
+    const runningGeneration = this.hostGenerations.get(channelId) ?? 0
     this.hosts.get(channelId)?.close()
     this.hosts.delete(channelId)
+    this.hostGenerations.delete(channelId)
     this.deps.delivery.removeClient(channelId)
+    if (wasRunning) this.deps.recordLifecycle?.(channelId, runningGeneration, 'stopped')
     this.lifetimes.delete(channelId)
   }
 
