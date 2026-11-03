@@ -29,8 +29,10 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.desktop.blocked': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
   // ── 情报 7 行（情报模块产品经理 2026-11-02 签；2026-11-03 删 ready，待重签 7 行） ──
   'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
-  'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false }, // 批准为上限；通道未接通前界面不提供该列。
-  'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false }, // 批准为上限；通道未接通前界面不提供该列。
+  // 这两行的 channel 是**上限**：通道投递尚未获用户点头，通道就绪前界面不提供该列（规范见 ui-spec v2.9 §清单）。
+  // 批准 ≠ 现况；撤掉再接通要重签，所以留着并解释——下一个人读到这里不许以为「批了就等于读者能配」。
+  'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+  'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.calibration.result': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
