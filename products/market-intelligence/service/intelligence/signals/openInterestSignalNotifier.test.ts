@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import type { SignalAnalysisRequest } from '../jobs/requestSignalAnalysis'
 import { signalTriggerKey } from '../../../contracts/moduleSignal'
 import {
   createOpenInterestSignalNotifier,
@@ -157,7 +158,7 @@ describe('handing a fired signal to the analysis entry', () => {
   const queued = { state: 'queued' as const, groupId: 'group-1', attemptLedgerId: 'ledger-1', jobRunId: 'job-1' }
 
   it('hands the signal itself, with the rule\'s own one-bucket window', async () => {
-    const requestAnalysis = vi.fn(async () => queued)
+    const requestAnalysis = vi.fn(async (_request: SignalAnalysisRequest) => queued)
     const wrapped = createSignalledOpenInterestRefresh({
       refresh: async () => ({ state: 'updated' as const }),
       readHistory: async () => reading(),
@@ -184,6 +185,35 @@ describe('handing a fired signal to the analysis entry', () => {
     expect(request.window).toEqual({ unit: 'buckets', amount: 1, bucketMs, upperBoundMs: bucketMs })
     // The key the budget recognises is built by the contract, not by this call site.
     expect(signalTriggerKey(request.signal.moduleId, request.signal.ruleId)).toBe('signal.open-interest.oi-liquidation-proxy')
+  })
+
+  it('offers a bucket to the analysis entry once, not once per refresh', async () => {
+    const requestAnalysis = vi.fn(async () => queued)
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      requestAnalysis,
+      now: () => asOf
+    })
+    // The same bucket stays "fresh" for two buckets; a second refresh must not ask for a second run
+    // of the same collapse (the ledger row would dedupe, but the model call would not).
+    await wrapped.refresh()
+    await wrapped.refresh()
+    expect(requestAnalysis).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not remember a hand-off the entry refused because the capability was off', async () => {
+    const requestAnalysis = vi.fn(async () => ({ state: 'disabled' as const }))
+    const wrapped = createSignalledOpenInterestRefresh({
+      refresh: async () => ({ state: 'updated' as const }),
+      readHistory: async () => reading(),
+      requestAnalysis,
+      now: () => asOf
+    })
+    await wrapped.refresh()
+    await wrapped.refresh()
+    // The switch may be turned on while this bucket is still fresh; "off" is not "handed".
+    expect(requestAnalysis).toHaveBeenCalledTimes(2)
   })
 
   it('binds after construction, because the runtime is assembled later', async () => {

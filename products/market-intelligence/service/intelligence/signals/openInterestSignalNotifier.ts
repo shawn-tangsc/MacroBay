@@ -22,7 +22,15 @@ const OPEN_INTEREST_PRODUCER_ID = 'market-intelligence.collectSource'
 
 export const openInterestSignalNotificationPolicy = Object.freeze({
   /** 两个桶：给慢一拍的采集留一步余量，再多就是旧闻。 */
-  freshnessMs: 2 * openInterestSignalRule.bucketMs
+  freshnessMs: 2 * openInterestSignalRule.bucketMs,
+  /**
+   * 一个桶问过分析之后，在本进程内还要记它多久。
+   *
+   * 刷新每次都重读滚动窗口，同一个桶在两个桶的新鲜期里会被看到两次；不记的话，第二次会再
+   * 要一次运行——账本行因为唯一键只有一行、额度也只算一次，但模型调用是两次。窗口给到四倍
+   * 新鲜期，覆盖采集的慢一拍与系统时钟的小抖动，不承担跨进程去重（那是账本唯一键的事）。
+   */
+  analysisHandoffMemoryMs: 8 * openInterestSignalRule.bucketMs
 })
 
 /** 这一轮值得推的信号：读到了、说得清是哪个资产、而且就是刚过去的桶。 */
@@ -117,9 +125,15 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
    * still produces its chip and its notification, it just cannot ask for a run.
    */
   requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
+  /** Buckets already offered in this process, keyed by the signal's dedupe key. */
+  handed?: Map<string, number>
 }>) {
   return async function notifyOpenInterestSignals(): Promise<readonly NotificationSubmitOutcome[]> {
     const asOf = (deps.now ?? (() => new Date().toISOString()))()
+    const asOfMs = Date.parse(asOf)
+    if (deps.handed !== undefined && Number.isFinite(asOfMs)) {
+      for (const [key, expiresAt] of deps.handed) if (expiresAt <= asOfMs) deps.handed.delete(key)
+    }
     const reading = await deps.readHistory({ asOf, window: '24h' })
     const candidates = selectSignalNotificationCandidates(openInterestSignalsFromHistory(reading, asOf), asOf)
     const outcomes: NotificationSubmitOutcome[] = []
@@ -128,8 +142,17 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
       if (request !== undefined && deps.submit !== undefined) outcomes.push(await deps.submit(request))
       const analysis = analysisRequestFor(signal)
       if (analysis === undefined || deps.requestAnalysis === undefined) continue
+      // The same bucket stays "fresh" for two buckets; asking twice would queue a second run for a
+      // reading the ledger already holds. The memory is per process; the ledger's unique key is
+      // what carries across restarts.
+      if (deps.handed?.has(analysis.signal.dedupeKey) === true) continue
       try {
-        await deps.requestAnalysis(analysis)
+        const outcome = await deps.requestAnalysis(analysis)
+        // "Disabled" is not "handed": the switch may be turned on while this bucket is still fresh.
+        if (outcome.state !== 'disabled') {
+          const observedMs = Date.parse(analysis.signal.observedAt)
+          deps.handed?.set(analysis.signal.dedupeKey, (Number.isFinite(observedMs) ? observedMs : asOfMs) + openInterestSignalNotificationPolicy.analysisHandoffMemoryMs)
+        }
       } catch {
         // One hand-off failing must not turn a stored bucket into a failed collection, and must
         // not stop the next signal from being offered.
@@ -162,6 +185,9 @@ export function createSignalledOpenInterestRefresh<T extends { state?: string }>
   bindSignalAnalysis: (service: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>) => void
 } {
   let requestAnalysis = input.requestAnalysis
+  // One memory for the lifetime of this refresh service, not per call: the whole point is that the
+  // next refresh does not ask again for a bucket this one already offered.
+  const handed = new Map<string, number>()
   return {
     async refresh(): Promise<T> {
       const result = await input.refresh()
@@ -172,7 +198,8 @@ export function createSignalledOpenInterestRefresh<T extends { state?: string }>
         ...(input.submit === undefined ? {} : { submit: input.submit }),
         readHistory: input.readHistory,
         ...(input.now === undefined ? {} : { now: input.now }),
-        ...(requestAnalysis === undefined ? {} : { requestAnalysis })
+        ...(requestAnalysis === undefined ? {} : { requestAnalysis }),
+        handed
       })
       try {
         await notify()
