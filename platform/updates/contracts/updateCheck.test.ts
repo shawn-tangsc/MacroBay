@@ -192,6 +192,24 @@ describe('what the settings row reads', () => {
     expect(unavailable).toEqual({ state: 'unavailable', currentVersion: '0.3.1', checkedAt })
   })
 
+  it('re-decides available vs up-to-date every time, instead of trusting the stored word', () => {
+    // 存下来的结论是「有新版本 0.3.1」，但当前版本已经升到 0.3.1——再说「有新版本」就是假话。
+    expect(
+      projectUpdateCheckState({
+        currentVersion: '0.3.1',
+        result: { status: 'available', latestVersion: '0.3.1', checkedAt }
+      })
+    ).toEqual({ state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt })
+
+    // 反方向：存下来的是「已是最新 0.3.1」，但当前版本被降到 0.3.0——那是真有新版。
+    expect(
+      projectUpdateCheckState({
+        currentVersion: '0.3.0',
+        result: { status: 'up-to-date', latestVersion: '0.3.1', checkedAt }
+      })
+    ).toEqual({ state: 'available', currentVersion: '0.3.0', latestVersion: '0.3.1', checkedAt })
+  })
+
   it('drops the internal reason code on the way to the row', () => {
     const projection = projectUpdateCheckState({
       currentVersion: '0.3.1',

@@ -229,8 +229,15 @@ export type UpdateCheckProjection =
   | { state: 'unavailable'; currentVersion: string; checkedAt: string }
 
 /**
- * 投影只有一个入口：拿「模式 + 当前版本 + 上次结论」判出一个读者能看到的状态。
+ * 投影只有一个入口：拿「当前版本 + 上次结论」判出一个读者能看到的状态。
  * 原因码在这一步被丢掉——它只属于日志。
+ *
+ * **「有新版本 / 已是最新」这个结论每次现算，不许信存下来的那个词。**
+ * 为什么（2026-11-03 撞出来的真问题）：结论会连同「上次取到的最新版本」写进文件，**下次启动直接读**，
+ * 而「当前版本」是每次现算的。两者一旦错位，界面就说假话——两个方向都撞到过：
+ * 「当前 0.3.0 / 最新 0.3.1，药丸却说已是最新」、「当前 0.3.1 / 最新 0.3.1，药丸却说有新版本」。
+ * 所以这里用**同一个比较函数**把两边的版本再判一次：存下来的只是一份「远端是什么版本」的记忆，
+ * 不是一句判决。
  */
 export function projectUpdateCheckState(input: Readonly<{
   currentVersion: string
@@ -242,8 +249,17 @@ export function projectUpdateCheckState(input: Readonly<{
     case 'unavailable':
       return { state: 'unavailable', currentVersion, checkedAt: result.checkedAt }
     case 'up-to-date':
-      return { state: 'up-to-date', currentVersion, latestVersion: result.latestVersion, checkedAt: result.checkedAt }
-    case 'available':
-      return { state: 'available', currentVersion, latestVersion: result.latestVersion, checkedAt: result.checkedAt }
+    case 'available': {
+      const current = parseVersion(currentVersion)
+      const known = parseVersion(result.latestVersion)
+      // 版本号解析不出来时退回存下来的结论：宁可沿用上次的判断，也不要因为坏值把这一行做没。
+      if (current === null || known === null) {
+        return { state: result.status, currentVersion, latestVersion: result.latestVersion, checkedAt: result.checkedAt }
+      }
+      return compareVersions(known, current) > 0
+        ? { state: 'available', currentVersion, latestVersion: result.latestVersion, checkedAt: result.checkedAt }
+        // 已是最新时「最新版本」就是当前版本：两格写同一个数，读者才对得上。
+        : { state: 'up-to-date', currentVersion, latestVersion: currentVersion, checkedAt: result.checkedAt }
+    }
   }
 }
