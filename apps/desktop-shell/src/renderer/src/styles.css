@@ -9229,6 +9229,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   max-width: 480px;
 }
 
+.about-notes-toggle {
+  /* 收起只是收起说明，不是主操作：靠右、宽度按内容，不横跨整行。 */
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
 .about-section-title {
   margin: 0;
   font-size: 12px;
