@@ -50,7 +50,7 @@ import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { NotificationBanner } from './notifications/NotificationBanner'
-import { createNotificationDeeplinkHandler } from './notifications/notificationDeeplinkHandler'
+import { reportNavFallback, useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -225,17 +225,13 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [activeNavKey, setActiveNavKey] = useState('assistants')
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
-  /** 通知落到设置面板之后要定位的那一行（任务定义 id）；面板自己负责滚过去并高亮。 */
-  const [focusEntityId, setFocusEntityId] = useState<string | null>(null)
-
-  const openNotificationTarget = createNotificationDeeplinkHandler({
+  // 装配与定位状态收在 `notificationDeeplinkWiring`：绑错 `navigate` 只换高亮不切页，那件事要有守卫盯着。
+  const { openNotificationTarget, focusEntityId } = useNotificationNavigation({
     productMenuEntries,
-    // 必须传 `activateNavKey`：有 Tab 桥时它走 `openTab`，否则只改侧栏高亮、页面不打开。
     navigate: activateNavKey,
-    // 面板键可能不存在（产品卸载 / 版本差异）：落到第一个可用面板，别把读者送进空屏。
-    setSettingsPanelKey: (key) => setSettingsPanelKey(resolveAvailableSettingsPanelKey(key, productSettingsEntries)),
-    setNotificationCenterOpen,
-    setFocusEntityId
+    setSettingsPanelKey,
+    productSettingsEntries,
+    setNotificationCenterOpen
   })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
@@ -415,7 +411,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       .then((result) => {
         setWorkspaceTabState(result.snapshot)
       })
-      .catch(() => { setActiveNavKey(navKey) })
+      // 被拒（key 不在注册表）时会退回只切高亮：开发期必须吵一声，否则症状只剩「点了没反应」。
+      .catch((error: unknown) => { reportNavFallback(navKey, error); setActiveNavKey(navKey) })
   }
 
   useEffect(() => {

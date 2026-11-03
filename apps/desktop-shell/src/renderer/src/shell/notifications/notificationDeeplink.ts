@@ -45,18 +45,22 @@ const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
 }
 
 /**
- * 通知里的 `pageId` → 壳层真能打开的那个页面。
+ * 产品页的 navKey **不是** manifest 里的 pageId，而是注册表里的 `routePath`
+ * （`shellRegistry.ts` 给的是 `/market-intelligence/intelligence`）。
  *
- * **日报不是独立页**：产品登记的页 id 是 `intelligence`，日报是那页里的一个子视图
- * （`activeView === 'briefing'`，状态在产品页内部）。只按 `pageId: 'daily-briefing'` 去
- * `openTab` 会落到一个不存在的页，所以这里映射到 `intelligence` 这个真页。
- *
- * 差的那半步要说清：**切到「日报」子视图今天没有跨模块入口**——那个 `activeView` 是产品页
- * 自己的状态，只能由它接受一个外部「显示哪一屏」的请求，那属于产品页与导航契约那一侧。
- * 在这里假造一个不存在的 pageId，比只打开产品页更糟：前者是假指路，后者至少到了对的产品。
+ * 早先这里有一张 `PAGE_ID_TO_MENU_KEY = { 'daily-briefing': 'intelligence' }`：键是真的，
+ * 但 `'intelligence'` 不是 navKey，`openTab` 会被主进程按注册表拒掉（`registration-missing`），
+ * 而 `activateNavKey` 的 `.catch` 又把它吞成「侧栏高亮变了」——看起来像跳了，其实没开页。
+ * 所以映射必须来自**注册表本身**，不能来自手写表。
  */
-const PAGE_ID_TO_MENU_KEY: Readonly<Record<string, string>> = {
-  'daily-briefing': 'intelligence'
+function routePathOfProduct(
+  deeplink: NotificationDeeplink,
+  productMenuEntries: readonly ProductMenuEntry[]
+): string | null {
+  if (deeplink.productId === undefined) return null
+  // 恰好一个才跳：同一产品有多个一级菜单页时，「点哪个」是猜，猜错比不跳更糟。
+  const candidates = productMenuEntries.filter((entry) => entry.productId === deeplink.productId)
+  return candidates.length === 1 ? candidates[0]!.routePath : null
 }
 
 /**
@@ -83,12 +87,10 @@ export function resolveNotificationNavigation(
     return { navKey: 'settings', settingsPanelKey: panelFromEntity, focusEntityId: focusEntityOf(deeplink) }
   }
   if (deeplink.pageId !== undefined) {
-    const menuKey = PAGE_ID_TO_MENU_KEY[deeplink.pageId]
-    if (menuKey !== undefined) return { navKey: menuKey }
-    return null
+    // 页面 id 是产品内部的；壳层只认注册表给的 routePath，认不出就不跳。
+    const routePath = routePathOfProduct(deeplink, productMenuEntries)
+    return routePath === null ? null : { navKey: routePath }
   }
-  // `productId` 这一支今天仍然没有生产者：留着等于提前写一条走不通的指路。
-  void productMenuEntries
   return null
 }
 

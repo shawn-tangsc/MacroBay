@@ -7,7 +7,7 @@ import { resolveNotificationNavigation } from './notificationDeeplink'
  * 这几条钉的是优先级，不是实现：改优先级时先改这里，别让读者被送到别处。
  */
 describe('resolveNotificationNavigation', () => {
-  const products = [{ productId: 'market-intelligence', routePath: '/market-intelligence' }]
+  const products = [{ productId: 'market-intelligence', routePath: '/market-intelligence/intelligence' }]
 
   it('sends a settings deeplink to that section, even when a product id is also present', () => {
     expect(
@@ -24,9 +24,22 @@ describe('resolveNotificationNavigation', () => {
     })
   })
 
-  it('sends an open-briefing action to the product page that actually exists', () => {
-    // 日报是 intelligence 页里的子视图，没有独立的 workspace pageId。
-    expect(resolveNotificationNavigation({ pageId: 'daily-briefing' }, products)).toEqual({ navKey: 'intelligence' })
+  it('sends an open-briefing action to the route path the registry actually publishes', () => {
+    // 产品页的 navKey 是注册表的 routePath，不是 manifest 里的 pageId。
+    expect(
+      resolveNotificationNavigation({ pageId: 'daily-briefing', productId: 'market-intelligence' }, products)
+    ).toEqual({ navKey: '/market-intelligence/intelligence' })
+  })
+
+  it('refuses to guess when one product has several top-level pages', () => {
+    const two = [...products, { productId: 'market-intelligence', routePath: '/market-intelligence/calendar' }]
+    // 点哪一个都是猜，猜错比不跳更糟。
+    expect(resolveNotificationNavigation({ pageId: 'daily-briefing', productId: 'market-intelligence' }, two)).toBeNull()
+  })
+
+  it('only ever returns a navKey the shell can actually open', () => {
+    const target = resolveNotificationNavigation({ pageId: 'daily-briefing', productId: 'market-intelligence' }, products)
+    expect(products.map((entry) => entry.routePath)).toContain(target?.navKey)
   })
 
   it('refuses an entity type it does not know, instead of guessing a panel', () => {

@@ -9,7 +9,7 @@ import { createNotificationDeeplinkHandler } from './notificationDeeplinkHandler
 function rig() {
   const calls: string[] = []
   const handler = createNotificationDeeplinkHandler({
-    productMenuEntries: [],
+    productMenuEntries: [{ productId: 'market-intelligence', routePath: '/market-intelligence/intelligence' }],
     navigate: (key) => calls.push(`navigate:${key}`),
     setSettingsPanelKey: (key) => calls.push(`panel:${key}`),
     setNotificationCenterOpen: (open) => calls.push(`center:${open}`),
@@ -31,7 +31,8 @@ describe('notification deeplink handler', () => {
     const { calls, handler } = rig()
     handler({ scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' })
 
-    expect(calls).toEqual(['center:false', 'navigate:intelligence', 'focus:none'])
+    // 切的是注册表发布的 routePath；`intelligence` 只是 manifest 里的 pageId，主进程会拒。
+    expect(calls).toEqual(['center:false', 'navigate:/market-intelligence/intelligence', 'focus:none'])
   })
 
   it('does nothing but close the centre for a deeplink it cannot resolve', () => {
@@ -49,23 +50,17 @@ describe('notification deeplink handler', () => {
  * 上一版就是这么错的，而单元测试断言的是回调名，把错误机制钉住了。所以这里直接读装配源码。
  */
 describe('the deeplink handler is assembled with a navigation that actually opens pages', () => {
-  const shell = readFileSync(
-    fileURLToPath(new URL('../AppShell.tsx', import.meta.url)),
-    'utf8'
-  )
-  const assembly = shell.slice(
-    shell.indexOf('createNotificationDeeplinkHandler({'),
-    shell.indexOf('createNotificationDeeplinkHandler({') + 900
-  )
+  const shell = readFileSync(fileURLToPath(new URL('../AppShell.tsx', import.meta.url)), 'utf8')
+  const wiring = readFileSync(fileURLToPath(new URL('./notificationDeeplinkWiring.ts', import.meta.url)), 'utf8')
 
   it('passes activateNavKey, which opens a tab when the bridge exists', () => {
-    expect(assembly).toContain('navigate: activateNavKey')
+    expect(shell).toContain('navigate: activateNavKey')
     // 只改高亮的那个不许出现在装配里：它看起来能跳，实际只换了选中项。
-    expect(assembly).not.toContain('setActiveNavKey,')
+    expect(shell).not.toContain('navigate: setActiveNavKey')
   })
 
   it('resolves the settings panel through the availability check', () => {
     // 产品卸载或版本差异会让面板键不存在：直接 set 就是把读者送进空屏。
-    expect(assembly).toContain('resolveAvailableSettingsPanelKey(key, productSettingsEntries)')
+    expect(wiring).toContain('ports.setSettingsPanelKey(resolveAvailableSettingsPanelKey(key, ports.productSettingsEntries))')
   })
 })
