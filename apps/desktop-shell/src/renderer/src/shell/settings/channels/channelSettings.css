@@ -11,7 +11,8 @@
   flex-direction: column;
   gap: 2px;
   padding-right: 12px;
-  border-right: 1px solid var(--border-subtle);
+  /* 列间分隔用 --border（规范里「三列底 --bg、列间 --border」）；行间才是 --border-subtle。 */
+  border-right: 1px solid var(--border);
 }
 
 .channel-platform-item {
