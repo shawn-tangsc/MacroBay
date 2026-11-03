@@ -64,7 +64,6 @@ const DEV_ENTRIES: ReadonlyArray<readonly [key: string, why: string]> = [
   ['dist:win', '维护者手敲的打包命令'],
   ['dist:win:dir', '维护者手敲的打包命令（只出目录，不打包）'],
   ['release:bump', '发版第一步，发布流程里写死'],
-  ['seed:briefing-history', '一次性灌历史数据，不进任何链']
 ]
 const DEV_ENTRIES_CEILING = DEV_ENTRIES.length
 

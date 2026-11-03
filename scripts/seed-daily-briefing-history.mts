@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 /**
  * Seeds a throwaway data directory with a history that shows one cleaned writing attempt.
@@ -49,7 +49,7 @@ mkdirSync(productDir, { recursive: true })
 const briefingsPath = join(productDir, 'daily-briefings.sqlite')
 const sessionsPath = join(productDir, 'daily-brief-sessions.sqlite')
 
-const briefings = new DatabaseSync(briefingsPath)
+const briefings = openSqliteDatabase(briefingsPath)
 briefings.exec('pragma user_version = 0')
 const existing = briefings.prepare("select name from sqlite_master where type = 'table' and name = 'daily_briefings'").get()
 if (existing) throw new Error(`${briefingsPath} already holds a briefing database; refusing to overwrite it`)
@@ -143,7 +143,7 @@ insertAttempt.run(liveEdition, PERIOD_ID, 'en-US', 1, 'succeeded', null,
   `${liveEdition}T00:20:00.000Z`, `${liveEdition}T00:30:00.000Z`, JSON.stringify(trace(liveEdition, 'success')), null)
 briefings.close()
 
-const sessions = new DatabaseSync(sessionsPath)
+const sessions = openSqliteDatabase(sessionsPath)
 sessions.exec(`
   create table if not exists daily_brief_session_links (
     session_id text primary key,
