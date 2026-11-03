@@ -2223,7 +2223,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         check: '检查更新',
         justChecked: '刚查过',
         autoCheck: '启动时检查更新',
-        autoHint: '同一个 UTC 自然日最多查一次；应用不会自己下载或安装。',
+        // 原来那句「同一个 UTC 自然日最多查一次；应用不会自己下载或安装。」是自证清白式的解释，
+        // 用户两次说它是废话；现在只留最短的事实，和开关排在同一行右端（见 VersionCheckRow）。
+        autoHint: '每天最多一次',
         autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
         // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
         // 与「上次检查：{时刻}」合成一行（时间在前、`·` 连接）：药丸已经说了「暂时查不到」，
@@ -3410,7 +3412,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         check: 'Check for updates',
         justChecked: 'Just checked',
         autoCheck: 'Check for updates at startup',
-        autoHint: 'At most once per UTC day; the app never downloads or installs anything on its own.',
+        autoHint: 'At most once a day',
         autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
         unavailableLine: 'this does not mean there is no newer version.',
         lastCheckedAt: (time) => `Last checked: ${time}`,

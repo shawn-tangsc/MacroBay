@@ -9396,8 +9396,20 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 
 /* 开关和它的说明是一组：组内 6（说明从属于开关，必须比行距紧），组与组之间由区块 gap 12 管。 */
 .version-auto-group {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* **不换行**：右边那句「每天最多一次」必须跟开关标签同行；一换行它就成了另一行孤零零的小字，
+     而那正是这一笔要治的毛病。 */
+  flex-wrap: nowrap;
+}
+
+/* 开关行右端那句短事实：弱化色、右对齐、不折行。 */
+.version-auto-frequency {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .version-checked-line {

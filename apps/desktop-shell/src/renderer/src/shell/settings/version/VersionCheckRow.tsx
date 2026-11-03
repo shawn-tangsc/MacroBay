@@ -152,10 +152,12 @@ export function VersionCheckRow(props: {
             />
             <span>{text.autoCheck}</span>
           </label>
-          {/* 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。 */}
-          <p className="preference-hint" id={FREQUENCY_HINT_ID}>
+          {/* 读屏用户靠这个 id 听到频率说明：开关与「检查更新」都指着它，「打开下载页」不指。
+              形态（用户 11-03 选 ②）：**与开关同一行、靠右**，不再是下面另起一行的小字；
+              原来那句长解释已删，只留「每天最多一次」这一件事实。 */}
+          <span className="version-auto-frequency" id={FREQUENCY_HINT_ID}>
             {text.autoHint}
-          </p>
+          </span>
         </div>
       ) : null}
     </div>
