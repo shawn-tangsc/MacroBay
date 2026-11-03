@@ -90,6 +90,30 @@ it('prefers the decision that names this run, which is how a restart compensatio
     .toEqual({ triggerKey: 'macro.actual.first-confirmed', reasonCode: 'restart-initial-compensated', decidedAt: '2026-10-13T15:14:03.000Z' })
 })
 
+it('explains a module signal run from its own ledger row, by prefix', () => {
+  // One key per rule, so the key cannot be listed in the policy array: without the prefix the
+  // signal's run loses its line and the timeline shows a reason-less analysis.
+  const key = 'signal.open-interest.oi-liquidation-proxy'
+  const signalRun = run({ triggerKey: key, queuedAt: '2026-11-03T02:07:00.000Z', completedAt: '2026-11-03T02:08:00.000Z' })
+  expect(projectTriggerStatus([row({ triggerKey: key, reasonCode: 'signal-high-triggered', decision: 'queued', createdAt: '2026-11-03T02:07:00.000Z' })], signalRun))
+    .toEqual({ triggerKey: key, reasonCode: 'signal-high-triggered', decidedAt: '2026-11-03T02:07:00.000Z' })
+  // A skipped signal explains the non-run too: that is the reader's "why was this not analysed".
+  expect(projectTriggerStatus([row({ triggerKey: key, reasonCode: 'signal-cooldown-active', decision: 'skipped', createdAt: '2026-11-03T02:06:00.000Z' })], signalRun)?.reasonCode)
+    .toBe('signal-cooldown-active')
+  // A key outside the registry stays unexplained: the prefix is the only thing added.
+  const unknown = run({ triggerKey: 'future.unknown.key' })
+  expect(projectTriggerStatus([row({ triggerKey: 'future.unknown.key' })], unknown)).toBeNull()
+})
+
+it('registers every reason a signal decision can carry, so the timeline can translate it', () => {
+  for (const code of ['signal-high-triggered', 'signal-medium-triggered', 'signal-cooldown-active',
+    'signal-low-marker-only', 'signal-calendar-owned', 'signal-freeze-unavailable']) {
+    expect(Object.values(triggerStatusPolicy.explainableReasonCodes)).toContain(code)
+  }
+  // Budget refusals are the existing codes: a second synonym for the same limit is a second truth.
+  expect(Object.values(triggerStatusPolicy.explainableReasonCodes)).not.toContain('signal-budget-exhausted')
+})
+
 it('says nothing for an item run whose decision was never recorded', () => {
   expect(projectTriggerStatus([row()], run({ triggerKey: 'macro.actual.first-confirmed' }))).toBeNull()
 })
