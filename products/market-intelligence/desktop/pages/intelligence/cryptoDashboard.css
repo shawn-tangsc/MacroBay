@@ -213,14 +213,23 @@
    focus come from the antd button tokens, so only the geometry and the pushed-right placement are
    set here. */
 .mi-capital-conditions__daily-button { margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
+/* Panel interior: a fixed head (title + unit line) and a scrolling body, so the unit line never
+   slides away from the numbers it explains. */
+.mi-capital-conditions__daily { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mi-capital-conditions__daily-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 12px 7px; border-bottom: 1px solid var(--border-strong); }
+.mi-capital-conditions__daily-head h4 { margin: 0; color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.mi-capital-conditions__daily-units { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.mi-capital-conditions__daily-scroll { min-height: 0; overflow: auto; }
 .mi-capital-conditions__daily-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.mi-capital-conditions__daily-table caption { padding: 0 0 6px; color: var(--mi-dashboard-muted); font-size: 10px; text-align: left; }
-.mi-capital-conditions__daily-units { display: block; padding-top: 2px; font-size: 9px; }
-.mi-capital-conditions__daily-table thead th { padding: 0 8px 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); font-size: 10px; font-weight: 400; text-align: right; white-space: nowrap; }
+.mi-capital-conditions__daily-caption { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mi-capital-conditions__daily-table thead th { position: sticky; top: 0; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); background: var(--surface); color: var(--muted); font-size: 10px; font-weight: 500; text-align: right; white-space: nowrap; }
 .mi-capital-conditions__daily-table thead th:first-child,
 .mi-capital-conditions__daily-table tbody th { text-align: left; }
-.mi-capital-conditions__daily-table tbody th { padding: 5px 8px 5px 0; color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 400; white-space: nowrap; }
-.mi-capital-conditions__daily-table tbody td { padding: 5px 0 5px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
+.mi-capital-conditions__daily-table tbody th { padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 400; white-space: nowrap; }
+.mi-capital-conditions__daily-table tbody td { padding: 5px 8px; border-bottom: 1px solid var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mi-capital-conditions__daily-table tbody tr:last-child th,
+.mi-capital-conditions__daily-table tbody tr:last-child td { border-bottom: 0; }
+.mi-capital-conditions__daily-table tbody tr:hover { background: var(--surface-soft); }
 .mi-capital-conditions__daily-empty { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }

@@ -17,10 +17,10 @@ type ChartText = FlowAccessibleText & {
 
 type HoveredFlow = { row: FlowChartRow; x: number; y: number; tooltipLeft: number; tooltipTop: number }
 
-type ChartGeometry = { labelHeight: number; gap: number; inset: number; maxLanes: number }
+type ChartGeometry = { labelHeight: number; gap: number; inset: number; maxLanes: number; axisBand: number }
 
 /** Pixels only: measured boxes are compared against measured bars, never against a fixed offset. */
-const labelGeometry: ChartGeometry = { labelHeight: 14, gap: 2, inset: 4, maxLanes: 3 }
+const labelGeometry: ChartGeometry = { labelHeight: 14, gap: 2, inset: 4, maxLanes: 3, axisBand: 22 }
 
 const tooltipPlacement = { offset: 14, inset: 4, estimatedWidth: 176, estimatedHeight: 86 } as const
 
@@ -59,7 +59,9 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
         anchors.push({
           index,
           centerX: barRect.left - chartRect.left + barRect.width / 2,
-          edgeY: direction === 'outflow' ? barRect.bottom - chartRect.top : barRect.top - chartRect.top,
+          // Always the bar's top edge: an outflow label then rises into the upper half rather
+          // than descending onto the date axis.
+          anchorY: barRect.top - chartRect.top,
           direction,
           width: label.offsetWidth
         })

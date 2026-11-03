@@ -1,15 +1,17 @@
-/* 锚定内容面板：位置与尺寸由组件按锚点算出（fixed），这里只管外观。 */
+/* 锚定内容面板：位置与尺寸由组件按锚点算出（fixed），这里只管外观。
+   内容自己负责内边距，面板只做外框与层，这样表头能贴着上边缘、滚动留给内容区。 */
 .mi-anchored-panel {
   position: fixed;
   z-index: 1400;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
+  background: var(--surface-strong);
+  box-shadow: 0 16px 36px rgb(0 0 0 / 42%);
   color: var(--text);
-  overflow: auto;
 }
 
 .mi-anchored-panel:focus-visible {

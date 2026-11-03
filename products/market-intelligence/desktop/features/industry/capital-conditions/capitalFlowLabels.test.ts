@@ -11,7 +11,9 @@ const geometry: FlowLabelGeometry = {
   labelHeight: 14,
   gap: 2,
   inset: 4,
-  maxLanes: 3
+  maxLanes: 3,
+  // The date ticks get their own band; labels must stop above it.
+  axisBand: 22
 }
 
 function boxOf(boxes: readonly { left: number; top: number }[], width: number) {
@@ -61,9 +63,9 @@ describe('pickFlowLabelIndexes', () => {
 describe('placeFlowLabels', () => {
   it('never lets two neighbouring labels overlap', () => {
     const anchors: FlowLabelAnchor[] = [
-      { index: 1, centerX: 100, edgeY: 52, direction: 'inflow', width: 60 },
-      { index: 2, centerX: 108, edgeY: 40, direction: 'inflow', width: 60 },
-      { index: 3, centerX: 116, edgeY: 46, direction: 'inflow', width: 60 }
+      { index: 1, centerX: 100, anchorY: 52, direction: 'inflow', width: 60 },
+      { index: 2, centerX: 108, anchorY: 40, direction: 'inflow', width: 60 },
+      { index: 3, centerX: 116, anchorY: 46, direction: 'inflow', width: 60 }
     ]
     const boxes = placeFlowLabels(anchors, geometry)
     const rects = boxOf(boxes, 60)
@@ -74,27 +76,33 @@ describe('placeFlowLabels', () => {
     }
   })
 
-  it('keeps an inflow label above its bar and an outflow label below it', () => {
+  it('keeps every label above the bar edge it belongs to, outflow included', () => {
+    // The outflow bar hangs from the zero line, so its top edge is where the label starts —
+    // dropping it below the bar would put it on the date axis.
     const anchors: FlowLabelAnchor[] = [
-      { index: 1, centerX: 200, edgeY: 30, direction: 'inflow', width: 60 },
-      { index: 2, centerX: 120, edgeY: 80, direction: 'outflow', width: 60 }
+      { index: 1, centerX: 200, anchorY: 30, direction: 'inflow', width: 60 },
+      { index: 2, centerX: 120, anchorY: 54, direction: 'outflow', width: 60 }
     ]
     const boxes = placeFlowLabels(anchors, geometry)
-    const inflow = boxes.find((box) => box.index === 1)!
-    const outflow = boxes.find((box) => box.index === 2)!
-    expect(inflow.top + geometry.labelHeight).toBeLessThanOrEqual(30 - geometry.gap)
-    expect(outflow.top).toBeGreaterThanOrEqual(80 + geometry.gap)
+    for (const box of boxes) {
+      expect(box.top + geometry.labelHeight).toBeLessThanOrEqual(54 - geometry.gap + 1)
+    }
+  })
+
+  it('never enters the date band, even for the tallest bar', () => {
+    const boxes = placeFlowLabels([{ index: 0, centerX: 200, anchorY: 108, direction: 'outflow', width: 60 }], geometry)
+    expect(boxes[0]!.top + geometry.labelHeight).toBeLessThanOrEqual(108 - 22 - 2)
   })
 
   it('clamps a label inside a narrow chart', () => {
     const narrow = { ...geometry, chartWidth: 100 }
-    const boxes = placeFlowLabels([{ index: 0, centerX: 6, edgeY: 40, direction: 'inflow', width: 80 }], narrow)
+    const boxes = placeFlowLabels([{ index: 0, centerX: 6, anchorY: 40, direction: 'inflow', width: 80 }], narrow)
     expect(boxes[0]?.left).toBe(narrow.inset)
   })
 
   it('answers every anchor, even when the frame cannot separate them', () => {
     const crowded: FlowLabelAnchor[] = [1, 2, 3].map((index) => ({
-      index, centerX: 40, edgeY: 54, direction: 'inflow' as const, width: 60
+      index, centerX: 40, anchorY: 54, direction: 'inflow' as const, width: 60
     }))
     const small = { ...geometry, labelHeight: 40, maxLanes: 1 }
     const boxes = placeFlowLabels(crowded, small)

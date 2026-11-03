@@ -189,6 +189,47 @@ describe('the labels on the user-reported card', () => {
   })
 })
 
+describe('labels versus the date band', () => {
+  it('keeps every label box clear of the date-tick boxes', async () => {
+    // jsdom has no layout, so the widths the placer reads are stubbed; the intersection test is
+    // then the same one the reviewer runs in the real window.
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 60 })
+    try {
+      const container = mount()
+      const chart = container.querySelector<HTMLElement>('.mi-capital-conditions__chart')!
+      chart.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 108, right: 400, bottom: 108, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+      for (const bar of [...chart.querySelectorAll<HTMLElement>('[data-flow-bar]')]) {
+        bar.getBoundingClientRect = () => ({ left: 10, top: 54, width: 6, height: 54, right: 16, bottom: 108, x: 10, y: 54, toJSON: () => ({}) }) as DOMRect
+      }
+      await act(async () => { window.dispatchEvent(new Event('resize')) })
+
+      const tickBoxes = [0, 200, 380].map((left) => ({ left, top: 108, right: left + 40, bottom: 124 }))
+      const overlaps = (a: { left: number; top: number; right: number; bottom: number }, b: typeof tickBoxes[number]) =>
+        a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom
+      const labels = [...container.querySelectorAll<HTMLElement>('[data-flow-label]')]
+      expect(labels).toHaveLength(3)
+      for (const label of labels) {
+        const box = {
+          left: Number.parseFloat(label.style.left),
+          top: Number.parseFloat(label.style.top),
+          right: Number.parseFloat(label.style.left) + 60,
+          bottom: Number.parseFloat(label.style.top) + 14
+        }
+        for (const tick of tickBoxes) expect(overlaps(box, tick)).toBe(false)
+      }
+    } finally {
+      if (width) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', width)
+    }
+  })
+
+  it('never overlaps two neighbouring labels', () => {
+    const markup = renderToStaticMarkup(createElement(ShellLanguageProvider, { language: 'zh-CN' },
+      createElement(CapitalConditionsPanel, { text: cardText(), state: state(plainRows) as never, onRefresh: () => undefined })))
+    expect((markup.match(/data-flow-label="/g) ?? [])).toHaveLength(3)
+  })
+})
+
 describe('daily table', () => {
   it('keeps the table out of the card until the title-row button is pressed', async () => {
     const container = mount()
