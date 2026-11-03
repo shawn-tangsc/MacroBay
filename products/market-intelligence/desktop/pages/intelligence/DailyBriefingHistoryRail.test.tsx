@@ -57,6 +57,7 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
       text={text}
       timeZone="Asia/Shanghai"
       onSelect={() => undefined}
+      deleteLocale="zh-CN"
       {...props}
     />
     </ConfirmProvider></ConfigProvider>)
@@ -142,9 +143,9 @@ describe('daily briefing history rail', () => {
     expect(onSelect).toHaveBeenCalledWith('2026-11-02')
   })
 
-  it('deletes the issue the menu was opened on, after the shared confirmation', async () => {
+  it('deletes the edition on screen, after the shared confirmation', async () => {
     const onDeletePeriod = vi.fn()
-    const resolveText = (key: string) => key.endsWith('history.deletePeriod') ? '删除这一期…' : key
+    const resolveText = (key: string) => key.endsWith('history.deleteEdition.zh-CN') ? '删除中文版…' : key
     render({ resolveText, onDeletePeriod })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
 
@@ -161,12 +162,13 @@ describe('daily briefing history rail', () => {
     act(() => { confirmButton.click() })
     await flush()
 
-    expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default' })
+    // The language is the one the reader was reading, and the menu said so before the dialog.
+    expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
   it('opens a one-item delete menu from right-click or the keyboard, and disables it while generating', () => {
-    const resolveText = (key: string) => key.endsWith('history.deletePeriod')
-      ? '删除这一期…'
+    const resolveText = (key: string) => key.endsWith('history.deleteEdition.zh-CN')
+      ? '删除中文版…'
       : key.endsWith('history.deletePeriodBlocked') ? '生成中不能删除这一期' : key
     render({ resolveText })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
@@ -174,7 +176,7 @@ describe('daily briefing history rail', () => {
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
     expect(items).toHaveLength(1)
-    expect(items[0].textContent).toContain('删除这一期…')
+    expect(items[0].textContent).toContain('删除中文版…')
 
     act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
     expect(document.querySelectorAll('.ant-dropdown-menu-item')).toHaveLength(0)

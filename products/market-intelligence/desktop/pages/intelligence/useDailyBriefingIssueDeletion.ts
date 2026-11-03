@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 
 /**
- * Deleting one issue from the history rail, and what the page says afterwards.
+ * Deleting one edition from the history rail, and what the page says afterwards.
  *
  * A delete spans two databases, so it can finish on one side and fail on the other. The page must
  * not then say "gone": `remaining` is the real leftover count when the reply carries one, and
@@ -17,7 +17,7 @@ import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
  * Extracted from the page component: the state, the retry target and the sentence around them are
  * one capability, and keeping them inline pushed that file past its size baseline.
  */
-export type BriefingIssueTarget = Readonly<{ date: string; periodId: string }>
+export type BriefingIssueTarget = Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>
 
 export type BriefingDeleteOutcome = Readonly<{
   target: BriefingIssueTarget

@@ -14,7 +14,7 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
  * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
  * not layout, and the page is a layout.
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, failureActive, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -22,7 +22,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   generating: boolean
   regenerating: boolean
   todayReady: boolean
-  failureActive: boolean
   zoneInvalid: boolean
   systemZone: boolean
   exportable: boolean
@@ -36,13 +35,17 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
 }>): React.ReactElement {
   return <div className="mi-daily-briefing-page__actions">
     {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
-    {/* One generate control, one reason when it cannot run: the failure panel owns the retry. */}
-    <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating || failureActive}
-      {...(failureActive ? { 'aria-label': text.regenerateInPanel, title: text.regenerateInPanel } : generating ? { 'aria-label': text.generationProgress.workingHint } : {})}
+    {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
+        showing a past day, no detail column — keeps it clickable, and its name always says whose
+        day it acts on. A disabled control with no reason the reader can see is not allowed. */}
+    <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
+      {...(generating
+        ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
+        : { 'aria-label': text.headerGenerate })}
       onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
       {regenerating ? text.regenerating : text.regenerate}
     </Button>
-    {todayReady && !failureActive ? <>
+    {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
       {/* The settings zone was unusable, so the window was computed in the machine's zone. The
           reader configured a time and is getting another day boundary; saying nothing would let

@@ -302,24 +302,16 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async publishEdition(edition, attempt) {
       statements.publishEdition(edition, edition.periodId ?? DEFAULT_PERIOD_ID, attempt)
     },
-    async deletePeriod(date, periodId) {
-      // One transaction for the three tables that share this database: either all of this side goes
-      // or none of it does. The session links live in another database and are deleted separately.
-      db.exec('begin immediate')
-      try {
-        const editions = db.prepare('delete from daily_briefings where edition_date = ? and period_id = ?').run(date, periodId)
-        const attempts = db.prepare('delete from daily_briefing_attempts where edition_date = ? and period_id = ?').run(date, periodId)
-        const periodRuns = db.prepare('delete from daily_briefing_period_runs where edition_date = ? and period_id = ?').run(date, periodId)
-        db.exec('commit')
-        return Object.freeze({
-          editions: Number(editions.changes ?? 0),
-          attempts: Number(attempts.changes ?? 0),
-          periodRuns: Number(periodRuns.changes ?? 0)
-        })
-      } catch (error) {
-        try { db.exec('rollback') } catch { /* the transaction already ended */ }
-        throw error
-      }
+    async deletePeriod(date, periodId, locale) {
+      // One edition, one language. Attempts and period runs carry no language: they are the history
+      // of that day's runs, so deleting one edition must not erase why another language exists.
+      // The session links live in another database and are deleted separately.
+      const editions = db.prepare('delete from daily_briefings where edition_date = ? and period_id = ? and locale = ?').run(date, periodId, locale)
+      return Object.freeze({
+        editions: Number(editions.changes ?? 0),
+        attempts: 0,
+        periodRuns: 0
+      })
     },
     upgradeState,
     async retryUpgrade() {

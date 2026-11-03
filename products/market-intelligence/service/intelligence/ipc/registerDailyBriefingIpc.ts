@@ -55,14 +55,14 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   })
 }
 
-/** Both fields are required and validated: a missing period would delete another issue's rows. */
-function readDeleteQuery(payload: unknown): Readonly<{ date: string; periodId: string }> {
+/** Every field is required and validated: a missing one would delete another issue's edition. */
+function readDeleteQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
-  const date = payload.date
-  const periodId = payload.periodId
+  const { date, periodId, locale } = payload
   if (typeof date !== 'string' || !isDailyBriefingEditionDate(date)) throw new Error('daily-briefing-invalid-request')
   if (typeof periodId !== 'string' || periodId.trim().length === 0 || periodId.length > 64) throw new Error('daily-briefing-invalid-request')
-  return { date, periodId }
+  if (!isDailyBriefingLocale(locale)) throw new Error('daily-briefing-invalid-request')
+  return { date, periodId, locale }
 }
 
 /** Shape only. The allowed times and window lengths are the settings service's rule. */

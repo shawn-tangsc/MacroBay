@@ -386,7 +386,7 @@ describe('daily briefing page', () => {
     await act(async () => { confirm.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
 
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default' })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN' })
     // The list is read again (the row that survived must still be on screen), but no new run starts.
     expect(client.list).toHaveBeenCalledTimes(2)
     expect(client.getToday).toHaveBeenCalledTimes(1)
@@ -648,9 +648,11 @@ describe('daily briefing page', () => {
     expect(tabs).toHaveLength(2)
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
-    // The tab lives at the top of the detail column; the header row carries no tab at all.
-    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).toBeNull()
-    expect(dom.querySelector('[data-briefing-detail]')?.firstElementChild?.getAttribute('data-content-language-tabs')).toBe('true')
+    // One switch, in the header: the detail column only exists when this issue has an edition, so a
+    // tab living there disappears exactly when the reader needs it (a day with nothing to read).
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
+    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).not.toBeNull()
+    expect(dom.querySelector('[data-briefing-detail] [data-content-language-tabs]')).toBeNull()
 
     // The selection comes from the one content-locale state. Switching is a read of what already
     // exists in that language: it must never open a run, or a glance costs a full generation.
@@ -665,6 +667,95 @@ describe('daily briefing page', () => {
     expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
+  it('keeps the language switch in the header on a day with nothing to read', async () => {
+    // The switch used to live in the detail column, which only exists when the issue has an
+    // edition — so selecting a day with nothing on it took the switch away with it, and the reader
+    // could not get back to the other language. It belongs to the page, not to the edition.
+    const client = fakeClient({ getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })) })
+    const dom = await renderPage(client)
+
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(dom.querySelector('[data-briefing-no-edition="2026-10-28"]')).not.toBeNull()
+    const switches = dom.querySelectorAll('[data-content-language-tabs]')
+    expect(switches).toHaveLength(1)
+    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).not.toBeNull()
+
+    const getTodayCalls = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+    const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    await act(async () => { tabs[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect((client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(getTodayCalls)
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
+  })
+
+  it('falls back to the other language when the reader deletes the one on screen', async () => {
+    // Deleting the edition being read must not leave a dead pane: if this issue still has another
+    // language, show it — as a read, not as a new run.
+    const chinese = briefingDocument('2026-10-30')
+    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English lede after the delete' } }
+    let listCalls = 0
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      list: vi.fn(async () => {
+        listCalls += 1
+        return {
+          state: 'available' as const,
+          result: {
+            editions: [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: '2026-10-30T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z', readingsAvailable: 4 }]
+              .map((edition) => listCalls === 1 ? edition : { ...edition, availableLocales: ['en-US'] as const })
+          }
+        }
+      }),
+      // After the delete the Chinese edition is gone; only the English one can still be read.
+      get: vi.fn(async ({ locale }: { locale: string }) => locale === 'en-US'
+        ? { state: 'available' as const, document: english }
+        : { state: 'missing' as const }),
+      deletePeriod: vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }))
+    })
+    const dom = await renderPage(client)
+    // The language switch and the current edition language both come from the settings answer;
+    // deleting before it lands would exercise a page that knows no other language exists.
+    for (let round = 0; round < 20; round += 1) {
+      await act(async () => { await Promise.resolve() })
+      if (dom.querySelectorAll('[data-content-language-tabs] [role="tab"]').length === 2) break
+    }
+    const switchTabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+    expect(switchTabs).toHaveLength(2)
+    // The content language is remembered across mounts; start from the Chinese edition so the
+    // delete has an unambiguous target, whatever a previous case left behind.
+    if (switchTabs[0]?.getAttribute('aria-selected') !== 'true') {
+      await act(async () => { switchTabs[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    }
+    const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!
+
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    act(() => { item.click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    await act(async () => { confirm.click() })
+    // Flush until the fallback read settles: the delete, the list read and the language switch are
+    // three awaited steps, and a fixed number of flushes is what made this pass alone and fail in
+    // the suite on a busier machine.
+    for (let round = 0; round < 40; round += 1) {
+      await act(async () => { await Promise.resolve() })
+      if (dom.querySelector('.mi-daily-briefing-page__paper')?.textContent?.includes('English lede after the delete')) break
+    }
+
+    // The Chinese edition went; the English one is what the reader now reads.
+    expect((client as unknown as { deletePeriod: { mock: { calls: unknown[][] } } }).deletePeriod.mock.calls[0]![0]).toEqual({ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' })
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
+    // The pane is not empty and not the deleted edition: the other language is on screen, and the
+    // page reached it by reading (the English doc was fetched), not by opening a run.
+    expect(document.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
+    expect(dom.querySelector('[data-content-language-tabs] [aria-selected="true"]')?.textContent).toContain(text.languageTabs['en-US'])
+    // Falling back to the other language is a read: no run was opened by the delete or the switch.
+    expect(client.getToday).toHaveBeenCalledTimes(1)
   })
 
   it('shows the missing language as its own state with an explicit generate action', async () => {
@@ -770,12 +861,12 @@ describe('daily briefing page', () => {
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(2)
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
-    // The header keeps the action's place but is disabled here: the panel's retry is the only one
-    // the reader can click while a failure is shown.
+    // The header action stays clickable in a failure too: only a run in flight disables it. It and
+    // the panel's retry may both be clickable — that is the ask, not a duplicate to remove.
     const headerAction = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(headerAction).not.toBeNull()
-    expect(headerAction.disabled).toBe(true)
-    expect(headerAction.getAttribute('aria-label')).toBe(text.regenerateInPanel)
+    expect(headerAction.disabled).toBe(false)
+    expect(headerAction.getAttribute('aria-label')).toBe(text.headerGenerate)
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     await act(async () => {
@@ -1540,6 +1631,8 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+  // A failed retry with an older edition on screen is still not "busy": the header stays clickable.
+  expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
 it('keeps a generate action in the header even when there is nothing to regenerate', async () => {

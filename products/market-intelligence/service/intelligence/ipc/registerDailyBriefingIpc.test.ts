@@ -7,7 +7,7 @@ const service = {
   listAttempts: vi.fn(), getStorageState: vi.fn(() => ({ state: 'ready' })), retryUpgrade: vi.fn(() => ({ state: 'ready' }))
 } as never
 
-function registerAll(deletePeriod?: (input: Readonly<{ date: string; periodId: string }>) => Promise<never>) {
+function registerAll(deletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: string }>) => Promise<never>) {
   const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
   registerDailyBriefingIpc((( _product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
     handlers.set(method, handler)
@@ -21,21 +21,23 @@ describe('daily briefing delete channel', () => {
     expect(registerAll().has('intelligence.dailyBriefing.deletePeriod')).toBe(true)
   })
 
-  it('passes the validated date and period to the delete handler', async () => {
-    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 2, periodRuns: 1, sessionLinks: 3, allDone: true }))
+  it('passes the validated date, period and edition language to the delete handler', async () => {
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 3, allDone: true }))
     const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
-    await expect(handler({ date: '2026-11-03', periodId: 'default' })).resolves.toMatchObject({ editions: 1, allDone: true })
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default' })
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })).resolves.toMatchObject({ editions: 1, allDone: true })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })
   })
 
   it('refuses a payload that could delete another issue', async () => {
     const deletePeriod = vi.fn()
     const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
-    // Both fields are required: a missing period would delete another issue's rows.
+    // Every field is required: a missing period or language would delete another edition's rows.
     await expect(handler({ date: '2026-11-03' })).rejects.toThrow('daily-briefing-invalid-request')
     await expect(handler({ periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
-    await expect(handler({ date: '2026-13-40', periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
-    await expect(handler({ date: '2026-11-03', periodId: '   ' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-13-40', periodId: 'default', locale: 'zh-CN' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: '   ', locale: 'zh-CN' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'fr-FR' })).rejects.toThrow('daily-briefing-invalid-request')
     expect(deletePeriod).not.toHaveBeenCalled()
   })
 })

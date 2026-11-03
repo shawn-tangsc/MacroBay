@@ -4,7 +4,6 @@ import { ArrowLeft, CircleHelp } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Tabs } from '@platform/ui/components/tabs'
 import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -57,6 +56,7 @@ import {
 } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
+import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 
@@ -175,6 +175,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         if (active && cached?.state === 'available' && (view.status === 'loading' || skipGenerate)) {
           setView({ status: 'ready', document: cached.document, kind: 'today' })
           keptCachedToday = true
+        } else if (active && skipGenerate && cached?.state !== 'available') {
+          // The reader just deleted the edition they were reading. If the issue still has another
+          // language, fall back to it instead of leaving them on an empty pane; the switch is a
+          // read, so it must not open a run.
+          const other = (cachedRow.availableLocales ?? []).find((candidate) => candidate !== effectiveLocale)
+          if (other) { localeSwitchRef.current = true; setContentLocale(other) }
         }
       }
       const today = await todayPromise
@@ -206,7 +212,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         const stale = lastReadyRef.current
         // A retry that failed after an earlier success: the issue still has an edition, so the reader
         // keeps reading it under the failure notice. Only a day that never produced one goes blank.
-        if (stale && stale.edition.date === todayDate && rows.some((row) => row.date === todayDate && row.state !== 'missing')) {
+        // The stale copy is what a failed retry keeps on screen. A delete reload is the opposite:
+        // the reader removed that edition, so putting it back would undo their action.
+        if (!skipGenerate && stale && stale.edition.date === todayDate && rows.some((row) => row.date === todayDate && row.state !== 'missing')) {
           setView({ status: 'ready', document: stale, kind: 'today' })
           setShowingStale(true)
           setRegenerating(false)
@@ -370,6 +378,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
+      {/* In the header, not in the detail column: the column disappears on a day with no edition,
+          which is exactly when the reader wants to switch to the other one. */}
+      {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale}
+        onChange={(value) => { localeSwitchRef.current = true; setContentLocale(value) }} /> : null}
       <DailyBriefingPageActions
         text={text}
         resolveText={resolveProductText}
@@ -378,7 +390,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generating={generating}
         regenerating={regenerating}
         todayReady={view.status === 'ready' && view.kind === 'today'}
-        failureActive={failure !== null}
         zoneInvalid={zoneInvalid !== null}
         systemZone={view.status === 'ready' && view.timeZoneSource === 'system'}
         exportable={view.status === 'ready' && !contentBlocked}
@@ -395,6 +406,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
+        deleteLocale={selectedLocale ?? effectiveLocale}
         onDeletePeriod={(target) => {
           // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
           void deletePeriod(target)
@@ -436,16 +448,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </div> : null}
       </section>
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
-        {englishEditionsEnabled ? <div className="mi-daily-briefing-page__lang-tabs" data-content-language-tabs="true">
-          <Tabs
-            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.label"
-            items={[{ value: 'zh-CN', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.zh-CN' }, { value: 'en-US', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.en-US' }]}
-            onChange={(value) => { localeSwitchRef.current = true; setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN') }}
-            panels={{ 'zh-CN': null, 'en-US': null }}
-            resolveText={resolveProductText}
-            value={contentLocale}
-          />
-        </div> : null}
         <section data-briefing-gaps="true">
         {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
           onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>

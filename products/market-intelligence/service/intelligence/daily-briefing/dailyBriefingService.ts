@@ -163,7 +163,7 @@ export type DailyBriefingStore = Readonly<{
    * three tables of this database, in one transaction. Returns the row count of each; a date that
    * was already deleted returns zeros instead of throwing, so the caller can simply retry.
    */
-  deletePeriod?: (date: string, periodId: string) => Promise<Readonly<{ editions: number; attempts: number; periodRuns: number }>>
+  deletePeriod?: (date: string, periodId: string, locale: 'zh-CN' | 'en-US') => Promise<Readonly<{ editions: number; attempts: number; periodRuns: number }>>
   /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
   upgradeState?: () => DailyBriefingStorageState
   retryUpgrade?: () => Promise<DailyBriefingStorageState>

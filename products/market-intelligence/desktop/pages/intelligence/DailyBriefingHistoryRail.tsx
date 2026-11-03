@@ -17,7 +17,7 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
  * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
  * stays one line of facts.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onDeletePeriod }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, deleteLocale, onDeletePeriod }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -36,8 +36,13 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
-  /** 删除某一天的一期；缺省时菜单项仍在但点了不做任何事（由宿主决定能不能删）。 */
-  onDeletePeriod?: (input: Readonly<{ date: string; periodId: string }>) => void | Promise<void>
+  /**
+   * The language a delete removes: the one the reader is reading. The rail does not decide it —
+   * deleting an issue used to mean every language at once, and that is no longer the action.
+   */
+  deleteLocale: DailyBriefingLocale
+  /** 删除某一天的一版；缺省时菜单项仍在但点了不做任何事（由宿主决定能不能删）。 */
+  onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
   // The row menu: opened by right-click or by Shift+F10 / the menu key, and focus returns to the row.
   const confirm = useConfirm()
@@ -138,9 +143,10 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
       ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.history.rowMenu"
       items={[{
         key: 'delete-period',
+        // The menu names the edition it removes: "delete this issue" no longer describes the action.
         labelKey: menu && editions.some((edition) => edition.date === menu.date && edition.date === todayDate && generatingStage)
           ? 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked'
-          : 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriod',
+          : `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${deleteLocale}`,
         tone: 'danger',
         disabled: Boolean(menu && editions.some((edition) => edition.date === menu.date && edition.date === todayDate && generatingStage))
       }]}
@@ -149,13 +155,14 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         const target = menu
         closeMenu()
         if (key !== 'delete-period' || !target || !onDeletePeriod) return
+        const language = text.history.editionLanguages[deleteLocale === 'en-US' ? 'en' : 'zh']
         confirm({
-          title: text.history.deleteTitle,
-          description: text.history.deleteDescription.replace('{date}', target.date),
+          title: text.history.deleteTitle.replace('{date}', target.date).replace('{language}', language),
+          description: text.history.deleteDescription,
           confirmLabel: text.history.deleteConfirm,
           cancelLabel: text.history.deleteCancel,
           tone: 'danger',
-          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId })
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: deleteLocale })
         })
       }}
       open={menu !== null}

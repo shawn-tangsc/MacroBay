@@ -150,8 +150,8 @@ export type DailyBriefingClient = Readonly<{
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
   getStorageState: () => Promise<DailyBriefingStorageStateResult>
   retryUpgrade: () => Promise<DailyBriefingStorageStateResult>
-  /** Deletes one issue across both databases; `allDone` is false when the links could not be removed. */
-  deletePeriod: (input: Readonly<{ date: string; periodId: string }>) => Promise<Readonly<{
+  /** Deletes one edition (one language) across both databases; `allDone` is false when the links could not be removed. */
+  deletePeriod: (input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<Readonly<{
     editions: number
     attempts: number
     periodRuns: number
