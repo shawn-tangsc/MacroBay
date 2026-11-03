@@ -348,7 +348,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const hasTodayEdition = editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
   // The archive belongs to the edition on screen, not to "today": reading a past edition must show
   // its trace and gaps even when today has never been generated.
-  const showAppendix = !contentBlocked && (view.status === 'ready' || hasTodayEdition)
+  // The column is always there, and the language switch lives at its top: the two must not be
+  // able to take each other away. Its audit blocks render only when the issue has an edition.
+  const hasArchive = !contentBlocked && view.status === 'ready'
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt
@@ -376,14 +378,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
-      {/* In the header, not in the detail column: the column disappears on a day with no edition,
-          which is exactly when the reader wants to switch to the other one. */}
-      {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale}
-        onChange={(value) => {
-          // Same read path as a row click, with the language swapped: no second implementation.
-          setContentLocale(value)
-          openEdition(pinnedDate ?? todayDate, value)
-        }} /> : null}
       <DailyBriefingPageActions
         text={text}
         resolveText={resolveProductText}
@@ -450,7 +444,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+      <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+        {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale}
+          onChange={(value) => {
+            // Same read path as a row click, with the language swapped: no second implementation.
+            setContentLocale(value)
+            openEdition(pinnedDate ?? todayDate, value)
+          }} /> : null}
+        {hasArchive ? <>
         <section data-briefing-gaps="true">
         {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
           onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
@@ -476,7 +477,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         </details> : null}</section>
         <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
-      </aside> : <aside className="mi-daily-briefing-page__appendix" aria-hidden="true" />}
+        </> : null}
+      </aside>
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
     {/* Mounted only while open: both blocks read settings on mount, so a closed page reads none. */}

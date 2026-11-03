@@ -652,11 +652,11 @@ describe('daily briefing page', () => {
     expect(tabs).toHaveLength(2)
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
-    // One switch, in the header: the detail column only exists when this issue has an edition, so a
-    // tab living there disappears exactly when the reader needs it (a day with nothing to read).
+    // One switch, at the top of the detail column. The column itself is always rendered, so the
+    // switch cannot disappear with it; the header carries no switch of its own.
     expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
-    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).not.toBeNull()
-    expect(dom.querySelector('[data-briefing-detail] [data-content-language-tabs]')).toBeNull()
+    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).toBeNull()
+    expect(dom.querySelector('[data-briefing-detail]')?.firstElementChild?.getAttribute('data-content-language-tabs')).toBe('true')
 
     // The selection comes from the one content-locale state. Switching is a read of what already
     // exists in that language: it must never open a run, or a glance costs a full generation.
@@ -805,10 +805,9 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
   })
 
-  it('keeps the language switch in the header on a day with nothing to read', async () => {
-    // The switch used to live in the detail column, which only exists when the issue has an
-    // edition — so selecting a day with nothing on it took the switch away with it, and the reader
-    // could not get back to the other language. It belongs to the page, not to the edition.
+  it('keeps the language switch on a day with nothing to read', async () => {
+    // The column is always rendered, so the switch at its top stays even on a day with no edition;
+    // the audit blocks below it simply do not render.
     const client = fakeClient({ getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })) })
     const dom = await renderPage(client)
 
@@ -818,7 +817,9 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-briefing-no-edition="2026-10-28"]')).not.toBeNull()
     const switches = dom.querySelectorAll('[data-content-language-tabs]')
     expect(switches).toHaveLength(1)
-    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).not.toBeNull()
+    expect(dom.querySelector('[data-briefing-detail] [data-content-language-tabs]')).not.toBeNull()
+    // Only the switch: no gaps block, no stage list for an issue that has no edition.
+    expect(dom.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
 
     const getTodayCalls = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
     const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
@@ -1744,8 +1745,10 @@ it('leaves the archive out while generating a day that never produced one', asyn
   const dom = await renderPage(client as ReturnType<typeof fakeClient>)
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
-  // No edition to keep: no archive column, and the run's panel is still in the body.
-  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  // No edition to keep: the column exists (so the layout never reflows) but carries no archive,
+  // and the run's panel is still in the body.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+  expect(dom.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
 })
 
@@ -1782,7 +1785,8 @@ it('keeps the same three-column body whether or not the archive has content', as
   // Same grid and the same (empty) column: the body must not reflow when the archive is absent.
   expect(withoutArchive.querySelector('.mi-daily-briefing-page__body')!.classList.contains('mi-daily-briefing-page__body--with-appendix')).toBe(true)
   expect(withoutArchive.querySelectorAll('.mi-daily-briefing-page__appendix')).toHaveLength(1)
-  expect(withoutArchive.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  expect(withoutArchive.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+  expect(withoutArchive.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
 })
 
 it('keeps the stored edition under a failure notice when a retry fails after an earlier success', async () => {
@@ -1837,8 +1841,9 @@ it('shows one empty reason and no detail column when no edition exists', async (
   })
   const dom = await renderPage(client)
 
-  // An empty page has nothing to put in a detail column; a shell there would look broken.
-  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(0)
+  // The column keeps its width even with nothing to audit; it must not push the body sideways.
+  expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
+  expect(dom.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
   expect(dom.querySelectorAll('.state-view')).toHaveLength(1)
   expect(dom.querySelectorAll('.state-view__action')).toHaveLength(1)
   expect(dom.querySelectorAll('[data-locale]')).toHaveLength(0)
