@@ -85,7 +85,6 @@ export function NotificationSettingsScreen(props: {
                   subscriptions: state.data.subscriptions
                 })}
                 text={text}
-                language={props.language}
                 onToggle={(id, level, next) => void setSubscription(id, level, next)}
               />
             )}

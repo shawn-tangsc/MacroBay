@@ -1,6 +1,3 @@
-import type { NotificationCopyLanguage } from '@platform/i18n/notificationCopy'
-import { notificationCopy } from '@platform/i18n/notificationCopy'
-
 import type { NotificationSettingsText } from './notificationSettingsText'
 import type { SubscriptionCell, SubscriptionRow } from './subscriptionMatrix'
 
@@ -19,11 +16,12 @@ import type { SubscriptionCell, SubscriptionRow } from './subscriptionMatrix'
 export function SubscriptionMatrixView(props: {
   rows: readonly SubscriptionRow[]
   text: NotificationSettingsText
-  language: NotificationCopyLanguage
   onToggle: (id: string, level: 'record' | 'desktop', next: boolean) => void
 }): React.ReactElement {
-  const { rows, text, language } = props
-  const title = (key: string): string => notificationCopy[language][key as keyof (typeof notificationCopy)['en-US']] ?? key
+  const { rows, text } = props
+  // 行名按事件 id 取这一屏自己的名字：**读不到就说「暂时读不出来」，绝不回显键名或事件 id**。
+  // 之前这里只查平台通知词表、查不到就 `?? key`，情报那 7 行因此把内部键印在了屏幕上。
+  const title = (id: string): string => text.eventNames[id] ?? text.subsNameUnavailable
 
   const columnReason = (cell: SubscriptionCell): string | null =>
     cell.kind === 'not-approved' ? text.notApprovedDesktop : null
@@ -38,18 +36,18 @@ export function SubscriptionMatrixView(props: {
 
       {rows.map((row) => (
         <div className="notification-subs-row" role="row" key={row.id} data-event-id={row.id}>
-          <span className="notification-subs-name">{title(row.titleKey)}</span>
+          <span className="notification-subs-name">{title(row.id)}</span>
           <Cell
             cell={row.record}
             column="record"
-            label={`${title(row.titleKey)} · ${text.subsColRecord}`}
+            label={`${title(row.id)} · ${text.subsColRecord}`}
             text={text}
             onToggle={(next) => props.onToggle(row.id, 'record', next)}
           />
           <Cell
             cell={row.desktop}
             column="desktop"
-            label={`${title(row.titleKey)} · ${text.subsColDesktop}`}
+            label={`${title(row.id)} · ${text.subsColDesktop}`}
             text={text}
             reason={columnReason(row.desktop)}
             onToggle={(next) => props.onToggle(row.id, 'desktop', next)}

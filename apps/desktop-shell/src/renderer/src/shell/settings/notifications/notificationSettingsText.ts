@@ -31,6 +31,16 @@ export type NotificationSettingsText = {
   subsScope: string
   subsEmpty: string
   subsEmptyReason: string
+  /**
+   * 清单里每一行的事件名，按事件 id 查。
+   *
+   * 为什么不直接复用通知词表：产品事件的标题是**通知正文**（`{sourceName} 连续失败 {failures} 次`），
+   * 带占位符、清单里又没有参数可填；这一列要的是一个能站住的短名。名字查不到就显示
+   * `subsNameUnavailable`，**绝不回显键名或事件 id**——那是内部代号，读者不该看见。
+   */
+  eventNames: Readonly<Record<string, string>>
+  /** 事件名查不到时的那一句：说「拿不到」，不说「没有」。 */
+  subsNameUnavailable: string
   recordedVia: (surface: string) => string
   notApprovedDesktop: string
   readFailed: string
@@ -66,6 +76,24 @@ const zh: NotificationSettingsText = {
   subsScope: '无条件记录的事件，取消订阅只影响桌面；结果类事件的「记录」不勾就不记。',
   subsEmpty: '现在还没有可以订阅的事件',
   subsEmptyReason: '产品与平台都还没有登记事件；登记之后它们会出现在这里。',
+  subsNameUnavailable: '这一条的名称暂时读不出来',
+  eventNames: Object.freeze({
+    'platform.job.failed-terminal': '任务跑到终态仍失败',
+    'platform.job.repeated-failed': '同一任务连续失败 3 次',
+    'platform.analysis.quota-exhausted': '分析额度用尽',
+    'platform.provider.credential-invalid': '模型供应商凭据失效',
+    'platform.provider.credential-recovered': '模型供应商凭据恢复',
+    'platform.channel.push-suspended': '推送到手机已暂停',
+    'platform.channel.push-resumed': '推送到手机已恢复',
+    'platform.desktop.blocked': '桌面通知没有弹出来',
+    'market-intelligence.briefing.failed': '日报没生成出来',
+    'market-intelligence.signal.triggered': '模块信号触发',
+    'market-intelligence.macro.event-landed': '宏观事件落地',
+    'market-intelligence.source.consecutive-failed': '来源连续失败',
+    'market-intelligence.source.stale': '来源长时间没有新数据',
+    'market-intelligence.calibration.result': '预测校准结果',
+    'market-intelligence.timezone.invalid': '时区无效，自动生成已暂停'
+  }),
   recordedVia: (surface) => `已记录（因勾了${surface}）`,
   notApprovedDesktop: '这条不会到桌面',
   readFailed: '通知设置没读出来',
@@ -102,6 +130,24 @@ const en: NotificationSettingsText = {
     'For events recorded unconditionally, unsubscribing only affects the desktop. For result-type events, "Record" is what decides whether it is recorded at all.',
   subsEmpty: 'There is nothing to subscribe to yet',
   subsEmptyReason: 'Neither the platform nor a product has registered an event yet; they appear here once they do.',
+  subsNameUnavailable: 'The name of this entry cannot be read right now',
+  eventNames: Object.freeze({
+    'platform.job.failed-terminal': 'A task still failing at its final state',
+    'platform.job.repeated-failed': 'The same task failed 3 times in a row',
+    'platform.analysis.quota-exhausted': 'Analysis quota exhausted',
+    'platform.provider.credential-invalid': 'Model provider credential rejected',
+    'platform.provider.credential-recovered': 'Model provider credential restored',
+    'platform.channel.push-suspended': 'Sending to your phone is paused',
+    'platform.channel.push-resumed': 'Sending to your phone is back',
+    'platform.desktop.blocked': 'A desktop notification did not appear',
+    'market-intelligence.briefing.failed': 'The daily briefing did not generate',
+    'market-intelligence.signal.triggered': 'Module signal fired',
+    'market-intelligence.macro.event-landed': 'A macro event landed',
+    'market-intelligence.source.consecutive-failed': 'A source keeps failing',
+    'market-intelligence.source.stale': 'A source has no new data',
+    'market-intelligence.calibration.result': 'Forecast calibration settled',
+    'market-intelligence.timezone.invalid': 'Invalid time zone, generation paused'
+  }),
   recordedVia: (surface) => `Recorded (because ${surface} is ticked)`,
   notApprovedDesktop: 'This one does not go to the desktop',
   readFailed: 'The notification settings could not be read',

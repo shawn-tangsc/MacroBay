@@ -79,6 +79,42 @@ describe('desktop notification permission is not a fake state', () => {
   })
 })
 
+describe('the event name column never shows an internal key', () => {
+  it('names the rows the reader subscribed to, in both products and the platform', async () => {
+    const container = await mount({
+      listEventCatalog: () =>
+        Promise.resolve([
+          entry(),
+          entry({ id: 'market-intelligence.briefing.failed', titleKey: 'notification.event.market-intelligence.briefing.failed.title', productId: 'market-intelligence' })
+        ]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+
+    const names = [...container.querySelectorAll('.notification-subs-name')].map((node) => node.textContent)
+    expect(names).toContain('任务跑到终态仍失败')
+    // 产品事件名同样读得出来：这一行以前会直接印出 `notification.event.market-intelligence.…`。
+    expect(names).toContain('日报没生成出来')
+  })
+
+  it('says the name cannot be read instead of printing the key when there is no name for it', async () => {
+    const container = await mount({
+      listEventCatalog: () =>
+        Promise.resolve([
+          entry({ id: 'platform.something.new', titleKey: 'notification.something.new.title', productId: 'platform' })
+        ]),
+      getSubscriptions: () => Promise.resolve({}),
+      getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
+    })
+
+    const name = container.querySelector('.notification-subs-name')?.textContent ?? ''
+    expect(name).toBe('这一条的名称暂时读不出来')
+    // 兜底不许回显键名，也不许把事件 id 当文字。
+    expect(name).not.toContain('notification.')
+    expect(name).not.toContain('platform.something.new')
+  })
+})
+
 describe('notification settings screen', () => {
   it('waits with the platform loading surface instead of drawing an empty form', async () => {
     const container = await mount({
