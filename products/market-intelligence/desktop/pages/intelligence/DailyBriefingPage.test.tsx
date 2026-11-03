@@ -1797,6 +1797,62 @@ describe('the edition language and the interface language are two different thin
     expect(dom.textContent).not.toContain(englishText.regenerate)
   })
 
+  // The state × action matrix the reader asked for: every state the page can be in, with the two
+  // controls that must never vanish — the generate action and the language switch. A missing one is
+  // a dead end, and the reader hit two of them today.
+  const enabledSettings = vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } }))
+  const allMissing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
+  const emptyRail = { list: vi.fn(async () => ({ state: 'available' as const, result: { editions: allMissing } })) }
+
+  it.each([
+    ['nothing generated yet', { getSettings: enabledSettings, getToday: vi.fn(async () => ({ state: 'unavailable' as const })), ...emptyRail }, false],
+    ['a failure with no edition', { getSettings: enabledSettings, getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'model-unavailable' as const })), ...emptyRail }, false],
+    ['a finished edition', { getSettings: enabledSettings }, false]
+  ])('keeps the header action usable and the switch present when the page is in %s', async (_name, overrides, expectedDisabled) => {
+    const client = fakeClient(overrides as Record<string, unknown>)
+    const dom = await renderPage(client)
+
+    const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')
+    expect(action).not.toBeNull()
+    expect(action!.disabled).toBe(expectedDisabled)
+    // The label always names today, so nobody has to guess which day it writes.
+    expect(action!.getAttribute('aria-label')).toBe(text.headerGenerate)
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
+  })
+
+  it('disables the header action only while a run is in flight, and still shows the switch', async () => {
+    const client = fakeClient({
+      getSettings: enabledSettings,
+      getToday: vi.fn(() => new Promise(() => undefined)),
+      getProgress: vi.fn(async () => ({ state: 'idle' as const })),
+      ...emptyRail
+    })
+    const dom = await renderPage(client as ReturnType<typeof fakeClient>)
+
+    const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+    expect(action.disabled).toBe(true)
+    expect(action.getAttribute('aria-label')).toBe(text.generationProgress.workingHint)
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
+  })
+
+  it('keeps a stored edition and the switch visible when a retry fails after an earlier success', async () => {
+    const client = fakeClient({
+      getSettings: enabledSettings,
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
+      regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'store-failed' as const }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => {
+      dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    })
+
+    expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(1)
+    expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
+  })
+
   it('is not vacuously green: writing the document back in Chinese turns the same scan red', async () => {
     const dom = await renderPage(fakeClient(), { locale: 'zh-CN' })
     expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toMatch(cjk)
