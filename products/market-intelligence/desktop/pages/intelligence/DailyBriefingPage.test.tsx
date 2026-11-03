@@ -754,6 +754,8 @@ describe('daily briefing page', () => {
     expect(document.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
     expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
     expect(dom.querySelector('[data-content-language-tabs] [aria-selected="true"]')?.textContent).toContain(text.languageTabs['en-US'])
+    // The row's tag follows the languages that are left: "bilingual" is now wrong.
+    expect(dom.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('en')
     // Falling back to the other language is a read: no run was opened by the delete or the switch.
     expect(client.getToday).toHaveBeenCalledTimes(1)
   })
