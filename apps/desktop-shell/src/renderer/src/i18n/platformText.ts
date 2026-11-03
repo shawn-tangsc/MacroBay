@@ -1071,7 +1071,6 @@ export type PlatformText = {
     }
     links: {
       title: string
-      hint: string
       changelog: string
       docs: string
       site: string
@@ -2250,7 +2249,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       },
       links: {
         title: '链接',
-        hint: '由应用代你打开，只会打开本项目自己的页面。',
         changelog: '更新日志',
         docs: '帮助文档',
         site: '官网',
@@ -3434,7 +3432,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       },
       links: {
         title: 'Links',
-        hint: 'Opened by the app for you; only this project’s own pages can be opened.',
         changelog: 'Release notes',
         docs: 'Documentation',
         site: 'Website',

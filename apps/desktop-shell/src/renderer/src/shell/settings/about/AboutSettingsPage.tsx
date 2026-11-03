@@ -145,7 +145,6 @@ export function AboutSettingsPage(props: {
             </li>
           ))}
         </ul>
-        <p className="preference-hint">{text.links.hint}</p>
         {openFailed === null ? null : (
           <p className="preference-hint about-link-failed" role="status">
             {text.links.openFailed}
