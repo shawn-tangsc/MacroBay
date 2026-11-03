@@ -225,7 +225,16 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [activeNavKey, setActiveNavKey] = useState('assistants')
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
-  const openNotificationTarget = createNotificationDeeplinkHandler({ productMenuEntries, setActiveNavKey, setSettingsPanelKey, setNotificationCenterOpen })
+  /** 通知落到设置面板之后要定位的那一行（任务定义 id）；面板自己负责滚过去并高亮。 */
+  const [focusEntityId, setFocusEntityId] = useState<string | null>(null)
+
+  const openNotificationTarget = createNotificationDeeplinkHandler({
+    productMenuEntries,
+    setActiveNavKey,
+    setSettingsPanelKey,
+    setNotificationCenterOpen,
+    setFocusEntityId
+  })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
@@ -1109,7 +1118,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           <StorageCacheSettingsPage language={settings.language} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
-          <TaskAutomationSettingsPage language={settings.language} />
+          <TaskAutomationSettingsPage language={settings.language} focusTaskId={focusEntityId} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
           <ChannelSettingsPage language={settings.language} />

@@ -14,6 +14,8 @@ export function createNotificationDeeplinkHandler(deps: {
   setActiveNavKey: (key: string) => void
   setSettingsPanelKey: (key: string) => void
   setNotificationCenterOpen: (open: boolean) => void
+  /** 设置面板里要定位的那一行；面板自己负责滚过去并高亮。 */
+  setFocusEntityId?: (id: string | null) => void
 }): (deeplink: NotificationDeeplink) => void {
   return (deeplink) => {
     deps.setNotificationCenterOpen(false)
@@ -21,5 +23,7 @@ export function createNotificationDeeplinkHandler(deps: {
     if (target === null) return
     if (target.settingsPanelKey !== undefined) deps.setSettingsPanelKey(target.settingsPanelKey)
     if (target.navKey !== undefined) deps.setActiveNavKey(target.navKey)
+    // 定位只在设置面板有意义：换个分区就把上一次的定位清掉，否则下次进面板会莫名其妙高亮一行。
+    deps.setFocusEntityId?.(target.focusEntityId ?? null)
   }
 }

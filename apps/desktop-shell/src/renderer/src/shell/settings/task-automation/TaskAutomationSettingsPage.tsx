@@ -12,7 +12,14 @@ import { summarizeResourceJobRuns } from './resourceJobRunSummary'
 import { useResourceJobSchedules } from './useResourceJobSchedules'
 import { useTaskAutomationSettings } from './useTaskAutomationSettings'
 
-export function TaskAutomationSettingsPage({ language }: { language: AppLanguage }): React.ReactElement {
+export function TaskAutomationSettingsPage({
+  language,
+  focusTaskId = null
+}: {
+  language: AppLanguage
+  /** 通知点进来时要定位的任务定义 id：面板负责滚过去并高亮那一行。 */
+  focusTaskId?: string | null
+}): React.ReactElement {
   const labels = platformText[language].taskAutomation
   const settings = useTaskAutomationSettings()
   const jobs = useResourceJobSchedules({ language })
@@ -49,7 +56,7 @@ export function TaskAutomationSettingsPage({ language }: { language: AppLanguage
         onRetry={() => void settings.reload()}
       />
 
-      <TaskAutomationTasksSection labels={labels} language={language} controller={settings} />
+      <TaskAutomationTasksSection labels={labels} language={language} controller={settings} focusTaskId={focusTaskId} />
 
       <TaskAutomationResourceJobsSection labels={labels} language={language} controller={jobs} />
 

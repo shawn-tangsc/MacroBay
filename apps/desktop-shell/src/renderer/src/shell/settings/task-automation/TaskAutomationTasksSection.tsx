@@ -1,6 +1,6 @@
 import { Button, Input, Select } from 'antd'
 import { RefreshCw, Search } from 'lucide-react'
-import { Fragment } from 'react'
+import { Fragment, useEffect } from 'react'
 
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
@@ -31,10 +31,19 @@ export function TaskAutomationTasksSection(props: {
   labels: TaskAutomationLabels
   language: AppLanguage
   controller: TaskAutomationSettingsController
+  /** 通知点进来时要定位的那一行；面板负责滚过去并高亮。 */
+  focusTaskId?: string | null
 }): React.ReactElement {
-  const { labels, language, controller } = props
+  const { labels, language, controller, focusTaskId = null } = props
   const { state } = controller
   const pillText = pillTextResolver(labels)
+
+  useEffect(() => {
+    if (focusTaskId === null) return
+    // 等这一帧的行渲染出来再滚：表格是筛选后渲染的，元素可能这一刻还不存在。
+    const row = document.querySelector<HTMLElement>(`[data-task-id="${focusTaskId}"]`)
+    row?.scrollIntoView({ block: 'center' })
+  }, [focusTaskId, state.rows])
 
   /**
    * 读失败只有一套渲染：没有数据时它就是整块内容，有数据时压在表格上方。
@@ -114,7 +123,15 @@ export function TaskAutomationTasksSection(props: {
               return (
                 <Fragment key={row.task.id}>
                   <tr
-                    className={`task-automation-row${expanded ? ' task-automation-row-expanded' : ''}`}
+                    className={[
+                      'task-automation-row',
+                      expanded ? 'task-automation-row-expanded' : '',
+                      // 通知点进来那一路：把这一行标出来，否则读者落在一张表里还得自己找。
+                      focusTaskId === row.task.id ? 'task-automation-row-focused' : ''
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    data-task-id={row.task.id}
                     onClick={() => controller.toggleTaskExpanded(row.task.id)}
                   >
                     <td title={row.task.name}>
