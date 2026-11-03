@@ -96,6 +96,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
   // Content language: one hook owns it; the tab's selection state derives from it.
   const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
+  // The switch only exists when the brief may have more than one edition language at all.
+  const [englishEditionsEnabled, setEnglishEditionsEnabled] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -186,6 +188,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     void client.getSettings?.().then((result) => {
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
+      setEnglishEditionsEnabled(result.view.language.settings.additional.includes('en-US'))
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
     }).catch(() => undefined)
@@ -349,16 +352,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
       <div className="mi-daily-briefing-page__actions">
-        <div className="mi-daily-briefing-page__lang-tabs" data-content-language-tabs="true">
-          <Tabs
-            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.label"
-            items={[{ value: 'zh-CN', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.zh-CN' }, { value: 'en-US', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.en-US' }]}
-            onChange={(value) => setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN')}
-            panels={{ 'zh-CN': null, 'en-US': null }}
-            resolveText={resolveProductText}
-            value={contentLocale}
-          />
-        </div>
         {view.status === 'loading' ? <DailyBriefingGeneratingStatus progress={liveProgress} resolveText={resolveProductText} text={text} /> : null}
         {view.status === 'ready' && view.kind === 'today' && failure === null ? <>
           <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={regenerating} onClick={() => void regenerate()}>
@@ -424,6 +417,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </section>
       {view.status === 'loading' ? <DailyBriefingGeneratingAside formatTime={formatTime} progress={liveProgress} text={text} /> : null}
       {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+        {englishEditionsEnabled ? <div className="mi-daily-briefing-page__lang-tabs" data-content-language-tabs="true">
+          <Tabs
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.label"
+            items={[{ value: 'zh-CN', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.zh-CN' }, { value: 'en-US', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.languageTabs.en-US' }]}
+            onChange={(value) => setContentLocale(value === 'en-US' ? 'en-US' : 'zh-CN')}
+            panels={{ 'zh-CN': null, 'en-US': null }}
+            resolveText={resolveProductText}
+            value={contentLocale}
+          />
+        </div> : null}
         <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
         <section data-briefing-gaps="true">
         {issues.length > 0 ? <>

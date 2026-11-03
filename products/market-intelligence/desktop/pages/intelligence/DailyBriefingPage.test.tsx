@@ -292,6 +292,7 @@ describe('daily briefing page', () => {
     const chinese = briefingDocument('2026-10-30')
     const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const } }
     const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
       list: vi.fn(async () => ({
         state: 'available' as const,
         result: { editions: [{ ...editions[0], availableLocales: ['zh-CN', 'en-US'] as const }] }
@@ -478,14 +479,17 @@ describe('daily briefing page', () => {
     expect(reason.getAttribute('data-reason-source')).toBe('platform')
   })
 
-  it('switches the content language from the top tab, with one selected tab', async () => {
-    const client = fakeClient()
+  it('switches the content language from the detail column tab, with one selected tab', async () => {
+    const client = fakeClient({ getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })) })
     const dom = await renderPage(client)
     const tabs = [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
 
     expect(tabs).toHaveLength(2)
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    // The tab lives at the top of the detail column; the header row carries no tab at all.
+    expect(dom.querySelector('.mi-daily-briefing-page__bar [data-content-language-tabs]')).toBeNull()
+    expect(dom.querySelector('[data-briefing-detail]')?.firstElementChild?.getAttribute('data-content-language-tabs')).toBe('true')
 
     // The selection comes from the one content-locale state: switching asks for that edition next.
     await act(async () => {
@@ -495,6 +499,15 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenLastCalledWith({ locale: 'en-US', timeZone: expect.any(String) })
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
     expect(tabs.filter((tab) => tab.getAttribute('aria-selected') === 'true')).toHaveLength(1)
+  })
+
+  it('renders no language tab at all when English editions are not enabled', async () => {
+    const dom = await renderPage(fakeClient())
+    const column = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
+
+    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(0)
+    // No gap is left behind: the column starts with the stage block.
+    expect(column.firstElementChild?.hasAttribute('data-briefing-stages')).toBe(true)
   })
 
   it('keeps the toolbar regenerate on the normal path', async () => {
