@@ -181,27 +181,32 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
       setEditionsLoading(false)
       setEditionsFailed(listed?.state !== 'available')
-      const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
+      // The row this load is about. `periodDate` is the list's own answer; using the wall-clock
+      // `todayDate` here is what made a delete reload look at a day the list does not contain, find
+      // nothing, and report the whole issue as empty.
+      const periodRow = rows.find((row) => row.date === periodDate)
       let keptCachedToday = false
-      if (cachedRow) {
-        const cached = await client.get({ date: cachedRow.date, locale: localeForLoad }).catch(() => undefined)
-        // On the delete reload the captured `view` is the one from before (still ready), and no
-        // getToday answer follows to fill the screen: the list's row is what must stand.
-        if (active && cached?.state === 'available' && (view.status === 'loading' || skipGenerate)) {
-          setView({ status: 'ready', document: cached.document, kind: 'today' })
-          keptCachedToday = true
-        } else if (active && skipGenerate && cached?.state !== 'available') {
-          // The reader just deleted the edition they were reading. If the issue still has another
-          // language, fall back to it instead of leaving them on an empty pane; the switch is a
-          // read, so it must not open a run.
-          const other = (cachedRow.availableLocales ?? []).find((candidate) => candidate !== localeForLoad)
-          if (other) {
-            setContentLocale(other)
-            openEditionRef.current(cachedRow.date, other, cachedRow)
-            // The pane is being handled by the other language's read: the branches below must not
-            // overwrite it with "nothing here".
+      if (skipGenerate) {
+        // A delete reload reads the edition that is left, in the language that is left, and puts it
+        // on screen. Only an issue with no language at all may land on "nothing generated".
+        const available = periodRow?.availableLocales ?? []
+        const wanted = available.includes(localeForLoad) ? localeForLoad : available.find((candidate) => candidate !== localeForLoad)
+        if (wanted) {
+          if (wanted !== localeForLoad) setContentLocale(wanted)
+          const read = await client.get({ date: periodDate, locale: wanted }).catch(() => undefined)
+          if (!active) return
+          if (read?.state === 'available') {
+            setView({ status: 'ready', document: read.document, kind: periodDate === todayDate ? 'today' : 'history' })
             keptCachedToday = true
           }
+        }
+        if (!keptCachedToday) setView({ status: 'no-edition', date: periodDate, failed: false })
+        keptCachedToday = true
+      } else if (periodRow && view.status === 'loading') {
+        const cached = await client.get({ date: periodDate, locale: localeForLoad }).catch(() => undefined)
+        if (active && cached?.state === 'available') {
+          setView({ status: 'ready', document: cached.document, kind: periodDate === todayDate ? 'today' : 'history' })
+          keptCachedToday = true
         }
       }
       const today = await todayPromise
@@ -250,10 +255,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           }
         } else setView({ status: 'no-edition', date: periodDate, failed: false })
       } else if (skipGenerate && !keptCachedToday) {
-        // Nothing is left for that day. It is the ordinary "nothing generated yet" state, not a
-        // special one: what the reader did is said by the one-time delete note, not by the pane.
-        setView({ status: 'no-edition', date: pinnedDate ?? todayDate, failed: false })
-      } else if (!skipGenerate || !keptCachedToday) {
+        // Nothing is left for that day — same sentence as any day that never generated.
+        setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
+      } else if (!keptCachedToday) {
         // A read that failed still says so. The delete reload is the opposite case: today was never
         // read, so it must not be reported as unreadable — the row the list already returned stands.
         const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
