@@ -9,6 +9,8 @@
  * 也不替代 Chief 跑的全量。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const BUDGET_MS = Number(process.env.PRE_COMMIT_BUDGET_MS ?? 58_000)
@@ -97,17 +99,43 @@ if (guard.status !== 0) {
 }
 
 // ── 2. 全仓 typecheck，只有「报错文件属于本次提交」才判失败 ──────────────────────────────
-const tsc = spawnSync('node_modules/.bin/tsc', ['--noEmit', '-p', 'tsconfig.json'], {
-  cwd: root,
-  encoding: 'utf8',
-  timeout: remaining()
-})
-if (tsc.error !== undefined && tsc.error !== null && (tsc.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+//
+// 实测：这台机器上全仓 tsc 要 42–60s，负载高时 58s 也跑不完。跑不完就放行等于没钩子，
+// 所以超时后**退一步只查本次提交的那几个文件**：注释、依赖解析、自己文件里的类型错都在，
+// 抓不到的是「改了别人的类型签名」这类跨文件破坏——那本来也该由 runner 的全量来兜。
+function runTypecheck(args: readonly string[], timeoutMs: number) {
+  return spawnSync('node_modules/.bin/tsc', args, { cwd: root, encoding: 'utf8', timeout: timeoutMs })
+}
+
+const timedOut = (result: ReturnType<typeof runTypecheck>): boolean =>
+  result.error !== undefined && result.error !== null && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
+
+// 给「退一步只查本笔文件」留 12s：全仓那步最多用到「预算 - 已用时 - 12s」，绝不把总时长顶穿。
+const sinceStart = (): number => Math.round(performance.now() - started)
+let check = runTypecheck(['--noEmit', '-p', 'tsconfig.json'], Math.max(8_000, BUDGET_MS - sinceStart() - 12_000))
+if (timedOut(check)) {
+  // 只查本次这几个文件：临时 tsconfig 放 node_modules/.cache（git 忽略），不落到仓库里。
+  const cacheDir = join(root, 'node_modules', '.cache')
+  mkdirSync(cacheDir, { recursive: true })
+  const scopedConfig = join(cacheDir, 'pre-commit-tsconfig.json')
+  writeFileSync(
+    scopedConfig,
+    JSON.stringify({
+      extends: join(root, 'tsconfig.json'),
+      include: [],
+      files: codeStaged.map((path) => join(root, path))
+    })
+  )
+  say('全仓 typecheck 超出预算，改为只查本次提交的文件（跨文件破坏留给 runner 的全量）。')
+  check = runTypecheck(['--noEmit', '-p', scopedConfig], Math.max(6_000, BUDGET_MS - sinceStart()))
+}
+
+if (timedOut(check)) {
   say(`预检超时（typecheck 超过 ${Math.round(BUDGET_MS / 1000)}s），**未拦截**，请手动跑 pnpm typecheck。`)
   process.exit(0)
 }
 
-const tscOutput = `${tsc.stdout ?? ''}${tsc.stderr ?? ''}`
+const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}`
 const ownErrors: string[] = []
 const foreignErrors: string[] = []
 for (const line of tscOutput.split('\n')) {
