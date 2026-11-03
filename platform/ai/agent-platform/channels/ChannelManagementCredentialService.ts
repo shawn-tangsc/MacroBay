@@ -87,7 +87,11 @@ export class ChannelManagementCredentialService {
           : type === 'discord'
               ? assertDiscordSecret(value)
               : assertTelegramSecret(value)
-      return intent === 'provision'
+      // 编辑弹层保存 Token 走的是 `rotate`；但「这条通道本来就没有凭据」时没有可轮换的旧值，
+      // `rotateKnown` 只会返回 `channel-credential-missing` —— 用户在编辑里填了 token 却永远存不上，
+      // 而界面还以为保存过。没有旧值就落到 provision：这才是「点保存」的意图。
+      const hasExistingCredential = this.deps.repository.credentialMetadata(input.id) !== null
+      return intent === 'provision' || !hasExistingCredential
         ? await this.provisionReserved(input.id, input.actorId, type, secret, input.owner)
         : await this.rotateKnown(input.id, input.actorId, type, secret, input.owner)
     } catch (error) {

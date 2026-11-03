@@ -1612,3 +1612,22 @@ describe('in-app smoke on enable (unsupported adapter)', () => {
     expect(smoke).not.toHaveBeenCalled()
   })
 })
+
+describe('saving a token on a channel that has none', () => {
+  it('provisions instead of failing to rotate when the channel has no stored credential', async () => {
+    const { database, service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    expect(service.get(id)?.credential.status).toBe('missing')
+
+    // 编辑弹层就是这么保存的：同一条交接材料，走的是 rotate。
+    const handoff = await credentialHandoff(service, id, '123456789:AAHfake-token-for-test')
+    await expect(Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff })))
+      .resolves.toMatchObject({ ok: true })
+
+    const stored = service.get(id)
+    expect(stored?.credential.status).toBe('configured')
+    expect(stored?.credential.hasCredential).toBe(true)
+    expect(database.connection.prepare('select credential_ref, credential_health from agent_channels where id = ?').get(id))
+      .toMatchObject({ credential_health: 'configured' })
+  })
+})
