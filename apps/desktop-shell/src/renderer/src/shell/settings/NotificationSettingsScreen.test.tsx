@@ -234,7 +234,9 @@ describe('the send-to-channel row', () => {
       getDeliverySettings: () => Promise.resolve({ channels: [], toastEnabled: false })
     })
     const navigations: unknown[] = []
-    const listener = (event: Event): void => navigations.push((event as CustomEvent).detail)
+    const listener = (event: Event): void => {
+      navigations.push((event as CustomEvent).detail)
+    }
     window.addEventListener('app-shell:navigate', listener)
 
     const button = container.querySelector('[data-row="channel"] button')
