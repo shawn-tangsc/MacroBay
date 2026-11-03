@@ -1631,3 +1631,23 @@ describe('saving a token on a channel that has none', () => {
       .toMatchObject({ credential_health: 'configured' })
   })
 })
+
+describe('replacing a token after an edit (the order the settings page uses)', () => {
+  it('updates the channel first and still rotates the credential', async () => {
+    const { database, service, vault } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    // 已有一条真实凭据（FakeVault 只认 'known-ref'；用它模拟真机上已存好的那条）。
+    database.connection.prepare(
+      "update agent_channels set credential_ref='known-ref', credential_revision=1, credential_health='configured', lifecycle_state='disabled' where id = ?"
+    ).run(id)
+    expect(service.get(id)?.credential.status).toBe('configured')
+
+    // 编辑弹层的顺序：先 update（会把频道停用），再换 Token。
+    expect(service.update({ id, name: 'test', agentId: 'agent-a', actorId: 'user-a' })).toMatchObject({ ok: true })
+    const handoff = await credentialHandoff(service, id, '123456789:AAHsecond-token-for-test')
+    const rotated = await Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff }))
+    expect(rotated).toMatchObject({ ok: true })
+    expect(service.get(id)?.credential.revision).toBe(2)
+    expect(database.connection.prepare('select credential_health from agent_channels where id = ?').get(id)).toEqual({ credential_health: 'configured' })
+  })
+})

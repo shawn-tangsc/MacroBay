@@ -17,6 +17,8 @@ import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { requestSmokeEnabledChannel } from './channelSmokeEnable'
 import { getWithCredentialPreviews, listWithCredentialPreviews } from './channelCredentialProjection'
+import { createChannelInventory, type ChannelInventory } from './channelInventoryQueries'
+import { requireExistingChannel } from './channelLookup'
 import { listDeliveryAttemptsFor, listDeliveryAuditsFor } from './channelDeliveryQueries'
 import { createManagedChannel, updateManagedChannel } from './channelSettingsMutations'
 import { assertManagedChannelType } from './channelSettingsInputs'
@@ -54,7 +56,10 @@ export class ChannelManagementService {
   private readonly testMessage: ReturnType<typeof createChannelTestMessageSender>
   private readonly channelMutations = new Map<string, Promise<void>>()
 
+  private readonly inventory: ChannelInventory
+
   constructor(private readonly deps: ManagementDependencies) {
+    this.inventory = createChannelInventory({ repository: deps.repository, registry: deps.registry })
     this.testMessage = createChannelTestMessageSender({ channels: () => this, deliver: () => this.deps.delivery, now: () => this.now() })
     this.credentials = new ChannelManagementCredentialService({
       repository: deps.repository,
@@ -71,84 +76,27 @@ export class ChannelManagementService {
     this.deps.runtime = runtime
   }
 
-  catalog(): ChannelManagementCatalogEntry[] {
-    return projectChannelCatalog(this.deps.registry.list())
-  }
+  catalog() { return this.inventory.catalog() }
 
-
-  list() {
-    return this.deps.repository.query.list()
-  }
+  list() { return this.inventory.list() }
 
   /** 界面读：附凭据头尾掩码（异步解密一次）。推送端口仍用同步 `list()`。 */
   listWithCredentialPreviews() { return listWithCredentialPreviews(this.deps.repository, this.deps.vault, this.deps.repository.query.list()) }
   getWithCredentialPreviews(id: unknown) { return getWithCredentialPreviews(this.deps.repository, this.deps.vault, this.deps.repository.query.get(String(id))) }
 
-  /**
-   * 通知设置页的只读投影：每个通道能否投递、为什么不能、绑了几个目标。
-   *
-   * 不缓存第二份通道状态——每次调用都读库，与通道页同源。折算规则在
-   * `projectDeliveryTargets`（纯函数），那里能单独把判序和四档目标验证清楚。
-   */
-  listDeliveryTargets(): { channels: ChannelDeliveryTargetView[] } {
-    return {
-      channels: projectDeliveryTargets({
-        channels: this.deps.repository.query.list(),
-        supportedTypes: new Set(
-          this.catalog().filter((entry) => entry.status === 'supported').map((entry) => entry.type)
-        ),
-        enabledTargets: this.deps.repository.query.enabledDeliveryTargets()
-      })
-    }
-  }
-
-  listAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) {
-    return this.deps.repository.query.audits(
-      this.requireChannel(input.id),
-      assertBoundedInteger(input.limit, 50, 100) || 1,
-      assertBoundedInteger(input.offset, 0, 10_000)
-    )
-  }
-
-  listPolicies(input: { id: unknown; limit?: unknown }) {
-    const id = this.requireChannel(input.id)
-    if (this.deps.repository.channelType(id) === 'wechat') return []
-    return this.deps.repository.query.policies(id, assertBoundedInteger(input.limit, 50, 100) || 1)
-  }
-
-  listConversations(input: { id: unknown; limit?: unknown }) {
-    const id = this.requireChannel(input.id)
-    if (this.deps.repository.channelType(id) === 'wechat') return []
-    return this.deps.repository.query.conversations(id, assertBoundedInteger(input.limit, 50, 100) || 1)
-  }
-
-  runtimeStatus(input: { id: unknown }) {
-    const id = this.requireChannel(input.id)
-    return this.deps.repository.query.runtime(id)
-  }
-
-  listDeliveryAttempts(input: { id: unknown; limit?: unknown; offset?: unknown }) {
-    return listDeliveryAttemptsFor(this.deps.repository, this.requireChannel(input.id), input)
-  }
-
-  listDeliveryAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) {
-    return listDeliveryAuditsFor(this.deps.repository, this.requireChannel(input.id), input)
-  }
-
-  /** 设置页日志面板的「运行异常」：只读、keyset 分页；`limit` 由服务端夹到 200（见 `channelRuntimeAuditPage`）。 */
-  listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) {
-    const id = this.requireChannel(input.id)
-    if (this.deps.repository.channelType(id) === 'wechat') return { rows: [], nextCursor: null }
-    return this.deps.repository.query.runtimeAudits(id, clampAuditLimit(input.limit), readAuditCursor(input.cursor))
-  }
+  get(id: unknown) { return this.inventory.get(id) }
+  listDeliveryTargets() { return this.inventory.listDeliveryTargets() }
+  listAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listAudits(input) }
+  listPolicies(input: { id: unknown; limit?: unknown }) { return this.inventory.listPolicies(input) }
+  listConversations(input: { id: unknown; limit?: unknown }) { return this.inventory.listConversations(input) }
+  runtimeStatus(input: { id: unknown }) { return this.inventory.runtimeStatus(input) }
+  listDeliveryAttempts(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAttempts(input) }
+  listDeliveryAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAudits(input) }
+  listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) { return this.inventory.listRuntimeAudits(input) }
 
   /** 真发一条测试消息，回执只有三种：受理 / 已交给通道但没拿到确认 / 失败给平台词。 */
   sendTestMessage(input: { id: unknown; text: unknown }): Promise<ChannelTestMessageReceipt> {
     return this.testMessage({ channelId: this.requireChannel(input.id), text: input.text })
-  }
-
-  get(id: unknown) {
-    return this.deps.repository.query.get(assertIdentifier(id))
   }
 
   create(input: Parameters<typeof createManagedChannel>[1]): ChannelManagementResult {
@@ -396,9 +344,7 @@ export class ChannelManagementService {
   }
 
   private requireChannel(id: unknown): string {
-    const normalized = assertIdentifier(id)
-    if (!this.deps.repository.query.get(normalized)) throw new Error('channel-not-found')
-    return normalized
+    return requireExistingChannel(this.deps.repository, id)
   }
 
   private async writePolicy(input: { id: string; actorId: unknown; senderId: unknown; handoff: SecureHandoffSubmit }): Promise<{ ok: boolean; code: string }> {
