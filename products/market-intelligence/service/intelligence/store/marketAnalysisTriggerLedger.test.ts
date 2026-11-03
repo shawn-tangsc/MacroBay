@@ -1,4 +1,11 @@
+import { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import { moduleSignalPolicy, signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
+import { parseSignalEvidence, queuedSignalEvidence, skippedSignalEvidence } from '../../../contracts/moduleSignalEvidence'
+import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 import { createMarketAnalysisRepository } from './marketAnalysisRepository'
 
 const asOf = '2026-10-09T12:00:00.000Z'
@@ -18,6 +25,15 @@ const ledger = (overrides: Record<string, unknown> = {}) => ({
   id: 'mi-tl-1', eventGroupId, triggerKey: 'calendar.refresh', changeHash: 'hash-1', decision: 'skipped',
   reasonCode: 'interval-active', snapshotHash: null, analysisRunId: null, createdAt: asOf, ...overrides
 })
+
+const signal = (overrides: Partial<ModuleSignal> = {}): ModuleSignal => ({
+  version: moduleSignalPolicy.version, moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
+  severity: 'high', observedAt: '2026-10-09T12:00:00.000Z', cadence: { kind: 'intraday', bucketMs: 15 * 60_000 },
+  values: { dropPct: -1.9, volumeMultiple: 3.4 },
+  dedupeKey: 'open-interest:oi-liquidation-proxy:btc:2026-10-09T12:00:00.000Z', readiness: 'available',
+  triggerOwner: 'module-signal', ...overrides
+})
+const withWindow = (value: ModuleSignal) => ({ signal: value, window: signalWindow(value.cadence, 1)! })
 
 it('keeps the latest decision for the same content instead of dropping it', () => {
   const repo = repository()
@@ -43,4 +59,69 @@ it('keeps one row per trigger key and content, so different causes do not overwr
   repo.appendTriggerLedger(ledger({ id: 'mi-tl-2', triggerKey: 'schedule.asia.open', reasonCode: 'session-slot', decision: 'queued' }) as never)
   repo.appendTriggerLedger(ledger({ id: 'mi-tl-3', changeHash: 'hash-2', reasonCode: 'significance-below-threshold' }) as never)
   expect(repo.listTriggerLedger(eventGroupId)).toHaveLength(3)
+})
+
+it('stores the reading a refused signal was judged on, and reads it back by its decision', () => {
+  const repo = repository()
+  const skipped = skippedSignalEvidence(withWindow(signal()))
+  repo.appendTriggerLedger(ledger({ evidence: skipped }))
+  const [row] = repo.listTriggerLedger(eventGroupId)
+  expect(row!.evidenceJson).toBeTruthy()
+  expect(parseSignalEvidence(row!.decision, row!.evidenceJson)).toEqual(skipped)
+  // The same stored JSON read as the other shape is not a reading: the decision picks the shape.
+  expect(parseSignalEvidence('queued', row!.evidenceJson)).toBeNull()
+})
+
+it('keeps one run one row: three signals in one queued line count as a single analysis', () => {
+  const repo = repository()
+  const queued = queuedSignalEvidence([
+    withWindow(signal()),
+    withWindow(signal({ severity: 'medium', observedAt: '2026-10-09T12:15:00.000Z', ruleId: 'oi-second' })),
+    withWindow(signal({ severity: 'low', observedAt: '2026-10-09T12:30:00.000Z', ruleId: 'oi-third' }))
+  ])
+  repo.appendTriggerLedger(ledger({
+    triggerKey: 'signal.open-interest.oi-liquidation-proxy', decision: 'queued',
+    reasonCode: 'signal-high-triggered', evidence: queued
+  }))
+  const counts = countAnalysisRuns(repo, asOf)
+  // One model call: the batch's other two signals are readings in this row, not deliveries.
+  expect(counts).toMatchObject({ dayRuns: 1, hourRuns: 1, eventRunsToday: 1, calendarRunsToday: 0 })
+  expect(parseSignalEvidence('queued', repo.listTriggerLedger(eventGroupId)[0]!.evidenceJson)).toMatchObject({ signalCount: 3 })
+})
+
+it('does not let a later decision rewrite erase the reading', () => {
+  const repo = repository()
+  const skipped = skippedSignalEvidence(withWindow(signal()))
+  repo.appendTriggerLedger(ledger({ evidence: skipped }))
+  // The significance gate rewrites the same attempt's decision without carrying the reading back.
+  repo.appendTriggerLedger(ledger({ id: 'mi-tl-2', decision: 'queued', reasonCode: 'signal-high-triggered', createdAt: '2026-10-09T12:01:00.000Z' }))
+  const [row] = repo.listTriggerLedger(eventGroupId)
+  expect(row).toMatchObject({ decision: 'queued', reasonCode: 'signal-high-triggered' })
+  expect(parseSignalEvidence('skipped', row!.evidenceJson)).toEqual(skipped)
+})
+
+it('adds the evidence column to a database created without it', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mi-ledger-evidence-'))
+  const filePath = join(directory, 'analysis.sqlite')
+  try {
+    // An install from before the column: create it, then take the column away through the same
+    // SQLite file the runtime opens.
+    createMarketAnalysisRepository({ filePath }).close()
+    const legacy = new DatabaseSync(filePath)
+    legacy.exec('alter table mi_analysis_trigger_ledger drop column evidence_json')
+    legacy.close()
+
+    const repo = createMarketAnalysisRepository({ filePath })
+    repo.appendEventGroup({
+      id: eventGroupId, schemaVersion: 1, status: 'monitoring', groupType: 'macro', mergeKey: 'US.CPI', firstObservedAt: asOf,
+      lastObservedAt: asOf, reviewDeadlineAt: '2026-10-09T14:00:00.000Z', eventRefs: ['event-1'], triggerCount: 0, reviewCount: 0,
+      currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    })
+    const queued = queuedSignalEvidence([withWindow(signal())])
+    repo.appendTriggerLedger(ledger({ triggerKey: 'signal.open-interest.oi-liquidation-proxy', decision: 'queued', evidence: queued }))
+    expect(parseSignalEvidence('queued', repo.listTriggerLedger(eventGroupId)[0]!.evidenceJson)).toEqual(queued)
+    repo.close()
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
