@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { moduleSignalPolicy, signalWindow, type ModuleSignal, type SignalCadence } from './moduleSignal'
 import {
-  moduleSignalEvidencePolicy, parseSignalEvidence, queuedSignalEvidence, signalEvidenceJson,
-  skippedSignalEvidence, type SignalWithWindow
+  moduleSignalEvidencePolicy, mostSevereSkippedEvidence, parseSignalEvidence, queuedSignalEvidence, signalEvidenceJson,
+  skippedSignalEvidence, type QueuedSignalEvidence, type SignalWithWindow
 } from './moduleSignalEvidence'
 
 const intraday: SignalCadence = { kind: 'intraday', bucketMs: 15 * 60_000 }
@@ -107,4 +107,46 @@ describe('signal evidence contract', () => {
     const { moduleId: _moduleId, ...entryWithoutModule } = entry!
     expect(parseSignalEvidence('queued', JSON.stringify({ signalCount: 1, signals: [entryWithoutModule] }))).toBeNull()
   })
+})
+
+it('carries a trading-day window as its own shape, not as a day count in milliseconds', () => {
+  // The ETF rule sums a three-trading-day window; a weekend is not three calendar days, so the window
+  // must stay in its own unit and `upperBoundMs` must stay null.
+  const daily = signal({
+    moduleId: 'etf-flows', ruleId: 'etf-three-day-outflow', asset: null, cadence: { kind: 'trading-day' },
+    values: { netFlowUsd: -4.98e8, coveredDays: 3, requiredDays: 3 }
+  })
+  const evidence = queuedSignalEvidence([{ signal: daily, window: signalWindow(daily.cadence, 3)! }])
+  const parsed = parseSignalEvidence('queued', signalEvidenceJson('queued', evidence)) as QueuedSignalEvidence
+  expect(parsed.signals[0]!.window).toEqual({ unit: 'trading-days', amount: 3, upperBoundMs: null })
+  expect(parsed.signals[0]!.values).toEqual({ netFlowUsd: -4.98e8, coveredDays: 3, requiredDays: 3 })
+})
+
+it('refuses a reading it could not read back, instead of storing half a shape', () => {
+  const skipped = skippedSignalEvidence(withWindow(signal()))
+  const { values: _values, ...withoutValues } = skipped
+  // Empty readings, non-finite numbers and a window whose upper bound disagrees with its parts are
+  // all "almost a reading" — storing them would make the panel show a blank where a number belongs.
+  expect(() => signalEvidenceJson('skipped', withoutValues as never)).toThrowError('signal-evidence-shape-mismatch')
+  expect(() => signalEvidenceJson('skipped', { ...skipped, values: {} } as never)).toThrowError('signal-evidence-shape-mismatch')
+  expect(() => signalEvidenceJson('skipped', { ...skipped, values: { dropPct: Number.NaN } } as never)).toThrowError('signal-evidence-shape-mismatch')
+  expect(() => signalEvidenceJson('skipped', {
+    ...skipped, window: { unit: 'buckets', amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 1 }
+  } as never)).toThrowError('signal-evidence-shape-mismatch')
+  // An empty batch is not a run: `signalCount` would say zero model calls were spent on nothing.
+  expect(() => signalEvidenceJson('queued', queuedSignalEvidence([]))).toThrowError('signal-evidence-shape-mismatch')
+})
+
+it('keeps the most severe signal when a batch has to become one reading', () => {
+  const batch = queuedSignalEvidence([
+    withWindow(signal({ severity: 'low', ruleId: 'oi-quiet' })),
+    withWindow(signal({ severity: 'high', values: { dropPct: -2.7, volumeMultiple: 3.8 } })),
+    withWindow(signal({ severity: 'medium', ruleId: 'oi-mid', observedAt: '2026-11-03T02:05:00.000Z' }))
+  ])
+  const kept = mostSevereSkippedEvidence(batch)
+  expect(kept.severity).toBe('high')
+  expect(kept.values).toEqual({ dropPct: -2.7, volumeMultiple: 3.8 })
+  // Exactly the four keys a skipped row reads: the batch-only identifiers do not survive the change.
+  expect(Object.keys(kept).sort()).toEqual([...moduleSignalEvidencePolicy.skippedKeys].sort())
+  expect(() => mostSevereSkippedEvidence(queuedSignalEvidence([]))).toThrowError('signal-evidence-shape-mismatch')
 })

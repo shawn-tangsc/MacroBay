@@ -84,6 +84,23 @@ export function queuedSignalEvidence(inputs: readonly SignalWithWindow[]): Queue
 }
 
 /**
+ * The reading a refused run keeps, taken from the batch it carried.
+ *
+ * A run that was queued and then refused (out of budget, or could not be enqueued) must not keep the
+ * batch shape under a `skipped` decision: the reader parses by the decision and would find nothing —
+ * exactly when the reason matters most. The batch already holds every candidate, so it keeps the most
+ * severe one, which is the same entry the prompt would have read first. A row with no batch has no
+ * reading to restate, and this function is never asked to invent one.
+ */
+export function mostSevereSkippedEvidence(queued: QueuedSignalEvidence): SkippedSignalEvidence {
+  const [first] = [...queued.signals].sort((left, right) =>
+    moduleSignalEvidencePolicy.severityOrder[left.severity] - moduleSignalEvidencePolicy.severityOrder[right.severity] ||
+    left.observedAt.localeCompare(right.observedAt))
+  if (!first) throw new Error('signal-evidence-shape-mismatch')
+  return Object.freeze({ severity: first.severity, observedAt: first.observedAt, window: first.window, values: first.values })
+}
+
+/**
  * The JSON to store for one decision, or `null` when that decision carries no evidence.
  *
  * Fails loudly on a mismatch instead of writing a shape the reader would refuse: a silently dropped
@@ -91,11 +108,10 @@ export function queuedSignalEvidence(inputs: readonly SignalWithWindow[]): Queue
  * prevent.
  */
 export function signalEvidenceJson(decision: string, evidence: SignalEvidence | null | undefined): string | null {
+  // Most deliveries carry no readings at all — the calendar line, the session slots, a restart
+  // compensation — so "no evidence" is always allowed. Only a present reading is held to its shape.
+  if (evidence === null || evidence === undefined) return null
   const { decisions } = moduleSignalEvidencePolicy
-  if (decision === decisions.recorded) {
-    if (evidence !== null && evidence !== undefined) throw new Error('signal-evidence-shape-mismatch')
-    return null
-  }
   if (decision === decisions.skipped) {
     if (!isSkippedShape(evidence)) throw new Error('signal-evidence-shape-mismatch')
     return JSON.stringify(evidence)
@@ -104,9 +120,9 @@ export function signalEvidenceJson(decision: string, evidence: SignalEvidence | 
     if (!isQueuedShape(evidence)) throw new Error('signal-evidence-shape-mismatch')
     return JSON.stringify(evidence)
   }
-  // Any other decision (an older row's, or a path that records no readings) carries none.
-  if (evidence !== null && evidence !== undefined) throw new Error('signal-evidence-shape-mismatch')
-  return null
+  // `recorded` is usage, not a signal, and any older decision predates the column: neither may
+  // carry a reading, because a reader would then translate it as "this analysed something".
+  throw new Error('signal-evidence-shape-mismatch')
 }
 
 /**

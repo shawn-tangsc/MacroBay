@@ -13,7 +13,9 @@ import type {
   TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { PREDICTION_LEDGER_SHAPE_POLICY } from '../../../contracts/marketAnalysisContracts'
-import type { SignalEvidence } from '../../../contracts/moduleSignalEvidence'
+import {
+  mostSevereSkippedEvidence, parseSignalEvidence, signalEvidenceJson, type SignalEvidence
+} from '../../../contracts/moduleSignalEvidence'
 import { buildAnalysisSnapshotHash, canonicalizeMarketAnalysisJson, snapshotHashInput } from '../analysis/analysisHash'
 import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
 import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
@@ -237,12 +239,17 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     appendTriggerLedger(value: Readonly<{ id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string; evidence?: SignalEvidence | null }>) {
       if (!exists(sqlite, 'mi_analysis_event_groups', value.eventGroupId)) throw new Error('analysis-event-group-not-found')
       if (value.analysisRunId && !exists(sqlite, 'mi_analysis_runs', value.analysisRunId)) throw new Error('analysis-run-not-found')
+      // The stored shape follows the decision, and a mismatch is refused here rather than written:
+      // a batch stored under `skipped` reads back as null, so the run would show a reason with no
+      // reading while claiming nothing was wrong. The contract owns that check, this is the one write
+      // path that calls it.
+      const evidenceJson = signalEvidenceJson(value.decision, value.evidence ?? null)
       // `coalesce` on update: the trigger line writes the reading first, then the significance gate
       // may rewrite the same row's decision. That rewrite carries no evidence, and it must not erase
       // the reading the reader is going to be shown.
       sqlite.database.prepare(`insert into mi_analysis_trigger_ledger (id,schema_version,event_group_id,trigger_key,change_hash,decision,reason_code,snapshot_hash,analysis_run_id,created_at,evidence_json) values (?,?,?,?,?,?,?,?,?,?,?) on conflict(event_group_id,trigger_key,change_hash) do update set
         decision = excluded.decision, reason_code = excluded.reason_code, snapshot_hash = excluded.snapshot_hash, analysis_run_id = excluded.analysis_run_id,
-        evidence_json = coalesce(excluded.evidence_json, mi_analysis_trigger_ledger.evidence_json)`).run(value.id, 1, value.eventGroupId, value.triggerKey, value.changeHash, value.decision, value.reasonCode, value.snapshotHash, value.analysisRunId, value.createdAt, value.evidence ? json(value.evidence) : null)
+        evidence_json = coalesce(excluded.evidence_json, mi_analysis_trigger_ledger.evidence_json)`).run(value.id, 1, value.eventGroupId, value.triggerKey, value.changeHash, value.decision, value.reasonCode, value.snapshotHash, value.analysisRunId, value.createdAt, evidenceJson)
       // The conflict target keeps the first row's id, so a repeated (group, key, change) attempt
       // must answer with the id that is actually stored — the caller flips that row later.
       const stored = sqlite.database.prepare('select id from mi_analysis_trigger_ledger where event_group_id=? and trigger_key=? and change_hash=?').get(value.eventGroupId, value.triggerKey, value.changeHash) as Row | undefined
@@ -254,8 +261,22 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
      * Deliberately by row id: a group and a trigger key repeat, so locating by that pair would
      * rewrite an older attempt that really did run.
      */
+    /**
+     * Rewrites one attempt as skipped, restating its reading in the shape that decision reads.
+     *
+     * Both places that rewrite a decision are refusals — the significance gate's budget check and the
+     * freeze request's enqueue failure — and the row they rewrite is the one the trigger line wrote
+     * first, which carries the batch shape `{signalCount, signals}`. Left alone under a `skipped`
+     * decision that reading parses to null, so the reader would see the reason for the commonest
+     * refusal (out of budget) and no reading at all. The batch's most severe signal becomes the
+     * four-key reading; a row that never had one keeps none rather than inventing a number.
+     */
     updateTriggerLedgerDecision(rowId: string, decision: string, reasonCode: string) {
-      sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=? where id=?').run(decision, reasonCode, rowId)
+      const row = sqlite.database.prepare('select evidence_json from mi_analysis_trigger_ledger where id=?').get(rowId) as Row | undefined
+      if (!row) return
+      const stored = row.evidence_json as string | null
+      const evidenceJson = decision === 'skipped' ? restateAsSkipped(stored) : stored
+      sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=?, evidence_json=? where id=?').run(decision, reasonCode, evidenceJson, rowId)
     },
     listTriggerLedger(eventGroupId: string) {
       // Evidence stays serialized here on purpose: the caller has the decision, and the contract's
@@ -405,6 +426,22 @@ function insertLedgerEntry(database: MarketAnalysisSqlite['database'], value: Pr
 }
 function exists(sqlite: MarketAnalysisSqlite, table: string, id: string): boolean { return Boolean(sqlite.database.prepare(`select 1 from ${table} where id=?`).get(id)) }
 function json(value: unknown): string { return canonicalizeMarketAnalysisJson(value) }
+
+/**
+ * One rewrite rule for a row that stops being a queued run.
+ *
+ * The decision picks the shape, so the batch is converted here and never left for the reader to
+ * discard. Corrupt bytes become `null` on purpose: keeping them would keep a row that claims a
+ * reading it cannot state.
+ */
+function restateAsSkipped(stored: string | null): string | null {
+  const queued = parseSignalEvidence('queued', stored)
+  // `parseSignalEvidence` returns whichever shape its decision validates; the key check narrows it
+  // back for the conversion, because the parser's return type names both shapes.
+  if (queued && 'signalCount' in queued) return signalEvidenceJson('skipped', mostSevereSkippedEvidence(queued))
+  const skipped = parseSignalEvidence('skipped', stored)
+  return skipped && !('signalCount' in skipped) ? signalEvidenceJson('skipped', skipped) : null
+}
 function validateEventGroup(value: EventGroup): void { if (!value.id.startsWith('mi-eg-') || value.schemaVersion !== 1) throw new Error('analysis-event-group-invalid') }
 function validateSnapshot(value: EvidenceSnapshot): void {
   if (!value.id.startsWith('mi-es-') || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || value.snapshotHash !== buildAnalysisSnapshotHash(snapshotHashInput(value))) throw new Error('analysis-snapshot-invalid')

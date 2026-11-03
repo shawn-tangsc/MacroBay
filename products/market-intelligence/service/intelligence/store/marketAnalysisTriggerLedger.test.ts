@@ -125,3 +125,59 @@ it('adds the evidence column to a database created without it', () => {
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+it('refuses to store a reading whose shape disagrees with its decision', () => {
+  const repo = repository()
+  const queued = queuedSignalEvidence([withWindow(signal())])
+  const skipped = skippedSignalEvidence(withWindow(signal()))
+  // Stored as-is, a batch under `skipped` reads back as null and the panel shows a reason with no
+  // reading — the one failure this column is meant to make impossible.
+  expect(() => repo.appendTriggerLedger(ledger({ decision: 'skipped', evidence: queued }))).toThrowError('signal-evidence-shape-mismatch')
+  expect(() => repo.appendTriggerLedger(ledger({ decision: 'queued', evidence: skipped }))).toThrowError('signal-evidence-shape-mismatch')
+  expect(() => repo.appendTriggerLedger(ledger({ decision: 'recorded', evidence: skipped }))).toThrowError('signal-evidence-shape-mismatch')
+  expect(repo.listTriggerLedger(eventGroupId)).toHaveLength(0)
+})
+
+it('still writes the queued rows that carry no reading at all', () => {
+  // The calendar line, the session slots and restart compensation are all `queued` with no evidence;
+  // requiring a reading there would refuse the runs that never had one.
+  const repo = repository()
+  repo.appendTriggerLedger(ledger({ decision: 'queued', reasonCode: 'significance-confirmed' }))
+  repo.appendTriggerLedger(ledger({ id: 'mi-tl-2', triggerKey: 'restart.compensation', decision: 'queued', reasonCode: 'restart-initial-compensated' }))
+  expect(repo.listTriggerLedger(eventGroupId)).toHaveLength(2)
+  expect(repo.listTriggerLedger(eventGroupId).every(row => row.evidenceJson === null)).toBe(true)
+})
+
+it('restates a refused batch as its most severe signal, so the reason keeps its reading', () => {
+  const repo = repository()
+  const queued = queuedSignalEvidence([
+    withWindow(signal({ severity: 'low', ruleId: 'oi-quiet' })),
+    withWindow(signal({ severity: 'high', values: { dropPct: -2.7, volumeMultiple: 3.8 } })),
+    withWindow(signal({ severity: 'medium', ruleId: 'oi-mid' }))
+  ])
+  const rowId = repo.appendTriggerLedger(ledger({
+    triggerKey: 'signal.open-interest.oi-liquidation-proxy', decision: 'queued',
+    reasonCode: 'signal-high-triggered', evidence: queued
+  }))
+  // The budget refusal and the enqueue failure both come through this one rewrite.
+  repo.updateTriggerLedgerDecision(rowId, 'skipped', 'hour-budget-exhausted')
+  const [row] = repo.listTriggerLedger(eventGroupId)
+  expect(row).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  const reading = parseSignalEvidence('skipped', row!.evidenceJson)
+  expect(reading).toMatchObject({ severity: 'high', values: { dropPct: -2.7, volumeMultiple: 3.8 } })
+  // "Four keys, no more": the batch shape must not survive under the refused decision.
+  expect(Object.keys(reading!).sort()).toEqual(['observedAt', 'severity', 'values', 'window'])
+  expect(parseSignalEvidence('queued', row!.evidenceJson)).toBeNull()
+})
+
+it('leaves a rewrite without a reading empty instead of inventing one', () => {
+  const repo = repository()
+  const rowId = repo.appendTriggerLedger(ledger({ decision: 'queued', reasonCode: 'significance-confirmed' }))
+  repo.updateTriggerLedgerDecision(rowId, 'skipped', 'hour-budget-exhausted')
+  const [row] = repo.listTriggerLedger(eventGroupId)
+  expect(row).toMatchObject({ decision: 'skipped', evidenceJson: null })
+  // Corrupt bytes become empty on the same pass: a row must not claim a reading it cannot state.
+  const corruptId = repo.appendTriggerLedger(ledger({ id: 'mi-tl-2', changeHash: 'hash-2', decision: 'queued' }))
+  repo.updateTriggerLedgerDecision(corruptId, 'skipped', 'day-budget-exhausted')
+  expect(repo.listTriggerLedger(eventGroupId).find(row => row.id === corruptId)?.evidenceJson).toBeNull()
+})
