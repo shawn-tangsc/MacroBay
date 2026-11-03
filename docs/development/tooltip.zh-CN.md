@@ -1,6 +1,6 @@
 [English](./tooltip.md) | [中文](./tooltip.zh-CN.md) | [← 文档](../README.md)
 
-# 提示
+# 悬停提示
 
 挂在触发器上的简短解释一律渲染 `@platform/ui/components/tooltip` 的 `Tooltip`。不要用原生 `title`：
 它只跟着鼠标走、也进不了可访问描述，键盘用户永远看不到。

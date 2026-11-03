@@ -106,6 +106,34 @@ part of this release. See [Status and limitations](./reference/status-and-limita
 - [Roadmap](../ROADMAP.md)
 - [Git workflow](./development/git-workflow.md)
 
+### Building on the platform
+
+- [Development setup](./development/setup.md)
+- [Testing](./development/testing.md)
+- [Packaging and release](./development/packaging.md)
+- [Adding a product](./development/adding-a-product.md)
+
+### Components and UI standards
+
+- [State components](./development/ui-state-components.md)
+- [Loading Standard](./development/loading-standard.md)
+- [Icon buttons](./development/icon-button.md)
+- [Status pills](./development/status-pill.md)
+- [Filter chips](./development/filter-chip.md)
+- [Tabs](./development/tabs.md)
+- [Segmented](./development/segmented.md)
+- [Drawers](./development/drawer.md)
+- [Side panels](./development/side-panel.md)
+- [Modals](./development/modal.md)
+- [Confirmation dialogs](./development/confirm.md)
+- [Toasts](./development/toast.md)
+- [Tooltips](./development/tooltip.md)
+- [Popovers](./development/popover.md)
+- [Menus](./development/menu.md)
+- [Structured text](./development/structured-text.md)
+- [Disabled controls and their reason](./development/disabled-hint.md)
+- [Closing a container that holds unsaved input](./development/unsaved-changes.md)
+
 ## License
 
 [MIT](../LICENSE) © 2026 MacroBay contributors

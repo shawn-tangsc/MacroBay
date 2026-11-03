@@ -96,6 +96,34 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 - [路线图](../ROADMAP.zh-CN.md)
 - [Git 工作流](./development/git-workflow.zh-CN.md)
 
+### 在平台上做东西
+
+- [开发环境](./development/setup.zh-CN.md)
+- [测试](./development/testing.zh-CN.md)
+- [打包与发布](./development/packaging.zh-CN.md)
+- [新增产品](./development/adding-a-product.zh-CN.md)
+
+### 组件与界面规范
+
+- [状态组件](./development/ui-state-components.zh-CN.md)
+- [Loading 规范](./development/loading-standard.zh-CN.md)
+- [图标按钮](./development/icon-button.zh-CN.md)
+- [状态药丸](./development/status-pill.zh-CN.md)
+- [筛选胶囊](./development/filter-chip.zh-CN.md)
+- [页内标签](./development/tabs.zh-CN.md)
+- [分段选择](./development/segmented.zh-CN.md)
+- [抽屉](./development/drawer.zh-CN.md)
+- [常驻侧面板](./development/side-panel.zh-CN.md)
+- [弹窗](./development/modal.zh-CN.md)
+- [确认对话框](./development/confirm.zh-CN.md)
+- [轻提示](./development/toast.zh-CN.md)
+- [悬停提示](./development/tooltip.zh-CN.md)
+- [浮层说明](./development/popover.zh-CN.md)
+- [菜单](./development/menu.zh-CN.md)
+- [结构化文本](./development/structured-text.zh-CN.md)
+- [禁用控件与它的原因](./development/disabled-hint.zh-CN.md)
+- [关闭一个装着未保存输入的容器](./development/unsaved-changes.zh-CN.md)
+
 ## 许可证
 
 [MIT](../LICENSE) © 2026 MacroBay contributors
