@@ -56,7 +56,10 @@ describe('daily briefing generation settings modal', () => {
     const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
     await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve() })
 
-    expect(client.saveSettings).toHaveBeenCalledWith({ generation: { generationTime: '08:00', windowHours: 24 } })
+    expect(client.saveSettings).toHaveBeenCalledWith({
+      generation: { generationTime: '08:00', windowHours: 24 },
+      language: { additional: [] }
+    })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -91,5 +94,61 @@ describe('daily briefing generation settings modal', () => {
 
     expect(document.body.textContent).toContain(text.generationSettings.failed)
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps the add-edition control disabled and gives the reason as its accessible name', async () => {
+    const { client } = await render()
+    const add = [...document.body.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
+    // Behaviour, not styling: a control that reads as disabled but still saves would pass a
+    // "the sentence is there" check and fail this one.
+    expect(add.disabled).toBe(true)
+    expect(add.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
+    await act(async () => { add.click(); await Promise.resolve() })
+    expect(client.saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('offers the second edition only when ticked and states the cost the plan reports', async () => {
+    const { client } = await render()
+    const costTrigger = (): HTMLElement | null => document.body.querySelector(`[aria-label="${text.settings.periods.costLabel}"]`)
+    expect(costTrigger()).toBeNull()
+    // The field values carry their meaning, and the default time is the policy's, not a literal here.
+    expect(document.body.textContent).toContain(text.settings.periods.timeValue.replace('{time}', '08:00'))
+    expect(document.body.textContent).toContain(text.settings.periods.windowValue.replace('{hours}', '24'))
+
+    const tick = document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    await act(async () => { tick.click(); await Promise.resolve() })
+    const trigger = costTrigger()!
+    await act(async () => { trigger.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(document.body.textContent).toContain('写作 2 次')
+
+    await act(async () => { trigger.click(); await Promise.resolve() })
+    await act(async () => {
+      const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
+      save.click(); await Promise.resolve(); await Promise.resolve()
+    })
+    expect(client.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: { additional: ['en-US'] } }))
+
+    await act(async () => { tick.click(); await Promise.resolve() })
+    expect(costTrigger()).toBeNull()
+  })
+
+  it('shows a read failure as an error with a retry instead of a spinner that never stops', async () => {
+    const getSettings = vi.fn()
+      .mockResolvedValueOnce({ state: 'unavailable', failureCode: 'daily-briefing-request-failed' })
+      .mockResolvedValue({ state: 'available', view })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root!.render(<DailyBriefingGenerationSettingsModal open text={text} client={{ getSettings, saveSettings: vi.fn(async () => ({ state: 'available' as const, view })) }} onClose={vi.fn()} />)
+    })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    expect(document.body.textContent).not.toContain(text.generationSettings.loading)
+    expect(document.body.querySelector('[data-state="error"]')).not.toBeNull()
+    const retry = document.body.querySelector<HTMLButtonElement>('[data-state="error"] button')!
+    await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(getSettings).toHaveBeenCalledTimes(2)
+    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
   })
 })
