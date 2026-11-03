@@ -234,8 +234,9 @@ export type PlatformText = {
     channelPermissionInherit: string
     /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
     channelFieldNotSavable: string
-    /** 编辑弹层里 Token 只有圆点：说明它是占位，不是真值。 */
+    /** 编辑弹层里 Token：旧值不可读；留空表示不修改，输入新值表示整串替换。 */
     channelTokenReadOnly: string
+    channelTokenReplaceHint: string
     /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
     channelPermissionDefault: string
     channelPermissionAcceptEdits: string
@@ -1589,7 +1590,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelWorkspaceDefault: '不使用工作目录',
       channelPermissionInherit: '继承助手设置',
       channelFieldNotSavable: '这一版还保存不了这一项',
-      channelTokenReadOnly: '圆点只是占位，不是真值',
+      channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
+      channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
       channelPermissionDefault: '每次都要问',
       channelPermissionAcceptEdits: '自动接受修改',
       channelPermissionBypass: '完全放行',
@@ -2843,7 +2845,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelWorkspaceDefault: 'Do not use a working folder',
       channelPermissionInherit: 'Inherit the agent setting',
       channelFieldNotSavable: 'This version cannot save this field yet',
-      channelTokenReadOnly: 'The dots are a placeholder, not the value',
+      channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',
+      channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
       channelPermissionDefault: 'Ask every time',
       channelPermissionAcceptEdits: 'Accept edits automatically',
       channelPermissionBypass: 'Allow everything',

@@ -33,6 +33,8 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     disable: vi.fn(async () => ({})),
     remove: vi.fn(async () => ({})),
     listPolicies: vi.fn(async () => []),
+    beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
+    rotateCredential: vi.fn(async () => ({})),
     ...overrides
   }
   Object.assign(globalThis, {
@@ -218,6 +220,57 @@ describe('the two fields that became saveable', () => {
     // Token 与助手是必填：没填时保存按钮禁用——这是「不许保存成功但没存」那条规矩的延伸。
     expect((save as HTMLButtonElement).disabled).toBe(true)
     expect(channels.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('replacing the token without revealing it', () => {
+  it('starts a credential handoff only when a new token is typed', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+
+    const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    expect(field).not.toBeNull()
+    // 旧值不被回显：输入框永远是空的。
+    expect(field.value).toBe('')
+    expect(field.getAttribute('type')).toBe('password')
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(field, '123:new-token')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const save = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelUpdate
+    )
+    await act(async () => save?.click())
+    await act(async () => {})
+
+    // 真实加密要 WebCrypto（happy-dom 没有 subtle），所以这里证明「替换路径被走到」：
+    // 一旦输入新值，页面就会去取交接材料；空值时不会（见下一条）。
+    expect(channels.beginCredential).toHaveBeenCalledWith({ id: 'channel-1' })
+    expect(channels.update).toHaveBeenCalled()
+  })
+
+  it('leaves the credential alone when the field stays empty', async () => {
+    const channels = installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
+      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
+    )
+    await act(async () => edit?.click())
+    await act(async () => {})
+    const save = [...document.body.querySelectorAll('button')].find(
+      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelUpdate
+    )
+    await act(async () => save?.click())
+    await act(async () => {})
+
+    expect(channels.beginCredential).not.toHaveBeenCalled()
+    expect(channels.update).toHaveBeenCalled()
   })
 })
 

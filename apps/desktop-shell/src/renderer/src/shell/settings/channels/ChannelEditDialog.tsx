@@ -28,6 +28,8 @@ export function ChannelEditDialog(props: {
     workspaceId: string | null
     permissionMode: ChannelFieldValues['permissionMode']
     allowedChatIds: readonly string[]
+    /** 空串＝保持原 Token；非空＝整串替换。 */
+    token: string
   }) => void
 }): React.ReactElement {
   const { labels, channel } = props
@@ -67,7 +69,8 @@ export function ChannelEditDialog(props: {
                 agentId: values.agentId,
                 workspaceId: values.workspaceId,
                 permissionMode: values.permissionMode,
-                allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText)
+                allowedChatIds: parseAllowedChatIds(values.allowedChatIdsText),
+                token: values.token
               })
             }
             type="primary">

@@ -103,11 +103,19 @@ export function ChannelFields(props: {
             value={values.token}
           />
         ) : (
-          // 编辑时只有圆点：要露任何真值字符都得让主进程解明文再切片，那正是被否掉的口子。
-          <span className="channel-token-dots" aria-label={labels.channelCredential}>
-            {labels.channelTokenMask}
+          // 编辑时**可以替换**，但旧值不可读：输入框永远空着，留空＝不改。
+          // 不用 Input.Password（它带「眼睛」＝查看入口），也不回显、不复制旧值。
+          <>
+            <Input
+              aria-label={labels.channelCredential}
+              autoComplete="off"
+              onChange={(event) => props.onChange({ token: event.target.value })}
+              placeholder={labels.channelTokenReplaceHint}
+              type="password"
+              value={values.token}
+            />
             <small className="channel-field-hint">{labels.channelTokenReadOnly}</small>
-          </span>
+          </>
         )}
       </FieldShell>
 

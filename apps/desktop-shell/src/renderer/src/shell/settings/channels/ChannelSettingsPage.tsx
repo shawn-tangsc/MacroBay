@@ -12,6 +12,7 @@ import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreate
 import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
 import { ChannelLogsPanel } from './ChannelLogsPanel'
+import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
@@ -158,6 +159,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     workspaceId: string | null
     permissionMode: ChannelPermissionMode | null
     allowedChatIds: readonly string[]
+    token: string
   }): Promise<void> => {
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
@@ -172,6 +174,21 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })
+      // 空串＝不修改旧 Token；非空＝整串替换（旧值全程不可读，走同一套加密交接）。
+      if (input.token.trim().length > 0) {
+        const begin = await window.platform.channels.beginCredential({ id: editor.channel.id })
+        const handoff = await encryptChannelHandoff(
+          begin as Parameters<typeof encryptChannelHandoff>[0],
+          editor.channel.id,
+          'credential',
+          { bot_token: input.token }
+        )
+        await window.platform.channels.rotateCredential({
+          id: editor.channel.id,
+          actorId: 'settings-user',
+          handoff
+        })
+      }
       setEditor(null)
       await reload()
     } catch {
