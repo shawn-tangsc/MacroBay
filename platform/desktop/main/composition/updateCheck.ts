@@ -10,13 +10,14 @@ import { parseReleaseNotes } from '../../../updates/contracts/releaseNotes'
 import { createReleaseNotesService } from '../../../updates/runtime/releaseNotesService'
 
 /**
- * 更新检查的装配：建服务、注册三条通道、把自动检查排到主界面之后。
+ * 更新检查的装配：建服务、注册四条通道、把自动检查排到主界面之后。
  *
  * 为什么单独一片而不是塞回 `app.ts`：`app.ts` 是受保护接缝、而且是体积基线文件（只减不增）。
  * 这里只做接线，**不含任何判断**；判断全在 `platform/updates/**` 里。
- * **没有「开发态 / 打包态」这条分支**（11-03 用户定的）：两边逻辑一模一样，区别只由服务里的
- * 「同一个 UTC 自然日最多一次」承担。这个文件**不读任何应用级事实**（数据目录、应用名、装没装
- * 都从入参来），有守卫用例盯着。
+ * **没有「开发态 / 打包态」这条分支**（11-03 用户定，`mode` 已从契约整段删掉）：源码与安装版
+ * 同一套逻辑，四条通道（get-state / check-now / open-link / release-notes）在两种运行方式下都注册；
+ * 唯一的闸门是服务里的「同一个 UTC 自然日最多一次」。这个文件**不读任何应用级事实**（数据目录、
+ * 应用名、装没装都从入参来），有守卫用例盯着。
  */
 export type UpdateCheckCompositionPorts = Readonly<{
   ipcMain: Pick<IpcMain, 'handle'>
@@ -41,14 +42,6 @@ export type UpdateCheckComposition = Readonly<{
   startAutomaticCheck: () => void
 }>
 
-/**
- * 交付门：**源码启动没有更新能力，安装版/目录版才有**。
- *
- * 只收一个布尔值，不读 `app`——`isPackaged` 由组合根在接缝之后读一次传进来。
- * 上锁后开发版连 `check-now` / `open-link` / `release-notes` 三条通道都不注册，
- * 零出网由「没有那条路」保证，不靠调用方自觉。**改这一行等于开/关能力**，
- * 验收必须同时覆盖 `packaged` 与 `development` 两侧。
- */
 export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Promise<UpdateCheckComposition> {
   const service = await createUpdateCheckService({
     currentVersion: ports.currentVersion,
