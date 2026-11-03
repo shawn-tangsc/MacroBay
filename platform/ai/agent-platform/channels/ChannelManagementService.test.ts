@@ -1526,8 +1526,12 @@ describe('in-app smoke on enable (unsupported adapter)', () => {
     return { ...base, service, started }
   }
 
-  function configuredSlack(database: ReturnType<typeof harness>['database'], service: ChannelManagementService): string {
-    const id = service.create({ type: 'slack', name: 'Slack', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+  function configuredSlack(
+    database: ReturnType<typeof harness>['database'],
+    service: ChannelManagementService,
+    type: 'slack' | 'telegram' = 'slack'
+  ): string {
+    const id = service.create({ type, name: 'Channel', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
     database.connection.prepare(
       "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
     ).run(`channel-migration:${id}:ref`, id)
@@ -1563,8 +1567,37 @@ describe('in-app smoke on enable (unsupported adapter)', () => {
     expect(database.connection.prepare('select requested_enabled from agent_channels where id = ?').get(id)).toEqual({ requested_enabled: 0 })
     // 失败按现有审计链记一行，动作沿用 request-enable，原因写进 code。
     expect(database.connection.prepare(
-      "select action, code from channel_management_audits where channel_id = ? order by created_at desc, id desc limit 1"
-    ).get(id)).toEqual({ action: 'request-enable', code: 'telegram-conflict' })
+      "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
+    ).all(id)).toEqual([{ code: 'telegram-conflict' }])
+  })
+
+  it('never leaves the failure reason empty: throws, timeouts and blank codes are normalised', async () => {
+    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string]> = [
+      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable'],
+      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable'],
+      [async () => ({ ok: false, code: 'something-new' }), 'telegram-network-unavailable']
+    ]
+    for (const [smoke, expected] of cases) {
+      const { database, service } = harnessWithSmoke(smoke as never)
+      // 用 telegram：未知/异常码归一成「网络不可用」，非 telegram 会归成「适配器未支持」——那是另一条语义。
+      const id = configuredSlack(database, service, 'telegram')
+      const result = await service.requestEnable({ id, actorId: 'user-a' })
+      expect(result).toMatchObject({ ok: false, code: 'channel-smoke-failed', reason: expected })
+      // 审计行必须能看出「因为什么没开」：与返回的 reason 同一个码。
+      expect(database.connection.prepare(
+        "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
+      ).all(id)).toEqual([{ code: expected }])
+    }
+  })
+
+  it('keeps a known credential-missing reason instead of rewriting it', async () => {
+    const { database, service } = harnessWithSmoke(async () => ({ ok: false, code: 'channel-credential-missing' }))
+    const id = configuredSlack(database, service)
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+      ok: false,
+      code: 'channel-smoke-failed',
+      reason: 'channel-credential-missing'
+    })
   })
 
   it('does not run the smoke when the platform is already supported', async () => {
