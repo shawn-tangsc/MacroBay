@@ -10,6 +10,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -64,6 +65,37 @@ export const VERIFY_CHECKS = [
   'build'
 ] as const
 
+/**
+ * 起点之后被**写过**的 tracked 文件数；`-1` 表示无法统计。
+ *
+ * `dirty` 是计数，不是指纹：跑中有人改一个文件、跑完再 `git checkout` 撤掉，两端都是
+ * `dirty=0`、`HEAD` 没动 → 现在的比较判 `valid`，可链路中间那几个检查读的可能是被改过的那份。
+ * 这不是假想：当事人就在群里说过「我可以立刻撤掉」。**计数相同不等于树相同。**
+ *
+ * 所以补一次 mtime 扫：起点之后被写过的文件必须为 0，`valid` 才成立。
+ * 范围取 `git ls-files`——链子读的就是这些文件；gitignore 目录（`out/`、`dist/`）是产物，
+ * 由 build 自己写，不该算进"有人在改源码"。
+ */
+export function countTouchedSince(sinceIso: string): number {
+  const since = Date.parse(sinceIso)
+  if (Number.isNaN(since)) return -1
+  try {
+    const listing = execFileSync('git', ['ls-files'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    let touched = 0
+    for (const relative of listing.split('\n')) {
+      if (relative === '') continue
+      try {
+        if (statSync(relative).mtimeMs > since) touched += 1
+      } catch {
+        // 被删掉的文件：`dirty` 已经数到它了，这里只负责「写」。
+      }
+    }
+    return touched
+  } catch {
+    return -1
+  }
+}
+
 /** 数未提交路径。抽成纯函数：`-uall` 与折叠目录的差别只能在这一层被测出来。 */
 export function countDirty(porcelain: string): number {
   return porcelain === '' ? 0 : porcelain.split('\n').filter((line) => line.trim() !== '').length
@@ -108,7 +140,7 @@ export type Comparison = { verdict: Verdict; attributable: boolean; reason: stri
  * `attributable` 才是「这次结果能不能记在某个提交上」的唯一答案；`valid` 只是它的充分条件之一，
  * 所以报告行两个都打——只打一个词，就一定有人只读那一个词。
  */
-export function compareSamples(start: TreeSample, end: TreeSample): Comparison {
+export function compareSamples(start: TreeSample, end: TreeSample, touchedSinceStart = 0): Comparison {
   if (start.head === 'no-git' || end.head === 'no-git') {
     return { verdict: 'unknown', attributable: false, reason: 'not a git checkout, so the tree state cannot be attested' }
   }
@@ -122,5 +154,13 @@ export function compareSamples(start: TreeSample, end: TreeSample): Comparison {
     // 首尾一致但本来就不干净：稳定，但**不能归因到任何提交**。
     return { verdict: 'polluted', attributable: false, reason: `the tree was already dirty (${start.dirty} path(s)) at both samples` }
   }
-  return { verdict: 'valid', attributable: true, reason: 'same commit, clean tree at both samples' }
+  // 计数相同还不够：改完再撤掉，两端都是 0。被写过的文件数必须也是 0。
+  if (touchedSinceStart > 0) {
+    return {
+      verdict: 'invalid',
+      attributable: false,
+      reason: `${touchedSinceStart} tracked file(s) were written during the run and the count came back to ${start.dirty} — the tree was not the same tree`
+    }
+  }
+  return { verdict: 'valid', attributable: true, reason: 'same commit, clean tree at both samples, nothing written during the run' }
 }

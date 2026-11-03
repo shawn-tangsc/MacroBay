@@ -189,4 +189,26 @@ describe('verify sampling', () => {
     expect(source).toContain("'rev-parse', '--show-toplevel'")
     expect(source).not.toContain('randomUUID')
   })
+
+  it('refuses to call a run valid when tracked files were written and the count came back to zero', () => {
+    // 这是计数当指纹的那个洞：跑中改一个文件、跑完 `git checkout` 撤掉，两端都是 `dirty=0`、
+    // HEAD 没动，于是旧比较判 valid——可链路中间那几个检查读的可能是被改过的那份。
+    const clean: TreeSample = { head: 'abc1234', dirty: 0, at: '2026-11-03T00:00:00.000Z' }
+
+    // 没有文件被写过：仍然 valid。
+    expect(compareSamples(clean, clean, 0)).toMatchObject({ verdict: 'valid', attributable: true })
+
+    // 有文件被写过：哪怕两端 dirty 都是 0，也判 invalid，而且不给归因。
+    const touched = compareSamples(clean, clean, 3)
+    expect(touched).toMatchObject({ verdict: 'invalid', attributable: false })
+    expect(touched.reason).toContain('3 tracked file(s) were written')
+
+    // 反向：默认参数下行为不变，免得老调用方被静默改变语义。
+    expect(compareSamples(clean, clean)).toMatchObject({ verdict: 'valid' })
+
+    // postflight 必须真的把这个数传进来，否则上面三条测的是一个没人用的参数。
+    const postflight = readFileSync(`${ROOT}scripts/verify-postflight.mts`, 'utf8')
+    expect(postflight).toContain('countTouchedSince(start.at)')
+    expect(postflight).toMatch(/compareSamples\(start, end, /)
+  })
 })
