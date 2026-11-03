@@ -50,6 +50,7 @@ import {
   issueCountsText,
   localDate,
   briefingFailure,
+  briefingListFacts,
   summaryFromDocument,
   withDeadline
 } from './dailyBriefingPageDerived'
@@ -57,6 +58,9 @@ import {
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { openBriefingEdition } from './openBriefingEdition'
+import { DailyBriefingAppendix } from './DailyBriefingAppendix'
+import { DailyBriefingContent } from './DailyBriefingContent'
+import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 
@@ -348,18 +352,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     })
   openEditionRef.current = openEdition
   const selectEdition = (date: string): void => openEdition(date, effectiveLocaleRef.current)
-  const regenerate = async (): Promise<void> => {
-    setRegenerating(true)
-    setRegenerateFailure(null)
-    const outcome = await runBriefingRegenerate({ client, locale, timeZone: zoneInvalid ? 'UTC' : timeZone })
-    if (outcome.kind === 'available') {
-      setView({ status: 'ready', document: outcome.document, kind: 'today' })
-      setEditions((current) => current.map((edition) => edition.date === outcome.document.edition.date ? summaryFromDocument(outcome.document) : edition))
-    } else {
-      setRegenerateFailure(outcome.failure)
-    }
-    setRegenerating(false)
-  }
+  const { regenerate, generateNow } = useBriefingRunActions({
+    client, locale, zoneInvalid, timeZone,
+    setView, setRegenerating, setRegenerateFailure, setEditions,
+    setCurrentPeriodDate, onSettled: () => setReloadKey((key) => key + 1)
+  })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: view.status === 'ready' ? view.document : undefined,
@@ -394,7 +391,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     : undefined
   // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
   // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
-  const hasTodayEdition = editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
   // The archive belongs to the edition on screen, not to "today": reading a past edition must show
   // its trace and gaps even when today has never been generated.
   // The column is always there, and the language switch lives at its top: the two must not be
@@ -402,29 +398,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const hasArchive = !contentBlocked && view.status === 'ready'
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
-  const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt
+  const { lastGeneratedAt, scheduledTime, todayMissing, hasTodayEdition } = briefingListFacts(editions, todayDate)
   // The one action that spends a run, and only after a click. It writes this issue, then the list is
   // read again (a read) so the row shows what just landed.
-  const generateNow = (): void => {
-    setRegenerateFailure(null)
-    setRegenerating(true)
-    void runBriefingRegenerate({ client, locale, timeZone: zoneInvalid ? 'UTC' : timeZone })
-      .then((outcome) => {
-        if (outcome.kind === 'available') {
-          setView({ status: 'ready', document: outcome.document, kind: 'today' })
-          setCurrentPeriodDate(outcome.document.edition.date)
-        } else {
-          setRegenerateFailure(outcome.failure)
-        }
-      })
-      .finally(() => {
-        setRegenerating(false)
-        setReloadKey((key) => key + 1)
-      })
-  }
   // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
-  const scheduledTime = editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime
-  const todayMissing = editions.some((edition) => edition.date === todayDate && edition.state === 'missing')
   const openModelService = onOpenModelSettings ?? openModelSettings
   // The grid never changes shape: the detail column keeps its width even with nothing to show, so the
   // body does not jump sideways when an edition appears or disappears.
@@ -475,81 +452,20 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
           void deletePeriod(target)
         }} />
-      <section className="mi-daily-briefing-page__content">
-        {deleteOutcome ? <DailyBriefingDeleteOutcomeNote outcome={deleteOutcome} text={text} onRetry={(outcome) => void deletePeriod(outcome.target)} /> : null}
-        <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
-        <DailyBriefingStorageNotice text={text.migration} />
-        {webSearchEnabled === false && settingsSection === null ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
-          <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
-          <Button data-open-settings-section="ai" onClick={() => setSettingsSection('ai')}>{text.aiSettings.goEnable}</Button>
-        </div> : null}
-        {/* A run in flight owns the pane, whatever local state says: the scheduled run and a run
-            started elsewhere land here too, and the nine steps must be visible while it works. */}
-        {view.status === 'loading' || (generating && view.status !== 'ready')
-          ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
-          : null}
-        {view.status === 'unavailable' && !failure && !generating
-          ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={generateNow} text={text} timeZone={timeZone} todayDate={todayDate} />
-          : null}
-        {view.status === 'locale-missing' && !generating ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={generateNow} /> : null}
-        {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={() => setSettingsSection('ai')} /> : null}
-        {failure ? <DailyBriefingFailurePanel
-          failure={failure}
-          text={text}
-          formatTime={formatTime}
-          regenerating={regenerating}
-          onRetry={() => void regenerate()}
-          onOpenSettings={() => setSettingsSection('ai')}
-        /> : null}
-        {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
-        {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <StateView
-          state="empty"
-          reasonCode="nothing-enabled"
-          productReason={{
-            key: 'mi.dailyBriefing.nothingEnabled',
-            resolve: (key, params) => resolveBriefingStateReason(text, key, params)
-          }}
-          action={{ labelKey: 'ui.state.action.open-settings', onSelect: onConfigureSources }}
-        /> : null}
-        {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-page__paper">
-          <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
-        </div> : null}
-      </section>
-      <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
-        {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale}
-          onChange={(value) => {
-            // Same read path as a row click, with the language swapped: no second implementation.
-            setContentLocale(value)
-            openEdition(pinnedDate ?? todayDate, value)
-          }} /> : null}
-        {hasArchive ? <>
-        <section data-briefing-gaps="true">
-        {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
-          onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
-          {/* The counts are the verdict, not the detail: they stay on the summary line even closed. */}
-          <summary className="mi-briefing-gaps__head">
-            <h2>{text.sections.limits}</h2>
-            <span className="mi-briefing-gaps__counts">{issueCountsText(issueCounts, text)}</span>
-          </summary>
-          <ol className="mi-daily-briefing-page__groups">
-            {groups.map((group) => <li key={group.key}>
-              {/* Three facts on the row: how bad, which kind, how many. The long titles live in the
-                  drawer this opens — keeping them here is what made two of them overlap. */}
-              <Button className="mi-daily-briefing-page__group" aria-haspopup="dialog"
-                aria-label={text.limits.openGroup.replace('{label}', group.label).replace('{count}', String(group.count))}
-                data-group-key={group.key} data-group-severity={group.severity} data-group-category={group.category}
-                onClick={(event) => setOpenGroup({ key: group.key, trigger: event.currentTarget })}>
-                <span data-issue-severity={group.severity} className="mi-daily-briefing-page__group-severity">{text.limits.severity[group.severity]}</span>
-                <span data-issue-label={group.label} className="mi-daily-briefing-page__group-label" title={group.label}>{group.label}</span>
-                <span data-issue-count={group.count} className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
-              </Button>
-            </li>)}
-          </ol>
-        </details> : null}</section>
-        <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
-        {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} /> : null}
-        </> : null}
-      </aside>
+      <DailyBriefingContent {...{
+        text, view, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
+        editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
+        eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
+        settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
+        onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
+        onDeleteRetry: (target) => void deletePeriod(target)
+      }} />
+      <DailyBriefingAppendix {...{
+        text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime,
+        editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup,
+        setOpenGroup, listAttempts: client.listAttempts,
+        onSwitch: (value) => { setContentLocale(value); openEdition(pinnedDate ?? todayDate, value) }
+      }} />
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}
     {/* Mounted only while open: both blocks read settings on mount, so a closed page reads none. */}

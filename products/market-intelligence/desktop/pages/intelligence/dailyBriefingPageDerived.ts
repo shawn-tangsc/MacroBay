@@ -115,3 +115,21 @@ export function briefingFailure(input: Readonly<{
   }
   return { failure: null, editorialBlocked }
 }
+
+/**
+ * What the rail and the poster need from the list, derived once.
+ *
+ * These answers were three inline expressions in the page, each recomputing "is there an edition".
+ * Kept together so "this issue has an edition" has one shape.
+ */
+export function briefingListFacts<T extends Readonly<{ date: string; state: string; generatedAt?: string; scheduledTime?: string }>>(
+  editions: readonly T[],
+  todayDate: string
+): Readonly<{ lastGeneratedAt?: string; scheduledTime?: string; todayMissing: boolean; hasTodayEdition: boolean }> {
+  return {
+    lastGeneratedAt: editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt,
+    scheduledTime: editions.find((edition) => edition.scheduledTime !== undefined)?.scheduledTime,
+    todayMissing: editions.some((edition) => edition.date === todayDate && edition.state === 'missing'),
+    hasTodayEdition: editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
+  }
+}

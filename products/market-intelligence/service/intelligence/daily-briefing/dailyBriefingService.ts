@@ -26,6 +26,7 @@ import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBrie
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { readBriefingHistory } from './dailyBriefingHistory'
@@ -353,10 +354,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // Opening the page is a read. A caller that passes `generate: false` gets what is stored, or a
     // code that says nothing was written yet — never a model run the reader did not ask for.
     if (input.generate === false) {
-      const stored = await deps.store.get(window.date, input.locale, periodId).catch(() => undefined)
-      return stored && isCurrent(stored.document)
-        ? withTimeZoneSource({ state: 'available', document: stored.document }, window.zoneSource)
-        : { state: 'unavailable', failureCode: 'not-generated' }
+      return openStoredEdition({ store: deps.store, date: window.date, locale: input.locale, periodId, zoneSource: window.zoneSource, isCurrent })
     }
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
       const result = await resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)

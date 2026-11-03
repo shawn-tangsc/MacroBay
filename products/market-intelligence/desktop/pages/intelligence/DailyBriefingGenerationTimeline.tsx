@@ -6,6 +6,7 @@ import { Popover } from '@platform/ui/components/popover'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
+import { DailyBriefingStageRowContent, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
   failedStage,
@@ -37,6 +38,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
   /** The run is still in flight: the same list, with a running word instead of a verdict. */
   running?: boolean
 }>): React.ReactElement {
+  const resolveText = useProductTextKey()
   const labels = text.generationTrace
   const failed = trace ? failedStage(trace) : undefined
   const failedLabel = failed ? labels.stages[failed.id] : labels.notRecorded
@@ -89,24 +91,42 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
           const state = stage?.state ?? 'pending'
           const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
           const failure = failed?.id === id ? stage : undefined
+          // One row implementation for every state: this list only supplies what this view knows.
+          const row = {
+            id,
+            name: labels.stages[id],
+            state: rowStateFor(state, skipReason),
+            detail: stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded,
+            ...(labels.stageHelp?.[id]?.trim()
+              ? {
+                help: {
+                  labelKey: STAGE_HELP_KEYS[id],
+                  triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel',
+                  triggerLabelParams: { stage: labels.stages[id] },
+                  dataAttributes: { 'data-stage-help': id }
+                }
+              }
+              : {}),
+            ...(failure?.failureCode
+              ? { failure: { code: failure.failureCode, label: `${failureLabel(failure.failureCode, text)}${failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}` } }
+              : {})
+          }
           return {
             status: stepStatus(stage, skipReason),
-            title: <span className="mi-generation-trace__stage-title" data-stage={id} data-stage-state={state} data-stage-skip={skipReason ?? 'none'}>
-              <span className="mi-generation-trace__stage-name">{labels.stages[id]}</span>
-              <StageHelp id={id} text={text} />
-            </span>,
-            description: <span className="mi-generation-trace__stage-result" data-stage-result={id} data-stage-result-state={state}>
-              <span className="mi-generation-trace__stage-time">{stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded}</span>
-              {failure?.failureCode ? <span className="mi-generation-trace__stage-failure" data-stage-failure-code={failure.failureCode}>
-                {failureLabel(failure.failureCode, text)}
-                {failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}
-              </span> : null}
-            </span>
+            title: <DailyBriefingStageRowContent row={row} resolveText={resolveText} extraAttributes={{ 'data-stage-state': state, 'data-stage-skip': skipReason ?? 'none' }} />,
+            description: null
           }
         })}
       />
     </>
   </details>
+}
+
+function rowStateFor(state: GenerationTraceStage['state'], skipReason: SkipReason | undefined): DailyBriefingStageRowState {
+  if (state === 'failed') return 'failed'
+  if (state === 'success') return 'done'
+  if (state === 'skipped') return skipReason === 'blocked' ? 'waiting' : 'not-needed'
+  return 'waiting'
 }
 
 type SkipReason = 'not-needed' | 'blocked'
@@ -151,6 +171,7 @@ const STAGE_HELP_KEYS: Record<GenerationStageId, string> = {
  * icon, so an empty bubble cannot appear.
  */
 function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBriefingText }>): React.ReactElement | null {
+  const resolveText = useProductTextKey()
   const labels = text.generationTrace
   const resolveProductText = useProductTextKey()
   if (!labels.stageHelp[id]?.trim()) return null
