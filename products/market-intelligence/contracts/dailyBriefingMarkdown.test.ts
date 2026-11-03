@@ -169,6 +169,12 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('- 恐惧贪婪: 较上次发布 +4 点（10-30 → 11-02） (当前 30)')
   })
 
+  it('leaves the banned word out of every reason the copied text can print', () => {
+    // Reasons reach the copy through the whole text tree (`labels.reasons[row.reason]`), so the
+    // check has to look at the values the tree actually carries, not at a `.reasons` call site.
+    for (const reason of Object.values(options.labels.reasons)) expect(reason).not.toContain('读数')
+  })
+
   it('states an empty edition instead of leaving blank sections', () => {
     const empty = document({
       status: { readings: [

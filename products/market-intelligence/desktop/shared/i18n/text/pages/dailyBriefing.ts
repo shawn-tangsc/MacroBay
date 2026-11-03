@@ -21,9 +21,9 @@ export const dailyBriefingText = {
     states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
     // 分享卡只回答一件事：这个数是哪个时点的。五种口径各不相同，所以逐条写出来，
     // 不合并成一个读者没见过的词；没有依据时干脆不标，不拿一句话去凑。
-    // 只在读数不是名字所承诺的口径时才写一句；24 小时的涨跌本来就有下面的时刻在说。
+    // 只有数据不是名字所承诺的口径时才写一句；24 小时的涨跌本来就有下面的时刻在说。
     staleBasis: { lastClose: '最近一次收盘', seriesLevel: '最新水平（当天没有 24 小时涨跌）', published: '上一交易日的官方收盘' },
-    reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面数据不可用', 'etf-unavailable': 'ETF 读数不可用' },
+    reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面数据不可用', 'etf-unavailable': 'ETF 数据不可用' },
     changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
     // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
     changeWindows: { '24h': '24h', '1d': '1d', daily: '1d', '7d': '7d', '30d': '30d', latest: '', 'trading-day': '较上一交易日收盘', 'publication-day': '较上次发布' },
@@ -249,7 +249,7 @@ export const dailyBriefingText = {
     // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
     // last close is not today's reading.
     staleBasis: { lastClose: 'Most recent close', seriesLevel: 'Latest level (no 24-hour move that day)', published: 'Official close of the prior session' },
-    reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
+    reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF data unavailable' },
     changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
     // What each change is measured against: a rolling window, a session close, a release.
     changeWindows: { '24h': '24h', '1d': '1d', daily: '1d', '7d': '7d', '30d': '30d', latest: '', 'trading-day': 'vs prior session close', 'publication-day': 'vs last publication' },
