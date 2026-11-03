@@ -188,6 +188,8 @@
 
 .channel-row-mask {
   color: var(--muted);
+  /* 掩码不可选中：没有任何复制入口，选中拖拽也算入口。 */
+  user-select: none;
   letter-spacing: 1px;
   /* 等宽字体栈与壳层其余 8 处一致；不为它新造 token（收敛成 token 是另一笔）。 */
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
