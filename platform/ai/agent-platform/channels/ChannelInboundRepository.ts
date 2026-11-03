@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
 import { recordRuntimeAudit } from './channelRuntimeAuditRetention'
+import { channelHasAnyAllowPolicy, isAllowedByPolicy, readChannelAllowList } from './channelAllowList'
 import type { ChannelConversationKind } from './channelContracts'
 import type { ChannelDispatchAdmission, ChannelDispatchFinalStatus, ChannelExecutionClaim } from './ChannelInboundContracts'
 
@@ -481,15 +482,12 @@ export class ChannelInboundRepository {
     ).run(randomUUID(), channelId, input.subjectType, input.keyCiphertext, input.keyRef, input.keyRevision, input.keyHash, input.conversationKind ?? null, now.toISOString())
   }
 
+  /** 实现在 `channelAllowList`（三条口径见那里）。 */
+  allowList(channelId: string): string[] { return readChannelAllowList(this.database, channelId) }
+  hasAnyAllowPolicy(channelId: string): boolean { return channelHasAnyAllowPolicy(this.database, channelId) }
+
   isAllowed(channelId: string, userHash: string, conversationHash: string, kind: ChannelConversationKind): boolean {
-    const row = this.database.connection.prepare(
-      `select 1 from channel_allow_policies
-       where channel_id = ? and (
-         (subject_type = 'user' and subject_key_hash = ? and (conversation_kind is null or conversation_kind = ?))
-         or (subject_type = 'conversation' and subject_key_hash = ? and (conversation_kind is null or conversation_kind = ?))
-       ) limit 1`
-    ).get(channelId, userHash, kind, conversationHash, kind)
-    return Boolean(row)
+    return isAllowedByPolicy(this.database, channelId, userHash, conversationHash, kind)
   }
 
   handleClaim(input: {

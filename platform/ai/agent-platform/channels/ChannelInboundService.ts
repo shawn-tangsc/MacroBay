@@ -69,24 +69,13 @@ export class ChannelInboundService {
         this.deps.encryption.cipher.keyedHash(request.channelId, bytes(request.providerUserKey))
       ])
       const now = this.now()
-      const decision = guarded.rejection ?? this.policyDecision(request, userHash, conversationHash)
+      const decision = guarded.rejection ?? await this.policyDecision(request, userHash, conversationHash)
       if (decision === 'channel-policy-denied') {
-        try {
-          this.deps.repository.upsertCandidate({
-            channelId: request.channelId,
-            kind: request.conversationKind,
-            userKeyCiphertext: encryptedUser.ciphertext,
-            userKeyRef: encryptedUser.keyRef,
-            userKeyRevision: encryptedUser.keyRevision,
-            userKeyHash: userHash,
-            conversationKeyCiphertext: encryptedConversation.ciphertext,
-            conversationKeyRef: encryptedConversation.keyRef,
-            conversationKeyRevision: encryptedConversation.keyRevision,
-            conversationKeyHash: conversationHash,
-            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
-            now
-          })
-        } catch { /* Discovery is best-effort; the denied message must still be acknowledged. */ }
+        this.recordCandidate(request, { encryptedUser, encryptedConversation, userHash, conversationHash, now })
+      } else if (decision === null && this.deps.repository.allowList(request.channelId).length === 0) {
+        // 「允许所有」时把见过的会话记进**候选表**，方便读者以后照着填允许列表。
+        // 绝不写进允许列表本身：一写，列表就非空，语义会在第一条消息后静默收紧成「只允许这一个」。
+        this.recordCandidate(request, { encryptedUser, encryptedConversation, userHash, conversationHash, now })
       }
       const isNewCommand = request.text?.trim() === '/new'
       const admissionId = decision ? null : this.deps.repository.reserveAdmission(request.channelId, request.generation, now)
@@ -243,9 +232,48 @@ export class ChannelInboundService {
     return this.deps.repository.setDeliveryTarget(input.channelId, input.conversationId, input.enabled, this.now())
   }
 
-  private policyDecision(request: ChannelInboundRequest, userHash: string, conversationHash: string): ChannelInboundAuditCode | null {
+  private recordCandidate(
+    request: ChannelInboundRequest,
+    input: {
+      encryptedUser: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }
+      encryptedConversation: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }
+      userHash: string
+      conversationHash: string
+      now: Date
+    }
+  ): void {
+    try {
+      this.deps.repository.upsertCandidate({
+        channelId: request.channelId,
+        kind: request.conversationKind,
+        userKeyCiphertext: input.encryptedUser.ciphertext,
+        userKeyRef: input.encryptedUser.keyRef,
+        userKeyRevision: input.encryptedUser.keyRevision,
+        userKeyHash: input.userHash,
+        conversationKeyCiphertext: input.encryptedConversation.ciphertext,
+        conversationKeyRef: input.encryptedConversation.keyRef,
+        conversationKeyRevision: input.encryptedConversation.keyRevision,
+        conversationKeyHash: input.conversationHash,
+        ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+        now: input.now
+      })
+    } catch { /* Discovery is best-effort; the message must still be acknowledged. */ }
+  }
+
+  private async policyDecision(request: ChannelInboundRequest, userHash: string, conversationHash: string): Promise<ChannelInboundAuditCode | null> {
     if ((request.conversationKind === 'group' || request.conversationKind === 'channel') && !request.mentionedBot) return 'channel-mention-required'
-    if (!this.deps.repository.isAllowed(request.channelId, userHash, conversationHash, request.conversationKind)) return 'channel-policy-denied'
+    const allowList = this.deps.repository.allowList(request.channelId)
+    if (allowList.length > 0) {
+      // 读者填了列表：**只放行这些会话**。列表与入站用的是同一个 keyedHash，所以能逐字比。
+      const allowed = await Promise.all(
+        allowList.map((id) => this.deps.encryption.cipher.keyedHash(request.channelId, bytes(id)))
+      )
+      return allowed.includes(conversationHash) ? null : 'channel-policy-denied'
+    }
+    // 列表为空：仍然尊重历史策略行（老数据行为不变）；一条策略都没有才是「允许所有」。
+    if (this.deps.repository.hasAnyAllowPolicy(request.channelId)) {
+      return this.deps.repository.isAllowed(request.channelId, userHash, conversationHash, request.conversationKind) ? null : 'channel-policy-denied'
+    }
     return null
   }
 

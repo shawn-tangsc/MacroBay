@@ -76,6 +76,8 @@ describe('ChannelInboundService', () => {
 
   it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {
     const { service, database } = createHarness()
+    // 有一条显式策略的频道仍按老规则：只放行列表里的，陌生人进候选表（空白频道现在是「允许所有」）。
+    await allow(service, 'channel-a', 'user-a')
     const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerUserLabel: 'Alice', providerConversationKey: 'conversation-x' })
     expect(denied.disposition).toBe('ignored')
 
@@ -88,13 +90,48 @@ describe('ChannelInboundService', () => {
       channelId: 'channel-a', candidateId: candidates[0].id, enableTarget: true
     })
     expect(conversationId).toBeTruthy()
-    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 1 })
+    // 一条是上面为「陌生人被拒」预置的策略，另一条是这次放行候选写进来的。
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 2 })
     expect(database.connection.prepare('select count(*) as count from channel_delivery_targets where enabled=1').get()).toEqual({ count: 1 })
 
     const accepted = await receive(service, 'channel-a', {
       providerEventKey: 'event-after-allow', providerUserKey: 'user-x', providerConversationKey: 'conversation-x'
     })
     expect(accepted.disposition).toBe('acknowledged')
+  })
+
+  // 新口径（需求 v7）：「允许的会话 ID」留空 = 允许所有。老数据里有策略行的频道行为不变。
+  it('allows every conversation when the channel has neither an allowlist nor a policy', async () => {
+    const { service, database } = createHarness()
+    const result = await receive(service, 'channel-a', { providerEventKey: 'event-allow-all', providerUserKey: 'stranger', providerConversationKey: 'conversation-stranger' })
+    expect(result.disposition).not.toBe('ignored')
+    expect(database.connection.prepare('select count(*) as count from channel_runtime_audits where code = ?').get('channel-policy-denied')).toEqual({ count: 0 })
+  })
+
+  it('keeps allowing later messages while the allowlist stays empty, so it cannot silently tighten', async () => {
+    const { service, database } = createHarness()
+    for (const [index, user] of ['user-1', 'user-2', 'user-3'].entries()) {
+      const result = await receive(service, 'channel-a', {
+        providerEventKey: `event-allow-all-${index}`,
+        providerUserKey: user,
+        providerConversationKey: `conversation-${user}`
+      })
+      expect(result.disposition).not.toBe('ignored')
+    }
+    // 自动记录只进候选表：允许列表与策略表都不许被写。
+    const row = database.connection.prepare('select active_chat_ids_json from agent_channels where id = ?').get('channel-a') as { active_chat_ids_json: string | null }
+    expect(row.active_chat_ids_json).toBeNull()
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 0 })
+    expect((database.connection.prepare('select count(*) as count from channel_inbound_candidates').get() as { count: number }).count).toBeGreaterThan(0)
+  })
+
+  it('allows only the listed conversations once the reader fills the allowlist', async () => {
+    const { service, database } = createHarness()
+    database.connection.prepare('update agent_channels set active_chat_ids_json = ? where id = ?').run(JSON.stringify(['conversation-a']), 'channel-a')
+    const listed = await receive(service, 'channel-a', { providerEventKey: 'event-listed', providerUserKey: 'user-a', providerConversationKey: 'conversation-a' })
+    expect(listed.disposition).toBe('acknowledged')
+    const other = await receive(service, 'channel-a', { providerEventKey: 'event-other', providerUserKey: 'user-b', providerConversationKey: 'conversation-b' })
+    expect(other.disposition).toBe('ignored')
   })
 
   it('claims concurrent duplicates once, acknowledges both, and never creates a second dispatch', async () => {
