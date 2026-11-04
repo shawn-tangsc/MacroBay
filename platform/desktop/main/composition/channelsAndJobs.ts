@@ -261,16 +261,22 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 自动重连连续失败 → 一条「频道连不上」（契约 §4.1 P8）。断的是**收**，与 P6a「发不出去」不是一条。
     // 频道名现取：读者改过名字就该按新名字说；读不到时退回平台显示名，正文里绝不出现频道 id。
     reportConnectionLost: ({ channelId, cause, disconnectedAt }) => {
+      // 这是**发出去就不等**的一笔（断线判定不能等通知落盘）；但一个裸 rejection 在主进程里会升级成
+      // 退出，而「通知发不出去」绝不能把整个应用带走，所以最外层自己兜住。
       void (async () => {
-        const name = channelManagementRepository.query.get(channelId)?.name ?? null
-        const language = (await settingsStore.get()).language
-        await notifyChannelConnectionLost(ports.submitNotification, {
-          channelId,
-          channelName: name ?? channelAdapterDescriptor('telegram').displayName[language],
-          cause,
-          disconnectedAt,
-          occurredAt: new Date().toISOString()
-        })
+        try {
+          const name = channelManagementRepository.query.get(channelId)?.name ?? null
+          const language = (await settingsStore.get()).language
+          await notifyChannelConnectionLost(ports.submitNotification, {
+            channelId,
+            channelName: name ?? channelAdapterDescriptor('telegram').displayName[language],
+            cause,
+            disconnectedAt,
+            occurredAt: new Date().toISOString()
+          })
+        } catch {
+          // 读库/读设置失败也只是少一条提醒：连接自己会继续重试，状态行与日志另有记录。
+        }
       })()
     }
   })
