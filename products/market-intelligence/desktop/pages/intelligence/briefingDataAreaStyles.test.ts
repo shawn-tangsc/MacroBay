@@ -207,3 +207,29 @@ describe('the paper has one divider colour', () => {
     expect([...new Set(dividers)]).toEqual(['#c9bda3'])
   })
 })
+
+/**
+ * 注释里不许出现「当前值的写法」。
+ *
+ * 定值是常量，不是行为：现值只许住在 `07-style-values.md` 和本文件里，注释里复述一份就必然过期——
+ * 今晚已经有两处与规则相反（环心字号/位置、卡底那句），而且都是偶然翻到的。
+ *
+ * 只禁「当前值的写法」，不禁数值：`font-size: 15px`、`#ded4c2` 判红，而 `≥2px`、`< 114px` 这类**约束**
+ * 放行。注释说不了约束就只能删掉，删掉的是一段理由，那比一个过期的数更贵。
+ */
+describe('the comments state constraints, not current values', () => {
+  const blocks = (text: string): readonly string[] => text.match(/\/\*[\s\S]*?\*\//g) ?? []
+  const currentValue = /(?:^|[^\w-])(top|right|bottom|left|font-size|line-height|width|height|gap|color|background)\s*:/i
+  const colour = /#[0-9a-fA-F]{3,8}\b/
+
+  it('carries no property-value pair and no colour literal', () => {
+    expect(blocks(css).filter((block) => currentValue.test(block) || colour.test(block))).toEqual([])
+  })
+
+  it('would catch a restated value, and still lets a constraint speak', () => {
+    // 没人见它红过的校验，可能根本不会红。
+    expect(blocks('/* the ring sits at top: 25 with 16px type */').filter((block) => currentValue.test(block))).toHaveLength(1)
+    expect(blocks('/* the hairline is #ded4c2 */').filter((block) => colour.test(block))).toHaveLength(1)
+    expect(blocks('/* keeps ≥2px of clearance inside a 114px bore */').filter((block) => currentValue.test(block) || colour.test(block))).toHaveLength(0)
+  })
+})
