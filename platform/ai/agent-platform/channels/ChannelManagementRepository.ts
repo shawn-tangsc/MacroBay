@@ -706,7 +706,11 @@ export class ChannelManagementRepository {
     return replaced === 1 ? { token, purpose: 'restart', generation: null } : null
   }
 
-  activateOwnedRuntime(channelId: string, owner: TelegramLifecycleOwner, now: string): TelegramLifecycleOwner | null {
+  activateOwnedRuntime(
+    channelId: string,
+    owner: TelegramLifecycleOwner,
+    now: string
+  ): { owner: TelegramLifecycleOwner; displaced: import('./singleEnabledChannel').DisplacedChannel[] } | null {
     return activateOwnedChannelRuntime(this.database, channelId, owner, now)
   }
 

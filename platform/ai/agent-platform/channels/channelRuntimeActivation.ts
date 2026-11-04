@@ -1,6 +1,7 @@
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
 import type { TelegramLifecycleOwner } from './ChannelManagementRepository'
+import { disableOtherEnabledChannelsInTransaction, type DisplacedChannel } from './singleEnabledChannel'
 
 /**
  * 启用的最后一跳：把生命周期 owner 落成一条代际记录，通道才算真的「起来了」。
@@ -67,7 +68,7 @@ export function activateOwnedChannelRuntime(
   channelId: string,
   owner: TelegramLifecycleOwner,
   now: string
-): TelegramLifecycleOwner | null {
+): { owner: TelegramLifecycleOwner; displaced: DisplacedChannel[] } | null {
   return database.transact(() => {
     const current = database.connection.prepare(
       'select 1 from channel_telegram_lifecycle_operations where channel_id = ? and owner_token = ? and purpose = ? and generation is null'
@@ -75,6 +76,9 @@ export function activateOwnedChannelRuntime(
     if (!current) return null
     if (owner.purpose === 'mutation') return null
     const states = owner.purpose === 'enable' ? "('ready', 'disabled')" : "('enabled')"
+    // 单频道不变量：同一时间只允许一条启用。启用新的就把旧的自动停用（读者不用手动关、也不用确认），
+    // 与「这一条置为 enabled」在同一个事务里完成——中途失败不该留下一片停用。
+    const displaced = disableOtherEnabledChannelsInTransaction(database, channelId, now)
     const changed = database.connection.prepare(
       `update agent_channels set requested_enabled = 1, lifecycle_state = 'enabled', updated_at = ?
        where id = ? and ${supportedChannelSql()} and lifecycle_state in ${states}
@@ -93,6 +97,6 @@ export function activateOwnedChannelRuntime(
     const owned = database.connection.prepare(
       'update channel_telegram_lifecycle_operations set generation = ?, updated_at = ? where channel_id = ? and owner_token = ? and purpose = ? and generation is null'
     ).run(generation, now, channelId, owner.token, owner.purpose).changes
-    return owned === 1 ? { ...owner, generation } : null
+    return owned === 1 ? { owner: { ...owner, generation }, displaced } : null
   })
 }

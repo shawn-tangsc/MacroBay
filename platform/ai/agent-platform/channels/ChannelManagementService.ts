@@ -17,6 +17,7 @@ import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { requestSmokeEnabledChannel } from './channelSmokeEnable'
 import { releaseChannelAcceptance } from './channelAcceptanceOverride'
+import { reconcileEnabledChannels, resumeChannelsWithInvariant, stopDisplacedChannels } from './channelSingleEnabledEnforcement'
 import { getWithCredentialPreviews, listWithCredentialPreviews } from './channelCredentialProjection'
 import { createChannelInventory, type ChannelInventory } from './channelInventoryQueries'
 import { requireExistingChannel } from './channelLookup'
@@ -53,6 +54,11 @@ type ManagementDependencies = {
     stop: (channelId: string, ownerToken?: string) => void
   }
   now?: () => Date
+  /**
+   * 启动对账用的单频道不变量：由组合根接到同一份数据库（服务不直接摸连接）。
+   * 返回保留的那条与被停用的那些；停运行时与审计由服务负责。
+   */
+  singleEnabledChannel?: (now: string) => { kept: import('./singleEnabledChannel').DisplacedChannel | null; disabled: import('./singleEnabledChannel').DisplacedChannel[] }
 }
 
 type MutationInput = { id: unknown; actorId: unknown }
@@ -197,7 +203,9 @@ export class ChannelManagementService {
       this.deps.repository.failPendingLifecycleOwner(id, owner, this.now())
       return this.enableRejected(id, actorId, channel, credentialCode)
     }
-    const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
+    const activation = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
+    if (activation !== null) stopDisplacedChannels(this.enforcement(), activation.displaced)
+    const activeOwner = activation?.owner
     if (!activeOwner?.generation) {
       // 先把真实原因问出来，再放掉 pending owner（放了就查不到 owner 那一档了）。
       // 以前这里非 restart 一律报 `channel-agent-missing`：拿「助手不在了」当兜底，
@@ -337,22 +345,15 @@ export class ChannelManagementService {
     })
   }
 
-  /** Restarts channels whose intent survived a graceful quit; unsupported/broken rows are disabled. */
+  /** Restarts channels whose intent survived a graceful quit；恢复前后各对一次单频道不变量。 */
   async resumeRequested(): Promise<void> {
-    for (const id of this.deps.repository.resumableChannelIds()) {
-      const channel = this.deps.repository.query.get(id)
-      const result = channel?.state === 'runtime-ready'
-        ? await this.restart({ id, actorId: 'channel-startup' })
-        : await this.requestEnable({ id, actorId: 'channel-startup' })
-      if (!result.ok) {
-        if (result.code === 'adapter-runtime-start-failed') {
-          // Transient start failures keep the intent; the next boot retries through enable.
-          this.deps.repository.preserveResumeIntent(id, this.now())
-        } else {
-          this.disable({ id, actorId: 'channel-startup' })
-        }
-      }
-    }
+    await resumeChannelsWithInvariant({
+      ...this.enforcement(),
+      resumableChannelIds: () => this.deps.repository.resumableChannelIds(),
+      readChannel: (id) => this.deps.repository.query.get(id),
+      restart: (input) => this.restart(input), requestEnable: (input) => this.requestEnable(input),
+      disable: (input) => { this.disable(input) }
+    })
   }
 
   async recover(): Promise<void> {
@@ -369,6 +370,22 @@ export class ChannelManagementService {
       } catch {
         this.deps.repository.setCredentialHealth(credential.channelId, 'unavailable', this.now())
       }
+    }
+  }
+
+  /** 启动对账：保留最近启用的那条，其余停用并留一行审计。 */
+  reconcileSingleEnabledChannel(): { keptChannelId: string | null; disabledChannelIds: string[] } {
+    return reconcileEnabledChannels(this.enforcement())
+  }
+
+  /** 单频道不变量的执行上下文（停运行时、还放行、写审计都在 `channelSingleEnabledEnforcement`）。 */
+  private enforcement() {
+    return {
+      repository: this.deps.repository,
+      ...(this.deps.runtime ? { runtime: this.deps.runtime } : {}),
+      now: () => this.now(),
+      releaseAcceptance: (adapter: string) => { releaseChannelAcceptance(adapter) },
+      ...(this.deps.singleEnabledChannel ? { reconcile: this.deps.singleEnabledChannel } : {})
     }
   }
 
