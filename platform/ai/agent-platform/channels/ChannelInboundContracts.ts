@@ -60,8 +60,19 @@ export type ChannelDispatchAdmission = {
 
 export type ChannelDispatchFinalStatus = 'completed' | 'failed'
 
+export type ChannelSessionSuggestion = {
+  channelId: string
+  agentId: string
+  /** 对方显示名（Telegram 的 first_name 这类）：会话名优先用它。 */
+  displayLabel?: string
+  /** 平台原样的会话 id（`telegram:chat:<id>` 这类）：拿不到显示名时取后四位。 */
+  providerConversationKey: string
+  /** 这条频道下已经有别的会话：名字需要加区分段，否则同一个人/两个人都叫「Telegram 对话」。 */
+  disambiguate: boolean
+}
+
 export type ChannelSessionFactory = {
-  createForConversation: (input: { channelId: string; agentId: string }) => Promise<string>
+  createForConversation: (input: ChannelSessionSuggestion) => Promise<string>
   discardUnbound: (sessionId: string) => Promise<void>
   /** Optional existence probe; when provided, a deleted session is treated as unbound. */
   exists?: (sessionId: string) => Promise<boolean>

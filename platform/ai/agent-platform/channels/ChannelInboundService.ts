@@ -25,6 +25,11 @@ export type ChannelInboundServiceDependencies = {
   beforeAcknowledge?: () => Promise<void>
   // Private composition callback: adapters receive only ChannelInboundResult, never a claim.
   onInitialClaimAvailable?: (dispatchId: string) => void
+  /**
+   * 跟这条通道说过话的对话，自动记成投递目标（**已有目标时不许覆盖**）。
+   * 界面上没有绑定入口，所以这一步不能指望读者动手。
+   */
+  bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
 }
 
 export class ChannelInboundService {
@@ -83,6 +88,10 @@ export class ChannelInboundService {
       let conversation: { record: ChannelConversationRecord; created: boolean } | null = null
       try {
         conversation = decision ? null : await this.resolveConversation(request, agentId, conversationHash, encryptedConversation)
+        if (!decision && conversation && !request.text?.trim().startsWith('/new')) {
+          // 跟这条通道说过话的对话就是投递目标：界面上没有绑定入口，不能指望读者自己去绑。
+          this.deps.bindAutoTarget?.({ channelId: request.channelId, conversationId: conversation.record.id })
+        }
         // /new is a durable provider event but never Agent work. Replacement remains generation-bound.
         // The first /new creates its initial binding only; replacing that just-created session would orphan it.
         if (!decision && isNewCommand && conversation && !conversation.created) {
@@ -201,7 +210,12 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId })
+      sessionId = await this.deps.sessions.createForConversation({
+        channelId: input.channelId,
+        agentId,
+        providerConversationKey: input.providerConversationKey,
+        disambiguate: this.deps.repository.countConversations(input.channelId) > 0
+      })
       if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(input.channelId, keyHash, sessionId, input.generation, agentId, this.now())) {
         throw new Error('Channel conversation session replacement failed.')
       }
@@ -290,7 +304,12 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId: input.agentId })
+      sessionId = await this.deps.sessions.createForConversation({
+        channelId: input.channelId,
+        agentId: input.agentId,
+        providerConversationKey: input.keyHash,
+        disambiguate: this.deps.repository.countConversations(input.channelId) > 0
+      })
       if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
         input.channelId, input.keyHash, sessionId, input.generation, input.agentId, this.now()
       )) {
@@ -335,7 +354,13 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: request.channelId, agentId })
+      sessionId = await this.deps.sessions.createForConversation({
+        channelId: request.channelId,
+        agentId,
+        ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+        providerConversationKey: request.providerConversationKey,
+        disambiguate: this.deps.repository.countConversations(request.channelId) > 0
+      })
       if (!sessionId.trim()) throw new Error('Channel session factory returned no session.')
       const created = this.deps.repository.createConversation({
         id: randomUUID(), channelId: request.channelId, keyCiphertext: encrypted.ciphertext, keyRef: encrypted.keyRef,

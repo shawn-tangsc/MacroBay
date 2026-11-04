@@ -30,6 +30,8 @@ import {
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
+import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
+import { autoBindDeliveryTarget } from '../../../ai/agent-platform/channels/channelAutoTargetBinding'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createPlatformWebSocketFactory } from '../../../network/platformWebSocket'
 import { createTaskAutomationMaintenance } from '../taskAutomationMaintenance'
@@ -166,11 +168,20 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     repository: channelInboundRepository,
     encryption: { cipher: channelCredentialVault.payloadCipher },
     sessions: {
-      createForConversation: async ({ agentId }) => (await agentServices.sessions.create({
-        agentId,
-        name: 'Channel conversation',
-        workspace: { type: 'system' }
-      })).id,
+      // 会话名要能认出「来自哪个平台、哪个人」：平台名只从目录表取，拼接处不写字面量。
+      createForConversation: async (input) => {
+        const language = (await settingsStore.get()).language
+        const type = channelManagementRepository.channelType(input.channelId)
+        const adapter = type === 'feishu' ? 'lark' : type ?? 'telegram'
+        const name = channelConversationTitle({
+          adapter,
+          language,
+          ...(input.displayLabel ? { displayLabel: input.displayLabel } : {}),
+          providerConversationKey: input.providerConversationKey,
+          disambiguate: input.disambiguate
+        })
+        return (await agentServices.sessions.create({ agentId: input.agentId, name, workspace: { type: 'system' } })).id
+      },
       discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
       exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
     },
@@ -178,7 +189,11 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     contentGuard: createChannelInboundContentGuard({
       channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
     }),
-    onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
+    onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId),
+    // 入站消息到达且这条频道还没有投递目标时，自动把它记成唯一目标（不覆盖已有绑定）。
+    bindAutoTarget: ({ channelId, conversationId }) => {
+      autoBindDeliveryTarget(agentDatabase, { channelId, conversationId, now: new Date() })
+    }
   })
   const telegramRuntimeManager = new TelegramRuntimeManager({
     inbound: channelInboundRepository,

@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
+import {
+  countChannelConversations,
+  deleteUnboundChannelConversation,
+  releaseChannelConversationOperation,
+  reserveChannelConversationOperation
+} from './channelConversationBindings'
 import { recordRuntimeAudit } from './channelRuntimeAuditRetention'
 import { channelHasAnyAllowPolicy, isAllowedByPolicy, readChannelAllowList } from './channelAllowList'
 import type { ChannelConversationKind } from './channelContracts'
@@ -175,6 +181,10 @@ export class ChannelInboundRepository {
     this.database.transact(() => this.audit(channelId, generation, 'channel-inbound-failed', now))
   }
 
+  countConversations(channelId: string): number {
+    return countChannelConversations(this.database, channelId)
+  }
+
   getConversation(channelId: string, keyHash: string): ChannelConversationRecord | null {
     const row = this.database.connection.prepare(
       `select id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
@@ -239,26 +249,15 @@ export class ChannelInboundRepository {
   }
 
   reserveConversationOperation(channelId: string, keyHash: string, generation: number, agentId: string, now = new Date()): string | null {
-    return this.database.transact(() => {
-      if (this.getCurrentAgentId(channelId, generation) !== agentId) return null
-      // A restart advances generation, so only a same-generation reservation can block it.
-      this.database.connection.prepare(
-        'delete from channel_conversation_session_operations where channel_id = ? and conversation_key_hash = ? and generation <> ?'
-      ).run(channelId, keyHash, generation)
-      const operationId = randomUUID()
-      const inserted = this.database.connection.prepare(
-        `insert or ignore into channel_conversation_session_operations (
-          channel_id, conversation_key_hash, operation_id, generation, agent_id, created_at
-        ) values (?, ?, ?, ?, ?, ?)`
-      ).run(channelId, keyHash, operationId, generation, agentId, now.toISOString()).changes === 1
-      return inserted ? operationId : null
-    })
+    return reserveChannelConversationOperation(
+      this.database,
+      { channelId, keyHash, generation, agentId, now },
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration)
+    )
   }
 
   releaseConversationOperation(channelId: string, keyHash: string, operationId: string): void {
-    this.database.connection.prepare(
-      'delete from channel_conversation_session_operations where channel_id = ? and conversation_key_hash = ? and operation_id = ?'
-    ).run(channelId, keyHash, operationId)
+    releaseChannelConversationOperation(this.database, channelId, keyHash, operationId)
   }
 
   createConversation(record: ChannelConversationRecord, generation: number, agentId: string, now = new Date()): { record: ChannelConversationRecord; created: boolean } | null {
@@ -281,10 +280,7 @@ export class ChannelInboundRepository {
   }
 
   deleteUnboundConversation(channelId: string, keyHash: string, sessionId: string): boolean {
-    return this.database.connection.prepare(
-      `delete from channel_conversations where channel_id = ? and conversation_key_hash = ? and agent_session_id = ?
-       and not exists (select 1 from channel_inbound_work_items where conversation_id = channel_conversations.id)`
-    ).run(channelId, keyHash, sessionId).changes === 1
+    return deleteUnboundChannelConversation(this.database, channelId, keyHash, sessionId)
   }
 
   reserveAdmission(channelId: string, generation: number, now = new Date()): string | null {

@@ -63,6 +63,13 @@ export function createChannelInventory(deps: ChannelInventoryDeps) {
       return deps.repository.query.policies(id, assertBoundedInteger(input.limit, 50, 100) || 1)
     },
 
+    /** 把一条会话登记成投递目标（测试消息自动兜底用）；已有目标时不覆盖。 */
+    bindDeliveryTarget(input: { channelId: string; conversationId: string }) {
+      const id = requireChannel(input.channelId)
+      if (deps.repository.query.hasAnyDeliveryTarget(id)) return
+      deps.repository.setTarget(id, input.conversationId, true, new Date().toISOString())
+    },
+
     listConversations(input: { id: unknown; limit?: unknown }) {
       const id = requireChannel(input.id)
       if (deps.repository.channelType(id) === 'wechat') return []

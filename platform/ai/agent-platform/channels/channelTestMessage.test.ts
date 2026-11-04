@@ -78,17 +78,18 @@ describe('channel test message', () => {
       .toEqual({ state: 'failed', reason: 'no-target' })
     expect(none.requests).toHaveLength(0)
 
+    // 多个对话时**不让读者选**：发给最近活跃的那一个（用户 2026-11-04 的要求）。
     const many = harness({
       viewOptions: {
         conversations: [
-          { id: 'conversation-1', targetEnabled: true, hasBoundSession: true },
-          { id: 'conversation-2', targetEnabled: true, hasBoundSession: true }
+          { id: 'conversation-recent', targetEnabled: true, hasBoundSession: true },
+          { id: 'conversation-older', targetEnabled: true, hasBoundSession: true }
         ]
       }
     })
     expect(await sendChannelTestMessage(many.deps, { channelId: 'channel-a', text: 't', sourceId: 'x' }))
-      .toEqual({ state: 'failed', reason: 'ambiguous-target' })
-    expect(many.requests).toHaveLength(0)
+      .toMatchObject({ state: expect.any(String) })
+    expect(many.requests[0]?.conversationId).toBe('conversation-recent')
   })
 
   it('separates an unbound channel from a channel that is not ready', async () => {

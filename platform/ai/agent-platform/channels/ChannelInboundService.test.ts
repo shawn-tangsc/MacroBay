@@ -41,6 +41,57 @@ describe('ChannelInboundService', () => {
     expect(cipher.encrypt).toHaveBeenCalled()
   })
 
+  it('keeps one session per (channel, provider conversation) across messages', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+
+    await receive(service, 'channel-a', { providerEventKey: 'event-one' })
+    const first = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    await receive(service, 'channel-a', { providerEventKey: 'event-two' })
+    const second = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    expect(database.connection.prepare('select count(*) as count from channel_conversations').get()).toEqual({ count: 1 })
+    expect(second.agent_session_id).toBe(first.agent_session_id)
+  })
+
+  it('keeps two bots apart even when the same person talks to both', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await allow(service, 'channel-b', 'user-a')
+
+    await receive(service, 'channel-a', { providerEventKey: 'event-a-1' })
+    await receive(service, 'channel-b', { providerEventKey: 'event-b-1' })
+
+    const rows = database.connection.prepare(
+      'select channel_id, agent_session_id from channel_conversations order by channel_id'
+    ).all() as Array<{ channel_id: string; agent_session_id: string }>
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((row) => row.agent_session_id)).size).toBe(2)
+  })
+
+  it('keeps the same session for the same chat after the service is rebuilt', async () => {
+    const { service, database, repository, cipher } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'event-before-restart' })
+    const before = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    const rebuilt = new ChannelInboundService({
+      repository,
+      encryption: { cipher },
+      sessions: {
+        // 重启后 Agent 会话还在：exists 必须回答「在」，否则会被当成未绑定并重建一条。
+        createForConversation: async () => 'must-not-be-used',
+        discardUnbound: async () => {},
+        exists: async () => true
+      },
+      contentGuard: passthroughGuard,
+      now: () => new Date('2026-07-18T00:00:00.000Z')
+    })
+    await receive(rebuilt, 'channel-a', { providerEventKey: 'event-after-restart' })
+
+    expect(database.connection.prepare('select agent_session_id from channel_conversations').get()).toEqual(before)
+  })
+
   it('rebinds a conversation to a fresh session after its agent session is deleted', async () => {
     const { service, database } = createHarness()
     await allow(service, 'channel-a', 'user-a')

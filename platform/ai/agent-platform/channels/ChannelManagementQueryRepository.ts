@@ -199,6 +199,13 @@ export class ChannelManagementQueryRepository {
     }))
   }
 
+  /** 这条频道有没有任何投递目标（含停用的）：决定「自动绑定」要不要动手。 */
+  hasAnyDeliveryTarget(channelId: string): boolean {
+    return Boolean(this.database.connection.prepare(
+      'select 1 as present from channel_delivery_targets where channel_id = ? limit 1'
+    ).get(channelId))
+  }
+
   conversations(channelId: string, limit: number): ChannelConversationSafeView[] {
     return (this.database.connection.prepare(
       `select c.id, c.conversation_kind, c.agent_session_id, c.created_at, coalesce(t.enabled, 0) as target_enabled

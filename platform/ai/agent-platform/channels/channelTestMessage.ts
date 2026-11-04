@@ -29,7 +29,11 @@ export async function sendChannelTestMessage(
   deps: { channels: ChannelTargetView; deliver: (request: ChannelDeliveryRequest) => Promise<ChannelDeliveryResult> },
   input: { channelId: string; text: string; sourceId: string }
 ): Promise<ChannelTestMessageReceipt> {
-  const resolved = resolveDeliveryTarget(deps.channels, input.channelId)
+  const resolved = resolveDeliveryTarget(deps.channels, input.channelId, { allowFallback: true })
+  if (resolved.ok && resolved.source === 'fallback') {
+    // 读者没绑定过：这次推断出来的目标**回写**成绑定，下次不必再推断。
+    try { deps.channels.bindDeliveryTarget?.({ channelId: resolved.channelId, conversationId: resolved.conversationId }) } catch {}
+  }
   if (!resolved.ok) {
     return {
       state: 'failed',
