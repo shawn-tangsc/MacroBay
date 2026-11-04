@@ -64,6 +64,14 @@ export const marketIntelligenceProductManifest = {
         icon: 'database',
         order: 10,
         module: './desktop/settings/intelligence-sources'
+      },
+      {
+        // 设置 → 情报 → 通知：只放「这三条推不推手机」，本机两档在通用通知页（界面规范 §9d）。
+        id: 'intelligence-notification',
+        title: { 'zh-CN': '通知', 'en-US': 'Notifications' },
+        icon: 'message-square-text',
+        order: 11,
+        module: './desktop/settings/intelligence-notification'
       }
     ]
   },
