@@ -122,7 +122,7 @@ function toPulseRow(
     labelKey: row.labelKey,
     importance: isGap ? gap : context,
     materiality,
-    ...baselineVisibility(materiality, isGap),
+    ...baselineVisibility(!isGap, isGap),
     state,
     value: row.value ? Object.freeze({ number: row.value.number, format: row.value.format }) : null,
     change,
@@ -240,7 +240,7 @@ function crossRow(
     const stale = age(asOf, snapshot.analysisEnd) > marketStaleAfterMs
     const materiality = stale ? materialVerdict('gap') : marketMoveMateriality(normalize(metric.value), briefingDataMaterialityPolicy.marketPercent, rule.code)
     return Object.freeze({
-      id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(materiality, rule.must || stale),
+      id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(true, rule.must || stale),
       state: stale ? 'stale' as const : 'available' as const,
       ...(stale ? { valueBasis: 'snapshot' as const } : {}),
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
@@ -281,7 +281,7 @@ function gapRow(
   // data is missing, and hiding it would make the brief look complete when it is not.
   const materiality = materialVerdict('gap')
   return Object.freeze({
-    id, labelKey, importance: gap, materiality, ...baselineVisibility(materiality, true),
+    id, labelKey, importance: gap, materiality, ...baselineVisibility(false, true),
     state, value, change: null, window, cadence: rowCadence[id], observedAt, reason
   })
 }
@@ -323,7 +323,7 @@ function macroRow(
     // column. Printing the return under `format: percent` made "美元 -0.21%" read as a price.
     const materiality = marketMoveMateriality(normalize(value), briefingDataMaterialityPolicy.marketPercent, code)
     return Object.freeze({
-      id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+      id, labelKey, importance: context, materiality, ...baselineVisibility(true),
       state: 'available' as const,
       value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
       change: Object.freeze({ value: normalize(value), unit: 'percent' as const, window: '24h' as const }),
@@ -334,7 +334,7 @@ function macroRow(
   // fact the conclusion cites; a dash here would say "no data" about a number that is in hand. A
   // level alone is not a change, so it stays a context row.
   return Object.freeze({
-    id, labelKey, importance: context, materiality: immateriality, ...baselineVisibility(immateriality),
+    id, labelKey, importance: context, materiality: immateriality, ...baselineVisibility(true),
     state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
     change: null, window: 'latest' as const, cadence: 'trading-day' as const, observedAt
@@ -371,7 +371,7 @@ function ratesRow(
     ? materialVerdict(code)
     : immateriality
   return Object.freeze({
-    id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+    id, labelKey, importance: context, materiality, ...baselineVisibility(true),
     state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.actual), format: 'yield' as const }),
     change: changeBp === undefined

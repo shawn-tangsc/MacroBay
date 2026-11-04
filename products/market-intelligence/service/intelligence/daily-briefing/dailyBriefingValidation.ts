@@ -20,7 +20,8 @@ import {
 import {
   briefingDataFactIds,
   briefingDataVisibilityAudit,
-  selectBriefingDataFacts
+  selectBriefingDataFacts,
+  withEditorialReasons
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBriefingConclusionValidation'
@@ -397,7 +398,7 @@ export function applyDailyBriefingEditorial(
     citations: Object.freeze(citations),
     provenance: Object.freeze({
       ...document.provenance,
-      selectionAudit: mergeSelectionAudit(document.provenance.selectionAudit, briefingDataVisibilityAudit({ ...document, data })),
+      selectionAudit: mergeSelectionAudit(document.provenance.selectionAudit, withEditorialReasons(briefingDataVisibilityAudit({ ...document, data }), editorial.hiddenData)),
       editorialMeta: Object.freeze({
         promptVersion: meta.promptVersion,
         model: meta.model,

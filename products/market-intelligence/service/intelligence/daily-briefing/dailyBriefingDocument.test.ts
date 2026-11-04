@@ -131,7 +131,7 @@ const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefing
         { seriesId: 'dxy-real', level: 102.2, atMs: Date.parse('2026-10-30T00:25:00.000Z'), returns: { '24h': 0.43 } },
         { seriesId: 'xau-usd', level: 3996, atMs: Date.parse('2026-10-30T00:25:00.000Z'), returns: { '24h': -0.54 } }
       ]
-    } as unknown as MacroMarketSnapshotView,
+    } as unknown as NonNullable<NonNullable<DailyBriefingFactPacket['market']>['macroMarket']>,
     macroRates: {
       state: 'available',
       readings: [
@@ -150,11 +150,11 @@ const positioning = (btcH24: number, ethH24: number): NonNullable<DailyBriefingF
   btc: [{ observedAt: asOf, notionalUsd: 1_200_000_000 }],
   eth: [{ observedAt: asOf, notionalUsd: 800_000_000 }],
   change: { btc: { h24Pct: btcH24 }, eth: { h24Pct: ethH24 } }
-})
+} as unknown as NonNullable<DailyBriefingFactPacket['positioning']>)
 
 const policyPath = (
   value: number,
-  overrides: Readonly<{ meetingDate?: string; outcome?: string }> = {}
+  overrides: Readonly<{ meetingDate?: string; outcome?: 'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus' }> = {}
 ): NonNullable<DailyBriefingFactPacket['policyPath']> => ({
   meetingDate: overrides.meetingDate ?? '2026-12-09',
   daysUntilMeeting: 40,
@@ -194,14 +194,14 @@ describe('daily briefing document', () => {
     expect(document.data.funds.every((row) => row.importance.tier === 'support')).toBe(true)
     expect(document.data.funds.find((row) => row.id === 'etf-btc')?.materiality).toMatchObject({ material: true, reasonCode: 'etf-flow' })
     expect(document.data.funds.find((row) => row.id === 'stablecoin')?.materiality).toMatchObject({ material: false })
-    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.visibility).toBe('hidden')
+    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.visibility).toBe('shown')
     expect(document.data.sentiment.fearGreed?.importance.tier).toBe('support')
     expect(document.data.sentiment.fearGreed?.materiality).toMatchObject({ material: false })
     expect(document.data.market).toHaveLength(7)
     expect(document.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
     expect(document.data.market.find((row) => row.id === 'btc')?.visibility).toBe('shown')
     expect(document.data.market.find((row) => row.id === 'index')?.materiality).toMatchObject({ material: false })
-    expect(document.data.market.find((row) => row.id === 'index')?.visibility).toBe('hidden')
+    expect(document.data.market.find((row) => row.id === 'index')?.visibility).toBe('shown')
     expect(document.data.market.find((row) => row.id === 'us10y')?.importance.tier).toBe('support')
     expect(document.data.market.find((row) => row.id === 'us10y')?.materiality).toMatchObject({ material: false })
     expect(document.data.market.find((row) => row.id === 'us10y')?.change).toMatchObject({ unit: 'bp', value: 4 })
@@ -410,7 +410,7 @@ describe('daily briefing document', () => {
             // Old and no move at all: only the level survives.
             { seriesId: 'xau-usd', level: 3996, atMs: Date.parse('2026-10-20T00:25:00.000Z') }
           ]
-        } as unknown as MacroMarketSnapshotView,
+        } as unknown as NonNullable<NonNullable<DailyBriefingFactPacket['market']>['macroMarket']>,
         macroRates: {
           state: 'available',
           readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5, period: '2026-10-14' }]
@@ -614,12 +614,12 @@ describe('daily briefing document', () => {
   it('admits leverage only when open interest or funding moved past the threshold', () => {
     const flat = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(1.2, 0.4) }), date: '2026-10-30' })
     expect(flat.data.leverage?.materiality).toMatchObject({ material: false, reasonCode: 'no-material-change' })
-    expect(flat.data.leverage?.visibility).toBe('hidden')
+    // A quiet block is still shown: the threshold decides emphasis, not presence.
+    expect(flat.data.leverage?.visibility).toBe('shown')
 
     const moved = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(12.4, -8.1) }), date: '2026-10-30' })
     expect(moved.data.leverage?.materiality).toMatchObject({ material: true, reasonCode: 'open-interest-shift' })
-    // Material is not the same as shown: the editor still has to ask for the line.
-    expect(moved.data.leverage?.visibility).toBe('hidden')
+    expect(moved.data.leverage?.visibility).toBe('shown')
 
     const extremeFunding = buildDailyBriefingDocument({
       packet: packet({
@@ -642,7 +642,7 @@ describe('daily briefing document', () => {
   it('admits the rate path only on a probability shift, an imminent meeting or a changed outcome', () => {
     const unchanged = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60) }), date: '2026-10-30' })
     expect(unchanged.data.policyPath?.materiality).toMatchObject({ material: false })
-    expect(unchanged.data.policyPath?.visibility).toBe('hidden')
+    expect(unchanged.data.policyPath?.visibility).toBe('shown')
 
     const previous = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(45) }), date: '2026-10-29' })
     const shifted = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(76) }), date: '2026-10-30', previous })
@@ -657,7 +657,7 @@ describe('daily briefing document', () => {
 
     const previousOutcome = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60, { outcome: 'hike-25' }) }), date: '2026-10-29' })
     const changedOutcome = buildDailyBriefingDocument({
-      packet: packet({ policyPath: policyPath(60, { outcome: 'hold' }) }),
+      packet: packet({ policyPath: policyPath(60, { outcome: 'no-change' }) }),
       date: '2026-10-30',
       previous: previousOutcome
     })

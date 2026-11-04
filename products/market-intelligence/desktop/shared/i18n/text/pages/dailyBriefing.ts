@@ -7,7 +7,7 @@ export const dailyBriefingText = {
     /** 设置里的时区读不到时，窗口按系统时区算；说清为什么会和设定不同。 */
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
-    moreNumbers: '更多数字', noValue: '—',
+    noValue: '—',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '杠杆', policyPath: '利率路径', marketImplied: '市场隐含', rangeUnavailable: '区间未收录' },
     newsFocus: '重点',
     newsCount: '{count} 条',
@@ -259,7 +259,7 @@ export const dailyBriefingText = {
     /** The settings zone was unreadable, so the window used the machine's zone. */
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
-    moreNumbers: 'More numbers', noValue: '—',
+    noValue: '—',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Leverage', policyPath: 'Rate path', marketImplied: 'Market-implied', rangeUnavailable: 'Range unavailable' },
     newsFocus: 'Focus',
     newsCount: '{count} items',
