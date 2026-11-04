@@ -1,4 +1,5 @@
 import type { ClosedBar } from '../cross-asset/binanceCrossAssetClient'
+import { createCrossAssetBackfill as createBriefMarketBackfill } from '../cross-asset/crossAssetBackfill'
 
 /**
  * Fill the quote bars this edition needs, once, before the generation waits for them.
@@ -67,4 +68,50 @@ export async function ensureBriefingBars(
     backfill.hasBar({ asset, atMs: input.atMs, asOfMs: input.asOfMs }) &&
     backfill.hasBar({ asset, atMs: input.dayBeforeMs, asOfMs: input.asOfMs }))
   return { attempted: true, filled }
+}
+
+/**
+ * The collector the composition root hands in, once, after it has built the cross-asset store.
+ *
+ * Late binding rather than a constructor argument: the intelligence module is a singleton built
+ * before that store exists. Unset means the brief generates without fetching — the behaviour before
+ * this existed, never a half-wired one.
+ */
+let current: BriefingBarBackfill | undefined
+
+export function setBriefMarketBackfill(backfill: BriefingBarBackfill | undefined): void {
+  current = backfill
+}
+
+export function currentBriefMarketBackfill(): BriefingBarBackfill | undefined {
+  return current
+}
+
+/**
+ * Build the collector and hand it to the brief, from the composition root's own store and client.
+ *
+ * One call so the root carries one line, and so the store's symbol mapping and knowledge cutoff live
+ * next to the rule that uses them rather than in the composition file.
+ */
+export function installBriefMarketBackfill(
+  store: {
+    readonly revision: number
+    queryAt: (input: { symbol: ClosedBar['symbol']; fromMs: number; toMs: number; asOfMs: number }) => readonly ClosedBar[]
+    append: (input: { bars: readonly ClosedBar[]; observedAtMs: number; origin: 'rest' }) => unknown
+  },
+  client: Parameters<typeof createBriefMarketBackfill>[0]['client']
+): void {
+  const collector = createBriefMarketBackfill({ store, client })
+  setBriefMarketBackfill({
+    hasBar: ({ asset, atMs }) => store.queryAt({
+      symbol: briefMarketSymbol(asset), fromMs: atMs, toMs: atMs + 1, asOfMs: Date.now()
+    }).length > 0,
+    collect: (input) => collector.collect(input),
+    append: (bars, observedAtMs) => { store.append({ bars, observedAtMs, origin: 'rest' }) }
+  })
+}
+
+/** The stored symbol behind each brief asset: the collector's own mapping, not a second table. */
+function briefMarketSymbol(asset: BriefingBarAsset): ClosedBar['symbol'] {
+  return asset === 'btc' ? 'BTCUSDT' : 'ETHUSDT'
 }

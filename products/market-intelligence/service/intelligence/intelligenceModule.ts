@@ -67,6 +67,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
@@ -229,7 +230,6 @@ export type IntelligenceModulePlatformHooks = {
 }
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
-
 export type IntelligenceModule = {
   /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
   rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
@@ -943,6 +943,7 @@ export function getIntelligenceModule(
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       readiness: createDailyBriefReadinessFor(publicQueryService),
+      marketBackfill: currentBriefMarketBackfill,
       generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>

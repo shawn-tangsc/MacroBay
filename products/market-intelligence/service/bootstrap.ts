@@ -25,6 +25,7 @@ import { createCrossAssetSourceConfiguration } from './intelligence/cross-asset/
 import { createCrossAssetSnapshotQuery } from './intelligence/cross-asset/crossAssetSnapshotQuery'
 import { createCrossAssetIndexRuntime } from './intelligence/cross-asset/crossAssetIndexRuntime'
 import { crossAssetPolicy } from './intelligence/cross-asset/crossAssetPolicy'
+import { installBriefMarketBackfill } from './intelligence/daily-briefing/dailyBriefMarketBackfill'
 import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossAssetIpc'
 
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
@@ -239,10 +240,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
   try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
   catch { /* Preserve the unavailable feature database; other product capabilities remain usable. */ }
-  const crossAssetClient = createBinanceCrossAssetClient({
-    platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }),
-    requestGovernanceQueue: intelligenceModule.requestGovernanceQueue
-  })
+  const crossAssetClient = createBinanceCrossAssetClient({ platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }), requestGovernanceQueue: intelligenceModule.requestGovernanceQueue })
+  if (crossAssetStore) installBriefMarketBackfill(crossAssetStore, crossAssetClient)
   // The real Nasdaq 100 index is collected by its own five-minute job into the same store the Binance
   // proxy writes to: the row prefers the licensed index and falls back to the labelled proxy, and both
   // legs have to be on disk for that choice to be made from data rather than from hope. One store, one

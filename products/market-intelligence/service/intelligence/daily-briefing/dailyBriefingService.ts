@@ -308,8 +308,8 @@ export function createDailyBriefingService(deps: Readonly<{
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** Waits for the market the brief reads; absent means generate at once, as before. */
   readiness?: DailyBriefReadiness
-  /** The quote collector, when this build runs one: missing bars are fetched once, before generation. */
-  marketBackfill?: Parameters<typeof prepareMarketForRun>[0]['backfill']
+  /** Late-bound: the collector is built after this service in the composition root. */
+  marketBackfill?: () => Parameters<typeof prepareMarketForRun>[0]['backfill']
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -381,7 +381,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // record of an attempt that did not succeed, instead of an attempt that never happened.
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
-    const market = await prepareMarketForRun({ ...(deps.marketBackfill ? { backfill: deps.marketBackfill } : {}), ...(deps.readiness ? { readiness: deps.readiness } : {}), asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
+    const market = await prepareMarketForRun({ backfill: deps.marketBackfill?.(), readiness: deps.readiness, asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
@@ -587,7 +587,6 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-      if (!force) await notifyDailyBriefing(deps.noticeSubmit, { kind: 'ready', date: input.date }, now()) // automatic runs only
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
