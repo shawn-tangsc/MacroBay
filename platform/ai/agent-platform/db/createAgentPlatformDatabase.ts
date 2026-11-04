@@ -4,6 +4,7 @@ import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
 import { channelCredentialRecovery } from './migrations/channelCredentialRecovery'
 import { channelDeliveryAuditDetail } from './migrations/channelDeliveryAuditDetail'
 import { channelConversationSessionTitle } from './migrations/channelConversationSessionTitle'
+import { channelDispatchFailureReason } from './migrations/channelDispatchFailureReason'
 
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
@@ -1516,7 +1517,8 @@ const migrations: AgentPlatformMigration[] = [
   ...channelSettingsOverrides,
   ...channelCredentialRecovery,
   ...channelDeliveryAuditDetail,
-  ...channelConversationSessionTitle
+  ...channelConversationSessionTitle,
+  ...channelDispatchFailureReason
 ]
 
 export type AgentPlatformDatabase = {

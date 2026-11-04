@@ -9,6 +9,33 @@ import type { ChannelDispatchRunRepository } from './ChannelDispatchRunRepositor
 
 type Timer = ReturnType<typeof setInterval>
 
+/**
+ * 助手那一轮跑不起来的原因，必须可分辨：用户 2026-11-04 连收四句「处理失败，请稍后重试。」，
+ * 而库里只有 `status=failed`，真正的原因（会话不属于新助手）从头到尾没留下。
+ */
+export type DispatchFailureReason =
+  | 'dispatch-session-agent-mismatch'
+  | 'dispatch-session-missing'
+  | 'dispatch-model-missing'
+  | 'dispatch-quota-exhausted'
+  | 'dispatch-network-unavailable'
+  | 'dispatch-payload-invalid'
+  | 'dispatch-conversation-unbound'
+  | 'dispatch-failed-unknown'
+
+/** 把运行时抛出的错误归到闭集：先看最具体的，最后才是兜底（并标明是兜底）。 */
+export function classifyDispatchFailure(error: unknown): DispatchFailureReason {
+  const text = error instanceof Error ? `${error.message} ${error.cause instanceof Error ? error.cause.message : ''}` : String(error)
+  if (/does not belong to agent|不属于这个助手/i.test(text)) return 'dispatch-session-agent-mismatch'
+  if (/Session .* was not found|会话.*(不存在|找不到)/i.test(text)) return 'dispatch-session-missing'
+  if (/quota|额度|budget|insufficient/i.test(text)) return 'dispatch-quota-exhausted'
+  if (/model|模型/i.test(text)) return 'dispatch-model-missing'
+  if (/workspace|工作目录|工作区/i.test(text)) return 'dispatch-model-missing'
+  if (/fetch|network|ECONN|ENOTFOUND|timeout|timed out|网络/i.test(text)) return 'dispatch-network-unavailable'
+  if (/payload|decrypt|ciphertext|解密/i.test(text)) return 'dispatch-payload-invalid'
+  return 'dispatch-failed-unknown'
+}
+
 // The sole main-process bridge from durable inbound ownership to Agent execution and delivery.
 export class ChannelInboundExecutionCoordinator {
   constructor(private readonly deps: {
@@ -17,14 +44,40 @@ export class ChannelInboundExecutionCoordinator {
     cipher: ChannelPayloadCipher
     runtime: { sendMessage: (request: { agentId: string; sessionId: string; text: string; runId: string }) => Promise<AgentChatRuntimeResult> }
     runs?: ChannelDispatchRunRepository
-    failureText?: (kind: 'run-failed' | 'run-interrupted') => string | Promise<string>
+    /** 失败原因码闭集之一；界面据此说人话。`dispatch-failed-unknown` 是**兜底**，不是解释。 */
+    failureText?: (kind: 'run-failed' | 'run-interrupted', reason?: DispatchFailureReason) => string | Promise<string>
     now?: () => Date
     leaseMs?: number
     setInterval?: (callback: () => void, intervalMs: number) => Timer
     clearInterval?: (timer: Timer) => void
   }) {}
 
+  /** 每个对话一条串行队列：上一轮没结束时又来消息，排队而不是并发各跑一遍（并发会重复耗额度）。 */
+  private readonly conversationQueues = new Map<string, Promise<unknown>>()
+
   async execute(claim: ChannelExecutionClaim): Promise<'completed' | 'failed' | 'deferred'> {
+    const conversationId = this.conversationOf(claim)
+    const previous = this.conversationQueues.get(conversationId) ?? Promise.resolve()
+    const next = previous.then(() => this.executeSerial(claim), () => this.executeSerial(claim))
+    this.conversationQueues.set(conversationId, next.then(() => undefined, () => undefined))
+    try {
+      return await next
+    } finally {
+      if (this.conversationQueues.get(conversationId) === next) this.conversationQueues.delete(conversationId)
+    }
+  }
+
+  /** 队列键：优先用运行台账里的对话 id（admit 之前就要拿到，所以先查台账/工单）。 */
+  private conversationOf(claim: ChannelExecutionClaim): string {
+    const run = this.deps.runs?.get(claim.dispatchId)
+    if (run?.conversationId) return run.conversationId
+    // 台账还没写时按工单反查；两者都拿不到就退回 dispatch id（最坏只是少一次合并，不会并发失控）。
+    const lookup = this.deps.inbound.dispatchConversationId
+    const found = typeof lookup === 'function' ? lookup.call(this.deps.inbound, claim.dispatchId) : null
+    return found ?? claim.dispatchId
+  }
+
+  private async executeSerial(claim: ChannelExecutionClaim): Promise<'completed' | 'failed' | 'deferred'> {
     const admitted = this.deps.inbound.admitDispatch(claim, this.now())
     if (!admitted) return 'deferred'
     let owner = claim
@@ -40,7 +93,10 @@ export class ChannelInboundExecutionCoordinator {
     })
     try {
       const binding = this.deps.inbound.getConversationBinding({ claim: owner, conversationId: admitted.conversationId, now: this.now() })
-      if (!binding) return this.finalize(owner, 'failed')
+      if (!binding) {
+        this.deps.runs?.fail(owner.dispatchId, 'failed', this.now(), { code: 'dispatch-conversation-unbound' })
+        return this.finalize(owner, 'failed')
+      }
 
       const existing = this.deps.runs?.get(owner.dispatchId) ?? null
       if (existing?.status === 'started') {
@@ -84,11 +140,15 @@ export class ChannelInboundExecutionCoordinator {
       if (this.deps.runs && status === 'delivered') this.deps.runs.markResult(owner.dispatchId, 'delivered', this.now())
       if (renewalFailed || status === 'unknown-after-send') return 'deferred'
       return this.finalize(owner, status === 'delivered' ? 'completed' : 'failed')
-    } catch {
+    } catch (error) {
       if (!renewalFailed) {
-        this.deps.runs?.fail(owner.dispatchId, 'failed', this.now())
+        const reason = classifyDispatchFailure(error)
+        this.deps.runs?.fail(owner.dispatchId, 'failed', this.now(), {
+          code: reason,
+          detail: error instanceof Error ? error.message : String(error)
+        })
         const binding = this.deps.inbound.getConversationBinding({ claim: owner, conversationId: admitted.conversationId, now: this.now() })
-        if (binding) await this.deliverFailure(owner, admitted.conversationId, binding.agentId, 'run-failed')
+        if (binding) await this.deliverFailure(owner, admitted.conversationId, binding.agentId, 'run-failed', reason)
       }
       return renewalFailed ? 'deferred' : this.finalize(owner, 'failed')
     } finally {
@@ -120,11 +180,12 @@ export class ChannelInboundExecutionCoordinator {
     claim: ChannelExecutionClaim,
     conversationId: string,
     agentId: string,
-    kind: 'run-failed' | 'run-interrupted'
+    kind: 'run-failed' | 'run-interrupted',
+    reason?: DispatchFailureReason
   ): Promise<void> {
     if (!this.deps.failureText) return
     try {
-      const text = await this.deps.failureText(kind)
+      const text = await this.deps.failureText(kind, reason)
       if (!text.trim()) return
       await this.deps.delivery.deliverStreamFinal({
         channelId: claim.channelId, agentId, conversationId, source: 'inbound-reply',

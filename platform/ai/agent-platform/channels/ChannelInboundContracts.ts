@@ -81,6 +81,13 @@ export type ChannelSessionFactory = {
   discardUnbound: (sessionId: string) => Promise<void>
   /** Optional existence probe; when provided, a deleted session is treated as unbound. */
   exists?: (sessionId: string) => Promise<boolean>
+  /**
+   * Optional ownership probe：这条会话是不是这个助手的。
+   * 读者改了频道的助手之后，旧会话仍属于上一个助手，运行时会在第一毫秒抛
+   * `Session ... does not belong to agent ...`——看起来就是「处理失败」。
+   * 有这条判据时，这种绑定按「未绑定」处理，重新建一条属于当前助手的会话。
+   */
+  belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean>
 }
 
 /**

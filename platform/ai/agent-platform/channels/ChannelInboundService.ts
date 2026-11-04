@@ -383,6 +383,13 @@ export class ChannelInboundService {
         const alive = await this.deps.sessions.exists(existing.sessionId)
         if (!alive) return { record: { ...existing, sessionId: null }, created: false }
       }
+      // 读者换了这条频道绑的助手：旧会话属于上一个助手，继续用它只会在运行时第一毫秒报错。
+      if (existing.sessionId && this.deps.sessions.belongsToAgent &&
+        !(await this.deps.sessions.belongsToAgent(existing.sessionId, agentId))) {
+        // 旧会话属于上一个助手：不删（读者要能翻历史），下次来消息时按未绑定重建并记一行。
+        this.deps.repository.recordConversationSwitched(request.channelId, request.generation, this.now())
+        return { record: { ...existing, sessionId: null }, created: false }
+      }
       return { record: existing, created: false }
     }
     const resolutionKey = `${request.channelId}:${hash}`

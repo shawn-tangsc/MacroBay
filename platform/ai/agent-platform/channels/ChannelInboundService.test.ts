@@ -129,6 +129,32 @@ describe('ChannelInboundService', () => {
     expect(database.connection.prepare('select agent_session_id from channel_conversations').get()).toEqual(before)
   })
 
+  it('rebinds a conversation when the reader switched the channel to another assistant', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'before-agent-switch' })
+    const before = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    // 读者在界面里把频道换给另一个助手：旧会话属于上一个助手，继续用它会在运行时第一毫秒抛错。
+    ;(service as unknown as { deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean> } } })
+      .deps.sessions.belongsToAgent = async () => false
+    expect((await receive(service, 'channel-a', { providerEventKey: 'after-agent-switch' })).disposition).toBe('acknowledged')
+
+    const after = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(after.agent_session_id).toBeTruthy()
+    expect(after.agent_session_id).not.toBe(before.agent_session_id)
+    // 切换要留痕：日志/审计里能查到这一个对话换过会话。
+    expect(database.connection.prepare(
+      "select count(*) as count from channel_runtime_audits where code = 'channel-conversation-switched'"
+    ).get()).toEqual({ count: 1 })
+
+    // 同一个助手重复改（A→A）：会话仍然属于它，**不许重建**。
+    ;(service as unknown as { deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean> } } })
+      .deps.sessions.belongsToAgent = async () => true
+    await receive(service, 'channel-a', { providerEventKey: 'same-agent-again' })
+    expect(database.connection.prepare('select agent_session_id from channel_conversations').get()).toEqual(after)
+  })
+
   it('rebinds a conversation to a fresh session after its agent session is deleted', async () => {
     const { service, database } = createHarness()
     await allow(service, 'channel-a', 'user-a')

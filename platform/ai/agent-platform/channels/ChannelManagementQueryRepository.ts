@@ -166,10 +166,17 @@ export class ChannelManagementQueryRepository {
     }
   }
 
+  /**
+   * 日志面板读的投递审计：**只返回失败**。
+   *
+   * 这一栏的标题就是「最近一次发送失败」，而面板以前把每一条都当失败渲染——用户 2026-11-04
+   * 看到四条「发送失败：没有更多说明」，实际全是**发送成功**。成功码在读取处就排除，
+   * 面板侧再兜一层（不认识的成功码也不许画成失败）。
+   */
   deliveryAudits(channelId: string, limit: number, offset: number): ChannelDeliveryAuditSafeView[] {
     return (this.database.connection.prepare(
       `select id, attempt_id, code, detail, created_at from channel_delivery_audits
-       where channel_id = ? and exists (
+       where channel_id = ? and code <> 'channel-delivery-delivered' and exists (
          select 1 from agent_channels where id = channel_delivery_audits.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ? offset ?`

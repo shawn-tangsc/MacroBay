@@ -5,8 +5,10 @@ import { supportedChannelSql } from './ChannelManagementPredicates'
 import {
   countChannelConversations,
   deleteUnboundChannelConversation,
+  findDispatchConversation,
   insertChannelConversation,
   readChannelConversation,
+  recordConversationSwitchedAudit,
   fillChannelConversationTitle,
   releaseChannelConversationOperation,
   replaceChannelConversationSession,
@@ -17,16 +19,9 @@ import { channelHasAnyAllowPolicy, isAllowedByPolicy, readChannelAllowList } fro
 import type { ChannelConversationKind } from './channelContracts'
 import type { ChannelDispatchAdmission, ChannelDispatchFinalStatus, ChannelExecutionClaim } from './ChannelInboundContracts'
 
-export type ChannelInboundAuditCode =
-  | 'channel-policy-denied'
-  | 'channel-mention-required'
-  | 'channel-content-rejected'
-  | 'channel-receipt-without-work-item'
-  | 'channel-stale-generation'
-  | 'channel-agent-missing'
-  | 'channel-work-capacity-exhausted'
-  | 'channel-lifecycle-fenced'
-  | 'channel-inbound-failed'
+// 闭集搬到 `channelRuntimeAuditCodes`（与它的数组同源），这里只做再导出，调用方不用改。
+import type { ChannelInboundAuditCode } from './channelRuntimeAuditCodes'
+export type { ChannelInboundAuditCode }
 
 export type ChannelConversationRecord = {
   /** 创建时算好的会话名（`Telegram · 贾维斯`），用于投递回执「已发给谁」。 */
@@ -177,6 +172,16 @@ export class ChannelInboundRepository {
 
   acknowledgeIfCurrent(channelId: string, generation: number): boolean {
     return this.getCurrentAgentId(channelId, generation) !== null
+  }
+
+  /** 这条 dispatch 属于哪个对话：同会话排队要用它当键。 */
+  dispatchConversationId(dispatchId: string): string | null {
+    return findDispatchConversation(this.database, dispatchId)
+  }
+
+  /** 读者换了频道绑定的助手：这个对话已切到新助手的会话（旧会话留着当历史）。 */
+  recordConversationSwitched(channelId: string, generation: number, now = new Date()): void {
+    recordConversationSwitchedAudit(this.database, channelId, generation, now)
   }
 
   recordRejectedLifecycle(channelId: string, generation: number, code: 'channel-agent-missing' | 'channel-stale-generation', now = new Date()): void {

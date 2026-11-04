@@ -161,3 +161,18 @@ export function fillChannelConversationTitle(
      where channel_id = ? and conversation_key_hash = ? and (session_title is null or session_title = '')`
   ).run(input.title, input.channelId, input.keyHash).changes === 1
 }
+
+/** 按 dispatch id 找到它属于哪个对话：同会话排队要用它当键，admit 之前就要拿到。 */
+export function findDispatchConversation(database: AgentPlatformDatabase, dispatchId: string): string | null {
+  const row = database.connection.prepare(
+    'select conversation_id from channel_inbound_work_items where dispatch_id = ?'
+  ).get(dispatchId) as { conversation_id: string } | undefined
+  return row?.conversation_id ?? null
+}
+
+/** 一条运行时审计（`channel-conversation-switched` 这类），走同一张表与同一套裁剪。 */
+export function recordConversationSwitchedAudit(database: AgentPlatformDatabase, channelId: string, generation: number, now: Date): void {
+  database.connection.prepare(
+    `insert into channel_runtime_audits(id, channel_id, generation, code, created_at) values(?, ?, ?, 'channel-conversation-switched', ?)`
+  ).run(randomUUID(), channelId, generation, now.toISOString())
+}

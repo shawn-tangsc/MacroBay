@@ -23,6 +23,7 @@ export type ChannelRuntimeAuditCopyKey =
   | 'runtimeWorkCapacityExhausted'
   | 'runtimeLifecycleFenced'
   | 'runtimeInboundFailed'
+  | 'runtimeConversationSwitched'
 
 export type ChannelRuntimeAuditDescriptor = {
   level: ChannelRuntimeAuditLevel
@@ -40,7 +41,9 @@ export const channelRuntimeAuditDescriptors: Readonly<Record<ChannelInboundAudit
   'channel-policy-denied': { level: 'WARN', copyKey: 'runtimePolicyDenied' },
   'channel-mention-required': { level: 'WARN', copyKey: 'runtimeMentionRequired' },
   'channel-content-rejected': { level: 'WARN', copyKey: 'runtimeContentRejected' },
-  'channel-stale-generation': { level: 'WARN', copyKey: 'runtimeStaleGeneration' }
+  'channel-stale-generation': { level: 'WARN', copyKey: 'runtimeStaleGeneration' },
+  // 读者的主动动作（换助手），不是故障：INFO/WARN 都不该红。
+  'channel-conversation-switched': { level: 'WARN', copyKey: 'runtimeConversationSwitched' }
 })
 
 /**

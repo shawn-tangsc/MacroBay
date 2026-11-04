@@ -149,14 +149,36 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     cipher: channelCredentialVault.payloadCipher,
     runtime: agentRuntimeService,
     runs: channelDispatchRuns,
-    failureText: async (kind) => {
+    failureText: async (kind, reason) => {
       const language = (await settingsStore.get()).language
-      if (language === 'zh-CN') {
-        return kind === 'run-interrupted' ? '上一条消息处理被中断，请重新发送。' : '处理失败，请稍后重试。'
+      if (kind === 'run-interrupted') {
+        return language === 'zh-CN' ? '上一条消息处理被中断，请重新发送。' : 'The previous request was interrupted. Please send it again.'
       }
-      return kind === 'run-interrupted'
-        ? 'The previous request was interrupted. Please send it again.'
-        : 'The request failed. Please try again later.'
+      // 真实原因说到手机上：读者不该只看到「处理失败」这种套话。
+      const zh: Record<string, string> = {
+        'dispatch-session-agent-mismatch': '这个对话绑的会话还属上一个助手，下一条消息会自动换过来。',
+        'dispatch-session-missing': '这个对话的会话不在了，下一条消息会重新建一个。',
+        'dispatch-model-missing': '这个助手还没配置可用的模型，先在设置里配好再发。',
+        'dispatch-quota-exhausted': '模型额度用尽了，今天暂时发不出去。',
+        'dispatch-network-unavailable': '模型服务连不上，稍后再试一次。',
+        'dispatch-payload-invalid': '这条消息没能解开，重新发一次试试。',
+        'dispatch-conversation-unbound': '这个对话还没绑定好，重新发一次试试。'
+      }
+      const en: Record<string, string> = {
+        'dispatch-session-agent-mismatch': 'this conversation still uses the session of the previous assistant; the next message switches it.',
+        'dispatch-session-missing': 'the session for this conversation is gone; the next message creates a new one.',
+        'dispatch-model-missing': 'this assistant has no usable model yet; set one up first.',
+        'dispatch-quota-exhausted': 'the model quota is used up, so it cannot answer today.',
+        'dispatch-network-unavailable': 'the model service cannot be reached; try again shortly.',
+        'dispatch-payload-invalid': 'this message could not be decoded; send it again.',
+        'dispatch-conversation-unbound': 'this conversation is not bound yet; send again.'
+      }
+      const table = language === 'zh-CN' ? zh : en
+      // 查不到就**如实说「原因没有记录下来」**：兜底句只承认兜底，不冒充解释。
+      if (reason && table[reason]) return table[reason]
+      return language === 'zh-CN'
+        ? '处理失败：具体原因没有记录下来，请稍后重试。'
+        : 'The request failed and the reason was not recorded. Please try again later.'
     }
   })
   const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
@@ -175,7 +197,10 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
         return (await agentServices.sessions.create({ agentId: input.agentId, name, workspace: { type: 'system' } })).id
       },
       discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
-      exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
+      exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId)),
+      // 读者改过频道的助手后，旧会话属于上一个助手：这种绑定要按「未绑定」重建，
+      // 否则运行时会在第一毫秒抛「会话不属于这个助手」，用户只看到一句「处理失败」。
+      belongsToAgent: async (sessionId, agentId) => (await agentServices.sessions.get(sessionId))?.agentId === agentId
     },
     // Untrusted external text is wrapped and narrowly screened before it is encrypted and stored.
     contentGuard: createChannelInboundContentGuard({
