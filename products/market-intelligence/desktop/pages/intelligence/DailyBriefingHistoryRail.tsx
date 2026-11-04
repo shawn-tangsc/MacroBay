@@ -17,7 +17,7 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
  * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
  * stays one line of facts.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onDeletePeriod }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, gapCount, onDeletePeriod }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
@@ -36,6 +36,8 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
   /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
+  /** Gaps of the issue on screen, from the same list the rail's own gap block uses; 0 hides it. */
+  gapCount?: number
   /** 删除某一天的一版；缺省时菜单项仍在但点了不做任何事（由宿主决定能不能删）。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
@@ -136,6 +138,12 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
                 {edition.generatedAt ? <>
                   <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
                   <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>
+                </> : null}
+                {/* The gap count is a separate fact from the item count, and only shown when it is
+                    not zero: "4 items" beside three dashes is exactly what misleads a reader. */}
+                {edition.date === selectedDate && gapCount !== undefined && gapCount > 0 ? <>
+                  <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
+                  <span className="mi-daily-briefing__rail-fact" data-briefing-gap-count={gapCount}>{text.history.gapCount.replace('{count}', String(gapCount))}</span>
                 </> : null}
                   </>}
               </small>

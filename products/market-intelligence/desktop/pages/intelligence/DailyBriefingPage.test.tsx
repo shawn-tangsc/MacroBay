@@ -1260,9 +1260,11 @@ describe('daily briefing page', () => {
     expect(row.querySelector('[data-attempts-toggle]')).toBeNull()
     const meta = row.querySelector<HTMLElement>('.mi-daily-briefing__rail-meta')!.textContent!
     const segments = meta.split('·').map((segment) => segment.trim())
-    expect(segments).toHaveLength(2)
+    // The item count and the clock always; the gap count is a third segment, only when there are
+    // gaps, and it never merges with the item count.
     expect(segments[0]).toMatch(/^\d+ 项$/)
     expect(segments[1]).toMatch(/^\d{2}:\d{2}$/)
+    expect(segments.slice(2)).toEqual([expect.stringMatching(/^\d+ 缺口$/)])
 
     // The trail lives in the one detail column, and only there: one disclosure, no toggle button.
     expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)

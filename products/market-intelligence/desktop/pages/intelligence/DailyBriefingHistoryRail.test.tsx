@@ -217,6 +217,18 @@ describe('daily briefing history rail', () => {
     expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(1)
   })
 
+  it('shows a gap count as its own segment, and only when there is one', () => {
+    // "4 items" beside three dashes is what misleads a reader: the gap count is separate and never
+    // merged with the item count.
+    render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 3, resolveText: (key: string) => key })
+    const withGaps = host.querySelector('[data-briefing-gap-count]')
+    expect(withGaps?.getAttribute('data-briefing-gap-count')).toBe('3')
+    expect(host.querySelectorAll('.mi-daily-briefing__rail-sep')).toHaveLength(2)
+
+    render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 0, resolveText: (key: string) => key })
+    expect(host.querySelector('[data-briefing-gap-count]')).toBeNull()
+  })
+
   it('describes an emptied issue as not run, never as a failed generation', () => {
     // The reader deleted the editions; the row describes the present, not the history.
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined })] })
