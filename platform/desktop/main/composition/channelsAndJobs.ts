@@ -147,6 +147,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     inbound: channelInboundRepository,
     delivery: channelDeliveryService,
     cipher: channelCredentialVault.payloadCipher,
+    // 同一个运行时实例：通道分发前会把这个会话标成「手机通道」，工具审批不进卡片队列。
     runtime: agentRuntimeService,
     runs: channelDispatchRuns,
     failureText: async (kind, reason) => {

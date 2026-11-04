@@ -6,6 +6,7 @@ import { ChannelInboundRepository } from './ChannelInboundRepository'
 import type { ChannelInboundService } from './ChannelInboundService'
 import { ChannelDeliveryService } from './ChannelDeliveryService'
 import type { ChannelDispatchRunRepository } from './ChannelDispatchRunRepository'
+import { markChannelSession } from '../runtime/channelToolApproval'
 
 type Timer = ReturnType<typeof setInterval>
 
@@ -121,6 +122,8 @@ export class ChannelInboundExecutionCoordinator {
       }
 
       const payload = await this.decrypt(admitted)
+      // 手机通道没有确认卡：分发前标记这个会话，工具审批直接收口，不排队等界面。
+      markChannelSession(binding.sessionId)
       const runtime = await this.deps.runtime.sendMessage({ agentId: binding.agentId, sessionId: binding.sessionId, text: payload.text ?? '', runId: owner.dispatchId })
       if (this.deps.runs) {
         const text = getAgentTextParts(runtime.assistantMessage.data).join('\n')

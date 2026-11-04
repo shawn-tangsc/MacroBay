@@ -1,5 +1,7 @@
 import type { AgentStoreState } from '../store/agentStore'
 import type { ToolApprovalDecision, ToolApprovalRegistry } from './policy'
+import { channelToolApprovalDecision, isChannelSession } from './channelToolApproval'
+import { cloneStopReason } from './runtimeStopReasons'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from './agentChatRuntime'
 import type { AgentRuntimeCompositionService } from './AgentRuntimeCompositionService'
 import { RuntimeDriverRegistry } from './RuntimeDriverRegistry'
@@ -103,6 +105,7 @@ export class AgentTurnTimeoutError extends Error {
 
 export class AgentSessionRuntimeService {
   private readonly entries = new Map<string, RuntimeEntry>()
+
   private readonly chunksBySessionId = new Map<string, AgentRuntimeSessionChunk[]>()
   private readonly listeners = new Set<(snapshot: AgentSessionRuntimeSnapshot) => void>()
   private disposed = false
@@ -137,6 +140,7 @@ export class AgentSessionRuntimeService {
   }
 
   requestToolApproval(input: ToolApprovalRequestInput): Promise<ToolApprovalDecision> {
+    if (isChannelSession(input.sessionId)) return Promise.resolve(channelToolApprovalDecision(input.toolName))
     const registry = this.requireToolApprovalRegistry()
     this.getOrCreateEntry(input.sessionId, null, null)
     const approvalId = input.approvalId ?? createApprovalId()
@@ -1017,15 +1021,10 @@ function createTurnTimeoutStopReason(timeoutMs: number): AgentRuntimeStopReason 
   }
 }
 
-function cloneStopReason(reason: AgentRuntimeStopReason): AgentRuntimeStopReason {
-  return {
-    kind: reason.kind,
-    ...(reason.message ? { message: reason.message } : {})
-  }
-}
 
 function normalizeTraceId(traceId: string | undefined): string | null {
   if (typeof traceId !== 'string') return null
   const trimmed = traceId.trim()
   return trimmed.length > 0 ? trimmed : null
 }
+
