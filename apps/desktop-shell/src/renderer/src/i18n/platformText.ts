@@ -1668,7 +1668,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
       'telegram-runtime-start-failed': '连接没能启动起来——具体原因写在这次运行的日志里',
       }),
-      channelFailureReasonUnknown: '这次没有通过检查，暂时说不出具体原因，可以再试一次',
+      // 事实 + 下一步。原因不明这件事不解释（用户要的是下一步）。
+      channelFailureReasonUnknown: '这次没通过，再试一次',
       channelOperationFailedUnknown: '这次没有成功，具体原因没说清楚，可以再试一次',
       channelLogs: '日志',
       channelEdit: '编辑',
@@ -3011,7 +3012,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
       'telegram-runtime-start-failed': 'the connection did not start; check the runtime log and try again',
       }),
-      channelFailureReasonUnknown: 'the check did not pass and this time the reason is unclear; try again',
+      channelFailureReasonUnknown: 'that did not pass; try again',
       channelOperationFailedUnknown: 'that did not go through, and the reason is unclear; try again',
       channelLogs: 'Logs',
       channelEdit: 'Edit',

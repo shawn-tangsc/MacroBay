@@ -349,8 +349,10 @@ describe('the send-to-channel row', () => {
 
     const row = container.querySelector('[data-row="channel"]')!
     // 交出去了、没拿到回执：既不能写「没发出去」，也不能借「推送失败」那档药丸。
-    expect(row.textContent).toContain('不确定有没有发到手机')
-    expect(row.textContent).toContain('没有拿到确认')
+    // 事实：发出去了、没回执。**不许**压成「已发送成功」，也不许写「没发出去」。
+    expect(row.textContent).toContain('已发给手机')
+    expect(row.textContent).toContain('未拿到确认')
+    expect(row.textContent).not.toContain('发送成功')
     expect(row.textContent).not.toContain('没发出去')
     // 药丸要有，但只能是「不确定」那一档；状态词给不出来就是又一个假状态。
     const pill = row.querySelector('.status-pill')

@@ -124,7 +124,8 @@ const zh: NotificationSettingsText = {
   channelUnbound: '目标未绑定：还看不出会发到哪个会话',
   channelAmbiguous: '这个频道绑了多个会话，请到频道页只保留一个；现在不发，也不替你挑',
   channelPushFailed: (reason, at) => `最近一次推送没发出去：${reason} · ${at}`,
-  channelPushUnknown: (at) => `不确定有没有发到手机：没有拿到确认 · ${at}`,
+  // 事实：发出去了、没回执。**不许压成「已发送成功」**——宁可短，不许变假话。
+  channelPushUnknown: (at) => `已发给手机，未拿到确认 · ${at}`,
   pushFailureReason: Object.freeze({
     'push-unavailable': '频道还没有接通',
     'delivery-no-target-bound': '频道还没有绑定会话',
@@ -215,7 +216,7 @@ const en: NotificationSettingsText = {
   channelAmbiguous:
     'This channel has several conversations bound; keep only one on the Channels page. Nothing is sent, and we do not pick for you.',
   channelPushFailed: (reason, at) => `The last push did not go out: ${reason} · ${at}`,
-  channelPushUnknown: (at) => `We cannot tell whether it reached your phone: no confirmation came back · ${at}`,
+  channelPushUnknown: (at) => `Sent to the phone, no confirmation yet · ${at}`,
   pushFailureReason: Object.freeze({
     'push-unavailable': 'no channel is connected yet',
     'delivery-no-target-bound': 'the channel has no conversation bound',
