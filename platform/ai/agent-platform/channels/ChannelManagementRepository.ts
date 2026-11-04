@@ -905,13 +905,13 @@ export class ChannelManagementRepository {
     setManagedCredentialHealth(this.database, channelId, health, now)
   }
 
-  audit(channelId: string, actorId: string, action: string, code: string | null, now: string): void {
+  audit(channelId: string, actorId: string, action: string, code: string | null, now: string, summary?: Record<string, string>): void {
     this.database.connection
       .prepare(
         `insert into channel_management_audits (id, channel_id, actor_id, action, code, summary_json, created_at)
-         values (?, ?, ?, ?, ?, '{}', ?)`
+         values (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(randomUUID(), channelId, actorId, action, code, now)
+      .run(randomUUID(), channelId, actorId, action, code, JSON.stringify(summary ?? {}), now)
   }
 
   setTarget(channelId: string, conversationId: string, enabled: boolean, now: string): boolean {

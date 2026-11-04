@@ -12,7 +12,10 @@ describe('TelegramRuntimeManager', () => {
     const database = createAgentPlatformDatabase(':memory:')
     seedActive(database)
     const manager = createManager(database, async () => { throw new Error('vault unavailable') })
-    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toBe(false)
+    // 失败必须带原因：vault 读不到是凭据那一档，不许被上层说成「网络连不通」。
+    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toMatchObject({
+      ok: false, reason: 'telegram-provider-rejected'
+    })
     manager.stopAllAndFence(() => {})
   })
 
@@ -28,7 +31,10 @@ describe('TelegramRuntimeManager', () => {
     const pending = manager.start('channel-a', 1, 'owner-a')
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce())
     manager.stop('channel-a')
-    await expect(pending).resolves.toBe(false)
+    // 停止时握手被打断：重要的是「有原因」而不是「一句什么都对的兜底话」。
+    const aborted = await pending
+    expect(aborted).toMatchObject({ ok: false })
+    expect(aborted.ok === false && aborted.reason.length > 0).toBe(true)
     expect(signal?.aborted).toBe(true)
   })
 
@@ -49,9 +55,31 @@ describe('TelegramRuntimeManager', () => {
     seedActive(database)
     const fetch = vi.fn() as unknown as typeof globalThis.fetch
     const manager = createManager(database, async () => 'token', fetch)
-    await expect(manager.start('channel-a', 1, '')).resolves.toBe(false)
-    await expect(manager.start('channel-a', 2, 'owner-a')).resolves.toBe(false)
+    await expect(manager.start('channel-a', 1, '')).resolves.toMatchObject({ ok: false, reason: 'telegram-runtime-start-failed' })
+    await expect(manager.start('channel-a', 2, 'owner-a')).resolves.toMatchObject({ ok: false, reason: 'telegram-runtime-start-failed' })
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('reports the handshake failure reason instead of a generic network sentence', async () => {
+    const database = createAgentPlatformDatabase(':memory:')
+    seedActive(database)
+    const failures: Array<{ channelId: string; generation: number; reason: string }> = []
+    // 409：另一个进程正拿着这个 bot。它和「网络不通」是两件完全不同的事。
+    const fetch = vi.fn(async () => ({
+      ok: false,
+      status: 409,
+      headers: new Headers(),
+      json: async () => ({ ok: false, error_code: 409, description: 'Conflict' })
+    })) as unknown as typeof globalThis.fetch
+    const withRecorder = new TelegramRuntimeManager({
+      inbound: new ChannelInboundRepository(database), inboundService: {} as never, offsets: new TelegramOffsetRepository(database),
+      vault: { get: async () => ({ bot_token: 'token' }) } as never, getPlatformFetch: () => fetch,
+      delivery: new TelegramDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }),
+      ownsLifecycleOwner: (_channelId, token, generation) => token === 'owner-a' && generation === 1,
+      recordFailure: (channelId, generation, reason) => failures.push({ channelId, generation, reason })
+    })
+    await expect(withRecorder.start('channel-a', 1, 'owner-a')).resolves.toEqual({ ok: false, reason: 'telegram-conflict' })
+    expect(failures).toEqual([{ channelId: 'channel-a', generation: 1, reason: 'telegram-conflict' }])
   })
 
   it('records one started and one stopped, and never repeats a stop', async () => {
@@ -68,7 +96,7 @@ describe('TelegramRuntimeManager', () => {
     })) as unknown as typeof globalThis.fetch
     const manager = createManager(database, async () => 'token', fetch, (channelId, generation, state) => recorded.push({ channelId, generation, state }))
 
-    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toBe(true)
+    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toEqual({ ok: true })
     expect(recorded).toEqual([{ channelId: 'channel-a', generation: 1, state: 'started' }])
 
     manager.stop('channel-a')

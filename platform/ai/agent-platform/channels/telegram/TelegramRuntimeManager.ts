@@ -6,6 +6,12 @@ import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramPollingHost } from './TelegramPollingHost'
 
+/**
+ * 启动结果必须带原因：以前这里只回 `boolean`，上层就把所有启动失败一律说成
+ * 「网络或代理连不通」（用户 2026-11-04 被这句话误导了三次）。`reason` 用运行审计那套闭集。
+ */
+export type TelegramRuntimeStartResult = { ok: true } | { ok: false; reason: string }
+
 /** Owns only C03-enabled Telegram pollers; legacy runtime hosts never enter this map. */
 export class TelegramRuntimeManager {
   private readonly hosts = new Map<string, TelegramPollingHost>()
@@ -24,12 +30,22 @@ export class TelegramRuntimeManager {
     ownsLifecycleOwner?: (channelId: string, token: string, generation: number) => boolean
     /** 连接真的起来/停下时写一条运行审计（面板的「状态变化」那一类）。只在状态变化时被调用。 */
     recordLifecycle?: (channelId: string, generation: number, state: 'started' | 'stopped') => void
+    /** 起不来时把**具体原因**写进运行审计（面板能读到），别再让上层拿一句兜底话冒充原因。 */
+    recordFailure?: (channelId: string, generation: number, reason: string) => void
   }) {}
 
-  async start(channelId: string, generation: number, ownerToken: string): Promise<boolean> {
-    if (!ownerToken || !this.deps.ownsLifecycleOwner?.(channelId, ownerToken, generation)) return false
+  async start(channelId: string, generation: number, ownerToken: string): Promise<TelegramRuntimeStartResult> {
+    const failed = (reason: string): TelegramRuntimeStartResult => {
+      this.deps.recordFailure?.(channelId, generation, reason)
+      return { ok: false, reason }
+    }
+    if (!ownerToken || !this.deps.ownsLifecycleOwner?.(channelId, ownerToken, generation)) {
+      return failed('telegram-runtime-start-failed')
+    }
     this.stop(channelId)
-    if (!this.deps.inbound.isCurrentActive(channelId, generation) || !this.deps.ownsLifecycleOwner?.(channelId, ownerToken, generation)) return false
+    if (!this.deps.inbound.isCurrentActive(channelId, generation) || !this.deps.ownsLifecycleOwner?.(channelId, ownerToken, generation)) {
+      return failed('telegram-runtime-start-failed')
+    }
     const lifetime = new AbortController()
     this.lifetimes.set(channelId, { controller: lifetime, ownerToken })
     try {
@@ -38,14 +54,21 @@ export class TelegramRuntimeManager {
         token: async () => {
           const metadata = this.deps.getCredential(channelId)
           if (!metadata || lifetime.signal.aborted) return null
-          const secret = await this.deps.vault.get(metadata.ref)
-          return lifetime.signal.aborted ? null : secret?.bot_token ?? null
+          try {
+            const secret = await this.deps.vault.get(metadata.ref)
+            return lifetime.signal.aborted ? null : secret?.bot_token ?? null
+          } catch {
+            // 凭据读不出来不是网络问题：让它归到「平台拒绝/读不到」那一档，别冒充成网络。
+            return null
+          }
         }
       })
       const identity = await client.botUsername(lifetime.signal)
       const isCurrent = () => !lifetime.signal.aborted && this.lifetimes.get(channelId)?.controller === lifetime && this.deps.inbound.isCurrentActive(channelId, generation) &&
         this.deps.ownsLifecycleOwner?.(channelId, ownerToken, generation) === true
-      if (!identity.ok || !isCurrent()) { this.stopOwned(channelId, lifetime); return false }
+      // 握手失败带真实原因（代理断了 / token 被拒 / 被别的进程占着），不再一律算网络。
+      if (!identity.ok) { this.stopOwned(channelId, lifetime); return failed(identity.code) }
+      if (!isCurrent()) { this.stopOwned(channelId, lifetime); return failed('telegram-runtime-start-failed') }
       this.deps.delivery.setClient(channelId, client, { isCurrent, signal: lifetime.signal })
       const host = new TelegramPollingHost({
         channelId, generation, inbound: this.deps.inboundService, offsets: this.deps.offsets, api: client,
@@ -55,10 +78,10 @@ export class TelegramRuntimeManager {
       this.hostGenerations.set(channelId, generation)
       host.start()
       this.deps.recordLifecycle?.(channelId, generation, 'started')
-      return true
+      return { ok: true }
     } catch {
       this.stopOwned(channelId, lifetime)
-      return false
+      return failed('telegram-runtime-start-failed')
     }
   }
 

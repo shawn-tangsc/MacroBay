@@ -43,7 +43,12 @@ type ManagementDependencies = {
    */
   smoke?: (channel: { id: string; type: AgentChannelType }) => Promise<{ ok: true } | { ok: false; code: string }>
   runtime?: {
-    start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean>
+    /**
+     * 启动结果可以是布尔（旧实现）或带原因的结果。**启动失败的真实原因必须往上带**：
+     * 以前这里只收布尔，于是 telegram 的启动失败被硬编码成 `telegram-network-unavailable`，
+     * 用户被指去看代理与网络，而真实原因可能是凭据、占用或状态。
+     */
+    start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean | { ok: boolean; reason?: string }>
     stop: (channelId: string, ownerToken?: string) => void
   }
   now?: () => Date
@@ -143,7 +148,7 @@ export class ChannelManagementService {
       return requestSmokeEnabledChannel(
         {
           smoke,
-          audit: (code) => this.deps.repository.audit(id, assertIdentifier(input.actorId), 'request-enable', code, this.now()),
+          audit: (code, summary) => this.deps.repository.audit(id, assertIdentifier(input.actorId), 'request-enable', code, this.now(), summary),
           enable: () => this.enableKnownChannel(id, channel, input.actorId)
         },
         { channel }
@@ -202,15 +207,23 @@ export class ChannelManagementService {
       )
     }
     this.deps.runtime?.stop(id)
-    let started = false
-    try { started = Boolean(this.deps.runtime && await this.deps.runtime.start(id, activeOwner.generation, owner.token)) } catch {}
-    if (!started || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
+    let started: boolean | { ok: boolean; reason?: string } = false
+    try { started = this.deps.runtime ? await this.deps.runtime.start(id, activeOwner.generation, owner.token) : false } catch {}
+    const startOk = typeof started === 'boolean' ? started : started.ok === true
+    if (!startOk || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
       this.deps.runtime?.stop(id, owner.token)
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      // 启动把异常吞成一句「启动失败」时，用户看不到为什么。原因码与自检同一套闭集，
-      // 界面只需要认一个字段：`reason`。
-      const rejected = this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
-      return channel.type === 'telegram' ? { ...rejected, reason: 'telegram-network-unavailable' } : rejected
+      // 启动失败的真实原因由运行时给（`telegram-proxy-unavailable` / `telegram-conflict` 等），
+      // 这里**不再替它编一个**：编出来的原因会把用户指到完全无关的方向。
+      const startReason = typeof started === 'object' && started !== null && started.ok === false ? started.reason : undefined
+      const rejected = this.enableRejected(
+        id,
+        actorId,
+        channel,
+        'adapter-runtime-start-failed',
+        startReason ? { runtimeReason: startReason } : undefined
+      )
+      return startReason ? { ...rejected, reason: startReason } : rejected
     }
     this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())
     return {
@@ -434,8 +447,14 @@ export class ChannelManagementService {
     return this.deps.acceptance?.isSupported(adapterType) ?? this.deps.registry.canEnable(adapterType)
   }
 
-  private enableRejected(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, code: ChannelManagementResult['code'] = 'adapter-not-supported'): ChannelManagementResult {
-    this.deps.repository.audit(id, assertIdentifier(actorId), 'request-enable', code, this.now())
+  private enableRejected(
+    id: string,
+    actorId: unknown,
+    channel: NonNullable<ReturnType<ChannelManagementService['get']>>,
+    code: ChannelManagementResult['code'] = 'adapter-not-supported',
+    summary?: Record<string, string>
+  ): ChannelManagementResult {
+    this.deps.repository.audit(id, assertIdentifier(actorId), 'request-enable', code, this.now(), summary)
     return { ok: false, code, channel }
   }
 }

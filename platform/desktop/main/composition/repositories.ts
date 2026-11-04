@@ -11,6 +11,7 @@ import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/creat
 import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
+import { describeActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
@@ -85,7 +86,10 @@ const channelManagementService = new ChannelManagementService({
   smoke: createTelegramChannelSmoke({
     credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
     readSecret: (ref) => channelCredentialVault.get(ref),
-    getPlatformFetch
+    getPlatformFetch,
+    // 失败时把「实际生效的代理」记进审计：这是唯一能把「代理没生效」与「代理连不上」分开的事实。
+    describeProxy: describeActiveProxy,
+    fetchKind: 'net'
   })
 })
 const agentStore = createAgentSqliteStoreWithOptions(

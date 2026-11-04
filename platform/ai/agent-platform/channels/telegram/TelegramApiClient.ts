@@ -67,7 +67,9 @@ export class TelegramApiClient {
       if (response.status >= 500) return { ok: false, code: 'telegram-network-unavailable' }
       return { ok: false, code: 'telegram-provider-rejected', parseRejected: /parse entities|can't parse/i.test(json.description ?? '') }
     } catch (error) {
-      return { ok: false, code: classifyTransportFailure(error, signal) }
+      const transportError = chromiumErrorName(error)
+      const failure = { ok: false as const, code: classifyTransportFailure(error, signal) }
+      return transportError ? { ...failure, transportError } : failure
     }
   }
 }
@@ -82,6 +84,14 @@ export function classifyTransportFailure(error: unknown, signal?: AbortSignal): 
   return proxyTransportErrors.some((marker) => text.includes(marker))
     ? 'telegram-proxy-unavailable'
     : 'telegram-network-unavailable'
+}
+
+/**
+ * 只取 Chromium 的错误**名字**（如 `ERR_PROXY_CONNECTION_FAILED`），不带消息正文：
+ * 消息里可能带完整 URL，而 URL 里有 bot token。名字本身足以分辨 DNS / 连接重置 / 代理拒绝。
+ */
+export function chromiumErrorName(error: unknown): string | undefined {
+  return /net::(ERR_[A-Z0-9_]+)/.exec(describeError(error))?.[1]
 }
 
 function describeError(error: unknown): string {

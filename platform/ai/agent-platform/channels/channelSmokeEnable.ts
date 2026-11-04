@@ -10,7 +10,18 @@ import type { AgentChannelType } from '../schemas/channelSchemas'
 import type { ChannelManagementResult, ChannelManagementSafeView } from './ChannelManagementContracts'
 import { setChannelAcceptanceOverride } from './channelAcceptanceOverride'
 
-export type ChannelSmokeResult = { ok: true } | { ok: false; code: string }
+export type ChannelSmokeResult =
+  | { ok: true }
+  | {
+    ok: false
+    code: string
+    /** 脱敏后的 Chromium 错误名（`ERR_...`）；只用于日志排查，界面不显示。 */
+    transportError?: string
+    /** 这次请求实际走的代理（`PROXY host:port` / `DIRECT`）；同样是诊断用，界面不显示。 */
+    proxy?: string
+    /** 这次用的出网入口（`session` / `net`）。 */
+    fetch?: string
+  }
 
 /**
  * `reason` 的闭集（界面按它说人话）。**任何没落进这里的码都要被归一**，否则界面只能显示
@@ -39,8 +50,8 @@ function normalizeReason(code: string | undefined, adapterType: string): Channel
 
 export type ChannelSmokeEnableDeps = {
   smoke: (channel: { id: string; type: AgentChannelType }) => Promise<ChannelSmokeResult>
-  /** 失败时记一行审计（动作沿用 request-enable，原因写进 code）。 */
-  audit: (code: string) => void
+  /** 失败时记一行审计（动作沿用 request-enable，原因写进 code，脱敏细节进 summary）。 */
+  audit: (code: string, summary?: Record<string, string>) => void
   /** 同一条启用链：调用方负责凭据检查、生命周期 owner 与运行时启动。 */
   enable: () => ChannelManagementResult | Promise<ChannelManagementResult>
 }
@@ -59,7 +70,13 @@ export async function requestSmokeEnabledChannel(
   }
   if (!smoke.ok) {
     const reason = normalizeReason(smoke.code, channel.type)
-    deps.audit(reason)
+    // 三条事实原样进审计 summary：下次排查不用再猜是代理没生效、DNS、还是连接被重置。
+    const detail = {
+      ...(smoke.transportError ? { transportError: smoke.transportError } : {}),
+      ...(smoke.proxy ? { proxy: smoke.proxy } : {}),
+      ...(smoke.fetch ? { fetch: smoke.fetch } : {})
+    }
+    deps.audit(reason, Object.keys(detail).length > 0 ? detail : undefined)
     return { ok: false, code: 'channel-smoke-failed', channel, reason }
   }
   setChannelAcceptanceOverride(channel.type)

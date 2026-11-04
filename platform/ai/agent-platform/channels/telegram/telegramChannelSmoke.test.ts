@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { TelegramApiClient, classifyTransportFailure } from './TelegramApiClient'
+import { TelegramApiClient, chromiumErrorName, classifyTransportFailure } from './TelegramApiClient'
 import { createTelegramChannelSmoke } from './telegramChannelSmoke'
 
 /**
@@ -37,11 +37,13 @@ function fail(status: number, description: string): Response {
   return new Response(JSON.stringify({ ok: false, error_code: status, description }), { status, headers: { 'content-type': 'application/json' } })
 }
 
-function smokeWith(fetchImpl: typeof fetch, token: string | null = '8830:secret') {
+function smokeWith(fetchImpl: typeof fetch, token: string | null = '8830:secret', proxy = 'PROXY 127.0.0.1:7888') {
   return createTelegramChannelSmoke({
     credentialMetadata: () => ({ ref: 'channel-credential:channel-1' }),
     readSecret: async () => (token === null ? null : { bot_token: token }),
-    getPlatformFetch: () => fetchImpl
+    getPlatformFetch: () => fetchImpl,
+    describeProxy: async () => proxy,
+    fetchKind: 'net'
   })
 }
 
@@ -75,28 +77,54 @@ describe('telegram enable self-check', () => {
 
   it('reports a rejected bot credential as provider-rejected, not as a network problem', async () => {
     const { fetch } = fakeFetch([fail(401, 'Unauthorized')])
-    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
+    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toMatchObject({
       ok: false, code: 'telegram-provider-rejected'
     })
   })
 
   it('reports another process holding the bot as conflict', async () => {
     const { fetch } = fakeFetch([ok({ username: 'bot' }), fail(409, 'Conflict: terminated by other getUpdates request')])
-    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
+    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toMatchObject({
       ok: false, code: 'telegram-conflict'
     })
   })
 
   it('separates a dead proxy hop from an unreachable target', async () => {
     const proxyDown = fakeFetch([ok({ username: 'bot' }), new Error('TypeError: net::ERR_PROXY_CONNECTION_FAILED')])
+    // 失败结果还带一次**脱敏**的 Chromium 错误名：只带名字，不带 URL（URL 里有 bot token）。
     await expect(smokeWith(proxyDown.fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
-      ok: false, code: 'telegram-proxy-unavailable'
+      ok: false,
+      code: 'telegram-proxy-unavailable',
+      transportError: 'ERR_PROXY_CONNECTION_FAILED',
+      proxy: 'PROXY 127.0.0.1:7888',
+      fetch: 'net'
     })
 
     const targetDown = fakeFetch([ok({ username: 'bot' }), new Error('TypeError: net::ERR_CONNECTION_TIMED_OUT')])
     await expect(smokeWith(targetDown.fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
-      ok: false, code: 'telegram-network-unavailable'
+      ok: false,
+      code: 'telegram-network-unavailable',
+      transportError: 'ERR_CONNECTION_TIMED_OUT',
+      proxy: 'PROXY 127.0.0.1:7888',
+      fetch: 'net'
     })
+  })
+
+  it('keeps the token out of the failure detail', async () => {
+    // Chromium 的原始消息里可能带完整 URL（含 bot token）：只取 `ERR_...` 名字，正文一律丢掉。
+    const leaky = new Error('TypeError: Failed to fetch https://api.telegram.org/bot8830:secret/getUpdates net::ERR_NAME_NOT_RESOLVED')
+    const { fetch } = fakeFetch([leaky])
+    const result = await smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })
+    expect(result).toEqual({
+      ok: false,
+      code: 'telegram-network-unavailable',
+      transportError: 'ERR_NAME_NOT_RESOLVED',
+      proxy: 'PROXY 127.0.0.1:7888',
+      fetch: 'net'
+    })
+    expect(JSON.stringify(result)).not.toContain('8830:secret')
+    expect(chromiumErrorName(leaky)).toBe('ERR_NAME_NOT_RESOLVED')
+    expect(chromiumErrorName(new Error('plain failure'))).toBeUndefined()
   })
 
   it('never claims a proxy problem it cannot prove', () => {
@@ -110,10 +138,28 @@ describe('telegram enable self-check', () => {
     expect(classifyTransportFailure(new Error('net::ERR_PROXY_CONNECTION_FAILED'), aborted.signal)).toBe('telegram-network-unavailable')
   })
 
+  it('records what the proxy actually resolved to, so DIRECT is visible in the audit', async () => {
+    // 用户遇到的那类情况：设置里写着自定义代理，而这次请求 Chromium 判成直连。
+    const { fetch } = fakeFetch([ok({ username: 'bot' }), new Error('TypeError: net::ERR_CONNECTION_REFUSED')])
+    const result = await smokeWith(fetch, '8830:secret', 'DIRECT')({ id: 'channel-1', type: 'telegram' })
+    expect(result).toMatchObject({ ok: false, proxy: 'DIRECT', fetch: 'net', transportError: 'ERR_CONNECTION_REFUSED' })
+  })
+
+  it('reports a vault read failure as a credential problem, not as a network problem', async () => {
+    const smoke = createTelegramChannelSmoke({
+      credentialMetadata: () => ({ ref: 'channel-credential:channel-1' }),
+      readSecret: async () => { throw new Error('unavailable') },
+      getPlatformFetch: () => { throw new Error('must not be called') }
+    })
+    await expect(smoke({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
+      ok: false, code: 'channel-credential-unavailable'
+    })
+  })
+
   it('does not classify a plain 500 as a proxy failure', async () => {
     const { fetch } = fakeFetch([ok({ username: 'bot' }), fail(502, 'Bad Gateway')])
-    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toEqual({
-      ok: false, code: 'telegram-network-unavailable'
+    await expect(smokeWith(fetch)({ id: 'channel-1', type: 'telegram' })).resolves.toMatchObject({
+      ok: false, code: 'telegram-network-unavailable', proxy: 'PROXY 127.0.0.1:7888'
     })
   })
 

@@ -48,7 +48,9 @@ function harness(options: { smokeOk?: boolean } = {}) {
     registry: new ChannelAdapterAcceptanceRegistry(),
     handoff: new ChannelSecureHandoff(),
     runtime,
-    smoke: async () => (options.smokeOk === false ? { ok: false, code: 'telegram-proxy-unavailable' } : { ok: true }),
+    smoke: async () => (options.smokeOk === false
+      ? { ok: false, code: 'telegram-proxy-unavailable', transportError: 'ERR_PROXY_CONNECTION_FAILED', proxy: 'DIRECT', fetch: 'net' }
+      : { ok: true }),
     now: () => new Date('2026-11-04T07:50:00.000Z')
   })
   return { database, service, runtime }
@@ -124,6 +126,16 @@ describe('enabling a channel that has no seven-item evidence', () => {
     const failing = harness({ smokeOk: false })
     await expect(Promise.resolve(failing.service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))).resolves.toMatchObject({
       ok: false, code: 'channel-smoke-failed', reason: 'telegram-proxy-unavailable'
+    })
+    // 失败原因那一行审计要带一次脱敏细节，下次排查不用再猜是 DNS、连接重置还是代理拒绝。
+    const audit = failing.database.connection.prepare(
+      "select code, summary_json from channel_management_audits where channel_id = ? and action = 'request-enable' order by created_at desc limit 1"
+    ).get(CHANNEL_ID) as { code: string; summary_json: string }
+    expect(audit.code).toBe('telegram-proxy-unavailable')
+    expect(JSON.parse(audit.summary_json)).toEqual({
+      transportError: 'ERR_PROXY_CONNECTION_FAILED',
+      proxy: 'DIRECT',
+      fetch: 'net'
     })
 
     setChannelAcceptanceOverride(null)

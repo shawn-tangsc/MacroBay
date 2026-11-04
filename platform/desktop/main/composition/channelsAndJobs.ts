@@ -28,6 +28,7 @@ import {
   createChannelInboundContentGuard
 } from '../../../ai/agent-platform/channels'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
+import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createPlatformWebSocketFactory } from '../../../network/platformWebSocket'
 import { createTaskAutomationMaintenance } from '../taskAutomationMaintenance'
@@ -189,7 +190,11 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     ownsLifecycleOwner: (channelId, token, generation) => channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'enable', generation }) ||
       channelManagementRepository.ownsLifecycleOwner(channelId, { token, purpose: 'restart', generation }),
     // 起/停各一条进运行审计表：面板的「状态变化」就靠它，失败仍走已有异常码。
-    recordLifecycle: (channelId, generation, state) => recordRuntimeLifecycle(agentDatabase, channelId, state, generation)
+    recordLifecycle: (channelId, generation, state) => recordRuntimeLifecycle(agentDatabase, channelId, state, generation),
+    // 起不来时把**具体原因**写进同一张表：面板读得到，用户不用再对着一句「网络连不通」猜。
+    recordFailure: (channelId, generation, reason) => {
+      if (isChannelRuntimeFailureMirrorCode(reason)) mirrorRuntimeFailure(agentDatabase, channelId, generation, reason, new Date())
+    }
   })
   const slackRuntimeManager = new SlackRuntimeManager({
     inbound: channelInboundService,

@@ -10,7 +10,14 @@ export type TelegramApiFailure =
 
 export type TelegramApiResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: TelegramApiFailure; retryAfterMs?: number; parseRejected?: boolean }
+  | {
+    ok: false
+    code: TelegramApiFailure
+    retryAfterMs?: number
+    parseRejected?: boolean
+    /** 脱敏后的 Chromium 错误名（`ERR_...`）。只带名字，不带 URL、不带 token。 */
+    transportError?: string
+  }
 
 export type TelegramUpdate = {
   update_id: number
