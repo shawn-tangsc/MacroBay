@@ -248,6 +248,9 @@ export function mergeDuplicateNotification(
     : existing.mergedEventTypes
   return {
     ...existing,
+    // 版次：**带了才覆盖成最新那次，没带就保持原样**——自动路径不带 edition，
+    // 不能让它把记录里已有的版次抹掉（否则按钮又会判「版次不符」）。
+    ...(incoming.edition === undefined ? {} : { edition: incoming.edition }),
     // 标题与动作取第一次：读者靠标题认人，动作一变等于换了一条通知。
     bodyKey: incoming.bodyKey ?? existing.bodyKey,
     bodyParams: incoming.bodyKey !== undefined ? incoming.bodyParams : existing.bodyParams,

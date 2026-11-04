@@ -229,7 +229,8 @@ function toLegacyRequest(
     ...(request.actions.length === 0 ? {} : { actions: [...request.actions] }),
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),
     dedupeKey,
-    ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId })
+    ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
+    ...(request.edition === undefined ? {} : { edition: request.edition })
   }
 }
 
@@ -242,14 +243,18 @@ function createRecord(
   bodyKey: string | undefined,
   now: string
 ): NotificationRecord {
+  // `deliver: false`：只落记录、不排任何投递面；记录内容与 `occurrenceCount` 照常。
+  const deliver = request.deliver !== false
   const localChannels = levels.filter((level): level is NotificationChannel =>
     level === 'center' || level === 'toast' || level === 'desktop'
   )
   const delivery: NotificationRecord['delivery'] = {}
-  // 互斥在这里落成数据：两个表面**不许同时**有交付条目（设计 §2）。
-  if (surfaces.desktop) delivery.desktop = { state: 'queued', at: now }
-  else if (surfaces.toast) delivery.toast = { state: 'queued', at: now }
-  if (levels.includes('channel')) delivery.push = { state: 'queued', at: now }
+  if (deliver) {
+    // 互斥在这里落成数据：两个表面**不许同时**有交付条目（设计 §2）。
+    if (surfaces.desktop) delivery.desktop = { state: 'queued', at: now }
+    else if (surfaces.toast) delivery.toast = { state: 'queued', at: now }
+    if (levels.includes('channel')) delivery.push = { state: 'queued', at: now }
+  }
   return {
     id: createNotificationId(),
     owner: entry.productId === 'platform' ? 'platform' : 'product',
@@ -271,6 +276,7 @@ function createRecord(
     actions: [...request.actions],
     dedupeKey,
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
+    ...(request.edition === undefined ? {} : { edition: request.edition }),
     occurrenceCount: 1,
     createdAt: now,
     updatedAt: now

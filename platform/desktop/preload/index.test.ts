@@ -151,6 +151,7 @@ describe('desktop preload platform api', () => {
       'onChanged',
       'onDelivered',
       'readDesktopPermission',
+      'redeliverPush',
       'sendTest',
       'setChannelEvent',
       'setDesktopEnabled',

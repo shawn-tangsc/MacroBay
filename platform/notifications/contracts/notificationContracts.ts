@@ -26,10 +26,19 @@ export type NotificationAction = {
 
 /** 每个投递表面各一条证据（契约 §8）：不是一个字段撑四个面。 */
 export type NotificationDeliveryState = {
-  state: 'queued' | 'sent-accepted' | 'failed'
+  /**
+   * 四档，映射写死（契约 §8 / 设计 N21）：没发出=`queued`、通道受理=`sent-accepted`、
+   * 请求已发但没拿到回执=`sent-unconfirmed`、通道报错=`failed`+原因。
+   * 界面文案只读这一档，不许拿投递端返回值猜。
+   */
+  state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
   reason?: string
   messageId?: string
   at: string
+  /** 「再推一次」用：这条记录的手机投递一共成功发起过几次（调试与瞬时回执用，界面不常驻）。 */
+  pushCount?: number
+  /** 最近一次重投的时刻（UTC）。 */
+  lastPushedAt?: string
 }
 
 /** 通道熔断状态：每个 channelId 一条，随通知 JSON 持久化、重启不丢窗口。 */
@@ -67,6 +76,8 @@ export type NotificationRecord = {
   dedupeKey?: string
   correlationId?: string
   safeMetadata?: Record<string, unknown>
+  /** 读者眼前那一版的标识（`redeliverPush` 靠它核对）；**历史记录没有它，一律按不匹配处理**。 */
+  edition?: { editionId: string; locale: string }
   occurrenceCount: number
   /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */
   collapsedCount?: number
@@ -106,6 +117,8 @@ export type NotificationRequest = {
   correlationId?: string
   safeMetadata?: Record<string, unknown>
   expiresAt?: string
+  /** 读者眼前那一版；合并时**带了才覆盖**，没带就保持记录原样（不许清空）。 */
+  edition?: { editionId: string; locale: string }
 }
 
 export type NotificationListQuery = {
@@ -262,6 +275,14 @@ export type NotificationDedupeVars =
 export type NotificationSubmitRequest = {
   eventTypeId: string
   producerId?: string
+  /**
+   * 只记录不投递（契约 §16.3.3）：照常走提交与去重，但**不写任何表面的 delivery 条目**。
+   * 缺省 `true`（不传＝投递，历史调用方一行不用改）。**只许手动/读者动作路径用**，
+   * 自动生产者带上它由生产者边界守卫报错。
+   */
+  deliver?: boolean
+  /** 读者眼前那一版；落库供 `redeliverPush` 核对。 */
+  edition?: { editionId: string; locale: string }
   dedupeVars: NotificationDedupeVars
   titleParams?: Readonly<Record<string, string>>
   bodyParams?: Readonly<Record<string, string>>

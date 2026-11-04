@@ -50,6 +50,18 @@ export function registerNotificationIpcHandlers(): void {
     if (!payload.eventId) throw new Error('eventId is required.')
     return getNotificationRuntime().setChannelEvent(payload.eventId, payload.enabled === true)
   })
+  ipcMain.handle(IpcChannels.notificationsRedeliverPush, (_event, input) => {
+    const payload = (input ?? {}) as { dedupeKey?: string; editionId?: string; locale?: string; surface?: string }
+    if (!payload.dedupeKey || !payload.editionId || !payload.locale) {
+      throw new Error('dedupeKey, editionId and locale are required.')
+    }
+    return getNotificationRuntime().redeliverPush({
+      dedupeKey: payload.dedupeKey,
+      editionId: payload.editionId,
+      locale: payload.locale,
+      ...(payload.surface === undefined ? {} : { surface: payload.surface })
+    })
+  })
   ipcMain.handle(IpcChannels.notificationsSetToastEnabled, (_event, input) => {
     const payload = (input ?? {}) as { enabled?: boolean }
     return getNotificationRuntime().setToastEnabled(payload.enabled === true)

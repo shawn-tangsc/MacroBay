@@ -66,6 +66,11 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
       ipcRenderer.invoke(IpcChannels.notificationsSetChannelEvent, { eventId, enabled }) as Promise<
         Awaited<ReturnType<NotificationRuntime['setChannelEvent']>>
       >,
+    /** 读者点「推送到手机」才调：不新建记录、不改内容，只重投这一条的手机一面。 */
+    redeliverPush: (input: { dedupeKey: string; editionId: string; locale: string; surface?: string }) =>
+      ipcRenderer.invoke(IpcChannels.notificationsRedeliverPush, input) as Promise<
+        Awaited<ReturnType<NotificationRuntime['redeliverPush']>>
+      >,
     /** 当前提示开关 / 桌面开关 / 接线状态：设置页首帧要这几个值，不是只给写口。 */
     getDeliverySettings: () =>
       ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings) as Promise<

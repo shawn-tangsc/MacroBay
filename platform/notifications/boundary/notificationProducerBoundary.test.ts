@@ -77,11 +77,22 @@ describe('notification producer boundary', () => {
       'onChanged',
       'onDelivered',
       'readDesktopPermission',
+      // 读者的显式「再推一次」：只重投这一条的手机一面，不是生产者。
+      'redeliverPush',
       'sendTest',
       'setChannelEvent',
       'setDesktopEnabled',
       'setToastEnabled',
       'snooze'
     ])
+  })
+
+  it('never lets an automatic producer take the "record but do not deliver" door', () => {
+    // `deliver: false` 只给读者动作（手动重新生成）用。自动路径带上它，等于给所有生产者一个
+    // 「静默改写记录、什么都没发」的口子——记录在、投递没了，读者会看到一条谁都没收到过的通知。
+    const producers = listSourceFiles(join(repoRoot, 'platform', 'notifications', 'producers'))
+    expect(producers.length).toBeGreaterThan(0)
+    const offenders = producers.filter((filePath) => /deliver\s*:\s*false/.test(readFileSync(filePath, 'utf8')))
+    expect(offenders.map(relativePath)).toEqual([])
   })
 })

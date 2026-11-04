@@ -263,6 +263,8 @@ export const IpcChannels = {
   /** 情报三条「推不推手机」：读回与写入（只接受批准含 channel 的三个 id）。 */
   notificationsGetChannelEvents: 'platform:notifications-get-channel-events',
   notificationsSetChannelEvent: 'platform:notifications-set-channel-event',
+  /** 读者显式点击「推送到手机」：只重投这一条记录的手机一面（契约 §16.3.4）。 */
+  notificationsRedeliverPush: 'platform:notifications-redeliver-push',
   /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
   notificationsChanged: 'platform:notifications-changed',
   /** 应用内投递（横幅 / 弹窗）：事件带那条记录的键与参数，渲染层自己解析句子。 */

@@ -52,6 +52,7 @@ import {
   type NotificationClock
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
+import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import {
   compareNotifications,
@@ -63,7 +64,6 @@ import {
 export type NotificationStorage = JsonFileStorage<NotificationStoreState>
 
 export function createNotificationJsonStorage(filePath: string): NotificationStorage {
-
 
   return {
     /**
@@ -304,6 +304,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
     ...settingsSurface,
     reportProviderCredential,
+
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged }),
 
     async initialize(): Promise<void> {
       await load()
