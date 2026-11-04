@@ -27,7 +27,7 @@ function isDocument(value: unknown): value is DailyBriefingDocument {
 }
 
 function isEdition(value: unknown, schemaVersion: unknown): boolean {
-  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours', 'periodId', 'periodTime', 'periodKind'])) return false
+  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours', 'periodId', 'periodTime', 'periodKind', 'runTrigger'])) return false
   if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
   // From schema 7 the edition states the window it actually covered; older rows may omit it.
   if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
@@ -36,7 +36,8 @@ function isEdition(value: unknown, schemaVersion: unknown): boolean {
   if (typeof schemaVersion === 'number' && schemaVersion >= 13) {
     if (!isText(value.periodId) || !isText(value.periodTime)) return false
     if (value.periodKind !== 'scheduled' && value.periodKind !== 'manual') return false
-  } else if (value.periodId !== undefined || value.periodTime !== undefined || value.periodKind !== undefined) {
+    if (!['scheduled', 'catch-up', 'retry', 'manual'].includes(String(value.runTrigger))) return false
+  } else if (value.periodId !== undefined || value.periodTime !== undefined || value.periodKind !== undefined || value.runTrigger !== undefined) {
     // Editions before 13 had no period fields; a half-written set would make the fallback ambiguous.
     return false
   }

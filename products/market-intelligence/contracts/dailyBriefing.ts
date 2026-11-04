@@ -140,6 +140,12 @@ export type {
 /** The two kinds of period an edition can come from; the row's label depends on it, not on a lookup. */
 export type DailyBriefingPeriodKind = 'scheduled' | 'manual'
 
+/**
+ * Why this run happened. A catch-up or retry is what the list calls "补跑": the run record only
+ * lives 14 days, so the fact has to travel with the edition or an old row would silently lose it.
+ */
+export type DailyBriefingRunTrigger = 'scheduled' | 'catch-up' | 'retry' | 'manual'
+
 export type DailyBriefingDocument = Readonly<{
   schemaVersion: DailyBriefingDocumentSchemaVersion
   policyVersion: DailyBriefingPolicyVersion
@@ -172,6 +178,11 @@ export type DailyBriefingDocument = Readonly<{
     periodTime?: string
     /** What kind of period produced this edition; absent before schema 13 reads as `scheduled`. */
     periodKind?: DailyBriefingPeriodKind
+    /**
+     * Why the run happened. Absent before schema 13, and then it reads as `scheduled` — those
+     * editions recorded no such fact, and inventing "补跑" for them would be a claim nobody made.
+     */
+    runTrigger?: DailyBriefingRunTrigger
   }>
   status: Readonly<{
     readings: readonly Readonly<{ id: DailyBriefingReadingId; state: DailyBriefingReadingState }>[]
@@ -300,11 +311,13 @@ export function briefingEditionPeriod(edition: Readonly<{
   periodId?: string
   periodTime?: string
   periodKind?: DailyBriefingPeriodKind
-}>): Readonly<{ periodId: string; periodTime: string; periodKind: DailyBriefingPeriodKind }> {
+  runTrigger?: DailyBriefingRunTrigger
+}>): Readonly<{ periodId: string; periodTime: string; periodKind: DailyBriefingPeriodKind; runTrigger: DailyBriefingRunTrigger }> {
   return Object.freeze({
     periodId: edition.periodId !== undefined && edition.periodId.length > 0 ? edition.periodId : 'default',
     periodTime: edition.periodTime ?? edition.generatedAt,
-    periodKind: edition.periodKind ?? 'scheduled'
+    periodKind: edition.periodKind ?? 'scheduled',
+    runTrigger: edition.runTrigger ?? 'scheduled'
   })
 }
 

@@ -177,7 +177,9 @@ describe('edition period identity', () => {
     expect(briefingEditionPeriod({ generatedAt: '2026-10-30T00:30:00.000Z' })).toEqual({
       periodId: 'default',
       periodTime: '2026-10-30T00:30:00.000Z',
-      periodKind: 'scheduled'
+      periodKind: 'scheduled',
+      // Those editions recorded no trigger: they read as running on schedule, never as "补跑".
+      runTrigger: 'scheduled'
     })
   })
 
@@ -186,11 +188,13 @@ describe('edition period identity', () => {
       generatedAt: '2026-11-03T07:00:12.345Z',
       periodId: 'period_01J8Z6Q4T3',
       periodTime: '2026-11-03T07:00:00.000Z',
-      periodKind: 'manual'
+      periodKind: 'manual',
+      runTrigger: 'manual'
     })).toEqual({
       periodId: 'period_01J8Z6Q4T3',
       periodTime: '2026-11-03T07:00:00.000Z',
-      periodKind: 'manual'
+      periodKind: 'manual',
+      runTrigger: 'manual'
     })
   })
 
@@ -203,5 +207,6 @@ describe('edition period identity', () => {
     expect(first.periodTime).toBe(second.periodTime)
     expect(first.periodId).not.toBe(second.periodId)
     expect(first.periodKind).toBe('scheduled')
+    expect(first.runTrigger).toBe('scheduled')
   })
 })

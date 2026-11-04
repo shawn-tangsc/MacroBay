@@ -23,6 +23,7 @@ const document = (overrides: Partial<DailyBriefingDocument['edition']> = {}): Da
     periodId: 'default',
     periodTime: '2026-10-30T00:30:00.000Z',
     periodKind: 'scheduled',
+    runTrigger: 'scheduled',
     ...overrides
   },
   status: {
@@ -50,18 +51,21 @@ const document = (overrides: Partial<DailyBriefingDocument['edition']> = {}): Da
 
 const withoutPeriod = (): DailyBriefingDocument => {
   const value = document()
-  const { periodId: _id, periodTime: _time, periodKind: _kind, ...edition } = value.edition
+  const { periodId: _id, periodTime: _time, periodKind: _kind, runTrigger: _trigger, ...edition } = value.edition
   return { ...value, edition }
 }
 
 describe('daily briefing document guard at schema 13', () => {
   it('accepts a 13 document that carries the full period identity', () => {
     expect(isDocument(document())).toBe(true)
-    expect(isDocument(document({ periodKind: 'manual', periodId: 'period_01J8Z6Q4T3' }))).toBe(true)
+    expect(isDocument(document({ periodKind: 'manual', periodId: 'period_01J8Z6Q4T3', runTrigger: 'manual' }))).toBe(true)
+    for (const trigger of ['scheduled', 'catch-up', 'retry', 'manual'] as const) {
+      expect(isDocument(document({ runTrigger: trigger })), trigger).toBe(true)
+    }
   })
 
   it('refuses a 13 document that is missing any of the three fields', () => {
-    for (const field of ['periodId', 'periodTime', 'periodKind'] as const) {
+    for (const field of ['periodId', 'periodTime', 'periodKind', 'runTrigger'] as const) {
       const value = document()
       const edition = { ...value.edition }
       delete (edition as Record<string, unknown>)[field]
@@ -72,6 +76,7 @@ describe('daily briefing document guard at schema 13', () => {
 
   it('refuses an unknown period kind and an empty opaque id', () => {
     expect(isDocument(document({ periodKind: 'retro' as unknown as 'scheduled' }))).toBe(false)
+    expect(isDocument(document({ runTrigger: 'catchup' as unknown as 'scheduled' }))).toBe(false)
     expect(isDocument(document({ periodId: '' }))).toBe(false)
   })
 

@@ -51,6 +51,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
       // exactly where the window ends. `generatedAt` below is the actual moment the run finished.
       periodTime: packet.windowEnd,
       periodKind: 'scheduled',
+      // Why this run happened; this version only has the scheduled daily run.
+      runTrigger: 'scheduled',
       generatedAt: packet.asOf,
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,

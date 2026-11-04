@@ -285,6 +285,8 @@ describe('daily briefing document', () => {
     expect(document.edition.generatedAt).toBe('2026-10-30T00:30:12.345Z')
     expect(document.edition.periodTime).toMatch(/\.\d{3}Z$/)
     expect(document.edition.periodKind).toBe('scheduled')
+    // The scheduled daily run of this version: never recorded as a catch-up or a retry.
+    expect(document.edition.runTrigger).toBe('scheduled')
   })
 
   it('records the packet window that generation actually read', () => {
