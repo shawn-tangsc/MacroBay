@@ -84,7 +84,7 @@ const guardDocument = (): DailyBriefingDocument => ({
     }],
     funds: [{
       id: 'etf-btc', group: 'funds', labelKey: 'dailyBriefing.row.etfBtc',
-      importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+      importance: { tier: 'support', source: 'rule', reasonCode: 'gap' },
       state: 'unavailable', value: null, change: null, window: 'trading-day',
       observedAt: null, reason: 'etf-unavailable'
     }],
