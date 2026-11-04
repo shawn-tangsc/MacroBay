@@ -60,6 +60,8 @@ export function withRunGaps(
   input: Readonly<{
     failure: string | undefined
     readinessWait: Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined
+    /** A fetch for the missing quotes was attempted during this run. */
+    backfilled?: boolean
     locale: DailyBriefingLocale
   }>
 ): DailyBriefingDocument {
@@ -67,5 +69,24 @@ export function withRunGaps(
   if (input.readinessWait && !input.readinessWait.ready) {
     next = withCoreFactsNotReadyGap(next, input.readinessWait, input.locale)
   }
-  return next
+  return input.backfilled ? withBackfillAttemptGap(next, input.locale) : next
+}
+
+/**
+ * We asked the source for the missing quotes and it still did not give them.
+ *
+ * A reader who is told only "missing" cannot tell a source that is slow from one that never answered,
+ * and neither can the next person reading the log. The edition says we tried.
+ */
+export function withBackfillAttemptGap(document: DailyBriefingDocument, locale: DailyBriefingLocale): DailyBriefingDocument {
+  if (!document.conclusion) return document
+  const sentence = locale === 'en-US'
+    ? 'Missing quotes were requested from the source again during this run and still did not arrive.'
+    : '本次生成已向数据源补抓缺失报价，仍未取到。'
+  const gaps = document.conclusion.dataGaps
+  if (gaps.includes(sentence)) return document
+  return Object.freeze({
+    ...document,
+    conclusion: Object.freeze({ ...document.conclusion, dataGaps: Object.freeze([...gaps, sentence]) })
+  })
 }

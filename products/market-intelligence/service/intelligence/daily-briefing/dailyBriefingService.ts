@@ -22,7 +22,7 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
-import { awaitReadinessForRun } from './dailyBriefProgressWaiting'
+import { prepareMarketForRun } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads } from './dailyBriefingReads'
 import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
@@ -308,6 +308,8 @@ export function createDailyBriefingService(deps: Readonly<{
   noticeSubmit?: DailyBriefingNoticeSubmit
   /** Waits for the market the brief reads; absent means generate at once, as before. */
   readiness?: DailyBriefReadiness
+  /** The quote collector, when this build runs one: missing bars are fetched once, before generation. */
+  marketBackfill?: Parameters<typeof prepareMarketForRun>[0]['backfill']
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -379,9 +381,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // record of an attempt that did not succeed, instead of an attempt that never happened.
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
-    // The wait is published too: one "generating" with no attempt, no session and no step is what
-    // made a waiting run indistinguishable from a stuck one.
-    const readinessWait = await awaitReadinessForRun(deps.readiness, input.asOf, force, (progress) => runs.progress.set(progressKey, progress), now)
+    const market = await prepareMarketForRun({ ...(deps.marketBackfill ? { backfill: deps.marketBackfill } : {}), ...(deps.readiness ? { readiness: deps.readiness } : {}), asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
@@ -439,7 +439,7 @@ export function createDailyBriefingService(deps: Readonly<{
     try {
       const previous = await previousEditionBefore(deps.store, input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
-      document = withRunGaps(document, { failure: packet.market.crossAssetFailure, readinessWait, locale: input.locale })
+      document = withRunGaps(document, { failure: packet.market.crossAssetFailure, readinessWait: market.readinessWait, backfilled: market.backfillAttempted, locale: input.locale })
       recorder.end('candidates', 'success')
     } catch {
       recorder.end('candidates', 'failed', { failureCode: 'build-failed' })
@@ -587,7 +587,7 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-      // 成功不通知（`BACKLOG` §28）：日报每天自己会来，「今天有了」不值得打断读者一次。
+      if (!force) await notifyDailyBriefing(deps.noticeSubmit, { kind: 'ready', date: input.date }, now()) // automatic runs only
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)

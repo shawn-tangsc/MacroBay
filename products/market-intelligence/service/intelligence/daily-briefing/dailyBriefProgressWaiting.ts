@@ -2,6 +2,7 @@ import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefin
 import { briefingGenerationStageIds } from '../../../contracts/dailyBriefing'
 
 import { awaitDailyBriefReadiness, dailyBriefReadinessPolicy, type DailyBriefReadiness } from './dailyBriefReadinessGate'
+import { ensureBriefingBars, type BriefingBarBackfill } from './dailyBriefMarketBackfill'
 
 /**
  * The wait before a run may open its attempt, published as progress.
@@ -76,4 +77,41 @@ export async function awaitReadinessForRun(
     return undefined
   }
   return awaitDailyBriefReadinessPublished(readiness, asOf, publish, now)
+}
+
+/** What the generation path needs to know about the market before it opens its attempt. */
+export type MarketPreparation = Readonly<{
+  readinessWait: Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined
+  /** Whether a fetch for the missing quotes was attempted, so the edition can say so in its gaps. */
+  backfillAttempted: boolean
+}>
+
+/**
+ * Get this edition's market into the state generation can use: fetch the missing bars once, then wait.
+ *
+ * Both halves exist because they answer different failures: a bar that was never fetched needs the
+ * collector asked (this module), and a bar that was just fetched needs a moment to become readable at
+ * the cutoff (the readiness gate). Doing only the second is what made the gate wait out its budget
+ * every morning for data nobody had asked for.
+ */
+export async function prepareMarketForRun(input: Readonly<{
+  backfill?: BriefingBarBackfill
+  readiness?: DailyBriefReadiness
+  asOf: string
+  manual: boolean
+  publish: (progress: BriefingGenerationProgress) => void
+  now: () => string
+}>): Promise<MarketPreparation> {
+  let backfillAttempted = false
+  if (input.backfill) {
+    const cutoff = Date.parse(input.asOf)
+    if (Number.isFinite(cutoff)) {
+      const atMs = Math.floor(cutoff / 300_000) * 300_000
+      const outcome = await ensureBriefingBars(input.backfill, { atMs, dayBeforeMs: atMs - 86_400_000, asOfMs: Date.parse(input.now()) })
+      backfillAttempted = outcome.attempted
+      if (outcome.attempted) console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_BAR_BACKFILL', filled: outcome.filled, atMs }))
+    }
+  }
+  const readinessWait = await awaitReadinessForRun(input.readiness, input.asOf, input.manual, input.publish, input.now)
+  return { readinessWait, backfillAttempted }
 }
