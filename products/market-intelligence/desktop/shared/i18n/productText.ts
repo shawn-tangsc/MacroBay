@@ -522,7 +522,10 @@ mi: miText['zh-CN'],
               sourceStates: { loading: '加载中', available: '持仓与费率可用', empty: '暂无观测值', unavailable: '持仓数据不可用' },
               manageSettings: '管理 Binance Futures Positioning 设置',
               assets: { btc: 'BTC', eth: 'ETH' },
-              paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
+              paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
+              // The brief's small line has ~280px; the full English wording does not fit. Same meaning,
+              // same keys; the Chinese values are the full ones because there is nothing shorter to say.
+              paymentDirectionsCompact: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
             },
             divergence: {
               title: '跨面板背离',
@@ -1802,7 +1805,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceStates: { loading: 'Loading', available: 'Positioning and funding available', empty: 'No observation', unavailable: 'Positioning unavailable' },
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
-              paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' }
+              paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' },
+              paymentDirectionsCompact: { 'long-pays-short': 'Longs pay', 'short-pays-long': 'Shorts pay', neutral: 'Neutral' }
             },
             divergence: {
               title: 'Cross-panel divergence',

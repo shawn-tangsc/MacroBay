@@ -6,27 +6,23 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { briefingDataRows } from '../../../contracts/dailyBriefingMarkdown'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
+import { paymentDirectionFor, type paymentDirectionWords as PayDirectionWords } from './dailyBriefingPaymentDirections'
 
 /**
  * The image edition. It deliberately drops the app chrome and the rail: a reader posts one page,
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, paymentDirectionsCompact, formatTime }: Readonly<{
   document: DailyBriefingDocument
   /** Already produced by the one place that decides completeness; the card only renders it. */
   completenessNote?: string
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   eventTitles?: Record<string, string>
+  /** The funding-direction words, owned by the positioning copy; passed in, never copied here. */
+  paymentDirectionsCompact: PayDirectionWords
   readOnly?: boolean
-  /**
-   * The exported image leaves out rows whose only value is a fallback reading.
-   *
-   * The card gets forwarded, so a number that is not that day's exact reading must not travel as if
-   * it were; the page keeps those rows, labelled, because a reader judging the day needs them.
-   * "The card is for forwarding, the page is for reading" is the rule behind this switch.
-   */
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
@@ -122,10 +118,21 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           </div>
         })}
       </div>
-      {doc.data.leverage && doc.data.leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage">
-        <span>{text.sections.leverage}</span>
-        <b>BTC OI {doc.data.leverage.btc.openInterestUsd !== undefined ? `$${(doc.data.leverage.btc.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.btc.change24hPct !== undefined ? `${doc.data.leverage.btc.change24hPct.toFixed(1)}%` : '—'}</b>
-        <b>ETH OI {doc.data.leverage.eth.openInterestUsd !== undefined ? `$${(doc.data.leverage.eth.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.eth.change24hPct !== undefined ? `${doc.data.leverage.eth.change24hPct.toFixed(1)}%` : '—'}</b>
+      {doc.data.leverage && doc.data.leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
+        <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
+        {(['btc', 'eth'] as const).map((asset) => {
+          const entry = doc.data.leverage![asset]
+          // The rate is the funds row of the same asset; the block explains it rather than repeating it.
+          const rate = doc.data.funds.find((row) => row.id === `funding-${asset}`)?.value?.number
+          const direction = paymentDirectionFor(rate, paymentDirectionsCompact)
+          return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={rate === undefined ? 'flat' : rate > 0 ? 'up' : rate < 0 ? 'down' : 'flat'}>
+            <span>{asset.toUpperCase()}</span>
+            <b>{rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`}</b>
+            <small>{direction}</small>
+            <small>OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
+            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · 24h {entry.change24hPct !== undefined ? `${entry.change24hPct.toFixed(1)}%` : text.noValue}</small>
+          </div>
+        })}
       </div> : null}
       {doc.data.policyPath && doc.data.policyPath.visibility !== 'hidden' ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">

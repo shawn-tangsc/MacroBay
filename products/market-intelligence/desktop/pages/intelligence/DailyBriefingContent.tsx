@@ -16,6 +16,7 @@ import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { briefingPaymentDirections } from './dailyBriefingPaymentDirections'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { editorialFailureText } from './dailyBriefingPageDerived'
 import { resolveBriefingStateReason } from './dailyBriefingText'
@@ -94,7 +95,7 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {/* A run replaces this edition only when it succeeds: until then the reader keeps the one that
         is already there, and the run reports in the right column. */}
     {showingEdition ? <div className="mi-daily-briefing-page__paper">
-      <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+      <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
     </div> : null}
   </section>
 }

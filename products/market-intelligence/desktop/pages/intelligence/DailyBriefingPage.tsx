@@ -40,6 +40,7 @@ import { DailyBriefingPageActions } from './DailyBriefingPageActions'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
+import { briefingPaymentDirections } from './dailyBriefingPaymentDirections'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -482,7 +483,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       }} /> : null}
     {readyDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-      <div ref={shareRef}><DailyBriefingShareCard document={readyDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
+      <div ref={shareRef}><DailyBriefingShareCard document={readyDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
     </div> : null}
   </main>
 }
