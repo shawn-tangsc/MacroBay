@@ -294,7 +294,7 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('returns a failed document without storing an edition when the agent turn fails', async () => {
+  it('stores the fact layer and marks it when the agent turn fails', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
       source: fakeSource(), store, now: () => asOf,
@@ -305,8 +305,11 @@ describe('daily briefing service', () => {
       }
     })
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    // A brief that could be read is a brief that ships: the reader gets the numbers, and the edition
+    // says in its provenance that the interpretation is missing. "No brief today" is the other thing.
     expect(result.state).toBe('available')
-    expect(store.rows.size).toBe(0)
+    expect(store.rows.size).toBe(1)
+    expect(result.state === 'available' ? result.document.provenance.editorialFailure : undefined).toBeDefined()
   })
 
   it('cancels the runtime session and abandons its link when the editorial deadline fires', async () => {
@@ -337,7 +340,7 @@ describe('daily briefing service', () => {
       if (result.state === 'available') {
         expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
       }
-      expect(store.rows.size).toBe(0)
+      expect(store.rows.size).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -366,7 +369,7 @@ describe('daily briefing service', () => {
       if (result.state === 'available') {
         expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
       }
-      expect(store.rows.size).toBe(0)
+      expect(store.rows.size).toBe(1)
     } finally {
       vi.useRealTimers()
     }
@@ -426,7 +429,7 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    expect(store.rows.size).toBe(0)
+    expect(store.rows.size).toBe(1)
     expect(result.state).toBe('available')
     if (result.state === 'available') {
       expect(result.document.lede.source).toBe('template')
@@ -446,7 +449,7 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(starts).toHaveLength(0)
-    expect(store.rows.size).toBe(0)
+    expect(store.rows.size).toBe(1)
     if (result.state === 'available') {
       expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
     }
@@ -866,8 +869,9 @@ describe('briefing notices', () => {
     })
   })
 
-  it('N5 ②: data ready but the interpretation missing says that instead', async () => {
-    // 数据齐了、解读没出来：正文变体不同，但仍是同一个事件、同一个键。
+  it('N5 ②: data ready but the interpretation missing still ships the brief', async () => {
+    // 数据齐了、解读没出来：**仍然出报**（事实层 + 标记），所以发的不是「失败」而是「完成」——
+    // 「未生成」会在读者那里变成「今天没有日报」，而那正是我们要避免的那句假话。
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
       source: fakeSource(),
@@ -890,9 +894,9 @@ describe('briefing notices', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('available')
     expect(notices).toHaveLength(1)
-    expect(notices[0]).toMatchObject({
-      eventTypeId: 'market-intelligence.briefing.failed',
-      bodyVariant: 'editorial-missing'
-    })
+    // A delivered brief is a completion notice, whatever the editor did: the reader opens it and sees
+    // the numbers plus "this edition has no interpretation". A failure notice would say nothing ran.
+    expect(notices[0]).toMatchObject({ eventTypeId: 'market-intelligence.briefing.ready' })
+    expect(notices[0]).not.toHaveProperty('bodyVariant', 'editorial-missing')
   })
 })

@@ -477,7 +477,6 @@ export function createDailyBriefingService(deps: Readonly<{
     const periodFacts = Object.freeze({ rowIds: briefingEditionRowIds(document), direction: briefingFactDirection(document) })
     await run.open(document, facts, periodFacts)
     document = restrictEditionRows(document, periodFacts.rowIds)
-    let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {
       // The editor runs as an agent session, so the model must be resolved before the session
@@ -488,7 +487,6 @@ export function createDailyBriefingService(deps: Readonly<{
         ? await deps.agentModel().catch(() => Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const }))
         : undefined
       if (model?.state === 'unavailable') {
-        publish = false
         recorder.begin('selection')
         recorder.end('selection', 'failed', { failureCode: 'model-unavailable', failureDetail: model.reason })
         failedStage = 'selection'
@@ -513,7 +511,6 @@ export function createDailyBriefingService(deps: Readonly<{
             onStage
           }), DAILY_BRIEF_GENERATION_BUDGET_MS, () => controller.abort())
         } catch (error) {
-          publish = false
           const failureCode = isOutputTruncation(error) ? 'agent-turn-output-truncated' : 'editorial-timeout'
           const detail = error instanceof Error && error.message ? error.message : undefined
           if (activeStage) {
@@ -540,7 +537,9 @@ export function createDailyBriefingService(deps: Readonly<{
         if (turn.state === 'accepted') {
           document = model?.state === 'agent' ? withEditorialModel(turn.document, model) : turn.document
         } else {
-          publish = false
+          // The fact layer is publishable on its own: the reader gets today's numbers and a stated
+          // "this edition has no interpretation", which is a different thing from "no brief today".
+          // The one thing that must not happen is a silent success, so the provenance records the code.
           if (!failedStage) {
             recorder.begin('writing')
             recorder.end('writing', 'failed', {
@@ -553,57 +552,45 @@ export function createDailyBriefingService(deps: Readonly<{
         }
       }
     } else if (!editorialEnabled) {
-      // AI off is the fact-layer edition: it is published, and the provenance records why no agent
-      // ran. A failed agent turn or an unavailable model keeps `publish` false and is never stored.
+      // AI off is the fact-layer edition too: published, with the reason in the provenance.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
-    if (publish) {
-      recorder.begin('store')
-      recorder.end('store', 'success')
-      const traced = withGenerationTrace(document, recorder.complete('success'))
-      try {
-        const edition = {
-          date: input.date,
-          periodId: input.periodId,
-          locale: input.locale,
-          generatedAt: traced.edition.generatedAt,
-          windowStart: traced.edition.windowStart,
-          windowEnd: traced.edition.windowEnd,
-          document: traced
-        }
-        const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
-        // The edition row and the attempt that wrote it are one write: a reader never sees one
-        // without the other.
-        if (deps.store.publishEdition) {
-          await deps.store.publishEdition(edition, settled)
-        } else {
-          await deps.store.put(edition)
-          if (settled) await deps.store.finishAttempt?.(settled).catch(() => undefined)
-        }
-        await run.settle('published', 1)
-      } catch {
-        // Returning the document here would report a stored edition that does not exist; the next
-        // read would fall back to a different generation, so surface the write failure instead.
-        recorder.end('store', 'failed', { failureCode: 'store-failed' })
-        return fail('store-failed')
+    recorder.begin('store')
+    recorder.end('store', 'success')
+    const traced = withGenerationTrace(document, recorder.complete(document.provenance.editorialFailure ? 'failed' : 'success'))
+    try {
+      const edition = {
+        date: input.date,
+        periodId: input.periodId,
+        locale: input.locale,
+        generatedAt: traced.edition.generatedAt,
+        windowStart: traced.edition.windowStart,
+        windowEnd: traced.edition.windowEnd,
+        document: traced
       }
-      await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-      // 完成类一天一期。自动运行投递；读者按「重新生成」照常写记录但不投递——记录是「推送到手机」
-      // 要核对的那一版，投递与否由按钮决定，不再靠「不发」把它整个丢掉。
-      await notifyDailyBriefing(deps.noticeSubmit, {
-        kind: 'ready', date: input.date, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
-      }, now())
-      return { state: 'available', document: traced }
+      const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
+      // The edition row and the attempt that wrote it are one write: a reader never sees one
+      // without the other.
+      if (deps.store.publishEdition) {
+        await deps.store.publishEdition(edition, settled)
+      } else {
+        await deps.store.put(edition)
+        if (settled) await deps.store.finishAttempt?.(settled).catch(() => undefined)
+      }
+      await run.settle('published', 1)
+    } catch {
+      // Returning the document here would report a stored edition that does not exist; the next
+      // read would fall back to a different generation, so surface the write failure instead.
+      recorder.end('store', 'failed', { failureCode: 'store-failed' })
+      return fail('store-failed')
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-    // A failed editorial turn still returns the fact-layer document; the page renders its failure
-    // panel from `provenance.editorialFailure`. The trace travels with it so the panel can show the
-    // stage that stopped, while no edition is stored.
-    const failedTrace = recorder.complete('failed')
-    await attempts.settle('failed', failedTrace.finishedAt, { trace: failedTrace })
-    await run.settle('failed', 0)
-    await notifyDailyBriefing(deps.noticeSubmit, { kind: 'failed', variant: 'editorial-missing', date: input.date, periodId: input.periodId }, now())
-    return { state: 'available', document: withGenerationTrace(document, failedTrace) }
+    // 完成类一天一期。自动运行投递；读者按「重新生成」照常写记录但不投递——记录是「推送到手机」
+    // 要核对的那一版，投递与否由按钮决定，不再靠「不发」把它整个丢掉。
+    await notifyDailyBriefing(deps.noticeSubmit, {
+      kind: 'ready', date: input.date, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
+    }, now())
+    return { state: 'available', document: traced }
   }
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
     const schedule = await generation()

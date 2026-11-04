@@ -218,7 +218,7 @@ describe('daily briefing generation trace', () => {
     }
   })
 
-  it('locates a validation failure that exhausted both repairs', async () => {
+  it('locates a validation failure that exhausted all three repairs', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
       source: source(), store, now: () => asOf,
@@ -232,7 +232,9 @@ describe('daily briefing generation trace', () => {
     expect(stage(trace, 'validation')).toMatchObject({ state: 'failed', failureCode: expect.any(String) })
     expect(stage(trace, 'repair-1')?.state).toBe('success')
     expect(stage(trace, 'repair-2')?.state).toBe('success')
-    expect(stage(trace, 'store')?.state).toBe('skipped')
+    expect(stage(trace, 'repair-3')?.state).toBe('success')
+    // The fact layer still ships: the run failed, the edition was stored, and the trace says so.
+    expect(stage(trace, 'store')?.state).toBe('success')
   })
 
   it('locates a store failure and still persists the attempt', async () => {

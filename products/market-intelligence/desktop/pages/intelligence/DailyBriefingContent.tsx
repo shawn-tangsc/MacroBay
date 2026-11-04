@@ -118,7 +118,9 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {view.status === 'locale-missing' && !generating ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={onGenerate} /> : null}
     {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
     {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating} onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
-    {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
+    {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the
+        edition still ships and says so here. A reader must never be told "no brief today" instead. */}
+    {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
     {showingEdition && view.document.status.readingsAvailable === 0 ? <StateView
       state="empty"
       reasonCode="nothing-enabled"
