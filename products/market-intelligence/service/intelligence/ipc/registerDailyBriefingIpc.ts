@@ -152,11 +152,14 @@ function readAttemptsQuery(payload: unknown): Readonly<{ date: string; locale: D
   return { ...base, ...(typeof periodId === 'string' ? { periodId } : {}) }
 }
 
-function readGet(payload: unknown): Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }> {
+function readGet(payload: unknown): Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
   if (!isDailyBriefingEditionDate(payload.date)) throw new Error('daily-briefing-invalid-date')
   if (!isDailyBriefingLocale(payload.locale)) throw new Error('daily-briefing-invalid-locale')
-  return { date: payload.date, locale: payload.locale }
+  if (payload.periodId !== undefined && (typeof payload.periodId !== 'string' || payload.periodId.length === 0 || payload.periodId.length > 64)) {
+    throw new Error('daily-briefing-invalid-request')
+  }
+  return { date: payload.date, locale: payload.locale, ...(typeof payload.periodId === 'string' ? { periodId: payload.periodId } : {}) }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

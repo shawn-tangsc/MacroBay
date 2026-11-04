@@ -42,7 +42,7 @@ export type DailyBriefingClientInput = Readonly<{
   /** `false` opens the page as a read: the stored edition, or "nothing written yet". No run. */
   generate?: boolean
 }>
-export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }>
+export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }>
 
 export type DailyBriefingClockSource = 'settings' | 'system'
 
