@@ -80,6 +80,21 @@ describe('daily briefing document guard at schema 13', () => {
     expect(isDocument(document({ periodId: '' }))).toBe(false)
   })
 
+  it('refuses a nominal cutoff that is not an ISO instant with milliseconds', () => {
+    // A11.4 is about the stored precision, so the guard has to be the judge: a second-precision
+    // value must not pass just because it is a non-empty string.
+    for (const periodTime of [
+      '2026-11-05T07:00:00Z',
+      '2026-11-05T07:00:00.00Z',
+      '2026-11-05T07:00:00.000+00:00',
+      '2026-11-05 07:00:00.000Z',
+      '2026-13-05T07:00:00.000Z'
+    ]) {
+      expect(isDocument(document({ periodTime })), periodTime).toBe(false)
+    }
+    expect(isDocument(document({ periodTime: '2026-11-05T07:00:00.000Z' }))).toBe(true)
+  })
+
   it('keeps accepting rows written before 13, which never had the fields', () => {
     const old = { ...withoutPeriod(), schemaVersion: 12 as const }
     expect(isDocument(old)).toBe(true)

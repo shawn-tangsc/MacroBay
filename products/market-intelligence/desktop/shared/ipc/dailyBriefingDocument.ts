@@ -31,10 +31,15 @@ function isEdition(value: unknown, schemaVersion: unknown): boolean {
   if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
   // From schema 7 the edition states the window it actually covered; older rows may omit it.
   if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
-  // From schema 13 the edition carries its period identity. The three fields arrive together: a
-  // document with only some of them is refused rather than guessed at.
+  // From schema 13 the edition carries its period identity — periodId (an opaque identity), the
+  // nominal cutoff periodTime, and the kind of period. All four fields of that step arrive together,
+  // including runTrigger, which is not identity but *how this run happened* (scheduled / catch-up /
+  // retry / manual); a document with only some of them is refused rather than guessed at.
   if (typeof schemaVersion === 'number' && schemaVersion >= 13) {
     if (!isText(value.periodId) || !isText(value.periodTime)) return false
+    // A11.4: the nominal cutoff is stored at millisecond precision, like generatedAt. Without this
+    // check a second-precision value would pass and the judge would quietly stop holding.
+    if (!isIsoMilliseconds(value.periodTime)) return false
     if (value.periodKind !== 'scheduled' && value.periodKind !== 'manual') return false
     if (!['scheduled', 'catch-up', 'retry', 'manual'].includes(String(value.runTrigger))) return false
   } else if (value.periodId !== undefined || value.periodTime !== undefined || value.periodKind !== undefined || value.runTrigger !== undefined) {
@@ -43,6 +48,13 @@ function isEdition(value: unknown, schemaVersion: unknown): boolean {
   }
   return isText(value.date) && isDailyBriefingLocale(value.locale) && isText(value.generatedAt) &&
     isText(value.windowStart) && isText(value.windowEnd) && isText(value.timeZone)
+}
+
+/** An ISO instant with milliseconds, in UTC, that survives a parse/format round trip. */
+function isIsoMilliseconds(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value
 }
 
 function isStatus(value: unknown): boolean {
