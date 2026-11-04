@@ -178,6 +178,11 @@ export const dailyBriefingText = {
       attempt: '本次尝试',
       // One instant, said as a start: a bare "17:01:47" beside "attempt" reads as "17 hours of trying".
       startedAt: '开始于 {time}',
+      notStartedYet: '尚未开始',
+      // The wait before a run may open an attempt: what it is waiting for, how long, how often.
+      waitingSummary: '等待行情数据就绪',
+      waitingElapsed: '已等 {seconds} 秒 · 探测 {polls} 次',
+      waitingHint: '正在等待核心行情，等到了才开始计时。',
       duration: '耗时 {duration}',
       expand: '展开阶段',
       collapse: '收起阶段',
@@ -424,6 +429,10 @@ export const dailyBriefingText = {
       failed: 'Failed',
       attempt: 'This attempt',
       startedAt: 'started {time}',
+      notStartedYet: 'Not started yet',
+      waitingSummary: 'Waiting for market data',
+      waitingElapsed: 'waited {seconds}s · {polls} probes',
+      waitingHint: 'Waiting for core market data; the steps start once it can be read.',
       duration: 'Took {duration}',
       expand: 'Show stages',
       collapse: 'Hide stages',

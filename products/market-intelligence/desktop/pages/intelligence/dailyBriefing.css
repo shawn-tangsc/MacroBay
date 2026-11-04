@@ -148,6 +148,7 @@
 .mi-generation-trace__summary, .mi-generation-trace__failed, .mi-generation-trace__missing { margin: 4px 0 0; color: #7d8790; font-size: 9px; line-height: 1.5; }
 .mi-generation-trace__failed { color: #e7c98f; }
 .mi-generation-trace__missing { color: #7d8790; font-style: italic; }
+.mi-generation-trace__waiting-hint { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 9px; line-height: 1.5; }
 /* One stepper for every state: the live run in the body and the finished or failed trace in the
    rail. The circle and its connector are the stepper's; the name, its help and the recorded time
    are one row from the shared row implementation. Type size and rhythm are stated once here rather

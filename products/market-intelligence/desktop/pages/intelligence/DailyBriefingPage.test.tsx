@@ -1833,6 +1833,30 @@ it('reports a run that is already in flight in the right column, step by step', 
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).toContain('ant-btn-loading')
 })
 
+it('says a run is waiting for market data, not just that it is running', async () => {
+  // The reader saw one "generating", no attempt row, no session and no step: unaudited waiting is
+  // indistinguishable from a stuck run. The wait has to say what it waits for, how long, how often.
+  const waiting = { since: '2026-10-30T04:00:00.000Z', polls: 4, waitedMs: 120_000, budgetMs: 900_000 }
+  const progress = {
+    attemptId: '',
+    startedAt: waiting.since,
+    state: 'running' as const,
+    stages: traceStageIds.map((id) => ({ id, state: 'pending' as const })),
+    waiting
+  }
+  const client = fakeClient({ getProgress: vi.fn(async () => ({ state: 'running' as const, progress })) })
+  const dom = await renderPage(client)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  const rail = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
+  expect(rail.textContent).toContain(text.generationTrace.waitingSummary)
+  expect(rail.textContent).toContain(text.generationTrace.notStartedYet)
+  expect(rail.textContent).toContain(text.generationTrace.waitingElapsed.replace('{seconds}', '120').replace('{polls}', '4'))
+  expect(rail.textContent).toContain(text.generationTrace.waitingHint)
+  // Waiting is not an edition replacement: the one on screen is still readable.
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+})
+
 it('leaves the archive out while generating a day that never produced one', async () => {
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const client = fakeClient({

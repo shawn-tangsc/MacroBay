@@ -11,6 +11,7 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import {
   DEFAULT_PERIOD_ID,
+  briefingGenerationStageIds,
   dailyBriefingGenerationPolicy,
   dailyBriefingPolicy,
   isDailyBriefingGenerationTime,
@@ -21,10 +22,11 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
+import { awaitDailyBriefReadinessPublished } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads } from './dailyBriefingReads'
 import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
-import { awaitDailyBriefReadiness, type DailyBriefReadiness } from './dailyBriefReadinessGate'
+import type { DailyBriefReadiness } from './dailyBriefReadinessGate'
 export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 import { withRunGaps } from './dailyBriefCrossAssetGap'
 import { previousEditionBefore } from './dailyBriefingPreviousEdition'
@@ -376,10 +378,12 @@ export function createDailyBriefingService(deps: Readonly<{
     // The attempt row is opened before any work: a run the process never finishes is still a
     // record of an attempt that did not succeed, instead of an attempt that never happened.
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
-    const readinessWait = await awaitDailyBriefReadiness(deps.readiness, input.asOf)
+    const progressKey = `${input.date}:${input.periodId}:${input.locale}`
+    // The wait is published too: one "generating" with no attempt, no session and no step is what
+    // made a waiting run indistinguishable from a stuck one.
+    const readinessWait = await awaitDailyBriefReadinessPublished(deps.readiness, input.asOf, (progress) => runs.progress.set(progressKey, progress), now)
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     await attempts.open()
-    const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const recorder = createDailyBriefingGenerationRecorder({
       attemptId: `${input.date}:${input.locale}:${input.asOf}`,
       now,

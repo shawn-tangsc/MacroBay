@@ -76,6 +76,43 @@ describe('a wait that runs out still produces the edition once', () => {
   })
 })
 
+describe('the wait itself is published', () => {
+  it('reports a running attempt with its probe count, before any attempt row exists', async () => {
+    // "One running, no attempt row, no session" was the reader's whole complaint: the wait recorded
+    // nothing, so nothing on screen could say it was waiting rather than stuck.
+    const seen: unknown[] = []
+    const holder: { service?: ReturnType<typeof createDailyBriefingService> } = {}
+    let probes = 0
+    const gate = createDailyBriefReadiness({
+      readSnapshot: async () => {
+        probes += 1
+        seen.push(await holder.service!.getProgress({ locale: 'zh-CN', timeZone: TIME_ZONE }))
+        return probes >= 2 ? readySnapshot : undefined
+      },
+      sleep: async () => undefined
+    })
+    let attempts = 0
+    holder.service = createDailyBriefingService({
+      source: { readFacts: vi.fn(async () => { throw new Error('not under test') }) } as never,
+      store: store(async () => { attempts += 1; return 1 }),
+      readiness: gate,
+      editorialEnabled: async () => false,
+      now: () => NOW
+    })
+
+    await holder.service.getToday({ locale: 'zh-CN', timeZone: TIME_ZONE }).catch(() => undefined)
+
+    const first = seen[0] as { state: string; progress?: { waiting?: { polls: number; budgetMs: number } } }
+    expect(first.state).toBe('running')
+    expect(first.progress?.waiting?.polls).toBe(0)
+    expect(first.progress?.waiting?.budgetMs).toBeGreaterThan(0)
+    // The probe count moves while the wait goes on, and no attempt row exists yet.
+    const second = seen[1] as { progress?: { waiting?: { polls: number } } }
+    expect(second.progress?.waiting?.polls).toBe(1)
+    expect(attempts).toBe(1)
+  })
+})
+
 describe('generation waits before it records anything', () => {
   it('opens no attempt while the market is unreadable, and probes with the edition’s cutoff', async () => {
     const order: string[] = []

@@ -181,10 +181,30 @@ export type BriefingGenerationTrace = Readonly<{
  * `finishedAt` and a terminal state), and a live one must not say a stage was skipped merely
  * because it has not begun yet. Unstarted stages stay `pending` here.
  */
+/**
+ * The wait before a run may start, while the market it is about to read is still unreadable.
+ *
+ * The wait happens before the attempt row is opened, so a reader who asked for a run would otherwise
+ * see nothing at all: no attempt, no session, no step. This is what says a run is waiting rather
+ * than missing, how long it has waited and how many times it has asked.
+ */
+export type BriefingGenerationWaiting = Readonly<{
+  /** When the wait began; the reader's " waited N seconds" counts from here. */
+  since: string
+  /** Probes made so far, so "still trying" is a number and not a mood. */
+  polls: number
+  /** Milliseconds spent waiting so far. */
+  waitedMs: number
+  /** What this wait is allowed to spend before the edition is written anyway. */
+  budgetMs: number
+}>
+
 export type BriefingGenerationProgress = Readonly<{
   attemptId: string
   startedAt: string
   stages: readonly BriefingGenerationStage[]
+  /** Present while the run has not opened an attempt yet: it is still waiting for the market. */
+  waiting?: BriefingGenerationWaiting
 }>
 
 /**

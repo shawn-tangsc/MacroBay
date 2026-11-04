@@ -3,6 +3,7 @@ import { CircleHelp } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
+import type { BriefingGenerationWaiting } from '../../../contracts/dailyBriefing'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 import { DailyBriefingStageSteps, type DailyBriefingStageRowState } from './DailyBriefingStageList'
@@ -29,12 +30,17 @@ import { readableFailureDetail } from './dailyBriefingFailureDetail'
  * instead of a paragraph, while the recorded result — timing, failure code and detail — stays in
  * the step's description.
  */
-export function DailyBriefingGenerationTimeline({ trace, text, formatTime, running = false }: Readonly<{
+export function DailyBriefingGenerationTimeline({ trace, text, formatTime, running = false, waiting }: Readonly<{
   trace: GenerationTrace | undefined
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   /** The run is still in flight: the same list, with a running word instead of a verdict. */
   running?: boolean
+  /**
+   * The run exists but has not opened an attempt yet: it is waiting for the market it is about to
+   * read. Said here because "one running, no attempt, no session" is otherwise unreadable.
+   */
+  waiting?: BriefingGenerationWaiting | undefined
 }>): React.ReactElement {
   const resolveText = useProductTextKey()
   const labels = text.generationTrace
@@ -56,7 +62,9 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
     stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
   }
   const rendered = trace ?? emptyTrace
-  const summaryLine = running
+  const summaryLine = waiting
+    ? labels.waitingSummary
+    : running
     ? text.generationProgress.running
     : trace
       ? trace.state === 'failed'
@@ -70,12 +78,17 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
       <h3>{labels.title}</h3>
       <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-stage-summary="true">{summaryLine}</span>
     </summary>
-    {trace
+    {waiting
+      ? <p className="mi-generation-trace__summary" data-generation-waiting="true">
+        {labels.notStartedYet} · {labels.waitingElapsed.replace('{seconds}', String(Math.round(waiting.waitedMs / 1_000))).replace('{polls}', String(waiting.polls))}
+      </p>
+      : trace
       ? <p className="mi-generation-trace__summary">
         {labels.attempt} · {labels.startedAt.replace('{time}', formatInstant(trace.startedAt, formatTime))}
         {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
       : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
+    {waiting ? <p className="mi-generation-trace__waiting-hint" data-generation-waiting-hint="true">{labels.waitingHint}</p> : null}
     <>
       {trace && trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}

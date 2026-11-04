@@ -97,6 +97,7 @@ import type {
   BriefingGenerationStage,
   BriefingGenerationTrace,
   BriefingGenerationProgress,
+  BriefingGenerationWaiting,
   BriefingGenerationDisplayRowId,
   DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'
@@ -117,6 +118,7 @@ export type {
   BriefingGenerationStage,
   BriefingGenerationTrace,
   BriefingGenerationProgress,
+  BriefingGenerationWaiting,
   BriefingGenerationDisplayRowId,
   DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'

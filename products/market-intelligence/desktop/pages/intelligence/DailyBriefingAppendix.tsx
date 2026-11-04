@@ -71,7 +71,7 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
         {/* The column's first block reports the run when one is in flight: same stepper, live states.
             Otherwise it reports what the stored attempt recorded. */}
         <div data-briefing-stages="true">{generating
-          ? <DailyBriefingGenerationTimeline running text={text} formatTime={formatTime} trace={liveProgress ? traceFromProgress(liveProgress) : undefined} />
+          ? <DailyBriefingGenerationTimeline running text={text} formatTime={formatTime} trace={liveProgress ? traceFromProgress(liveProgress) : undefined} waiting={liveProgress?.waiting} />
           : <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />}</div>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={listAttempts ? (date, periodId, language) => listAttempts({ date, locale: language, periodId }) : undefined} /> : null}
         </> : null}

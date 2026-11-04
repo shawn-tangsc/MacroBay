@@ -17,12 +17,18 @@ export const dailyBriefReadinessPolicy = Object.freeze({
   budgetMs: 15 * 60_000
 })
 
+/** What the run can tell the reader while it waits: how long, and how many times it asked. */
+export type DailyBriefReadinessProgress = Readonly<{ polls: number; waitedMs: number }>
+
 export type DailyBriefReadinessGate = Readonly<{
   /**
    * `asOf` is the edition's own cutoff, never "now": the probe must ask the same question the
    * generation will ask, or it can report ready while the real read still fails.
+   *
+   * `onPoll` is called after every probe that came back not-ready, so a wait can be shown while it
+   * is happening instead of only after it ends.
    */
-  wait: (asOf: string) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
+  wait: (asOf: string, onPoll?: (progress: DailyBriefReadinessProgress) => void) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
 }>
 
 /**
@@ -52,7 +58,7 @@ export function createDailyBriefReadinessGate(deps: Readonly<{
   const pollMs = deps.pollMs ?? dailyBriefReadinessPolicy.pollMs
   const budgetMs = deps.budgetMs ?? dailyBriefReadinessPolicy.budgetMs
   return {
-    async wait(asOf: string) {
+    async wait(asOf: string, onPoll?: (progress: DailyBriefReadinessProgress) => void) {
       const startedAt = now()
       let polls = 0
       for (;;) {
@@ -60,8 +66,10 @@ export function createDailyBriefReadinessGate(deps: Readonly<{
         if (await deps.ready(asOf).catch(() => false)) {
           return { ready: true, polls, waitedMs: now() - startedAt }
         }
-        if (now() - startedAt + pollMs > budgetMs) {
-          return { ready: false, polls, waitedMs: now() - startedAt }
+        const waitedMs = now() - startedAt
+        onPoll?.({ polls, waitedMs })
+        if (waitedMs + pollMs > budgetMs) {
+          return { ready: false, polls, waitedMs }
         }
         await deps.sleep(pollMs)
       }
@@ -76,7 +84,7 @@ export function createDailyBriefReadinessGate(deps: Readonly<{
  * stays in this file rather than in the generation path.
  */
 export type DailyBriefReadiness = Readonly<{
-  wait: (asOf: string) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
+  wait: (asOf: string, onPoll?: (progress: DailyBriefReadinessProgress) => void) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
   /** Called once when the wait expired; the edition is still produced, with its gaps named. */
   onTimeout?: (info: Readonly<{ polls: number; waitedMs: number }>) => void
 }>
@@ -99,7 +107,7 @@ export function createDailyBriefReadiness(deps: Readonly<{
     ...(deps.budgetMs === undefined ? {} : { budgetMs: deps.budgetMs })
   })
   return {
-    wait: (asOf: string) => gate.wait(asOf),
+    wait: (asOf: string, onPoll?: (progress: DailyBriefReadinessProgress) => void) => gate.wait(asOf, onPoll),
     ...(deps.onTimeout ? { onTimeout: deps.onTimeout } : {})
   }
 }
@@ -107,10 +115,11 @@ export function createDailyBriefReadiness(deps: Readonly<{
 /** Ask, wait, and report a timeout through the gate's own callback. Awaiting it is the whole call. */
 export async function awaitDailyBriefReadiness(
   readiness: DailyBriefReadiness | undefined,
-  asOf: string
+  asOf: string,
+  onPoll?: (progress: DailyBriefReadinessProgress) => void
 ): Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined> {
   if (!readiness) return undefined
-  const waited = await readiness.wait(asOf)
+  const waited = await readiness.wait(asOf, onPoll)
   if (!waited.ready) readiness.onTimeout?.({ polls: waited.polls, waitedMs: waited.waitedMs })
   return waited
 }

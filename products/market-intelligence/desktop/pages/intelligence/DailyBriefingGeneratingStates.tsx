@@ -63,7 +63,7 @@ export function DailyBriefingGeneratingView({ text, progress, progressUnreadable
     {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
     {/* No progress yet means no attempt to describe: an invented start time beside "attempt" reads
         as a real one, and while the run waits for data that number would not even be its start. */}
-    <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : undefined} />
+    <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : undefined} waiting={progress?.waiting} />
   </DailyBriefingStagePanel>
 }
 

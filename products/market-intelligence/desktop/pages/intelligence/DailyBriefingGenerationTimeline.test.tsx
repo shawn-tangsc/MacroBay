@@ -82,13 +82,20 @@ afterEach(() => {
   for (const tip of document.querySelectorAll('.ant-tooltip, .ant-popover')) tip.remove()
 })
 
-function render(value: GenerationTrace | undefined, english = false, copy: typeof text = (english ? englishText : text) as typeof text, running = false): HTMLDivElement {
+function render(
+  value: GenerationTrace | undefined,
+  english = false,
+  copy: typeof text = (english ? englishText : text) as typeof text,
+  running = false,
+  waiting?: Parameters<typeof DailyBriefingGenerationTimeline>[0]['waiting']
+): HTMLDivElement {
   act(() => {
     root!.render(<DailyBriefingGenerationTimeline
       trace={value}
       text={copy}
       formatTime={formatTime}
       running={running}
+      waiting={waiting}
     />)
   })
   return container!
@@ -199,6 +206,25 @@ describe('generation stage timeline', () => {
     const dom = render(trace('success', allSucceeded.map((id) => ({ id, state: 'pending' as const }))), false, undefined, true)
     expect(dom.textContent).toContain(text.generationTrace.states.notStarted)
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
+    for (const id of allSucceeded) {
+      expect(resultOf(dom, id).textContent, id).toContain(text.generationTrace.states.notStarted)
+    }
+  })
+
+  it('says the run is waiting for the market, with how long and how many probes', () => {
+    // Before an attempt row exists there is nothing else on screen; without this line a reader sees
+    // one "generating" and concludes the run is stuck.
+    const dom = render(
+      trace('success', allSucceeded.map((id) => ({ id, state: 'pending' as const }))),
+      false, undefined, true,
+      { since: '2026-10-30T00:00:00.000Z', polls: 3, waitedMs: 90_000, budgetMs: 900_000 }
+    )
+    expect(dom.textContent).toContain(text.generationTrace.waitingSummary)
+    expect(dom.textContent).toContain(text.generationTrace.notStartedYet)
+    expect(dom.textContent).toContain(text.generationTrace.waitingElapsed.replace('{seconds}', '90').replace('{polls}', '3'))
+    expect(dom.textContent).toContain(text.generationTrace.waitingHint)
+    // No invented attempt while it waits.
+    expect(dom.textContent).not.toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
     for (const id of allSucceeded) {
       expect(resultOf(dom, id).textContent, id).toContain(text.generationTrace.states.notStarted)
     }
