@@ -212,6 +212,8 @@
 .mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
 .mi-brief-poster__gauge-event { stroke: #c2410c; stroke-width: 8; }
 .mi-brief-poster__gauge-rest { stroke: #a89f8d; stroke-width: 8; }
+.mi-brief-poster__gauge-other { stroke: #d8cfbd; stroke-width: 8; }
+.mi-brief-poster__policy-outcomes { font-size: 9.5px; color: #6b695f; }
 .mi-brief-poster__policy-probability { position: absolute; left: 0; top: 26px; width: 88px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; }
 .mi-brief-poster__readings-line { display: flex; flex-wrap: nowrap; gap: 0 10px; align-items: baseline; overflow: hidden; }
@@ -227,3 +229,4 @@
 .mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; }
 .mi-brief-poster__leverage-card[data-tone='up'] b { color: #1f5b32; }
 .mi-brief-poster__leverage-card[data-tone='down'] b { color: #8f2a1d; }
+.mi-brief-poster__leverage-spark { width: 60px; height: 26px; color: #8a5a35; }

@@ -14,6 +14,7 @@ import { productText } from '../../shared/i18n/productText'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { DailyBriefingPage } from './DailyBriefingPage'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
  * 门槛 6 的守卫：日报的产物里不许出现「读数」或「N/4」这类写法。
@@ -131,7 +132,8 @@ describe('briefing copy guard', () => {
   it('renders no banned word in the exported poster', () => {
     const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
     const html = renderToStaticMarkup(createElement(DailyBriefingShareCard, {
-      document: guardDocument(), text, locale: 'zh-CN', formatTime: (value: string) => value
+      document: guardDocument(), text, locale: 'zh-CN', formatTime: (value: string) => value,
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
     }))
     expect(bannedBriefingCopy([html.replace(/<[^>]+>/g, ' ')])).toEqual([])
   })

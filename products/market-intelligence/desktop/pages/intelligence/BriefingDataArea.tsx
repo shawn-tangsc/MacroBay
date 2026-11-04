@@ -2,10 +2,11 @@ import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy } from '../../../contracts/dailyBriefingMarkdown'
 import type { BriefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import type { BriefingMarketRow, BriefingPulseRow } from '../../../contracts/dailyBriefing'
+import type { PolicyPathOutcome } from '../../../contracts/policyPath'
 import type { DailyBriefingText } from './dailyBriefingText'
-import { paymentDirectionFor, type paymentDirectionWords } from './dailyBriefingPaymentDirections'
+import { paymentDirectionFor, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
-import { POLICY_GAUGE, PRICE_AREA, policyGaugeArcs, policyGaugeTrack, priceAreaPath, priceLinePoints } from './briefingDataGeometry'
+import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
 /**
  * The data region, drawn once for the exported card.
@@ -15,18 +16,19 @@ import { POLICY_GAUGE, PRICE_AREA, policyGaugeArcs, policyGaugeTrack, priceAreaP
  * arithmetic and the price geometry live in pure functions next door, because the assertions count
  * vertices and compare two renders — numbers, not pixels.
  */
-export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact }: Readonly<{
+export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact, policyWords }: Readonly<{
   groups: BriefingDataGroups
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   paymentDirectionsCompact: paymentDirectionWords
+  policyWords: policyGaugeWords
 }>): React.ReactElement {
   const policy = groups.policyPath
   const readings = groups.readings
   const leverage = groups.leverage
   return <div className="mi-brief-poster__data" data-briefing-data-region="true">
-    {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} /> : null}
+    {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} words={policyWords} /> : null}
     <div className="mi-brief-poster__price-row" data-briefing-price-row="true">
       {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}
     </div>
@@ -51,12 +53,19 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       {(['btc', 'eth'] as const).map((asset) => {
         const entry = leverage[asset]
         const rate = entry.fundingRate
+        const spark = entry.series ? oiSparkPoints(entry.series.map((point) => point.value)) : ''
         return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={rate === undefined || rate === 0 ? undefined : rate > 0 ? 'up' : 'down'}>
           <span>{asset.toUpperCase()}</span>
           <b>{rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`}</b>
           <small>{paymentDirectionFor(rate, paymentDirectionsCompact)}</small>
           <small>OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
           <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · 24h {entry.change24hPct !== undefined ? `${entry.change24hPct.toFixed(1)}%` : text.noValue}</small>
+          {/* Only when the edition carries a series: no series means no element at all, never a flat
+              placeholder line, because a flat line claims nothing moved. */}
+          {spark ? <svg className="mi-brief-poster__leverage-spark" data-briefing-oi-spark={asset} viewBox={`0 0 ${OI_SPARK.width} ${OI_SPARK.height}`} role="img" aria-label={`${asset.toUpperCase()} ${text.sections.leverage}`}>
+            <polyline points={spark} fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />
+            {sparkEnd(spark) ? <circle cx={sparkEnd(spark)!.x} cy={sparkEnd(spark)!.y} r="1.5" fill="currentColor" /> : null}
+          </svg> : null}
         </div>
       })}
     </div> : null}
@@ -67,32 +76,52 @@ const READING_IDS: Readonly<Record<string, string>> = Object.freeze({
   index: 'nasdaq', dxy: 'dxy', gold: 'gold', us10y: 'ust10y', stablecoin: 'stablecoin', 'fear-greed': 'fear-greed'
 })
 
-function PolicyCard({ policy, text, formatTime }: Readonly<{
+function PolicyCard({ policy, text, formatTime, words }: Readonly<{
   policy: NonNullable<BriefingDataGroups['policyPath']>
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
+  words: policyGaugeWords
 }>): React.ReactElement {
-  const probability = Math.round(policy.probability * 10) / 10
-  // The rest is computed here and nowhere else: two places subtracting from 100 is how an arc ends up
-  // a sliver short or past the end of the dial. With a distribution in the document this becomes three
-  // shares and the layout does not move.
-  const arcs = policyGaugeArcs([probability, 100 - probability])
+  // One source for the number and the arcs: with a distribution both read the same bucket, so the card
+  // cannot print 77.5% and draw 77.2°. Without one there is nothing to reconcile and the dial is two
+  // segments — the event and "not the event" — which is what `residual` names.
+  const released = policy.distribution ? Math.round((policy.distribution[policy.outcome as PolicyPathOutcome] ?? 0) * 1000) / 10 : undefined
+  const probability = released ?? Math.round(policy.probability * 10) / 10
+  const segments = policyGaugeSegments({ probability, outcome: policy.outcome, distribution: policy.distribution })
+  const arcs = policyGaugeArcs(segments)
+  const shares = segments.filter((segment) => segment.outcome === 'hold' || segment.outcome === 'other')
   return <div className="mi-brief-poster__policy-card" data-briefing-policy-card="true">
     <span className="mi-brief-poster__policy-title">{text.sections.policyPath}</span>
     <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
       <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
-      {/* Two segments today: the lead outcome and "not the lead outcome". The value names the role,
-          not a bucket — once the distribution arrives these become hike-25 / no-change / other, and
-          `residual` disappears. */}
-      {arcs.map((path, index) => <path key={index} className={index === 0 ? 'mi-brief-poster__gauge-event' : 'mi-brief-poster__gauge-rest'} d={path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={index === 0 ? 'event' : 'residual'} />)}
+      {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
     </svg>
     {/* HTML, not svg text: the number stays selectable and the svg keeps zero text nodes. */}
     <b className="mi-brief-poster__policy-probability">{probability}% · {policyOutcomeLabel(policy.outcome, text)}</b>
+    {shares.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
+      {shares.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
+    </span> : null}
     <span className="mi-brief-poster__policy-change">{text.sections.policyRange}</span>
     <small>{policy.targetLower !== undefined ? `${policy.targetLower}–${policy.targetUpper}%` : text.sections.rangeUnavailable}</small>
     <small className="mi-brief-poster__policy-meeting">{policy.meetingDate}</small>
     <small className="mi-brief-poster__policy-observed">{formatTime(policy.observedAt, 'minute')}</small>
   </div>
+}
+
+const GAUGE_CLASS: Readonly<Record<string, string>> = Object.freeze({
+  event: 'mi-brief-poster__gauge-event',
+  hold: 'mi-brief-poster__gauge-rest',
+  other: 'mi-brief-poster__gauge-other',
+  residual: 'mi-brief-poster__gauge-rest'
+})
+
+/** The dial's own separator: the copy is a word plus a number, so the join is punctuation, not prose. */
+const INDEX_SEPARATOR = ' · '
+
+function shareCopy(segment: Readonly<{ outcome: string; share: number }>, words: policyGaugeWords): string {
+  const share = `${Math.round(segment.share * 10) / 10}%`
+  // `rest` is a template in the copy that owns it ("其余 {value}"); the hold word is a bare word.
+  return segment.outcome === 'other' ? words.rest.replace('{value}', share) : `${words.hold} ${share}`
 }
 
 function PriceCard({ row, text, locale, formatTime }: Readonly<{
@@ -102,31 +131,32 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const copy = changeLedRowCopy(row, text, locale)
-  // No series in the document yet: the slot draws its zero line and nothing else. The series arrives
-  // with the contract version, and this component starts drawing it without moving.
-  const values: readonly number[] = []
-  const area = priceAreaPath(values)
-  const line = priceLinePoints(values)
+  // The stored curve, drawn as stored: the segments are already rebased and thinned, so the renderer
+  // neither resamples nor re-anchors. No curve is an empty column with its zero line and nothing else.
+  const paths = priceCurvePaths(row.curve ?? [])
   return <div className="mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
     <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
     <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
     {copy ? <small>{copy.secondary}</small> : null}
     <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
       <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
-      {area ? <path d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null}
-      {line ? <polyline points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" /> : null}
+      {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
+      {paths.lines.map((line, index) => <polyline key={`line-${index}`} points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
     </svg>
     <small className="mi-brief-poster__price-observed">{formatTime(row.observedAt ?? '', 'minute')}</small>
   </div>
-}
-
-function primaryOf(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
-  const copy = changeLedRowCopy(row, text, locale)
-  return copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)
 }
 
 function toneOf(row: BriefingMarketRow | BriefingPulseRow): 'up' | 'down' | undefined {
   const value = row.change?.value ?? row.value?.number
   if (value === undefined || value === 0) return undefined
   return value > 0 ? 'up' : 'down'
+}
+
+/** The last plotted point, for the "now" dot: one dot, at the end of the line, never a marker per point. */
+function sparkEnd(points: string): Readonly<{ x: number; y: number }> | undefined {
+  const last = points.split(' ').at(-1)
+  if (!last) return undefined
+  const [x, y] = last.split(',').map(Number)
+  return x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : undefined
 }

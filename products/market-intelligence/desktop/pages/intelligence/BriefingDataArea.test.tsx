@@ -7,7 +7,7 @@ import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingDataArea } from './BriefingDataArea'
-import { briefingPaymentDirections } from './dailyBriefingPaymentDirections'
+import { briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
  * What the data region actually renders.
@@ -47,7 +47,8 @@ function documentWithData(): DailyBriefingDocument {
       },
       policyPath: {
         state: 'available', meetingDate: '2026-12-09', outcome: 'hike-25', probability: 77.5,
-        observedAt: `${today}T00:10:00.000Z`, targetLower: 3.75, targetUpper: 4
+        observedAt: `${today}T00:10:00.000Z`, targetLower: 3.75, targetUpper: 4,
+        distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
       }
     } as never,
     conclusion: null,
@@ -70,7 +71,8 @@ async function render(): Promise<HTMLElement> {
   root = createRoot(host)
   const groups = briefingDataGroups(documentWithData())
   await act(async () => root!.render(createElement(BriefingDataArea, {
-    groups, text, locale: 'zh-CN', formatTime: () => '07:00', paymentDirectionsCompact: briefingPaymentDirections('zh-CN')
+    groups, text, locale: 'zh-CN', formatTime: () => '07:00',
+    paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
   })))
   return host
 }
@@ -113,5 +115,74 @@ describe('the partition keeps the excluded row in the document', () => {
     expect(doc.data.market.some((entry) => entry.id === 'us10y-real')).toBe(true)
     const groups = briefingDataGroups(doc)
     expect(groups.readings.some((entry) => entry.id === 'us10y-real')).toBe(false)
+  })
+})
+
+describe('the drawings the data arrived for', () => {
+  const at = (minutes: number) => new Date(Date.parse(`${today}T00:00:00.000Z`) + minutes * 60_000).toISOString()
+
+  it('draws three arcs from the distribution, and no "residual" once there is one', async () => {
+    const dom = await render()
+    const gauge = dom.querySelector('[data-briefing-policy-gauge]')!
+    const outcomes = [...gauge.querySelectorAll('[data-outcome]')].map((node) => node.getAttribute('data-outcome'))
+    // Non-zero shares only, and the role names are the three-segment ones.
+    expect(outcomes).toEqual(['event', 'hold', 'other'])
+    expect(gauge.querySelectorAll('[data-outcome="residual"]')).toHaveLength(0)
+    // The arcs sweep the whole half dial: three starts and three ends laid end to end.
+    expect(gauge.querySelectorAll('path[data-outcome]')).toHaveLength(3)
+  })
+
+  it('prints the same share the arcs are drawn from', async () => {
+    const dom = await render()
+    const card = dom.querySelector('[data-briefing-policy-card]')!
+    // 77.5% is the normalized lead bucket, which is also the event arc — one number, two carriers.
+    expect((card.textContent ?? '').split('77.5%').length - 1).toBe(1)
+    const bottom = [...card.querySelectorAll('[data-briefing-policy-outcomes] [data-outcome]')]
+      .map((node) => node.getAttribute('data-outcome'))
+    expect(bottom).toEqual(['hold', 'other'])
+    expect(card.querySelector('[data-briefing-policy-outcomes]')!.textContent).toContain('20.5%')
+    expect(card.querySelector('[data-briefing-policy-outcomes]')!.textContent).toContain('2%')
+  })
+
+  it('draws the stored curve, and nothing where there is none', async () => {
+    const withCurves = documentWithData()
+    const btc = withCurves.data.market.find((entry) => entry.id === 'btc')!
+    ;(btc as { curve?: unknown }).curve = [[
+      { at: at(0), returnPercent: 0 }, { at: at(60), returnPercent: 1.4 }, { at: at(120), returnPercent: 0.6 }
+    ]]
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(withCurves), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
+    })))
+    const areas = host.querySelectorAll('[data-briefing-price-area="btc"]')
+    expect(areas).toHaveLength(1)
+    expect(areas[0]!.querySelectorAll('polyline')).toHaveLength(1)
+    expect(areas[0]!.querySelectorAll('path')).toHaveLength(1)
+    // The other card has no curve in the document, so it draws its zero line and nothing else.
+    expect(host.querySelector('[data-briefing-price-area="eth"]')!.querySelectorAll('polyline')).toHaveLength(0)
+  })
+
+  it('draws one sparkline per card that has a series, and none for a card without one', async () => {
+    const withSeries = documentWithData()
+    const leverage = withSeries.data.leverage!
+    ;(leverage.btc as { series?: unknown }).series = [
+      { at: at(0), value: 7_000_000_000 }, { at: at(60), value: 7_500_000_000 }, { at: at(120), value: 7_750_000_000 }
+    ]
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(withSeries), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
+    })))
+    // One card has a series, so one spark exists: `= 1` is the state the criterion calls red, and
+    // this fixture is the half-data case that must still draw the one it has.
+    const sparks = host.querySelectorAll('[data-briefing-oi-spark]')
+    expect([...sparks].map((node) => node.getAttribute('data-briefing-oi-spark'))).toEqual(['btc'])
+    expect(sparks[0]!.querySelectorAll('polyline')).toHaveLength(1)
+    expect(sparks[0]!.querySelectorAll('circle').length).toBeLessThanOrEqual(1)
   })
 })

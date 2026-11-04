@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeTrack, priceAreaPath, priceLinePoints } from './briefingDataGeometry'
+import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
 /**
  * The geometry exists to be pinned by numbers, not looked at.
@@ -11,17 +11,17 @@ import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, pol
  */
 describe('the policy dial', () => {
   it('draws one segment per non-zero share, not a fixed three', () => {
-    expect(policyGaugeArcs([77.5, 22.5])).toHaveLength(2)
-    expect(policyGaugeArcs([100])).toHaveLength(1)
+    expect(policyGaugeArcs([{ outcome: 'event', share: 77.5 }, { outcome: 'residual', share: 22.5 }])).toHaveLength(2)
+    expect(policyGaugeArcs([{ outcome: 'event', share: 100 }])).toHaveLength(1)
     // A zero share draws nothing: the same dial serves two and three segments.
-    expect(policyGaugeArcs([0, 100])).toHaveLength(1)
+    expect(policyGaugeArcs([{ outcome: 'event', share: 0 }, { outcome: 'residual', share: 100 }])).toHaveLength(1)
   })
 
   it('sweeps a share in proportion to its size, and the shares add up to the half dial', () => {
-    const [only] = policyGaugeArcs([50])
+    const [only] = policyGaugeArcs([{ outcome: 'event', share: 50 }])
     // A 50% share is a quarter of the half dial: 90 degrees from the left end to the top.
-    expect(Math.abs(angleOf(only!, 0))).toBeCloseTo(180, 1)
-    expect(angleOf(only!, 1)).toBeCloseTo(-90, 1)
+    expect(Math.abs(angleOf(only!.path, 0))).toBeCloseTo(180, 1)
+    expect(angleOf(only!.path, 1)).toBeCloseTo(-90, 1)
   })
 
   it('keeps the track a full half circle', () => {
@@ -31,20 +31,70 @@ describe('the policy dial', () => {
 })
 
 describe('the price area', () => {
+  const curve = (...values: readonly number[]): readonly { at: string; returnPercent: number }[] =>
+    values.map((returnPercent, index) => ({ at: new Date(Date.parse('2026-10-29T00:30:00.000Z') + index * 1_800_000).toISOString(), returnPercent }))
+
   it('fills only above the zero axis, and draws nothing when every point is negative', () => {
-    expect(priceAreaPath([-1, -2, -3])).toBe('')
-    expect(priceAreaPath([1, 2, 3])).not.toBe('')
+    const negative = priceCurvePaths([curve(-1, -2, -3)])
+    expect(negative.lines).toHaveLength(1)
+    expect(negative.areas).toEqual([''])
+    expect(priceCurvePaths([curve(1, 2, 3)]).areas[0]).not.toBe('')
     // A single point is not a shape.
-    expect(priceAreaPath([1])).toBe('')
+    expect(priceCurvePaths([curve(1)])).toEqual({ lines: [], areas: [] })
   })
 
   it('is deterministic: the same input produces the same points twice', () => {
-    expect(priceLinePoints([1, 3, 2, 5])).toBe(priceLinePoints([1, 3, 2, 5]))
+    expect(priceCurvePaths([curve(1, 3, 2, 5)])).toEqual(priceCurvePaths([curve(1, 3, 2, 5)]))
+  })
+
+  it('draws one line per segment and spaces the x axis by time, both ends on the width', () => {
+    // Two segments separated by an hour: the second must start where the clock says, not where the
+    // first one ended, or the gap would lose its length.
+    const at = (minutes: number) => new Date(Date.parse('2026-10-29T00:00:00.000Z') + minutes * 60_000).toISOString()
+    const first = [{ at: at(0), returnPercent: 0 }, { at: at(30), returnPercent: 1 }]
+    const second = [{ at: at(90), returnPercent: 2 }, { at: at(150), returnPercent: 3 }]
+    const paths = priceCurvePaths([first, second])
+    expect(paths.lines).toHaveLength(2)
+    const xOf = (line: string, index: number) => Number(line.split(' ')[index]!.split(',')[0])
+    expect(xOf(paths.lines[0]!, 0)).toBe(0)
+    // 90 of 150 minutes in: the gap keeps its width instead of collapsing.
+    expect(xOf(paths.lines[1]!, 0)).toBeCloseTo((90 / 150) * PRICE_AREA.width, 1)
+    expect(xOf(paths.lines[1]!, 1)).toBe(PRICE_AREA.width)
   })
 
   it('draws a flat sparkline down the middle rather than dividing by zero', () => {
     const points = oiSparkPoints([5, 5, 5]).split(' ')
     for (const point of points) expect(Number(point.split(',')[1])).toBe(OI_SPARK.height / 2)
+  })
+})
+
+describe("the dial's shares", () => {
+  const distribution = { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+
+  it('is two segments without a distribution: the event and the rest of the dial', () => {
+    expect(policyGaugeSegments({ probability: 77.5, outcome: 'hike-25' })).toEqual([
+      { outcome: 'event', share: 77.5 },
+      { outcome: 'residual', share: 22.5 }
+    ])
+  })
+
+  it('merges the board into event, holding and the rest once the distribution is there', () => {
+    const segments = policyGaugeSegments({ probability: 77.5, outcome: 'hike-25', distribution })
+    expect(segments.map((segment) => segment.outcome)).toEqual(['event', 'hold', 'other'])
+    expect(segments[1]!.share).toBeCloseTo(20.5, 1)
+    // The rest is one subtraction, never a second sum of the three loose buckets.
+    expect(segments[2]!.share).toBeCloseTo(100 - 77.5 - 20.5, 1)
+    expect(segments.every((segment) => segment.outcome !== 'residual')).toBe(true)
+    // Arc lengths are the shares: the three arcs together sweep the whole half dial.
+    const arcs = policyGaugeArcs(segments)
+    expect(Math.abs(angleOf(arcs[0]!.path, 0))).toBeCloseTo(180, 1)
+    expect(angleOf(arcs.at(-1)!.path, 1)).toBeCloseTo(0, 1)
+  })
+
+  it('does not draw the held bucket twice when holding is the event', () => {
+    const segments = policyGaugeSegments({ probability: 50, outcome: 'no-change', distribution })
+    expect(segments.map((segment) => segment.outcome)).toEqual(['event', 'other'])
+    expect(segments[1]!.share).toBeCloseTo(50, 1)
   })
 })
 

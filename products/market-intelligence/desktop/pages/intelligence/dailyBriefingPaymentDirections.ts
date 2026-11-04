@@ -23,3 +23,16 @@ export function paymentDirectionFor(rate: number | undefined, words: paymentDire
   if (rate < 0) return words['short-pays-long']
   return words.neutral
 }
+
+/**
+ * The two words the dial's bottom row needs, resolved once from the copy that owns them.
+ *
+ * Same rule as the funding directions: the policy block already says "维持" and "其余 {value}", so the
+ * brief reuses that table instead of holding a second copy of two words it does not own.
+ */
+export type policyGaugeWords = Readonly<{ hold: string; rest: string }>
+
+export function briefingPolicyGaugeWords(locale: 'zh-CN' | 'en-US'): policyGaugeWords {
+  const words = productText[locale].pages.intelligence.portal.dashboard.policyPath
+  return { hold: words.shortOutcomes['no-change'], rest: words.topRest }
+}

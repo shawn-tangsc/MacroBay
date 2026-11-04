@@ -24,27 +24,65 @@ function arcPath(radius: number, cx: number, cy: number, fromDeg: number, toDeg:
 }
 
 /**
- * The dial's segments, one to three of them.
- *
- * Each share is drawn in proportion; a share of zero draws nothing at all, so the same function serves
- * a two-segment dial today (the outcome and the rest) and a three-segment one once the distribution is
- * carried by the document — the layout does not change when that data arrives.
+ * One arc's role. A two-segment dial names its second arc `residual` ("not the event"); a three-segment
+ * one names the small leftover `other` ("the rest of the board"), which is a different claim.
  */
-export function policyGaugeArcs(shares: readonly number[]): readonly string[] {
+export type PolicyGaugeSegmentOutcome = 'event' | 'hold' | 'other' | 'residual'
+export type PolicyGaugeSegment = Readonly<{ outcome: PolicyGaugeSegmentOutcome; share: number }>
+
+/**
+ * The dial's shares, decided in one place.
+ *
+ * With a distribution the venue priced five buckets, and the dial shows two claims beside the event:
+ * holding, and everything else merged. Without a distribution there is nothing to merge, and the dial
+ * is honestly two segments: the event and "not the event", which `residual` names.
+ *
+ * `other` is always `100 − event − hold` and never a fourth sum of buckets: one subtraction is what
+ * keeps the arcs meeting exactly, and two sources is how a dial ends up with a sliver of gap. When the
+ * event *is* holding there is no separate hold segment — the same bucket cannot be drawn twice — and
+ * everything else is the rest.
+ */
+export function policyGaugeSegments(input: Readonly<{
+  probability: number
+  outcome: string
+  distribution?: Readonly<Record<string, number>>
+}>): readonly PolicyGaugeSegment[] {
+  const event = clamp(input.probability, 0, 100)
+  const distribution = input.distribution
+  if (!distribution) return shares([{ outcome: 'event', share: event }, { outcome: 'residual', share: 100 - event }])
+  const holdShare = input.outcome === 'no-change' ? 0 : clamp((distribution['no-change'] ?? 0) * 100, 0, 100)
+  const hold: PolicyGaugeSegment | undefined = holdShare > 0 ? { outcome: 'hold', share: holdShare } : undefined
+  const remainder = 100 - event - (hold?.share ?? 0)
+  return shares([{ outcome: 'event', share: event }, ...(hold ? [hold] : []), { outcome: 'other', share: remainder }])
+}
+
+/** Drop the zero shares: a bucket nobody priced draws no arc. */
+function shares(segments: readonly PolicyGaugeSegment[]): readonly PolicyGaugeSegment[] {
+  return Object.freeze(segments.filter((segment) => segment.share > 0))
+}
+
+/**
+ * The dial's arcs, one per non-zero share.
+ *
+ * Each share is drawn in proportion and a share of zero draws nothing at all, so the same function
+ * serves a one-, two- or three-segment dial without the layout changing. The outcome travels with the
+ * path: the caller paints and labels by role, not by array position.
+ */
+export function policyGaugeArcs(segments: readonly PolicyGaugeSegment[]): readonly Readonly<{ outcome: PolicyGaugeSegmentOutcome; path: string }>[] {
   const { cx, cy, radius } = POLICY_GAUGE
-  const clamped = shares.map((share) => clamp(share, 0, 100))
-  const total = clamped.reduce((sum, share) => sum + share, 0)
-  // Guard against a caller passing shares that already add to more than the dial.
-  const normalised = total > 100 ? clamped.map((share) => (share / total) * 100) : clamped
-  const paths: string[] = []
+  const total = segments.reduce((sum, segment) => sum + clamp(segment.share, 0, 100), 0)
+  // Guard against shares that already add to more than the dial.
+  const scale = total > 100 ? 100 / total : 1
+  const arcs: Readonly<{ outcome: PolicyGaugeSegmentOutcome; path: string }>[] = []
   let fromDeg = -180
-  for (const share of normalised) {
+  for (const segment of segments) {
+    const share = clamp(segment.share, 0, 100) * scale
     if (share <= 0) continue
     const toDeg = fromDeg + (share / 100) * 180
-    paths.push(arcPath(radius, cx, cy, fromDeg, toDeg))
+    arcs.push(Object.freeze({ outcome: segment.outcome, path: arcPath(radius, cx, cy, fromDeg, toDeg) }))
     fromDeg = toDeg
   }
-  return Object.freeze(paths)
+  return Object.freeze(arcs)
 }
 
 /** The dial's empty track: one full half circle, drawn under the segments. */
@@ -53,36 +91,50 @@ export function policyGaugeTrack(): string {
   return arcPath(radius, cx, cy, -180, 0)
 }
 
-/**
- * The filled area of a price row, above the zero axis only.
- *
- * Points are clamped to `zeroY` rather than intersected: a segment that dips below zero simply stops
- * at the axis, which is what "fill only above zero" means. When every point is at or below zero the
- * area is empty and the caller draws nothing — a flat band at the axis would claim the market moved.
- */
-export function priceAreaPath(values: readonly number[]): string {
-  if (values.length < 2) return ''
-  const { width, height, zeroY } = PRICE_AREA
-  const max = Math.max(...values.map(Math.abs), 0)
-  if (max === 0) return ''
-  const step = width / (values.length - 1)
-  const xs = values.map((_, index) => round(index * step))
-  const ys = values.map((value) => round(clamp(zeroY - (value / max) * (height / 2 - 1), 0, zeroY)))
-  const above = ys.some((y, index) => y < zeroY && values[index]! > 0)
-  if (!above) return ''
-  return `M ${xs[0]} ${zeroY} ${xs.map((x, index) => `L ${x} ${ys[index]}`).join(' ')} L ${xs.at(-1)} ${zeroY} Z`
-}
+/** One point of a stored price curve: the instant it belongs to and its zero-anchored return. */
+export type PriceCurvePoint = Readonly<{ at: string; returnPercent: number }>
 
-/** The polyline for the same points, so the line and its fill can never disagree. */
-export function priceLinePoints(values: readonly number[]): string {
-  if (values.length < 2) return ''
+/** What one price card draws: a polyline and a fill per stored segment, in document order. */
+export type PriceCurvePaths = Readonly<{ lines: readonly string[]; areas: readonly string[] }>
+
+/**
+ * The price card's curve, drawn from the stored segments.
+ *
+ * Two properties matter and are computed here rather than in the component:
+ *
+ * - **x is time, not index.** The segments are stretches of one window with the missing readings cut
+ *   out; spacing them by index would give a four-hour stretch the same width as a twenty-hour one, and
+ *   a gap would lose its length. The axis is the first kept instant to the last.
+ * - **one vertical scale for every segment**, so a second segment is not silently rescaled to fill the
+ *   column and made to look like a bigger move than the first.
+ *
+ * The fill exists only above the zero axis. A segment that never rises above zero gets no area at all
+ * rather than a band lying along the axis, which would claim a move that did not happen.
+ */
+export function priceCurvePaths(segments: readonly (readonly PriceCurvePoint[])[]): PriceCurvePaths {
+  const points = segments.flat()
+  if (points.length < 2) return { lines: [], areas: [] }
+  const first = Date.parse(points[0]!.at)
+  const last = Date.parse(points.at(-1)!.at)
+  const span = last - first
+  const max = Math.max(...points.map((point) => Math.abs(point.returnPercent)), 0)
+  if (!(span > 0) || max === 0) return { lines: [], areas: [] }
   const { width, height, zeroY } = PRICE_AREA
-  const max = Math.max(...values.map(Math.abs), 0)
-  if (max === 0) return ''
-  const step = width / (values.length - 1)
-  return values
-    .map((value, index) => `${round(index * step)},${round(clamp(zeroY - (value / max) * (height / 2 - 1), 0, height))}`)
-    .join(' ')
+  const xOf = (at: string): number => round(((Date.parse(at) - first) / span) * width)
+  const yOf = (value: number, floor: number): number =>
+    round(clamp(zeroY - (value / max) * (height / 2 - 1), 0, floor))
+  const lines: string[] = []
+  const areas: string[] = []
+  for (const segment of segments) {
+    if (segment.length < 2) continue
+    const xs = segment.map((point) => xOf(point.at))
+    lines.push(segment.map((point, index) => `${xs[index]},${yOf(point.returnPercent, height)}`).join(' '))
+    const above = segment.some((point) => point.returnPercent > 0)
+    areas.push(above
+      ? `M ${xs[0]} ${zeroY} ${segment.map((point, index) => `L ${xs[index]} ${yOf(point.returnPercent, zeroY)}`).join(' ')} L ${xs.at(-1)} ${zeroY} Z`
+      : '')
+  }
+  return { lines: Object.freeze(lines), areas: Object.freeze(areas) }
 }
 
 /** The open-interest sparkline: shape only, normalized per row. */
