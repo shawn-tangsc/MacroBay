@@ -229,6 +229,24 @@ describe('the list projection decides the row, once', () => {
   })
 
 
+  it('lets a manual period be the current edition, and keeps it there by kind', async () => {
+    const rows = [
+      withPeriod('period_sched', 'zh-CN', { periodTime: '2026-11-02T12:30:00.000Z', generatedAt: '2026-11-02T12:31:00.000Z' }),
+      withPeriod('period_manual', 'zh-CN', {
+        periodTime: '2026-11-02T21:53:00.000Z', periodKind: 'manual', runTrigger: 'manual',
+        generatedAt: '2026-11-02T21:54:00.000Z'
+      })
+    ]
+    const summaries = await two(rows, {})
+    const current = summaries.filter((summary) => summary.isCurrent)
+    // B1: the current edition is decided by generatedAt, never by the kind of period.
+    expect(current).toHaveLength(1)
+    expect(current[0]).toMatchObject({ periodId: 'period_manual', periodKind: 'manual' })
+    // The reverse assertion: a reader that filters "scheduled only" would have no current row here,
+    // which is exactly what this test refuses.
+    expect(summaries.filter((summary) => summary.periodKind === 'scheduled' && summary.isCurrent)).toHaveLength(0)
+  })
+
   it('marks exactly one current edition per day: the latest generatedAt, not the latest cutoff', async () => {
     const rows = [
       withPeriod('period_early', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z', generatedAt: '2026-11-02T09:00:00.000Z' }),
