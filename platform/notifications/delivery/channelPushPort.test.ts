@@ -63,7 +63,7 @@ function targetView(patch: Partial<ChannelDeliveryTargetView> = {}): ChannelDeli
 }
 
 function conversation(patch: Partial<ChannelConversationSafeView> = {}): ChannelConversationSafeView {
-  return { id: 'conversation-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, createdAt: '2026-11-01T00:00:00.000Z', ...patch }
+  return { id: 'conversation-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: null, createdAt: '2026-11-01T00:00:00.000Z', ...patch }
 }
 
 function harness(options: {

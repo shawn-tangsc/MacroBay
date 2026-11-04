@@ -35,7 +35,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['channel'],
           dedupeKeyTemplate: 'push-probe:{key}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.channel.push-suspended',
@@ -46,8 +45,7 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['toast', 'desktop'],
           dedupeKeyTemplate: 'push-suspended:{channelId}',
           dedupeUnit: 'condition',
-          conditionWindowMs: 86_400_000,
-          notifyOnlyIfSubscribed: false
+          conditionWindowMs: 86_400_000
         },
         {
           id: 'platform.channel.push-resumed',
@@ -58,7 +56,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'push-resumed:{channelId}:{day}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     }

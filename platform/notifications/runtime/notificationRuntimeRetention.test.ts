@@ -32,8 +32,7 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop'],
           dedupeKeyTemplate: 'test:{id}',
           dedupeUnit: 'condition',
-          conditionWindowMs: 86_400_000,
-          notifyOnlyIfSubscribed: false
+          conditionWindowMs: 86_400_000
         }
       ]
     }

@@ -17,28 +17,50 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
   requiresUserAction: true,
   requestedDisruptionLevels: ['desktop'],
   dedupeUnit: 'occurrence',
-  notifyOnlyIfSubscribed: false,
   ...overrides
 })
 
 describe('notification event policy', () => {
-  it('is the signed 16-row table (8 platform + 8 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(16)
+  it('is the signed 15-row table (8 platform + 7 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(15)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
     expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(8)
-    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(8)
+    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(7)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
-    // 2026-11-04 用户翻案恢复：完成类回到批准表（读者勾了才推，默认不勾）。
+    // N8 calibration.result 2026-11-04 撤回：编号不复用，行也不留（留着就是静默复活的口子）。
+    expect(ids).not.toContain('market-intelligence.calibration.result')
+    // 完成类仍在表里：读者在情报页可以关掉它的手机推送。
     expect(ids).toContain('market-intelligence.briefing.ready')
   })
 
-  it('leaves exactly six desktop rows and thirteen channel rows unapproved', () => {
-    // 批准表面：桌面 9 行、通道 2 行（超过这个数的实现就是把「没批」画成了「能开」）。
-    const rows = Object.values(NOTIFICATION_EVENT_POLICY)
-    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('desktop'))).toHaveLength(10)
-    expect(rows.filter((row) => row.approvedDisruptionLevels.includes('channel'))).toHaveLength(3)
-    // 16 - 10 = 6 行未批准桌面；16 - 3 = 13 行未批准通道。
+  it('keeps desktop to the eleven failure / correction / system-status rows', () => {
+    // 桌面对「信息类」与「完成类」不开放（用户原话：没打开应用还被轰炸）。
+    // 11 = 平台 7（P7 自己不走桌面）+ 情报 4（当地时间无效、来源连续失败、来源长时间无数据、日报没生成）。
+    const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
+    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
+      'market-intelligence.briefing.failed',
+      'market-intelligence.source.consecutive-failed',
+      'market-intelligence.source.stale',
+      'market-intelligence.timezone.invalid',
+      'platform.analysis.quota-exhausted',
+      'platform.channel.push-resumed',
+      'platform.channel.push-suspended',
+      'platform.job.failed-terminal',
+      'platform.job.repeated-failed',
+      'platform.provider.credential-invalid',
+      'platform.provider.credential-recovered'
+    ])
+    // P7 不投桌面，否则「桌面失败 → P7 → 投桌面 → 再失败」自激。
+    expect(NOTIFICATION_EVENT_POLICY['platform.desktop.blocked'].approvedDisruptionLevels).not.toContain('desktop')
+    // 手机只批三条。
+    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('channel')).map(([id]) => id).sort()).toEqual([
+      'market-intelligence.briefing.ready',
+      'market-intelligence.macro.event-landed',
+      'market-intelligence.signal.triggered'
+    ])
+    // 提示 15 行全开：关掉桌面时它是唯一的本机提醒。
+    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(15)
   })
 
   it('never approves a bypass and always keeps center', () => {
