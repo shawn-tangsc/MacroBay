@@ -28,6 +28,7 @@ import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotServi
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { notifyMacroReleases } from '../signals/macroReleaseNotifier'
+import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
@@ -164,7 +165,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     countRuns: (at, excludedRowId) => countAnalysisRuns(repository, at, excludedRowId),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),
     recordDecision: (decision) => { void runs.recordDecision(decision) },
-    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)
+    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode),
+    // P3：当日额度被拒时告诉读者一次；按 UTC 日的键由平台声明展开，同一天重复被拒不会多一条。
+    notifyQuotaExhausted: async ({ used, limit, occurredAt }) => {
+      await notifyAnalysisQuota(input.submitNotification, { used, limit, occurredAt })
+    }
   })
   let crossAssetQuery = input.crossAssetQuery
   let disposed = false

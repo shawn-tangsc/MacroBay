@@ -1,0 +1,54 @@
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
+import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
+
+/**
+ * P3「今天的分析次数用完了」：**每日**额度被拒绝的那一刻提交一次（编排里拒绝的那一处）。
+ *
+ * 一天只发一条不在产品里数次数：键 `quota-exhausted:{date}` 由平台的声明展开，同一天再次命中
+ * 就是合并、不再推；再数一遍等于把去重规则写两处，迟早不一致。
+ *
+ * 键里的日期用 **UTC**：额度是读者看不见的记账（时区口径：看得见的日期跟读者时区，记账用 UTC）。
+ * 按读者时区切，跨时区会让同一个「今天」变成两个键、两条提醒。
+ *
+ * 正文必须带两个数（「今天已用 X / 上限 Y」）：只写「用尽了」，读者不知道差多少。
+ * 一条通知发不出去不能把一次拒绝判成故障，所以这里吞掉提交异常、返回 null。
+ */
+const ANALYSIS_QUOTA_EVENT_ID = 'platform.analysis.quota-exhausted'
+
+export type AnalysisQuotaSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+
+export type AnalysisQuota = Readonly<{ used: number; limit: number; occurredAt: string }>
+
+/** UTC 自然日（`YYYY-MM-DD`）：记账口径，不跟读者的显示时区走。 */
+export function utcDayOf(occurredAt: string): string {
+  return new Date(occurredAt).toISOString().slice(0, 10)
+}
+
+/** 纯函数：同样的用量与时刻永远得到同一份请求，便于逐字段断言。 */
+export function buildAnalysisQuotaRequest(quota: AnalysisQuota): NotificationSubmitRequest {
+  return {
+    eventTypeId: ANALYSIS_QUOTA_EVENT_ID,
+    // 判定与提交都在分析编排的同一个 handler 里，producerId 用稳定的 handler id（契约 §14.1）。
+    producerId: RUN_MARKET_ANALYSIS_JOB,
+    dedupeVars: { builder: 'template', vars: { date: utcDayOf(quota.occurredAt) } },
+    bodyParams: { used: String(quota.used), limit: String(quota.limit) },
+    actions: [],
+    occurredAt: quota.occurredAt
+  }
+}
+
+export async function notifyAnalysisQuota(
+  submit: AnalysisQuotaSubmit | undefined,
+  quota: AnalysisQuota
+): Promise<NotificationSubmitOutcome | null> {
+  if (!submit) return null
+  try {
+    return await submit(buildAnalysisQuotaRequest(quota))
+  } catch {
+    // 拒绝已经发生、ledger 已经写好；通知不是事实来源。
+    return null
+  }
+}

@@ -163,3 +163,39 @@ it('records its own decision for a line that has no attempt row', async () => {
   expect(updateDecision).not.toHaveBeenCalled()
   expect(recordDecision).toHaveBeenCalledTimes(1)
 })
+
+it('tells the reader when the day quota refused the run, and carries the pair that refused it', async () => {
+  // P3：只有「今天的次数用完了」这一种拒绝要通知；小时窗口、合并区间、时段保留位都不是。
+  const notifyQuotaExhausted = vi.fn(async () => undefined)
+  const { instance } = gate({
+    countRuns: () => ({ hourRuns: 48, dayRuns: 48, eventRunsToday: 48, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    notifyQuotaExhausted
+  })
+  const outcome = await instance.evaluate({
+    eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', asOf, previousSnapshot: snapshot('3.1%'), attemptLedgerId: 'mi-ledger-8'
+  })
+  expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 48, limit: 48 } })
+  expect(notifyQuotaExhausted).toHaveBeenCalledTimes(1)
+  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 48, limit: 48, occurredAt: asOf })
+})
+
+it('reports the calendar line’s own nine, not the event line’s forty-eight', async () => {
+  const notifyQuotaExhausted = vi.fn(async () => undefined)
+  const { instance } = gate({
+    countRuns: () => ({ hourRuns: 9, dayRuns: 9, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 9, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    notifyQuotaExhausted
+  })
+  await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  expect(notifyQuotaExhausted).toHaveBeenCalledWith({ used: 9, limit: 9, occurredAt: asOf })
+})
+
+it('stays silent for an hourly refusal: the day is not used up', async () => {
+  const notifyQuotaExhausted = vi.fn(async () => undefined)
+  const { instance } = gate({
+    countRuns: () => ({ hourRuns: 12, dayRuns: 12, eventRunsToday: 12, eventRunsThisHour: 12, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    notifyQuotaExhausted
+  })
+  const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', asOf, previousSnapshot: snapshot('3.1%') })
+  expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  expect(notifyQuotaExhausted).not.toHaveBeenCalled()
+})

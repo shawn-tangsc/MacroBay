@@ -1,6 +1,6 @@
 import type { AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
 import { hashMarketAnalysisJson } from './analysisHash'
-import { decideBudget, type BudgetDecision } from './analysisBudgetPolicy'
+import { decideBudget, type BudgetDecision, type DailyQuota } from './analysisBudgetPolicy'
 import { isScheduledSlotTriggerKey, slotForTriggerKey, type AnalysisSessionSlot } from './analysisSchedulePolicy'
 import { slotDedupeDay } from './analysisSlotCoverage'
 import { isGateEligible } from './analysisTriggerSourcePolicy'
@@ -44,6 +44,8 @@ export type SignificanceDecision = Readonly<{
   phase: AnalysisPhase | null
   signals: readonly SignificanceSignal[]
   changeHash: string
+  /** The day's pair when the daily quota refused this run; null otherwise. */
+  dailyQuota: DailyQuota | null
 }>
 
 export type SignificanceEvaluationInput = Readonly<{
@@ -72,8 +74,8 @@ export function significanceChangeHash(signals: readonly SignificanceSignal[]): 
 
 export function evaluateSignificance(input: SignificanceEvaluationInput): SignificanceDecision {
   const decide = (kind: 'queued' | 'skipped', reasonCode: string | null, signals: readonly SignificanceSignal[],
-    phase: AnalysisPhase | null = null, changeHash = significanceChangeHash(signals)): SignificanceDecision =>
-    ({ decision: kind, reasonCode, phase, signals, changeHash })
+    phase: AnalysisPhase | null = null, changeHash = significanceChangeHash(signals), dailyQuota: DailyQuota | null = null): SignificanceDecision =>
+    ({ decision: kind, reasonCode, phase, signals, changeHash, dailyQuota })
   // Not a key this gate judges: pass through without deciding or recording, and without a
   // phase — the freeze payload already carries the phase the caller decided.
   if (!isGateEligible(input.triggerKey) && !isScheduledSlotTriggerKey(input.triggerKey)) return decide('queued', null, [])
@@ -81,7 +83,7 @@ export function evaluateSignificance(input: SignificanceEvaluationInput): Signif
     triggerKey: input.triggerKey, now: input.now, lastAutoRunAt: input.lastAutoRunAt,
     hourRuns: input.hourRuns, dayRuns: input.dayRuns, eventRunsToday: input.eventRunsToday, scheduledRunsToday: input.scheduledRunsToday, eventRunsThisHour: input.eventRunsThisHour, calendarRunsToday: input.calendarRunsToday, calendarRunsThisHour: input.calendarRunsThisHour
   })
-  if (budget.decision === 'skipped') return decide('skipped', budget.reasonCode ?? analysisSignificancePolicy.reasonCodes.invalidInput, [])
+  if (budget.decision === 'skipped') return decide('skipped', budget.reasonCode ?? analysisSignificancePolicy.reasonCodes.invalidInput, [], null, significanceChangeHash([]), budget.dailyQuota ?? null)
   const slot = slotForTriggerKey(input.triggerKey)
   if (slot) return decide('queued', sessionSlotReasonCode(slot), [], 'correction', sessionSlotChangeHash(slot, input.now))
   const signals = diffSignificance(input.previous, input.current, input.previousAsOf)

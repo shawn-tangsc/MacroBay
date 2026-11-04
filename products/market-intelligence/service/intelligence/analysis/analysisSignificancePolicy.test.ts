@@ -91,7 +91,7 @@ it('gives a slot run an identity the ledger cannot confuse with another day', ()
 it('passes through the keys it does not judge without recording a decision', () => {
   for (const triggerKey of ['manual.refresh', 'manual.initial', 'macro.actual.first-confirmed', 'market-reaction.15m', 'unknown.key']) {
     // No phase either: the caller's freeze payload already decided it.
-    expect(evaluate({ triggerKey })).toEqual({ decision: 'queued', reasonCode: null, phase: null, signals: [], changeHash: significanceChangeHash([]) })
+    expect(evaluate({ triggerKey })).toEqual({ decision: 'queued', reasonCode: null, phase: null, signals: [], changeHash: significanceChangeHash([]), dailyQuota: null })
   }
 })
 

@@ -127,7 +127,7 @@ describe('the budget rule set the old gate is replaced by', () => {
     expect(decideBudget(spent)).toEqual({ decision: 'skipped', reasonCode: 'schedule-reserve-exhausted' })
     // And the data line is refused by the global day gate at the same point.
     expect(decideBudget({ ...spent, triggerKey: EVENT_KEY, eventRunsToday: 47 }))
-      .toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+      .toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 60, limit: 60 } })
     // Two slots spent and a day at 59: the third slot is still allowed, so the refusal above comes
     // from the reserve being used up, not from the global gate or from the order of the checks.
     expect(decideBudget({ ...spent, scheduledRunsToday: 2, dayRuns: 59 }).decision).toBe('queued')

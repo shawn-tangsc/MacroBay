@@ -1,5 +1,5 @@
 import { normalizeMacroRouteMonths, type MacroRoute } from '../public-query/macroRouteQuery'
-import { decideBudget } from './analysisBudgetPolicy'
+import { analysisBudgetPolicy, decideBudget, type DailyQuota } from './analysisBudgetPolicy'
 import { countAnalysisRuns, lastAutoRunAt, type AnalysisRunCounts } from './analysisRunCounter'
 import { evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
 import { analysisRunLineOf, isGateEligible } from './analysisTriggerSourcePolicy'
@@ -32,6 +32,11 @@ export type SignificanceGateDependencies = Readonly<{
    * the day for a model call that never happened.
    */
   updateDecision: (rowId: string, decision: 'skipped', reasonCode: string) => void
+  /**
+   * 当日额度用尽时告诉读者一次（P3）。只在 `day-budget-exhausted` 这一种拒绝上调用：
+   * 小时窗口、合并区间、时段的保留位都不是「今天的次数用完了」。缺省表示未装配通知运行时。
+   */
+  notifyQuotaExhausted?: (input: Readonly<{ used: number; limit: number; occurredAt: string }>) => Promise<void>
 }>
 
 export type SignificanceGateInput = Readonly<{
@@ -54,9 +59,19 @@ export type SignificanceGateOutcome = Readonly<{
   triggeredEventKeys: ReadonlySet<string>
   route: MacroRoute | null
   usedPreviousAsOf: string | null
+  /** 每日额度拒绝背后的「已用 / 上限」；其它拒绝与放行都是 null。 */
+  dailyQuota: DailyQuota | null
 }>
 
 export function createAnalysisSignificanceGate(dependencies: SignificanceGateDependencies) {
+  /**
+   * 「今天的次数用完了」只在每日额度这一种拒绝上通知一次；同一天的重复提交由平台按 UTC 日键合并，
+   * 所以这里不必自己数次数（那是去重键的职责，写两处迟早会不一致）。
+   */
+  const notifyQuotaExhausted = async (reasonCode: string | null, quota: DailyQuota | undefined): Promise<void> => {
+    if (reasonCode !== analysisBudgetPolicy.reasonCodes.daily || quota === undefined) return
+    await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now() })
+  }
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
       const line = analysisRunLineOf(input.triggerKey)
@@ -74,13 +89,14 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
           // The freeze boundary refuses an item-line payload without its attempt row, so the id is
           // always present here; without one there is no counted attempt to correct either.
           if (input.attemptLedgerId !== undefined) dependencies.updateDecision(input.attemptLedgerId, 'skipped', budget.reasonCode)
-          return { decision: 'skipped', reasonCode: budget.reasonCode, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
+          await notifyQuotaExhausted(budget.reasonCode, budget.dailyQuota)
+          return { decision: 'skipped', reasonCode: budget.reasonCode, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null, dailyQuota: budget.dailyQuota ?? null }
         }
-        return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
+        return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null, dailyQuota: null }
       }
       // Not a key this gate judges: hand it back untouched and record nothing.
       if (!isGateEligible(input.triggerKey)) {
-        return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
+        return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null, dailyQuota: null }
       }
       const previous: PreviousSignificanceBaseline | null = projectPreviousBaseline(input.previousSnapshot as never)
       const now = dependencies.now()
@@ -106,10 +122,11 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
           })
         }
       }
+      await notifyQuotaExhausted(decision.reasonCode, decision.dailyQuota ?? undefined)
       return {
         decision: decision.decision, reasonCode: decision.reasonCode, signals: decision.signals,
         triggeredEventKeys: new Set(decision.signals.map(signal => signal.eventKey)),
-        route, usedPreviousAsOf: previous?.asOf ?? null
+        route, usedPreviousAsOf: previous?.asOf ?? null, dailyQuota: decision.dailyQuota
       }
     }
   }
