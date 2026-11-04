@@ -18,6 +18,7 @@ import {
   isDailyBriefingWindowHours
 } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
+import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBriefingEditorialState'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
@@ -625,50 +626,3 @@ export function createDailyBriefingService(deps: Readonly<{
 
   return { getToday, regenerate, list, ...reads, getProgress }
 }
-
-/**
- * The model the agent session actually ran. `editorialMeta` is what a reader (and the history
- * rail) can audit, so it names the concrete `providerId:modelId` rather than "agent-session", and
- * carries the fallback reason when the stored custom choice was not callable.
- */
-function withEditorialModel(
-  document: DailyBriefingDocument,
-  model: Readonly<{ providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
-): DailyBriefingDocument {
-  const meta = document.provenance.editorialMeta
-  return Object.freeze({
-    ...document,
-    provenance: Object.freeze({
-      ...document.provenance,
-      editorialMeta: Object.freeze({
-        promptVersion: meta?.promptVersion ?? 'daily-briefing.agent.v2',
-        model: `${model.providerId}:${model.modelId}`,
-        source: model.source,
-        ...(model.fallback ? { fallback: model.fallback } : {})
-      })
-    })
-  })
-}
-
-function markEditorialFailure(
-  document: DailyBriefingDocument,
-  failureCode: string,
-  failureDetail?: string,
-  sessionId?: string
-): DailyBriefingDocument {
-  return Object.freeze({
-    ...document,
-    provenance: Object.freeze({
-      ...document.provenance,
-      ...(sessionId ? { aiSessionId: sessionId } : {}),
-      editorialFailure: failureCode,
-      ...(failureDetail ? { editorialFailureDetail: failureDetail } : {})
-    })
-  })
-}
-
-function isCurrent(document: DailyBriefingDocument): boolean {
-  return document.schemaVersion === dailyBriefingPolicy.schemaVersion && document.policyVersion === dailyBriefingPolicy.policyVersion
-}
-
-
