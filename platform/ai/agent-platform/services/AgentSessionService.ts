@@ -14,6 +14,7 @@ import {
   deleteAgentWorkspace,
   listAgentSessions,
   reorderAgentSessions,
+  selectAgentSession,
   toggleSessionPin,
   upsertAgentWorkspace,
   updateAgentSessionAgent,
@@ -122,6 +123,17 @@ export class AgentSessionService {
 
   async reorderBatch(orderedSessionIds: readonly string[]): Promise<void> {
     await this.store.update((state) => reorderAgentSessions(state, orderedSessionIds))
+  }
+
+  /**
+   * 「按会话选中」（IPC 与频道入口共用这一个入口）。
+   *
+   * 和 IPC handler 里原来那一行逐字一致：同一个纯函数 `selectAgentSession`、同一个写口
+   * `activeSelectionRowOnly`（只写选中那一行，不把整棵树写一遍）。**两份写法必然漂**，
+   * 所以合成一处；未知 id 原样返回状态，不抛错——与 handler 的行为一致。
+   */
+  async select(id: string) {
+    return this.store.update((state) => selectAgentSession(state, id), { activeSelectionRowOnly: true })
   }
 
   async togglePin(id: string) {

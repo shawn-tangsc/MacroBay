@@ -183,6 +183,45 @@ describe('agent platform services', () => {
     expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
   })
 
+  it('selects a session through the same focused write the IPC path uses', async () => {
+    // 「按会话选中」只能有一个入口：IPC handler 与频道入口都调这一个方法。
+    // 这条用例钉住两件事：选中真的落到 activeSessionId，且写口仍是「只写选中那一行」。
+    const otherSession: AgentSessionEntity = {
+      ...session,
+      id: 'session-2',
+      name: 'Second Session',
+      orderKey: 'session-2'
+    }
+    const optionsSeen: unknown[] = []
+    let state = createAgentStoreState({
+      agents: [agent],
+      sessions: [session, otherSession],
+      workspaces: [workspace]
+    })
+    const store: AgentPlatformStateStore = {
+      getState: async () => state,
+      update: async (updater, options) => {
+        optionsSeen.push(options)
+        state = updater(state)
+        return state
+      },
+      replace: async (nextState) => {
+        state = nextState
+        return state
+      }
+    }
+    const services = createAgentPlatformServices(store)
+
+    await services.sessions.select(otherSession.id)
+    expect(state.activeSessionId).toBe(otherSession.id)
+    expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
+
+    // 未知 id 不抛错、状态原样（与 handler 的行为一致）。
+    const before = state
+    await services.sessions.select('session-missing')
+    expect(state.activeSessionId).toBe(before.activeSessionId)
+  })
+
   it('hydrates agent get/list/search from query adapters instead of scanning store order', async () => {
     const repoAgent: AgentEntity = {
       ...agent,

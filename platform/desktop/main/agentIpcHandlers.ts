@@ -3,7 +3,6 @@ import type { AgentPlatformServices } from '../../ai/agent-platform/services'
 import type { UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
 import type { CreateTaskDto, UpdateTaskDto } from '../../ai/agent-platform/schemas/taskSchemas'
 import type { Trigger } from '../../ai/agent-platform/schemas/taskSchemas'
-import { selectAgentSession } from '../../ai/agent-platform/store/agentStore'
 import type {
   AgentMentionedModelDescriptor,
   AgentSessionMessagesListQuery,
@@ -243,8 +242,7 @@ export function createAgentIpcHandlers(
       return services.state.getState()
     },
     cancelSession: (sessionId: string) => runtime?.cancelSession(sessionId) ?? false,
-    selectSession: async (sessionId: string) =>
-      services.state.update((state) => selectAgentSession(state, sessionId), { activeSelectionRowOnly: true }),
+    selectSession: (sessionId: string) => services.sessions.select(sessionId),
     listProductToolPackages: (agentId: string) =>
       productToolReader?.listProductToolPackages(agentId) ?? Promise.resolve([]),
     updateProductToolPackageBinding: (

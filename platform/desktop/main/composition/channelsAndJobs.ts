@@ -37,7 +37,6 @@ import {
   readChannelConversationSession,
   touchChannelConversation
 } from '../../../ai/agent-platform/channels/channelConversationBindings'
-import { selectAgentSession } from '../../../ai/agent-platform/store/agentStore'
 import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
@@ -238,11 +237,9 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 「打开这条频道的会话」：会话 id 只在主进程里查、只用一次，渲染层拿不到（见 channelConversationBindings）。
     conversationSessionId: ({ channelId, conversationId }) =>
       readChannelConversationSession(agentDatabase, { channelId, conversationId }),
-    // 会话线没有「按会话选中」的服务方法（只有 IPC handler 里那一行）：这里复用同一个纯函数与
-    // 同一个 store 写口，没有第二套状态机。等他们开一个 `AgentSessionService.select(sessionId)`
-    // 就换成调它（已报，不在本笔越线改）。
+    // 「按会话选中」只有一个入口：`AgentSessionService.select`（IPC handler 也调它）。
     selectSession: async (sessionId) => {
-      await agentServices.state.update((state) => selectAgentSession(state, sessionId), { activeSelectionRowOnly: true })
+      await agentServices.sessions.select(sessionId)
     },
     // 会话名的拼装：平台名只从目录表取，语言跟界面走；算出来的名字会落到会话行上。
     conversationTitle: async (suggestion) => {
