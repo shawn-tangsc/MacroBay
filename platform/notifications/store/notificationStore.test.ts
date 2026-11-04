@@ -122,7 +122,9 @@ describe('notification store', () => {
     })
     expect(legacy).not.toHaveProperty('subscriptions')
     // 整份重写后也不会把它带回去。
-    expect(normalizeNotificationStoreState(JSON.parse(JSON.stringify(legacy)))).toEqual({ records: [], dailyCounters: {}, pushBackoff: {} })
+    const rewritten = normalizeNotificationStoreState(JSON.parse(JSON.stringify(legacy)))
+    expect(rewritten).not.toHaveProperty('subscriptions')
+    expect(rewritten.providerCredentialHealth).toEqual({})
   })
 
   it('normalizes old records to a legacy event type and an empty delivery map', () => {

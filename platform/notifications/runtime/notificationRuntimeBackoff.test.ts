@@ -159,3 +159,53 @@ describe('push breaker announces both transitions', () => {
     expect(records().some((record) => record.titleKey === RESUMED_TITLE)).toBe(false)
   })
 })
+
+describe('P4a/P4b: credential health announces only flips', () => {
+  it('sends invalid once, then recovery once, and does not repeat after a restart', async () => {
+    const state = createDefaultNotificationStoreState()
+    const make = (): ReturnType<typeof createNotificationRuntime> =>
+      createNotificationRuntime({
+        storage: {
+          read: async () => JSON.parse(JSON.stringify(state)),
+          write: async (next) => { Object.assign(state, next) }
+        },
+        catalog,
+        getSettings: async () => settings,
+        clock: { now: () => new Date(nowMs), timeZone: () => 'UTC' }
+      })
+
+    const runtime = make()
+    expect(await runtime.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: true })
+    // 持续失败不重复发：状态没翻转就什么都不做。
+    expect(await runtime.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: false })
+
+    // 重启：同一份 state 读回来，仍然不重发。
+    const restarted = make()
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: false })
+
+    // 从 invalid 翻回 ok：发一条恢复。
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'ok' })).toEqual({ changed: true })
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'ok' })).toEqual({ changed: false })
+  })
+
+  it('keeps the health state when records are pruned', async () => {
+    const state = createDefaultNotificationStoreState()
+    state.providerCredentialHealth = { silicon: 'invalid' }
+    const runtime = createNotificationRuntime({
+      storage: {
+        read: async () => JSON.parse(JSON.stringify(state)),
+        write: async (next) => { Object.assign(state, next) }
+      },
+      catalog,
+      getSettings: async () => settings,
+      clock: { now: () => new Date(nowMs), timeZone: () => 'UTC' }
+    })
+
+    await runtime.prune()
+
+    // 清记录不许顺手清掉判定状态，否则重启后会再发一遍失效。
+    expect((state as { providerCredentialHealth?: Record<string, string> }).providerCredentialHealth).toEqual({
+      silicon: 'invalid'
+    })
+  })
+})

@@ -27,13 +27,22 @@ export type NotificationStoreState = {
   dailyCounters: NotificationDailyCounters
   /** 通道熔断：每个 channelId 一条；只由 runtime 写，端口只返回结果（runtime §8）。 */
   pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+  /**
+   * 供应商凭据的**判定状态**（P4a/P4b 用）：`ok` / `invalid` 两值，没有第三态。
+   *
+   * - 只存两值：读不到就说不知道，那就不发事件，不许用 `unknown` 占位；
+   * - 只有**翻转**才发事件（invalid→invalid 不重复发）；
+   * - 它是判定状态、不是记录：**剪枝不许抹掉**，否则重启后会再发一遍失效。
+   */
+  providerCredentialHealth: Readonly<Record<string, 'ok' | 'invalid'>>
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
     records: [],
     dailyCounters: {},
-    pushBackoff: {}
+    pushBackoff: {},
+    providerCredentialHealth: {}
   }
 }
 
@@ -107,7 +116,9 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   return {
     records,
     dailyCounters: normalizeDailyCounters(candidate.dailyCounters),
-    pushBackoff: normalizePushBackoff(candidate.pushBackoff)
+    pushBackoff: normalizePushBackoff(candidate.pushBackoff),
+    // 只认两个值：别的（含旧文件里的脏数据）一律丢掉——没有「unknown」这个状态。
+    providerCredentialHealth: normalizeCredentialHealth(candidate.providerCredentialHealth)
   }
 }
 
@@ -368,4 +379,16 @@ function strongerPriority(left: NotificationPriority, right: NotificationPriorit
 
 function uniqueChannels(channels: NotificationChannel[]): NotificationChannel[] {
   return [...new Set(channels)]
+}
+
+/** 只留 `ok` / `invalid` 两值；其余丢弃，不发明第三态。 */
+function normalizeCredentialHealth(
+  value: unknown
+): Readonly<Record<string, 'ok' | 'invalid'>> {
+  if (!value || typeof value !== 'object') return {}
+  const out: Record<string, 'ok' | 'invalid'> = {}
+  for (const [providerId, state] of Object.entries(value as Record<string, unknown>)) {
+    if (state === 'ok' || state === 'invalid') out[providerId] = state
+  }
+  return out
 }
