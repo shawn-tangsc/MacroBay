@@ -10,9 +10,7 @@ export const dailyBriefingText = {
     noValue: '—',
     // 数值位缺数时说清缺的是哪一样：把变化率印在绝对值的位置上，读者会把它当规模。
     closeMissing: '这一期没有存收盘价',
-    aumMissing: '本版未采集基金规模',
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
-    aumUnavailable: '这一格这次没有取到数据',
     // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
     indexProxy: '（QQQ 永续代理）',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
@@ -55,7 +53,7 @@ export const dailyBriefingText = {
     // not direction, and the level/value colour rule has no entry for it.
     amplitude: '振幅 {value}',
     rowCurrent: '当前 {value}',
-    rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC（24h 涨跌）', eth: 'ETH（24h 涨跌）', index: '纳指（24h 涨跌）', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
+    rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC（24h 涨跌）', eth: 'ETH（24h 涨跌）', index: '纳指', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
     empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
     newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
     macroEmptyCodes: { 'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
@@ -286,8 +284,6 @@ export const dailyBriefingText = {
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
     closeMissing: 'This edition stored no close',
-    aumMissing: 'Fund size is not collected in this version',
-    aumUnavailable: 'This cell received no data this time',
     indexProxy: ' (QQQ perpetual proxy)',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
@@ -320,7 +316,7 @@ export const dailyBriefingText = {
     rowTotal: 'Total {value}',
     amplitude: 'Amplitude {value}',
     rowCurrent: 'Current {value}',
-    rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC (24h change)', eth: 'ETH (24h change)', index: 'Nasdaq (24h change)', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
+    rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC (24h change)', eth: 'ETH (24h change)', index: 'Nasdaq', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
     empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
     newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
     macroEmptyCodes: { 'past-24h-no-high-impact-release': 'No high-impact release in the past 24 hours', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },

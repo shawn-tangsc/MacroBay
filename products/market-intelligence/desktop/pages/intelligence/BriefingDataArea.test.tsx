@@ -653,6 +653,10 @@ describe('a level the document does not carry is a dash with a reason, never a m
     })
     const proxyCell = proxy.querySelector('[data-reading="nasdaq"]')!
     expect((proxyCell.textContent?.match(/QQQ 永续代理/g) ?? [])).toHaveLength(1)
+    // The block already says "past 24 hours": repeating the window on the row is noise, but "proxy" is
+    // not — it says the number is not the Nasdaq's own.
+    expect(proxyCell.textContent).not.toContain('24h')
+    expect(proxyCell.textContent).not.toContain('涨跌')
 
     await act(async () => root?.unmount())
     root = undefined
@@ -668,7 +672,7 @@ describe('a level the document does not carry is a dash with a reason, never a m
     expect(stable?.textContent).not.toContain(text.noValue)
   })
 
-  it('leads the ETF cell with the net flow and keeps the size slot a dash with its reason', async () => {
+  it('prints the net flow as the ETF cell\'s only number, with no dash and no explanation', async () => {
     const host = await render((doc) => {
       const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: { number: number; format: string } }
       etf.value = { number: -398_600_000, format: 'flow-usd' }
@@ -679,9 +683,9 @@ describe('a level the document does not carry is a dash with a reason, never a m
     expect(cell.querySelector('b')?.textContent)
       .toBe(formatBriefingValue({ number: -398_600_000, format: 'flow-usd' }, text.noValue, 'zh-CN'))
     expect(cell.querySelector('b')?.getAttribute('data-tone')).toBe('down')
-    expect(cell.textContent).toContain(`${text.noValue} ${text.aumMissing}`)
-    // One dash in the cell: the size slot. Two would leave the reader guessing which number is missing.
-    expect((cell.textContent ?? '').split(text.noValue).length - 1).toBe(1)
+    // The size this version does not collect is our gap, not the reader's: it takes no slot and no line.
+    expect(cell.textContent).not.toContain(text.noValue)
+    expect(cell.querySelectorAll('small')).toHaveLength(0)
   })
 })
 
@@ -729,53 +733,3 @@ describe('the dial has four colours and at most three arcs', () => {
   })
 })
 
-describe('three kinds of missing are three sentences', () => {
-  async function renderEtf(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
-    const doc = documentWithData()
-    mutate(doc)
-    const host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => root!.render(createElement(BriefingDataArea, {
-      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
-      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
-    })))
-    return host
-  }
-
-  it('separates "not collected" from "not received", and marks a stale one', async () => {
-    const fresh = await renderEtf((doc) => {
-      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: { number: number; format: string } }
-      etf.value = { number: -398_600_000, format: 'flow-usd' }
-    })
-    const freshText = fresh.querySelector('[data-reading="etf-btc"]')!.textContent!
-    expect(freshText).toContain(text.aumMissing)
-    expect(freshText).not.toContain(text.aumUnavailable)
-
-    await act(async () => root?.unmount())
-    root = undefined
-    const unavailable = await renderEtf((doc) => {
-      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: unknown; state: string }
-      etf.value = null
-      etf.state = 'unavailable'
-    })
-    const unavailableText = unavailable.querySelector('[data-reading="etf-btc"]')!.textContent!
-    // "We did not collect it" is our omission; "no data this time" is the reading's. Printing the first
-    // sentence for the second case blames the product for the venue's silence.
-    expect(unavailableText).toContain(text.aumUnavailable)
-    expect(unavailableText).not.toContain(text.aumMissing)
-
-    await act(async () => root?.unmount())
-    root = undefined
-    const stale = await renderEtf((doc) => {
-      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { state: string; valueBasis?: string }
-      etf.state = 'stale'
-      etf.valueBasis = 'last-close'
-    })
-    const staleCell = stale.querySelector('[data-reading="etf-btc"]')!
-    // A stale row keeps the size sentence but wears the stale marker: same fact, different claim.
-    expect(staleCell.querySelector('.mi-brief-poster__stale')).not.toBeNull()
-    expect(staleCell.textContent).toContain(text.aumMissing)
-  })
-})

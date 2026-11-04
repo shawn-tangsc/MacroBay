@@ -133,14 +133,12 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     // (which this version does not collect) in front of it hid the only figure the row has. The size
     // slot keeps its dash and its reason underneath, and the flow is tinted by its sign like any other
     // signed change.
-    const flow = row.value === null ? text.noValue : formatBriefingValue(row.value, text.noValue, locale)
+    // One number, and nothing explaining it: the size this version does not collect is our own gap, not
+    // something the reader can act on, so it does not take a line on the sheet.
     const flowValue = row.value?.number
     return {
-      primary: flow,
-      ...(flowValue === undefined || flowValue === 0 ? {} : { primaryTone: flowValue > 0 ? 'up' as const : 'down' as const }),
-      // Three cases, three sentences: a missing reading says so, a stale one carries the stale
-      // marker from `fallbackLabel`, and only a fresh row can say "this version does not collect it".
-      note: `${text.noValue} ${row.value === null ? text.aumUnavailable : text.aumMissing}`
+      primary: row.value === null ? text.noValue : formatBriefingValue(row.value, text.noValue, locale),
+      ...(flowValue === undefined || flowValue === 0 ? {} : { primaryTone: flowValue > 0 ? 'up' as const : 'down' as const })
     }
   }
   return row.change
