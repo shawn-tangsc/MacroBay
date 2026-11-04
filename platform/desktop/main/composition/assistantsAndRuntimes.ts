@@ -10,6 +10,7 @@ import {
 } from '../../../ai/agent-platform/productTools'
 import { createAssistantChatRuntimeService } from '../../../ai/assistant-platform/runtime/AssistantChatRuntimeService'
 import { AssistantTemplateRegistry } from '../../../ai/assistant-platform/library/AssistantTemplateRegistry'
+import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { AssistantLibraryService } from '../../../ai/assistant-platform/library/AssistantLibraryService'
 import { platformAssistantTemplates } from '../../../ai/assistant-platform/library/platformAssistantTemplates'
 import { AssistantTopicNamingService } from '../../../ai/assistant-platform/naming/AssistantTopicNamingService'
@@ -323,6 +324,11 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   })
 
   const assistantChatRuntime = createAssistantChatRuntimeService({
+    // 凭据判定信号：进程级依赖，**只在这里注入一次**（AI 运行时不许 import 通知包）。
+    // 请求路径上不携带；翻转去重交给 `reportProviderCredential` 自己的 changed。
+    onProviderCredentialSignal: (input) => {
+      void getNotificationRuntime().reportProviderCredential(input)
+    },
     repos: assistantRepositories,
     getProviderState: providerStore.getState,
     fetch: getPlatformFetch(),

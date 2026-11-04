@@ -1,5 +1,7 @@
 import { resolveModelChatProtocol, type ModelChatProtocol } from '../providers/modelChatProtocol'
+import { classifyHttpFailure } from '../providers/providerFailureMapping'
 import { ProviderRuntimeFailureError, ProviderRuntimeFailurePolicy } from '../providers/modelProviderTypes'
+import { ChatProtocolFailureError } from './chatProtocolFailure'
 import type { ProviderChatEndpoint } from '../providers/modelProviderTypes'
 import { resolveProviderChatBase } from '../providers/providerChatEndpoints'
 import { requestResponsesChatCompletion } from './responsesChatClient'
@@ -41,7 +43,17 @@ export type ConfiguredChatProtocolRequest = {
   tools?: ChatProtocolTool[]
   executeTool?: (call: ChatProtocolToolCall) => Promise<ChatProtocolToolResult>
   maxToolCalls?: number
+  /**
+   * 凭据判定信号（可选，默认为空 = 行为与之前完全一致）。
+   *
+   * 只把 `classifyHttpFailure()` 的**已有结论**翻成一个事实：`http_401`/`http_403` → `invalid`，
+   * 请求成功 → `ok`，**其余一律不报**（超时、代理、限流不是凭据问题，报出去就是误报）。
+   * 翻转去重不在这一层做——`reportProviderCredential` 自己的 `changed` 就是唯一判据。
+   */
+  onProviderCredentialSignal?: (input: { providerId: string; state: 'ok' | 'invalid' }) => void
 }
+
+let missingProviderIdReported = false
 
 export async function requestConfiguredChatProtocolCompletion(
   input: ConfiguredChatProtocolRequest
@@ -72,14 +84,36 @@ export async function requestConfiguredChatProtocolCompletion(
     ...(input.onDelta ? { onDelta: input.onDelta } : {})
   }
 
+  const signal = input.onProviderCredentialSignal
+  // 正常链路里 providerId 一定在；缺了说明传参有 bug——每进程只留一次痕迹，别每次请求刷日志。
+  if (signal && !input.providerId && !missingProviderIdReported) {
+    missingProviderIdReported = true
+    console.warn('provider-credential-signal: providerId is missing; credential health is not reported')
+  }
+  const finish = async (run: () => Promise<ChatProtocolResult>): Promise<ChatProtocolResult> => {
+    try {
+      const result = await run()
+      if (signal && input.providerId) signal({ providerId: input.providerId, state: 'ok' })
+      return result
+    } catch (error) {
+      if (signal && error instanceof ChatProtocolFailureError && error.evidence.httpStatus !== undefined) {
+        const code = classifyHttpFailure(error.evidence.httpStatus, error.evidence.summary)
+        if ((code === 'http_401' || code === 'http_403') && input.providerId) {
+          signal({ providerId: input.providerId, state: 'invalid' })
+        }
+      }
+      throw error
+    }
+  }
+
   if (resolved.protocol === 'responses') {
-    return requestResponsesChatCompletion({
+    return finish(() => requestResponsesChatCompletion({
       ...shared,
       ...(input.tools?.length ? { tools: input.tools } : {}),
       ...(input.executeTool ? { executeTool: input.executeTool } : {}),
       ...(input.maxToolCalls === undefined ? {} : { maxToolCalls: input.maxToolCalls })
-    })
+    }))
   }
-  if (resolved.protocol === 'messages') return requestMessagesChatCompletion(shared)
-  return requestGeminiChatCompletion(shared)
+  if (resolved.protocol === 'messages') return finish(() => requestMessagesChatCompletion(shared))
+  return finish(() => requestGeminiChatCompletion(shared))
 }

@@ -70,7 +70,7 @@ export async function requestAssistantChatCompletion(
         ...(input.onDelta ? { onDelta: input.onDelta } : {}),
         ...(input.tools?.length ? { tools: toChatProtocolTools(input.tools) } : {}),
         ...(input.executeTool ? { executeTool: toChatProtocolToolExecutor(input.executeTool) } : {}),
-        ...(input.maxToolCalls === undefined ? {} : { maxToolCalls: input.maxToolCalls })
+        ...(input.maxToolCalls === undefined ? {} : { maxToolCalls: input.maxToolCalls }),
       })
       if (!result) throw new ProviderRuntimeFailureError(ProviderRuntimeFailurePolicy.configurationRequired)
       const messageParts = toAssistantMessageParts(result.messageParts)
