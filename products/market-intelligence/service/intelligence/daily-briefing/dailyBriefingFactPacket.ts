@@ -80,6 +80,12 @@ export type DailyBriefingFactPacket = Readonly<{
   policyPath?: import('../policy-path/policyPathQueryService').PolicyPathReading
   market: Readonly<{
     crossAsset?: CrossAssetSnapshot
+    /**
+     * Why the cross-asset read came back empty, when it did: `not-wired`, `threw:<message>` or
+     * `rejected:<field>`. In-memory only — it reaches the agent's gap sentence, never the stored
+     * document, so no schemaVersion moves.
+     */
+    crossAssetFailure?: string
     macroMarket?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroMarketSnapshot']>>
     macroRates?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroRatesSnapshot']>>
   }>

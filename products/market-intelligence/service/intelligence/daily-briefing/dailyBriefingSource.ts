@@ -35,7 +35,8 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryMacroHistoryAsOf'
     | 'queryMacroRatesSnapshot'
     | 'queryMacroEconomicCalendarMonth'
-    | 'queryMarketCalendarMonth'>
+    | 'queryMarketCalendarMonth'
+    | 'getCrossAssetQueryFailure'>
   news: NewsQuery
   profiles: Pick<SourceProfileStore, 'listProfiles'>
   policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
@@ -86,6 +87,9 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         ...(policyPath ? { policyPath } : {}),
         market: Object.freeze({
           ...(crossAsset ? { crossAsset } : {}),
+          ...(!crossAsset && deps.publicQuery.getCrossAssetQueryFailure?.()
+            ? { crossAssetFailure: deps.publicQuery.getCrossAssetQueryFailure() ?? undefined }
+            : {}),
           ...(macroMarket ? { macroMarket } : {}),
           ...(macroRates ? { macroRates } : {})
         }),

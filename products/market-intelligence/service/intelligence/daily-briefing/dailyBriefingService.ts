@@ -26,6 +26,7 @@ import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBrie
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
+import { withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
@@ -441,6 +442,9 @@ export function createDailyBriefingService(deps: Readonly<{
       recorder.end('candidates', 'failed', { failureCode: 'build-failed' })
       return fail('build-failed')
     }
+    // The cross-asset read's named reason reaches the reader through the conclusion's own gap list:
+    // same field, one more sentence. In memory only, so the stored shape does not move.
+    document = withCrossAssetFailureGap(document, packet.market.crossAssetFailure, input.locale)
     // A pool above the per-class budget fails before any editorial work or write: the builder caps
     // its rendered sections, and a capped selection would silently stand in for the whole day.
     if (candidateOverflow(packet, document)) {
