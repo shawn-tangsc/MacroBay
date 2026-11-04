@@ -1,6 +1,7 @@
 import { Button } from 'antd'
 
 import { DisabledHint } from '@platform/ui/components/disabled-hint'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushState } from './dailyBriefingPushWiring'
@@ -32,9 +33,11 @@ export function BriefingPushToPhoneButton({ state, text, onPush, onRetry }: Brie
   const blocked = state.kind === 'disabled' ? state.reason : undefined
   const failed = state.kind === 'failed' ? state.reason : undefined
 
+  // The platform's own button and its own spinner: no colour, no size, no rotation of our own — the
+  // waiting state is the same one every other control in the app shows.
   const button = <Button
     disabled={sending || blocked !== undefined}
-    loading={sending}
+    icon={sending ? <LoadingSpinner size="sm" /> : undefined}
     onClick={failed === undefined ? onPush : onRetry}
     type="text">
     {sending ? text.sending : text.button}
