@@ -1777,13 +1777,23 @@ it('keeps the edition readable and reports a run in the right column', async () 
   expect(action.className).toContain('ant-btn-loading')
   expect(action.getAttribute('aria-label')).toBe(text.generationProgress.workingHint)
 
+  const replaced = briefingDocument('2026-10-30', '重新生成版')
   await act(async () => {
-    settle({ state: 'available', document: briefingDocument('2026-10-30', '重新生成版') })
+    settle({
+      state: 'available',
+      document: {
+        ...replaced,
+        provenance: { ...replaced.provenance, generationTrace: generationTraceFixture('success') } as typeof replaced.provenance
+      }
+    })
     await Promise.resolve(); await Promise.resolve()
   })
-  // 3b. Success replaces the body with the new edition.
+  // Success replaces the body with the new edition, and the column reports that attempt's steps.
   expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('重新生成版')
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).not.toContain('ant-btn-loading')
+  const settledRows = [...dom.querySelectorAll<HTMLElement>('[data-briefing-detail] [data-briefing-stage-row]')]
+  expect(settledRows).toHaveLength(9)
+  expect(settledRows.every((row) => row.getAttribute('data-stage-state') === 'done')).toBe(true)
 })
 
 it('reports a run that is already in flight in the right column, step by step', async () => {
