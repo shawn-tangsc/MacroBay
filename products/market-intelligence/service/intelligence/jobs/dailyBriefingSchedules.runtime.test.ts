@@ -78,4 +78,53 @@ describe('per-period schedules against the real job runtime', () => {
     expect(result.paused).toEqual(['asia-open'])
     expect(runtime.listSchedules().map((definition) => definition.id)).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`])
   })
+
+  it('re-arms a period whose time moved: remove first, then set, and only one definition', async () => {
+    runtime = createJobRuntime()
+    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00')]).getPeriods())
+    expect(runtime.listSchedules()[0]?.trigger).toMatchObject({ expression: '0 8 * * *' })
+
+    const calls: string[] = []
+    const spied = {
+      setSchedule: (definition: Parameters<JobRuntime['setSchedule']>[0]) => { calls.push(`set:${definition.id}`); runtime!.setSchedule(definition) },
+      removeSchedule: (id: string) => { calls.push(`remove:${id}`); runtime!.removeSchedule(id) },
+      listSchedules: () => runtime!.listSchedules()
+    }
+    // A day has one 08:00 trigger. Updating in place would leave the old one armed as well.
+    applyDailyBriefingSchedules(spied, await settingsWith([period('default', '09:00')]).getPeriods())
+
+    const definitionId = `${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`
+    expect(calls).toEqual([`remove:${definitionId}`, `set:${definitionId}`])
+    expect(runtime.listSchedules()).toHaveLength(1)
+    expect(runtime.listSchedules()[0]?.trigger).toMatchObject({ expression: '0 9 * * *' })
+  })
+
+  it('writes nothing when the periods did not change', async () => {
+    runtime = createJobRuntime()
+    const periods = await settingsWith([period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shanghai')]).getPeriods()
+    applyDailyBriefingSchedules(runtime, periods)
+
+    const calls: string[] = []
+    const spied = {
+      setSchedule: (definition: Parameters<JobRuntime['setSchedule']>[0]) => { calls.push(`set:${definition.id}`); runtime!.setSchedule(definition) },
+      removeSchedule: (id: string) => { calls.push(`remove:${id}`); runtime!.removeSchedule(id) },
+      listSchedules: () => runtime!.listSchedules()
+    }
+    const result = applyDailyBriefingSchedules(spied, periods)
+
+    expect(result).toMatchObject({ scheduled: ['default', 'asia-open'], removed: [], paused: [] })
+    expect(calls).toEqual([])
+  })
+
+  it('leaves no definition when there is no period left', async () => {
+    runtime = createJobRuntime()
+    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00')]).getPeriods())
+    expect(runtime.listSchedules()).toHaveLength(1)
+
+    const result = applyDailyBriefingSchedules(runtime, [])
+
+    expect(result.removed).toEqual(['default'])
+    // "All periods off" is an empty schedule table, not a handler that returns early.
+    expect(runtime.listSchedules()).toHaveLength(0)
+  })
 })

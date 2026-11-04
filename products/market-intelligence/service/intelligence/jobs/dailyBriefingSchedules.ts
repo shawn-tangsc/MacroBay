@@ -86,13 +86,35 @@ export function syncDailyBriefingSchedules(
   }
 
   const prefix = `${INTELLIGENCE_DAILY_BRIEFING_JOB}.`
+  const existing = new Map(jobRuntime.listSchedules().map((definition) => [definition.id, definition]))
   const removed: string[] = []
-  for (const definition of jobRuntime.listSchedules()) {
+  for (const definition of existing.values()) {
     if (!definition.id.startsWith(prefix) || desired.has(definition.id)) continue
     jobRuntime.removeSchedule(definition.id)
     removed.push(definition.id.slice(prefix.length))
   }
-  for (const definition of desired.values()) jobRuntime.setSchedule(definition)
+  for (const definition of desired.values()) {
+    // A moved trigger is removed before the replacement is set: setSchedule alone leaves the old
+    // trigger armed under the same id, and that day runs twice. An unchanged period is left alone,
+    // so syncing twice with the same periods still writes nothing.
+    const current = existing.get(definition.id)
+    // An unchanged period is left alone: syncing twice with the same saved periods writes nothing.
+    if (current && sameDefinition(current, definition)) continue
+    if (current && !sameTrigger(current, definition)) jobRuntime.removeSchedule(definition.id)
+    jobRuntime.setSchedule(definition)
+  }
 
   return { scheduled: [...desired.values()].map((definition) => definition.payload.periodId), removed, paused }
+}
+
+/** Same definition? Compared on the fields this module owns; runtime adds its own bookkeeping. */
+function sameDefinition(left: ScheduledJobDefinition, right: ScheduledJobDefinition): boolean {
+  return left.handlerId === right.handlerId && left.title === right.title &&
+    left.audience === right.audience && sameTrigger(left, right) &&
+    JSON.stringify(left.payload) === JSON.stringify(right.payload)
+}
+
+/** Same trigger? A changed hour or zone must re-arm the day instead of leaving the old one armed. */
+function sameTrigger(left: ScheduledJobDefinition, right: ScheduledJobDefinition): boolean {
+  return JSON.stringify(left.trigger) === JSON.stringify(right.trigger)
 }
