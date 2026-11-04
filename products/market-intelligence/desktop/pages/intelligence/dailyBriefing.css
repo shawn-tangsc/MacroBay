@@ -262,3 +262,12 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
 .mi-daily-briefing__push-slot { display: inline-flex; align-items: center; gap: 8px; }
 .mi-daily-briefing__push-toast { color: var(--mi-dashboard-muted); font-size: 12px; line-height: 18px; }
+
+/* The two period dialogs: one row per choice, the verdict under them. The conflict sentence is a
+   warning (the button is already disabled), not an error state — the reader has not done anything
+   wrong yet, they have picked values that collide with a row they already have. */
+.mi-briefing-period-dialog { display: flex; flex-direction: column; gap: 12px; }
+.mi-briefing-period-dialog__field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mi-briefing-period-dialog__field strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
+.mi-briefing-period-dialog__hint, .mi-briefing-period-dialog__note { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
+.mi-briefing-period-dialog__conflict { margin: 0; color: var(--mi-dashboard-caution); font-size: 12px; line-height: 1.6; }

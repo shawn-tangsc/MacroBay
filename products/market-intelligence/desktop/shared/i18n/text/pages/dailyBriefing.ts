@@ -71,6 +71,18 @@ export const dailyBriefingText = {
     visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', scale: '刻度 ±{max}', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
     languageTabs: { label: '简报语言', 'zh-CN': '中文版', 'en-US': '英文版', missing: '今天还没有{language}。切语言只读已经生成的内容，不会自动开始；要这一版，点下面的按钮。', generateMissing: '生成{language}', missingCurrentPeriod: '本期还没有{language}。', missingHistorical: '这一天还没有{language}。这一版还不支持补生成历史日报。' },
     history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', currentPeriod: '本期', currentPeriodNotRun: '本期（{date}）还没有生成过。本期在每天 {time}（{zone}）截止。', gapCount: '{count} 缺口', missing: '缺口', missingRun: '未运行', generationFailed: '生成失败', editionLanguages: { zh: '中文版', en: '英文版', both: '中英版' }, deletePeriod: '删除这一版…', deletePeriodBlocked: '生成中不能删除这一期', rowMenu: '这一期的操作', deleteEdition: { 'zh-CN': '删除中文版…', 'en-US': '删除英文版…' }, deleteNoEdition: '这一期没有可删除的版本', deleteTitle: '删除 {date} 的{language}？', deleteDescription: '这会删掉这一版的正文和它的会话记录，不可撤销；这一期的生成记录和运行历史会保留。', deleteConfirm: '删除', deleteCancel: '取消', deletePartial: '{date} 这一期删了一部分，还有 {count} 条没删掉。', deleteUnknownRemaining: '{date} 这一期删了一部分，无法确认还剩几条。', deleteRetry: '重试删除', deleteDone: '已删除 {date} 的{language}。', deleteNothing: '这一期没有可删除的{language}。', runInterrupted: '上次没跑完，可以再试一次', runFailed: '这次失败', notRunTitle: '这一天还没有生成过', notRunPlanned: '计划生成时刻是每天 {time}（{zone}）。这一天没有版次。', notRunUnknownPlanned: '这一天没有版次，也没有留下生成记录。', backfillBlocked: '这一版还不支持补生成历史日报', backfillAction: '生成这一天', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次', languages: { 'zh-CN': '中文', 'en-US': '英文' }, attempts: { show: '生成记录', hide: '收起生成记录', expand: '展开', collapse: '收起', title: '生成记录', times: '次', nth: '第 {n} 次', succeeded: '成功', failed: '失败', running: '进行中', cleaned: '那一次已清理', none: '还没有生成记录', unreadable: '生成记录读不到' } },
+    periodDialog: {
+      title: '添加一期', hint: '每一期只写一种语言；同一时刻的中英两版是两期，各占一行。',
+      generationTime: '生成时刻', windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
+      conflict: '与已有的一期重复：{time} · {window} · {language}。请改其中一项。',
+      invalid: '这一期的取值无效，请重新选择。', cancel: '取消', save: '保存', saving: '保存中…'
+    },
+    manualRunDialog: {
+      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。',
+      windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
+      repeatable: '同一组合可以重复生成：选同样的时刻、窗口和语言再点一次，会再生成新的一期。',
+      cancel: '取消', run: '生成', running: '生成中…'
+    },
     stateReasons: {
       noBrief: '简报只读取已启用的来源和已发布的结论。打开需要的来源并完成一次采集后，今天的消息、数据和结论会出现在这里。',
       noBriefAt: '还没有生成过日报。生成时间每天 {time}（{zone}）；也可以点「立即生成」马上生成。',
@@ -335,6 +347,18 @@ export const dailyBriefingText = {
     visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', scale: 'Scale ±{max}', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
     languageTabs: { label: 'Brief edition language', 'zh-CN': 'Chinese edition', 'en-US': 'English edition', missing: 'This issue has no {language} yet. Switching language only reads what was already written; use the button below to make this edition.', generateMissing: 'Generate the {language}', missingCurrentPeriod: 'This issue has no {language} yet.', missingHistorical: 'This day has no {language} edition. This version cannot backfill a past day yet.' },
     history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', currentPeriod: 'This issue', currentPeriodNotRun: 'This issue ({date}) has not been generated yet. It closes daily at {time} ({zone}).', gapCount: '{count} gaps', missing: 'Missing', missingRun: 'Not run', generationFailed: 'Generation failed', editionLanguages: { zh: 'Chinese', en: 'English', both: 'Bilingual' }, deletePeriod: 'Delete this edition…', deletePeriodBlocked: 'Cannot delete an issue while it is generating', rowMenu: 'Issue actions', deleteEdition: { 'zh-CN': 'Delete the Chinese edition…', 'en-US': 'Delete the English edition…' }, deleteNoEdition: 'This issue has no edition to delete', deleteTitle: 'Delete the {language} of {date}?', deleteDescription: 'This deletes that edition and its session links. It cannot be undone; this issue’s generation attempts and run history are kept.', deleteConfirm: 'Delete', deleteCancel: 'Cancel', deletePartial: 'Part of the {date} issue was deleted; {count} rows remain.', deleteUnknownRemaining: 'Part of the {date} issue was deleted; the remaining rows cannot be confirmed.', deleteRetry: 'Retry delete', deleteDone: 'Deleted the {language} of {date}.', deleteNothing: 'This issue has no {language} to delete.', runInterrupted: 'Last run did not finish; try again', runFailed: 'This run failed', notRunTitle: 'This day was never generated', notRunPlanned: 'It runs daily at {time} ({zone}). This day has no edition.', notRunUnknownPlanned: 'This day has no edition, and no attempt was recorded.', backfillBlocked: 'This version cannot backfill a past day yet', backfillAction: 'Generate this day', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet', languages: { 'zh-CN': 'Chinese', 'en-US': 'English' }, attempts: { show: 'Attempts', hide: 'Hide attempts', expand: 'Show', collapse: 'Hide', title: 'Generation attempts', times: 'attempts', nth: 'Attempt {n}', succeeded: 'Succeeded', failed: 'Failed', running: 'Running', cleaned: 'That attempt was cleaned up', none: 'No attempts yet', unreadable: 'Attempts could not be read' } },
+    periodDialog: {
+      title: 'Add an issue', hint: 'Each issue writes one language; the Chinese and English editions of the same moment are two issues.',
+      generationTime: 'Generation time', windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
+      conflict: 'This duplicates an existing issue: {time} · {window} · {language}. Change one of them.',
+      invalid: 'One of these values is not valid; choose again.', cancel: 'Cancel', save: 'Save', saving: 'Saving…'
+    },
+    manualRunDialog: {
+      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.',
+      windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
+      repeatable: 'The same combination can be generated again: choose the same time, window and language and press again, and it creates another issue.',
+      cancel: 'Cancel', run: 'Generate', running: 'Generating…'
+    },
     stateReasons: {
       noBrief: 'The brief reads only enabled sources and published conclusions. Open the sources you need and let one collection finish; today’s messages, numbers and conclusion will appear here.',
       noBriefAt: 'No brief has been generated yet. It runs daily at {time} ({zone}); or use “Generate now” to make today’s edition immediately.',

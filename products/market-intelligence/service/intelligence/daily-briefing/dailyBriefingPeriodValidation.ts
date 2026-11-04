@@ -11,37 +11,15 @@ import {
   type BriefingPeriodOrigin
 } from '../../../contracts/dailyBriefingPeriod'
 
-/** Which value a draft has wrong. The UI names the field; no sentence is built here. */
-export type BriefingPeriodDraftIssue = 'generation-time' | 'window-hours' | 'language'
+import {
+  briefingPeriodConflict,
+  briefingPeriodDraftIssue,
+  type BriefingPeriodDraftIssue
+} from '../../../contracts/dailyBriefingPeriod'
 
-/**
- * The three values a period may carry, checked against the closed vocabularies the rest of the
- * brief already uses. An hour outside the allowed table is not a preference to store and repair
- * later — it is a period the scheduler would never fire.
- */
-export function briefingPeriodDraftIssue(draft: Readonly<{ generationTime: unknown; windowHours: unknown; language: unknown }>): BriefingPeriodDraftIssue | undefined {
-  if (!isDailyBriefingGenerationTime(draft.generationTime)) return 'generation-time'
-  if (!isDailyBriefingWindowHours(draft.windowHours)) return 'window-hours'
-  if (!isDailyBriefingLocale(draft.language)) return 'language'
-  return undefined
-}
-
-/**
- * The row a draft would duplicate, or `undefined` when it is free.
- *
- * Duplicate means the same (hour, window, language): the same edition written twice. The conflicting
- * row is returned whole rather than as a code, because "已被占用" without saying by which row leaves
- * the reader guessing which of their periods to change. Editing a period ignores itself, otherwise
- * saving an untouched row would collide with the row being saved.
- */
-export function briefingPeriodConflict(
-  periods: readonly BriefingPeriod[],
-  draft: BriefingPeriodDraft,
-  ignoringId?: string
-): BriefingPeriod | undefined {
-  const key = briefingPeriodTriple(draft)
-  return periods.find((period) => period.id !== ignoringId && briefingPeriodTriple(period) === key)
-}
+// Re-exported so the service keeps one import site for the period rules; the rules themselves live
+// in the contract, where the renderer can enforce the same rule instead of a second copy.
+export { briefingPeriodConflict, briefingPeriodDraftIssue, type BriefingPeriodDraftIssue }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
