@@ -20,6 +20,10 @@ export const dailyBriefingText = {
     citationSources: { macroCalendar: '宏观日历', news: '新闻', analysis: '分析证据' },
     countries: { US: '美国', EU: '欧元区', EZ: '欧元区', DE: '德国', FR: '法国', GB: '英国', JP: '日本', CN: '中国' },
     policyOutcomes: { 'no-change': '维持利率', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp+', 'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp+' },
+    // Which meeting these odds belong to, and how far away it is. Without the month a reader cannot
+    // tell 12 月 from 3 月, and the sheet pairs the move with the countdown on one line.
+    policyOutcomeLead: '{month} 月{outcome}',
+    policyDaysAway: '{days} 天',
     comparison: { label: '较上一版', sameDirection: '方向未变', directionChanged: '方向由 {from} 转为 {to}', funding: '资金费率 BTC {value}', stablecoin: '稳定币 {value}', etf: '美国比特币现货基金 {value}', newMacro: '新增 {count} 条宏观事件' },
     groups: { market: '行情', funds: '资金', sentiment: '情绪' },
     tiers: { must: '重点', support: '补充', reference: '参考' },
@@ -278,6 +282,8 @@ export const dailyBriefingText = {
     citationSources: { macroCalendar: 'Macro calendar', news: 'News', analysis: 'Analysis evidence' },
     countries: { US: 'United States', EU: 'Euro area', EZ: 'Euro area', DE: 'Germany', FR: 'France', GB: 'United Kingdom', JP: 'Japan', CN: 'China' },
     policyOutcomes: { 'no-change': 'No change', 'hike-25': 'Hike 25bp', 'hike-50-plus': 'Hike 50bp+', 'cut-25': 'Cut 25bp', 'cut-50-plus': 'Cut 50bp+' },
+    policyOutcomeLead: '{outcome} in {month}',
+    policyDaysAway: '{days} days',
     comparison: { label: 'vs previous edition', sameDirection: 'Direction unchanged', directionChanged: 'Direction turned from {from} to {to}', funding: 'BTC funding {value}', stablecoin: 'Stablecoins {value}', etf: 'US spot Bitcoin fund {value}', newMacro: '{count} new macro events' },
     groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
     tiers: { must: 'Must', support: 'Support', reference: 'Reference' },

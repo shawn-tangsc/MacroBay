@@ -227,24 +227,31 @@
 .mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
 /* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
    of the gauge, because only the svg had an explicit position. */
-.mi-brief-poster__policy-card { position: relative; flex: 1 1 0; min-width: 0; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 10px; background: #f8ecd2; border-color: #e8d3a8; }
+/* Three stacked rows, as the sheet has them: heading across the card, dial beside two lines of reading,
+   bottom line across the card. The content box is 89 (114 − 23 padding − 2 border), so the bottom line
+   must stay on one line: 16 + 2 + 54 + 2 + 14 = 88. */
+.mi-brief-poster__policy-card { position: relative; flex: 1 1 0; min-width: 0; height: 114px; padding: 10px 14px 13px; display: flex; flex-direction: column; gap: 2px; background: #f8ecd2; border-color: #e8d3a8; }
 /* The accent bar: inside the shell, inset from both ends, never a border (that would change the height). */
 .mi-brief-poster__policy-card::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #c2410c; }
-.mi-brief-poster__policy-title { color: #8a5a12; }
-.mi-brief-poster__policy-dial { position: relative; grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
-.mi-brief-poster__policy-copy { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.mi-brief-poster__policy-gauge { width: 88px; height: 54px; display: block; }
+.mi-brief-poster__policy-title { flex: 0 0 auto; font-size: 11px; line-height: 1.45; color: #8a5a12; }
+.mi-brief-poster__policy-row { flex: 0 0 54px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mi-brief-poster__policy-dial { position: relative; flex: none; width: 88px; height: 54px; }
+.mi-brief-poster__policy-copy { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.mi-brief-poster__policy-gauge { display: block; width: 88px; height: 54px; }
 .mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
 .mi-brief-poster__gauge-event { stroke: #c2410c; stroke-width: 8; }
 .mi-brief-poster__gauge-rest { stroke: #a89f8d; stroke-width: 8; }
 .mi-brief-poster__gauge-other { stroke: #d8cfbd; stroke-width: 8; }
-.mi-brief-poster__policy-outcomes { font-size: 9.5px; color: #6b695f; }
-.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 26px; width: 88px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The ring's own number: 16px/750 sits inside a 60px bore without touching the arc. `top: 25` with
+   line-height 1 puts it just above the chord, which is the "inside the ring" position of the sheet. */
+.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 25px; width: 88px; height: 16px; line-height: 1; text-align: center; font-size: 16px; font-weight: 750; color: #7a4c10; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; white-space: nowrap; }
-.mi-brief-poster__policy-outcome { font-size: 11px; font-weight: 600; white-space: nowrap; }
+.mi-brief-poster__policy-outcome { font-size: 11px; color: #1b1d18; white-space: nowrap; }
 /* One line: the shares and the target range belong to the same sentence in the sheet. */
-.mi-brief-poster__policy-bottom { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 9.5px; color: #6b695f; }
+/* One line, never wrapped: a second line would push the card past 114 and clip it. */
+.mi-brief-poster__policy-bottom { flex: 0 0 auto; display: flex; align-items: baseline; gap: 0; white-space: nowrap; font-size: 9.5px; line-height: 1.45; color: #6b695f; }
 .mi-brief-poster__policy-range { white-space: nowrap; }
+.mi-brief-poster__policy-outcomes { white-space: nowrap; }
 /* Two blocks, each a titled table of cells: one row of three for the money, three columns by two lines
    for markets and sentiment. Fixed columns, so a missing cell is a hole rather than a stretched row. */
 .mi-brief-poster__funds-block, .mi-brief-poster__market-block { display: flex; flex-direction: column; gap: 2px; }
@@ -252,8 +259,10 @@
 .mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
 .mi-brief-poster__figure-line + .mi-brief-poster__figure-line { border-top: 1px solid #ded4c2; }
 .mi-brief-poster__figure { display: flex; align-items: baseline; gap: 6px; min-height: 20px; padding: 2px 0; white-space: nowrap; font-size: 11px; overflow: hidden; }
+/* The name gives way, the number never does: a truncated label still says which row it is, a clipped
+   number is simply wrong. The value also never wraps — a wrapped cell breaks the grid's line height. */
 .mi-brief-poster__figure-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #6b695f; }
-.mi-brief-poster__figure b { font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure b { flex: 0 0 auto; margin-left: auto; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__figure small { color: #6b695f; }
 .mi-brief-poster__figure[data-tone='positive'] b { color: #1f5b32; }
 .mi-brief-poster__figure[data-tone='negative'] b { color: #8f2a1d; }

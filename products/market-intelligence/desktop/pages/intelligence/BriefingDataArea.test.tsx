@@ -364,7 +364,8 @@ describe('the cards place their parts in their own columns', () => {
     expect(leads).toHaveLength(2)
     for (const lead of leads) {
       expect(lead.querySelector('.mi-brief-poster__price-value')).not.toBeNull()
-      expect(lead.querySelector('.mi-brief-poster__price-observed')).not.toBeNull()
+      // No instant in the cell: the block stamps its observation once at the heading.
+      expect(lead.querySelector('.mi-brief-poster__price-observed')).toBeNull()
       // The plot is a sibling of the text column, never inside it.
       expect(lead.querySelector('[data-briefing-price-area]')).toBeNull()
       expect(lead.parentElement!.querySelector(':scope > [data-briefing-price-area]')).not.toBeNull()
@@ -382,14 +383,18 @@ describe('the cards place their parts in their own columns', () => {
     expect(dial.querySelector('.mi-brief-poster__policy-probability')).not.toBeNull()
     // The title used to be auto-placed into this very cell, on top of the gauge.
     expect(dial.querySelector('.mi-brief-poster__policy-title')).toBeNull()
+    const card = dom.querySelector('[data-briefing-policy-card]')!
+    // The heading spans the card, above both columns; the copy column starts with what is priced.
+    expect(card.firstElementChild!.className).toContain('policy-title')
+    expect(dial.querySelector('.mi-brief-poster__policy-title')).toBeNull()
     const copy = dom.querySelector('[data-briefing-policy-copy]')!
-    expect(copy.querySelector('.mi-brief-poster__policy-title')).not.toBeNull()
-    expect(copy.querySelectorAll('[data-briefing-policy-outcomes]')).toHaveLength(1)
+    // The shares and the range are one line across the card's foot, not a line of the reading column.
+    expect(copy.querySelector('[data-briefing-policy-outcomes]')).toBeNull()
+    expect(card.querySelectorAll('[data-briefing-policy-outcomes]')).toHaveLength(1)
     // The reading order is the sheet's: title, what the market prices, the move and the meeting, then
     // the bottom row of shares and the range — the range never floats above the outcome.
     const order = [...copy.children].map((node) => node.className.replace('mi-brief-poster__', ''))
-    expect(order.slice(0, 3)).toEqual(['policy-title', 'policy-outcome', 'policy-change'])
-    expect(order.at(-1)).toBe('policy-bottom')
+    expect(order).toEqual(['policy-outcome', 'policy-change'])
   })
 })
 
@@ -411,6 +416,20 @@ describe('the rate card says one thing per line', () => {
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
       changeArrows: briefingChangeArrows('zh-CN')
     })))
-    expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp · 2026-12-09')
+    expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp · 12-09 · 35 天')
   })
+})
+
+describe("the rate card's own lines", () => {
+  it('never ends the legend on a separator, and keeps the number inside the dial', async () => {
+    const dom = await render()
+    const legend = dom.querySelector('[data-briefing-policy-outcomes]')!
+    // A separator appended after the last item reads as a sentence that was cut off.
+    expect(legend.textContent!.trim().endsWith('·')).toBe(false)
+    expect(legend.textContent).toBe('维持 20.5% · 其余 2%')
+    // The number belongs to the dial; a DOM cannot see where it lands, but it can see who owns it.
+    const probability = dom.querySelector('[data-briefing-policy-probability]')!
+    expect(probability.parentElement).toBe(dom.querySelector('[data-briefing-policy-dial]'))
+  })
+
 })

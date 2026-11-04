@@ -163,7 +163,9 @@ export function briefingDataRows(document: DailyBriefingDocument): readonly (Bri
 export function changeLedRowCopy(
   row: BriefingMarketRow | BriefingPulseRow,
   labels: BriefingRowCopyLabels,
-  locale = 'en-US'
+  locale = 'en-US',
+  /** The poster's cell has ~190px: it keeps the headline change and drops the longer windows. */
+  options: Readonly<{ compact?: boolean }> = {}
 ): Readonly<{ primary: string; secondary: string }> | null {
   if (row.id !== 'stablecoin' && row.id !== 'fear-greed') return null
   // Without a level there is no caption, and the normal "no value" row is the honest rendering.
@@ -172,7 +174,9 @@ export function changeLedRowCopy(
   const caption = (row.id === 'stablecoin' ? labels.rowTotal : labels.rowCurrent).replace('{value}', level)
   const reason = row.changeReason ? labels.changeReasons[row.changeReason] ?? '' : ''
   if (!row.change) return Object.freeze({ primary: reason || caption, secondary: reason ? caption : '' })
-  const secondary = row.id === 'stablecoin'
+  // A cell shows one comparison; the 7d/30d windows stay in the copied text, where there is room and
+  // where the reader can read them as a sentence.
+  const secondary = row.id === 'stablecoin' && !options.compact
     ? [caption, ...(row.auxiliaryChanges ?? []).map((change) => rowChangeText(change, labels, locale))].join(' · ')
     : caption
   return Object.freeze({ primary: rowChangeText(row.change, labels, locale, row), secondary })

@@ -32,6 +32,10 @@ export type BriefingDataGroups = Readonly<{
   funds: readonly (BriefingMarketRow | BriefingPulseRow)[]
   /** The policy card, when the edition carries one. */
   policyPath: DailyBriefingDocument['data']['policyPath']
+  /** The edition's cutoff: a block stamps it once, and a row prints its own time only when it differs. */
+  windowEnd: string
+  /** The issue day, which the rate card's countdown counts from. */
+  editionDate: string
   /** Open interest and funding: shown in the leverage block, never in the readings line. */
   leverage: DailyBriefingDocument['data']['leverage']
   /** The funding rows themselves: the leverage block prints the rate from here, nobody re-reads `funds`. */
@@ -65,6 +69,8 @@ export function briefingDataGroups(document: DailyBriefingDocument): BriefingDat
       ...funds.filter((row) => row.id === 'stablecoin')
     ]),
     policyPath: document.data.policyPath,
+    windowEnd: document.edition.windowEnd,
+    editionDate: document.edition.date,
     leverage: document.data.leverage,
     funding: Object.freeze(document.data.funds.filter((row) => row.visibility !== 'hidden' && LEVERAGE_ONLY_FUND_IDS.has(row.id)))
   })

@@ -1,5 +1,6 @@
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
-import { changeLedRowCopy } from '../../../contracts/dailyBriefingMarkdown'
+import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
+import { formatBriefingChange } from '../../../contracts/dailyBriefingFormat'
 import type { BriefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import type { BriefingMarketRow, BriefingPulseRow } from '../../../contracts/dailyBriefing'
 import type { PolicyPathOutcome } from '../../../contracts/policyPath'
@@ -33,7 +34,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
     {/* One row, three cards: BTC, ETH, then the rate card — the order the approved sheet has. */}
     <div className="mi-brief-poster__card-row" data-briefing-card-row="true">
       {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}
-      {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} words={policyWords} /> : null}
+      {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} locale={locale} formatTime={formatTime} words={policyWords} windowEnd={groups.windowEnd} editionDate={groups.editionDate} /> : null}
     </div>
     {groups.funds.length > 0 ? <div className="mi-brief-poster__funds-block" data-briefing-funds-row="true">
       <span className="mi-brief-poster__block-title">{text.groups.funds}</span>
@@ -76,24 +77,37 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
 }
 
 /**
- * One cell of the money or market line: its name, its number and the comparison behind it.
- *
- * One renderer for both lines, because a cell that looks different in each of them makes the reader
- * work out whether that difference means something. ETF amounts sit here too; the tone follows the
- * signed value, and a level (a fund amount, a stablecoin supply) has no sign to colour.
+ * One cell of the money or market line, in the density a cell has room for: a name, one number and at
+ * most one comparison. The stablecoin cell leads with its stock and keeps the day's dollar move; fear
+ * and greed leads with the score and keeps the step since the last release. Everything else is a level
+ * or a move with its window, and no cell prints an instant — the block stamps that once.
  */
-function Figure({ row, text, locale, formatTime }: Readonly<{
+function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): Readonly<{ primary: string; secondary: string }> {
+  const level = formatBriefingValue(row.value, text.noValue, locale)
+  if (row.id === 'stablecoin') {
+    const day = (row.auxiliaryChanges ?? []).find((change) => change.window === '1d' && change.unit === 'usd')
+    const dayText = day && day.unit === 'usd' ? formatBriefingChange({ value: day.value, unit: 'usd' }, locale) : ''
+    return { primary: level, secondary: dayText ? `${text.changeWindows['1d']} ${dayText}` : '' }
+  }
+  if (row.id === 'fear-greed') {
+    if (!row.change) return { primary: level, secondary: row.changeReason ? text.changeReasons[row.changeReason] ?? '' : '' }
+    return { primary: level, secondary: `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim() }
+  }
+  return { primary: level, secondary: keyMeta(row, text, locale) }
+}
+
+function Figure({ row, text, locale }: Readonly<{
   row: BriefingMarketRow | BriefingPulseRow
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
-  const copy = changeLedRowCopy(row, text, locale)
   const amplitude = 'amplitude' in row ? row.amplitude : undefined
-  return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
+  const cell = cellCopy(row, text, locale)
+  return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={cell.secondary ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
     <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-    <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
-    <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
+    <b>{cell.primary}</b>
+    {cell.secondary ? <small>{cell.secondary}</small> : null}
     {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
   </span>
 }
@@ -102,11 +116,14 @@ const READING_IDS: Readonly<Record<string, string>> = Object.freeze({
   index: 'nasdaq', dxy: 'dxy', gold: 'gold', us10y: 'ust10y', stablecoin: 'stablecoin', 'fear-greed': 'fear-greed'
 })
 
-function PolicyCard({ policy, text, formatTime, words }: Readonly<{
+function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editionDate }: Readonly<{
   policy: NonNullable<BriefingDataGroups['policyPath']>
+  locale: 'zh-CN' | 'en-US'
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   words: policyGaugeWords
+  windowEnd: string
+  editionDate: string
 }>): React.ReactElement {
   // One source for the number and the arcs: with a distribution both read the same bucket, so the card
   // cannot print 77.5% and draw 77.2°. Without one there is nothing to reconcile and the dial is two
@@ -118,39 +135,63 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
   // The event is already the number in the middle of the dial; the legend only carries the other two,
   // and a zero one is printed anyway — "维持 0.0%" is a fact, a missing line would be an omission.
   const legend = policyGaugeLegend(dial)
-  // Two columns, placed explicitly: the dial on the left, the reading on the right. Automatic placement
-  // put the title into the dial's cell and the copy underneath it — attributes all correct, the printed
-  // card wrong, which is exactly what a DOM without layout cannot catch.
+  const days = countdownDays(editionDate, policy.meetingDate)
   return <div className="mi-brief-poster__card mi-brief-poster__policy-card" data-briefing-policy-card="true">
+    {/* The heading spans the card: the dial below it is the left column, the reading the right. */}
+    <span className="mi-brief-poster__policy-title">{text.sections.policyProbability}</span>
+    <span className="mi-brief-poster__policy-row">
     <span className="mi-brief-poster__policy-dial" data-briefing-policy-dial="true">
       <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
         <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
         {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
       </svg>
-      {/* The ring holds the number and nothing else: "3.4% · 加息 25bp" is twice as wide as the dial
-          and wraps across it, which is how it ended up printed as two lines over the copy. */}
+      {/* The ring is the number's only home: "3.4% · 加息 25bp" is wider than the dial and wrapped across
+          the copy, which is how it came to be printed as two broken lines. */}
       <b className="mi-brief-poster__policy-probability" data-briefing-policy-probability="true">{probability}%</b>
     </span>
     <div className="mi-brief-poster__policy-copy" data-briefing-policy-copy="true">
-      <span className="mi-brief-poster__policy-title">{text.sections.policyProbability}</span>
-      {/* The order is the sheet's: what the market prices, then by how much it moved and for which
-          meeting, then the bottom row of shares and the target range. */}
-      <span className="mi-brief-poster__policy-outcome" data-briefing-policy-outcome="true">{policyOutcomeLabel(policy.outcome, text)}</span>
-      <small className="mi-brief-poster__policy-change">{policy.probabilityChangePp !== undefined
-        ? `${policy.probabilityChangePp > 0 ? '+' : ''}${policy.probabilityChangePp}pp${INDEX_SEPARATOR}${policy.meetingDate}`
-        : policy.meetingDate}</small>
-      <small className="mi-brief-poster__policy-observed">{formatTime(policy.observedAt, 'minute')}</small>
-      <span className="mi-brief-poster__policy-bottom">
-        {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
-          {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
-        </span> : null}
-        <span className="mi-brief-poster__policy-range">{text.sections.policyRange}{' '}
-          {policy.targetLower !== undefined && policy.targetUpper !== undefined
-            ? `${policy.targetLower.toFixed(2)}–${policy.targetUpper.toFixed(2)}%`
-            : text.sections.rangeUnavailable}</span>
-      </span>
+      {/* Which meeting, then how much it moved and how far away that meeting is — the sheet's order. */}
+      <span className="mi-brief-poster__policy-outcome" data-briefing-policy-outcome="true">{outcomeLead(policy.meetingDate, policy.outcome, text, locale)}</span>
+      <small className="mi-brief-poster__policy-change">
+        {policy.probabilityChangePp !== undefined ? <><b>{`${policy.probabilityChangePp > 0 ? '+' : ''}${policy.probabilityChangePp}pp`}</b>{INDEX_SEPARATOR}</> : null}
+        {`${policy.meetingDate.slice(5)}${days === undefined ? '' : `${INDEX_SEPARATOR}${text.policyDaysAway.replace('{days}', String(days))}`}`}
+      </small>
     </div>
+    </span>
+    {/* One line, as the sheet has it: the shares, then the target range, joined and never trailing. */}
+    <span className="mi-brief-poster__policy-bottom">
+      {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
+        {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}</span>).reduce<React.ReactNode[]>((joined, node, index) => (index === 0 ? [node] : [...joined, INDEX_SEPARATOR, node]), [])}
+      </span> : null}
+      {legend.length > 0 ? INDEX_SEPARATOR : null}
+      <span className="mi-brief-poster__policy-range">{text.sections.policyRange}{' '}
+        {policy.targetLower !== undefined && policy.targetUpper !== undefined
+          ? `${policy.targetLower.toFixed(2)}–${policy.targetUpper.toFixed(2)}%`
+          : text.sections.rangeUnavailable}</span>
+    </span>
   </div>
+}
+
+/** `12 月加息 25bp` in Chinese, `Hike 25bp in Dec` in English: the month is the meeting's own. */
+function outcomeLead(meetingDate: string, outcome: string, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
+  const month = monthName(meetingDate, locale)
+  return text.policyOutcomeLead.replace('{month}', month).replace('{outcome}', policyOutcomeLabel(outcome, text))
+}
+
+/** The reader's own month label for the meeting date; an unreadable date falls back to the lead word. */
+function monthName(meetingDate: string, locale: 'zh-CN' | 'en-US'): string {
+  const at = Date.parse(`${meetingDate}T12:00:00.000Z`)
+  if (!Number.isFinite(at)) return ''
+  return new Intl.DateTimeFormat(locale, { month: locale === 'zh-CN' ? 'numeric' : 'short', timeZone: 'UTC' }).format(at)
+}
+
+/** Whole days from the issue day to the meeting; the meeting day itself is zero, never "in 0 days". */
+function countdownDays(editionDate: string, meetingDate: string): number | undefined {
+  const from = Date.parse(`${editionDate}T00:00:00.000Z`)
+  const to = Date.parse(`${meetingDate}T00:00:00.000Z`)
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined
+  const days = Math.round((to - from) / 86_400_000)
+  return days >= 0 ? days : undefined
 }
 
 const GAUGE_CLASS: Readonly<Record<string, string>> = Object.freeze({
@@ -192,7 +233,6 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
         {/* Small, and never toned: amplitude is how much it moved, not which way. */}
         {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
       </span>
-      <small className="mi-brief-poster__price-observed">{formatTime(row.observedAt ?? '', 'minute')}</small>
     </div>
     <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
       <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
@@ -226,6 +266,19 @@ function changeCopy(change: number | undefined, arrows: changeArrowWords, noValu
   const magnitude = `${Math.abs(change).toFixed(1)}%`
   if (arrow) return `${arrow}${magnitude}`
   return `${change < 0 ? '' : '+'}${magnitude}`
+}
+
+/**
+ * Whether two instants fall in the same minute.
+ *
+ * Compared as instants, never as formatted text: a formatter that rounds or is stubbed would make every
+ * pair look equal and silently hide a stamp that really does differ.
+ */
+function sameMinute(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false
+  const a = Date.parse(left)
+  const b = Date.parse(right)
+  return Number.isFinite(a) && Number.isFinite(b) && Math.floor(a / 60_000) === Math.floor(b / 60_000)
 }
 
 /** The last plotted point, for the "now" dot: one dot, at the end of the line, never a marker per point. */

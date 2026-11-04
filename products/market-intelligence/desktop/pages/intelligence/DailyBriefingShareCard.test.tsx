@@ -213,7 +213,7 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toContain(text.sections.policyPath)
   })
 
-  it('leads stablecoins and fear and greed with the change, not the level', async () => {
+  it('leads the money and sentiment cells with their level, and keeps one comparison beside it', async () => {
     const base = briefing()
     const rendered = await render({
       ...base,
@@ -245,12 +245,15 @@ describe('daily brief share card in English', () => {
     })
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
 
-    expect(poster).toContain('1d -0.33%')
+    // The cell leads with the stock and keeps the day's dollar move; the longer windows are the
+    // copied text's, not a cell's.
+    expect(poster).toContain('253B USD')
+    expect(poster).toContain('1d -843.9M USD')
+    expect(poster).not.toContain('7d -0.81%')
+    expect(poster).not.toContain('30d')
+    // Fear and greed leads with the score, then the step since the last release — no date span.
+    expect(poster).toContain('28')
     expect(poster).toContain('1d -2 pts')
-    // The level is the caption, and the longer windows stay visible behind the day move.
-    expect(poster).toContain('Total 253B USD')
-    expect(poster).toContain('7d -0.81%')
-    expect(poster).toContain('Current 28')
   })
 
   it('prints the missing baseline instead of a zero change', async () => {
