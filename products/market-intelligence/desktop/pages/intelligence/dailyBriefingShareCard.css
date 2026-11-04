@@ -291,7 +291,9 @@
 .mi-brief-poster__figure-change b[data-tone='down'] { color: #8f2a1d; }
 /* The band word colours a judgement, not a move. The hexes are the move palette on purpose — one red, not a
    fifth — so the note lives beside them: at this line, 恐惧 red means "fear", not "falling". */
-.mi-brief-poster__figure-band { line-height: 1; }
+/* The judgement word is grey unless the band says otherwise: inheriting the score's body ink made
+   "neutral" look like part of the number instead of a judgement. The two tone rules below override it. */
+.mi-brief-poster__figure-band { line-height: 1; color: #6b695f; }
 .mi-brief-poster__figure-band[data-tone='down'] { color: #8f2a1d; }
 .mi-brief-poster__figure-band[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }

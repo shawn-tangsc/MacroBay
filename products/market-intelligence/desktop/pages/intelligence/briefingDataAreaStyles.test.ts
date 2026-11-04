@@ -116,6 +116,9 @@ describe('the amplitude label lives on the plot, not in the drawing', () => {
 
 describe('the fear-and-greed band word has its own tone', () => {
   it('tints the judgement in the move palette, and nothing else', () => {
+    // Neutral is a judgement too: without its own ink it inherits the score's body colour and reads as
+    // part of the number. The two tone rules below override this one.
+    expect(declaration(rule('.mi-brief-poster__figure-band'), 'color')).toBe('#6b695f')
     expect(declaration(rule(".mi-brief-poster__figure-band[data-tone='down']"), 'color')).toBe('#8f2a1d')
     expect(declaration(rule(".mi-brief-poster__figure-band[data-tone='up']"), 'color')).toBe('#1f5b32')
     // The cell itself still carries no tone: the score keeps the body ink.
