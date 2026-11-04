@@ -20,6 +20,7 @@ import {
   pulseRowMateriality
 } from './dailyBriefingDataSelection'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { briefingPriceCurve, type BriefingPriceCurve } from './dailyBriefingSeries'
 import { previousUsEquityTradingDay, tradingSessionsBehind } from '../macro-calendar/tradingDayCalendar'
 
 const gap: FactImportance = Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'gap' })
@@ -214,9 +215,17 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
   const realTenYear = rates?.state === 'available' || rates?.state === 'empty'
     ? rates.readings.find((reading) => reading.metricKey === 'US_REAL_YIELD_10Y')
     : undefined
+  // Only the two cards that draw one get a curve; the index row has no plot beside it, and a stored
+  // series nobody draws reads as a promise the layout never keeps.
+  const priceCurve = (id: 'btc' | 'eth'): BriefingPriceCurve => briefingPriceCurve({
+    points: cross?.curves?.[id],
+    windowStart: packet.windowStart,
+    windowEnd: packet.windowEnd,
+    windowHours: packet.windowHours
+  })
   return [
-    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }),
-    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }),
+    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }, priceCurve('btc')),
+    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }, priceCurve('eth')),
     crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }),
     macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf, 'fx-move'),
     macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf, 'gold-move'),
@@ -230,7 +239,8 @@ function crossRow(
   labelKey: string,
   snapshot: DailyBriefingFactPacket['market']['crossAsset'],
   asOf: string,
-  rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>
+  rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>,
+  priceCurve?: BriefingPriceCurve
 ): BriefingMarketRow {
   const metric = snapshot?.closedReturns[id]?.['24h']
   const importance: FactImportance = rule.must
@@ -244,11 +254,12 @@ function crossRow(
       state: stale ? 'stale' as const : 'available' as const,
       ...(stale ? { valueBasis: 'snapshot' as const } : {}),
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
-      change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd
+      change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd,
+      ...(priceCurve ?? {})
     })
   }
   if (!snapshot) {
-    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(priceCurve ?? {}) }
   }
   // The 24h pair is unavailable here; keep any persisted curve/last close.
   {
@@ -258,13 +269,13 @@ function crossRow(
     // returned nothing; a missing curve is a gap, not a crash on the way to the row.
     const curve = [...(snapshot.curves?.[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const, ...(priceCurve ?? {}) }
     }
     const last = snapshot.lastClosed?.[id]
     if (last) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const, ...(priceCurve ?? {}) }
     }
-    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(priceCurve ?? {}) }
   }
 }
 

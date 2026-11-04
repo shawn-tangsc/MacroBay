@@ -2,13 +2,11 @@ import type {
   BriefingConclusion,
   BriefingCounterEvidence,
   BriefingMacroItem,
-  BriefingMateriality,
   BriefingNewsItem,
   BriefingNewsSummary,
   BriefingNextItem,
   BriefingNextRelevance,
   BriefingNextRelevanceRole,
-  BriefingPulseRow,
   BriefingTopSignal,
   DailyBriefingDocument,
   DailyBriefingReadingId,
@@ -16,8 +14,8 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
-import { baselineVisibility, leverageMateriality, policyPathMateriality } from './dailyBriefingDataSelection'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
+import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
@@ -34,8 +32,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
-  const policyPathData = buildPolicyPath(packet, input.previous)
-  const leverage = buildLeverage(packet, readings.funds)
+  const policyPathData = buildPolicyPathBlock(packet, input.previous)
+  const leverage = buildLeverageBlock(packet, readings.funds)
   const document: DailyBriefingDocument = Object.freeze({
     // Read from the policy rather than repeating the literals: a version bump that updates only one
     // of the two makes every read look stale, and the brief is regenerated on every poll.
@@ -537,68 +535,4 @@ function surpriseMagnitude(event: Readonly<{ surprise: BriefingMacroItem['surpri
 
 function normalizeTitle(value: string): string {
   return value.trim().toLowerCase().replace(/[\s\p{P}]+/gu, '')
-}
-
-function buildPolicyPath(
-  packet: DailyBriefingFactPacket,
-  previous: DailyBriefingDocument | undefined
-): DailyBriefingDocument['data']['policyPath'] {
-  const policyPath = packet.policyPath
-  const probability = policyPath?.probability
-  if (!policyPath || !probability) return undefined
-  const current = probability.value <= 1 ? probability.value * 100 : probability.value
-  const previousProbability = previous?.data.policyPath?.probability
-  const probabilityChangePp = typeof previousProbability === 'number' && Number.isFinite(previousProbability)
-    ? Math.round((current - previousProbability) * 10) / 10
-    : undefined
-  const materiality = policyPathMateriality({
-    meetingDate: policyPath.meetingDate,
-    outcome: probability.outcome,
-    previousOutcome: previous?.data.policyPath?.outcome,
-    probabilityChangePp,
-    windowEnd: packet.windowEnd
-  })
-  return Object.freeze({
-    state: 'available' as const,
-    meetingDate: policyPath.meetingDate,
-    outcome: probability.outcome,
-    probability: current,
-    observedAt: probability.asOf,
-    ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}),
-    ...(probabilityChangePp !== undefined ? { probabilityChangePp } : {}),
-    materiality,
-    ...baselineVisibility(true)
-  })
-}
-
-function buildLeverage(
-  packet: DailyBriefingFactPacket,
-  funds: readonly BriefingPulseRow[]
-): NonNullable<DailyBriefingDocument['data']['leverage']> | undefined {
-  const positioning = packet.positioning
-  if (!positioning || positioning.state !== 'available') {
-    if (positioning?.state !== 'empty') return undefined
-    // An empty positioning read is a gap, not a flat market: keep the row so the reader sees the
-    // hole instead of a silently complete data section.
-    const gap: BriefingMateriality = Object.freeze({ material: true, reasonCode: 'gap' as const })
-    return Object.freeze({ state: 'unavailable' as const, btc: {}, eth: {}, materiality: gap, ...baselineVisibility(false, true) })
-  }
-  const funding = (id: string) => {
-    const row = funds.find((candidate) => candidate.id === id)
-    return row?.value?.number
-  }
-  const last = (rows: readonly { notionalUsd: number }[]) => rows.at(-1)?.notionalUsd
-  const change = positioning.change
-  const materiality = leverageMateriality({
-    funding: funds,
-    openInterestChange24hPct: { btc: change?.btc.h24Pct, eth: change?.eth.h24Pct }
-  })
-  return Object.freeze({
-    state: 'available' as const,
-    materiality,
-    ...baselineVisibility(true),
-    observedAt: positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt,
-    btc: Object.freeze({ ...(funding('funding-btc') !== undefined ? { fundingRate: funding('funding-btc') } : {}), ...(last(positioning.btc) !== undefined ? { openInterestUsd: last(positioning.btc) } : {}), ...(positioning.change?.btc.h1Pct !== undefined ? { change1hPct: positioning.change.btc.h1Pct } : {}), ...(positioning.change?.btc.h24Pct !== undefined ? { change24hPct: positioning.change.btc.h24Pct } : {}) }),
-    eth: Object.freeze({ ...(funding('funding-eth') !== undefined ? { fundingRate: funding('funding-eth') } : {}), ...(last(positioning.eth) !== undefined ? { openInterestUsd: last(positioning.eth) } : {}), ...(positioning.change?.eth.h1Pct !== undefined ? { change1hPct: positioning.change.eth.h1Pct } : {}), ...(positioning.change?.eth.h24Pct !== undefined ? { change24hPct: positioning.change.eth.h24Pct } : {}) })
-  })
 }

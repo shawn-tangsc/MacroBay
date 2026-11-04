@@ -1,4 +1,7 @@
 import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
+// The policy-path buckets are the same five names the policy block, the drawer and the edition share;
+// one vocabulary, so a stored distribution cannot drift from the one the dial is drawn from.
+import type { PolicyPathDistribution } from './policyPath'
 
 // The policy numbers live in their own module; they are re-exported here so every caller keeps
 // importing this one path, and a schema change cannot ride along with a budget change.
@@ -42,6 +45,10 @@ import type {
   BriefingRowChange,
   BriefingMarketRow,
   BriefingPulseRow,
+  BriefingSeriesPoint,
+  BriefingCurvePoint,
+  BriefingCurveSegment,
+  BriefingCurveReason,
   BriefingNewsPolarity,
   BriefingNewsItem,
   BriefingMacroItem,
@@ -73,6 +80,10 @@ export type {
   BriefingRowChange,
   BriefingMarketRow,
   BriefingPulseRow,
+  BriefingSeriesPoint,
+  BriefingCurvePoint,
+  BriefingCurveSegment,
+  BriefingCurveReason,
   BriefingNewsPolarity,
   BriefingNewsItem,
   BriefingMacroItem,
@@ -169,6 +180,13 @@ export type DailyBriefingDocument = Readonly<{
       observedAt: string
       targetLower?: number
       targetUpper?: number
+      /**
+       * All five priced buckets at the leading outcome's instant, normalized to sum to one. The dial
+       * needs the shares beside the lead probability; a single number cannot say what the rest is
+       * priced at. Absent on editions built before schema 10, and whenever the venue did not publish
+       * a complete distribution.
+       */
+      distribution?: PolicyPathDistribution
       /** Probability change against the previous edition, in percentage points. */
       probabilityChangePp?: number
       materiality?: BriefingMateriality
@@ -178,8 +196,26 @@ export type DailyBriefingDocument = Readonly<{
     leverage?: Readonly<{
       state: 'available' | 'stale' | 'unavailable'
       observedAt?: string
-      btc: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
-      eth: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
+      btc: Readonly<{
+        fundingRate?: number
+        openInterestUsd?: number
+        change1hPct?: number
+        change24hPct?: number
+        /**
+         * The 24-hour open interest series this card's change was measured on, thinned to at most 24
+         * points. Absent on editions built before schema 10, when the read failed, and when fewer than
+         * two points survived — the card's own state tells those apart.
+         */
+        series?: readonly BriefingSeriesPoint[]
+      }>
+      eth: Readonly<{
+        fundingRate?: number
+        openInterestUsd?: number
+        change1hPct?: number
+        change24hPct?: number
+        /** See `btc.series`. */
+        series?: readonly BriefingSeriesPoint[]
+      }>
       materiality?: BriefingMateriality
       visibility?: BriefingDataVisibility
       visibilityReason?: string

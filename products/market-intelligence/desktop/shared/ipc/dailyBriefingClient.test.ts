@@ -158,6 +158,50 @@ describe('daily briefing client', () => {
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
+  it('accepts a schema-10 edition that carries the stored drawings, and one that predates them', async () => {
+    const briefing = document()
+    const at = '2026-10-30T00:25:00.000Z'
+    const row = {
+      id: 'btc' as const, labelKey: 'dailyBriefing.row.btc',
+      importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'largest-move' as const },
+      state: 'available' as const, value: { number: 1.2, format: 'percent' as const },
+      change: null, window: '24h' as const, observedAt: at
+    }
+    const current = (): DailyBriefingDocument => ({
+      ...briefing,
+      schemaVersion: 10,
+      policyVersion: 'daily-briefing.v21',
+      edition: { ...briefing.edition, windowHours: 24 },
+      data: {
+        ...briefing.data,
+        market: [{ ...row, curve: [[{ at: '2026-10-29T00:30:00.000Z', returnPercent: 0 }, { at, returnPercent: 1.2 }]] }],
+        leverage: {
+          state: 'available',
+          btc: { openInterestUsd: 7_000_000_000, series: [{ at: '2026-10-29T00:30:00.000Z', value: 6_000_000_000 }, { at, value: 7_000_000_000 }] },
+          eth: {}
+        },
+        policyPath: {
+          state: 'available', meetingDate: '2026-12-09', outcome: 'hike-25', probability: 77.5, observedAt: at,
+          distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+        }
+      }
+    })
+    stubInvoke(() => ({ state: 'available', document: current() }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
+
+    // An edition generated before schema 10 has none of these fields and must still be readable: a
+    // reader opening yesterday's brief must not be told the whole document is malformed.
+    const older: DailyBriefingDocument = {
+      ...briefing,
+      schemaVersion: 9,
+      policyVersion: 'daily-briefing.v20',
+      edition: { ...briefing.edition, windowHours: 24 },
+      data: { ...briefing.data, market: [row] }
+    }
+    stubInvoke(() => ({ state: 'available', document: older }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
+  })
+
   it('lists summaries and rejects one malformed summary', async () => {
     const summary = {
       date: '2026-10-30', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated',

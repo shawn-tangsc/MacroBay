@@ -154,13 +154,17 @@ const positioning = (btcH24: number, ethH24: number): NonNullable<DailyBriefingF
 
 const policyPath = (
   value: number,
-  overrides: Readonly<{ meetingDate?: string; outcome?: 'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus' }> = {}
+  overrides: Readonly<{
+    meetingDate?: string
+    outcome?: 'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus'
+    distribution?: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', number>>
+  }> = {}
 ): NonNullable<DailyBriefingFactPacket['policyPath']> => ({
   meetingDate: overrides.meetingDate ?? '2026-12-09',
   daysUntilMeeting: 40,
   hasProjectionMaterials: true,
   phase: { kind: 'normal' },
-  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12 },
+  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
   staleness: 'live'
 })
 
@@ -674,5 +678,111 @@ describe('daily briefing document', () => {
     const latest = { ...cpi, eventKey: 'US.LATEST', scheduledAt: '2026-10-29T20:00:00.000Z', surprise: { direction: 'beat' as const, value: 0.1, unit: 'pp' as const } }
     expect(selectMacroFloorItem([smallerNewer, largerOlder])?.eventKey).toBe('US.OLDER')
     expect(selectMacroFloorItem([smallerNewer, latest])?.eventKey).toBe('US.LATEST')
+  })
+
+  /**
+   * The three facts schema 10 added to the document.
+   *
+   * All three were already in the packet and were dropped by this builder, so none of them is new
+   * collection: the policy venue prices five buckets, the open interest read returns a series, and the
+   * cross-asset snapshot carries a return curve. What these cases pin is that the edition now keeps
+   * them, in the shape the data region draws, and that an edition without them is still a document.
+   */
+  describe('the stored data behind the drawings', () => {
+    it('keeps all five priced buckets beside the lead probability', () => {
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          policyPath: policyPath(77.5, {
+            distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+          })
+        }),
+        date: '2026-10-30'
+      })
+
+      const distribution = document.data.policyPath?.distribution
+      expect(Object.keys(distribution ?? {}).sort()).toEqual(['cut-25', 'cut-50-plus', 'hike-25', 'hike-50-plus', 'no-change'])
+      // Normalized to one so the dial's three arcs can be shares of it without a second division.
+      expect(Object.values(distribution ?? {}).reduce((sum, share) => sum + share, 0)).toBeCloseTo(1, 6)
+      expect(distribution?.['hike-25']).toBeCloseTo(0.775, 6)
+      // The lead probability is unchanged: the distribution is beside it, not instead of it.
+      expect(document.data.policyPath?.probability).toBe(77.5)
+
+      // A venue that priced only the lead outcome is not given four invented buckets.
+      const partial = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5) }), date: '2026-10-30' })
+      expect(partial.data.policyPath).not.toHaveProperty('distribution')
+      expect(partial.data.policyPath?.probability).toBe(77.5)
+    })
+
+    it('keeps each positioning series, thinned, ending on the amount printed beside it', () => {
+      // Fifteen-minute buckets across the whole window: the read this edition asked for.
+      const readings = (offset: number) => Array.from({ length: 97 }, (_, index) => ({
+        observedAt: new Date(Date.parse(windowStart) + index * 900_000).toISOString(),
+        notionalUsd: offset + index * 1_000_000
+      }))
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          positioning: {
+            state: 'available', asOf, window: '24h',
+            btc: readings(7_000_000_000), eth: readings(4_000_000_000),
+            change: { btc: { h24Pct: 3.5 }, eth: { h24Pct: -1.2 } }
+          } as unknown as NonNullable<DailyBriefingFactPacket['positioning']>
+        }),
+        date: '2026-10-30'
+      })
+
+      const btc = document.data.leverage?.btc
+      expect(btc?.series).toHaveLength(24)
+      // The card's amount and the end of its line are the same reading.
+      expect(btc?.series?.at(-1)?.value).toBe(btc?.openInterestUsd)
+      expect(btc?.series?.at(-1)?.at).toBe(readings(0).at(-1)?.observedAt)
+      expect(document.data.leverage?.eth.series).toHaveLength(24)
+
+      // A read with a single point keeps the amount and states no series; a failed read is a different
+      // state entirely. Folding the two into one absence is what the card cannot tell apart.
+      const single = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(3.5, 1.2) }), date: '2026-10-30' })
+      expect(single.data.leverage?.state).toBe('available')
+      expect(single.data.leverage?.btc.openInterestUsd).toBe(1_200_000_000)
+      expect(single.data.leverage?.btc).not.toHaveProperty('series')
+    })
+
+    it('keeps the price curve on the two cards that draw one, starting at the window and at zero', () => {
+      const curve = Array.from({ length: 289 }, (_, index) => ({
+        at: new Date(Date.parse(windowStart) + index * 300_000).toISOString(),
+        returnPercent: index / 10
+      }))
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: {
+                btc: { '24h': { state: 'available', value: 28.8 } },
+                eth: { '24h': { state: 'available', value: -1.18 } },
+                index: { '24h': { state: 'available', value: 0.82 } }
+              },
+              curves: { btc: curve, eth: curve, index: curve }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      expect(document.schemaVersion).toBe(10)
+      const btc = document.data.market.find((row) => row.id === 'btc')
+      const points = btc?.curve?.[0] ?? []
+      expect(btc?.curve).toHaveLength(1)
+      expect(points.length).toBeLessThanOrEqual(48)
+      expect(points[0]?.at).toBe(windowStart)
+      expect(points[0]?.returnPercent).toBeCloseTo(0, 2)
+      expect(document.data.market.find((row) => row.id === 'eth')?.curve).toHaveLength(1)
+      // The index row has no plot beside it, so it is not given a line nobody draws.
+      expect(document.data.market.find((row) => row.id === 'index')).not.toHaveProperty('curve')
+
+      // Schemas 9 and older simply have no such field; reading one is not an error.
+      const legacy = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+      expect(legacy.data.market.find((row) => row.id === 'btc')?.curveReason).toBe('no-snapshot')
+    })
   })
 })
