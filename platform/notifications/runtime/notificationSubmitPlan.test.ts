@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
-import { emptySubscriptionTable, type NotificationSubscriptionTable } from '../contracts/notificationSubscriptions'
 import { planNotificationSubmit } from './notificationSubmitPlan'
 
 const policy: NotificationEventPolicy = {
@@ -28,7 +27,6 @@ const catalog = createNotificationEventCatalog({
           dedupeKeyTemplate: 'failed:{definitionId}:{date}',
           dedupeUnit: 'condition',
           conditionWindowMs: 86_400_000,
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.ready',
@@ -38,7 +36,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop', 'channel'],
           dedupeKeyTemplate: 'ready:{date}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: true
         },
         {
           id: 'platform.raw',
@@ -48,7 +45,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: '{key}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.variant',
@@ -59,7 +55,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'variant:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     },
@@ -74,7 +69,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'thing:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     }
@@ -93,7 +87,6 @@ function request(overrides: Partial<NotificationSubmitRequest> = {}): Notificati
 
 const base = {
   catalog,
-  subscriptions: emptySubscriptionTable() as NotificationSubscriptionTable,
   settings: {
     desktopEnabled: true,
     toastEnabled: false,
@@ -102,6 +95,7 @@ const base = {
     retentionDays: 30,
     defaultSnoozeMinutes: 60
   },
+  desktopSupported: true,
   now: '2026-11-03T00:00:00.000Z'
 }
 
@@ -118,27 +112,38 @@ describe('notification submit planner', () => {
     if (plan.kind === 'rejected') expect(plan.outcome.reason).toBe('missing-action')
   })
 
-  it('suppresses a completion event when the record column is not ticked', () => {
+  it('always records a completion event now that the subscription layer is gone', () => {
+    // 2026-11-04：逐事件订阅整层撤销，「没勾就抑制」这条路不再存在；中心恒记一条。
     const plan = planNotificationSubmit({
       ...base,
       request: request({ eventTypeId: 'platform.ready', dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } }, actions: [] })
     })
-    expect(plan).toMatchObject({ kind: 'suppressed', outcome: { reason: 'not-subscribed' } })
-  })
-
-  it('creates a record and queues only the approved + subscribed local surfaces', () => {
-    const subscriptions = { 'platform.failed': { desktop: true } }
-    const plan = planNotificationSubmit({ ...base, subscriptions, request: request() })
     expect(plan.kind).toBe('new')
     if (plan.kind !== 'new') return
-    expect(plan.outcome.levels).toEqual(['center', 'toast', 'desktop'])
-    expect(plan.record.eventTypeId).toBe('platform.failed')
-    expect(plan.record.productId).toBeUndefined()
-    expect(plan.record.delivery).toEqual({
-      toast: { state: 'queued', at: base.now },
-      desktop: { state: 'queued', at: base.now }
-    })
+    // 完成类也照常落库；本机表面同样按「桌面优先」排——没有订阅就不再抑制。
+    expect(plan.record.delivery.desktop).toEqual({ state: 'queued', at: base.now })
+  })
+
+  it('queues exactly one local surface: desktop when it can show, otherwise the in-app toast', () => {
+    const plan = planNotificationSubmit({ ...base, request: request() })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 桌面开关开着且平台支持 → 只排桌面，**不再同时排提示**（只打扰一次）。
+    expect(plan.outcome.levels).toEqual(['center', 'desktop'])
+    expect(plan.record.delivery).toEqual({ desktop: { state: 'queued', at: base.now } })
     expect(plan.record.dedupeKey).toBe('platform|failed:job-1:2026-11-03')
+  })
+
+  it('falls back to the in-app toast when the desktop switch is off', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      settings: { ...base.settings, desktopEnabled: false, toastEnabled: true },
+      request: request()
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    expect(plan.outcome.levels).toEqual(['center', 'toast'])
+    expect(plan.record.delivery).toEqual({ toast: { state: 'queued', at: base.now } })
   })
 
   it('rejects a hand-built key that claims another product prefix', () => {

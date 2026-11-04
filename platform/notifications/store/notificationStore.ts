@@ -1,10 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
-  emptySubscriptionTable,
-  normalizeSubscriptionTable,
-  type NotificationSubscriptionTable
-} from '../contracts/notificationSubscriptions'
-import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
   SEVERITY_RANK,
@@ -30,14 +25,6 @@ export type NotificationDailyCounters = Record<string, number>
 export type NotificationStoreState = {
   records: NotificationRecord[]
   dailyCounters: NotificationDailyCounters
-  /**
-   * 订阅表与记录**同一份文件**（契约 §5.1）：runtime 在内存里缓存整份 state、整份重写，
-   * 所以订阅不许另起一个文件——两个写入方各写各的，最后一个会静默覆盖另一个。
-   * 旧文件没有该字段 → 归一化为空表，不回写（空表 = 一条都不勾）。
-   *
-   * **必填**：做成可选就等于允许某一次 persist 把它丢掉（`prune()` 曾经就是这么把订阅整表抹掉的）。
-   */
-  subscriptions: NotificationSubscriptionTable
   /** 通道熔断：每个 channelId 一条；只由 runtime 写，端口只返回结果（runtime §8）。 */
   pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
 }
@@ -46,7 +33,6 @@ export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
     records: [],
     dailyCounters: {},
-    subscriptions: emptySubscriptionTable(),
     pushBackoff: {}
   }
 }
@@ -121,7 +107,6 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   return {
     records,
     dailyCounters: normalizeDailyCounters(candidate.dailyCounters),
-    subscriptions: normalizeSubscriptionTable(candidate.subscriptions),
     pushBackoff: normalizePushBackoff(candidate.pushBackoff)
   }
 }

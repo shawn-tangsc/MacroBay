@@ -51,24 +51,21 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'job-failed:{definitionId}:{date}',
     dedupeUnit: 'condition',
-    conditionWindowMs: 86_400_000,
-    notifyOnlyIfSubscribed: false
+    conditionWindowMs: 86_400_000
   }),
   // P2 同一任务连续 3 次终态失败：只通知、不暂停任务；同一天同一任务一条。
   declaration('platform.job.repeated-failed', {
     requiresUserAction: true,
     requestedDisruptionLevels: ['desktop'],
     dedupeKeyTemplate: 'job-repeated:{definitionId}:{date}',
-    dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: false
+    dedupeUnit: 'occurrence'
   }),
   // P3 分析额度用尽：同一天只发一次，不随每次被拒重复。
   declaration('platform.analysis.quota-exhausted', {
     requiresUserAction: false,
     requestedDisruptionLevels: ['toast'],
     dedupeKeyTemplate: 'quota-exhausted:{date}',
-    dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: false
+    dedupeUnit: 'occurrence'
   }),
   // P4a 供应商凭据失效：同一供应商 1 小时内合并；恢复是独立事件，不改这条的正文。
   declaration('platform.provider.credential-invalid', {
@@ -76,16 +73,14 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'credential-invalid:{providerId}',
     dedupeUnit: 'condition',
-    conditionWindowMs: 3_600_000,
-    notifyOnlyIfSubscribed: false
+    conditionWindowMs: 3_600_000
   }),
   // P4b 凭据恢复：一天最多一条；独立 id、独立记录，不弹不叫醒。
   declaration('platform.provider.credential-recovered', {
     requiresUserAction: false,
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'credential-recovered:{providerId}:{day}',
-    dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: false
+    dedupeUnit: 'occurrence'
   }),
   // P6a 通道连续失败、自动暂停推送：绝不发到通道本身（申请档位里没有 channel）。
   declaration('platform.channel.push-suspended', {
@@ -93,16 +88,14 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'push-suspended:{channelId}',
     dedupeUnit: 'condition',
-    conditionWindowMs: 86_400_000,
-    notifyOnlyIfSubscribed: false
+    conditionWindowMs: 86_400_000
   }),
   // P6b 通道恢复：一天最多一条。
   declaration('platform.channel.push-resumed', {
     requiresUserAction: false,
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'push-resumed:{channelId}:{day}',
-    dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: false
+    dedupeUnit: 'occurrence'
   }),
   // P7 桌面通知没弹出来：只说观测到的事实，不猜为什么；不合并，随事件本身。
   declaration('platform.desktop.blocked', {
@@ -110,6 +103,5 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'desktop-blocked:{recordId}',
     dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: false
   })
 ])

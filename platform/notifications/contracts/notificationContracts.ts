@@ -141,7 +141,15 @@ export type NotificationRuntimeSettings = {
   /** 全站提示开关，默认 false（契约 §5.1：提示不是订阅列）。 */
   toastEnabled: boolean
   popupEnabled: boolean
-  /** 出站通道；null 即关（契约 §2，通道方案 §2.3）。 */
+  /**
+   * 情报三条「推不推手机」的读者选择（契约 §5.4）：只存那三个 id，缺省即开。
+   * 生效还要同时满足「批准含 channel ∩ 频道已启用 ∩ 频道可用」，那是投递层的事。
+   */
+  channelEvents?: Readonly<Record<string, boolean>>
+  /**
+   * 出站通道（**过渡字段**）：设置页已经不再读写它；投递端口在「取唯一启用频道」落地前
+   * 仍按它取目标。第六组改完端口后，这个字段随 AppSettings 一并删除。
+   */
   push: { channelId: string | null }
   /**
    * 保留天数：**当前存着但没有任何消费者**——运行时没有剪枝任务，设置页也没暴露这一项
@@ -169,11 +177,14 @@ export type NotificationRuntimeSettings = {
 
 export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeSettings {
   return {
-    desktopEnabled: true,
+    // 契约 §5.1（2026-11-04 口径）：桌面默认**关**，读者主动打开才弹。
+    desktopEnabled: false,
     // 契约 §5.1：提示是全站一个开关，新装默认关；生效 = 批准含 toast ∩ 本开关。
     toastEnabled: false,
     popupEnabled: true,
-    // 通道推送默认关：`channelId = null` 就是关，不另加 enabled 布尔（通道方案 §2.3）。
+    // 三条频道事件默认全开：「装上就推，不想收再去关」（契约 §5.4）。
+    channelEvents: Object.freeze({}),
+    // 过渡字段：设置页不再写它，第六组把端口改成「唯一启用频道」后删掉。
     push: { channelId: null },
     retentionDays: 30,
     defaultSnoozeMinutes: 60
@@ -267,7 +278,6 @@ export type NotificationSubmitOutcome =
   | { kind: 'accepted'; recordId: string; levels: readonly NotificationApprovedLevel[] }
   | { kind: 'merged'; recordId: string; occurrenceCount: number; mergedEventTypes: string[] }
   | { kind: 'collapsed'; aggregateRecordId: string; collapsedCount: number }
-  | { kind: 'suppressed'; reason: 'not-subscribed'; eventTypeId: string }
   /** 让渡给了产品：平台不落库、不投递，只记一条 `delegated` 诊断（契约 §14）。 */
   | { kind: 'delegated'; eventTypeId: string; producerId: string; ownerProductId: string }
   | {

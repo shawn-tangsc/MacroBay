@@ -294,7 +294,6 @@ export const marketIntelligenceProductManifest = {
       dedupeKeyTemplate: 'brief-failed:{date}:{period}',
       dedupeUnit: 'condition',
       conditionWindowMs: 86_400_000,
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.signal.triggered', {
@@ -303,7 +302,6 @@ export const marketIntelligenceProductManifest = {
       requestedDisruptionLevels: ['desktop', 'channel'],
       dedupeKeyBuilder: 'moduleSignal',
       dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.macro.event-landed', {
@@ -312,7 +310,6 @@ export const marketIntelligenceProductManifest = {
       requestedDisruptionLevels: ['desktop', 'channel'],
       dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
       dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.source.consecutive-failed', {
@@ -322,7 +319,6 @@ export const marketIntelligenceProductManifest = {
       dedupeKeyBuilder: 'sourceIssue',
       dedupeUnit: 'condition',
       conditionWindowMs: 86_400_000,
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.source.stale', {
@@ -332,7 +328,6 @@ export const marketIntelligenceProductManifest = {
       dedupeKeyBuilder: 'sourceIssue',
       dedupeUnit: 'condition',
       conditionWindowMs: 86_400_000,
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.briefing.ready', {
@@ -342,7 +337,6 @@ export const marketIntelligenceProductManifest = {
       // 一天一期最多一条：键只带日期，**不许**混入版本号或生成时刻——否则同一天重新生成会被当成新事件重推。
       dedupeKeyTemplate: 'briefing-ready:{date}',
       dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: true,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.calibration.result', {
@@ -351,7 +345,6 @@ export const marketIntelligenceProductManifest = {
       requestedDisruptionLevels: [],
       dedupeKeyTemplate: 'calibration:{date}',
       dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: true,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.timezone.invalid', {
@@ -360,7 +353,6 @@ export const marketIntelligenceProductManifest = {
       requestedDisruptionLevels: [],
       dedupeKeyTemplate: 'timezone-invalid:{date}',
       dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     })
   ],

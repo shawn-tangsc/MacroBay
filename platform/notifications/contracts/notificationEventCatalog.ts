@@ -33,8 +33,6 @@ export type NotificationEventDeclaration = {
   /** 键的粒度：一次发生（occurrence）还是一个持续状况（condition）。 */
   dedupeUnit: 'occurrence' | 'condition'
   conditionWindowMs?: number
-  /** 完成 / 结果类：读者没订阅时**不落库、不投递**。 */
-  notifyOnlyIfSubscribed: boolean
   requestedBypassQuietHours?: boolean
   deprecated?: boolean
 }

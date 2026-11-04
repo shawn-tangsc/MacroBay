@@ -34,20 +34,21 @@ export function registerNotificationIpcHandlers(): void {
   // 只读授权状态：主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web Notification API。
   ipcMain.handle(IpcChannels.notificationsReadDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
 
-  // ── 订阅与投递设置（契约 §5.2）：五条读/写都只调 runtime，渲染层没有第二个写入 IO。 ──
+  // ── 开关与频道事件表（契约 §5.1 / §5.4）：读/写都只调 runtime，渲染层没有第二个写入 IO。 ──
+  // 订阅那一层（逐事件三列矩阵）在 2026-11-04 整层撤销：没有 getSubscriptions/setSubscription 了。
   ipcMain.handle(IpcChannels.notificationsListEventCatalog, () => getNotificationRuntime().listEventCatalog())
-  ipcMain.handle(IpcChannels.notificationsGetSubscriptions, () => getNotificationRuntime().getSubscriptions())
-  ipcMain.handle(IpcChannels.notificationsSetSubscription, (_event, input) => {
-    const payload = (input ?? {}) as { eventTypeId?: string; patch?: Record<string, unknown> }
-    if (!payload.eventTypeId) throw new Error('eventTypeId is required.')
-    return getNotificationRuntime().setSubscription(payload.eventTypeId, (payload.patch ?? {}) as never)
-  })
   ipcMain.handle(IpcChannels.notificationsGetDeliverySettings, () =>
     getNotificationRuntime().getDeliverySettings()
   )
-  ipcMain.handle(IpcChannels.notificationsSetPushChannel, (_event, input) => {
-    const payload = (input ?? {}) as { channelId?: string | null }
-    return getNotificationRuntime().setPushChannel(payload.channelId ?? null)
+  ipcMain.handle(IpcChannels.notificationsSetDesktopEnabled, (_event, input) => {
+    const payload = (input ?? {}) as { enabled?: boolean }
+    return getNotificationRuntime().setDesktopEnabled(payload.enabled === true)
+  })
+  ipcMain.handle(IpcChannels.notificationsGetChannelEvents, () => getNotificationRuntime().getChannelEvents())
+  ipcMain.handle(IpcChannels.notificationsSetChannelEvent, (_event, input) => {
+    const payload = (input ?? {}) as { eventId?: string; enabled?: boolean }
+    if (!payload.eventId) throw new Error('eventId is required.')
+    return getNotificationRuntime().setChannelEvent(payload.eventId, payload.enabled === true)
   })
   ipcMain.handle(IpcChannels.notificationsSetToastEnabled, (_event, input) => {
     const payload = (input ?? {}) as { enabled?: boolean }

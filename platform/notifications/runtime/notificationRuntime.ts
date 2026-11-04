@@ -85,6 +85,11 @@ export function createNotificationJsonStorage(filePath: string): NotificationSto
 export type NotificationRuntimeDependencies = {
   storage: NotificationStorage
   getSettings: () => Promise<NotificationRuntimeSettings>
+  /**
+   * 这个平台支不支持桌面通知（`Notification.isSupported()`）。**只认这一个外部事实**：
+   * 系统里有没有关掉 MacroBay 的通知我们读不到，不许拿授权状态猜（设计 §2）。
+   */
+  desktopSupported?: () => boolean
   /** 读者时区与当前时刻；免打扰窗口按它判断。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」。 */
   clock: NotificationClock
   deliveryHooks?: DeliveryHooks
@@ -197,25 +202,25 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
     const first = planNotificationSubmit({
       catalog: deps.catalog,
-      subscriptions: state.subscriptions,
       settings,
+      desktopSupported: deps.desktopSupported?.() ?? true,
       request,
       now
     })
-    if (first.kind === 'rejected' || first.kind === 'suppressed') return first.outcome
+    if (first.kind === 'rejected') return first.outcome
 
     const duplicate = findActiveDuplicate(state.records, first.incoming, now)
     const plan = duplicate
       ? planNotificationSubmit({
           catalog: deps.catalog,
-          subscriptions: state.subscriptions,
           settings,
+          desktopSupported: deps.desktopSupported?.() ?? true,
           request,
           now,
           duplicate
         })
       : first
-    if (plan.kind === 'rejected' || plan.kind === 'suppressed') return plan.outcome
+    if (plan.kind === 'rejected') return plan.outcome
 
     if (plan.kind === 'merge') {
       const merged = mergeDuplicateNotification(plan.duplicate, plan.incoming, now, {

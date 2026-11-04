@@ -9,12 +9,6 @@ import type {
   NotificationEventCatalog,
   NotificationEventCatalogEntry
 } from '../contracts/notificationEventCatalog'
-import {
-  applySubscriptionPatch,
-  type NotificationSubscription,
-  type NotificationSubscriptionPatch,
-  type NotificationSubscriptionTable
-} from '../contracts/notificationSubscriptions'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationStoreState } from '../store/notificationStore'
 
@@ -38,41 +32,42 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       return input.getCatalog()?.list() ?? []
     },
 
-    async getSubscriptions(): Promise<NotificationSubscriptionTable> {
-      return (await input.load()).subscriptions
+    /** 桌面开关：新装默认关，读者打开那一刻才请求系统授权（契约 §5.1）。 */
+    async setDesktopEnabled(enabled: boolean): Promise<{ desktopEnabled: boolean }> {
+      if (!input.updateSettings) throw new Error('notification-settings-update-not-configured')
+      await input.updateSettings({ desktopEnabled: enabled })
+      return { desktopEnabled: enabled }
     },
 
     /**
-     * 订阅写入的**唯一入口**（契约 §5.1）：订阅与记录在同一份 JSON，绕开 runtime 直接写
-     * 文件就会和记录互相覆盖。产品内入口只许写自己前缀的行；通用设置页传 `'platform'`。
+     * 情报三条「推不推手机」的**唯一写入口**（契约 §5.4）：
+     * 只接受批准含 `channel` 的那三个 id，写别的 id **报错**，不静默忽略——静默忽略会让
+     * 调用方以为存上了。与记录、两个总开关同一份 JSON，不另建设置文件。
      */
-    async setSubscription(
-      eventTypeId: string,
-      patch: NotificationSubscriptionPatch,
-      actor: 'platform' | { productId: string } = 'platform'
-    ): Promise<{ ok: true; subscription: NotificationSubscription | null } | { ok: false; reasonCode: string }> {
-      return input.exclusive(async () => {
-      const entry = input.getCatalog()?.get(eventTypeId)
-      if (!entry) return { ok: false, reasonCode: 'unknown-event-type' }
-      if (actor !== 'platform' && !eventTypeId.startsWith(`${actor.productId}.`)) {
-        return { ok: false, reasonCode: 'scope-mismatch' }
+    async setChannelEvent(eventId: string, enabled: boolean): Promise<{ eventId: string; enabled: boolean }> {
+      if (!input.updateSettings) throw new Error('notification-settings-update-not-configured')
+      const entry = input.getCatalog()?.get(eventId)
+      if (!entry || !entry.approvedDisruptionLevels.includes('channel')) {
+        throw new Error(`notification-channel-event-not-allowed: ${eventId}`)
       }
-      const state = await input.load()
-      const result = applySubscriptionPatch(entry, patch, state.subscriptions[eventTypeId])
-      if (!result.ok) return { ok: false, reasonCode: result.reasonCode }
-      const subscriptions: Record<string, NotificationSubscription> = { ...state.subscriptions }
-      if (result.subscription === null) delete subscriptions[eventTypeId]
-      else subscriptions[eventTypeId] = result.subscription
-      await input.persistWithDiagnostics({ ...state, subscriptions })
-      input.notifyChanged()
-      return result
+      const settings = await input.getSettings()
+      await input.updateSettings({
+        channelEvents: { ...(settings.channelEvents ?? {}), [eventId]: enabled }
       })
+      return { eventId, enabled }
     },
 
-    /** 设置页首帧要的三个当前值：提示开关、通道选择、通道接线状态（契约 §5.2）。 */
+    /** 读回那张三条表：没写过的按默认（开）——「装上就推，不想收再去关」。 */
+    async getChannelEvents(): Promise<Readonly<Record<string, boolean>>> {
+      const settings = await input.getSettings()
+      const events = settings.channelEvents ?? {}
+      return Object.freeze({ ...events })
+    },
+
+    /** 设置页首帧要的几个当前值：提示开关、桌面开关、通道接线状态（契约 §5.2）。 */
     async getDeliverySettings(): Promise<{
       toastEnabled: boolean
-      channelId: string | null
+      desktopEnabled: boolean
       pushWired: boolean
       channels: readonly unknown[]
       lastPushFailureAt: string | null
@@ -94,7 +89,7 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       }
       return {
         toastEnabled: settings.toastEnabled,
-        channelId: settings.push.channelId,
+        desktopEnabled: settings.desktopEnabled,
         pushWired: input.pushWired?.() ?? false,
         channels: (await input.getPushTargets?.()) ?? [],
         lastPushFailureAt,
@@ -108,10 +103,5 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       return { toastEnabled: enabled }
     },
 
-    async setPushChannel(channelId: string | null): Promise<{ channelId: string | null }> {
-      if (!input.updateSettings) throw new Error('notification-settings-update-not-configured')
-      await input.updateSettings({ push: { channelId } })
-      return { channelId }
-    }
   }
 }

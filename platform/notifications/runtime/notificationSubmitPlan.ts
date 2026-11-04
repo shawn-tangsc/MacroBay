@@ -18,10 +18,6 @@ import {
   isNotificationDedupeBuilderId,
   notificationDedupeBuilders
 } from '../contracts/notificationDedupeKeys'
-import {
-  isSubscribed,
-  type NotificationSubscriptionTable
-} from '../contracts/notificationSubscriptions'
 import type {
   NotificationChannel,
   NotificationDedupeVars,
@@ -35,7 +31,6 @@ import { createNotificationId } from '../store/notificationStore'
 
 export type NotificationSubmitPlan =
   | { kind: 'rejected'; outcome: Extract<NotificationSubmitOutcome, { kind: 'rejected' }> }
-  | { kind: 'suppressed'; outcome: Extract<NotificationSubmitOutcome, { kind: 'suppressed' }> }
   | {
       kind: 'new'
       record: NotificationRecord
@@ -54,11 +49,35 @@ export type NotificationSubmitPlan =
 
 export type NotificationSubmitPlanInput = {
   catalog: NotificationEventCatalog
-  subscriptions: NotificationSubscriptionTable
   settings: NotificationRuntimeSettings
+  /** 平台支不支持桌面通知（`Notification.isSupported()`）。判定只认这一个外部事实。 */
+  desktopSupported: boolean
   request: NotificationSubmitRequest
   duplicate?: NotificationRecord
   now: string
+}
+
+/**
+ * 一次提交会打扰哪些表面（契约 §5.1 / 设计 §2）。
+ *
+ * 中心恒真：它就是铃铛里那份记录。桌面与提示**互斥**，桌面优先——这条互斥只写在这里，
+ * 投递层不许再写第二套（设计 §2 硬规矩 2）。
+ *
+ * 桌面「可用」这里只判两件能判的事实：开关开、平台支持。第三种（`show()` 抛错/返回
+ * `ok:false`）只能投递时才知道，由投递层退回提示并记一条「桌面没有弹出来」——见 P7。
+ */
+export type NotificationSurfacePlan = Readonly<{ desktop: boolean; toast: boolean }>
+
+export function planNotificationSurfaces(
+  entry: NotificationEventCatalogEntry,
+  settings: NotificationRuntimeSettings,
+  desktopSupported: boolean
+): NotificationSurfacePlan {
+  const desktopApproved = entry.approvedDisruptionLevels.includes('desktop')
+  const toastApproved = entry.approvedDisruptionLevels.includes('toast')
+  const desktop = desktopApproved && settings.desktopEnabled && desktopSupported
+  // 桌面优先：桌面真能弹时，这条不再另外在应用内重复一次。
+  return Object.freeze({ desktop, toast: desktop ? false : toastApproved && settings.toastEnabled })
 }
 
 export function planNotificationSubmit(input: NotificationSubmitPlanInput): NotificationSubmitPlan {
@@ -91,14 +110,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   }
   const dedupeKey = `${entry.productId}|${rawDedupeKey}`
 
-  if (entry.notifyOnlyIfSubscribed && !isSubscribed(entry, 'center', input.subscriptions)) {
-    return {
-      kind: 'suppressed',
-      outcome: { kind: 'suppressed', reason: 'not-subscribed', eventTypeId: entry.id }
-    }
-  }
-
-  const levels = effectiveLevels(entry, input.subscriptions)
+  const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
+  const levels = effectiveLevels(entry, surfaces)
   const incoming = toLegacyRequest(entry, input.request, dedupeKey, levels, bodyKey)
   if (input.duplicate) {
     return {
@@ -109,7 +122,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const record = createRecord(entry, input.request, dedupeKey, levels, bodyKey, input.now)
+  const record = createRecord(entry, input.request, dedupeKey, levels, surfaces, bodyKey, input.now)
   return {
     kind: 'new',
     record,
@@ -174,16 +187,18 @@ function crossProductPrefix(
   return catalog.list().some((entry) => entry.productId === claimed) ? claimed : undefined
 }
 
-/** 生效表面 = 批准 ∩ 订阅；提示另加全站开关（投递层再判一次）。 */
+/**
+ * 生效表面 = 批准 ∩ 开关（桌面优先互斥）。手机那一档仍按批准：**投递层**还要再判
+ * 「频道事件表勾了 ∩ 频道启用 ∩ 频道可用」，两处各判自己那一半，不在这里替它猜。
+ */
 function effectiveLevels(
   entry: NotificationEventCatalogEntry,
-  subscriptions: NotificationSubscriptionTable
+  surfaces: NotificationSurfacePlan
 ): readonly NotificationApprovedLevel[] {
   const levels: NotificationApprovedLevel[] = ['center']
-  // 提示的全站开关是**投递层**的瞬时事实（§16.3）：提交层只按批准排进队列，投递时再判开关。
-  if (entry.approvedDisruptionLevels.includes('toast')) levels.push('toast')
-  if (isSubscribed(entry, 'desktop', subscriptions)) levels.push('desktop')
-  if (isSubscribed(entry, 'channel', subscriptions)) levels.push('channel')
+  if (surfaces.desktop) levels.push('desktop')
+  if (surfaces.toast) levels.push('toast')
+  if (entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
   return Object.freeze(levels)
 }
 
@@ -223,6 +238,7 @@ function createRecord(
   request: NotificationSubmitRequest,
   dedupeKey: string,
   levels: readonly NotificationApprovedLevel[],
+  surfaces: NotificationSurfacePlan,
   bodyKey: string | undefined,
   now: string
 ): NotificationRecord {
@@ -230,8 +246,9 @@ function createRecord(
     level === 'center' || level === 'toast' || level === 'desktop'
   )
   const delivery: NotificationRecord['delivery'] = {}
-  if (levels.includes('toast')) delivery.toast = { state: 'queued', at: now }
-  if (levels.includes('desktop')) delivery.desktop = { state: 'queued', at: now }
+  // 互斥在这里落成数据：两个表面**不许同时**有交付条目（设计 §2）。
+  if (surfaces.desktop) delivery.desktop = { state: 'queued', at: now }
+  else if (surfaces.toast) delivery.toast = { state: 'queued', at: now }
   if (levels.includes('channel')) delivery.push = { state: 'queued', at: now }
   return {
     id: createNotificationId(),

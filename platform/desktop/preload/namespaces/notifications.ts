@@ -7,9 +7,6 @@ import type { NotificationRuntime } from '../../../notifications/runtime/notific
 /** 测试通知的真实回执：一条记录 + 每一档投递的尝试结果。形状取自运行时签名，不在这里抄第二份。 */
 export type NotificationSelfTestReceipt = Awaited<ReturnType<NotificationRuntime['submitSelfTest']>>
 
-/** 订阅写入的回执：`ok:false` 带原因码。同样取自运行时签名，抄一份迟早与主进程漂移。 */
-export type NotificationSubscriptionWriteResult = Awaited<ReturnType<NotificationRuntime['setSubscription']>>
-
 /**
  * 通知命名空间（从 `preload/index.ts` 抽出来的第一块）。
  *
@@ -55,24 +52,25 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
       ipcRenderer.invoke(
         IpcChannels.notificationsReadDesktopPermission
       ) as Promise<Awaited<ReturnType<NotificationRuntime['readDesktopPermission']>>>,
-    /** 事件目录投影：带 `notifyOnlyIfSubscribed` 与批准档位；清单按它渲染，不写死事件名。 */
+    /** 事件目录投影：带批准档位；界面按它渲染，不写死事件名。 */
     listEventCatalog: () =>
       ipcRenderer.invoke(IpcChannels.notificationsListEventCatalog) as Promise<
         Awaited<ReturnType<NotificationRuntime['listEventCatalog']>>
       >,
-    getSubscriptions: () =>
-      ipcRenderer.invoke(IpcChannels.notificationsGetSubscriptions) as Promise<
-        Awaited<ReturnType<NotificationRuntime['getSubscriptions']>>
+    /** 情报三条「推不推手机」：读回那张表（只含批准含 channel 的三条）。 */
+    getChannelEvents: () =>
+      ipcRenderer.invoke(IpcChannels.notificationsGetChannelEvents) as Promise<
+        Awaited<ReturnType<NotificationRuntime['getChannelEvents']>>
       >,
-    setSubscription: (eventTypeId: string, patch: Record<string, unknown>) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSetSubscription, { eventTypeId, patch }) as Promise<NotificationSubscriptionWriteResult>,
-    /** 当前提示开关 / 通道选择 / 接线状态：设置页首帧要三个值，不是只给写口。 */
+    setChannelEvent: (eventId: string, enabled: boolean) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetChannelEvent, { eventId, enabled }) as Promise<
+        Awaited<ReturnType<NotificationRuntime['setChannelEvent']>>
+      >,
+    /** 当前提示开关 / 桌面开关 / 接线状态：设置页首帧要这几个值，不是只给写口。 */
     getDeliverySettings: () =>
       ipcRenderer.invoke(IpcChannels.notificationsGetDeliverySettings) as Promise<
         Awaited<ReturnType<NotificationRuntime['getDeliverySettings']>>
       >,
-    setPushChannel: (channelId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSetPushChannel, { channelId }) as Promise<{ channelId: string | null }>,
     setToastEnabled: (enabled: boolean) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetToastEnabled, { enabled }) as Promise<{ toastEnabled: boolean }>,
     /**

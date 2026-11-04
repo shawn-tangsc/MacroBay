@@ -137,10 +137,8 @@ function assertNotificationEvents(manifest: ProductManifest, productId: string):
         assertGeneratedEventKey(id, `bodyKeyByVariant.${variant}`, key, `${bodyBase}.${variant}`)
       }
     }
-    if (typeof event.requiresUserAction !== 'boolean' || typeof event.notifyOnlyIfSubscribed !== 'boolean') {
-      throw new ProductRegistryValidationError(
-        `notification event "${id}" must declare requiresUserAction and notifyOnlyIfSubscribed as booleans`
-      )
+    if (typeof event.requiresUserAction !== 'boolean') {
+      throw new ProductRegistryValidationError(`notification event "${id}" must declare requiresUserAction as a boolean`)
     }
 
     const levels = event.requestedDisruptionLevels
