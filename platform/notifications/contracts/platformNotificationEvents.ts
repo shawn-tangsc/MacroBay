@@ -1,5 +1,5 @@
 /**
- * 平台事件声明表（契约 §2）：平台自己产生的 8 条通知事件。
+ * 平台事件声明表（契约 §2）：平台自己产生的 9 条通知事件（P8 于 2026-11-04 新增）。
  *
  * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值不在这里——
  * 生效表面只读 `notificationEventPolicy.ts` 的批准表（契约 §4：「生效值只读批准表」）。
@@ -31,16 +31,26 @@ export function notificationEventBodyKey(eventTypeId: string, variant?: string):
 }
 
 
+/**
+ * 声明一条平台事件。正文两种写法互斥：默认一句 `…body`；给了 `bodyVariants` 就只有
+ * `…body.<variant>`——同时声明基础句会让文案门禁要求一句永远用不到的句子（变体表一旦存在，
+ * 没选变体的提交会被拒成 `unknown-body-variant`，基础句没有消费者）。
+ */
 function declaration(
   id: string,
-  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'bodyKey' | 'reasonKey'>
+  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'bodyKey' | 'reasonKey' | 'bodyKeyByVariant'> & {
+    bodyVariants?: readonly string[]
+  }
 ): NotificationEventDeclaration {
+  const { bodyVariants, ...rest } = input
   return {
     id,
     titleKey: notificationEventTitleKey(id),
-    bodyKey: notificationEventBodyKey(id),
     reasonKey: notificationEventReasonKey(id),
-    ...input
+    ...(bodyVariants
+      ? { bodyKeyByVariant: Object.fromEntries(bodyVariants.map((variant) => [variant, notificationEventBodyKey(id, variant)])) }
+      : { bodyKey: notificationEventBodyKey(id) }),
+    ...rest
   }
 }
 
@@ -103,5 +113,15 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'desktop-blocked:{recordId}',
     dedupeUnit: 'occurrence',
+  }),
+  // P8 频道连不上（2026-11-04 用户拍板新增，需求 v2.17 §11）：**自动重连失败之后**提交一次，
+  // 键带频道 id + 断开起始时刻，同一次断开只留一条；原因两档（网络连不上 / 代理这一跳没连上）
+  // 就是正文变体名。**不含 channel**：这是本机状态，不该再推到手机。
+  declaration('platform.channel.connection-lost', {
+    requiresUserAction: true,
+    requestedDisruptionLevels: ['toast', 'desktop'],
+    dedupeKeyTemplate: 'channel-lost:{channelId}:{disconnectedAt}',
+    dedupeUnit: 'occurrence',
+    bodyVariants: ['network', 'proxy']
   })
 ])

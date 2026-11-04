@@ -31,7 +31,10 @@ import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/chan
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
 import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
+import { channelAdapterDescriptor } from '../../../ai/agent-platform/channels/channelAdapterDescriptors'
 import { autoBindDeliveryTarget } from '../../../ai/agent-platform/channels/channelAutoTargetBinding'
+import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createPlatformWebSocketFactory } from '../../../network/platformWebSocket'
 import { createTaskAutomationMaintenance } from '../taskAutomationMaintenance'
@@ -69,6 +72,11 @@ export type ChannelsAndJobsPorts = Readonly<{
   agentBroadcasts: AgentBroadcasts
   /** 入站消息要推进的那台运行时；与智能体线共用同一实例，不另建。 */
   agentRuntimeService: ReturnType<typeof createAgentRuntime>['agentRuntimeService']
+  /**
+   * 通知提交口（P8「频道连不上」用）。**现取**：通知运行时晚于这里构造，
+   * 传一个实例会拿到未就绪的那个，所以这里只传一个每次调用才解析一次的闭包。
+   */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   repositories: Pick<
     ReturnType<typeof createRepositories>,
     | 'agentDatabase'
@@ -249,6 +257,21 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 轮询宿主退出也留一行：静默退出会让用户完全看不出为什么没反应。
     recordExit: (channelId, generation, code) => {
       if (code === 'channel-stale-generation') recordRuntimeAudit(agentDatabase, channelId, generation, code, new Date())
+    },
+    // 自动重连连续失败 → 一条「频道连不上」（契约 §4.1 P8）。断的是**收**，与 P6a「发不出去」不是一条。
+    // 频道名现取：读者改过名字就该按新名字说；读不到时退回平台显示名，正文里绝不出现频道 id。
+    reportConnectionLost: ({ channelId, cause, disconnectedAt }) => {
+      void (async () => {
+        const name = channelManagementRepository.query.get(channelId)?.name ?? null
+        const language = (await settingsStore.get()).language
+        await notifyChannelConnectionLost(ports.submitNotification, {
+          channelId,
+          channelName: name ?? channelAdapterDescriptor('telegram').displayName[language],
+          cause,
+          disconnectedAt,
+          occurredAt: new Date().toISOString()
+        })
+      })()
     }
   })
   const slackRuntimeManager = new SlackRuntimeManager({

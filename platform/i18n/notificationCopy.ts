@@ -44,6 +44,10 @@ export type NotificationCopyTable = {
   'notification.event.platform.desktop.blocked.title': string
   'notification.event.platform.desktop.blocked.body': string,
   'notification.event.platform.desktop.blocked.reason': string
+  'notification.event.platform.channel.connection-lost.title': string
+  'notification.event.platform.channel.connection-lost.body.network': string
+  'notification.event.platform.channel.connection-lost.body.proxy': string
+  'notification.event.platform.channel.connection-lost.reason': string
   /** 通道暂停事件里的动作：去设置检查。 */
   'notification.channelCheck.action': string
   /** 通用动作：去设置（来源两条等产品事件的动作标签）。 */
@@ -94,6 +98,10 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.desktop.blocked.title': "桌面通知没有弹出来",
     'notification.event.platform.desktop.blocked.body': "这条本该弹在桌面上，但没有弹出来。",
     'notification.event.platform.desktop.blocked.reason': "桌面通知没有弹出来。",
+    'notification.event.platform.channel.connection-lost.title': "频道连不上：{channel}",
+    'notification.event.platform.channel.connection-lost.body.network': "自动重连一直没成功，{channel} 现在收不到新消息：这台机器连不上网络。网络恢复后连接会自己接上，不用再点一次启用。",
+    'notification.event.platform.channel.connection-lost.body.proxy': "自动重连一直没成功，{channel} 现在收不到新消息：代理这一跳没连上（代理没开、端口不对或隧道被拒）。修好代理后连接会自己接上，不用再点一次启用。",
+    'notification.event.platform.channel.connection-lost.reason': '自动重连连续失败才提醒一次，同一次断开不会反复提醒；重新连上后状态行与操作记录里能看到。',
     'notification.channelCheck.action': '去设置检查',
     'notification.action.open-settings': '去设置',
     'notification.action.open-briefing': '打开日报',
@@ -134,6 +142,10 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.desktop.blocked.title': "The desktop notification did not appear",
     'notification.event.platform.desktop.blocked.body': "This was supposed to show up on your desktop, but it did not.",
     'notification.event.platform.desktop.blocked.reason': "The desktop notification did not appear.",
+    'notification.event.platform.channel.connection-lost.title': "Channel unreachable: {channel}",
+    'notification.event.platform.channel.connection-lost.body.network': "Automatic reconnection has kept failing, so {channel} is not receiving new messages: this machine cannot reach the network. The connection reconnects by itself once the network is back, so you do not need to enable it again.",
+    'notification.event.platform.channel.connection-lost.body.proxy': "Automatic reconnection has kept failing, so {channel} is not receiving new messages: the proxy hop could not be reached (proxy off, wrong port, or tunnel refused). The connection reconnects by itself once the proxy is fixed, so you do not need to enable it again.",
+    'notification.event.platform.channel.connection-lost.reason': 'Shown once after automatic reconnection fails; one outage never repeats, and the status row shows it once the channel reconnects.',
     'notification.channelCheck.action': 'Check settings',
     'notification.action.open-settings': 'Open settings',
     'notification.action.open-briefing': 'Open briefing',

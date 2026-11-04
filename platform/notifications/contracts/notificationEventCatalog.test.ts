@@ -21,10 +21,10 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 15-row table (8 platform + 7 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(15)
+  it('is the signed 16-row table (9 platform + 7 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(16)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
-    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(8)
+    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(9)
     expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(7)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
@@ -34,9 +34,9 @@ describe('notification event policy', () => {
     expect(ids).toContain('market-intelligence.briefing.ready')
   })
 
-  it('keeps desktop to the eleven failure / correction / system-status rows', () => {
+  it('keeps desktop to the twelve failure / correction / system-status rows', () => {
     // 桌面对「信息类」与「完成类」不开放（用户原话：没打开应用还被轰炸）。
-    // 11 = 平台 7（P7 自己不走桌面）+ 情报 4（当地时间无效、来源连续失败、来源长时间无数据、日报没生成）。
+    // 12 = 平台 8（9 行里 P7 自己不走桌面）+ 情报 4（当地时间无效、来源连续失败、来源长时间无数据、日报没生成）。
     const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
       'market-intelligence.briefing.failed',
@@ -44,6 +44,7 @@ describe('notification event policy', () => {
       'market-intelligence.source.stale',
       'market-intelligence.timezone.invalid',
       'platform.analysis.quota-exhausted',
+      'platform.channel.connection-lost',
       'platform.channel.push-resumed',
       'platform.channel.push-suspended',
       'platform.job.failed-terminal',
@@ -59,8 +60,8 @@ describe('notification event policy', () => {
       'market-intelligence.macro.event-landed',
       'market-intelligence.signal.triggered'
     ])
-    // 提示 15 行全开：关掉桌面时它是唯一的本机提醒。
-    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(15)
+    // 提示 16 行全开：关掉桌面时它是唯一的本机提醒。
+    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(16)
   })
 
   it('never approves a bypass and always keeps center', () => {

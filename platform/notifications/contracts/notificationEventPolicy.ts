@@ -4,14 +4,15 @@
  * 批准是**上限**，也是**内置规则**：读者没有逐条勾选权，能改的只有「应用内提示」「桌面提醒」两个总开关，
  * 以及情报模块那一页「哪三条情报推到手机」。投递表面 = 批准 ∩ 开关状态；中心恒在，不受开关影响。
  *
- * 改动任何一格都要回产品重签（平台 8 行＝通用模块产品经理，情报 7 行＝情报模块产品经理），
+ * 改动任何一格都要回产品重签（平台 9 行＝通用模块产品经理，情报 7 行＝情报模块产品经理），
  * 不许在实现里顺手调。
  *
- * **本版 15 行（平台 8 + 情报 7）**，编号跳过 N4（`signal.interpreted` 本版不登记）、
- * N8（`calibration.result` 已撤回，编号不复用）。
+ * **本版 16 行（平台 9 + 情报 7）**，编号跳过 N4（`signal.interpreted` 本版不登记）、
+ * N8（`calibration.result` 已撤回，编号不复用）。P8「频道连不上」是 2026-11-04 用户实测后新增的
+ * 第 16 行（需求 v2.17 §11）：原来的 15 条里没有「收消息那条路断了」，最接近的 P6a 讲的是发不出去。
  *
  * 2026-11-04 当天的三次收敛，读这张表前先看这里：
- * 1. **桌面只对「失败 / 需修正 / 系统状态」开放**（11 行）——读者原话：「不是都需要桌面通知的，
+ * 1. **桌面只对「失败 / 需修正 / 系统状态」开放**（12 行）——读者原话：「不是都需要桌面通知的，
  *    不然我没打开应用还被轰炸」。信息类（模块信号、宏观事件）与完成类（日报完成）**不弹桌面**。
  * 2. **`platform.desktop.blocked`（P7）自己不走桌面**：它是「桌面没弹出来」这件事的结果，
  *    再投桌面就是「失败 → P7 → 投桌面 → 再失败」的自激循环。所以它只有 center + toast。
@@ -21,7 +22,7 @@
 import type { NotificationEventPolicy } from './notificationEventCatalog'
 
 export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze({
-  // ── 平台 8 行（通用模块产品经理 2026-11-02 签；2026-11-04 按「桌面只给三类」补档） ──
+  // ── 平台 9 行（通用模块产品经理 2026-11-02 签 8 行；2026-11-04 按「桌面只给三类」补档，同日加 P8） ──
   'platform.job.failed-terminal': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.job.repeated-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'platform.analysis.quota-exhausted': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
@@ -31,6 +32,9 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.channel.push-resumed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   // 桌面自己失败时不再投桌面：见文件头第 2 条。
   'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false },
+  // P8 频道连不上（2026-11-04 用户拍板新增；通用 PM 需求 v2.17 §11 签字）：
+  // 系统状态类，与该表其它系统状态同档；**不含 channel**——本机状态不该再推到手机。
+  'platform.channel.connection-lost': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   // ── 情报 7 行（情报模块产品经理 2026-11-02 签 7 行；2026-11-04 重签桌面与提示档） ──
   'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   // 完成类：不弹桌面、不弹提示（只在应用内与中心出现），通道是上限，读者在情报页勾了才推。
@@ -43,5 +47,5 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false }
 })
 
-/** 本版批准表行数：验收与守卫按它核对「15 行」。多一行少一行都要回产品重签。 */
+/** 本版批准表行数：验收与守卫按它核对「16 行」。多一行少一行都要回产品重签。 */
 export const NOTIFICATION_EVENT_POLICY_ROW_COUNT = Object.keys(NOTIFICATION_EVENT_POLICY).length

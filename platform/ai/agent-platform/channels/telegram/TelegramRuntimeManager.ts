@@ -1,6 +1,7 @@
 import type { ChannelCredentialVault } from '../../../../secrets/channels/channelCredentialContracts'
 import type { ChannelInboundService } from '../ChannelInboundService'
 import { ChannelInboundRepository } from '../ChannelInboundRepository'
+import type { ChannelConnectionCause } from '../channelConnectionOutage'
 import { TelegramApiClient } from './TelegramApiClient'
 import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
@@ -34,6 +35,10 @@ export class TelegramRuntimeManager {
     recordFailure?: (channelId: string, generation: number, reason: string) => void
     /** 轮询宿主退出时记一行（失去资格 / 被停掉）：**静默退出**是最坏的表现形式。 */
     recordExit?: (channelId: string, generation: number, code: string) => void
+    /** 自动重连失败时提交一次「频道连不上」（契约 §4.1 P8）；重试过程一次都不提交。 */
+    reportConnectionLost?: (input: {
+      channelId: string; generation: number; cause: ChannelConnectionCause; disconnectedAt: string
+    }) => void
   }) {}
 
   async start(channelId: string, generation: number, ownerToken: string): Promise<TelegramRuntimeStartResult> {
@@ -83,7 +88,8 @@ export class TelegramRuntimeManager {
         onExit: (reason) => {
           // 只有「失去资格」要单独记一笔：用户停用/重启那一路已经有「连接已停止」了。
           if (reason === 'not-current') this.deps.recordExit?.(channelId, generation, 'channel-stale-generation')
-        }
+        },
+        onConnectionLost: (lost) => this.deps.reportConnectionLost?.({ channelId, generation, ...lost })
       })
       this.hosts.set(channelId, host)
       this.hostGenerations.set(channelId, generation)
