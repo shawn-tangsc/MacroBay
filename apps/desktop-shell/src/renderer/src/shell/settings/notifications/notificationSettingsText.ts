@@ -47,17 +47,16 @@ const zh: NotificationSettingsText = {
   localGroup: '本机',
   testGroup: '测试',
   toastRow: '应用内提示',
-  toastHint:
-    '两个作用：桌面提醒开着时不会再在应用内重复；桌面关着时，它接住这些提醒。两个都关，就只剩通知中心里的记录。',
+  toastHint: '桌面关着时，它接住这些提醒；桌面开着时，弹过桌面的不会在这里重复。',
   desktopRow: '桌面提醒',
   desktopHint:
-    '开了就弹桌面，同一条只打扰一次，不会再在应用内重复。系统里如果关掉了 MacroBay 的通知，我们看不到——没看到横幅就去「系统设置 › 通知 › MacroBay」打开允许通知，再点一次「发送测试通知」。',
+    '桌面开着时，失败与系统状态会弹到桌面；同一件事只打扰一次，不会再在应用内重复。第一次真要弹通知时，系统会问你要不要允许。系统里如果关掉了 MacroBay 的通知，我们看不到——没看到横幅就去『系统设置 › 通知 › MacroBay』打开允许通知，再点一次『发送测试通知』。',
   toastHintLabel: '应用内提示的说明',
   desktopHintLabel: '桌面提醒的说明',
   footerHintLabel: '页脚说明',
   sendTestRow: '发送测试通知',
   sendTest: '发送测试',
-  footerLine: '失败与状态变化一定会记录。',
+  footerLine: '都会记进通知中心。该弹桌面的会弹到桌面，同一件事不会重复。',
   centerDesc: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
   footerHint:
     '这些事件都由我们替你决定、不给开关。本机只打扰一次：桌面开着就弹桌面、不再在应用内重复；只有「桌面关着、这台机器不支持桌面通知、发送报错」这三种情况才改在应用内提示。系统里关掉通知这件事我们读不到，也不会因此重复弹一次。手机是另一回事——只有三条离开应用，跟这里的开关无关。',
@@ -76,16 +75,16 @@ const en: NotificationSettingsText = {
   testGroup: 'Test',
   toastRow: 'In-app hint',
   toastHint:
-    'It does two things: when desktop alerts are on, this keeps a notification from repeating in the app; when desktop alerts are off, it catches them instead. With both off, only the record in the notification center remains.',
+    'When desktop alerts are off, this catches those reminders; when they are on, anything already shown on the desktop does not repeat here.',
   desktopRow: 'Desktop alerts',
   desktopHint:
-    'When on, it shows on the desktop; one notification disturbs you once and does not repeat in the app. We cannot see whether MacroBay notifications are turned off in the system — if no banner appears, open "System Settings › Notifications › MacroBay", allow notifications, then press "Send test" again.',
+    'Failures and system status show on the desktop when desktop alerts are on; one notification disturbs you once and does not repeat in the app. The first time a notification really needs to appear, the system asks whether to allow it. We cannot see whether MacroBay notifications are turned off in the system — if no banner appears, open 「System Settings › Notifications › MacroBay」, allow notifications, then press "Send test" again.',
   toastHintLabel: 'About the in-app hint',
   desktopHintLabel: 'About desktop alerts',
   footerHintLabel: 'About this footer',
   sendTestRow: 'Send a test notification',
   sendTest: 'Send test',
-  footerLine: 'Failures and state changes are always recorded.',
+  footerLine: 'Everything is recorded in the notification center. Whatever should show on the desktop does, and the same thing never repeats.',
   centerDesc:
     'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',
   footerHint:
