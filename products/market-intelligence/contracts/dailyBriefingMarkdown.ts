@@ -1,6 +1,7 @@
 import { editionNewsTitle } from './dailyBriefing/readings'
 import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, BriefingRowChange, DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
+import { briefingDataGroups, briefingDataRowsFromGroups } from './dailyBriefingDataGroups'
 
 export type DailyBriefingMarkdownLabels = Readonly<{
   title: string
@@ -87,10 +88,13 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     if (document.data.leverage && document.data.leverage.visibility !== 'hidden') {
       const leverage = document.data.leverage
       lines.push('', `### ${labels.sections.leverage}`)
-      for (const [asset, entry] of [['BTC', leverage.btc], ['ETH', leverage.eth]] as const) {
+      for (const [asset, key, entry] of [['BTC', 'btc', leverage.btc], ['ETH', 'eth', leverage.eth]] as const) {
         const openInterest = entry.openInterestUsd === undefined ? labels.noValue : `$${(entry.openInterestUsd / 1e9).toFixed(2)}B`
         const day = entry.change24hPct === undefined ? labels.noValue : `${entry.change24hPct.toFixed(1)}%`
-        lines.push(`- ${asset} · ${openInterest} · ${day}`)
+        // The rate travels with the block that explains it, exactly as on the card.
+        const rate = briefingDataGroups(document).funding.find((row) => row.id === `funding-${key}`)?.value?.number
+        const fee = rate === undefined ? labels.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`
+        lines.push(`- ${asset} · ${fee} · ${openInterest} · ${day}`)
       }
     }
     if (document.data.policyPath && document.data.policyPath.visibility !== 'hidden') {
@@ -138,9 +142,14 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
  * and be missing from the markdown. Readiness already decided presence; nothing here filters on "does
  * this row have a change", which silently dropped stablecoin and fear-and-greed on quiet days.
  */
-export function briefingDataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
-  return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
-    .filter((row) => row.visibility !== 'hidden')
+/**
+ * The data region's rows, derived from the one partition.
+ *
+ * Derived, not re-walked: a second traversal of `document.data.*` is how the funding rate came to be
+ * printed twice — once in the funds block and once in the leverage card.
+ */
+export function briefingDataRows(document: DailyBriefingDocument): readonly (BriefingMarketRow | BriefingPulseRow)[] {
+  return briefingDataRowsFromGroups(briefingDataGroups(document))
 }
 
 /**

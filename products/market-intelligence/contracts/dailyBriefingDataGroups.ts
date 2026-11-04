@@ -28,6 +28,8 @@ export type BriefingDataGroups = Readonly<{
   policyPath: DailyBriefingDocument['data']['policyPath']
   /** Open interest and funding: shown in the leverage block, never in the readings line. */
   leverage: DailyBriefingDocument['data']['leverage']
+  /** The funding rows themselves: the leverage block prints the rate from here, nobody re-reads `funds`. */
+  funding: readonly BriefingPulseRow[]
 }>
 
 const PRICE_IDS: ReadonlySet<string> = new Set(['btc', 'eth'])
@@ -48,6 +50,23 @@ export function briefingDataGroups(document: DailyBriefingDocument): BriefingDat
     ]),
     funds: Object.freeze(funds.filter((row) => row.id !== 'stablecoin')),
     policyPath: document.data.policyPath,
-    leverage: document.data.leverage
+    leverage: document.data.leverage,
+    funding: Object.freeze(document.data.funds.filter((row) => row.visibility !== 'hidden' && LEVERAGE_ONLY_FUND_IDS.has(row.id)))
   })
+}
+
+/**
+ * The whole data region as one ordered list, derived from the groups.
+ *
+ * Derived, not re-walked: a second traversal of `document.data.*` is how the funding rate came to be
+ * printed twice (once in the funds block, once in the leverage card) and how a partition function
+ * could sit unused while both renderers kept their own loops.
+ */
+export function briefingDataRowsFromGroups(groups: BriefingDataGroups): readonly (BriefingMarketRow | BriefingPulseRow)[] {
+  return Object.freeze([...groups.price, ...groups.readings, ...groups.funds])
+}
+
+/** The same list for a caller that holds the document; both read the one partition. */
+export function briefingDataRows(document: DailyBriefingDocument): readonly (BriefingMarketRow | BriefingPulseRow)[] {
+  return briefingDataRowsFromGroups(briefingDataGroups(document))
 }

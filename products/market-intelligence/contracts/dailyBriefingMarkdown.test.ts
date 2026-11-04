@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { productText } from '../desktop/shared/i18n/productText'
 import type { DailyBriefingDocument } from './dailyBriefing'
+import { briefingDataRows } from './dailyBriefingDataGroups'
 import { dailyBriefingToMarkdown } from './dailyBriefingMarkdown'
 
 const labels = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -290,5 +291,31 @@ describe('daily briefing markdown news titles', () => {
       expect(markdown).toContain(SECOND)
       expect(markdown.indexOf(first)).toBeLessThan(markdown.indexOf(SECOND))
     }
+  })
+})
+
+describe('the data region has one partition', () => {
+  it('keeps the funding rows out of the row list and the ETF rows in it', () => {
+    // The duplicate that started this: the funding rate printed in the funds block and again in the
+    // leverage card. Restoring it to the list turns this red, which is the point.
+    const base = document()
+    const fundRow = (id: 'funding-btc' | 'funding-eth' | 'etf-btc' | 'etf-eth', value: number) => ({
+      id, group: 'funds' as const, labelKey: `dailyBriefing.row.${id}`,
+      importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+      state: 'available' as const, value: { number: value, format: 'percent' as const },
+      change: null, window: '24h' as const, observedAt: base.edition.windowEnd
+    })
+    const rows = briefingDataRows({
+      ...base,
+      data: {
+        ...base.data,
+        funds: [...base.data.funds, fundRow('funding-btc', 0.01), fundRow('funding-eth', 0.01), fundRow('etf-btc', -398_600_000), fundRow('etf-eth', -139_700_000)]
+      }
+    })
+    const ids = rows.map((row) => row.id)
+    expect(ids.filter((id) => id === 'funding-btc')).toHaveLength(0)
+    expect(ids.filter((id) => id === 'funding-eth')).toHaveLength(0)
+    expect(ids.filter((id) => id === 'etf-btc')).toHaveLength(1)
+    expect(ids.filter((id) => id === 'etf-eth')).toHaveLength(1)
   })
 })

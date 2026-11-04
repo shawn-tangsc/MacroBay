@@ -3,7 +3,7 @@ import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
-import { briefingDataRows } from '../../../contracts/dailyBriefingMarkdown'
+import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { paymentDirectionFor, type paymentDirectionWords as PayDirectionWords } from './dailyBriefingPaymentDirections'
@@ -29,7 +29,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   // The same rows the copied text prints, unmodified: one function, two exports, no second opinion.
   // A stale row is marked stale on the row itself; dropping it here made the PNG and the copied text
   // disagree about the same edition (the image lost rows the text still had).
-  const rows = briefingDataRows(doc)
+  const groups = briefingDataGroups(doc)
+  const rows = [...groups.price, ...groups.readings, ...groups.funds]
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')
@@ -123,7 +124,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {(['btc', 'eth'] as const).map((asset) => {
           const entry = doc.data.leverage![asset]
           // The rate is the funds row of the same asset; the block explains it rather than repeating it.
-          const rate = doc.data.funds.find((row) => row.id === `funding-${asset}`)?.value?.number
+          const rate = groups.funding.find((row) => row.id === `funding-${asset}`)?.value?.number
           const direction = paymentDirectionFor(rate, paymentDirectionsCompact)
           return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={rate === undefined ? 'flat' : rate > 0 ? 'up' : rate < 0 ? 'down' : 'flat'}>
             <span>{asset.toUpperCase()}</span>
