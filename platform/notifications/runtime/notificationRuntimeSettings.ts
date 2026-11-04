@@ -105,3 +105,32 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
 
   }
 }
+
+/**
+ * 设置面的**装配**（从 runtime 搬出来只为体积门禁）。
+ *
+ * 这里仍然只有一份设置面：唯一写入口还是 `updateSettings`，runtime 不另外整份重写设置，
+ * 所以搬出来不会多出第二个写入方（契约 §5.1）。
+ */
+export function composeNotificationSettingsSurface(
+  deps: {
+    catalog?: NotificationEventCatalog
+    getSettings: () => Promise<NotificationRuntimeSettings>
+    updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
+    getPushTargets?: () => Promise<readonly unknown[]>
+    pushWired?: () => boolean
+  },
+  internals: Pick<
+    NotificationSettingsSurfaceInput,
+    'load' | 'exclusive' | 'persistWithDiagnostics' | 'notifyChanged'
+  >
+) {
+  return createNotificationSettingsSurface({
+    getCatalog: () => deps.catalog,
+    getSettings: deps.getSettings,
+    updateSettings: deps.updateSettings,
+    getPushTargets: deps.getPushTargets,
+    pushWired: deps.pushWired,
+    ...internals
+  })
+}

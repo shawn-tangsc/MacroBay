@@ -114,25 +114,15 @@ describe('notification store', () => {
     expect(normalizeNotificationStoreState({ records: [] }).dailyCounters).toEqual({})
   })
 
-  it('keeps the subscription table in the same file and normalizes it without inventing rows', () => {
-    // 契约 §5.1：订阅与记录同一份 JSON（一份真相），旧文件没有该字段 → 空表、不预置。
-    const fresh = normalizeNotificationStoreState({ records: [] })
-    expect(fresh.subscriptions).toEqual({})
-
-    const stored = normalizeNotificationStoreState({
+  it('ignores a legacy subscription table instead of resurrecting it', () => {
+    // 订阅层 2026-11-04 整层撤销：旧文件里还留着 `subscriptions`，读时**忽略**，不回写、不迁移。
+    const legacy = normalizeNotificationStoreState({
       records: [],
-      subscriptions: {
-        'market-intelligence.briefing.ready': { record: true },
-        'platform.job.failed-terminal': { desktop: true, record: 'yes' },
-        'market-intelligence.calibration.result': {}
-      }
+      subscriptions: { 'market-intelligence.briefing.ready': { record: true } }
     })
-    expect(stored.subscriptions).toEqual({
-      'market-intelligence.briefing.ready': { record: true },
-      'platform.job.failed-terminal': { desktop: true }
-    })
-    // 整份重写后仍是同一张表：空行不复活、不按批准表预置。
-    expect(normalizeNotificationStoreState(JSON.parse(JSON.stringify(stored))).subscriptions).toEqual(stored.subscriptions)
+    expect(legacy).not.toHaveProperty('subscriptions')
+    // 整份重写后也不会把它带回去。
+    expect(normalizeNotificationStoreState(JSON.parse(JSON.stringify(legacy)))).toEqual({ records: [], dailyCounters: {}, pushBackoff: {} })
   })
 
   it('normalizes old records to a legacy event type and an empty delivery map', () => {

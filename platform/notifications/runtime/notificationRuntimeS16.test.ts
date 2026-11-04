@@ -31,7 +31,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop'],
           dedupeKeyTemplate: 'done:{date}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: true
         },
         {
           id: 'platform.other',
@@ -41,7 +40,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop'],
           dedupeKeyTemplate: 'other:{date}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     }
@@ -71,31 +69,46 @@ function createRuntime(records: readonly ReturnType<typeof record>[]) {
   let state: any = {
     records,
     dailyCounters: {},
-    subscriptions: {},
     pushBackoff: {}
+  }
+  // 设置与记录同一份 JSON：这是 `getSettings`/`updateSettings` 的替身，写入后必须读得回。
+  // 频道事件表也在这份设置里：清理**不许**把它抹掉（三条缺省即开，这里显式存一个 false）。
+  let settings: any = {
+    desktopEnabled: false,
+    toastEnabled: false,
+    channelEvents: { 'market-intelligence.signal.triggered': false }
   }
   const storage: NotificationStorage = {
     read: async () => JSON.parse(JSON.stringify(state)),
     write: async (next) => { state = JSON.parse(JSON.stringify(next)) }
   }
   return {
-    runtime: createNotificationRuntime({ storage, catalog, getSettings: async () => settings, clock }),
-    state: () => state
+    runtime: createNotificationRuntime({
+      storage,
+      catalog,
+      getSettings: async () => settings,
+      updateSettings: async (patch) => {
+        settings = { ...settings, ...patch }
+      },
+      clock
+    }),
+    state: () => state,
+    settings: () => settings
   }
 }
 
 describe('S16: prune keeps subscriptions and caps records', () => {
-  it('keeps the subscription table exactly as the reader left it', async () => {
-    const { runtime, state } = createRuntime([record(0), record(1)])
-    await runtime.setSubscription('platform.done', { record: true })
-    await runtime.setSubscription('platform.other', { desktop: true })
+  it('keeps the switches and the three channel events exactly as the reader left them', async () => {
+    const { runtime, state, settings } = createRuntime([record(0), record(1)])
+    await runtime.setDesktopEnabled(true)
 
     const result = await runtime.prune()
 
     expect(result).toEqual({ removedRecords: 0, removedCounters: 0 })
-    expect(await runtime.getSubscriptions()).toEqual({
-      'platform.done': { record: true },
-      'platform.other': { desktop: true }
+    // 清理只碰记录与计数；两个开关与频道事件表原样留着（设置与记录同一份 JSON）。
+    expect(settings()).toMatchObject({
+      desktopEnabled: true,
+      channelEvents: { 'market-intelligence.signal.triggered': false }
     })
     expect(state().records).toHaveLength(2)
   })
@@ -103,26 +116,26 @@ describe('S16: prune keeps subscriptions and caps records', () => {
   it('actually deletes a record older than the window and keeps subscriptions through the write', async () => {
     const old = { ...record(0), createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' }
     const fresh = record(1)
-    const { runtime, state } = createRuntime([old, fresh])
-    await runtime.setSubscription('platform.done', { record: true })
+    const { runtime, state, settings } = createRuntime([old, fresh])
+    await runtime.setDesktopEnabled(true)
 
     const result = await runtime.prune()
 
     // removedRecords === 1 证明这次真写了盘，不是「没东西删」的早退分支。
     expect(result.removedRecords).toBe(1)
     expect(state().records).toHaveLength(1)
-    expect(await runtime.getSubscriptions()).toEqual({ 'platform.done': { record: true } })
+    expect(settings()).toMatchObject({ desktopEnabled: true })
   })
 
   it('caps the record list at 500 on the runtime, not only in the pure function', async () => {
     const records = Array.from({ length: 501 }, (_, index) => record(index))
-    const { runtime, state } = createRuntime(records)
-    await runtime.setSubscription('platform.done', { record: true })
+    const { runtime, state, settings } = createRuntime(records)
+    await runtime.setDesktopEnabled(true)
 
     const result = await runtime.prune()
 
     expect(result.removedRecords).toBe(1)
     expect(state().records).toHaveLength(500)
-    expect(await runtime.getSubscriptions()).toEqual({ 'platform.done': { record: true } })
+    expect(settings()).toMatchObject({ desktopEnabled: true })
   })
 })

@@ -37,7 +37,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'source:{sourceId}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     },
@@ -54,7 +53,6 @@ const catalog = createNotificationEventCatalog({
           dedupeKeyTemplate: 'failed:{id}:{date}',
           dedupeUnit: 'condition',
           conditionWindowMs: 86_400_000,
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.done',
@@ -64,7 +62,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop'],
           dedupeKeyTemplate: 'done:{date}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: true
         },
         {
           id: 'platform.merge-a',
@@ -75,7 +72,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'shared:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.merge-b',
@@ -86,7 +82,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'shared:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.merge-c',
@@ -96,7 +91,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'shared:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     }
@@ -150,27 +144,29 @@ describe('notification runtime submit', () => {
     expect(state().records).toHaveLength(0)
   })
 
-  it('suppresses a completion event when the reader has not subscribed', async () => {
+  it('still records a completion event: there is no "not subscribed" suppression any more', async () => {
+    // 订阅层 2026-11-04 撤销：完成类不再因为「没勾」被丢掉，中心恒记一条。
     const { runtime, state } = createRuntime()
     const outcome = await runtime.submit(
       request({ eventTypeId: 'platform.done', dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } } })
     )
-    expect(outcome).toMatchObject({ kind: 'suppressed', reason: 'not-subscribed' })
-    expect(state().records).toHaveLength(0)
+    expect(outcome).toMatchObject({ kind: 'accepted' })
+    expect(state().records).toHaveLength(1)
   })
 
-  it('records a completion event once the record column is ticked', async () => {
+  it('records a completion event with the center surface, whatever the switches say', async () => {
     const { runtime, state } = createRuntime({
       records: [],
       dailyCounters: {},
-      subscriptions: { 'platform.done': { record: true } },
       pushBackoff: {}
     })
     const outcome = await runtime.submit(
       request({ eventTypeId: 'platform.done', dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } } })
     )
-    expect(outcome).toMatchObject({ kind: 'accepted', levels: ['center'] })
+    expect(outcome).toMatchObject({ kind: 'accepted' })
     expect(state().records).toHaveLength(1)
+    // 两个本机表面互斥：排了桌面就不再排提示。
+    expect(state().records[0]?.delivery.toast).toBeUndefined()
   })
 
   it('T27: merges two event types under one key, keeping title/actions of the first and body of the latest', async () => {
@@ -251,12 +247,13 @@ describe('notification runtime submit', () => {
     expect(diagnostics).toEqual([])
   })
 
-  it('T19: unchecking the desktop column returns the record to suppressed', async () => {
-    const { runtime } = createRuntime()
+  it('T19: with the desktop switch off the event still lands in the center, without a desktop delivery', async () => {
+    const { runtime, state } = createRuntime({ settings: { desktopEnabled: false } })
     await expect(
       runtime.submit(
         request({ eventTypeId: 'platform.done', dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } } })
       )
-    ).resolves.toMatchObject({ kind: 'suppressed' })
+    ).resolves.toMatchObject({ kind: 'accepted' })
+    expect(state().records[0]?.delivery.desktop).toBeUndefined()
   })
 })

@@ -47,7 +47,6 @@ function event(overrides: Record<string, unknown> = {}): Record<string, unknown>
     requestedDisruptionLevels: ['desktop', 'channel'],
     dedupeKeyTemplate: 'brief-done:{date}:{period}',
     dedupeUnit: 'occurrence',
-    notifyOnlyIfSubscribed: true,
     ...overrides
   }
 }
@@ -73,7 +72,8 @@ describe('notification event declarations', () => {
     ['an unknown dedupe unit', { dedupeUnit: 'window' }],
     ['condition without a window', { dedupeUnit: 'condition' }],
     ['occurrence with a window', { dedupeUnit: 'occurrence', conditionWindowMs: 3_600_000 }],
-    ['a non-boolean notifyOnlyIfSubscribed', { notifyOnlyIfSubscribed: 'yes' }]
+    // 字段已随订阅层撤销删除，但「布尔字段必须校验」这份覆盖要保住：换成现存的布尔字段。
+    ['a non-boolean requiresUserAction', { requiresUserAction: 'yes' }]
   ])('rejects %s', (_label, overrides) => {
     expect(() => validate(manifestWith([event(overrides)]))).toThrow(ProductRegistryValidationError)
   })

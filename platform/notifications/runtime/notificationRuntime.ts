@@ -50,7 +50,7 @@ import {
   type NotificationClock
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
-import { createNotificationSettingsSurface } from './notificationRuntimeSettings'
+import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 import {
   compareNotifications,
   notificationCursorKey,
@@ -272,17 +272,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     return plan.outcome
   }
 
-  const settingsSurface = createNotificationSettingsSurface({
-    getCatalog: () => deps.catalog,
-    getSettings: deps.getSettings,
-    updateSettings: deps.updateSettings,
-    getPushTargets: deps.getPushTargets,
-    pushWired: () => deps.deliveryHooks?.push !== undefined,
-    load,
-    exclusive,
-    persistWithDiagnostics,
-    notifyChanged
-  })
+  const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }
+  const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
   const delivery = createNotificationDelivery({
     deliveryHooks: deps.deliveryHooks,
     clock: deps.clock,

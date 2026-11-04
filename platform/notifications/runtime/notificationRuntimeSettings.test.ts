@@ -25,7 +25,6 @@ const catalog = createNotificationEventCatalog({
           dedupeKeyTemplate: 'push-suspended:{channelId}',
           dedupeUnit: 'condition',
           conditionWindowMs: 86_400_000,
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.channel.push-resumed',
@@ -36,7 +35,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'push-resumed:{channelId}:{day}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         },
         {
           id: 'platform.done',
@@ -47,7 +45,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: ['desktop', 'channel'],
           dedupeKeyTemplate: 'done:{date}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: true
         }
       ]
     },
@@ -62,7 +59,6 @@ const catalog = createNotificationEventCatalog({
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'thing:{id}',
           dedupeUnit: 'occurrence',
-          notifyOnlyIfSubscribed: false
         }
       ]
     }
@@ -87,7 +83,6 @@ function createRuntime(options: {
   let state: any = {
     records: [],
     dailyCounters: {},
-    subscriptions: options.subscriptions ?? {},
     pushBackoff: {}
   }
   const storage: NotificationStorage = {
@@ -115,64 +110,53 @@ function createRuntime(options: {
 }
 
 describe('notification settings surface', () => {
-  it('projects the catalog with notifyOnlyIfSubscribed', async () => {
+  it('projects the catalog with the approved disruption levels', async () => {
     const { runtime } = createRuntime()
     const entries = await runtime.listEventCatalog()
-    expect(entries.find((entry) => entry.id === 'platform.done')?.notifyOnlyIfSubscribed).toBe(true)
+    const entry = entries.find((candidate) => candidate.id === 'platform.done')
+    // 订阅层撤销后，目录只剩「批准档位」这一份上限；不再有逐事件的订阅标记。
+    expect(entry?.approvedDisruptionLevels).toContain('center')
+    expect(entry).not.toHaveProperty('notifyOnlyIfSubscribed')
   })
 
-  it('writes a subscription and derives record from a delivery column', async () => {
-    const { runtime, state } = createRuntime()
-    expect(await runtime.getSubscriptions()).toEqual({})
-    await expect(runtime.setSubscription('platform.done', { record: true })).resolves.toMatchObject({
-      ok: true,
-      subscription: { record: true }
+  it('writes the three channel events and refuses an id that is not approved for the phone', async () => {
+    const { runtime, updates } = createRuntime()
+    expect(await runtime.getChannelEvents()).toEqual({})
+
+    await expect(runtime.setChannelEvent('platform.done', false)).resolves.toEqual({
+      eventId: 'platform.done',
+      enabled: false
     })
-    expect(state().subscriptions).toEqual({ 'platform.done': { record: true } })
+    expect(updates.at(-1)).toMatchObject({ channelEvents: { 'platform.done': false } })
 
-    // 勾桌面 → 记录格视为已记录；取消桌面 → 回到显式值（没有隐藏 true）。
-    await runtime.setSubscription('platform.done', { desktop: true })
-    expect(state().subscriptions['platform.done']).toEqual({ record: true, desktop: true })
-    await runtime.setSubscription('platform.done', { record: false, desktop: false })
-    expect(state().subscriptions['platform.done']).toBeUndefined()
+    // 未批准 channel 的 id：**抛错**，不静默忽略——静默会让调用方以为存上了。
+    await expect(runtime.setChannelEvent('platform.nope', true)).rejects.toThrow(
+      'notification-channel-event-not-allowed: platform.nope'
+    )
   })
 
-  it('rejects an unregistered event and a product-writing another product row', async () => {
-    const { runtime } = createRuntime()
-    await expect(runtime.setSubscription('platform.nope', { desktop: true })).resolves.toEqual({
-      ok: false,
-      reasonCode: 'unknown-event-type'
-    })
-    await expect(
-      runtime.setSubscription('platform.done', { desktop: true }, { productId: 'other-product' })
-    ).resolves.toEqual({ ok: false, reasonCode: 'scope-mismatch' })
-  })
-
-  it('returns the current toast switch and the real push wiring, not a constant', async () => {
+  it('reports the desktop switch and the real push wiring, not a constant', async () => {
     const withoutPush = createRuntime()
-    expect(await withoutPush.runtime.getDeliverySettings()).toEqual({
+    expect(await withoutPush.runtime.getDeliverySettings()).toMatchObject({
       toastEnabled: false,
-      channelId: 'telegram',
+      desktopEnabled: true,
       pushWired: false,
-      channels: [],
-      lastPushFailureAt: null,
-      lastPushFailureReason: null
+      channels: []
     })
     const withPush = createRuntime({ push: async () => ({ ok: true }) })
     expect((await withPush.runtime.getDeliverySettings()).pushWired).toBe(true)
   })
 
-  it('writes the toast switch and the push channel through the injected settings port', async () => {
+  it('writes both switches through the injected settings port', async () => {
     const { runtime, updates } = createRuntime()
     await runtime.setToastEnabled(true)
-    await runtime.setPushChannel('telegram')
-    expect(updates).toEqual([{ toastEnabled: true }, { push: { channelId: 'telegram' } }])
+    await runtime.setDesktopEnabled(true)
+    expect(updates).toEqual([{ toastEnabled: true }, { desktopEnabled: true }])
   })
 
   it('pauses push after three consecutive failures and skips with push-backoff', async () => {
     let calls = 0
     const { runtime, state } = createRuntime({
-      subscriptions: { 'platform.done': { channel: true } },
       push: async () => {
         calls += 1
         return { ok: false, reason: 'channel-rejected' }
@@ -199,16 +183,16 @@ describe('notification settings surface', () => {
     expect((await runtime.getDeliverySettings()).lastPushFailureReason).toBe('push-backoff')
   })
 
-  it('keeps subscriptions and records when they alternate twenty times', async () => {
-    const { runtime, state } = createRuntime()
+  it('keeps the preferences and the records when they alternate twenty times', async () => {
+    const { runtime, state, updates } = createRuntime()
     for (let index = 0; index < 20; index += 1) {
-      await runtime.setSubscription('platform.done', { desktop: index % 2 === 0 })
+      await runtime.setChannelEvent('platform.done', index % 2 === 0)
       await runtime.submit(request(`2026-11-${String(index + 1).padStart(2, '0')}`))
     }
-    // 最后一次是关，行被删掉；再写一次仍能落到同一份 state，证明没有互相覆盖。
-    expect(state().subscriptions['platform.done']).toBeUndefined()
-    await runtime.setSubscription('platform.done', { desktop: true })
-    expect(state().subscriptions['platform.done']).toEqual({ desktop: true })
+    // 偏好与记录走两个入口、同一份 state：二十轮交替之后，最后一次写的是关，记录也都在。
+    expect(updates.at(-1)).toMatchObject({ channelEvents: { 'platform.done': false } })
+    await runtime.setChannelEvent('platform.done', true)
+    expect(updates.at(-1)).toMatchObject({ channelEvents: { 'platform.done': true } })
     expect(state().records.length).toBeGreaterThan(0)
   })
 
@@ -219,7 +203,6 @@ describe('notification settings surface', () => {
 
   it('does not count unknown-after-send as a failure and does not clear the backoff', async () => {
     const { runtime, state } = createRuntime({
-      subscriptions: { 'platform.done': { channel: true } },
       push: async () => ({ ok: false, reason: 'unknown-after-send' })
     })
     for (const date of ['2026-11-01', '2026-11-02', '2026-11-03']) await runtime.submit(request(date))
@@ -231,7 +214,6 @@ describe('notification settings surface', () => {
   it('clears the backoff after a successful send', async () => {
     let calls = 0
     const { runtime, state } = createRuntime({
-      subscriptions: { 'platform.done': { channel: true } },
       push: async () => {
         calls += 1
         return calls < 3 ? { ok: false, reason: 'channel-rejected' } : { ok: true, messageId: 'm-1' }

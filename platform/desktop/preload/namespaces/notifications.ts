@@ -73,6 +73,11 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
       >,
     setToastEnabled: (enabled: boolean) =>
       ipcRenderer.invoke(IpcChannels.notificationsSetToastEnabled, { enabled }) as Promise<{ toastEnabled: boolean }>,
+    /** 桌面开关（缺过一行：IPC 常量与 handler 都在，桥接漏了，于是那颗开关永远存不上）。 */
+    setDesktopEnabled: (enabled: boolean) =>
+      ipcRenderer.invoke(IpcChannels.notificationsSetDesktopEnabled, { enabled }) as Promise<{
+        desktopEnabled: boolean
+      }>,
     /**
      * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是那条记录本身（键与参数）。
      * 渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。

@@ -32,7 +32,15 @@ describe('product registry generator', () => {
     const intelligenceSettingsIds = registry.settingsEntries
       .filter((entry) => entry.id.startsWith('market-intelligence.'))
       .map((entry) => entry.id)
-    expect(intelligenceSettingsIds).toEqual(['market-intelligence.intelligence-sources'])
+    expect(intelligenceSettingsIds).toEqual([
+      'market-intelligence.intelligence-sources',
+      'market-intelligence.intelligence-notification'
+    ])
+    const intelligenceNotificationEntry = registry.settingsEntries.find(
+      (entry) => entry.id === 'market-intelligence.intelligence-notification'
+    )
+    // 新面板用注册表里已有的图标，不新增图标；顺序 11 紧跟源面板。
+    expect(intelligenceNotificationEntry).toMatchObject({ icon: 'message-square-text', order: 11 })
   })
 
   it('rejects manifest ids that do not match the product directory', () => {
