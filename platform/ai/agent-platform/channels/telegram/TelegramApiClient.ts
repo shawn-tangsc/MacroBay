@@ -65,7 +65,14 @@ export class TelegramApiClient {
       if (response.status === 429) return { ok: false, code: 'telegram-rate-limited', retryAfterMs: boundedRetry(json.parameters?.retry_after) }
       if (response.status === 409) return { ok: false, code: 'telegram-conflict' }
       if (response.status >= 500) return { ok: false, code: 'telegram-network-unavailable' }
-      return { ok: false, code: 'telegram-provider-rejected', parseRejected: /parse entities|can't parse/i.test(json.description ?? '') }
+      return {
+        ok: false,
+        code: 'telegram-provider-rejected',
+        parseRejected: /parse entities|can't parse/i.test(json.description ?? ''),
+        // Telegram 的说明是人类可读的（`Bad Request: chat not found` 这类），不含 token、不含 URL；
+        // 截断后随失败一路带到投递审计里——用户看到「发送失败」时，我们总算有下一句可查。
+        providerDetail: sanitizeProviderDetail(json.description)
+      }
     } catch (error) {
       const transportError = chromiumErrorName(error)
       const failure = { ok: false as const, code: classifyTransportFailure(error, signal) }
@@ -100,6 +107,13 @@ function describeError(error: unknown): string {
     return `${error.name}: ${error.message} ${cause}`
   }
   return String(error)
+}
+
+/** 只保留 Telegram 自己的说明文字：去掉尖括号里的占位（可能含 id）与多余空白，截断到 120 字。 */
+function sanitizeProviderDetail(description: unknown): string | undefined {
+  if (typeof description !== 'string') return undefined
+  const cleaned = description.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+  return cleaned ? cleaned.slice(0, 120) : undefined
 }
 
 function boundedRetry(value: unknown): number {

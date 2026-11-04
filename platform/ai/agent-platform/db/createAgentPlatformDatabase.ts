@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
 import { channelCredentialRecovery } from './migrations/channelCredentialRecovery'
+import { channelDeliveryAuditDetail } from './migrations/channelDeliveryAuditDetail'
 
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
@@ -1512,7 +1513,8 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   ...channelSettingsOverrides,
-  ...channelCredentialRecovery
+  ...channelCredentialRecovery,
+  ...channelDeliveryAuditDetail
 ]
 
 export type AgentPlatformDatabase = {

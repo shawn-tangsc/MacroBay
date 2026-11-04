@@ -46,14 +46,17 @@ export function isChannelDeliverySkipReason(value: string | null | undefined): v
 
 export type ChannelDeliveryTransportResult =
   | { kind: 'delivered' }
-  | { kind: 'failed'; code: ChannelDeliveryFailureCode }
-  | { kind: 'unknown-after-send' }
+  /** `detail` 是通道自己给的一句话（已脱敏截断），只用于日志排查，不参与判定。 */
+  | { kind: 'failed'; code: ChannelDeliveryFailureCode; detail?: string }
+  | { kind: 'unknown-after-send'; detail?: string }
 
 export type ChannelDeliveryFailureCode =
   | 'delivery-host-unavailable'
   | 'delivery-permission-denied'
   | 'delivery-rate-limited'
   | 'delivery-provider-rejected'
+  /** 会话键里补不出平台认的目标（例如 Telegram 的 chat id）：这是目标解析问题，不是网络。 */
+  | 'delivery-target-invalid'
 
 export type ChannelDeliveryTransport = {
   send: (input: {

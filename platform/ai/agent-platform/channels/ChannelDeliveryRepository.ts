@@ -145,7 +145,17 @@ export class ChannelDeliveryRepository {
 
   // An old sender cannot overwrite a newer owner. A lifecycle fence after transport begins
   // preserves an unknown outcome instead of asserting delivery.
-  finish(input: { owner: ChannelDeliverySendOwner; status: Exclude<ChannelDeliveryStatus, 'pending' | 'sending'>; errorCode: string | null; retryable?: boolean; executionClaim?: ChannelExecutionClaim; now: Date }): boolean {
+  finish(input: {
+    owner: ChannelDeliverySendOwner
+    status: Exclude<ChannelDeliveryStatus, 'pending' | 'sending'>
+    errorCode: string | null
+    weight?: never
+    retryable?: boolean
+    /** 通道自己给的一句话（脱敏截断），只进审计，不参与判定。 */
+    detail?: string
+    executionClaim?: ChannelExecutionClaim
+    now: Date
+  }): boolean {
     return this.database.transact(() => {
       const row = this.database.connection.prepare(
         `select id, channel_id, agent_id, conversation_id, source_type, attempt_count from channel_delivery_attempts
@@ -171,7 +181,9 @@ export class ChannelDeliveryRepository {
         input.owner.attemptId, input.owner.token, input.owner.revision, input.owner.leaseExpiresAt).changes
       if (changed === 1) {
         if (!retryAt) this.clearRetryPayloadInTransaction(input.owner.attemptId)
-        this.audit(row.channel_id, input.owner.attemptId, `channel-delivery-${status}`, input.now)
+        // 有具体原因就记具体原因（`delivery-provider-rejected` 这类），只有拿不到原因才退回状态码。
+        // 用户看到的「发送失败：没有更多说明」就是因为这里以前永远只写状态。
+        this.audit(row.channel_id, input.owner.attemptId, code ?? `channel-delivery-${status}`, input.now, input.detail)
       }
       return changed === 1
     })
@@ -330,8 +342,10 @@ export class ChannelDeliveryRepository {
       input.executionClaim?.workItemId ?? '', input.executionClaim?.receiptId ?? '', input.executionClaim?.dispatchId ?? '', input.executionClaim?.leaseToken ?? '', input.executionClaim?.leaseExpiresAt ?? '', input.now.toISOString(), input.executionClaim?.generation ?? -1))
   }
 
-  private audit(channelId: string, attemptId: string | null, code: string, now: Date): void {
-    this.database.connection.prepare('insert into channel_delivery_audits (id, channel_id, attempt_id, code, created_at) values (?, ?, ?, ?, ?)').run(randomUUID(), channelId, attemptId, code, now.toISOString())
+  private audit(channelId: string, attemptId: string | null, code: string, now: Date, detail?: string): void {
+    this.database.connection.prepare(
+      'insert into channel_delivery_audits (id, channel_id, attempt_id, code, detail, created_at) values (?, ?, ?, ?, ?, ?)'
+    ).run(randomUUID(), channelId, attemptId, code, detail ?? null, now.toISOString())
   }
 }
 

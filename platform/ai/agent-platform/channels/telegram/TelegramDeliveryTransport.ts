@@ -20,17 +20,21 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
     const client = this.clients.get(input.channelId)
     const lifetime = this.lifetimeByChannel.get(input.channelId)
     if (!client || !lifetime || lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
+    // 会话键是 `telegram:chat:<id>`（入站写进去的就是这个），而 Telegram 的 `chat_id` 只认那串数字。
+    // 以前整串直接当 chat_id 发出去 → 400 `chat not found` → 被记成「凭据被拒」，用户看到「发送失败」。
+    const chatId = telegramChatId(input.providerConversationKey)
+    if (!chatId) return { kind: 'failed', code: 'delivery-target-invalid' }
     for (const segment of splitTelegramText(input.text)) {
       // A fence between delivery admission and a later segment must not leak a stale send.
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
-      let response = await client.sendMessage(input.providerConversationKey, segment, false, lifetime.signal)
+      let response = await client.sendMessage(chatId, segment, false, lifetime.signal)
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
       if (!response.ok && response.parseRejected) {
         if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
-        response = await client.sendMessage(input.providerConversationKey, segment, true, lifetime.signal)
+        response = await client.sendMessage(chatId, segment, true, lifetime.signal)
         if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
       }
-      if (!response.ok) return mapFailure(response.code)
+      if (!response.ok) return mapFailure(response.code, response.providerDetail)
     }
     return { kind: 'delivered' }
   }
@@ -44,8 +48,24 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
   }
 }
 
-function mapFailure(code: string): ChannelDeliveryTransportResult {
-  if (code === 'telegram-rate-limited') return { kind: 'failed', code: 'delivery-rate-limited' }
-  if (code === 'telegram-provider-rejected') return { kind: 'failed', code: 'delivery-provider-rejected' }
+/**
+ * 从入站写入的会话键里取出 Telegram 的 chat id。
+ *
+ * 入站统一把会话键写成 `<platform>:chat:<id>`（跨平台一致），发送侧必须按平台自己解析——
+ * 直接把整串当 `chat_id`，Telegram 会回 400 `chat not found`，看起来像“凭据被拒”。
+ */
+export function telegramChatId(providerConversationKey: string): string | null {
+  const match = /^telegram:chat:(.+)$/.exec(providerConversationKey.trim())
+  const candidate = (match ? match[1] : providerConversationKey).trim()
+  // 私聊/群/频道都是数字 id（可能有负号）；@name 形式不接受——那是另一套解析，别在这里猜。
+  return /^-?\d+$/.test(candidate) ? candidate : null
+}
+
+function mapFailure(code: string, detail?: string): ChannelDeliveryTransportResult {
+  if (code === 'telegram-rate-limited') return { kind: 'failed', code: 'delivery-rate-limited', ...(detail ? { detail } : {}) }
+  if (code === 'telegram-provider-rejected') return { kind: 'failed', code: 'delivery-provider-rejected', ...(detail ? { detail } : {}) }
+  if (code === 'telegram-network-unavailable' || code === 'telegram-proxy-unavailable') {
+    return { kind: 'unknown-after-send', ...(detail ? { detail } : {}) }
+  }
   return { kind: 'unknown-after-send' }
 }

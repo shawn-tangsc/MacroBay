@@ -17,6 +17,8 @@ export type TelegramApiResult<T> =
     parseRejected?: boolean
     /** 脱敏后的 Chromium 错误名（`ERR_...`）。只带名字，不带 URL、不带 token。 */
     transportError?: string
+    /** Telegram 自己的说明（已脱敏截断），例如 `Bad Request: chat not found`。 */
+    providerDetail?: string
   }
 
 export type TelegramUpdate = {
