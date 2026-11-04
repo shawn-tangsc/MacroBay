@@ -1260,6 +1260,8 @@ describe('read-only delivery targets projection', () => {
     expect(service.listDeliveryTargets().channels[0]).toMatchObject({ deliverable: false, reason: 'not-enabled' })
 
     database.connection.prepare("update agent_channels set lifecycle_state='enabled' where id=?").run(id)
+    // 适配器没有真机证据也**不再**是一个理由：`supported` 只决定「对外声明支持」，
+    // 不决定这条正在运行、凭据可用、目标已绑的通道能不能当投递目标（Chief 2026-11-04 定）。
     const unsupported = new ChannelManagementService({
       repository: new ChannelManagementRepository(database),
       vault: new FakeVault(false, false, false, false),
@@ -1268,8 +1270,8 @@ describe('read-only delivery targets projection', () => {
       handoff: new ChannelSecureHandoff()
     })
     expect(unsupported.listDeliveryTargets().channels[0]).toMatchObject({
-      deliverable: false,
-      reason: 'adapter-not-supported'
+      deliverable: true,
+      reason: null
     })
   })
 })

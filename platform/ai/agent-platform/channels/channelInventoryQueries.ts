@@ -44,9 +44,6 @@ export function createChannelInventory(deps: ChannelInventoryDeps) {
       return {
         channels: projectDeliveryTargets({
           channels: deps.repository.query.list(),
-          supportedTypes: new Set(
-            projectChannelCatalog(deps.registry.list()).filter((entry) => entry.status === 'supported').map((entry) => entry.type)
-          ),
           enabledTargets: deps.repository.query.enabledDeliveryTargets()
         })
       }
