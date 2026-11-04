@@ -781,6 +781,25 @@ describe('period run', () => {
     expect(run?.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
   })
 
+  it('writes the period and the trigger of the run into the edition it publishes', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+    const result = await service.getToday({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai',
+      periodId: 'period_x', periodKind: 'manual', runTrigger: 'manual'
+    })
+
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    // A non-default period must not be filed under `default`, and a manual run must not read as
+    // scheduled: the identity the run was given is what the edition records.
+    expect(result.document.edition).toMatchObject({ periodId: 'period_x', periodKind: 'manual', runTrigger: 'manual' })
+    expect(result.document.edition.periodTime).toBe(result.document.edition.windowEnd)
+    // The stored row lives under the same period, so a second period cannot overwrite it.
+    expect(await store.get('2026-10-30', 'zh-CN', 'period_x')).toBeDefined()
+    expect(await store.get('2026-10-30', 'zh-CN', 'default')).toBeUndefined()
+  })
+
   it('records a failed run when the source cannot be read', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     const failing: DailyBriefingSource = {

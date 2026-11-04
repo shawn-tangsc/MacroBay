@@ -44,15 +44,14 @@ export function buildDailyBriefingDocument(input: Readonly<{
       date,
       locale: packet.locale,
       // Identity travels with the edition, not with a configuration row: a deleted period must still
-      // say which one it was. `default` is this version's single fixed period; it is a name, never a
-      // time in disguise.
-      periodId: 'default',
+      // say which one it was. Taken from the packet the run was built for; a run that never said
+      // which period it belonged to is this version's single fixed period.
+      periodId: packet.periodId ?? 'default',
       // The nominal cutoff: for a scheduled period this is the configured generation time, which is
       // exactly where the window ends. `generatedAt` below is the actual moment the run finished.
-      periodTime: packet.windowEnd,
-      periodKind: 'scheduled',
-      // Why this run happened; this version only has the scheduled daily run.
-      runTrigger: 'scheduled',
+      periodTime: packet.periodTime ?? packet.windowEnd,
+      periodKind: packet.periodKind ?? 'scheduled',
+      runTrigger: packet.runTrigger ?? 'scheduled',
       generatedAt: packet.asOf,
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,

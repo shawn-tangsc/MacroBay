@@ -12,6 +12,8 @@ import type {
 import {
   DEFAULT_PERIOD_ID,
   briefingGenerationStageIds,
+  type DailyBriefingPeriodKind,
+  type DailyBriefingRunTrigger,
   dailyBriefingGenerationPolicy,
   dailyBriefingPolicy,
   isDailyBriefingGenerationTime,
@@ -242,7 +244,18 @@ export type DailyBriefingAttemptsResult = Readonly<
 
 export type DailyBriefingService = Readonly<{
   /** One named period's edition when the scheduler says which fired; unscheduled callers mean `default`. */
-  getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration; /** `false` opens the page as a read; no run. */ generate?: boolean }>) => Promise<DailyBriefingTodayResult>
+  getToday: (input: Readonly<{
+    locale: DailyBriefingLocale
+    timeZone: string
+    periodId?: string
+    generation?: DailyBriefingGeneration
+    /** Which kind of period this run belongs to; absent means the scheduled one. */
+    periodKind?: DailyBriefingPeriodKind
+    /** Why the run happened; absent means the schedule fired it. */
+    runTrigger?: DailyBriefingRunTrigger
+    /** `false` opens the page as a read; no run. */
+    generate?: boolean
+  }>) => Promise<DailyBriefingTodayResult>
   regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
@@ -349,7 +362,15 @@ export function createDailyBriefingService(deps: Readonly<{
    * `generation` is that period's own time and window, so a period never borrows another one's
    * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
    */
-  async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration; generate?: boolean }>): Promise<DailyBriefingTodayResult> {
+  async function getToday(input: Readonly<{
+    locale: DailyBriefingLocale
+    timeZone: string
+    periodId?: string
+    generation?: DailyBriefingGeneration
+    periodKind?: DailyBriefingPeriodKind
+    runTrigger?: DailyBriefingRunTrigger
+    generate?: boolean
+  }>): Promise<DailyBriefingTodayResult> {
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
@@ -359,23 +380,40 @@ export function createDailyBriefingService(deps: Readonly<{
       return openStoredEdition({ store: deps.store, date: window.date, locale: input.locale, periodId, zoneSource: window.zoneSource, isCurrent })
     }
     return runs.join(runs.key(window.date, periodId, input.locale), async () => {
-      const result = await resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
+      const result = await resolveToday({
+        asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
+        ...(input.periodKind ? { periodKind: input.periodKind } : {}), ...(input.runTrigger ? { runTrigger: input.runTrigger } : {})
+      }, false)
       return withTimeZoneSource(await withStoredAttempt(deps.store, result, window.date, input.locale, periodId), window.zoneSource)
     })
   }
 
-  async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
+  async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string }>): Promise<DailyBriefingTodayResult> {
     const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     // One run per edition, whichever path asked for it. The open path already coalesced, but a
     // reader who presses 重新生成 three times started three concurrent runs, and each of them
     // published its own agent session and its own edition. A second request now joins the run that
     // is already working on that edition instead of starting another one.
-    return runs.join(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale), async () =>
-      withTimeZoneSource(await resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true), window.zoneSource))
+    const periodId = input.periodId ?? DEFAULT_PERIOD_ID
+    return runs.join(runs.key(window.date, periodId, input.locale), async () =>
+      withTimeZoneSource(await resolveToday({
+        asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
+        // A reader asking again is the only trigger this path has; the scheduled run is the other.
+        runTrigger: 'manual'
+      }, true), window.zoneSource))
   }
 
-  async function resolveToday(input: Readonly<{ asOf: string; date: string; periodId: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
+  async function resolveToday(input: Readonly<{
+    asOf: string
+    date: string
+    periodId: string
+    locale: DailyBriefingLocale
+    timeZone: string
+    windowHours: number
+    periodKind?: DailyBriefingPeriodKind
+    runTrigger?: DailyBriefingRunTrigger
+  }>, force: boolean): Promise<DailyBriefingTodayResult> {
     const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
     // The attempt row is opened before any work: a run the process never finishes is still a
@@ -429,7 +467,16 @@ export function createDailyBriefingService(deps: Readonly<{
     try {
       facts = await withDeadline(deps.source.readFacts({ asOf: input.asOf, windowHours: input.windowHours }), 15_000)
       // Rendering is text-only work over the frozen facts; it is not a second read.
-      packet = await deps.source.renderPacket(facts, input.locale, input.timeZone)
+      // The facts are period-independent; the identity is this run's, so it is attached here rather
+      // than inside the source (which never sees a period). Every edition this run writes then
+      // carries the id it was generated for, not a literal `default`.
+      packet = Object.freeze({
+        ...(await deps.source.renderPacket(facts, input.locale, input.timeZone)),
+        periodId: input.periodId,
+        periodTime: input.asOf,
+        periodKind: input.periodKind ?? 'scheduled',
+        runTrigger: input.runTrigger ?? 'scheduled'
+      })
       recorder.end('source', 'success')
     } catch {
       recorder.end('source', 'failed', { failureCode: 'source-failed' })

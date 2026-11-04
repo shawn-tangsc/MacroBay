@@ -54,6 +54,9 @@ export function registerDailyBriefingJob(
       locale,
       timeZone,
       periodId,
+      // The scheduler fired this run: that is the trigger the edition must record.
+      periodKind: 'scheduled',
+      runTrigger: 'scheduled',
       generation: { generationTime: period.generationTime, windowHours: period.windowHours }
     })
     if (result.state !== 'available') throw new Error(`daily-briefing-generation-${result.failureCode}`)

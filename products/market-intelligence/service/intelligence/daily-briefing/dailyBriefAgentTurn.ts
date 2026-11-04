@@ -140,7 +140,9 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   ].join('\n\n')
   throwIfAborted(input.signal)
   stage({ stage: 'selection', state: 'begin' })
-  const started = await input.runner.start({ date: document.edition.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
+  // The session key includes the period: two periods of one day must not share (and overwrite) one
+  // writing session.
+  const started = await input.runner.start({ date: document.edition.date, periodId: document.edition.periodId ?? DEFAULT_PERIOD_ID, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
   const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]

@@ -289,6 +289,27 @@ describe('daily briefing document', () => {
     expect(document.edition.runTrigger).toBe('scheduled')
   })
 
+  it('writes the identity of the run it belongs to, not a literal default period', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        periodId: 'period_x',
+        periodTime: '2026-10-30T07:00:00.000Z',
+        periodKind: 'manual',
+        runTrigger: 'retry'
+      }),
+      date: '2026-10-30'
+    })
+
+    // A non-default period's edition must not be filed under `default`, and a retry must not claim
+    // it ran on schedule: both facts travel from the run into the document.
+    expect(document.edition).toMatchObject({
+      periodId: 'period_x',
+      periodTime: '2026-10-30T07:00:00.000Z',
+      periodKind: 'manual',
+      runTrigger: 'retry'
+    })
+  })
+
   it('records the packet window that generation actually read', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

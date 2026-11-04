@@ -6,7 +6,7 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { AgentEvidenceRef, AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
-import type { BriefingPriorConclusion } from '../../../contracts/dailyBriefing'
+import type { BriefingPriorConclusion, DailyBriefingPeriodKind, DailyBriefingRunTrigger } from '../../../contracts/dailyBriefing'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 
@@ -57,6 +57,17 @@ export type DailyBriefingFactPacket = Readonly<{
   windowHours: number
   locale: 'zh-CN' | 'en-US'
   timeZone: string
+  /**
+   * Which period this run is for, and why it ran. Carried on the packet so the document builder does
+   * not have to guess: after periods got their own ids, a literal `default` here would file every
+   * edition under the wrong period. Absent on older callers/fixtures, and then the builder's
+   * fallback applies.
+   */
+  periodId?: string
+  /** The nominal cutoff of this period; absent means the window end. */
+  periodTime?: string
+  periodKind?: DailyBriefingPeriodKind
+  runTrigger?: DailyBriefingRunTrigger
   conclusion: DailyBriefingConclusionInput | null
   /**
    * Every earlier AI conclusion inside the window, oldest first. These are claims the editor may

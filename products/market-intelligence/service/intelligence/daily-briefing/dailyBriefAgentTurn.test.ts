@@ -190,6 +190,32 @@ describe('daily brief agent turn copy', () => {
     expect(runner.finish).not.toHaveBeenCalled()
   })
 
+  it('opens the writing session under the edition\'s own period, so two periods cannot overwrite one session', async () => {
+    const started: Array<{ periodId?: string }> = []
+    const runner = {
+      start: vi.fn(async (input: { periodId?: string }) => {
+        started.push(input)
+        return {
+          sessionId: 's1', created: true, toolInvocations: [],
+          assistantText: JSON.stringify({ stage: 'select', news: ['news:n1'], macro: [], next: [], requests: [] })
+        }
+      }),
+      continue: vi.fn(async () => ({ assistantText: '{}', toolInvocations: [] })),
+      finish: vi.fn(async () => undefined)
+    }
+    const period = (periodId: string) => {
+      const base = document('en-US')
+      return { ...base, edition: { ...base.edition, periodId } } as typeof base
+    }
+
+    await runDailyBriefAgentTurn({ runner, document: period('period_a'), locale: 'en-US' })
+    await runDailyBriefAgentTurn({ runner, document: period('period_b'), locale: 'en-US' })
+
+    // The session key carries the period; a shared `default` key would have the second run write
+    // over the first period's conversation.
+    expect(started.map((input) => input.periodId)).toEqual(['period_a', 'period_b'])
+  })
+
   it('writes the first task, the fact card and the field answers in English for en-US', async () => {
     const { starts, continues, runner } = fakeRunner()
     await runDailyBriefAgentTurn({ runner, document: document('en-US'), locale: 'en-US' })
