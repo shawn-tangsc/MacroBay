@@ -107,7 +107,7 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('# 每日简报 — 2026-10-30')
     expect(markdown).toContain('## 过去 24 小时要闻')
     expect(markdown).toContain('JPMorgan says AI labels no longer win lenders')
-    expect(markdown).toContain('## 一天的数据')
+    expect(markdown).toContain('## 过去 24 小时数据')
     expect(markdown).toContain('### 重点')
     expect(markdown).toContain('稳定币')
     expect(markdown).toContain('## 结论')
