@@ -94,12 +94,12 @@ function render(value: GenerationTrace | undefined, english = false, copy: typeo
 }
 
 function stepItems(dom: HTMLElement): HTMLElement[] {
-  return [...dom.querySelectorAll<HTMLElement>('.ant-steps-item')]
+  return [...dom.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]
 }
 
 function stepOf(dom: HTMLElement, id: GenerationStageId): HTMLElement {
   const title = dom.querySelector<HTMLElement>(`[data-stage="${id}"]`)
-  const item = title?.closest<HTMLElement>('.ant-steps-item')
+  const item = title?.closest<HTMLElement>('[data-briefing-stage-row]')
   if (!item) throw new Error(`no step for ${id}`)
   return item
 }
@@ -146,10 +146,10 @@ describe('generation stage timeline', () => {
     expect(details.tagName).toBe('DETAILS')
     expect(details.open).toBe(true)
     expect(details.querySelector('summary')!.textContent).toMatch(/生成阶段9 步 · .+ · 全部完成/)
-    expect(dom.querySelector('.ant-steps-vertical')).not.toBeNull()
+    expect(dom.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
     expect(steps).toHaveLength(9)
-    expect(steps.map((entry) => entry.querySelector('[data-stage]')?.getAttribute('data-stage'))).toEqual(allSucceeded)
-    expect(steps.every((entry) => entry.classList.contains('ant-steps-item-finish'))).toBe(true)
+    expect(steps.map((entry) => entry.getAttribute('data-stage'))).toEqual(allSucceeded)
+    expect(steps.every((entry) => entry.getAttribute('data-stage-state') === 'done')).toBe(true)
     expect(dom.textContent).toContain(text.generationTrace.title)
     expect(dom.textContent).toContain(text.generationTrace.allCompleted)
     // Same-day attempts print only the clock; the date is noise inside one edition.
@@ -179,20 +179,20 @@ describe('generation stage timeline', () => {
 
   it('maps finish, error and wait to the recorded stage states', () => {
     const success = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
-    expect(stepItems(success).every((item) => item.classList.contains('ant-steps-item-finish'))).toBe(true)
+    expect(stepItems(success).every((item) => item.getAttribute('data-stage-state') === 'done')).toBe(true)
 
     const failed = render(failureTrace('validation', 'schema-validation-failed'))
-    expect(stepOf(failed, 'source').classList.contains('ant-steps-item-finish')).toBe(true)
-    expect(stepOf(failed, 'validation').classList.contains('ant-steps-item-error')).toBe(true)
-    expect(stepOf(failed, 'store').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(stepOf(failed, 'source').getAttribute('data-stage-state') === 'done').toBe(true)
+    expect(stepOf(failed, 'validation').getAttribute('data-stage-state') === 'failed').toBe(true)
+    expect(stepOf(failed, 'store').getAttribute('data-stage-state') === 'waiting').toBe(true)
   })
 
   it('waits on a stage the trace does not carry, including an unrecorded second repair', () => {
     const dom = render(trace('success', [stage('source', 'success')]))
     // repair-2 is absent from this trace: it waits, it never claims a process or a finish.
-    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-wait')).toBe(true)
-    expect(stepOf(dom, 'repair-2').querySelector('[data-stage]')?.getAttribute('data-stage-state')).toBe('pending')
-    expect(stepOf(dom, 'selection').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(stepOf(dom, 'repair-2').getAttribute('data-stage-state') === 'waiting').toBe(true)
+    expect(stepOf(dom, 'repair-2').getAttribute('data-stage-state')).toBe('waiting')
+    expect(stepOf(dom, 'selection').getAttribute('data-stage-state') === 'waiting').toBe(true)
     expect(resultOf(dom, 'selection').textContent).toContain(text.generationTrace.notRecorded)
     expect(resultOf(dom, 'selection').textContent).not.toContain('00:00:05')
   })
@@ -204,14 +204,15 @@ describe('generation stage timeline', () => {
       stage('repair-2', 'skipped'),
       stage('store', 'success')
     ]))
-    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-finish')).toBe(true)
+    // A repair that was not needed is its own state: it reads "not needed", not a grey skip.
+    expect(stepOf(dom, 'repair-2').getAttribute('data-stage-state')).toBe('not-needed')
     expect(resultOf(dom, 'repair-2').textContent).toContain(text.generationTrace.states.notNeeded)
     expect(resultOf(dom, 'repair-2').textContent).not.toContain(text.generationTrace.states.skipped)
   })
 
   it('keeps a stage skipped because an earlier one failed grey and not run', () => {
     const dom = render(failureTrace('source', 'source-failed'))
-    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(stepOf(dom, 'repair-2').getAttribute('data-stage-state') === 'waiting').toBe(true)
     expect(dom.querySelector('[data-stage="repair-2"]')?.getAttribute('data-stage-skip')).toBe('blocked')
     expect(resultOf(dom, 'repair-2').textContent).toContain(text.generationTrace.states.notRun)
   })
@@ -221,7 +222,7 @@ describe('generation stage timeline', () => {
       stage('source', 'success'),
       stage('candidates', 'pending', { startedAt: '2026-10-30T00:00:05.000Z' })
     ]))
-    expect(stepOf(dom, 'candidates').classList.contains('ant-steps-item-process')).toBe(true)
+    expect(stepOf(dom, 'candidates').getAttribute('data-stage-state') === 'running').toBe(true)
     expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05')
   })
 
@@ -244,8 +245,8 @@ describe('generation stage timeline', () => {
     expect(dom.querySelector('[data-generation-trace-state]')?.getAttribute('data-generation-trace-state')).toBe('failed')
     expect(dom.querySelector('[data-failed-stage="source"]')).not.toBeNull()
     expect(failed.textContent).toBe('失败于：数据采集')
-    expect(stepOf(dom, 'source').classList.contains('ant-steps-item-error')).toBe(true)
-    expect(dom.querySelectorAll('.ant-steps-item-wait')).toHaveLength(8)
+    expect(stepOf(dom, 'source').getAttribute('data-stage-state') === 'failed').toBe(true)
+    expect(dom.querySelectorAll('[data-briefing-stage-row][data-stage-state=\"waiting\"]')).toHaveLength(8)
   })
 
   it('locates an AI-selection failure', () => {
@@ -271,7 +272,7 @@ describe('generation stage timeline', () => {
     // the label. Only the circle stays.
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     for (const row of [...dom.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
-      expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(0)
+      expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(1)
       expect(row.textContent ?? '').not.toMatch(/[✓✔√]/)
     }
   })
@@ -374,7 +375,8 @@ describe('generation stage timeline', () => {
     expect(dom.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
     const items = stepItems(dom)
     expect(items).toHaveLength(9)
-    expect(items.map((entry) => entry.querySelector('[data-stage]')?.getAttribute('data-stage-state'))).toEqual(new Array(9).fill('pending'))
+    // A row reports its own state; with no trace every stage has simply not started.
+    expect(items.map((entry) => entry.getAttribute('data-stage-state'))).toEqual(new Array(9).fill('waiting'))
     expect(dom.textContent).not.toContain(text.generationTrace.failed)
   })
 

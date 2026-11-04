@@ -1282,7 +1282,8 @@ describe('daily briefing page', () => {
 
     // One container, three marked blocks, exactly once each.
     expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
-    expect(dom.querySelectorAll('[data-briefing-stages]')).toHaveLength(1)
+    // Only the rail's block: the body's stage list (generating) is a different surface and absent here.
+    expect(column.querySelectorAll('[data-briefing-stages]')).toHaveLength(1)
     expect(dom.querySelectorAll('[data-briefing-gaps]')).toHaveLength(1)
     expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
 
@@ -1634,7 +1635,7 @@ describe('daily briefing page', () => {
     // Open in every state; the summary line is where collapsing starts.
     expect(details.open).toBe(true)
     expect(details.querySelector('summary')!.textContent).toMatch(/9 步 · .+ · 全部完成/)
-    expect(details.querySelectorAll('.ant-steps-item')).toHaveLength(9)
+    expect(details.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
     expect(details.querySelectorAll('[data-stage]')).toHaveLength(9)
     expect(trace.textContent).toContain('耗时 30 秒')
     expect(dom.querySelector('[data-briefing-issues] [data-briefing-stages] .mi-generation-trace')).not.toBeNull()
@@ -1652,7 +1653,7 @@ describe('daily briefing page', () => {
 
     expect(panel.textContent).toContain('失败于：落库/发布')
     expect(panel.querySelector('[data-stage="store"]')?.getAttribute('data-stage-state')).toBe('failed')
-    expect(panel.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('success')
+    expect(panel.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('done')
     expect(panel.querySelector('[data-failed-stage="store"]')).not.toBeNull()
 
     // The next read of the same failed edition still carries the trace: the service persists the
@@ -1734,7 +1735,7 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(dom.querySelectorAll('.state-view')).toHaveLength(0)
   const panel = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')!
   expect(panel.querySelectorAll('[data-loading-state]')).toHaveLength(1)
-  expect(panel.querySelectorAll('.ant-steps-item').length).toBeGreaterThan(0)
+  expect(panel.querySelectorAll('[data-briefing-stage-row]').length).toBeGreaterThan(0)
   // No third layout: the right-hand column is absent while generating, like after a failure.
   // Today already has an edition here, so the archive stays while the new run is in flight.
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)

@@ -1,4 +1,3 @@
-import { Steps } from 'antd'
 import { CircleHelp } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -6,7 +5,7 @@ import { Popover } from '@platform/ui/components/popover'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
-import { DailyBriefingStageRowContent, type DailyBriefingStageRowState } from './DailyBriefingStageList'
+import { DailyBriefingStageList, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
   failedStage,
@@ -19,7 +18,6 @@ import {
 } from './dailyBriefingGenerationTrace'
 import { readableFailureDetail } from './dailyBriefingFailureDetail'
 
-type StepStatus = 'finish' | 'error' | 'wait' | 'process'
 
 /**
  * The right rail's first block: the fixed generation stages as a vertical stepper, with the status
@@ -82,52 +80,29 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
       {trace && trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}
       </p> : null}
-      <Steps
-        className="mi-generation-trace__steps"
-        direction="vertical"
-        size="small"
-        items={generationStageIds.map((id) => {
-          const stage = rendered.stages.find((entry) => entry.id === id)
-          const state = stage?.state ?? 'pending'
-          const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
-          const failure = failed?.id === id ? stage : undefined
-          // One row implementation for every state: this list only supplies what this view knows.
-          const row = {
-            id,
-            name: labels.stages[id],
-            state: rowStateFor(state, skipReason),
-            detail: stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded,
-            ...(labels.stageHelp?.[id]?.trim()
-              ? {
-                help: {
-                  labelKey: STAGE_HELP_KEYS[id],
-                  triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel',
-                  triggerLabelParams: { stage: labels.stages[id] },
-                  dataAttributes: { 'data-stage-help': id }
-                }
-              }
-              : {}),
-            ...(failure?.failureCode
-              ? { failure: { code: failure.failureCode, label: `${failureLabel(failure.failureCode, text)}${failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}` } }
-              : {})
-          }
-          return {
-            status: stepStatus(stage, skipReason),
-            // The stepper draws the status circle; the row must not add a second mark beside the name.
-            title: <DailyBriefingStageRowContent row={{ ...row, id: row.id, name: row.name }} resolveText={resolveText} showIcon={false} extraAttributes={{ 'data-stage-state': state, 'data-stage-skip': skipReason ?? 'none' }} />,
-            description: null
-          }
-        })}
-      />
+      {/* One container for every state: the live run draws the same list, so "generating" and
+          "finished/failed" cannot drift apart in spacing, indentation or connector placement. */}
+      <DailyBriefingStageList rows={generationStageIds.map((id) => {
+        const stage = rendered.stages.find((entry) => entry.id === id)
+        const state = stage?.state ?? 'pending'
+        const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
+        const failure = failed?.id === id ? stage : undefined
+        return {
+          id,
+          name: labels.stages[id],
+          state: rowStateFor(stage, skipReason),
+          detail: stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded,
+          ...(labels.stageHelp?.[id]?.trim()
+            ? { help: { labelKey: STAGE_HELP_KEYS[id], triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel', triggerLabelParams: { stage: labels.stages[id] }, dataAttributes: { 'data-stage-help': id } } }
+            : {}),
+          attributes: { 'data-stage-skip': skipReason ?? 'none' },
+          ...(failure?.failureCode
+            ? { failure: { code: failure.failureCode, label: `${failureLabel(failure.failureCode, text)}${failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}` } }
+            : {})
+        }
+      })} resolveText={resolveText} />
     </>
   </details>
-}
-
-function rowStateFor(state: GenerationTraceStage['state'], skipReason: SkipReason | undefined): DailyBriefingStageRowState {
-  if (state === 'failed') return 'failed'
-  if (state === 'success') return 'done'
-  if (state === 'skipped') return skipReason === 'blocked' ? 'waiting' : 'not-needed'
-  return 'waiting'
 }
 
 type SkipReason = 'not-needed' | 'blocked'
@@ -141,12 +116,12 @@ function skipReasonFor(index: number, failedIndex: number): SkipReason {
 }
 
 /** Not needed is a finished stage; blocked and absent stages wait; a started, unended stage is in process. */
-function stepStatus(stage: GenerationTraceStage | undefined, skipReason: SkipReason | undefined): StepStatus {
-  if (!stage) return 'wait'
-  if (stage.state === 'success') return 'finish'
-  if (stage.state === 'failed') return 'error'
-  if (stage.state === 'pending') return stage.startedAt ? 'process' : 'wait'
-  return skipReason === 'blocked' ? 'wait' : 'finish'
+function rowStateFor(stage: GenerationTraceStage | undefined, skipReason: SkipReason | undefined): DailyBriefingStageRowState {
+  if (!stage) return 'waiting'
+  if (stage.state === 'success') return 'done'
+  if (stage.state === 'failed') return 'failed'
+  if (stage.state === 'pending') return stage.startedAt ? 'running' : 'waiting'
+  return skipReason === 'blocked' ? 'waiting' : 'not-needed'
 }
 
 /**

@@ -18,6 +18,8 @@ export type DailyBriefingStageRow = Readonly<{
   name: string
   state: DailyBriefingStageRowState
   detail: string
+  /** Extra anchors for this row (the trace's own skip marker, for instance). */
+  attributes?: Readonly<Record<string, string>>
   /** A failure's code line, shown under the detail; absent on a clean row. */
   failure?: Readonly<{ code: string; label: string }>
   /** The help popover's trigger, when this row carries the stage's own explanation. */
@@ -82,9 +84,9 @@ export function DailyBriefingStageList({ rows, resolveText, dataAttributes }: Re
   /** Extra anchors the caller needs on the list element. */
   dataAttributes?: Readonly<Record<string, string | undefined>>
 }>): React.ReactElement {
-  return <ol className="mi-brief-steps__list" data-briefing-stages="true" {...dataAttributes}>
+  return <ol className="mi-brief-steps__list" {...dataAttributes}>
     {rows.map((row) => <li key={row.id} className="mi-brief-steps__row" data-step={row.id} data-step-state={row.state}>
-      <DailyBriefingStageRowContent row={row} {...(resolveText ? { resolveText } : {})} />
+      <DailyBriefingStageRowContent row={row} {...(resolveText ? { resolveText } : {})} {...(row.attributes ? { extraAttributes: row.attributes } : {})} />
     </li>)}
   </ol>
 }
