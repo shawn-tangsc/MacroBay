@@ -69,17 +69,22 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
   ): Promise<{
     record: NotificationRecord
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+    /** 桌面这一跳没弹出来（`show()` 返回 `ok:false` 或平台不支持）：P7 的唯一来源。 */
+    desktopBlocked: boolean
     transition?: NotificationPushTransition
   }> {
     const content = await resolveContent(record)
     const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content)
     const delivery: NotificationRecord['delivery'] = { ...record.delivery }
+    let desktopBlocked = false
     for (const attempt of attempts) {
       if (attempt.channel !== 'toast' && attempt.channel !== 'popup' && attempt.channel !== 'desktop') continue
       if (attempt.result === 'skipped') {
         delete delivery[attempt.channel]
         continue
       }
+      // 只认「真的试过但没成」：开关关着（skipped/desktop-disabled）是读者的选择，不算被拦下。
+      if (attempt.channel === 'desktop' && attempt.result === 'failed') desktopBlocked = true
       delivery[attempt.channel] = {
         state: attempt.result === 'failed' ? 'failed' : 'sent-accepted',
         at: attempt.attemptedAt,
@@ -131,6 +136,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     return {
       record: deliveryChanged ? { ...record, delivery } : record,
       pushBackoff: backoffChanged ? nextBackoff : pushBackoff,
+      desktopBlocked,
       ...(transition === undefined ? {} : { transition })
     }
   }

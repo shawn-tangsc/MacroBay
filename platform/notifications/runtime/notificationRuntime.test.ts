@@ -261,3 +261,84 @@ describe('test notifications do not spend the daily cap', () => {
     expect(record.titleKey).toBe('notification.taskFailed.title')
   })
 })
+
+const catalogWithBlocked = createNotificationEventCatalog({
+  policy: {
+    'platform.test': { approvedDisruptionLevels: ['center', 'desktop', 'channel'], approvedBypassQuietHours: false },
+    'platform.desktop.blocked': { approvedDisruptionLevels: ['center', 'toast'], approvedBypassQuietHours: false }
+  },
+  sources: [
+    {
+      productId: 'platform',
+      events: [
+        {
+          id: 'platform.test',
+          titleKey: 'notification.taskFailed.title',
+          bodyKey: 'notification.taskFailed.body',
+          reasonKey: 'notification.taskFailed.body',
+          requiresUserAction: false,
+          requestedDisruptionLevels: ['desktop', 'channel'],
+          dedupeKeyTemplate: 'test:{id}',
+          dedupeUnit: 'condition',
+          conditionWindowMs: 86_400_000
+        },
+        {
+          id: 'platform.desktop.blocked',
+          titleKey: 'notification.event.platform.desktop.blocked.title',
+          bodyKey: 'notification.event.platform.desktop.blocked.body',
+          reasonKey: 'notification.event.platform.desktop.blocked.reason',
+          requiresUserAction: false,
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'desktop-blocked:{recordId}',
+          dedupeUnit: 'occurrence'
+        }
+      ]
+    }
+  ]
+})
+
+describe('P7: the desktop blocked event has a producer', () => {
+  it('submits platform.desktop.blocked when show() fails, and records it in the center', async () => {
+    const state = createDefaultNotificationStoreState()
+    const runtime = createNotificationRuntime({
+      storage: {
+        read: async () => JSON.parse(JSON.stringify(state)),
+        write: async (next) => { Object.assign(state, next) }
+      },
+      catalog: catalogWithBlocked,
+      getSettings: async () => runtimeSettings({ desktopEnabled: true }),
+      clock,
+      deliveryHooks: {
+        desktop: async () => ({ ok: false, reason: 'blocked-by-system' })
+      }
+    })
+
+    await runtime.submit(request('desktop-blocked'))
+
+    const page = await runtime.list({ limit: 50 })
+    const blocked = page.items.find((item) => item.eventTypeId === 'platform.desktop.blocked')
+    expect(blocked).toBeDefined()
+    // 它自己只批了中心与提示：不会再产生一次桌面投递，不会自激。
+    expect(blocked?.delivery.desktop).toBeUndefined()
+  })
+
+  it('does not submit it when the desktop switch is simply off', async () => {
+    const state = createDefaultNotificationStoreState()
+    const runtime = createNotificationRuntime({
+      storage: {
+        read: async () => JSON.parse(JSON.stringify(state)),
+        write: async (next) => { Object.assign(state, next) }
+      },
+      catalog: catalogWithBlocked,
+      getSettings: async () => runtimeSettings({ desktopEnabled: false }),
+      clock,
+      deliveryHooks: { desktop: async () => ({ ok: false, reason: 'blocked-by-system' }) }
+    })
+
+    await runtime.submit(request('desktop-off'))
+
+    const page = await runtime.list({ limit: 50 })
+    // 开关关着是读者的选择，不是「被系统拦下」——不许误报。
+    expect(page.items.some((item) => item.eventTypeId === 'platform.desktop.blocked')).toBe(false)
+  })
+})
