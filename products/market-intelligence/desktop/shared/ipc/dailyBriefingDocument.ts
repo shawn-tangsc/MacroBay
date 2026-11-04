@@ -18,7 +18,7 @@ import {
 
 function isDocument(value: unknown): value is DailyBriefingDocument {
   if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23')) return false
+  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12 && value.schemaVersion !== 13) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23')) return false
   if (!isEdition(value.edition, value.schemaVersion) || !isStatus(value.status) || !isLede(value.lede)) return false
   if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
   if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
@@ -27,10 +27,19 @@ function isDocument(value: unknown): value is DailyBriefingDocument {
 }
 
 function isEdition(value: unknown, schemaVersion: unknown): boolean {
-  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours'])) return false
+  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours', 'periodId', 'periodTime', 'periodKind'])) return false
   if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
   // From schema 7 the edition states the window it actually covered; older rows may omit it.
   if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
+  // From schema 13 the edition carries its period identity. The three fields arrive together: a
+  // document with only some of them is refused rather than guessed at.
+  if (typeof schemaVersion === 'number' && schemaVersion >= 13) {
+    if (!isText(value.periodId) || !isText(value.periodTime)) return false
+    if (value.periodKind !== 'scheduled' && value.periodKind !== 'manual') return false
+  } else if (value.periodId !== undefined || value.periodTime !== undefined || value.periodKind !== undefined) {
+    // Editions before 13 had no period fields; a half-written set would make the fallback ambiguous.
+    return false
+  }
   return isText(value.date) && isDailyBriefingLocale(value.locale) && isText(value.generatedAt) &&
     isText(value.windowStart) && isText(value.windowEnd) && isText(value.timeZone)
 }

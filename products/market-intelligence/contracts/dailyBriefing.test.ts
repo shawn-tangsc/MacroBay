@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  briefingEditionPeriod,
   briefingGenerationDisplayRows,
   briefingGenerationStageIds,
   dailyBriefingPolicy,
@@ -167,5 +168,40 @@ describe('generation display rows', () => {
     expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2', 'repair-3'])
     // Eight rows for the reader, nine stages in the pipeline.
     expect(briefingGenerationDisplayRows).toHaveLength(8)
+  })
+})
+
+describe('edition period identity', () => {
+  it('reads an edition written before schema 13 as the default period of its day', () => {
+    // Old rows have no period fields, were the one fixed period of the day, and predate manual runs.
+    expect(briefingEditionPeriod({ generatedAt: '2026-10-30T00:30:00.000Z' })).toEqual({
+      periodId: 'default',
+      periodTime: '2026-10-30T00:30:00.000Z',
+      periodKind: 'scheduled'
+    })
+  })
+
+  it('keeps the identity a new edition wrote, manual kind included', () => {
+    expect(briefingEditionPeriod({
+      generatedAt: '2026-11-03T07:00:12.345Z',
+      periodId: 'period_01J8Z6Q4T3',
+      periodTime: '2026-11-03T07:00:00.000Z',
+      periodKind: 'manual'
+    })).toEqual({
+      periodId: 'period_01J8Z6Q4T3',
+      periodTime: '2026-11-03T07:00:00.000Z',
+      periodKind: 'manual'
+    })
+  })
+
+  it('never derives the id from the cutoff, and a deleted period stays scheduled', () => {
+    // Two periods may legitimately share a cutoff; identity is the stored id. And a scheduled
+    // edition whose configuration row was deleted still reads as scheduled — the kind travels with
+    // the edition, not with a lookup that can come back empty.
+    const first = briefingEditionPeriod({ generatedAt: '2026-11-03T07:00:01.000Z', periodId: 'period_a', periodTime: '2026-11-03T07:00:00.000Z', periodKind: 'scheduled' })
+    const second = briefingEditionPeriod({ generatedAt: '2026-11-03T07:00:02.000Z', periodId: 'period_b', periodTime: '2026-11-03T07:00:00.000Z', periodKind: 'scheduled' })
+    expect(first.periodTime).toBe(second.periodTime)
+    expect(first.periodId).not.toBe(second.periodId)
+    expect(first.periodKind).toBe('scheduled')
   })
 })

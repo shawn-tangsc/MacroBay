@@ -137,6 +137,9 @@ export type {
   BriefingGenerationDisplayRowId,
   DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'
+/** The two kinds of period an edition can come from; the row's label depends on it, not on a lookup. */
+export type DailyBriefingPeriodKind = 'scheduled' | 'manual'
+
 export type DailyBriefingDocument = Readonly<{
   schemaVersion: DailyBriefingDocumentSchemaVersion
   policyVersion: DailyBriefingPolicyVersion
@@ -154,6 +157,21 @@ export type DailyBriefingDocument = Readonly<{
      * configurable; those covered the fixed 24 hours the policy then named.
      */
     windowHours?: number
+    /**
+     * Which period of that day this edition belongs to. Opaque: created when the period is created,
+     * never derived from a time, so changing the scheduled hour cannot detach an edition from its
+     * own history. Absent on editions written before schema 13; those belong to `default`, and
+     * `briefingEditionPeriod` is the one place that reads the fallback.
+     */
+    periodId?: string
+    /**
+     * The nominal cutoff of this edition (ISO milliseconds, same precision as `generatedAt`):
+     * the configured generation time for a scheduled period, the chosen cutoff for a manual run.
+     * Absent before schema 13; it then reads as `generatedAt`.
+     */
+    periodTime?: string
+    /** What kind of period produced this edition; absent before schema 13 reads as `scheduled`. */
+    periodKind?: DailyBriefingPeriodKind
   }>
   status: Readonly<{
     readings: readonly Readonly<{ id: DailyBriefingReadingId; state: DailyBriefingReadingState }>[]
@@ -267,6 +285,28 @@ export type DailyBriefingDocument = Readonly<{
     generationTrace?: BriefingGenerationTrace
   }>
 }>
+
+/**
+ * The period identity of an edition, in one place.
+ *
+ * Editions written before schema 13 carry none of the three fields: they were the one fixed period
+ * of their day, so they read back as `default`, their own `generatedAt`, and `scheduled` — which is
+ * also what a deleted scheduled period still reads as, because its identity travels with the
+ * edition rather than with a configuration row that may be gone. New editions carry what the builder
+ * wrote; nothing here derives an id from a time.
+ */
+export function briefingEditionPeriod(edition: Readonly<{
+  generatedAt: string
+  periodId?: string
+  periodTime?: string
+  periodKind?: DailyBriefingPeriodKind
+}>): Readonly<{ periodId: string; periodTime: string; periodKind: DailyBriefingPeriodKind }> {
+  return Object.freeze({
+    periodId: edition.periodId !== undefined && edition.periodId.length > 0 ? edition.periodId : 'default',
+    periodTime: edition.periodTime ?? edition.generatedAt,
+    periodKind: edition.periodKind ?? 'scheduled'
+  })
+}
 
 /** One fact the builder dropped, and why. `field` names the document path it would have filled. */
 export type BriefingDataAuditEntry = Readonly<{

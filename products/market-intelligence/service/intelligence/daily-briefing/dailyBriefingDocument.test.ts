@@ -271,6 +271,22 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 
+  it('writes the period identity into the edition at schema 13', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({ asOf: '2026-10-30T00:30:12.345Z', windowEnd: asOf }),
+      date: '2026-10-30'
+    })
+
+    expect(document.schemaVersion).toBe(13)
+    // The id is a name, not the clock: this version's single fixed period.
+    expect(document.edition.periodId).toBe('default')
+    // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
+    expect(document.edition.periodTime).toBe(asOf)
+    expect(document.edition.generatedAt).toBe('2026-10-30T00:30:12.345Z')
+    expect(document.edition.periodTime).toMatch(/\.\d{3}Z$/)
+    expect(document.edition.periodKind).toBe('scheduled')
+  })
+
   it('records the packet window that generation actually read', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({
@@ -803,7 +819,7 @@ describe('daily briefing document', () => {
       })
 
       // (10 800 − 10 100) / 10 400 × 100, with the close the curve is also divided by.
-      expect(document.schemaVersion).toBe(12)
+      expect(document.schemaVersion).toBe(dailyBriefingPolicy.schemaVersion)
       for (const id of ['btc', 'eth', 'index'] as const) {
         expect(document.data.market.find((row) => row.id === id)?.amplitude)
           .toEqual({ percent: 6.73, high: 10_800, low: 10_100, anchor: 10_400 })
@@ -902,7 +918,7 @@ describe('daily briefing document', () => {
         date: '2026-10-30'
       })
 
-      expect(document.schemaVersion).toBe(12)
+      expect(document.schemaVersion).toBe(dailyBriefingPolicy.schemaVersion)
       const btc = document.data.market.find((row) => row.id === 'btc')
       const points = btc?.curve?.[0] ?? []
       expect(btc?.curve).toHaveLength(1)

@@ -43,6 +43,14 @@ export function buildDailyBriefingDocument(input: Readonly<{
     edition: Object.freeze({
       date,
       locale: packet.locale,
+      // Identity travels with the edition, not with a configuration row: a deleted period must still
+      // say which one it was. `default` is this version's single fixed period; it is a name, never a
+      // time in disguise.
+      periodId: 'default',
+      // The nominal cutoff: for a scheduled period this is the configured generation time, which is
+      // exactly where the window ends. `generatedAt` below is the actual moment the run finished.
+      periodTime: packet.windowEnd,
+      periodKind: 'scheduled',
       generatedAt: packet.asOf,
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,
