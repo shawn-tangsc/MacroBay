@@ -791,6 +791,7 @@ describe('daily briefing document', () => {
                 eth: { '24h': { state: 'available', value: -1.18 } },
                 index: { '24h': { state: 'available', value: 0.82 } }
               },
+              indexSource: 'real',
               extremes: { btc: extremes, eth: extremes, index: extremes, dxy: null, gold: null },
               historyCoverage: { btc: coverage, eth: coverage, index: coverage, dxy: coverage, gold: coverage }
             } as unknown as CrossAssetSnapshot,
@@ -816,6 +817,36 @@ describe('daily briefing document', () => {
       }
     })
 
+    it('withholds the Nasdaq amplitude on a proxy day rather than attributing it to the index', () => {
+      const coverage = { count: 289, expectedCount: 289, complete: true }
+      const extremes = { high: 10_800, low: 10_100, anchor: 10_400 }
+      const build = (indexSource: 'real' | 'proxy') => buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z', indexSource,
+              closedReturns: { btc: { '24h': { state: 'available', value: 3.8 } }, eth: { '24h': { state: 'available', value: -1 } }, index: { '24h': { state: 'available', value: 0.8 } } },
+              extremes: { btc: extremes, eth: extremes, index: extremes },
+              historyCoverage: { btc: coverage, eth: coverage, index: coverage }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      // The index leg answered with the tokenised proxy: that amplitude belongs to the proxy, and the
+      // row has no marker to carry it beside, so the number is withheld rather than mis-attributed.
+      const proxied = build('proxy').data.market.find((row) => row.id === 'index')!
+      expect(proxied).not.toHaveProperty('amplitude')
+      expect(proxied).not.toHaveProperty('amplitudeReason')
+      // BTC and ETH are unaffected: their bars are their own.
+      expect(build('proxy').data.market.find((row) => row.id === 'btc')?.amplitude?.percent).toBe(6.73)
+      // On a real-index day the row states it.
+      expect(build('real').data.market.find((row) => row.id === 'index')?.amplitude?.percent).toBe(6.73)
+    })
+
     it('withholds the amplitude on an incomplete window and says how incomplete', () => {
       const complete = { count: 289, expectedCount: 289, complete: true }
       const partial = { count: 231, expectedCount: 289, complete: false }
@@ -825,6 +856,7 @@ describe('daily briefing document', () => {
             crossAsset: {
               analysisEnd: '2026-10-30T00:25:00.000Z',
               closedReturns: { btc: { '24h': { state: 'available', value: 3.8 } }, eth: { '24h': { state: 'available', value: -1 } }, index: { '24h': { state: 'available', value: 0.8 } } },
+              indexSource: 'real',
               extremes: { btc: { high: 10_800, low: 10_100, anchor: 10_400 }, eth: null, index: null },
               historyCoverage: { btc: partial, eth: complete, index: complete }
             } as unknown as CrossAssetSnapshot,

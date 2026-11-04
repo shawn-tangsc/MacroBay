@@ -218,14 +218,18 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
   // Only the two cards that draw a curve get one; the index row has no plot beside it, and a stored
   // series nobody draws reads as a promise the layout never keeps. The amplitude is asked for on the
   // three readings that have continuous bars — BTC, ETH and the Nasdaq row — and on nothing else.
+  // A proxy leg's amplitude is the proxy's, not the index's, and the row has no marker to carry that
+  // distinction beside the number. So on such a day the field is omitted entirely rather than shown
+  // without its warning — an absent key cannot be mistaken for the index's own travel.
+  const indexOnProxy = cross?.indexSource !== 'real'
   const drawing = (id: 'btc' | 'eth' | 'index') => ({
     // Only the two cards draw a curve. The amplitude is asked for on the three readings with continuous
     // bars; DXY, gold and the ten-year are not given a field at all, so nothing downstream can show one.
     ...(id === 'index' ? {} : briefingPriceCurve({ points: cross?.curves?.[id], windowStart: packet.windowStart, windowEnd: packet.windowEnd, windowHours: packet.windowHours })),
-    ...briefingAmplitude({
+    ...(id === 'index' && indexOnProxy ? {} : briefingAmplitude({
       extremes: cross?.extremes?.[id],
       ...(cross?.historyCoverage?.[id] ? { coverage: cross.historyCoverage[id] } : {})
-    })
+    }))
   })
   return [
     crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }, drawing('btc')),

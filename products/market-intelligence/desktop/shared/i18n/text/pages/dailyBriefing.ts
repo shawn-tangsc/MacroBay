@@ -30,6 +30,9 @@ export const dailyBriefingText = {
     changeBaselineSpan: '（{from} → {to}）',
     units: { points: '点' },
     rowTotal: '总量 {value}',
+    // The window's travel. A small word beside the number, never coloured: amplitude is volatility,
+    // not direction, and the level/value colour rule has no entry for it.
+    amplitude: '振幅 {value}',
     rowCurrent: '当前 {value}',
     rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC（24h 涨跌）', eth: 'ETH（24h 涨跌）', index: '纳指（24h 涨跌）', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
     empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
@@ -282,6 +285,7 @@ export const dailyBriefingText = {
     changeBaselineSpan: ' ({from} → {to})',
     units: { points: 'pts' },
     rowTotal: 'Total {value}',
+    amplitude: 'Amplitude {value}',
     rowCurrent: 'Current {value}',
     rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC (24h change)', eth: 'ETH (24h change)', index: 'Nasdaq (24h change)', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
     empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },

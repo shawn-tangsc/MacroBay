@@ -37,10 +37,13 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
     {readings.length > 0 ? <div className="mi-brief-poster__readings-line" data-briefing-readings-line="true">
       {readings.map((row) => {
         const copy = changeLedRowCopy(row, text, locale)
-        return <span className="mi-brief-poster__reading" key={row.id} data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
+        // Only a market row can carry an amplitude; a pulse row never has one.
+        const amplitude = 'amplitude' in row ? row.amplitude : undefined
+        return <span className="mi-brief-poster__reading" key={row.id} data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
           <span className="mi-brief-poster__reading-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
           <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
           <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
+          {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
         </span>
       })}
     </div> : null}
@@ -144,6 +147,8 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
     <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
     <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
     {copy ? <small>{copy.secondary}</small> : null}
+    {/* Beside the number, small, and never toned: amplitude is how much it moved, not which way. */}
+    {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
     <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
       <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
       {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
@@ -157,6 +162,11 @@ function toneOf(row: BriefingMarketRow | BriefingPulseRow): 'up' | 'down' | unde
   const value = row.change?.value ?? row.value?.number
   if (value === undefined || value === 0) return undefined
   return value > 0 ? 'up' : 'down'
+}
+
+/** The window's travel, as the copy that owns the word spells it. */
+function amplitudeCopy(amplitude: NonNullable<BriefingMarketRow['amplitude']>, text: DailyBriefingText): string {
+  return text.amplitude.replace('{value}', `${Math.round(amplitude.percent * 10) / 10}%`)
 }
 
 /**

@@ -19,13 +19,19 @@ import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWor
 const today = '2026-11-04'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 
-function row(id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real' | 'stablecoin' | 'fear-greed' | 'etf-btc' | 'etf-eth', label: string, value: number) {
+function row(
+  id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real' | 'stablecoin' | 'fear-greed' | 'etf-btc' | 'etf-eth',
+  label: string,
+  value: number,
+  amplitude?: { percent: number; high: number; low: number; anchor: number }
+) {
   return {
     id, labelKey: `dailyBriefing.row.${label}`,
     importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
     state: 'available' as const,
     value: { number: value, format: 'percent' as const },
-    change: null, window: '24h' as const, observedAt: `${today}T00:00:00.000Z`
+    change: null, window: '24h' as const, observedAt: `${today}T00:00:00.000Z`,
+    ...(amplitude ? { amplitude } : {})
   }
 }
 
@@ -38,7 +44,12 @@ function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}):
     lede: { text: 'lede' },
     news: { items: [], macro: [], notes: {} },
     data: {
-      market: [row('btc', 'btc', 1.23), row('eth', 'eth', 1.59), row('index', 'index', 0.82), row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)],
+      market: [
+        row('btc', 'btc', 1.23, { percent: 3.2, high: 72_400, low: 69_800, anchor: 70_000 }),
+        row('eth', 'eth', 1.59, { percent: 2.4, high: 3_620, low: 3_520, anchor: 3_540 }),
+        row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }),
+        row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)
+      ],
       funds: [row('stablecoin', 'stablecoin', 2530), row('etf-btc', 'etfBtc', 110_300_000), row('etf-eth', 'etfEth', -88_600_000)],
       sentiment: { fearGreed: row('fear-greed', 'fearGreed', 26) as never },
       leverage: {
@@ -240,5 +251,46 @@ describe('the positioning card points at its change', () => {
     const btc = host.querySelector('[data-briefing-leverage-card="btc"]')!
     expect(btc.getAttribute('data-tone')).toBe('down')
     expect(btc.querySelector('[data-briefing-oi-change="btc"]')!.textContent).toBe('↓3.5%')
+  })
+})
+
+describe('the window amplitude', () => {
+  it('appears on the three readings that have continuous bars, and nowhere else', async () => {
+    const dom = await render()
+    const anchors = [...dom.querySelectorAll('[data-briefing-amplitude]')]
+      .map((node) => node.getAttribute('data-briefing-amplitude'))
+    // Exactly three, and the Nasdaq one sits on the same element as its reading.
+    expect(anchors).toEqual(['btc', 'eth', 'nasdaq'])
+    expect(dom.querySelector('[data-reading="nasdaq"]')!.getAttribute('data-briefing-amplitude')).toBe('nasdaq')
+    // DXY, gold and the ten-year carry no field in the document, so nothing renders one there.
+    for (const id of ['dxy', 'gold', 'ust10y']) {
+      expect(dom.querySelector(`[data-reading="${id}"]`)!.hasAttribute('data-briefing-amplitude')).toBe(false)
+    }
+    // Amplitude is volatility, not a direction: neither the price cards' own amplitude element nor the
+    // Nasdaq one inside the readings line carries a tone. The reading entry around it may, for its value.
+    for (const id of ['btc', 'eth']) {
+      expect(dom.querySelector(`[data-briefing-price-card="${id}"] [data-briefing-amplitude]`)!.hasAttribute('data-tone')).toBe(false)
+    }
+    expect(dom.querySelector('[data-reading="nasdaq"] .mi-brief-poster__amplitude')!.hasAttribute('data-tone')).toBe(false)
+    expect(dom.querySelector('[data-briefing-price-card="btc"]')!.textContent).toContain('振幅 3.2%')
+  })
+
+  it('shows nothing where the document withheld the number', async () => {
+    const withheld = documentWithData()
+    const btc = withheld.data.market.find((entry) => entry.id === 'btc')!
+    ;(btc as { amplitude?: unknown; amplitudeReason?: string }).amplitude = undefined
+    ;(btc as { amplitudeReason?: string }).amplitudeReason = 'partial-bars'
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(withheld), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN')
+    })))
+    // The number is gone, the card is not: the percentage and its time still say what the row is.
+    expect([...host.querySelectorAll('[data-briefing-amplitude]')].map((node) => node.getAttribute('data-briefing-amplitude')))
+      .toEqual(['eth', 'nasdaq'])
+    expect(host.querySelector('[data-briefing-price-card="btc"]')!.textContent).toContain('+1.23%')
   })
 })

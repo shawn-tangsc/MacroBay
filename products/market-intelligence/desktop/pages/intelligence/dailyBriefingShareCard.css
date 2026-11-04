@@ -207,6 +207,8 @@
 .mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
 .mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__price-card[data-tone='down'] { color: #8f2a1d; }
+/* The window's travel: one size down, the muted ink, and no tone of its own — it is not a direction. */
+.mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
 .mi-brief-poster__policy-card { position: relative; display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: 114px; align-items: center; gap: 10px; }
 .mi-brief-poster__policy-gauge { grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
 .mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
