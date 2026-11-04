@@ -82,12 +82,13 @@ afterEach(() => {
   for (const tip of document.querySelectorAll('.ant-tooltip, .ant-popover')) tip.remove()
 })
 
-function render(value: GenerationTrace | undefined, english = false, copy: typeof text = (english ? englishText : text) as typeof text): HTMLDivElement {
+function render(value: GenerationTrace | undefined, english = false, copy: typeof text = (english ? englishText : text) as typeof text, running = false): HTMLDivElement {
   act(() => {
     root!.render(<DailyBriefingGenerationTimeline
       trace={value}
       text={copy}
       formatTime={formatTime}
+      running={running}
     />)
   })
   return container!
@@ -155,7 +156,7 @@ describe('generation stage timeline', () => {
     expect(dom.textContent).toContain(text.generationTrace.allCompleted)
     // One instant per row: when the run began, and when each stage began. The date is noise inside
     // one edition, and an end time would repeat what the duration already says.
-    expect(dom.textContent).toContain('本次尝试 · 00:00:00')
+    expect(dom.textContent).toContain('本次尝试 · 开始于 00:00:00')
     expect(dom.textContent).toContain('耗时 1 分 0 秒')
     expect(dom.textContent).not.toContain('2026-10-30 00:00:00')
     expect(dom.textContent).not.toContain('→')
@@ -175,7 +176,7 @@ describe('generation stage timeline', () => {
     // One fact, one time: the run begins and ends in the same second, so only the start is printed —
     // and no row anywhere shows a range.
     const summary = dom.querySelector('.mi-generation-trace__summary')?.textContent ?? ''
-    expect(summary).toContain('00:00:05')
+    expect(summary).toContain('开始于 00:00:05')
     expect(summary).not.toContain('→')
     expect(resultOf(dom, 'source').textContent).toContain('00:00:05')
     expect(dom.textContent).not.toContain('→')
@@ -189,6 +190,18 @@ describe('generation stage timeline', () => {
     expect(stepOf(failed, 'source').getAttribute('data-stage-state') === 'done').toBe(true)
     expect(stepOf(failed, 'validation').getAttribute('data-stage-state') === 'failed').toBe(true)
     expect(stepOf(failed, 'store').getAttribute('data-stage-state') === 'waiting').toBe(true)
+  })
+
+  it('says a step the running attempt has not reached is not started, not unrecorded', () => {
+    // The reader saw nine "未记录" rows while the run was in flight and read them as "nothing is
+    // happening". A run in flight has not started those steps yet; only a finished run has nothing
+    // recorded to report.
+    const dom = render(trace('success', allSucceeded.map((id) => ({ id, state: 'pending' as const }))), false, undefined, true)
+    expect(dom.textContent).toContain(text.generationTrace.states.notStarted)
+    expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
+    for (const id of allSucceeded) {
+      expect(resultOf(dom, id).textContent, id).toContain(text.generationTrace.states.notStarted)
+    }
   })
 
   it('waits on a stage the trace does not carry, including an unrecorded second repair', () => {
@@ -219,6 +232,23 @@ describe('generation stage timeline', () => {
     expect(stepOf(dom, 'repair-2').getAttribute('data-stage-state') === 'waiting').toBe(true)
     expect(dom.querySelector('[data-stage="repair-2"]')?.getAttribute('data-stage-skip')).toBe('blocked')
     expect(resultOf(dom, 'repair-2').textContent).toContain(text.generationTrace.states.notRun)
+  })
+
+  it('follows the running attempt: a finished row, a running row, the rest not started', () => {
+    // The reader watches these rows while the run works, so one snapshot has to show all three
+    // states at once: done with its duration, running with its start, and not started yet.
+    const dom = render(trace('success', [
+      stage('source', 'success'),
+      stage('candidates', 'pending', { startedAt: '2026-10-30T00:00:05.000Z' })
+    ]), false, undefined, true)
+
+    expect(stepOf(dom, 'source').getAttribute('data-stage-state')).toBe('done')
+    expect(resultOf(dom, 'source').textContent).toContain('00:00:05')
+    expect(resultOf(dom, 'source').textContent).toContain('1 秒')
+    expect(stepOf(dom, 'candidates').getAttribute('data-stage-state')).toBe('running')
+    expect(resultOf(dom, 'candidates').textContent).toContain(text.generationProgress.running)
+    expect(stepOf(dom, 'writing').getAttribute('data-stage-state')).toBe('waiting')
+    expect(resultOf(dom, 'writing').textContent).toContain(text.generationTrace.states.notStarted)
   })
 
   it('shows a stage that began but never finished as process', () => {

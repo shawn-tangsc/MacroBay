@@ -176,13 +176,16 @@ export const dailyBriefingText = {
       completed: '已完成',
       failed: '失败',
       attempt: '本次尝试',
+      // One instant, said as a start: a bare "17:01:47" beside "attempt" reads as "17 hours of trying".
+      startedAt: '开始于 {time}',
       duration: '耗时 {duration}',
       expand: '展开阶段',
       collapse: '收起阶段',
       missing: '本次未记录时间线', notExecutedCount: '{count} 步未执行', stepsCount: '{count} 步', allCompleted: '全部完成',
       failedAt: '失败于：{stage}',
       notRecorded: '未记录',
-      states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notNeeded: '无需修正', notRun: '未执行' },
+      // "Not recorded" is for a finished run that left no row; a run in flight has not started that step yet.
+      states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notStarted: '未开始', notNeeded: '无需修正', notRun: '未执行' },
       stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
       stageHelpLabel: '查看{stage}的阶段说明',
       // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
@@ -420,13 +423,14 @@ export const dailyBriefingText = {
       completed: 'Completed',
       failed: 'Failed',
       attempt: 'This attempt',
+      startedAt: 'started {time}',
       duration: 'Took {duration}',
       expand: 'Show stages',
       collapse: 'Hide stages',
       missing: 'No stage timeline was recorded for this attempt', notExecutedCount: '{count} steps not run', stepsCount: '{count} steps', allCompleted: 'all done',
       failedAt: 'Failed at: {stage}',
       notRecorded: 'Not recorded',
-      states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notNeeded: 'No repair needed', notRun: 'Not run' },
+      states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notStarted: 'Not started', notNeeded: 'No repair needed', notRun: 'Not run' },
       // One word per stage, at most 14 characters: the rail's name column is narrow, and a truncated
       // stage name tells the reader nothing about what the step does. The full sentence stays in the
       // question mark's explanation (stageHelp), which is where a reader goes for detail.

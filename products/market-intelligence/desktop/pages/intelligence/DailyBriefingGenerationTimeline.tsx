@@ -72,7 +72,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
     </summary>
     {trace
       ? <p className="mi-generation-trace__summary">
-        {labels.attempt} · {formatInstant(trace.startedAt, formatTime)}
+        {labels.attempt} · {labels.startedAt.replace('{time}', formatInstant(trace.startedAt, formatTime))}
         {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
       : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
@@ -91,7 +91,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
           id,
           name: labels.stages[id],
           state: rowStateFor(stage, skipReason),
-          detail: stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded,
+          detail: stage ? stageResult(stage, id, skipReason, text, formatTime, running) : running ? text.generationTrace.states.notStarted : labels.notRecorded,
           ...(labels.stageHelp?.[id]?.trim()
             ? { help: { labelKey: STAGE_HELP_KEYS[id], triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel', triggerLabelParams: { stage: labels.stages[id] }, dataAttributes: { 'data-stage-help': id } } }
             : {}),
@@ -174,20 +174,26 @@ function stageResult(
   id: GenerationStageId,
   skipReason: SkipReason | undefined,
   text: DailyBriefingText,
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
+  formatTime: (value: string, precision?: 'minute' | 'second') => string,
+  running: boolean
 ): string {
   // The start instant, not a range: the duration beside it already says how long the stage took,
   // and "07:21:26 → 07:21:27" answers a question the reader did not ask.
   const instant = formatInstant(stage.startedAt ?? stage.finishedAt, formatTime)
   const duration = stageDurationMs(stage)
   const parts = [instant, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
+  // A step that is executing says so; without the word its row is only a clock, and the reader
+  // cannot tell "working on it" from "finished at that moment".
+  if (running && stage.state === 'pending' && stage.startedAt) parts.push(text.generationProgress.running)
   if (parts.length > 0) return parts.join(' · ')
   if (stage.state === 'skipped') {
     if (skipReason === 'blocked') return text.generationTrace.states.notRun
     // Only the repair stages mean "no repair was needed"; any other clean skip just says skipped.
     return id === 'repair-1' || id === 'repair-2' ? text.generationTrace.states.notNeeded : text.generationTrace.states.skipped
   }
-  return text.generationTrace.notRecorded
+  // A step the run has not reached yet has not started; "not recorded" is what a finished run says
+  // about a step that left no row behind.
+  return running ? text.generationTrace.states.notStarted : text.generationTrace.notRecorded
 }
 
 /**
