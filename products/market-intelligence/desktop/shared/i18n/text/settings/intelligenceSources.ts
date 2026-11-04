@@ -137,10 +137,14 @@ export const intelligenceSourcesText = {
   sourceFilterLabel: '来源筛选',
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
-    title: '这个来源需要连接 VPN（本地代理）才能采集。',
+    title: '这个来源要走本地代理才能连',
     failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
-    body: '没走代理时「测试连接」和自动采集会一直失败，与 API Key 是否正确无关。请先打开能访问境外网络的 VPN 或本地代理（也就是常说的翻墙），再到「设置 → 基础设置 → 代理模式」选择「自定义代理」并填入同一个本地地址（例如 http://127.0.0.1:7888），保存后回来重试。浏览器能打开不代表应用能连——应用请求只走这里的代理。',
-    action: '去设置代理'
+    // 已配好代理却仍连不上：不让他去「打开 VPN」，而是查地址/端口/代理是否在跑。
+    configuredFailedTitle: '代理没通：这次没连上',
+    configuredFailedBody: '检查代理地址与端口是否正确、代理程序是否正在运行，然后回来重试。',
+    body: '去「设置 → 基础设置 → 代理模式」选「自定义代理」，填入本地地址（例如 http://127.0.0.1:7888），保存后回来重试。',
+    action: '去设置代理',
+    configuredFailedAction: '检查代理地址'
   },
   agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
   panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
@@ -538,10 +542,13 @@ export const intelligenceSourcesText = {
   sourceFilterLabel: 'Filter sources',
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
-    title: 'This source needs a VPN (local proxy) to collect.',
+    title: 'This source needs a local proxy to connect',
     failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
-    body: 'Without a proxy, “Test connection” and automatic collection keep failing — the API key is not the problem. Open a VPN or local proxy that can reach overseas networks, then set “Proxy mode” to “Custom proxy” under Settings → Basic settings with the same local address (for example http://127.0.0.1:7888) and try again. A browser reaching the site does not mean this app can: app requests only use the proxy configured here.',
-    action: 'Open proxy settings'
+    configuredFailedTitle: 'The proxy is not reachable: this attempt did not connect',
+    configuredFailedBody: 'Check the proxy address and port, and that the proxy program is running, then try again.',
+    body: 'Set “Proxy mode” to “Custom proxy” under Settings → Basic settings and enter your local address (for example http://127.0.0.1:7888), then try again.',
+    action: 'Open proxy settings',
+    configuredFailedAction: 'Check the proxy address'
   },
   agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },
   panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },

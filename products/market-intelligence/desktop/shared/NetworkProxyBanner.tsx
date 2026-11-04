@@ -17,18 +17,27 @@ import { productText } from './i18n/productText'
  *
  * Callers decide when it is honest to show at all: a rejected credential must never send anyone here.
  */
-export function NetworkProxyBanner({ tone = 'requires', onOpenProxySettings }: {
+export function NetworkProxyBanner({ tone = 'requires', configured = false, onOpenProxySettings }: {
   tone?: 'requires' | 'failed'
+  /**
+   * 读者已经配好了自定义代理。此时「去配一个代理」不再是题目：失败档改成「配好了但这次没连上」，
+   * 不再让他去打开 VPN（`MI-11-R196`）。未配置时行为与原来一致。
+   */
+  configured?: boolean
   onOpenProxySettings: () => void
 }): React.ReactElement {
   const text = productText[useShellLanguage()].settings.intelligenceSources.proxyNotice
-  return <div className="mi-network-proxy-banner" data-network-proxy-banner data-tone={tone}>
+  const failedTitle = configured ? text.configuredFailedTitle : text.failedTitle
+  const failedBody = configured ? text.configuredFailedBody : text.body
+  // 动作跟着状态走：已配好却失败时再给「去设置代理」等于让他重新填一遍。
+  const actionLabel = tone === 'failed' && configured ? text.configuredFailedAction : text.action
+  return <div className="mi-network-proxy-banner" data-network-proxy-banner data-tone={tone} data-proxy-configured={configured ? 'yes' : 'no'}>
     <Alert
       type="warning"
       showIcon
-      message={tone === 'failed' ? text.failedTitle : text.title}
-      description={text.body}
-      action={<Button size="small" icon={<Settings2 size={12} />} onClick={onOpenProxySettings} data-network-proxy-settings>{text.action}</Button>}
+      message={tone === 'failed' ? failedTitle : text.title}
+      description={tone === 'failed' ? failedBody : text.body}
+      action={<Button size="small" icon={<Settings2 size={12} />} onClick={onOpenProxySettings} data-network-proxy-settings>{actionLabel}</Button>}
     />
   </div>
 }
