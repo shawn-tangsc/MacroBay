@@ -698,6 +698,43 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-briefing-locale-missing="en-US"]')).toBeNull()
   })
 
+  it('switches language while a run is in flight, and the run keeps reporting beside it', async () => {
+    // 读者明确要的：生成是"正在跑的那一期"，切语言是"看哪一版"，两件事不许互相锁。以前一次运行会接管
+    // 整个正文，点 tab 后读到的版次被 mode 压掉，看起来就是"切不动"。
+    const chinese = briefingDocument('2026-10-30')
+    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English lede while the run continues' } }
+    const progress = {
+      attemptId: 'attempt-1', startedAt: '2026-10-30T04:00:00.000Z', state: 'running',
+      stages: [{ id: traceStageIds[0], state: 'running', startedAt: '2026-10-30T04:00:00.000Z', finishedAt: null, durationMs: 0 }]
+    }
+    const client = fakeClient({
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
+      getToday: vi.fn(() => new Promise(() => undefined)),
+      getProgress: vi.fn(async () => ({ state: 'running' as const, progress })),
+      get: vi.fn(async ({ locale }: { locale: string }) => ({ state: 'available' as const, document: locale === 'en-US' ? english : chinese }))
+    })
+    const dom = await renderPage(client)
+    const tabs = (): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>('[data-content-language-tabs] [role="tab"]')]
+
+    expect(tabs()).toHaveLength(2)
+    expect(tabs()[1]!.hasAttribute('disabled')).toBe(false)
+    expect(tabs()[1]!.getAttribute('aria-disabled')).not.toBe('true')
+
+    await act(async () => { tabs()[1]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US' })
+    expect(tabs()[1]!.getAttribute('aria-selected')).toBe('true')
+    // The edition the reader asked for, not the one the run is writing.
+    expect(dom.textContent).toContain('English lede while the run continues')
+    // The run is still reported, and switching did not restart or cancel it.
+    expect(dom.querySelector('[data-briefing-stages], [data-briefing-stage-panel]')).not.toBeNull()
+    expect(client.regenerate).not.toHaveBeenCalled()
+
+    // And back: the Chinese edition is read again without another run.
+    await act(async () => { tabs()[0]!.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN' })
+    expect(tabs()[0]!.getAttribute('aria-selected')).toBe('true')
+  })
+
   it('keeps each language correct when both editions exist and the switch moves both ways', async () => {
     const chinese = briefingDocument('2026-11-02')
     const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'English lede for this day' } }

@@ -24,10 +24,17 @@ export function resolveBriefingMode(input: Readonly<{
   /** Whether the language the reader asked for exists in this issue. */
   localeAvailable: boolean
 }>): DailyBriefingMode {
-  // A run in flight owns the pane, whoever started it and whatever the local view says.
-  if (input.rowState === 'running' || input.viewStatus === 'loading') return 'generating'
-  // An edition on screen keeps the pane even when the latest attempt failed: content, not an error.
+  // An edition on screen is content, and **a run does not take it away**: the run reports in the rail
+  // and in the right column, while the pane keeps whatever edition the reader asked for. That is the
+  // whole point of switching language during a generation — the two facts ("an issue is running" and
+  // "which version am I reading") must not lock each other out.
   if (input.viewStatus === 'ready') return input.rowState === 'failed' ? 'ready-with-failure' : 'ready'
+  // The reader asked for a version this issue does not have. That answer is about what they asked for,
+  // so it survives a run in flight too: the pane says it, the steps keep reporting beside it. A failed
+  // attempt still speaks first, because its retry is the reader's next move.
+  if (input.viewStatus === 'locale-missing') return input.rowState === 'failed' ? 'failed' : 'locale-missing'
+  // A run in flight owns the pane only when there is nothing else to show it.
+  if (input.rowState === 'running' || input.viewStatus === 'loading') return 'generating'
   if (input.rowState === 'failed' || input.viewStatus === 'unavailable') return 'failed'
   // This issue has an edition, just not in the language asked for.
   if (input.hasEdition && !input.localeAvailable) return 'locale-missing'

@@ -115,7 +115,9 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {view.status === 'unavailable' && !failure && !generating
       ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={onGenerate} text={text} timeZone={timeZone} todayDate={todayDate} />
       : null}
-    {view.status === 'locale-missing' && !generating ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={onGenerate} /> : null}
+    {/* Shown during a run too: the reader asked to read this language, and "this issue has no such
+        version" is the answer to that, not a reason to replace the pane with the run's own screen. */}
+    {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={onGenerate} /> : null}
     {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
     {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating} onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
     {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the

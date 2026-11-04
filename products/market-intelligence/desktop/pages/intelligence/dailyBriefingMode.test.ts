@@ -29,12 +29,14 @@ const cells: readonly Cell[] = [
   // The reader's own issue: an edition exists, just not in the language asked for.
   { rowState: 'idle', viewStatus: 'locale-missing', hasEdition: true, localeAvailable: false, mode: 'locale-missing' },
 
-  // running: a run in flight owns the pane, whoever started it.
+  // running: a run in flight owns the pane **only when there is nothing to read**. An edition on screen
+  // stays, and a version this issue does not have stays answered — switching language during a
+  // generation must not be swallowed by it.
   { rowState: 'running', viewStatus: 'loading', hasEdition: false, localeAvailable: true, mode: 'generating' },
   { rowState: 'running', viewStatus: 'no-edition', hasEdition: false, localeAvailable: true, mode: 'generating' },
-  { rowState: 'running', viewStatus: 'ready', hasEdition: true, localeAvailable: true, mode: 'generating' },
+  { rowState: 'running', viewStatus: 'ready', hasEdition: true, localeAvailable: true, mode: 'ready' },
   { rowState: 'running', viewStatus: 'unavailable', hasEdition: false, localeAvailable: true, mode: 'generating' },
-  { rowState: 'running', viewStatus: 'locale-missing', hasEdition: true, localeAvailable: false, mode: 'generating' },
+  { rowState: 'running', viewStatus: 'locale-missing', hasEdition: true, localeAvailable: false, mode: 'locale-missing' },
 
   // failed: the row says the attempt failed; an edition on screen still wins.
   { rowState: 'failed', viewStatus: 'loading', hasEdition: false, localeAvailable: true, mode: 'generating' },
