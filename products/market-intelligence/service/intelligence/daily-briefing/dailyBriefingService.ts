@@ -22,7 +22,7 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
-import { awaitDailyBriefReadinessPublished } from './dailyBriefProgressWaiting'
+import { awaitReadinessForRun } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads } from './dailyBriefingReads'
 import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
@@ -196,7 +196,7 @@ function withTimeZoneSource(
 
 export type DailyBriefingTodayFailureCode =
   | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
-  | 'attempt-not-recorded' // The store refused the attempt row: stop, never run unrecorded.
+  | 'attempt-not-recorded' | 'run-timeout' // attempt row refused; the caller gave up waiting.
   | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
 
 export type DailyBriefingTodayResult =
@@ -381,7 +381,7 @@ export function createDailyBriefingService(deps: Readonly<{
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     // The wait is published too: one "generating" with no attempt, no session and no step is what
     // made a waiting run indistinguishable from a stuck one.
-    const readinessWait = await awaitDailyBriefReadinessPublished(deps.readiness, input.asOf, (progress) => runs.progress.set(progressKey, progress), now)
+    const readinessWait = await awaitReadinessForRun(deps.readiness, input.asOf, force, (progress) => runs.progress.set(progressKey, progress), now)
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({

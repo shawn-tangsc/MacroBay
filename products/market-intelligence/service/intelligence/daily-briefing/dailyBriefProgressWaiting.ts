@@ -55,3 +55,25 @@ export async function awaitDailyBriefReadinessPublished(
   waiting.publish(0, 0)
   return awaitDailyBriefReadiness(readiness, asOf, (poll) => waiting.publish(poll.polls, poll.waitedMs))
 }
+
+/**
+ * The generation path's one call: wait for the market, unless the reader asked for this run.
+ *
+ * The gate exists to stop an automatic run from reading a market that has not arrived yet. A reader
+ * pressing 重新生成 has already decided to spend a run, and making them wait the full budget for a
+ * probe that may never answer turns the button into a dead control. A manual run therefore goes
+ * straight to work, and says so in the log.
+ */
+export async function awaitReadinessForRun(
+  readiness: DailyBriefReadiness | undefined,
+  asOf: string,
+  manual: boolean,
+  publish: (progress: BriefingGenerationProgress) => void,
+  now: () => string
+): Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined> {
+  if (manual) {
+    console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_READINESS_SKIPPED_MANUAL', asOf }))
+    return undefined
+  }
+  return awaitDailyBriefReadinessPublished(readiness, asOf, publish, now)
+}

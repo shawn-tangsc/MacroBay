@@ -76,6 +76,34 @@ describe('a wait that runs out still produces the edition once', () => {
   })
 })
 
+describe('a manual run does not wait', () => {
+  it('goes straight to work when the reader pressed 重新生成', async () => {
+    // Waiting fifteen minutes on a button the reader just pressed is the feature being unusable: the
+    // gate is for automatic runs, which nobody is watching.
+    const wait = vi.fn(async () => ({ ready: false, polls: 1, waitedMs: 0 }))
+    const gate = createDailyBriefReadiness({ readSnapshot: async () => undefined })
+    const spaced = { ...gate, wait }
+    let attempts = 0
+    const service = createDailyBriefingService({
+      source: { readFacts: vi.fn(async () => { throw new Error('not under test') }) } as never,
+      store: store(async () => { attempts += 1; return 1 }),
+      readiness: spaced,
+      editorialEnabled: async () => false,
+      now: () => NOW
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      await service.regenerate({ locale: 'zh-CN', timeZone: TIME_ZONE }).catch(() => undefined)
+      expect(wait).not.toHaveBeenCalled()
+      // The run opened its attempt row at once, instead of waiting for a market it was told to skip.
+      expect(attempts).toBe(1)
+      expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toContain('MI_DAILY_BRIEF_READINESS_SKIPPED_MANUAL')
+    } finally {
+      log.mockRestore()
+    }
+  })
+})
+
 describe('the wait itself is published', () => {
   it('reports a running attempt with its probe count, before any attempt row exists', async () => {
     // "One running, no attempt row, no session" was the reader's whole complaint: the wait recorded
