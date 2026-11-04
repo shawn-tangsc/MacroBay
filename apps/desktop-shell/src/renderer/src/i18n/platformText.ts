@@ -6,6 +6,7 @@ import type {
   ChannelRuntimeLifecycleCopyKey,
   ChannelTelegramFailureCopyKey
 } from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import type { ChannelFailureCode } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { ChannelManagementAuditCopyKey } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 
@@ -224,8 +225,13 @@ export type PlatformText = {
     channelNeedsEvidence: string
     /** 启用不再要求先交验收记录：点一下，应用现场检查连接。 */
     channelEnableSelfCheckHint: string
-    /** 失败原因表（启用自检 + 新建/编辑/删除共用）：码 → 大白话，不出现内部码。 */
-    channelFailureReason: Readonly<Record<string, string>>
+    /**
+     * 失败原因表（启用自检 + 新建/编辑/删除 + 运行时启动共用）：码 → 大白话，不出现内部码。
+     *
+     * 键的类型是平台那份闭集（`CHANNEL_FAILURE_CODES`）：**少一个就编译不过**。
+     * 上一版用 `Record<string, string>`，漏了新码也一路绿，用户看到的是「暂时说不出具体原因」。
+     */
+    channelFailureReason: Readonly<Record<ChannelFailureCode, string>>
     /** 启用/自检这条路上表里没有的码：说「没通过、说不出具体原因」，不把空值包装成解释。 */
     channelFailureReasonUnknown: string
     /** 其它操作（新建、编辑、删除、启停）上表里没有的码：同一件事，换个说法。 */
@@ -1627,23 +1633,32 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelNeedsEvidence: '这个平台还没有通过真机验收；不影响你启用，应用会现场检查一次连接。',
       channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
       channelFailureReason: Object.freeze({
-        'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
-        'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
-        'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
-        'telegram-network-unavailable': '网络连不通，检查网络后重试',
-        'telegram-proxy-unavailable': '代理连不上（代理没开或端口不对），检查代理设置后重试',
-        'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
-        'channel-credential-missing': '还没有存 Token，先在「编辑」里填一把再启用',
-        'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
-        'channel-runtime-owner-conflict': '启用时这条频道正被另一处改动抢着，稍等一秒再试一次',
-        'adapter-not-supported': '这个平台还没接上，这一版启用不了',
-        'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
-        'channel-not-found': '这条频道已经不在了，刷新一下列表',
-        'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
-        'channel-credential-unavailable': '凭据读不出来，重新填一次',
-        'channel-delete-pending': '这条频道正在删除，等它删完再改',
-        'channel-management-metadata-failed': '这条频道的状态没存上，可以再试一次',
-        'channel-policy-invalid': '访问策略填得不对，检查一下再存'
+      'adapter-not-supported': '这个平台还没接上，这一版启用不了',
+      'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
+      'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
+      'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
+      'channel-credential-missing': '还没有存 Token，先在「编辑」里填一把再启用',
+      'channel-credential-mutation-incomplete': '上一次更换没走完，重新打开编辑保存一次就能接着来',
+      'channel-credential-mutation-unattributed': '上一次更换没记到发起者，重新保存一次把它收拾干净',
+      'channel-credential-recovery-exhausted': '这把凭据反复恢复失败，重新填一把新的',
+      'channel-credential-unavailable': '存过，但读不出来了——重新保存一次会换一把新的',
+      'channel-delete-pending': '这条频道正在删除，等它删完再改',
+      'channel-management-metadata-failed': '这条频道的状态没存上，可以再试一次',
+      'channel-management-recovery-pending': '上一次的更换还在收尾，等一会儿再试',
+      'channel-not-found': '这条频道已经不在了，刷新一下列表',
+      'channel-policy-invalid': '访问策略填得不对，检查一下再存',
+      'channel-runtime-generation-stale': '频道状态刚变过，这次没有生效，再点一次就好',
+      'channel-runtime-owner-conflict': '启用时这条频道正被另一处改动抢着，稍等一秒再试一次',
+      'channel-runtime-owner-lost': '启用过程中运行许可被别的操作抢走了，再点一次就好',
+      'channel-runtime-owner-missing': '这次启用已经没有对应的运行许可了，再点一次就好',
+      'channel-smoke-failed': '这次没有通过检查',
+      'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
+      'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
+      'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
+      'telegram-proxy-unavailable': '代理连不上：检查代理设置之后再试',
+      'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
+      'telegram-runtime-start-failed': '连接没能启动起来——具体原因写在这次运行的日志里',
       }),
       channelFailureReasonUnknown: '这次没有通过检查，暂时说不出具体原因，可以再试一次',
       channelOperationFailedUnknown: '这次没有成功，具体原因没说清楚，可以再试一次',
@@ -1739,6 +1754,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegramNetworkUnavailable: '网络连不上，收消息中断',
         telegramProxyUnavailable: '代理这一跳没连上，收消息中断',
         telegramRuntimeStartFailed: '连接启动失败，收消息没起来',
+        channelRuntimeOwnerMissing: '这次启用已经没有对应的运行许可了，再点一次',
+        channelRuntimeGenerationStale: '频道状态刚变过，这一次没有生效，再点一次',
+        channelRuntimeOwnerLost: '启用过程中运行许可被别的操作抢走了，再点一次',
         telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
         telegramRateLimited: '请求太频繁，被平台限流，稍后会自动重试',
         telegramPollFailed: '这一次取消息失败，稍后会自动重试',
@@ -2938,23 +2956,32 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelNeedsEvidence: 'This platform has no real-device acceptance record yet; that does not block you — the app checks the connection when you enable it.',
       channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
       channelFailureReason: Object.freeze({
-        'telegram-credential-missing': 'no token is stored yet; add one in Edit',
-        'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
-        'telegram-conflict': 'another program is using the same bot; stop that one first',
-        'telegram-network-unavailable': 'the network cannot be reached; check the connection and retry',
-        'telegram-proxy-unavailable': 'the proxy could not be reached (off or wrong port); check the proxy settings and retry',
-        'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
-        'channel-credential-missing': 'no token is stored yet; add one in Edit and enable again',
-        'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
-        'channel-runtime-owner-conflict': 'this channel is being changed elsewhere right now; try again in a second',
-        'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
-        'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
-        'channel-not-found': 'this channel is gone now; refresh the list',
-        'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',
-        'channel-credential-unavailable': 'the credential cannot be read; enter it again',
-        'channel-delete-pending': 'this channel is being deleted; wait for that to finish',
-        'channel-management-metadata-failed': 'this channel state was not stored; retry',
-        'channel-policy-invalid': 'the access policy is not valid; check it and save again'
+      'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
+      'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
+      'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
+      'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',
+      'channel-credential-missing': 'no token is stored yet; add one in Edit and enable again',
+      'channel-credential-mutation-incomplete': 'the last replacement did not finish; open Edit and save once more to continue',
+      'channel-credential-mutation-unattributed': 'the last replacement was not attributed; save once more to clean it up',
+      'channel-credential-recovery-exhausted': 'this credential kept failing to recover; enter a new one',
+      'channel-credential-unavailable': 'a token was stored, but it cannot be read any more — saving again replaces it',
+      'channel-delete-pending': 'this channel is being deleted; wait for that to finish',
+      'channel-management-metadata-failed': 'this channel state was not stored; retry',
+      'channel-management-recovery-pending': 'the last replacement is still finishing; try again in a moment',
+      'channel-not-found': 'this channel is gone now; refresh the list',
+      'channel-policy-invalid': 'the access policy is not valid; check it and save again',
+      'channel-runtime-generation-stale': 'the channel state changed just now, so this did not take effect; try again',
+      'channel-runtime-owner-conflict': 'another change is holding this channel right now; wait a second and retry',
+      'channel-runtime-owner-lost': 'another action took the run permit while enabling; try again',
+      'channel-runtime-owner-missing': 'this enable no longer holds a runtime permit; try again',
+      'channel-smoke-failed': 'the check did not pass',
+      'telegram-conflict': 'another program is using the same bot; stop that one first',
+      'telegram-credential-missing': 'no token is stored yet; add one in Edit',
+      'telegram-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
+      'telegram-proxy-unavailable': 'the proxy could not be reached (off or wrong port); check the proxy settings and retry',
+      'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
+      'telegram-runtime-start-failed': 'the connection did not start; check the runtime log and try again',
       }),
       channelFailureReasonUnknown: 'the check did not pass and this time the reason is unclear; try again',
       channelOperationFailedUnknown: 'that did not go through, and the reason is unclear; try again',
@@ -3050,6 +3077,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegramNetworkUnavailable: 'the network cannot be reached, so receiving stopped',
         telegramProxyUnavailable: 'the proxy hop could not be reached, so receiving stopped',
         telegramRuntimeStartFailed: 'the connection failed to start, so nothing is being received',
+        channelRuntimeOwnerMissing: 'this enable attempt no longer holds a runtime permit; try again',
+        channelRuntimeGenerationStale: 'the channel state just changed, so this attempt did not take effect; try again',
+        channelRuntimeOwnerLost: 'another action took the runtime permit during the enable; try again',
         telegramRuntimeEvidenceMissing: 'no real-device verification record, so it did not start',
         telegramRateLimited: 'too many requests; the platform is rate limiting, retrying shortly',
         telegramPollFailed: 'this fetch failed; it will retry shortly',

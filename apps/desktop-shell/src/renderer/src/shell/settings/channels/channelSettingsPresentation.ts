@@ -95,37 +95,8 @@ export function credentialStatusLabel(
  * 用户看到的就是「失败了但不知道为什么」。
  */
 
-/** 启用/自检这条路上的码（`reason` 与 `code` 合起来）。 */
-export const CHANNEL_ENABLE_FAILURE_REASONS = [
-  'channel-runtime-owner-conflict',
-  'telegram-credential-missing',
-  'telegram-provider-rejected',
-  'telegram-conflict',
-  'telegram-network-unavailable',
-  'telegram-proxy-unavailable',
-  'telegram-rate-limited',
-  'channel-credential-missing',
-  'channel-agent-missing',
-  'adapter-not-supported',
-  'adapter-runtime-start-failed',
-  'channel-not-found'
-] as const
-
-/** 新建/编辑/删除/启停这条路上的码（`ChannelManagementCode` 里用户能看到的那些）。 */
-export const CHANNEL_MUTATION_FAILURE_REASONS = [
-  'channel-agent-missing',
-  'channel-credential-invalid',
-  'channel-credential-missing',
-  'channel-credential-unavailable',
-  'channel-delete-pending',
-  'channel-management-metadata-failed',
-  'channel-not-found',
-  'channel-policy-invalid',
-  'adapter-not-supported'
-] as const
-
-export type ChannelEnableFailureReason = (typeof CHANNEL_ENABLE_FAILURE_REASONS)[number]
-export type ChannelMutationFailureReason = (typeof CHANNEL_MUTATION_FAILURE_REASONS)[number]
+/** 失败码的闭集来自平台侧（`CHANNEL_FAILURE_CODES`）：平台新增一个码，这张文案表少一个就编译不过。 */
+export { CHANNEL_FAILURE_CODES as CHANNEL_FAILURE_REASON_CODES } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 
 type FailureLabels = Pick<
   typeof platformText['en-US']['settings'],
@@ -140,9 +111,9 @@ type FailureLabels = Pick<
  */
 export function channelFailureReason(code: string | null | undefined, labels: FailureLabels): string | null {
   if (typeof code !== 'string' || code === '') return null
-  return Object.prototype.hasOwnProperty.call(labels.channelFailureReason, code)
-    ? labels.channelFailureReason[code]
-    : null
+  // 表按闭集类型声明；这里按字符串查，是为了让「服务端返回了一个表外的码」走兜底句而不是抛错。
+  const table: Readonly<Record<string, string>> = labels.channelFailureReason
+  return Object.prototype.hasOwnProperty.call(table, code) ? table[code] : null
 }
 
 /**

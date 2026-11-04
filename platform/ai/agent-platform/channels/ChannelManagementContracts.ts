@@ -268,3 +268,67 @@ function invalidInput(): Error {
 function isSlackToken(value: string, prefix: string): boolean {
   return value.length <= 512 && new RegExp(`^${prefix}[A-Za-z0-9-]{10,}$`).test(value)
 }
+
+/**
+ * 会作为**结果码**返回、且可能被读者看到的那一组（成功码见 `CHANNEL_SUCCESS_CODES`）。
+ *
+ * 为什么把这份清单放在平台侧：界面那张「码 → 人话」的表用它做**键的类型**，
+ * 少一个就编译不过——比人工核对可靠。上一版就是漏了 `channel-runtime-owner-conflict` 等新码，
+ * 用户看到的成了「暂时说不出具体原因」。
+ */
+export const CHANNEL_FAILURE_CODES = [
+  'adapter-not-supported',
+  'adapter-runtime-start-failed',
+  'channel-agent-missing',
+  'channel-credential-invalid',
+  'channel-credential-missing',
+  'channel-credential-mutation-incomplete',
+  'channel-credential-mutation-unattributed',
+  'channel-credential-recovery-exhausted',
+  'channel-credential-unavailable',
+  'channel-delete-pending',
+  'channel-management-metadata-failed',
+  'channel-management-recovery-pending',
+  'channel-not-found',
+  'channel-policy-invalid',
+  'channel-runtime-generation-stale',
+  'channel-runtime-owner-conflict',
+  'channel-runtime-owner-lost',
+  'channel-runtime-owner-missing',
+  'channel-smoke-failed',
+  'telegram-conflict',
+  'telegram-credential-missing',
+  'telegram-network-unavailable',
+  'telegram-provider-rejected',
+  'telegram-proxy-unavailable',
+  'telegram-rate-limited',
+  'telegram-runtime-start-failed'
+] as const
+
+export type ChannelFailureCode = (typeof CHANNEL_FAILURE_CODES)[number]
+
+/** 成功码：它们不进「失败原因」表，界面也不该把它们当失败说。 */
+export const CHANNEL_SUCCESS_CODES = [
+  'configuration-ready',
+  'runtime-ready',
+  'restarted',
+  'deleted',
+  'disabled',
+  'updated',
+  'policy-created',
+  'policy-deleted',
+  'target-updated',
+  'channel-credential-settled',
+  'channel-runtime-started'
+] as const
+
+/**
+ * 编译期闸门：`ChannelManagementCode` 里每新增一个码，必须落进「失败码」或「成功码」之一。
+ *
+ * 少了这条，新码会静默走到界面的兜底句（「暂时说不出具体原因」）——用户就是这么被糊了几次。
+ */
+type ChannelCodeNotClassified = Exclude<
+  ChannelManagementCode,
+  (typeof CHANNEL_FAILURE_CODES)[number] | (typeof CHANNEL_SUCCESS_CODES)[number]
+>
+export const channelCodesAllClassified: ChannelCodeNotClassified extends never ? true : never = true

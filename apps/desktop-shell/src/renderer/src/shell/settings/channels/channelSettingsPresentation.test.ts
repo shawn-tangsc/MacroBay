@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { platformText } from '../../../i18n/platformText'
 import {
-  CHANNEL_ENABLE_FAILURE_REASONS,
-  CHANNEL_MUTATION_FAILURE_REASONS,
+  CHANNEL_FAILURE_REASON_CODES,
   channelFailureReason,
   enableFailureSentence,
   mutationFailureSentence
@@ -21,7 +20,7 @@ const en = platformText['en-US'].settings
  */
 describe('failure sentences', () => {
   it('has plain words for every code in both closed sets, in both locales', () => {
-    for (const code of [...CHANNEL_ENABLE_FAILURE_REASONS, ...CHANNEL_MUTATION_FAILURE_REASONS]) {
+    for (const code of CHANNEL_FAILURE_REASON_CODES) {
       for (const labels of [zh, en]) {
         const sentence = channelFailureReason(code, labels)
         expect(sentence).not.toBeNull()
