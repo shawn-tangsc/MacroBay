@@ -261,6 +261,20 @@ describe('period runs', () => {
     expect(await store.getPeriodRun!('2026-11-02')).toMatchObject({ state: 'published', writingRounds: 1, finishedAt: '2026-11-02T00:05:00.000Z' })
   })
 
+  it('lists the runs of a date range, including one that wrote no edition at all', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.openPeriodRun!(run('bs_a', 'hash-a'))
+    await store.openPeriodRun!({ ...run('bs_b', 'hash-b'), periodId: 'period_x' })
+    await store.openPeriodRun!({ ...run('bs_c', 'hash-c'), date: '2026-11-01' })
+    // Nothing published for any of them: the run row is the only trace, which is exactly the case
+    // the list has to show.
+    const listed = await store.listPeriodRuns!('2026-11-02', '2026-11-02')
+    expect(listed.map((entry) => entry.periodId)).toEqual(['default', 'period_x'])
+    expect(await store.get('2026-11-02', 'zh-CN', 'period_x')).toBeUndefined()
+    // The range is respected, not "everything ever".
+    expect((await store.listPeriodRuns!('2026-11-01', '2026-11-01')).map((entry) => entry.date)).toEqual(['2026-11-01'])
+  })
+
   it('writes the edition and its settled attempt in one write', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.beginAttempt!({ date: '2026-11-02', locale: 'zh-CN', startedAt: '2026-11-02T00:00:00.000Z' })

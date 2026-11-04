@@ -9,6 +9,7 @@ import {
   type DailyBriefingRunTrigger
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
+import { readPeriodRuns } from './dailyBriefingPeriodRunJournal'
 
 /**
  * Whether a period still exists in the configuration.
@@ -20,7 +21,7 @@ export type DailyBriefingPeriodPresence = 'found' | 'absent' | 'unreadable'
 
 /** The stored rows of one reader's history window, grouped into rail rows. */
 export async function readBriefingHistory(input: Readonly<{
-  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'>
+  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'> & Pick<Partial<DailyBriefingStore>, 'listPeriodRuns'>
   locale: DailyBriefingLocale
   today: string
   retentionDays: number
@@ -36,15 +37,17 @@ export async function readBriefingHistory(input: Readonly<{
   const from = dates[0]!
   const to = dates[dates.length - 1]!
   const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
-  const [primaryRows, otherRows] = await Promise.all([
+  const [primaryRows, otherRows, runs] = await Promise.all([
     input.store.list(from, to, primary).catch(() => []),
-    input.store.list(from, to, otherLocale).catch(() => [])
+    input.store.list(from, to, otherLocale).catch(() => []),
+    readPeriodRuns(input.store, from, to)
   ])
   return briefingHistorySummaries({
     dates,
     primary,
     primaryRows,
     otherRows,
+    runs,
     periodRun: (date, periodId) => input.store.getPeriodRun?.(date, periodId),
     attemptCount: (date, periodId, locale) => {
       const read = input.store.listAttempts
@@ -86,6 +89,8 @@ export async function briefingHistorySummaries(input: Readonly<{
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
   scheduledTime?: string
+  /** Runs of the window; a run with no edition row is the only trace some periods leave. */
+  runs?: readonly DailyBriefingPeriodRun[]
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
@@ -101,17 +106,31 @@ export async function briefingHistorySummaries(input: Readonly<{
     byPeriod.set(key, entry)
   }
 
+  const runsByDate = new Map<string, Map<string, DailyBriefingPeriodRun>>()
+  for (const run of input.runs ?? []) {
+    const forDate = runsByDate.get(run.date) ?? new Map<string, DailyBriefingPeriodRun>()
+    forDate.set(run.periodId, run)
+    runsByDate.set(run.date, forDate)
+  }
+
   const editions: DailyBriefingEditionSummary[] = []
   for (const date of [...input.dates].reverse()) {
     const periods: PeriodRows[] = [...byPeriod.values()]
       .filter((entry) => entry.date === date)
       .map((entry) => ({ date: entry.date, periodId: entry.periodId, rows: entry.rows }))
+    // A run that wrote no edition still names its period: without this merge, a failed or
+    // interrupted run would simply vanish from the list.
+    const runsToday = runsByDate.get(date) ?? new Map<string, DailyBriefingPeriodRun>()
+    const known = new Set(periods.map((period) => period.periodId))
+    for (const periodId of runsToday.keys()) {
+      if (!known.has(periodId)) periods.push({ date, periodId, rows: new Map() })
+    }
     // A day with nothing stored still gets the one row it always had: "not run", not "no row".
     if (periods.length === 0) periods.push({ date, periodId: DEFAULT_PERIOD_ID, rows: new Map() })
 
     const day: DailyBriefingEditionSummary[] = []
     for (const period of periods) {
-      day.push(await summaryOfPeriod(period, input))
+      day.push(await summaryOfPeriod(period, input, runsToday.get(period.periodId)))
     }
     // A5.1, the one definition: nominal cutoff ascending, same moment resolved by the period id.
     // Not by generatedAt and not by window, or the reader sees the list reshuffle between renders.
@@ -139,7 +158,7 @@ async function summaryOfPeriod(period: PeriodRows, input: Readonly<{
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
-}>): Promise<DailyBriefingEditionSummary> {
+}>, knownRun?: DailyBriefingPeriodRun): Promise<DailyBriefingEditionSummary> {
   const { date, periodId, rows } = period
   // The row's face is the reader's language. Another language being published does not turn the
   // reader's own gap into a generated row — `languages` says what exists; `state` stays about the
@@ -163,7 +182,7 @@ async function summaryOfPeriod(period: PeriodRows, input: Readonly<{
     } : {})
   }
 
-  const run = input.periodRun ? await input.periodRun(date, periodId) : undefined
+  const run = knownRun ?? (input.periodRun ? await input.periodRun(date, periodId) : undefined)
   const expectedLocales = run?.expectedLocales
   const completeness = briefingCompleteness({
     ...(expectedLocales ? { expectedLocales } : {}),
@@ -249,10 +268,13 @@ function languagesOf(
     // "Generating" comes from the process that is actually running the period, not from the stored
     // run row: a process that died leaves that row `running` forever, and the row would spin.
     if (live.running) return Object.freeze({ locale, state: 'generating' as const })
+    // A run still marked `running` with nothing alive is a run the process died inside: the reader
+    // is told it never finished, not that it failed (a failure never happened).
+    const interrupted = run?.state === 'running'
     return Object.freeze({
       locale,
       state: 'missing' as const,
-      reason: run?.state === 'failed' ? 'run-failed' as const : 'not-published' as const
+      reason: interrupted ? 'run-interrupted' as const : run?.state === 'failed' ? 'run-failed' as const : 'not-published' as const
     })
   })
 }

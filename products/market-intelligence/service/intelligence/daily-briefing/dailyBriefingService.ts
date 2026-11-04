@@ -157,6 +157,12 @@ export type DailyBriefingStore = Readonly<{
   listAttempts?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<readonly DailyBriefingAttemptRecord[]>
   /** The run of that period, holding the frozen facts every edition of it was written from. */
   getPeriodRun?: (date: string, periodId?: string) => Promise<DailyBriefingPeriodRun | undefined>
+  /**
+   * Every run of a date range. The list needs this to show a period whose run wrote no edition at
+   * all (still generating, failed, or interrupted): edition rows are what name a period id, so a
+   * period that never published cannot be found by iterating rows.
+   */
+  listPeriodRuns?: (from: string, to: string) => Promise<readonly DailyBriefingPeriodRun[]>
   /** Writes the first run of a period; a second call for the same period keeps the first facts. */
   openPeriodRun?: (run: DailyBriefingPeriodRun) => Promise<void>
   settlePeriodRun?: (run: Readonly<{
@@ -648,7 +654,9 @@ export function createDailyBriefingService(deps: Readonly<{
       locale: input.locale,
       today: window.date,
       retentionDays: dailyBriefingPolicy.retentionDays,
-      scheduledTime: schedule.generationTime
+      scheduledTime: schedule.generationTime,
+      // "Generating" is a live fact: the stored run row outlives the process that wrote it.
+      isRunning: (date, periodId) => [...runs.progress.keys()].some((key) => key.startsWith(`${date}:${periodId}:`))
     })
     return { state: 'available', result: { editions, today: window.date } }
   }

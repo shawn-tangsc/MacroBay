@@ -336,7 +336,15 @@ export type DailyBriefingEditionLanguageState = 'published' | 'generating' | 'mi
  * Why a language has no edition to open. Closed on purpose: the rail prints the reason from this
  * code, it never infers one from the absence itself.
  */
-export type DailyBriefingEditionLanguageReason = 'not-published' | 'run-running' | 'run-failed'
+export type DailyBriefingEditionLanguageReason =
+  /** The run settled without this language (partial publication). */
+  | 'not-published'
+  /** A run is in flight right now, in this process. */
+  | 'run-running'
+  /** The run ended failed. */
+  | 'run-failed'
+  /** The run never finished: the process died and nothing is running now. Not the same as failed. */
+  | 'run-interrupted'
 
 export type DailyBriefingEditionLanguage = Readonly<{
   locale: DailyBriefingLocale

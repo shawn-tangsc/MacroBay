@@ -167,7 +167,8 @@ describe('the list projection decides the row, once', () => {
       isRunning: () => false
     })
     expect(dead[0]?.languages).toEqual([
-      { locale: 'en-US', state: 'missing', reason: 'not-published' },
+      // A stored `running` with no live process is an interrupted run, not a published partial one.
+      { locale: 'en-US', state: 'missing', reason: 'run-interrupted' },
       { locale: 'zh-CN', state: 'published' }
     ])
 
@@ -235,6 +236,65 @@ describe('the list projection decides the row, once', () => {
     ]
     const summaries = await two(rows, {})
     expect(summaries.filter((summary) => summary.isCurrent).map((summary) => summary.periodId)).toEqual(['period_late'])
+  })
+})
+
+describe('a run that wrote no edition still gets a row', () => {
+  const emptyDayRun = (state: 'running' | 'failed', periodId = 'period_crash'): DailyBriefingPeriodRun => ({
+    ...run(['zh-CN']),
+    periodId,
+    state
+  })
+
+  const onlyRuns = (runs: readonly DailyBriefingPeriodRun[], isRunning?: (date: string, periodId: string) => boolean) =>
+    briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [], runs,
+      ...(isRunning ? { isRunning } : {})
+    })
+
+  it('shows a failed run with a reason, and no body-derived number on the row', async () => {
+    const [summary] = await onlyRuns([emptyDayRun('failed')])
+    expect(summary).toMatchObject({ periodId: 'period_crash', state: 'missing' })
+    // A9.9: a row with no body may not carry any of the body's derived values. `startedAt` is not a
+    // stand-in for `generatedAt`, and a nominal cutoff is not invented either.
+    expect(summary?.generatedAt).toBeUndefined()
+    expect(summary?.summaryLine).toBeUndefined()
+    expect(summary?.direction).toBeUndefined()
+    expect(summary?.readingsAvailable).toBeUndefined()
+    expect(summary?.windowEnd).toBeUndefined()
+    expect(summary?.periodTime).toBeUndefined()
+    expect(summary?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }])
+  })
+
+  it('says "generating" only while the run is alive, and "interrupted" once the process is gone', async () => {
+    const alive = await onlyRuns([emptyDayRun('running')], () => true)
+    expect(alive[0]?.languages).toEqual([{ locale: 'zh-CN', state: 'generating' }])
+
+    // Same stored row after a crash and restart: nothing is running, so the row stops spinning and
+    // says the run never finished — which is not the same statement as "it failed".
+    const crashed = await onlyRuns([emptyDayRun('running')], () => false)
+    expect(crashed[0]?.languages).toEqual([{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }])
+  })
+
+  it('never marks a generating or missing row as the current edition', async () => {
+    const rows = [edition('zh-CN')]
+    const [published, failed] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      runs: [emptyDayRun('failed')]
+    })
+    expect(published?.isCurrent).toBe(true)
+    expect(failed?.isCurrent).toBeUndefined()
+    expect([published, failed].filter((summary) => summary?.isCurrent)).toHaveLength(1)
+  })
+
+  it('keeps the day sorted by nominal cutoff, with the unknown-cutoff row last', async () => {
+    const known = edition('zh-CN')
+    const [first, second] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [known], otherRows: [],
+      runs: [emptyDayRun('failed')]
+    })
+    expect(first?.periodId).toBe('default')
+    expect(second?.periodId).toBe('period_crash')
   })
 })
 })

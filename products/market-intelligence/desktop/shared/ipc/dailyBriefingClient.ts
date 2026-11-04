@@ -431,7 +431,7 @@ function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLan
     }
     if (entry.state !== 'missing') return null
     const reason = entry.reason
-    if (reason !== 'not-published' && reason !== 'run-running' && reason !== 'run-failed') return null
+    if (reason !== 'not-published' && reason !== 'run-running' && reason !== 'run-failed' && reason !== 'run-interrupted') return null
     parsed.push(Object.freeze({ locale: entry.locale, state: 'missing' as const, reason }))
   }
   return Object.freeze(parsed)

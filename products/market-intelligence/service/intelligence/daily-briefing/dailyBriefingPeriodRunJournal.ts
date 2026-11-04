@@ -60,3 +60,19 @@ export function createDailyBriefingPeriodRunJournal(
     }
   })
 }
+
+/**
+ * The runs of a date range, read through the store.
+ *
+ * The list uses this to find a period whose run wrote **no edition at all** (still generating, failed,
+ * or interrupted): edition rows are what name a period id, so a period that never published cannot be
+ * found by iterating rows. A missing capability reads as "no runs known", never as "all finished".
+ */
+export async function readPeriodRuns(
+  store: Readonly<{ listPeriodRuns?: (from: string, to: string) => Promise<readonly DailyBriefingPeriodRun[]> }>,
+  from: string,
+  to: string
+): Promise<readonly DailyBriefingPeriodRun[]> {
+  if (!store.listPeriodRuns) return Object.freeze([])
+  return store.listPeriodRuns(from, to).catch(() => Object.freeze([]))
+}

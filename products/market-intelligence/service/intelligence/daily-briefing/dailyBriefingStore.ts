@@ -95,6 +95,9 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       set state = ?, finished_at = ?, writing_rounds = coalesce(?, writing_rounds)
       where edition_date = ? and period_id = ?`)
     const readRun = db.prepare('select * from daily_briefing_period_runs where edition_date = ? and period_id = ?')
+    // The list needs the runs of a range, not one known period: a run that wrote no edition at all
+    // is invisible through `readRun`, because nothing names its period id.
+    const listRuns = db.prepare('select * from daily_briefing_period_runs where edition_date between ? and ? order by edition_date desc, period_id asc')
 
     const beginAttempt = attemptPeriod
       ? (attempt: DailyBriefingAttemptStart): number => {
@@ -178,6 +181,11 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       },
       periodRun(date: string, periodId: string): DailyBriefingPeriodRun | undefined {
         return parseRun(readRun.get(date, periodId) as RunRow | undefined)
+      },
+      listPeriodRuns(from: string, to: string): readonly DailyBriefingPeriodRun[] {
+        return (listRuns.all(from, to) as RunRow[])
+          .map((row) => parseRun(row))
+          .filter((run): run is DailyBriefingPeriodRun => run !== undefined)
       },
       publishEdition(edition: DailyBriefingStoredEdition, periodId: string, attempt?: DailyBriefingAttemptEnd) {
         if (!isDailyBriefingDocumentWithinBudget(edition.document)) throw new Error('daily-briefing-document-too-large')
@@ -292,6 +300,9 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     },
     async getPeriodRun(date, periodId) {
       return statements.periodRun(date, periodId ?? DEFAULT_PERIOD_ID)
+    },
+    async listPeriodRuns(from, to) {
+      return statements.listPeriodRuns(from, to)
     },
     async openPeriodRun(run) {
       statements.openPeriodRun(run)
