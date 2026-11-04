@@ -166,7 +166,8 @@ describe('daily briefing generation settings service', () => {
     const onSaved = vi.fn()
     const service = createDailyBriefingGenerationSettingsService({ storage, onSaved, now: () => NOW })
 
-    await expect(service.save({ generationTime: '11:30' })).rejects.toThrow('daily-briefing-generation-time-invalid')
+    // 12:45 is off the half-hour grid; 11:30 used to be outside the old morning window and is legal now.
+    await expect(service.save({ generationTime: '12:45' })).rejects.toThrow('daily-briefing-generation-time-invalid')
     await expect(service.save({ windowHours: 36 })).rejects.toThrow('daily-briefing-window-hours-invalid')
     expect(onSaved).not.toHaveBeenCalled()
     expect(await storage.read()).toBeUndefined()

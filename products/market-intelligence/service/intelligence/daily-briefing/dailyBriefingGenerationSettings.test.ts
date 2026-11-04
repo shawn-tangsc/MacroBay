@@ -31,7 +31,10 @@ describe('daily briefing generation settings', () => {
 
   it('rejects an out-of-range time, an off-step minute and an unsupported window on a save', () => {
     const current = createDefaultDailyBriefingPeriodsSettings(NOW)
-    for (const generationTime of ['05:30', '11:00', '08:15', '08:01', '8:00', '', 'noon']) {
+    // Times every half hour from 00:00 to 23:30 are legal since the grid widened, so the rejected
+    // cases are now the ones that are off the grid or outside the day, not the ones that were
+    // outside the old 06:00–10:00 morning window.
+    for (const generationTime of ['05:45', '12:45', '08:15', '08:01', '8:00', '', 'noon', '24:00']) {
       expect(() => applyDailyBriefingGenerationSettingsPatch(current, { generationTime }, NOW))
         .toThrow('daily-briefing-generation-time-invalid')
     }
