@@ -115,7 +115,8 @@ export function DailyBriefingHistoryRail({
             return next
           }) }}>
           <span className="mi-daily-briefing__rail-day-date">{formatDate(day.date, locale)}</span>
-          {day.date === todayDate ? <em data-current-period="true">{text.history.currentPeriod}</em> : null}
+          {/* The day head says which day it is, never "本期": the current issue is marked on its row. */}
+          {day.date === todayDate ? <em data-today="true">{text.history.today}</em> : null}
           {/* The count stays on the head even when collapsed (A5.2). */}
           <span className="mi-daily-briefing__rail-day-count" data-day-count={day.rows.length}>
             {text.history.periodCount.replace('{count}', String(day.rows.length))}

@@ -254,6 +254,12 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
     /></ConfirmProvider></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  // The rail groups by day and opens only today (A5.3). These page cases read rows across the whole
+  // window, so open every day once, the way a reader would.
+  await act(async () => {
+    for (const head of container!.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head[aria-expanded="false"]')) head.click()
+  })
+  await act(async () => { await Promise.resolve() })
   return container
 }
 
@@ -268,7 +274,9 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('CPI 超预期')
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
-    expect(dom.querySelector('[data-date="2026-10-30"]')?.textContent).toContain(text.history.currentPeriod)
+    // The day head says 今天; which issue is *current* is decided by the projection and marked on
+    // its row (covered by the rail cases), not by the wall clock here.
+    expect(dom.querySelector('[data-today]')?.textContent).toBe(text.history.today)
     expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(false)
 
     act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__back')!.click())
@@ -942,7 +950,7 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
     expect(dom.querySelector('[data-content-language-tabs] [aria-selected="true"]')?.textContent).toContain(text.languageTabs['en-US'])
     // The row's tag follows the languages that are left: "bilingual" is now wrong.
-    expect(dom.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('en')
+    expect(dom.querySelector('[data-briefing-locale-tag]')?.getAttribute('data-briefing-locale-tag')).toBe('en')
     // Falling back to the other language is a read: no run was opened by the delete or the switch.
     expect(client.getToday).toHaveBeenCalledTimes(1)
   })
@@ -1302,13 +1310,9 @@ describe('daily briefing page', () => {
 
     // The row is the clock and the item count; no expander, no "N attempts".
     expect(row.querySelector('[data-attempts-toggle]')).toBeNull()
-    const meta = row.querySelector<HTMLElement>('.mi-daily-briefing__rail-meta')!.textContent!
-    const segments = meta.split('·').map((segment) => segment.trim())
-    // The item count and the clock always; the gap count is a third segment, only when there are
-    // gaps, and it never merges with the item count.
-    expect(segments[0]).toMatch(/^\d+ 项$/)
-    expect(segments[1]).toMatch(/^\d{2}:\d{2}$/)
-    expect(segments.slice(2)).toEqual([expect.stringMatching(/^\d+ 缺口$/)])
+    // The row carries the item count and the clocks; the attempt count stays in the detail column.
+    expect(row.textContent).toContain(`4 ${text.readingsUnit}`)
+    expect(row.textContent).not.toContain(text.history.attempts.times)
 
     // The trail lives in the one detail column, and only there: one disclosure, no toggle button.
     expect(dom.querySelectorAll('[data-briefing-attempts]')).toHaveLength(1)
@@ -1992,7 +1996,7 @@ it('takes the current issue from the service, not from the wall clock', async ()
   // The current issue is the first row, marked as the issue — not "today", which it is not.
   const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
   expect(first.getAttribute('data-date')).toBe('2026-10-29')
-  expect(first.querySelector('[data-current-period]')?.textContent).toBe(text.history.currentPeriod)
+  expect(first.getAttribute('aria-current')).toBe('true')
   expect(first.hasAttribute('disabled')).toBe(false)
 
   await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
@@ -2145,13 +2149,13 @@ it('derives the row tag, the switch and the pane from one list of languages', as
 
   const both = await page(['zh-CN', 'en-US'])
   await flushPaper(both)
-  expect(both.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('both')
+  expect(both.querySelector('[data-briefing-locale-tag]')?.getAttribute('data-briefing-locale-tag')).toBe('both')
   expect(both.querySelectorAll('[data-content-language-tabs] [role="tab"]')).toHaveLength(2)
   expect(both.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
 
   const englishOnly = await page(['en-US'])
   await flushPaper(englishOnly)
-  expect(englishOnly.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('en')
+  expect(englishOnly.querySelector('[data-briefing-locale-tag]')?.getAttribute('data-briefing-locale-tag')).toBe('en')
   // The pane names the missing Chinese edition rather than claiming the issue has no content.
   const missing = englishOnly.querySelector('[data-briefing-locale-missing="zh-CN"]')
   expect(missing).not.toBeNull()
@@ -2354,7 +2358,7 @@ it('switches to the surviving language when the edition on screen is deleted', a
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
   expect(dom.querySelector('[data-content-language-tabs] [aria-selected="true"]')?.textContent).toContain(text.languageTabs['en-US'])
-  expect(dom.querySelector('[data-edition-languages]')?.getAttribute('data-edition-languages')).toBe('en')
+  expect(dom.querySelector('[data-briefing-locale-tag]')?.getAttribute('data-briefing-locale-tag')).toBe('en')
 })
 
 it('selects the current issue as soon as the page opens, with no button of its own', async () => {
