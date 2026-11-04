@@ -252,9 +252,24 @@ export type DailyBriefingDocument = Readonly<{
     editorialFailure?: string
     editorialFailureDetail?: string
     selectionAudit?: Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }>
+    /**
+     * Data the builder had in hand and deliberately left out, with the reason.
+     *
+     * Not shown to the reader: it answers the question a reader cannot ask today and an engineer
+     * cannot answer in three months — "was there no distribution, or did we refuse this one?".
+     */
+    dataAudit?: readonly BriefingDataAuditEntry[]
     /** Absent on editions generated before the stage trace existed. */
     generationTrace?: BriefingGenerationTrace
   }>
+}>
+
+/** One fact the builder dropped, and why. `field` names the document path it would have filled. */
+export type BriefingDataAuditEntry = Readonly<{
+  field: 'policyPath.distribution'
+  /** `incomplete-distribution`: the venue did not price all five buckets. `inconsistent-totals`: it
+   * did, but normalizing moved the lead bucket away from the probability the card prints. */
+  reason: 'incomplete-distribution' | 'inconsistent-totals'
 }>
 
 export type DailyBriefingEditionSummary = Readonly<{

@@ -1,4 +1,4 @@
-import type { BriefingMateriality, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import type { BriefingDataAuditEntry, BriefingMateriality, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { normalizeOutcomes } from '../../../contracts/policyPath'
 import { baselineVisibility, leverageMateriality, policyPathMateriality } from './dailyBriefingDataSelection'
 import { briefingOpenInterestSeries } from './dailyBriefingSeries'
@@ -23,10 +23,14 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 export function buildPolicyPathBlock(
   packet: DailyBriefingFactPacket,
   previous: DailyBriefingDocument | undefined
-): DailyBriefingDocument['data']['policyPath'] {
+): Readonly<{
+  policyPath: DailyBriefingDocument['data']['policyPath']
+  /** What the card could have drawn and did not, so a two-segment dial is answerable later. */
+  audit: readonly BriefingDataAuditEntry[]
+}> {
   const policyPath = packet.policyPath
   const probability = policyPath?.probability
-  if (!policyPath || !probability) return undefined
+  if (!policyPath || !probability) return { policyPath: undefined, audit: [] }
   const current = probability.value <= 1 ? probability.value * 100 : probability.value
   const previousProbability = previous?.data.policyPath?.probability
   const probabilityChangePp = typeof previousProbability === 'number' && Number.isFinite(previousProbability)
@@ -50,19 +54,30 @@ export function buildPolicyPathBlock(
   // rather than showing two different odds for one market.
   const normalized = probability.distribution ? normalizeOutcomes(probability.distribution) : undefined
   const normalizedLead = normalized ? normalized[probability.outcome] * 100 : undefined
-  const distribution = normalizedLead !== undefined && Math.abs(normalizedLead - current) <= 0.5 ? normalized : undefined
-  return Object.freeze({
-    state: 'available' as const,
-    meetingDate: policyPath.meetingDate,
-    outcome: probability.outcome,
-    probability: current,
-    observedAt: probability.asOf,
-    ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}),
-    ...(distribution ? { distribution } : {}),
-    ...(probabilityChangePp !== undefined ? { probabilityChangePp } : {}),
-    materiality,
-    ...baselineVisibility(true)
-  })
+  const usable = normalizedLead !== undefined && Math.abs(normalizedLead - current) <= 0.5
+  const distribution = usable ? normalized : undefined
+  // Never shown on the page. Only a distribution the venue actually published can be "dropped": no
+  // distribution at all is the absence of a fact, not a decision to leave one out.
+  const audit: BriefingDataAuditEntry[] = []
+  if (probability.distribution) {
+    if (!normalized) audit.push(Object.freeze({ field: 'policyPath.distribution' as const, reason: 'incomplete-distribution' as const }))
+    else if (!usable) audit.push(Object.freeze({ field: 'policyPath.distribution' as const, reason: 'inconsistent-totals' as const }))
+  }
+  return {
+    policyPath: Object.freeze({
+      state: 'available' as const,
+      meetingDate: policyPath.meetingDate,
+      outcome: probability.outcome,
+      probability: current,
+      observedAt: probability.asOf,
+      ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}),
+      ...(distribution ? { distribution } : {}),
+      ...(probabilityChangePp !== undefined ? { probabilityChangePp } : {}),
+      materiality,
+      ...baselineVisibility(true)
+    }),
+    audit: Object.freeze(audit)
+  }
 }
 
 /**

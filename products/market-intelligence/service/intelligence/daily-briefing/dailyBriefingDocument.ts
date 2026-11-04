@@ -32,7 +32,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
-  const policyPathData = buildPolicyPathBlock(packet, input.previous)
+  const policyBlock = buildPolicyPathBlock(packet, input.previous)
+  const policyPathData = policyBlock.policyPath
   const leverage = buildLeverageBlock(packet, readings.funds)
   const document: DailyBriefingDocument = Object.freeze({
     // Read from the policy rather than repeating the literals: a version bump that updates only one
@@ -87,7 +88,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
     citations: built.citations,
     provenance: Object.freeze({
       summaryId: packet.conclusion?.summary.id ?? null,
-      readAt: packet.asOf
+      readAt: packet.asOf,
+      ...(policyBlock.audit.length > 0 ? { dataAudit: policyBlock.audit } : {})
     })
   })
   return input.previous ? Object.freeze({ ...document, comparison: buildComparison(document, input.previous) }) : document

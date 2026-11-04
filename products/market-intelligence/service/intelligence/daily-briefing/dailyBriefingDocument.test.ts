@@ -730,6 +730,13 @@ describe('daily briefing document', () => {
       const inconsistent = fixture({ 'no-change': 0.10, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.01, 'cut-50-plus': 0.01 })
       expect(inconsistent.data.policyPath).not.toHaveProperty('distribution')
       expect(inconsistent.data.policyPath?.probability).toBe(77.5)
+      // Dropping it leaves a trace: a two-segment dial in three months must be answerable.
+      expect(inconsistent.provenance.dataAudit).toEqual([{ field: 'policyPath.distribution', reason: 'inconsistent-totals' }])
+      expect(overround.provenance.dataAudit).toBeUndefined()
+
+      // An unpublished distribution is an absence, not a decision — nothing to audit.
+      const absent = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5) }), date: '2026-10-30' })
+      expect(absent.provenance.dataAudit).toBeUndefined()
 
       // Whatever survives must satisfy the invariant, checked rather than assumed.
       for (const document of [overround, inconsistent]) {
