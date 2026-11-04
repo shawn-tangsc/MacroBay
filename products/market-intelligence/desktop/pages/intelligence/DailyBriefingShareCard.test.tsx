@@ -81,7 +81,8 @@ afterEach(async () => {
 
 const renderWith = async (
   doc: DailyBriefingDocument,
-  copy: typeof text,
+  // Both locales are passed here; the component's own prop is the union of the two copy trees.
+  copy: typeof text | typeof zhText,
   locale: 'zh-CN' | 'en-US',
   omitFallbackReadings = false
 ): Promise<HTMLDivElement> => {
@@ -269,13 +270,14 @@ describe('daily brief share card in English', () => {
         }
       }
     })
-    const numbers = rendered.querySelector('.mi-brief-poster__numbers')!.textContent ?? ''
+    // A row that is not one of the four headline numbers lands in the metrics block, so read the
+    // whole card: where it prints does not matter, that it prints does.
+    const numbers = rendered.textContent ?? ''
 
-    // A change-led row with no baseline is left out of the poster rather than printed as a level or
-    // a fabricated flat move; the document itself keeps `no-baseline` for the reader's audit.
-    expect(numbers).not.toContain(text.rows.stablecoin)
-    expect(numbers).not.toContain(text.rows.fearGreed)
-    expect(numbers).not.toContain('Total 253B USD')
+    // The rows print with their missing baseline stated; the poster used to drop them silently,
+    // which is how a quiet day looked like a day with no readings.
+    expect(numbers).toContain(text.rows.stablecoin)
+    expect(numbers).toContain(text.rows.fearGreed)
     expect(numbers).not.toContain('0.00%')
   })
 

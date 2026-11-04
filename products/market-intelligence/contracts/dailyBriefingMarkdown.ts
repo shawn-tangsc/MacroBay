@@ -8,7 +8,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   edition: string
   readingsAllMissing: string
   noValue: string
-  sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string }>
+  sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string; leverage: string; policyPath: string }>
   tiers: Readonly<{ must: string; support: string; reference: string }>
   states: Readonly<Record<string, string>>
   reasons: Readonly<Record<string, string>>
@@ -73,7 +73,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     for (const item of visibleMacro) lines.push('', macroLine(item, options))
   }
 
-  const rows = dataRows(document)
+  const rows = briefingDataRows(document)
   if (rows.length > 0) {
     lines.push('', `## ${labels.sections.data}`)
     for (const tier of ['must', 'support', 'reference'] as const) {
@@ -81,6 +81,22 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
       if (tierRows.length === 0) continue
       lines.push('', `### ${labels.tiers[tier]}`)
       for (const row of tierRows) lines.push(dataLine(row, options))
+    }
+    // The card prints these two blocks; the copied text is the same edition, so it prints them too.
+    // Their absence here was the "page one thing, export another" defect reported on 2026-11-04.
+    if (document.data.leverage && document.data.leverage.visibility !== 'hidden') {
+      const leverage = document.data.leverage
+      lines.push('', `### ${labels.sections.leverage}`)
+      for (const [asset, entry] of [['BTC', leverage.btc], ['ETH', leverage.eth]] as const) {
+        const openInterest = entry.openInterestUsd === undefined ? labels.noValue : `$${(entry.openInterestUsd / 1e9).toFixed(2)}B`
+        const day = entry.change24hPct === undefined ? labels.noValue : `${entry.change24hPct.toFixed(1)}%`
+        lines.push(`- ${asset} · ${openInterest} · ${day}`)
+      }
+    }
+    if (document.data.policyPath && document.data.policyPath.visibility !== 'hidden') {
+      const path = document.data.policyPath
+      lines.push('', `### ${labels.sections.policyPath}`)
+      lines.push(`${Math.round(path.probability)}% · ${path.meetingDate}${path.targetLower !== undefined ? ` · ${path.targetLower}–${path.targetUpper}%` : ''}`)
     }
   }
 
@@ -114,15 +130,17 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   return `${lines.join('\n').trimEnd()}\n`
 }
 
-function dataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
-  // The copy must agree with the screen: hidden data rows are audited, not rendered.
+/**
+ * The rows the data region shows, for both exports.
+ *
+ * One function, because the exported image and the copied text are the same edition: two renderers
+ * each deciding what to print is how the leverage block and the rate path came to exist in the card
+ * and be missing from the markdown. Readiness already decided presence; nothing here filters on "does
+ * this row have a change", which silently dropped stablecoin and fear-and-greed on quiet days.
+ */
+export function briefingDataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
   return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
-    .filter((row) => row.visibility !== 'hidden' && hasChangeToShow(row))
-}
-
-/** A change-led row with no comparable earlier value is omitted, never shown as a bare level. */
-export function hasChangeToShow(row: BriefingMarketRow | BriefingPulseRow): boolean {
-  return row.id !== 'stablecoin' && row.id !== 'fear-greed' ? true : row.change !== null
+    .filter((row) => row.visibility !== 'hidden')
 }
 
 /**

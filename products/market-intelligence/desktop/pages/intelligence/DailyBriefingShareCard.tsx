@@ -3,7 +3,7 @@ import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
-import { hasChangeToShow } from '../../../contracts/dailyBriefingMarkdown'
+import { briefingDataRows } from '../../../contracts/dailyBriefingMarkdown'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 
@@ -31,10 +31,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
-  // The data region is a selection, not a dump: a row the editor did not include stays out of the
-  // poster even when its value is present, and a hidden row's reason lives only in the audit.
-  const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])].filter(hasChangeToShow)
-    .filter((row) => row.visibility !== 'hidden')
+  // The same rows the copied text prints: one function, two exports, no second opinion.
+  const rows = briefingDataRows(doc)
     // A stale row carries a fallback number, never the exact reading; the exported image drops it.
     .filter((row) => !omitFallbackReadings || row.state !== 'stale')
   const must = rows.filter((row) => row.importance.tier === 'must')

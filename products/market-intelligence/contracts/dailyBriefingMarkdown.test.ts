@@ -148,10 +148,10 @@ describe('daily briefing markdown', () => {
       }
     }, options)
 
-    // A change-led row with no baseline is not printed as a bare level or a flat move: the document
-    // keeps `no-baseline` for the screen, and the export leaves the row out rather than claim a zero.
-    expect(markdown).not.toContain('- 稳定币:')
-    expect(markdown).not.toContain('- 恐惧贪婪:')
+    // The rows print — a reading without a baseline is still a reading — and the missing baseline is
+    // stated instead of a fabricated zero. Dropping the row made a quiet day look like no data.
+    expect(markdown).toContain('- 稳定币:')
+    expect(markdown).toContain('- 恐惧贪婪:')
     expect(markdown).not.toContain('0.00%')
   })
 
