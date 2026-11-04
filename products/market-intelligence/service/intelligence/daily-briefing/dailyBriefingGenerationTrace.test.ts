@@ -268,3 +268,39 @@ describe('daily briefing generation trace', () => {
     expect(stage(trace, 'writing')?.state).toBe('skipped')
   })
 })
+
+/**
+ * A stage that runs twice reports its latest segment.
+ *
+ * Validation runs, fails, hands off to a repair, then runs again. If the second begin were ignored
+ * (the old behaviour), the validation row's window would swallow the repair's seconds and two rows
+ * would show one set of numbers — the reader cannot tell which one actually spent the time.
+ */
+describe('a repeated stage reports its last segment', () => {
+  it('gives the second segment its own start, and drops the first window', () => {
+    let clock = Date.parse('2026-11-04T00:00:00.000Z')
+    const recorder = createDailyBriefingGenerationRecorder({ attemptId: 'a', now: () => new Date(clock).toISOString() })
+
+    recorder.begin('validation')
+    clock += 1_000
+    recorder.end('validation', 'failed', { failureCode: 'schema-validation-failed' })
+    recorder.begin('repair-1')
+    clock += 8_000
+    recorder.end('repair-1', 'success')
+    clock += 100
+    recorder.begin('validation')
+    clock += 500
+    recorder.end('validation', 'success')
+
+    const stages = recorder.snapshot().stages
+    const validation = stages.find((stage) => stage.id === 'validation')
+    const repair = stages.find((stage) => stage.id === 'repair-1')
+
+    expect(validation?.startedAt).toBe('2026-11-04T00:00:09.100Z')
+    expect(validation?.durationMs).toBe(500)
+    // The repair keeps the seconds it spent, and the two rows no longer share a window.
+    expect(repair?.startedAt).toBe('2026-11-04T00:00:01.000Z')
+    expect(repair?.durationMs).toBe(8_000)
+    expect(Date.parse(validation!.startedAt!)).toBeGreaterThan(Date.parse(repair!.finishedAt!))
+  })
+})

@@ -38,7 +38,12 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
   const stages = new Map<BriefingGenerationStageId, BriefingGenerationStage>()
   const changed = (): void => input.onChange?.()
   const begin = (id: BriefingGenerationStageId): void => {
-    if (stages.has(id)) return
+    const existing = stages.get(id)
+    // A stage may run more than once (validation, then again after a repair). A second begin after
+    // the first segment ended starts a new segment: the row shows the time of the *work it just did*,
+    // not the parent window that contains someone else's work. Between segments nothing accumulates —
+    // the previous times are dropped, which is the contract "last segment wins".
+    if (existing && existing.state === 'pending') return
     stages.set(id, { id, state: 'pending', startedAt: input.now() })
     changed()
   }
@@ -63,7 +68,10 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
     changed()
   }
   const skip = (id: BriefingGenerationStageId): void => {
-    if (stages.has(id)) return
+    // A stage that merely began and never ended may still be marked skipped (nothing ran); one that
+    // already ended keeps its record, because it did run.
+    const existing = stages.get(id)
+    if (existing && existing.state !== 'pending') return
     stages.set(id, Object.freeze({ id, state: 'skipped' }))
     changed()
   }

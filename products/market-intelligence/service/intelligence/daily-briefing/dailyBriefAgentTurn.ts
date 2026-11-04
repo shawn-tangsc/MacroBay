@@ -179,10 +179,12 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   stage({ stage: 'writing', state: 'success' })
-  stage({ stage: 'validation', state: 'begin' })
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
   for (let attempt = 0; attempt < 3; attempt++) {
+    // Each check times itself. A check that fails closes before the repair it triggers, so the repair
+    // row owns the seconds it spends and the validation row does not silently include them.
+    stage({ stage: 'validation', state: 'begin' })
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
@@ -196,6 +198,9 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       failureCode = validation.failureCode
       failureDetail = validation.detail
     }
+    // Close this check before repairing: the first failure code is kept for the loop's verdict, and
+    // the repair that follows gets its own window instead of nesting inside this one.
+    stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
     if (attempt < 2) {
       throwIfAborted(input.signal)
       const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
