@@ -146,6 +146,7 @@ describe('generation stage timeline', () => {
     expect(details.tagName).toBe('DETAILS')
     expect(details.open).toBe(true)
     expect(details.querySelector('summary')!.textContent).toMatch(/生成阶段9 步 · .+ · 全部完成/)
+    expect(dom.querySelector('.ant-steps-vertical')).not.toBeNull()
     expect(dom.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
     expect(steps).toHaveLength(9)
     expect(steps.map((entry) => entry.getAttribute('data-stage'))).toEqual(allSucceeded)
@@ -272,7 +273,8 @@ describe('generation stage timeline', () => {
     // the label. Only the circle stays.
     const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
     for (const row of [...dom.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
-      expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(1)
+      // The row draws no mark of its own at all: the stepper's circle is the only one.
+      expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(0)
       expect(row.textContent ?? '').not.toMatch(/[✓✔√]/)
     }
   })

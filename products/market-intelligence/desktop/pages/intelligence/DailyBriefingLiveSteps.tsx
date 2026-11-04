@@ -4,7 +4,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
 import { briefingGenerationDisplayRows, type BriefingGenerationProgress, type BriefingGenerationStage } from '../../../contracts/dailyBriefing'
-import { DailyBriefingStageList, type DailyBriefingStageRowState } from './DailyBriefingStageList'
+import { DailyBriefingStageSteps, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 /**
@@ -59,7 +59,7 @@ export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: D
       /> : null}
       <h3 className="mi-brief-steps__title">{copy.title}</h3>
     </div>
-    <DailyBriefingStageList rows={rows} />
+    <DailyBriefingStageSteps rows={rows} />
   </div>
 }
 

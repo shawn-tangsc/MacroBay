@@ -148,24 +148,26 @@
 .mi-generation-trace__summary, .mi-generation-trace__failed, .mi-generation-trace__missing { margin: 4px 0 0; color: #7d8790; font-size: 9px; line-height: 1.5; }
 .mi-generation-trace__failed { color: #e7c98f; }
 .mi-generation-trace__missing { color: #7d8790; font-style: italic; }
-/* Vertical antd Steps, compressed to the rail's 10px scale: the stage name and its help share the
-   title row, and the recorded time/error is the description. The stepper draws the rail itself. */
-.mi-generation-trace__steps { margin-top: 8px; }
-.mi-generation-trace__steps .ant-steps-item { padding-bottom: 5px; }
-.mi-generation-trace__steps .ant-steps-item:last-child { padding-bottom: 0; }
-.mi-generation-trace__steps .ant-steps-item-tail { inset-inline-start: 5.5px; }
-.mi-generation-trace__steps .ant-steps-item-tail::after { width: 1px; background: var(--mi-dashboard-line) !important; }
-.mi-generation-trace__steps .ant-steps-item-icon { width: 12px; height: 12px; margin-inline-start: 0; font-size: 7px; line-height: 10px; }
-.mi-generation-trace__steps .ant-steps-item-icon .ant-steps-icon { font-size: 8px; line-height: 1; }
-.mi-generation-trace__steps .ant-steps-item-finish .ant-steps-item-icon { background: #6f9e7b; border-color: #6f9e7b; }
-.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-icon { background: #d16a6a; border-color: #d16a6a; }
-.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon { background: transparent; border-color: #4d555c; }
-.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon { color: #4d555c; }
-.mi-generation-trace__steps .ant-steps-item-content { min-height: 12px; }
-.mi-generation-trace__steps .ant-steps-item-title { padding-inline-end: 0; color: #c4ccd2; font-size: 9.5px; line-height: 1.35; }
-.mi-generation-trace__steps .ant-steps-item-title::after { display: none; }
-.mi-generation-trace__steps .ant-steps-item-description { padding-bottom: 0; color: #7d8790; font-size: 8.5px; line-height: 1.35; }
-.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
+/* One stepper for every state: the live run in the body and the finished or failed trace in the
+   rail. The circle and its connector are the stepper's; the name, its help and the recorded time
+   are one row from the shared row implementation. Type size and rhythm are stated once here rather
+   than per surface, which is what keeps "generating" and "finished" from drifting apart again. */
+.mi-brief-steps__stepper { margin-top: 4px; }
+.mi-brief-steps__stepper .ant-steps-item { padding-bottom: 4px; }
+.mi-brief-steps__stepper .ant-steps-item:last-child { padding-bottom: 0; }
+.mi-brief-steps__stepper .ant-steps-item-tail { inset-inline-start: 7.5px; }
+.mi-brief-steps__stepper .ant-steps-item-tail::after { width: 1px; background: var(--mi-dashboard-line) !important; }
+.mi-brief-steps__stepper .ant-steps-item-icon { width: 16px; height: 16px; margin-inline-start: 0; font-size: 11px; line-height: 14px; }
+.mi-brief-steps__stepper .ant-steps-item-icon .ant-steps-icon { font-size: 11px; line-height: 14px; }
+.mi-brief-steps__stepper .ant-steps-item-finish .ant-steps-item-icon { background: #6f9e7b; border-color: #6f9e7b; }
+.mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-icon { background: #d16a6a; border-color: #d16a6a; }
+.mi-brief-steps__stepper .ant-steps-item-wait .ant-steps-item-icon { background: transparent; border-color: #4d555c; }
+.mi-brief-steps__stepper .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon { color: #4d555c; }
+.mi-brief-steps__stepper .ant-steps-item-content { min-height: 22px; }
+.mi-brief-steps__stepper .ant-steps-item-title { display: block; padding-inline-end: 0; color: #c4ccd2; font-size: 12px; font-weight: 600; line-height: 18px; }
+.mi-brief-steps__stepper .ant-steps-item-title::after { display: none; }
+.mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
+.mi-brief-steps__stepper .mi-brief-steps__row-content { display: flex; align-items: baseline; gap: 8px; }
 .mi-generation-trace__stage-title { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .mi-generation-trace__stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-generation-trace__stage-time { font-variant-numeric: tabular-nums; }
@@ -177,14 +179,8 @@
 .mi-daily-briefing-page__websearch-warning button { flex: none; height: 26px; padding: 0 9px; border: 1px solid #8b6d2e; border-radius: 6px; background: transparent; color: #f2d59a; font-size: 10px; cursor: pointer; }
 
 
-/* Live generation steps: eight rows from the contract's mapping, no percentage anywhere. */
+/* The live run's own block: eight rows from the contract's mapping, no percentage anywhere. */
 .mi-brief-steps { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.mi-brief-steps__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.mi-brief-steps__row { display: flex; align-items: baseline; gap: 8px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
-.mi-brief-steps__row[data-step-state='done'] { color: var(--mi-dashboard-text); }
-.mi-brief-steps__row[data-step-state='running'] { color: var(--mi-dashboard-text); }
-.mi-brief-steps__row[data-step-state='failed'] { color: var(--mi-dashboard-negative); }
-.mi-brief-steps__icon { flex: none; align-self: center; }
 .mi-brief-steps__name { flex: 1 1 auto; min-width: 0; }
 .mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; }
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
@@ -228,18 +224,8 @@
 [data-briefing-detail] .mi-generation-trace__stage-failure,
 [data-briefing-detail] .mi-briefing-attempts__row em,
 [data-briefing-detail] .mi-briefing-attempts__row small { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 400; line-height: 16px; }
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-title,
 [data-briefing-detail] .mi-briefing-attempts__row span { font-size: 12px; font-weight: 600; line-height: 18px; }
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-description,
 [data-briefing-detail] .mi-briefing-attempts__list p { font-size: 12px; font-weight: 400; line-height: 18px; }
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon { height: 16px; width: 16px; }
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon,
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-icon .ant-steps-icon { font-size: 11px; line-height: 14px; }
-/* Steps read as one list, not nine cards: the description line is the only separator, so the row
-   carries no bottom padding of its own. */
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item { padding-bottom: 0; }
-[data-briefing-detail] .mi-generation-trace__steps .ant-steps-item-description { margin-top: 0; }
-[data-briefing-detail] .mi-generation-trace__steps { margin-top: 4px; }
 [data-briefing-detail] .mi-daily-briefing-page__group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 32px; padding: 0 0 0 18px; }
 [data-briefing-detail] .mi-daily-briefing-page__group-severity { flex: none; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
 [data-briefing-detail] .mi-daily-briefing-page__group-severity[data-issue-severity="blocking"] { color: var(--mi-dashboard-negative); }

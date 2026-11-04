@@ -30,20 +30,25 @@ describe('stage rows have one renderer', () => {
     expect(containing('data-briefing-stage-row').map((file) => file.split('/').pop())).toEqual(['DailyBriefingStageList.tsx'])
   })
 
-  it('has both stage lists import that renderer', () => {
+  it('has both stage surfaces import that renderer', () => {
     for (const name of ['DailyBriefingLiveSteps.tsx', 'DailyBriefingGenerationTimeline.tsx']) {
       const file = files.find((candidate) => candidate.endsWith(`/${name}`))
       expect(file, name).toBeDefined()
-      expect(readFileSync(file!, 'utf8'), name).toContain('DailyBriefingStageList')
+      expect(readFileSync(file!, 'utf8'), name).toContain('DailyBriefingStageSteps')
     }
+  })
+
+  it('draws the stage list in one stepper, in every state', () => {
+    // Both surfaces render the same container: a second list implementation would let the two
+    // states drift apart again in indent, row pitch or connector position.
+    expect(containing('<Steps').map((file) => file.split('/').pop())).toEqual(['DailyBriefingStageList.tsx'])
   })
 })
 
 /**
- * The two states may differ in their outer container — the live run is a plain list, the recorded
- * trace keeps the stepper — but a row must look the same in both. This is the signature check that
- * Chief allowed in place of collapsing the containers: tag sequence and class list of the row's
- * parts, compared between the two components' own output.
+ * The two states share one stepper container, and a row must look the same in both. This is the
+ * signature check: the tag sequence and class list of the row's parts, compared between the two
+ * components' own output.
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { DailyBriefingLiveSteps } from './DailyBriefingLiveSteps'
@@ -72,11 +77,15 @@ describe('a stage row looks the same in both states', () => {
     />)
 
     const parts = (html: string): string[] => {
-      const first = html.slice(html.indexOf('data-briefing-stage-row'))
-      const row = first.slice(0, first.indexOf('</li>'))
+      const start = html.indexOf('data-briefing-stage-row')
+      const rest = html.slice(start + 1)
+      const next = rest.indexOf('data-briefing-stage-row')
+      const row = next === -1 ? rest : rest.slice(0, next)
       return [...row.matchAll(/class="(mi-brief-steps__[a-z-]+)"/g)].map((match) => match[1]!)
     }
 
+    expect(live).toContain('ant-steps-vertical')
+    expect(trace).toContain('ant-steps-vertical')
     expect(rowSignature(live)).toHaveLength(8)
     expect(rowSignature(trace)).toHaveLength(9)
     // Name then detail, in that order, in both. The trace also carries the per-stage help trigger;

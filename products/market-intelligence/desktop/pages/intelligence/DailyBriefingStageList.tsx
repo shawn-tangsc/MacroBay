@@ -1,14 +1,15 @@
-import { Check, CircleAlert, CircleHelp, Loader, Minus } from 'lucide-react'
+import { Steps } from 'antd'
+import { CircleHelp } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
 /**
- * One list of stage rows, drawn once.
+ * One stepper of stage rows, drawn once.
  *
  * The live run and the recorded trace used to map the same stages in two files, so "generating" and
- * "finished/failed" could differ in shape and in wording. Both now hand their rows here; this file
- * is the only place in the repository that renders a stage row.
+ * "finished/failed" could differ in shape, in wording and in spacing. Both now hand their rows to the
+ * same stepper; this file is the only place in the repository that renders a stage row.
  */
 export type DailyBriefingStageRowState = 'done' | 'not-needed' | 'running' | 'waiting' | 'failed'
 
@@ -34,23 +35,23 @@ export type DailyBriefingStageRow = Readonly<{
 }>
 
 /**
- * One row's content. Both the live list and the recorded stage list render through this, so a row
- * says the same things in both: the same name, the same state word, the same detail, the same
- * failure code. The anchor is here because this is the row.
+ * One row's content. Both the live run and the recorded trace render through this, so a row says the
+ * same things in both: the same name, the same state word, the same detail, the same failure code.
+ * The anchor is here because this is the row.
+ *
+ * It draws no status mark of its own: the stepper's circle is the one and only mark, so a finished
+ * row cannot show two ticks.
  */
-export function DailyBriefingStageRowContent({ row, resolveText, showIcon = true, extraAttributes, children }: Readonly<{
+export function DailyBriefingStageRowContent({ row, resolveText, extraAttributes, children }: Readonly<{
   row: DailyBriefingStageRow
   resolveText?: (key: string) => string
-  /** Off when the container already draws the status icon (the stepper's circle); one mark is enough. */
-  showIcon?: boolean
   /** Anchors a caller needs on the row itself (the trace's skip reason, for instance). */
   extraAttributes?: Readonly<Record<string, string>>
-  /** The caller's own wrapper (a list item, a stepper item's title) goes around this content. */
+  /** The caller's own wrapper (the stepper item's title) goes around this content. */
   children?: React.ReactNode
 }>): React.ReactElement {
   const help = row.help
   return <span className="mi-brief-steps__row-content" data-briefing-stage-row="true" data-stage={row.id} data-stage-state={row.state} {...extraAttributes}>
-    {showIcon ? <StepIcon state={row.state} /> : null}
     <span className="mi-brief-steps__name">{row.name}</span>
     {help && resolveText
       ? <Popover
@@ -77,24 +78,38 @@ export function DailyBriefingStageRowContent({ row, resolveText, showIcon = true
   </span>
 }
 
-export function DailyBriefingStageList({ rows, resolveText, dataAttributes }: Readonly<{
+/** A row state and the stepper status that says the same thing. */
+const STEP_STATUS: Readonly<Record<DailyBriefingStageRowState, 'finish' | 'error' | 'process' | 'wait'>> = {
+  done: 'finish',
+  // A repair that was not needed still completed; it is not a stage that waits to run.
+  'not-needed': 'finish',
+  running: 'process',
+  waiting: 'wait',
+  failed: 'error'
+}
+
+/**
+ * The stage list in every state: one stepper, one row implementation.
+ *
+ * The live run and the finished or failed trace both come through here, so the two states cannot
+ * drift apart in indent, row pitch, type size or connector position — they are the same container.
+ */
+export function DailyBriefingStageSteps({ rows, resolveText }: Readonly<{
   rows: readonly DailyBriefingStageRow[]
   /** Product text resolver for the help popover; absent means no help trigger. */
   resolveText?: (key: string) => string
-  /** Extra anchors the caller needs on the list element. */
-  dataAttributes?: Readonly<Record<string, string | undefined>>
 }>): React.ReactElement {
-  return <ol className="mi-brief-steps__list" {...dataAttributes}>
-    {rows.map((row) => <li key={row.id} className="mi-brief-steps__row" data-step={row.id} data-step-state={row.state}>
-      <DailyBriefingStageRowContent row={row} {...(resolveText ? { resolveText } : {})} {...(row.attributes ? { extraAttributes: row.attributes } : {})} />
-    </li>)}
-  </ol>
-}
-
-function StepIcon({ state }: Readonly<{ state: DailyBriefingStageRowState }>): React.ReactElement {
-  const size = 12
-  if (state === 'done') return <Check aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  if (state === 'failed') return <CircleAlert aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  if (state === 'not-needed') return <Minus aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  return <Loader aria-hidden="true" className="mi-brief-steps__icon" size={size} />
+  return <Steps
+    className="mi-brief-steps__stepper"
+    direction="vertical"
+    size="small"
+    items={rows.map((row) => ({
+      key: row.id,
+      status: STEP_STATUS[row.state],
+      title: <DailyBriefingStageRowContent row={row} {...(resolveText ? { resolveText } : {})} {...(row.attributes ? { extraAttributes: row.attributes } : {})} />,
+      // The row keeps its own single line: name, its help and the recorded time sit together, and
+      // there is no second description line to repeat what the row already says.
+      description: null
+    }))}
+  />
 }

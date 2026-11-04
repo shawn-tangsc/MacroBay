@@ -32,10 +32,6 @@
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__head > span": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__missing": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__stage-failure": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-description": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-title": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__summary, .mi-generation-trace__failed, .mi-generation-trace__missing": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace[data-generation-trace-state=\"failed\"] .mi-generation-trace__head span[data-trace-state]": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace[data-generation-trace-state=\"success\"] .mi-generation-trace__head span[data-trace-state]": 1,
@@ -74,5 +70,8 @@
   "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .source-provider-detail__proxy": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__detail .mi-sync-run__failure": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__grid span[data-outcome='succeeded']": 1,
-  "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__grid[data-outcome='failed'] span[data-outcome='failed']": 1
+  "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__grid[data-outcome='failed'] span[data-outcome='failed']": 1,
+  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-title": 1,
+  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-brief-steps__stepper .ant-steps-item-title": 1,
+  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-brief-steps__stepper .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon": 1
 }

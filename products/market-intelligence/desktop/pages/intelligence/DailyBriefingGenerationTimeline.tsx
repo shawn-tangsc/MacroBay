@@ -5,7 +5,7 @@ import { Popover } from '@platform/ui/components/popover'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
-import { DailyBriefingStageList, type DailyBriefingStageRowState } from './DailyBriefingStageList'
+import { DailyBriefingStageSteps, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
   failedStage,
@@ -80,9 +80,9 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
       {trace && trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}
       </p> : null}
-      {/* One container for every state: the live run draws the same list, so "generating" and
+      {/* One stepper for every state: the live run draws the same container, so "generating" and
           "finished/failed" cannot drift apart in spacing, indentation or connector placement. */}
-      <DailyBriefingStageList rows={generationStageIds.map((id) => {
+      <DailyBriefingStageSteps rows={generationStageIds.map((id) => {
         const stage = rendered.stages.find((entry) => entry.id === id)
         const state = stage?.state ?? 'pending'
         const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
