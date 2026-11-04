@@ -4,7 +4,8 @@ import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
-import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql } from './ChannelManagementPredicates'
+import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, type ChannelAdapterKey } from './ChannelManagementPredicates'
+import { channelAdapterDescriptor } from './channelAdapterDescriptors'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 import {
   activateOwnedChannelRuntime,
@@ -1048,16 +1049,23 @@ export class ChannelManagementRepository {
 
   /** A blocked adapter is manageable metadata, never a durable C03 runtime owner. */
   private fenceBlockedAdapterRuntimes(now: string): string[] {
-    const ids = this.database.connection.prepare(
-      `select distinct c.id from agent_channels c
+    const rows = this.database.connection.prepare(
+      `select distinct c.id, c.adapter_key from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
        where ${blockedRuntimeChannelSql('c')} and (
          o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
-    ).all().map((row) => (row as { id: string }).id)
-    for (const id of ids) {
+    ).all() as Array<{ id: string; adapter_key: ChannelAdapterKey }>
+    const ids = rows.map((row) => row.id)
+    for (const { id, adapter_key: adapterKey } of rows) {
       this.invalidateLifecycleOwner(id)
+      // **已实现、只是还没拿到验收证据**的适配器：只围栏运行时，不清开启意图。
+      // 这类频道的启用是读者点启用时靠现场自检放行的——`supported` 决定的是平台对外声明，
+      // 不是读者能不能用；清掉 `requested_enabled` 会让他的意图消失，下次启动连恢复候选都没有
+      // （用户 2026-11-04 报的「每次重启都要再点一次启用」）。
+      // 未实现的适配器（微信/飞书/QQ/Discord）仍按原规则收口：它们根本没运行时可跑。
+      if (channelAdapterDescriptor(adapterKey).implemented) { this.fence(id, now); continue }
       this.database.connection.prepare(
         `update agent_channels set requested_enabled = 0,
            lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'disabled' end,

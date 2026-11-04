@@ -126,6 +126,23 @@ describe('ChannelManagementService', () => {
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ generation: 2, lifecycle_state: 'inactive' })
   })
 
+  it('keeps the enable intent across a graceful quit even when the adapter has no acceptance record', () => {
+    const { database, repository } = harness()
+    const id = 'channel-self-check-quit'
+    expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    // 这个用户是靠现场自检启用的：库里适配器仍是 blocked。
+    database.connection.prepare("update agent_channels set requested_enabled=1,lifecycle_state='enabled',credential_health='configured' where id=?").run(id)
+    database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,1,'active','2026-07-19') on conflict(channel_id) do update set generation=1,lifecycle_state='active'").run(id)
+
+    expect(repository.fenceAllForQuit('2026-07-19T00:00:00.000Z')).toContain(id)
+
+    // 运行时被围栏，但**开启意图保留**：下次启动才有恢复候选，读者不用再点一次启用。
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
+      requested_enabled: 1, lifecycle_state: 'enabled'
+    })
+    expect(database.connection.prepare('select lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ lifecycle_state: 'inactive' })
+  })
+
   it('quit invalidates a pending owner before deferred credential inspection can activate it', async () => {
     const { database, repository, vault, cipher } = harness()
     const id = 'channel-pending-quit'
