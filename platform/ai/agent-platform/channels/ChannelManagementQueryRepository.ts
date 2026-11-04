@@ -168,13 +168,13 @@ export class ChannelManagementQueryRepository {
 
   deliveryAudits(channelId: string, limit: number, offset: number): ChannelDeliveryAuditSafeView[] {
     return (this.database.connection.prepare(
-      `select id, attempt_id, code, created_at from channel_delivery_audits
+      `select id, attempt_id, code, detail, created_at from channel_delivery_audits
        where channel_id = ? and exists (
          select 1 from agent_channels where id = channel_delivery_audits.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ? offset ?`
-    ).all(channelId, limit, offset) as Array<{ id: string; attempt_id: string | null; code: string; created_at: string }>).map((row) => ({
-      id: row.id, attemptId: row.attempt_id, code: row.code, createdAt: row.created_at
+    ).all(channelId, limit, offset) as Array<{ id: string; attempt_id: string | null; code: string; detail: string | null; created_at: string }>).map((row) => ({
+      id: row.id, attemptId: row.attempt_id, code: row.code, detail: row.detail, createdAt: row.created_at
     }))
   }
 

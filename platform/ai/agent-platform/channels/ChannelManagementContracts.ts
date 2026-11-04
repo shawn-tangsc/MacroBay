@@ -87,6 +87,11 @@ export type ChannelDeliveryAuditSafeView = {
   id: string
   attemptId: string | null
   code: string
+  /**
+   * 通道自己给的一句话（已脱敏截断，例如 `Bad Request: chat not found`）。
+   * **只是补充说明**：主句永远是 `code` 翻出来的人话，界面必须把它放在正文之后，不许拿它当原因。
+   */
+  detail: string | null
   createdAt: string
 }
 
