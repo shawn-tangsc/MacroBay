@@ -24,8 +24,6 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 export type DailyBriefingNotice =
   | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
-  /** The reader's own daily "it is ready" notice: one per day, re-generating does not repeat it. */
-  | Readonly<{ kind: 'ready'; date: string }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -88,18 +86,6 @@ export function buildBriefingNoticeRequest(
         deeplink: { ...TIME_ZONE_SETTINGS_DEEPLINK }
       }],
       deeplink: { ...TIME_ZONE_SETTINGS_DEEPLINK },
-      occurredAt
-    }
-  }
-  if (notice.kind === 'ready') {
-    // One per day: the key carries the date only. A revision or a generation time inside it would
-    // turn the same day's re-generation into a second notice.
-    return {
-      eventTypeId: EVENT_IDS.briefingReady,
-      producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
-      dedupeVars: { builder: 'template', vars: { date: notice.date } },
-      actions: [{ ...OPEN_BRIEFING_ACTION }],
-      deeplink: { ...OPEN_BRIEFING_DEEPLINK },
       occurredAt
     }
   }

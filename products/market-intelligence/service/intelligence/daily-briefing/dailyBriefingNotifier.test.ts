@@ -15,7 +15,7 @@ import { buildBriefingNoticeRequest, notifyDailyBriefing } from './dailyBriefing
 const NOW = '2026-11-03T00:30:00.000Z'
 const DATE = '2026-11-03'
 /** 已按 §28 删除的完成类事件 id：留成字面量，才能证明「它现在提交不进去」。 */
-const READY_EVENT_ID = 'market-intelligence.briefing.ready'
+const REMOVED_READY_EVENT_ID = 'market-intelligence.briefing.ready'
 
 const settings: NotificationRuntimeSettings = {
   desktopEnabled: true,
@@ -57,30 +57,33 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
 }
 
 describe('daily briefing notifier', () => {
-  it('declares the completion notice again, subscribed-only (§28 withdrawn by the reader, 2026-11-04)', () => {
-    // The notice was removed when "success is silent" was the rule; the reader changed that rule and
-    // wants one notice a day. The declaration is what makes a submission possible at all.
-    const events = marketIntelligenceProductManifest.notificationEvents
-    const ready = events.find((event) => event.id === READY_EVENT_ID)
-    expect(ready).toBeDefined()
-    expect(ready).toMatchObject({ notifyOnlyIfSubscribed: true, dedupeKeyTemplate: 'briefing-ready:{date}', dedupeUnit: 'occurrence' })
+  it('does not declare a completion notice at all (§28: success is silent)', () => {
+    // 删的是**声明**，不是调用点：声明不在表里，同一个 id 再提交上来就会被平台拒收。
+    const ids = marketIntelligenceProductManifest.notificationEvents.map((event) => event.id)
+    expect(ids).not.toContain(REMOVED_READY_EVENT_ID)
     expect(createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
-      sources: [{ productId: 'market-intelligence', events }]
-    }).has(READY_EVENT_ID)).toBe(true)
+      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }]
+    }).has(REMOVED_READY_EVENT_ID)).toBe(false)
   })
 
-  it('builds the completion request with the date alone, so a re-generation cannot repeat it', () => {
-    // The reverse criterion: a revision, a generation time or a content hash inside the key would turn
-    // the same day's re-generation into a second notice. The key carries the date and nothing else.
-    const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE }, NOW)
-
-    expect(request).toMatchObject({
-      eventTypeId: READY_EVENT_ID,
-      dedupeVars: { builder: 'template', vars: { date: DATE } },
+  it('rejects a completion submission instead of dropping it silently, so re-adding one cannot pass unnoticed', async () => {
+    // 「没发」有两种：没人发（靠纪律），和发不出去（靠平台）。这里钉的是后者——
+    // 有人把这条请求塞回调用点，回执必须是 rejected，而不是 accepted 或静默丢弃。
+    const { runtime, records } = createRuntime()
+    const attempt: NotificationSubmitRequest = {
+      eventTypeId: REMOVED_READY_EVENT_ID,
+      producerId: 'market-intelligence.dailyBriefing',
+      dedupeVars: { builder: 'template', vars: { date: DATE, period: 'default' } },
+      actions: [],
       occurredAt: NOW
+    }
+
+    await expect(runtime.submit(attempt)).resolves.toMatchObject({
+      kind: 'rejected',
+      reason: 'unknown-event-type'
     })
-    expect(JSON.stringify(request.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt/)
+    expect(records()).toHaveLength(0)
   })
 
   it('names the two failure bodies by the declared variant and gives the reader the open action', () => {

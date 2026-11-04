@@ -791,10 +791,9 @@ describe('period run', () => {
 })
 
 describe('briefing notices', () => {
-  it('submits one completion notice when an automatic run stores an edition (§28 withdrawn)', async () => {
-    // The reader changed the rule on 2026-11-04: one notice a day when the brief is ready. The port is
-    // alive in both halves — the failure cases above prove a failure submits exactly one, so "one here"
-    // is the ready notice and not a leftover.
+  it('says nothing when an edition is stored (§28: success is silent)', async () => {
+    // 成功不通知是 §28 的口径，不是「这条路径还没接上」——端口就在下面这个依赖里活着，
+    // 同一个端口在失败用例里必须收到恰好一条；两半合起来，"0 条"才证明的是「不该发」，而不是「发不出去」。
     const store = memoryStore()
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
@@ -808,14 +807,10 @@ describe('briefing notices', () => {
       }
     })
 
-    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(result.state).toBe('available')
-    expect(notices).toHaveLength(1)
-    expect(notices[0]).toMatchObject({
-      eventTypeId: 'market-intelligence.briefing.ready',
-      dedupeVars: { builder: 'template', vars: { date: result.state === 'available' ? result.document.edition.date : 'x' } }
-    })
+    expect(notices).toEqual([])
   })
 
   it('N5 ①: a terminal failure says the edition was not generated', async () => {
