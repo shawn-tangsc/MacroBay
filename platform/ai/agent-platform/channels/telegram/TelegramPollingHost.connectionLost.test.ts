@@ -134,4 +134,8 @@ describe('Telegram polling host: channel connection lost', () => {
     }
     expect(internal.lost).toHaveLength(0)
   })
+
+  // 为什么没有「两条频道同时断开、键不串」这条：单频道不变量（同一时间只允许一条频道启用）下
+  // 这个状态产品上不可达；要造它就必须直接注入 host、绕过不变量——测一个不存在的状态，成本比
+  // 收益高。验收按「不适用 + 理由」记，不是漏测（Chief 2026-11-04 定）。
 })
