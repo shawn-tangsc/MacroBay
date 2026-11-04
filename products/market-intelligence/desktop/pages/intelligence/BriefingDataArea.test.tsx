@@ -294,3 +294,37 @@ describe('the window amplitude', () => {
     expect(host.querySelector('[data-briefing-price-card="btc"]')!.textContent).toContain('+1.23%')
   })
 })
+
+describe('the cards place their parts in their own columns', () => {
+  // A DOM without layout cannot measure where a box lands, so the placement is asserted as structure:
+  // which container holds which part. Auto-placement once put the number and its amplitude into the
+  // 100px plot column and the policy title on top of the dial — every attribute right, the paper wrong.
+  it('keeps the number, its amplitude and the time in the lead column, with the plot beside it', async () => {
+    const dom = await render()
+    const leads = [...dom.querySelectorAll('[data-briefing-price-lead]')]
+    expect(leads).toHaveLength(2)
+    for (const lead of leads) {
+      expect(lead.querySelector('.mi-brief-poster__price-value')).not.toBeNull()
+      expect(lead.querySelector('.mi-brief-poster__price-observed')).not.toBeNull()
+      // The plot is a sibling of the text column, never inside it.
+      expect(lead.querySelector('[data-briefing-price-area]')).toBeNull()
+      expect(lead.parentElement!.querySelector(':scope > [data-briefing-price-area]')).not.toBeNull()
+    }
+    // Both amplitudes live in the lead column, on the same figures row as the number.
+    const amplitudes = [...dom.querySelectorAll('[data-briefing-price-lead] [data-briefing-amplitude]')]
+    expect(amplitudes.map((node) => node.getAttribute('data-briefing-amplitude'))).toEqual(['btc', 'eth'])
+    for (const node of amplitudes) expect(node.closest('.mi-brief-poster__price-figures')).not.toBeNull()
+  })
+
+  it('keeps the dial and the printed number together, and the copy out of that cell', async () => {
+    const dom = await render()
+    const dial = dom.querySelector('[data-briefing-policy-dial]')!
+    expect(dial.querySelectorAll('svg')).toHaveLength(1)
+    expect(dial.querySelector('.mi-brief-poster__policy-probability')).not.toBeNull()
+    // The title used to be auto-placed into this very cell, on top of the gauge.
+    expect(dial.querySelector('.mi-brief-poster__policy-title')).toBeNull()
+    const copy = dom.querySelector('[data-briefing-policy-copy]')!
+    expect(copy.querySelector('.mi-brief-poster__policy-title')).not.toBeNull()
+    expect(copy.querySelectorAll('[data-briefing-policy-outcomes]')).toHaveLength(1)
+  })
+})

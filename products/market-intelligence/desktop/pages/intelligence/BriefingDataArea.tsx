@@ -99,21 +99,28 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
   // The event is already the number in the middle of the dial; the legend only carries the other two,
   // and a zero one is printed anyway — "维持 0.0%" is a fact, a missing line would be an omission.
   const legend = policyGaugeLegend(dial)
+  // Two columns, placed explicitly: the dial on the left, the reading on the right. Automatic placement
+  // put the title into the dial's cell and the copy underneath it — attributes all correct, the printed
+  // card wrong, which is exactly what a DOM without layout cannot catch.
   return <div className="mi-brief-poster__policy-card" data-briefing-policy-card="true">
-    <span className="mi-brief-poster__policy-title">{text.sections.policyPath}</span>
-    <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
-      <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
-      {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
-    </svg>
-    {/* HTML, not svg text: the number stays selectable and the svg keeps zero text nodes. */}
-    <b className="mi-brief-poster__policy-probability">{probability}% · {policyOutcomeLabel(policy.outcome, text)}</b>
-    {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
-      {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
-    </span> : null}
-    <span className="mi-brief-poster__policy-change">{text.sections.policyRange}</span>
-    <small>{policy.targetLower !== undefined ? `${policy.targetLower}–${policy.targetUpper}%` : text.sections.rangeUnavailable}</small>
-    <small className="mi-brief-poster__policy-meeting">{policy.meetingDate}</small>
-    <small className="mi-brief-poster__policy-observed">{formatTime(policy.observedAt, 'minute')}</small>
+    <span className="mi-brief-poster__policy-dial" data-briefing-policy-dial="true">
+      <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
+        <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
+        {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
+      </svg>
+      {/* HTML, not svg text: the number stays selectable and the svg keeps zero text nodes. */}
+      <b className="mi-brief-poster__policy-probability">{probability}% · {policyOutcomeLabel(policy.outcome, text)}</b>
+    </span>
+    <div className="mi-brief-poster__policy-copy" data-briefing-policy-copy="true">
+      <span className="mi-brief-poster__policy-title">{text.sections.policyPath}</span>
+      <span className="mi-brief-poster__policy-change">{text.sections.policyRange}</span>
+      <small>{policy.targetLower !== undefined ? `${policy.targetLower}–${policy.targetUpper}%` : text.sections.rangeUnavailable}</small>
+      {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
+        {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
+      </span> : null}
+      <small className="mi-brief-poster__policy-meeting">{policy.meetingDate}</small>
+      <small className="mi-brief-poster__policy-observed">{formatTime(policy.observedAt, 'minute')}</small>
+    </div>
   </div>
 }
 
@@ -143,18 +150,26 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
   // The stored curve, drawn as stored: the segments are already rebased and thinned, so the renderer
   // neither resamples nor re-anchors. No curve is an empty column with its zero line and nothing else.
   const paths = priceCurvePaths(row.curve ?? [])
+  // The text column and the plot column, placed explicitly: with automatic placement the number landed
+  // in the 100px plot column, on top of the chart, and the implicit second row pushed the card past its
+  // 114px. Same attributes, wrong paper.
   return <div className="mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
-    <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-    <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
-    {copy ? <small>{copy.secondary}</small> : null}
-    {/* Beside the number, small, and never toned: amplitude is how much it moved, not which way. */}
-    {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
+    <div className="mi-brief-poster__price-lead" data-briefing-price-lead="true">
+      <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
+      {/* The number and its amplitude share one baseline row: they are one reading, not two lines. */}
+      <span className="mi-brief-poster__price-figures">
+        <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
+        {copy ? <small>{copy.secondary}</small> : null}
+        {/* Small, and never toned: amplitude is how much it moved, not which way. */}
+        {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
+      </span>
+      <small className="mi-brief-poster__price-observed">{formatTime(row.observedAt ?? '', 'minute')}</small>
+    </div>
     <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
       <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
       {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
       {paths.lines.map((line, index) => <polyline key={`line-${index}`} points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
     </svg>
-    <small className="mi-brief-poster__price-observed">{formatTime(row.observedAt ?? '', 'minute')}</small>
   </div>
 }
 

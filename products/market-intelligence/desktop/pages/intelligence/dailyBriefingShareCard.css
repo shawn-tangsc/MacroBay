@@ -198,19 +198,29 @@
    1080px sheet, so a stacked variant at narrow widths would make the export and the preview differ. */
 .mi-brief-poster__data { display: flex; flex-direction: column; gap: 6px; }
 .mi-brief-poster__price-row { display: flex; gap: 8px; }
+/* Two columns, both placed: the reading on the left, the plot on the right. Leaving placement to the
+   grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
+   pushed the card past 114px — the DOM looked right and the paper did not. */
 .mi-brief-poster__price-card { display: grid; grid-template-columns: minmax(0, 1fr) 100px; grid-template-rows: 114px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 .mi-brief-poster__price-label { font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mi-brief-poster__price-value { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* The number and its amplitude on one baseline row: one reading, not two lines. */
+.mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.mi-brief-poster__price-value { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__price-observed { font-size: 10px; color: #6b695f; white-space: nowrap; }
-.mi-brief-poster__price-area { grid-column: 2; grid-row: 1 / span 3; width: 100%; height: 100%; }
+.mi-brief-poster__price-area { grid-column: 2; grid-row: 1; width: 100%; height: 100%; }
 .mi-brief-poster__price-zero { stroke: #a89f8d; stroke-width: 1; opacity: .5; }
 .mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
 .mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__price-card[data-tone='down'] { color: #8f2a1d; }
 /* The window's travel: one size down, the muted ink, and no tone of its own — it is not a direction. */
 .mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
-.mi-brief-poster__policy-card { position: relative; display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: 114px; align-items: center; gap: 10px; }
-.mi-brief-poster__policy-gauge { grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
+/* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
+   of the gauge, because only the svg had an explicit position. */
+.mi-brief-poster__policy-card { display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: 114px; align-items: center; gap: 10px; }
+.mi-brief-poster__policy-dial { position: relative; grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
+.mi-brief-poster__policy-copy { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-brief-poster__policy-gauge { width: 88px; height: 54px; display: block; }
 .mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
 .mi-brief-poster__gauge-event { stroke: #c2410c; stroke-width: 8; }
 .mi-brief-poster__gauge-rest { stroke: #a89f8d; stroke-width: 8; }
