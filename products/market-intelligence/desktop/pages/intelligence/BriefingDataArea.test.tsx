@@ -433,3 +433,33 @@ describe("the rate card's own lines", () => {
   })
 
 })
+
+describe('the row lines', () => {
+  // The separator belongs to the row: a border on a cell stops at every column gap and at a missing
+  // cell, which is exactly how the lines ended at no consistent place. Structure is what a DOM without
+  // layout can check — line on the row container, cells only ever inside it, nothing on the title.
+  it('gives each block a row container that owns its cells', async () => {
+    const dom = await render()
+    for (const block of ['[data-briefing-funds-row]', '[data-briefing-market-row]']) {
+      const rows = [...dom.querySelectorAll(`${block} > .mi-brief-poster__figure-line`)]
+      expect(rows.length).toBeGreaterThan(0)
+      for (const row of rows) {
+        // Every cell is a child of a row, never of the block itself.
+        expect(row.querySelectorAll('.mi-brief-poster__figure').length).toBeGreaterThan(0)
+      }
+      // Nothing but the title and the rows: a cell placed directly on the block would sit outside any
+      // line, and the line would stop before it.
+      const strays = [...dom.querySelector(block)!.children]
+        .filter((node) => !node.classList.contains('mi-brief-poster__figure-line') && !node.classList.contains('mi-brief-poster__block-title'))
+      expect(strays).toEqual([])
+    }
+  })
+
+  it('leaves the block heading out of the ruling', async () => {
+    const dom = await render()
+    for (const title of dom.querySelectorAll('.mi-brief-poster__block-title')) {
+      // The heading groups on its own; a line under it is where the misalignment showed.
+      expect(title.children).toHaveLength(0)
+    }
+  })
+})

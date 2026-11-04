@@ -256,8 +256,10 @@
    for markets and sentiment. Fixed columns, so a missing cell is a hole rather than a stretched row. */
 .mi-brief-poster__funds-block, .mi-brief-poster__market-block { display: flex; flex-direction: column; gap: 2px; }
 .mi-brief-poster__block-title { font-size: 10px; color: #6b695f; }
-.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
-.mi-brief-poster__figure-line + .mi-brief-poster__figure-line { border-top: 1px solid #ded4c2; }
+/* The line belongs to the row, never to a cell: a border per cell breaks at every column gap and at a
+   missing cell, which is what made the separators stop halfway. One line per row, full content width,
+   and `column-gap` (not a margin on a cell) so it has no gaps to break at. */
+.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; border-bottom: 1px solid #ded4c2; }
 .mi-brief-poster__figure { display: flex; align-items: baseline; gap: 6px; min-height: 20px; padding: 2px 0; white-space: nowrap; font-size: 11px; overflow: hidden; }
 /* The name gives way, the number never does: a truncated label still says which row it is, a clipped
    number is simply wrong. The value also never wraps — a wrapped cell breaks the grid's line height. */
