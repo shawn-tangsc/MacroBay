@@ -274,8 +274,10 @@
 .mi-brief-poster__policy-swatch.mi-brief-poster__gauge-cut { background: #1f5b32; }
 .mi-brief-poster__policy-swatch.mi-brief-poster__gauge-hold { background: #3f6d8f; }
 .mi-brief-poster__policy-swatch.mi-brief-poster__gauge-other { background: #8c8474; }
-/* The ring's own number: 16px/750 sits inside a 60px bore without touching the arc. `top: 25` with
-   line-height 1 puts it just above the chord, which is the "inside the ring" position of the sheet. */
+/* The ring's own number must clear the inner wall on both sides and still stay above the chord at the
+   bore's bottom — two constraints that fight each other: a wider number has to sit lower, and a lower one
+   drifts past the chord. History: a larger size placed higher overlapped the wall, and the lower placement
+   pushed the baseline below the chord. Measured values live in 07-style-values.md. */
 .mi-brief-poster__policy-probability { position: absolute; left: 0; top: 27px; width: 88px; height: 16px; line-height: 1; text-align: center; font-size: 15px; font-weight: 750; letter-spacing: -0.02em; color: #7a4c10; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; white-space: nowrap; }
 .mi-brief-poster__policy-outcome { font-size: 11px; color: #1b1d18; white-space: nowrap; }
@@ -294,9 +296,10 @@
 /* The line belongs to the row, never to a cell: a border per cell breaks at every column gap and at a
    missing cell, which is what made the separators stop halfway. One line per row, full content width,
    and `column-gap` (not a margin on a cell) so it has no gaps to break at. */
-/* One line per row, on the row container, in a colour that survives the paper tone (#ded4c2 is 1.28:1
-   against it — present in the file and invisible on the sheet); a block's own last row draws none, because
-   the space after it already separates the blocks. */
+/* One line per row, on the row container, in a colour dark enough to survive the paper tone — the older
+   hairline was present in the file and invisible on the sheet, which is how "exactly one line" turned into
+   a claim nobody could check. A block's own last row draws none, because the space after it already
+   separates the blocks. Values live in 07-style-values.md. */
 .mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 32px; border-bottom: 1px solid #c9bda3; }
 .mi-brief-poster__funds-block > .mi-brief-poster__figure-line:last-of-type,
 .mi-brief-poster__market-block > .mi-brief-poster__figure-line:last-of-type { border-bottom: 0; }
