@@ -131,10 +131,26 @@ export async function awaitDailyBriefReadiness(
  */
 export function createDailyBriefReadinessFor(reader: Readonly<{
   queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
+  /** Why the last cross-asset read failed, when it did; the probe's own record of "not available". */
+  getCrossAssetQueryFailure?: () => unknown
 }>): DailyBriefReadiness {
   return createDailyBriefReadiness({
     // The cutoff is the caller's, never the clock's: same question, same instant as the generation.
-    readSnapshot: (asOf) => reader.queryCrossAssetSnapshot({ range: '24h', asOf }),
+    // Every probe says what it asked for and what came back: "waiting for the market" that nobody can
+    // audit is how a run spends fifteen minutes for a reason no one can name afterwards.
+    readSnapshot: async (asOf) => {
+      const snapshot = await reader.queryCrossAssetSnapshot({ range: '24h', asOf })
+      console.log(JSON.stringify({
+        marker: 'MI_DAILY_BRIEF_READINESS_PROBE',
+        asOf,
+        snapshot: snapshot !== undefined,
+        btc: snapshot?.closedReturns.btc?.['24h']?.state ?? 'missing',
+        eth: snapshot?.closedReturns.eth?.['24h']?.state ?? 'missing',
+        index: snapshot?.closedReturns.index?.['24h']?.state ?? 'missing',
+        failure: reader.getCrossAssetQueryFailure?.() ?? null
+      }))
+      return snapshot
+    },
     onTimeout: (info) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', ...info }))
   })
 }

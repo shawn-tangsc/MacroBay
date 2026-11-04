@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createDailyBriefingService, type DailyBriefingStore } from './dailyBriefingService'
-import { createDailyBriefReadiness } from './dailyBriefReadinessGate'
+import { createDailyBriefReadiness, createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 
 /**
  * The gate as the generation path actually uses it.
@@ -168,5 +168,40 @@ describe('generation waits before it records anything', () => {
     expect(order.indexOf('attempt')).toBeGreaterThan(order.lastIndexOf('probe'))
     // Both probes asked about the edition's cutoff, never about `Date.now()`.
     expect(probes).toEqual([CUTOFF, CUTOFF])
+  })
+})
+
+describe('every probe says what it asked and what came back', () => {
+  it('logs the cutoff, whether a snapshot arrived, and each quote’s state', async () => {
+    // "Waiting for the market" that nobody can audit is how a run spends fifteen minutes for a reason
+    // no one can name afterwards: a historical cutoff asked of a current snapshot, or a quote that is
+    // genuinely unavailable, have different fixes.
+    const calls: string[] = []
+    const log = vi.spyOn(console, 'log').mockImplementation((line: unknown) => { calls.push(String(line)) })
+    try {
+      const gate = createDailyBriefReadinessFor({
+        queryCrossAssetSnapshot: async () => ({
+          closedReturns: {
+            btc: { '24h': { state: 'available' } },
+            eth: { '24h': { state: 'available' } },
+            index: { '24h': { state: 'unavailable' } }
+          }
+        }) as never,
+        getCrossAssetQueryFailure: () => ({ reason: 'shape' })
+      })
+      await gate.wait(CUTOFF)
+
+      const probe = calls.map((line) => JSON.parse(line) as Record<string, unknown>).find((entry) => entry.marker === 'MI_DAILY_BRIEF_READINESS_PROBE')
+      expect(probe).toMatchObject({
+        asOf: CUTOFF,
+        snapshot: true,
+        btc: 'available',
+        eth: 'available',
+        index: 'unavailable',
+        failure: { reason: 'shape' }
+      })
+    } finally {
+      log.mockRestore()
+    }
   })
 })
