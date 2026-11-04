@@ -12,7 +12,7 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, omitFallbackReadings = false, completenessNote, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, formatTime }: Readonly<{
   document: DailyBriefingDocument
   /** Already produced by the one place that decides completeness; the card only renders it. */
   completenessNote?: string
@@ -27,14 +27,13 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
    * it were; the page keeps those rows, labelled, because a reader judging the day needs them.
    * "The card is for forwarding, the page is for reading" is the rule behind this switch.
    */
-  omitFallbackReadings?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
-  // The same rows the copied text prints: one function, two exports, no second opinion.
+  // The same rows the copied text prints, unmodified: one function, two exports, no second opinion.
+  // A stale row is marked stale on the row itself; dropping it here made the PNG and the copied text
+  // disagree about the same edition (the image lost rows the text still had).
   const rows = briefingDataRows(doc)
-    // A stale row carries a fallback number, never the exact reading; the exported image drops it.
-    .filter((row) => !omitFallbackReadings || row.state !== 'stale')
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')

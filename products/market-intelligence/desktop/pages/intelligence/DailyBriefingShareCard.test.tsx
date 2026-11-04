@@ -83,14 +83,13 @@ const renderWith = async (
   doc: DailyBriefingDocument,
   // Both locales are passed here; the component's own prop is the union of the two copy trees.
   copy: typeof text | typeof zhText,
-  locale: 'zh-CN' | 'en-US',
-  omitFallbackReadings = false
+  locale: 'zh-CN' | 'en-US'
 ): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime, omitFallbackReadings })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime })))
   return host
 }
 
@@ -161,7 +160,7 @@ describe('daily brief share card in English', () => {
     expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.lastClose)
   })
 
-  it('leaves that row out of the exported image', async () => {
+  it('keeps a stale row in the exported image, marked as stale', async () => {
     const base = briefing()
     const doc: DailyBriefingDocument = {
       ...base,
@@ -172,9 +171,10 @@ describe('daily brief share card in English', () => {
           : row)
       }
     }
-    const rendered = await renderWith(doc, text, 'en-US', true)
-    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
-    expect(rendered.textContent).not.toContain('BTC')
+    const rendered = await renderWith(doc, text, 'en-US')
+    // The image and the copied text are one edition: a stale row is labelled, not dropped from half
+    // of the exports. Dropping it here made the PNG lose rows the text still carried.
+    expect(rendered.textContent).toContain('BTC')
   })
 
   it('renders only the data rows the editor kept', async () => {
