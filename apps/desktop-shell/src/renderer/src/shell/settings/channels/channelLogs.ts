@@ -29,15 +29,21 @@ type Labels = PlatformText['settings']
 
 /** 管理审计一行：启用失败时带 `code`（原因码），成功时没有。 */
 export type ChannelLogOperationInput = { id: string; action: string; code?: string | null; createdAt: string }
-/** 运行审计与投递审计一行：两者都必带一个码。 */
+/** 运行审计一行：必带一个码。 */
 export type ChannelLogCodeInput = { id: string; code: string; createdAt: string }
+
+/**
+ * 投递审计一行。`detail` 是平台（如 Telegram）的原话，**只作补充说明**：
+ * 主句永远是「码 → 人话」，detail 跟在后面括注，不许它取代原因。
+ */
+export type ChannelLogDeliveryInput = ChannelLogCodeInput & { detail?: string | null }
 
 export type ChannelLogSources = {
   /** 管理审计：`code` 在这一类里只在「启用失败」时有值（写的是原因码）。 */
   operations?: readonly ChannelLogOperationInput[]
   runtime?: readonly ChannelLogCodeInput[]
   /** 发送失败的来源是**投递审计**（不是投递尝试）：一条审计一行，code 是闭集。 */
-  deliveries?: readonly ChannelLogCodeInput[]
+  deliveries?: readonly ChannelLogDeliveryInput[]
 }
 
 const MAX_ROWS = 50
@@ -102,13 +108,19 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     // 「交出去了、拿不到回执」既不是成功也不是失败：它是「不确定」，不进「发送失败」那一类。
     // 面板上仍要能看见它，所以单独用 WARN 行，前缀也说「不确定」。
     const uncertain = entry.code === 'unknown-after-send'
+    // 主句：码 → 人话。平台的原始说明（已脱敏截断）只跟在后面括注——**它是补充，不是原因**，
+    // 所以既不进前缀、也不许在没有主句时单独立着。
+    const sentence = uncertain
+      ? labels.channelLogDeliveryText.unknownAfterSend
+      : (labels.channelLogDeliveryText[entry.code] ?? labels.channelLogsUnknownCode)
+    const detail = typeof entry.detail === 'string' && entry.detail.trim() !== '' ? entry.detail.trim() : null
     rows.push({
       id: `delivery-${entry.id}`,
       at: entry.createdAt,
       level: uncertain ? 'WARN' : 'ERROR',
-      text: uncertain
-        ? `${labels.channelLogUncertainPrefix}${labels.channelLogDeliveryText.unknownAfterSend}`
-        : `${labels.channelLogDeliveryPrefix}${labels.channelLogDeliveryText[entry.code] ?? labels.channelLogsUnknownCode}`
+      text: `${uncertain ? labels.channelLogUncertainPrefix : labels.channelLogDeliveryPrefix}${sentence}${
+        detail === null ? '' : `（${detail}）`
+      }`
     })
   }
 

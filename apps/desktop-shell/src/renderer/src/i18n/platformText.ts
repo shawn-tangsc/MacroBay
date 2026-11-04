@@ -1764,6 +1764,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': '这一次没有发出去',
+        // 具体码优先：有它就不再显示下面那句兜底。
+        'delivery-provider-rejected': '平台拒绝了这条消息（可能是找不到这个会话）',
+        'delivery-target-invalid': '目标会话的 ID 不合法，一个请求都没发出去',
+        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试',
+        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去',
+        // 兜底：只有拿不到具体码时才会出现，别把它当解释。
+        'channel-delivery-failed': '这次没有发出去，具体原因没有记录',
         'delivery-send-lease-expired': '发送没有回音，按未确认处理',
         'delivery-lifecycle-fenced': '运行的代际变了，这次发送被放弃',
         'channel-rejected': '通道拒收了这条',
@@ -3087,6 +3094,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }),
       channelLogDeliveryText: Object.freeze({
         'channel-delivery-skipped': 'this one was not sent',
+        'delivery-provider-rejected': 'the platform rejected this message (the conversation may not exist)',
+        'delivery-target-invalid': 'the target conversation ID is not valid, so nothing was sent',
+        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly',
+        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent',
+        'channel-delivery-failed': 'this one was not sent, and no specific reason was recorded',
         'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
         'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',
         'channel-rejected': 'the channel rejected this message',

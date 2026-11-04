@@ -21,9 +21,6 @@ const channelServiceDir = resolve(root, '../../platform/ai/agent-platform/channe
  * 「会一路传到读者眼前」的那几个出口。豁免表加一条，等于公开承认「这个码不给读者看」。
  */
 const EXEMPT_LOG_ONLY: Readonly<Record<string, string>> = {
-  'delivery-host-unavailable': '投递审计表：由日志面板的发送失败那一类单独翻译，不走启用文案表',
-  'delivery-provider-rejected': '同上',
-  'delivery-rate-limited': '同上',
   'lark-network-unavailable': '本版界面只接 Telegram；飞书未接入时的运行时码，用户看不到',
   'lark-provider-rejected': '同上',
   'lark-rate-limited': '同上',
@@ -56,7 +53,14 @@ describe('every code the channel service can return has words', () => {
   it('covers each literal found in a code position with copy, a success code, or a documented exemption', () => {
     const files: string[] = []
     collect(channelServiceDir, files)
-    const known = new Set<string>([...CHANNEL_FAILURE_REASON_CODES, ...CHANNEL_SUCCESS_CODES, ...Object.keys(EXEMPT_LOG_ONLY)])
+    // 投递类码由日志面板的「发送失败」那一类单独翻译（`channelLogDeliveryText`），也算有话说。
+    const deliveryCopy = Object.keys(platformText['zh-CN'].settings.channelLogDeliveryText)
+    const known = new Set<string>([
+      ...CHANNEL_FAILURE_REASON_CODES,
+      ...CHANNEL_SUCCESS_CODES,
+      ...deliveryCopy,
+      ...Object.keys(EXEMPT_LOG_ONLY)
+    ])
     // 扫空目录等于永远是绿的：先把「真的扫到了东西」钉住，再比覆盖。
     expect(files.length).toBeGreaterThan(20)
     const seen = new Set<string>()

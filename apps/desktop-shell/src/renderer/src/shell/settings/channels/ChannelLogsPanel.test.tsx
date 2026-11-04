@@ -254,3 +254,83 @@ describe('the channel log panel', () => {
     expect(retry).toBe(true)
   })
 })
+
+describe('a failed send names its reason instead of saying "no further explanation"', () => {
+  it.each([
+    ['delivery-provider-rejected'],
+    ['delivery-target-invalid'],
+    ['delivery-rate-limited'],
+    ['delivery-host-unavailable']
+  ])('translates %s', async (code) => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd9', attemptId: 'x', code, createdAt: '2026-11-04T09:06:38.000Z' }]
+      }))
+    })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain(labels.channelLogDeliveryPrefix)
+    expect(text).toContain(labels.channelLogDeliveryText[code])
+    // 有具体码就不许落回「没有更多说明」，原始码也不上屏。
+    expect(text).not.toContain(labels.channelLogsUnknownCode)
+    expect(text).not.toContain(code)
+  })
+
+  it('keeps the bare status code only as a fallback, worded as a fallback', async () => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd10', attemptId: 'x', code: 'channel-delivery-failed', createdAt: '2026-11-04T09:06:38.000Z' }]
+      }))
+    })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain(labels.channelLogDeliveryText['channel-delivery-failed'])
+    // 兜底句自己要说清「没有记录」，不假装是解释。
+    expect(labels.channelLogDeliveryText['channel-delivery-failed']).toContain('没有记录')
+  })
+})
+
+describe('the platform\'s own words ride along as a note, never as the reason', () => {
+  it('keeps the human sentence first and appends the detail in brackets', async () => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [
+          {
+            id: 'd11',
+            attemptId: 'x',
+            code: 'delivery-provider-rejected',
+            detail: 'Bad Request: chat not found',
+            createdAt: '2026-11-04T09:06:38.000Z'
+          }
+        ]
+      }))
+    })
+
+    const row = [...container.querySelectorAll('.channel-log-row')].find((node) =>
+      node.textContent?.includes(labels.channelLogDeliveryPrefix)
+    )
+    const text = row?.textContent ?? ''
+    // 主句还是人话；原话在括号里补充。
+    expect(text).toContain(labels.channelLogDeliveryText['delivery-provider-rejected'])
+    expect(text).toContain('（Bad Request: chat not found）')
+    expect(text.indexOf(labels.channelLogDeliveryText['delivery-provider-rejected'])).toBeLessThan(
+      text.indexOf('Bad Request: chat not found')
+    )
+  })
+
+  it('draws no brackets when there is nothing to append', async () => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd12', attemptId: 'x', code: 'delivery-rate-limited', detail: null, createdAt: '2026-11-04T09:06:38.000Z' }]
+      }))
+    })
+
+    const text = container.textContent ?? ''
+    expect(text).toContain(labels.channelLogDeliveryText['delivery-rate-limited'])
+    expect(text).not.toContain('（）')
+  })
+})
