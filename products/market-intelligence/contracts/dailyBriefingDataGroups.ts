@@ -20,9 +20,15 @@ export type BriefingDataBlock =
 export type BriefingDataGroups = Readonly<{
   /** BTC and ETH: the two rows that carry a price area and an amplitude. */
   price: readonly BriefingMarketRow[]
-  /** Everything read as a number: index, dollar, gold, the two yields, stablecoin, fear and greed. */
+  /**
+   * The market and sentiment line: the index, the dollar, gold, the nominal yield and fear-and-greed.
+   * Five cells in three fixed columns, so the second line keeps an empty cell rather than stretching.
+   */
   readings: readonly (BriefingMarketRow | BriefingPulseRow)[]
-  /** The ETF rows, which are amounts rather than moves. */
+  /**
+   * The money line: the two spot funds and the stablecoin supply — flows and a stock, which is why the
+   * heading is "funds" and not "flows". Three fixed columns, one cell each.
+   */
   funds: readonly (BriefingMarketRow | BriefingPulseRow)[]
   /** The policy card, when the edition carries one. */
   policyPath: DailyBriefingDocument['data']['policyPath']
@@ -33,7 +39,6 @@ export type BriefingDataGroups = Readonly<{
 }>
 
 const PRICE_IDS: ReadonlySet<string> = new Set(['btc', 'eth'])
-const FUND_IDS: ReadonlySet<string> = new Set(['etf-btc', 'etf-eth', 'stablecoin'])
 /** Funding lives in the leverage block; printing it here too is the duplicate that started this. */
 const LEVERAGE_ONLY_FUND_IDS: ReadonlySet<string> = new Set(['funding-btc', 'funding-eth'])
 /**
@@ -48,12 +53,17 @@ export function briefingDataGroups(document: DailyBriefingDocument): BriefingDat
   const sentiment = document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : []
   return Object.freeze({
     price: Object.freeze(market.filter((row) => PRICE_IDS.has(row.id))),
+    // Order is fixed, never by whether a row moved today: a reader who has seen it once should not
+    // have to search for the same cell the next morning.
     readings: Object.freeze([
       ...market.filter((row) => !PRICE_IDS.has(row.id) && !READINGS_EXCLUDED.has(row.id)),
-      ...funds.filter((row) => FUND_IDS.has(row.id) && row.id === 'stablecoin'),
       ...sentiment
     ]),
-    funds: Object.freeze(funds.filter((row) => row.id !== 'stablecoin')),
+    funds: Object.freeze([
+      ...funds.filter((row) => row.id === 'etf-btc'),
+      ...funds.filter((row) => row.id === 'etf-eth'),
+      ...funds.filter((row) => row.id === 'stablecoin')
+    ]),
     policyPath: document.data.policyPath,
     leverage: document.data.leverage,
     funding: Object.freeze(document.data.funds.filter((row) => row.visibility !== 'hidden' && LEVERAGE_ONLY_FUND_IDS.has(row.id)))

@@ -10,7 +10,10 @@ export const dailyBriefingText = {
     noValue: '—',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '杠杆', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
-      policyProbability: '利率概率' },
+      policyProbability: '利率概率',
+      // Two headings with meaning: "资金" covers flows and the stablecoin stock, so it is not "流向";
+      // and the other line is prices and sentiment together, which is what the five cells are.
+      markets: '行情与情绪' },
     newsFocus: '重点',
     newsCount: '{count} 条',
     labelSeparator: '：',
@@ -267,7 +270,8 @@ export const dailyBriefingText = {
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Leverage', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
-      policyProbability: 'Rate probability' },
+      policyProbability: 'Rate probability',
+      markets: 'Markets & sentiment' },
     newsFocus: 'Focus',
     newsCount: '{count} items',
     labelSeparator: ': ',

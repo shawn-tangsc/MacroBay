@@ -35,24 +35,17 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}
       {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} words={policyWords} /> : null}
     </div>
-    {groups.funds.length > 0 ? <div className="mi-brief-poster__etf" data-briefing-etf-line="true">
-      {groups.funds.map((row) => <span key={row.id}>
-        <span>{text.rows[row.labelKey.replace('dailyBriefing.row.', '') as keyof typeof text.rows] ?? row.labelKey}</span>
-        <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
-      </span>)}
+    {groups.funds.length > 0 ? <div className="mi-brief-poster__funds-block" data-briefing-funds-row="true">
+      <span className="mi-brief-poster__block-title">{text.groups.funds}</span>
+      {/* Three fixed columns: a missing row leaves its cell empty instead of stretching the other two,
+          so a value stays under the same heading on every edition. */}
+      <div className="mi-brief-poster__figure-line">{groups.funds.map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div>
     </div> : null}
-    {readings.length > 0 ? <div className="mi-brief-poster__readings-line" data-briefing-readings-line="true">
-      {readings.map((row) => {
-        const copy = changeLedRowCopy(row, text, locale)
-        // Only a market row can carry an amplitude; a pulse row never has one.
-        const amplitude = 'amplitude' in row ? row.amplitude : undefined
-        return <span className="mi-brief-poster__reading" key={row.id} data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
-          <span className="mi-brief-poster__reading-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-          <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
-          <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
-          {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
-        </span>
-      })}
+    {readings.length > 0 ? <div className="mi-brief-poster__market-block" data-briefing-market-row="true">
+      <span className="mi-brief-poster__block-title">{text.sections.markets}</span>
+      {/* Three columns by two lines; five cells leave the sixth empty rather than reflowing. */}
+      <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div>
+      {readings.length > 3 ? <div className="mi-brief-poster__figure-line">{readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div> : null}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
       <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
@@ -80,6 +73,29 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       })}
     </div> : null}
   </div>
+}
+
+/**
+ * One cell of the money or market line: its name, its number and the comparison behind it.
+ *
+ * One renderer for both lines, because a cell that looks different in each of them makes the reader
+ * work out whether that difference means something. ETF amounts sit here too; the tone follows the
+ * signed value, and a level (a fund amount, a stablecoin supply) has no sign to colour.
+ */
+function Figure({ row, text, locale, formatTime }: Readonly<{
+  row: BriefingMarketRow | BriefingPulseRow
+  text: DailyBriefingText
+  locale: 'zh-CN' | 'en-US'
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
+}>): React.ReactElement {
+  const copy = changeLedRowCopy(row, text, locale)
+  const amplitude = 'amplitude' in row ? row.amplitude : undefined
+  return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
+    <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
+    <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
+    <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
+    {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
+  </span>
 }
 
 const READING_IDS: Readonly<Record<string, string>> = Object.freeze({

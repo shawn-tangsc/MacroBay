@@ -99,14 +99,17 @@ describe('the data region', () => {
     expect(dom.querySelectorAll('[data-briefing-price-area]')).toHaveLength(2)
     expect(dom.querySelectorAll('[data-briefing-leverage-block]')).toHaveLength(1)
     expect(dom.querySelectorAll('[data-briefing-leverage-card]')).toHaveLength(2)
-    expect(dom.querySelectorAll('[data-briefing-readings-line]')).toHaveLength(1)
-    // Six, in this order. The real yield is in the document but not on this line: it appears in the
-    // watch list as a sentence, and the approved layout has one yield there.
-    const readings = [...dom.querySelectorAll('[data-reading]')].map((node) => node.getAttribute('data-reading'))
-    expect(readings).toEqual(['nasdaq', 'dxy', 'gold', 'ust10y', 'stablecoin', 'fear-greed'])
-    // Exactly six: the real yield stays in the document (gaps and the numeric whitelist count it)
-    // but never on this line.
-    expect(readings).toHaveLength(6)
+    // Two titled lines since the regrouping: money (three cells) and markets & sentiment (five), both
+    // fixed three-column grids. The old one-line-six anchor is gone with the layout it described.
+    expect(dom.querySelectorAll('[data-briefing-funds-row]')).toHaveLength(1)
+    expect(dom.querySelectorAll('[data-briefing-market-row]')).toHaveLength(1)
+    const funds = [...dom.querySelectorAll('[data-briefing-funds-row] [data-reading]')].map((node) => node.getAttribute('data-reading'))
+    const market = [...dom.querySelectorAll('[data-briefing-market-row] [data-reading]')].map((node) => node.getAttribute('data-reading'))
+    // Order is fixed and not by movement: the three money cells, then the five market ones.
+    expect(funds).toEqual(['etf-btc', 'etf-eth', 'stablecoin'])
+    expect(market).toEqual(['nasdaq', 'dxy', 'gold', 'ust10y', 'fear-greed'])
+    expect([...funds, ...market]).toHaveLength(8)
+    // The real yield stays in the document (gaps and the numeric whitelist count it) and never on a line.
     expect(dom.querySelector('[data-reading="us10y-real"]')).toBeNull()
   })
 
@@ -116,7 +119,7 @@ describe('the data region', () => {
     expect(card.querySelectorAll('svg')).toHaveLength(1)
     expect(card.querySelectorAll('svg text')).toHaveLength(0)
     expect(card.querySelectorAll('svg rect')).toHaveLength(0)
-    expect(dom.querySelector('[data-briefing-readings-line] svg')).toBeNull()
+    expect(dom.querySelector('[data-briefing-market-row] svg')).toBeNull()
     // The probability is HTML over the dial, printed once, outside the svg — and the ring holds the
     // number alone: "3.4% · 加息 25bp" is wider than the dial and wraps across it.
     const matches = (card.textContent ?? '').split('77.5%').length - 1
@@ -171,10 +174,10 @@ describe('the drawings the data arrived for', () => {
       .toEqual(['event', 'residual'])
   })
 
-  it('keeps the ETF row free of charts', async () => {
+  it('keeps both lines free of charts', async () => {
     const dom = await render()
-    expect(dom.querySelector('[data-briefing-etf-line]')).not.toBeNull()
-    expect(dom.querySelectorAll('[data-briefing-etf-line] svg')).toHaveLength(0)
+    expect(dom.querySelectorAll('[data-briefing-funds-row] svg')).toHaveLength(0)
+    expect(dom.querySelectorAll('[data-briefing-market-row] svg')).toHaveLength(0)
   })
 
   it('draws the stored curve, and nothing where there is none', async () => {
@@ -342,12 +345,12 @@ describe("the data region's own order", () => {
     expect([...btc.parentElement!.children]).toEqual([btc, eth, rate])
   })
 
-  it('puts the fund rows before the readings line', async () => {
+  it('puts the money line above the market line', async () => {
     const dom = await render()
-    const etf = dom.querySelector('[data-briefing-etf-line]')!
-    const readings = dom.querySelector('[data-briefing-readings-line]')!
+    const funds = dom.querySelector('[data-briefing-funds-row]')!
+    const market = dom.querySelector('[data-briefing-market-row]')!
     // `compareDocumentPosition` answers document order, which is what the sheet's order is.
-    expect(etf.compareDocumentPosition(readings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(funds.compareDocumentPosition(market) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
 

@@ -161,10 +161,10 @@ describe('generation display rows', () => {
     expect(new Set(flattened).size).toBe(flattened.length)
   })
 
-  it('folds both repair rounds into one row', () => {
+  it('folds the three repair rounds into one row', () => {
     const repair = briefingGenerationDisplayRows.filter((row) => (row.stages as readonly string[]).includes('repair-1'))
     expect(repair).toHaveLength(1)
-    expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2'])
+    expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2', 'repair-3'])
     // Eight rows for the reader, nine stages in the pipeline.
     expect(briefingGenerationDisplayRows).toHaveLength(8)
   })

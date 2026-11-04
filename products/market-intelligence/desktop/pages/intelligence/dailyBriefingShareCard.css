@@ -245,12 +245,20 @@
 /* One line: the shares and the target range belong to the same sentence in the sheet. */
 .mi-brief-poster__policy-bottom { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 9.5px; color: #6b695f; }
 .mi-brief-poster__policy-range { white-space: nowrap; }
-.mi-brief-poster__readings-line { display: flex; flex-wrap: nowrap; gap: 0 10px; align-items: baseline; overflow: hidden; }
-.mi-brief-poster__reading { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; font-size: 11px; }
-.mi-brief-poster__reading small { color: #6b695f; }
-.mi-brief-poster__reading[data-tone='positive'] b { color: #1f5b32; }
-.mi-brief-poster__reading[data-tone='negative'] b { color: #8f2a1d; }
-.mi-brief-poster__etf { display: flex; gap: 12px; font-size: 11px; }
+/* Two blocks, each a titled table of cells: one row of three for the money, three columns by two lines
+   for markets and sentiment. Fixed columns, so a missing cell is a hole rather than a stretched row. */
+.mi-brief-poster__funds-block, .mi-brief-poster__market-block { display: flex; flex-direction: column; gap: 2px; }
+.mi-brief-poster__block-title { font-size: 10px; color: #6b695f; }
+.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+.mi-brief-poster__figure-line + .mi-brief-poster__figure-line { border-top: 1px solid #ded4c2; }
+.mi-brief-poster__figure { display: flex; align-items: baseline; gap: 6px; min-height: 20px; padding: 2px 0; white-space: nowrap; font-size: 11px; overflow: hidden; }
+.mi-brief-poster__figure-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #6b695f; }
+.mi-brief-poster__figure b { font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure small { color: #6b695f; }
+.mi-brief-poster__figure[data-tone='positive'] b { color: #1f5b32; }
+.mi-brief-poster__figure[data-tone='negative'] b { color: #8f2a1d; }
+.mi-brief-poster__figure[data-tone='up'] b { color: #1f5b32; }
+.mi-brief-poster__figure[data-tone='down'] b { color: #8f2a1d; }
 .mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
 .mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 11px; color: #6b695f; }
 .mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
