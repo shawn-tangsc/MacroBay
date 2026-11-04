@@ -23,3 +23,47 @@ export function withCrossAssetFailureGap(document: DailyBriefingDocument, failur
     conclusion: Object.freeze({ ...document.conclusion, dataGaps: Object.freeze([...gaps, sentence]) })
   })
 }
+
+/**
+ * The wait for market data ran out before the edition was built.
+ *
+ * Producing the edition anyway is right — the reader wants the morning brief — but it must not look
+ * like an ordinary one: the sentence says the wait happened and how long it lasted, in the edition's
+ * own language, in the same gap list the rest of the run uses.
+ */
+export function withCoreFactsNotReadyGap(
+  document: DailyBriefingDocument,
+  wait: Readonly<{ polls: number; waitedMs: number }>,
+  locale: DailyBriefingLocale
+): DailyBriefingDocument {
+  if (!document.conclusion) return document
+  const minutes = Math.max(1, Math.round(wait.waitedMs / 60_000))
+  const sentence = locale === 'en-US'
+    ? `Core market data was not ready: waited ${minutes} min (${wait.polls} probes) for BTC/ETH prices.`
+    : `核心行情未就绪：等待 ${minutes} 分钟（探测 ${wait.polls} 次）仍读不到 BTC/ETH 报价。`
+  const gaps = document.conclusion.dataGaps
+  if (gaps.includes(sentence)) return document
+  return Object.freeze({
+    ...document,
+    conclusion: Object.freeze({ ...document.conclusion, dataGaps: Object.freeze([...gaps, sentence]) })
+  })
+}
+
+/**
+ * Both run-level facts a reader needs in the gap list, applied once: a failed cross-asset read, and a
+ * wait for market data that ran out. One call so the generation path stays a path.
+ */
+export function withRunGaps(
+  document: DailyBriefingDocument,
+  input: Readonly<{
+    failure: string | undefined
+    readinessWait: Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined
+    locale: DailyBriefingLocale
+  }>
+): DailyBriefingDocument {
+  let next = withCrossAssetFailureGap(document, input.failure, input.locale)
+  if (input.readinessWait && !input.readinessWait.ready) {
+    next = withCoreFactsNotReadyGap(next, input.readinessWait, input.locale)
+  }
+  return next
+}

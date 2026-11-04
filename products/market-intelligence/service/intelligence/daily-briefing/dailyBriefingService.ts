@@ -26,7 +26,7 @@ import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBrie
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { awaitDailyBriefReadiness, type DailyBriefReadiness } from './dailyBriefReadinessGate'
 export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
-import { withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
+import { withRunGaps } from './dailyBriefCrossAssetGap'
 import { previousEditionBefore } from './dailyBriefingPreviousEdition'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
@@ -376,7 +376,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // The attempt row is opened before any work: a run the process never finishes is still a
     // record of an attempt that did not succeed, instead of an attempt that never happened.
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
-    await awaitDailyBriefReadiness(deps.readiness)
+    const readinessWait = await awaitDailyBriefReadiness(deps.readiness, input.asOf)
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     await attempts.open()
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
@@ -435,8 +435,7 @@ export function createDailyBriefingService(deps: Readonly<{
     try {
       const previous = await previousEditionBefore(deps.store, input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
-      // The cross-asset read's named reason reaches the reader through the conclusion's own gaps.
-      document = withCrossAssetFailureGap(document, packet.market.crossAssetFailure, input.locale)
+      document = withRunGaps(document, { failure: packet.market.crossAssetFailure, readinessWait, locale: input.locale })
       recorder.end('candidates', 'success')
     } catch {
       recorder.end('candidates', 'failed', { failureCode: 'build-failed' })

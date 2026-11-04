@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createDailyBriefReadinessGate, crossAssetQuotesReady } from './dailyBriefReadinessGate'
+import { createDailyBriefReadiness, createDailyBriefReadinessGate, crossAssetQuotesReady } from './dailyBriefReadinessGate'
 
 /**
  * The 07:00 run waited for nothing and published three dashes. These are the three cells the
@@ -9,6 +9,9 @@ import { createDailyBriefReadinessGate, crossAssetQuotesReady } from './dailyBri
  * Waiting is polled, never a fixed delay: a fixed delay guesses how long a cold start takes, and a
  * guess is wrong in both directions. The budget is the only bound.
  */
+/** The edition's own cutoff: the probe must ask about this instant, not about "now". */
+const CUTOFF = '2026-11-04T00:00:00.000Z'
+
 const snapshot = (btc: string, eth: string, index = 'unavailable') => ({
   closedReturns: {
     btc: { '24h': { state: btc } },
@@ -31,7 +34,7 @@ describe('waiting for the market', () => {
   it('continues as soon as the second poll is readable', async () => {
     const ready = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     const sleep = vi.fn(async () => undefined)
-    const outcome = await createDailyBriefReadinessGate({ ready, sleep, pollMs: 30_000, budgetMs: 900_000 }).wait()
+    const outcome = await createDailyBriefReadinessGate({ ready, sleep, pollMs: 30_000, budgetMs: 900_000 }).wait(CUTOFF)
 
     expect(outcome).toMatchObject({ ready: true, polls: 2 })
     expect(sleep).toHaveBeenCalledTimes(1)
@@ -46,15 +49,27 @@ describe('waiting for the market', () => {
       now: () => clock,
       pollMs: 30_000,
       budgetMs: 90_000
-    }).wait()
+    }).wait(CUTOFF)
 
     expect(outcome.ready).toBe(false)
     expect(outcome.waitedMs).toBeLessThanOrEqual(90_000)
   })
 
+  it('asks about the edition’s cutoff, never about the moment the check runs', async () => {
+    // The bug this pins: a probe using `Date.now()` asks a different question from the generation,
+    // so it can say ready while the real read at the cutoff still fails.
+    const seen: string[] = []
+    const readiness = createDailyBriefReadiness({
+      readSnapshot: async (asOf) => { seen.push(asOf); return snapshot('available', 'available') }
+    })
+    const outcome = await readiness.wait(CUTOFF)
+    expect(outcome.ready).toBe(true)
+    expect(seen).toEqual([CUTOFF])
+  })
+
   it('does not sleep at all when the market is already readable', async () => {
     const sleep = vi.fn(async () => undefined)
-    const outcome = await createDailyBriefReadinessGate({ ready: async () => true, sleep }).wait()
+    const outcome = await createDailyBriefReadinessGate({ ready: async () => true, sleep }).wait(CUTOFF)
     expect(outcome).toMatchObject({ ready: true, polls: 1 })
     expect(sleep).not.toHaveBeenCalled()
   })

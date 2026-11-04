@@ -18,7 +18,11 @@ export const dailyBriefReadinessPolicy = Object.freeze({
 })
 
 export type DailyBriefReadinessGate = Readonly<{
-  wait: () => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
+  /**
+   * `asOf` is the edition's own cutoff, never "now": the probe must ask the same question the
+   * generation will ask, or it can report ready while the real read still fails.
+   */
+  wait: (asOf: string) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
 }>
 
 /**
@@ -36,8 +40,8 @@ export function crossAssetQuotesReady(snapshot: Readonly<{
 }
 
 export function createDailyBriefReadinessGate(deps: Readonly<{
-  /** Readiness is the consumer's own question, not a proxy for it. */
-  ready: () => Promise<boolean>
+  /** Readiness is the consumer's own question, asked at the edition's own cutoff. */
+  ready: (asOf: string) => Promise<boolean>
   /** Injected so tests do not sleep for real; production passes a setTimeout-based sleep. */
   sleep: (ms: number) => Promise<void>
   now?: () => number
@@ -48,12 +52,12 @@ export function createDailyBriefReadinessGate(deps: Readonly<{
   const pollMs = deps.pollMs ?? dailyBriefReadinessPolicy.pollMs
   const budgetMs = deps.budgetMs ?? dailyBriefReadinessPolicy.budgetMs
   return {
-    async wait() {
+    async wait(asOf: string) {
       const startedAt = now()
       let polls = 0
       for (;;) {
         polls += 1
-        if (await deps.ready().catch(() => false)) {
+        if (await deps.ready(asOf).catch(() => false)) {
           return { ready: true, polls, waitedMs: now() - startedAt }
         }
         if (now() - startedAt + pollMs > budgetMs) {
@@ -72,36 +76,40 @@ export function createDailyBriefReadinessGate(deps: Readonly<{
  * stays in this file rather than in the generation path.
  */
 export type DailyBriefReadiness = Readonly<{
-  wait: () => ReturnType<DailyBriefReadinessGate['wait']>
+  wait: (asOf: string) => Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }>>
   /** Called once when the wait expired; the edition is still produced, with its gaps named. */
   onTimeout?: (info: Readonly<{ polls: number; waitedMs: number }>) => void
 }>
 
 export function createDailyBriefReadiness(deps: Readonly<{
-  /** The brief's own reader, asked the brief's own question. */
-  readSnapshot: () => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
+  /** The brief's own reader, asked the brief's own question at the edition's cutoff. */
+  readSnapshot: (asOf: string) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
   onTimeout?: (info: Readonly<{ polls: number; waitedMs: number }>) => void
   sleep?: (ms: number) => Promise<void>
   pollMs?: number
   budgetMs?: number
 }>): DailyBriefReadiness {
   const gate = createDailyBriefReadinessGate({
-    ready: async () => crossAssetQuotesReady(await deps.readSnapshot()),
+    ready: async (asOf) => crossAssetQuotesReady(await deps.readSnapshot(asOf)),
     sleep: deps.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
     ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),
     ...(deps.budgetMs === undefined ? {} : { budgetMs: deps.budgetMs })
   })
   return {
-    wait: () => gate.wait(),
+    wait: (asOf: string) => gate.wait(asOf),
     ...(deps.onTimeout ? { onTimeout: deps.onTimeout } : {})
   }
 }
 
 /** Ask, wait, and report a timeout through the gate's own callback. Awaiting it is the whole call. */
-export async function awaitDailyBriefReadiness(readiness: DailyBriefReadiness | undefined): Promise<void> {
-  if (!readiness) return
-  const waited = await readiness.wait()
+export async function awaitDailyBriefReadiness(
+  readiness: DailyBriefReadiness | undefined,
+  asOf: string
+): Promise<Readonly<{ ready: boolean; polls: number; waitedMs: number }> | undefined> {
+  if (!readiness) return undefined
+  const waited = await readiness.wait(asOf)
   if (!waited.ready) readiness.onTimeout?.({ polls: waited.polls, waitedMs: waited.waitedMs })
+  return waited
 }
 
 /**
@@ -113,7 +121,8 @@ export function createDailyBriefReadinessFor(reader: Readonly<{
   queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
 }>): DailyBriefReadiness {
   return createDailyBriefReadiness({
-    readSnapshot: () => reader.queryCrossAssetSnapshot({ range: '24h', asOf: new Date().toISOString() }),
+    // The cutoff is the caller's, never the clock's: same question, same instant as the generation.
+    readSnapshot: (asOf) => reader.queryCrossAssetSnapshot({ range: '24h', asOf }),
     onTimeout: (info) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', ...info }))
   })
 }
