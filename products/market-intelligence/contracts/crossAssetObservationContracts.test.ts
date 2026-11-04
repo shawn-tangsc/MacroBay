@@ -196,3 +196,49 @@ describe('cross-asset IPC input boundary', () => {
     expect(getter).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * 每一行"最后一根已收盘的 K 线"——2026-11-05 起两种模式都带。
+ *
+ * 之前它只属于 current：日报永远带截止时刻，所以拿到的永远是 historical，那一行就没有价格可印。
+ * 下面四条反向夹具是"只放开这一个字段、没把校验放宽"的证明。
+ */
+describe('the row’s last closed bar (both modes)', () => {
+  const iso = new Date(now).toISOString()
+  const bars = () => ({ index: { at: iso, close: '23100.5' }, btc: { at: iso, close: '61234.25' }, eth: { at: iso, close: '2410.1' } })
+
+  it('keeps a historical map, and reads a missing bar as an explicit null', () => {
+    const withBars = { ...snapshot(), lastClosed: bars() }
+    expect(parseCrossAssetSnapshot(withBars)).toEqual(withBars)
+    // 某个市场在窗口内没有收盘：给 null，不整块不给（否则另外两个资产的值会被一起丢掉）。
+    const partial = { ...snapshot(), lastClosed: { ...bars(), index: null } }
+    expect(parseCrossAssetSnapshot(partial)).toEqual(partial)
+  })
+
+  it('refuses a missing asset key, and refuses anything that is not a positive decimal price', () => {
+    const { index, btc } = bars()
+    expect(parseCrossAssetSnapshot({ ...snapshot(), lastClosed: { index, btc } })).toBeUndefined()
+    expect(parseCrossAssetSnapshot({ ...snapshot(), lastClosed: { ...bars(), btc: { at: iso, close: '0' } } })).toBeUndefined()
+    expect(parseCrossAssetSnapshot({ ...snapshot(), lastClosed: { ...bars(), eth: { at: iso, close: '2,410' } } })).toBeUndefined()
+    // 收盘价不能晚于窗口结束：那是一根还没走完的 bar，把它当已收盘就是把进行中说成已定。
+    expect(parseCrossAssetSnapshot({ ...snapshot(), lastClosed: { ...bars(), eth: { at: new Date(now + 300_000).toISOString(), close: '2410.1' } } })).toBeUndefined()
+  })
+
+  it('has not loosened the field set: live facts are still refused on a historical snapshot', () => {
+    const live = { index: { state: 'missing' }, btc: { state: 'missing' }, eth: { state: 'missing' } }
+    expect(parseCrossAssetSnapshot({ ...snapshot(), quotes: live })).toBeUndefined()
+    expect(parseCrossAssetSnapshot({ ...snapshot(), lastClosed: bars(), quotes: live })).toBeUndefined()
+  })
+
+  it('still requires the map in current mode, where the row cannot be drawn without it', () => {
+    const current = { ...snapshot(), mode: 'current', servedAt: new Date(now + 1000).toISOString(), asOf: new Date(now + 1000).toISOString(),
+      indexSource: 'proxy', sourceState: 'live',
+      quotes: { index: { state: 'missing' }, btc: { state: 'missing' }, eth: { state: 'missing' } },
+      marketState: { index: 'open', btc: 'open', eth: 'open' },
+      lastClosed: bars(), forming: { index: null, btc: null, eth: null } }
+    ;(current.curves.index as { at: string; returnPercent: number | null }[]).forEach(point => { point.returnPercent = 0 })
+    expect(parseCrossAssetSnapshot(current)).toEqual(current)
+    const { lastClosed: _drop, ...withoutMap } = current
+    expect(parseCrossAssetSnapshot(withoutMap)).toBeUndefined()
+  })
+})

@@ -199,6 +199,15 @@ export function createCrossAssetSnapshotQuery(deps: {
         snapshot.macroCurves = { dxy: wire(curves.dxy), gold: wire(curves.gold) }
       }
       const safeCopy = structuredClone(snapshot)
+      // The last bar each row actually closed on, written in **both** modes. It used to be a current-mode
+      // fact only, and that is what left a historical reader with a level nobody could read: the daily
+      // brief always asks with a cutoff, so it is always historical, and its row had no `at`/`close` to
+      // print. `null` per asset means that market closed nothing at or before the window end — stated,
+      // never filled in from the curve's last point, which is a return rather than a price.
+      safeCopy.lastClosed = Object.fromEntries(assets.map(asset => {
+        const latest = analysis.latestClosed[asset]
+        return [asset, latest === null ? null : { at: iso(latest.atMs), close: latest.close }]
+      })) as Snapshot['lastClosed']
       // `live` is read exactly once per query and only in current mode; the condition narrows it.
       if (mode === 'current' && live) {
         // The session of each row is stated, never inferred from a missing bar: the Nasdaq 100 row is
@@ -206,10 +215,6 @@ export function createCrossAssetSnapshotQuery(deps: {
         // trade around the clock. What the row has to show in either case is its last closed bar.
         safeCopy.marketState = Object.fromEntries(assets.map(asset => [asset,
           crossAssetRowMarketState(asset, indexSource, asOfMs, analysis.latestClosed[asset] !== null)])) as Snapshot['marketState']
-        safeCopy.lastClosed = Object.fromEntries(assets.map(asset => {
-          const latest = analysis.latestClosed[asset]
-          return [asset, latest === null ? null : { at: iso(latest.atMs), close: latest.close }]
-        })) as Snapshot['lastClosed']
         if (now - end > crossAssetAnalyticsPolicy.missingGraceMs) {
           const missing = (asset: CrossAssetId) => !analysis.latestClosedPresent[asset]
           for (const asset of assets.filter(missing)) {

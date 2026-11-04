@@ -330,6 +330,29 @@ export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
  */
 export type CrossAssetRejection = { field?: string }
 
+/**
+ * The last closed bar each row prints, held to one shape whoever asks.
+ *
+ * Both modes carry it now, and the same rules apply: every asset present, `null` for "this market had
+ * no bar at or before the window end", and otherwise a real decimal price with a UTC instant that does
+ * not sit after the window end. One implementation on purpose — a second, looser check on the historical
+ * branch is how an unvalidated number would reach a row that prints it as a level.
+ */
+function lastClosedMap(value: unknown, analysisEnd: string): boolean {
+  const policy = crossAssetContractPolicy
+  if (!exact(value, policy.assets)) return false
+  const map = value as Record<string, unknown>
+  return policy.assets.every((asset) => {
+    const closed = map[asset]
+    if (closed === null) return true
+    if (!exact(closed, ['at', 'close'])) return false
+    const { at, close } = closed as Record<string, unknown>
+    return utc(at) && typeof close === 'string' && close.length <= policy.maxPriceLength &&
+      policy.pricePattern.test(close) && Number.isFinite(Number(close)) && Number(close) > 0 &&
+      Date.parse(at) <= Date.parse(analysisEnd)
+  })
+}
+
 export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRejection): CrossAssetSnapshot | undefined {
   const policy = crossAssetContractPolicy
   /** Records the most specific check that refused the snapshot, then answers the old way. */
@@ -350,7 +373,15 @@ export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRe
     // `extremes`, and one that sends them must send a pair this renderer can print.
     if (value.extremes !== undefined) fields.push('extremes')
     if (value.mode === 'current') fields.push('sourceState', 'quotes', 'forming', 'marketState', 'lastClosed')
-    else if (value.mode !== 'historical') return reject('shape')
+    else if (value.mode === 'historical') {
+      // Optional, and only on this branch: the row's last closed bar used to be a current-mode-only
+      // fact, so a snapshot frozen in historical mode carried no `at`/`close` for the row to print and
+      // the reader got a level nobody measured. A main process from before this field keeps passing;
+      // one that sends it is held to the same shape as the current-mode map, below.
+      // Listed only here: pushing it on the current branch as well would list it twice and no snapshot
+      // would satisfy `exact`.
+      if (value.lastClosed !== undefined) fields.push('lastClosed')
+    } else return reject('shape')
     if (!exact(value, fields) || ![value.servedAt, value.asOf, value.analysisEnd, value.windowStart].every(utc)) return reject('shape')
     if (value.schemaVersion !== 1) return reject('schemaVersion')
     if (!policy.ranges.includes(value.range as CrossAssetRange)) return reject('range')
@@ -421,21 +452,18 @@ export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRe
     if (!Object.values(value.correlations).every(value => metric(value, true)) || !Object.values(value.relativeReturns).every(value => metric(value))) return reject('keys')
     if (value.mode === 'current') {
       if (typeof value.sourceState !== 'string' || !policy.sourceStates.includes(value.sourceState) || !exact(value.quotes, policy.assets) ||
-        !exact(value.forming, policy.assets) || !exact(value.marketState, policy.assets) || !exact(value.lastClosed, policy.assets)) return reject('keys')
+        !exact(value.forming, policy.assets) || !exact(value.marketState, policy.assets) ||
+        !lastClosedMap(value.lastClosed, value.analysisEnd as string)) return reject('keys')
       // The row's session, its last closed bar and the leg that answers it are one statement, and the
       // three have to agree: a row with no source has no reading, and a row with a source always has
       // the last bar it closed on. A snapshot that cannot say both is refused rather than displayed.
       const answersRow = value.indexSource !== 'unavailable'
-      const hasReading = value.marketState.index !== 'unavailable' && value.lastClosed.index !== null
+      // The map itself was validated a line above; this only reads the index entry out of it again.
+      const closedByAsset = value.lastClosed as Record<string, unknown>
+      const hasReading = value.marketState.index !== 'unavailable' && closedByAsset.index !== null
       if (answersRow !== hasReading) return reject('shape')
       for (const asset of policy.assets) {
         if (!(policy.marketStates as readonly string[]).includes(value.marketState[asset] as string)) return reject('shape')
-        const closed = value.lastClosed[asset]
-        if (closed === null) continue
-        if (!exact(closed, ['at', 'close']) || !utc(closed.at) || typeof closed.close !== 'string' ||
-          closed.close.length > policy.maxPriceLength || !policy.pricePattern.test(closed.close) ||
-          !Number.isFinite(Number(closed.close)) || Number(closed.close) <= 0 ||
-          Date.parse(closed.at) > Date.parse(value.analysisEnd as string)) return reject('keys')
       }
       // While the real index answers the row there is no live tick for it. A quote printed beside that
       // value would belong to the other instrument, so the contract refuses to carry one.
@@ -458,6 +486,11 @@ export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRe
           !Number.isFinite(Number(quote.price)) || Number(quote.price) <= 0 ||
           ![quote.tradedAtMs, quote.receivedAtMs].every(at => Number.isSafeInteger(at) && (at as number) >= 0)) return
       }
+    } else if (value.lastClosed !== undefined && !lastClosedMap(value.lastClosed, value.analysisEnd as string)) {
+      // Historical snapshots carry the map too, held to the shape the current branch just applied — one
+      // validator, not a second looser one. A snapshot from a main process that predates the field sends
+      // nothing and still passes; the row then prints `—` with its reason rather than a level.
+      return reject('keys')
     }
     if (new TextEncoder().encode(JSON.stringify(value)).byteLength > policy.maxSnapshotBytes) return
     return structuredClone(value) as CrossAssetSnapshot
