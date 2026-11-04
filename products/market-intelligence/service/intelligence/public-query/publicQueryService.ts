@@ -355,8 +355,9 @@ export function createMarketIntelligencePublicQueryService(
         recordCrossAssetFailure(crossAssetThrew(error))
         return undefined
       }
-      const parsed = parseCrossAssetSnapshot(raw)
-      recordCrossAssetFailure(parsed ? null : crossAssetRejected())
+      const rejection: { field?: string } = {}
+      const parsed = parseCrossAssetSnapshot(raw, rejection)
+      recordCrossAssetFailure(parsed ? null : crossAssetRejected(rejection.field))
       return parsed
     },
     getCrossAssetQueryFailure: () => readCrossAssetFailure(),

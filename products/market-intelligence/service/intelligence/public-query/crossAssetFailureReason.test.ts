@@ -37,7 +37,7 @@ describe('cross-asset failure reasons', () => {
     expect(outlet).not.toMatch(/catch\s*\{\s*return undefined\s*\}/)
     expect(source).toContain('recordCrossAssetFailure(crossAssetNotWired())')
     expect(source).toContain('recordCrossAssetFailure(crossAssetThrew(error))')
-    expect(source).toContain('crossAssetRejected()')
+    expect(source).toContain('crossAssetRejected(rejection.field)')
     expect(source).toContain('readCrossAssetFailure()')
   })
 })
