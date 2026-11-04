@@ -247,6 +247,8 @@ describe('generation stage timeline', () => {
     expect(resultOf(dom, 'source').textContent).toContain('1 秒')
     expect(stepOf(dom, 'candidates').getAttribute('data-stage-state')).toBe('running')
     expect(resultOf(dom, 'candidates').textContent).toContain(text.generationProgress.running)
+    // A step that has not ended has no duration: it must not print "0 ms" as if it had taken none.
+    expect(resultOf(dom, 'candidates').textContent).not.toContain(text.generationTrace.durationUnits.milliseconds.replace('{count}', '0'))
     expect(stepOf(dom, 'writing').getAttribute('data-stage-state')).toBe('waiting')
     expect(resultOf(dom, 'writing').textContent).toContain(text.generationTrace.states.notStarted)
   })

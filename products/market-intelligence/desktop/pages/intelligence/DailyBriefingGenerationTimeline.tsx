@@ -180,7 +180,8 @@ function stageResult(
   // The start instant, not a range: the duration beside it already says how long the stage took,
   // and "07:21:26 → 07:21:27" answers a question the reader did not ask.
   const instant = formatInstant(stage.startedAt ?? stage.finishedAt, formatTime)
-  const duration = stageDurationMs(stage)
+  // No end, no duration: a step still running must not print "0 ms" as if it had taken no time.
+  const duration = stage.finishedAt ? stageDurationMs(stage) : undefined
   const parts = [instant, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
   // A step that is executing says so; without the word its row is only a clock, and the reader
   // cannot tell "working on it" from "finished at that moment".

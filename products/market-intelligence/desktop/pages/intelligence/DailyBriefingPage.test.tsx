@@ -1786,6 +1786,43 @@ it('keeps the edition readable and reports a run in the right column', async () 
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).not.toContain('ant-btn-loading')
 })
 
+it('reports a run that is already in flight in the right column, step by step', async () => {
+  // A scheduled run (not this window's click): the edition stays readable in the body and the steps
+  // report in the column, following the progress the service publishes.
+  const progress = {
+    attemptId: 'attempt-1',
+    startedAt: '2026-10-30T04:00:00.000Z',
+    state: 'running' as const,
+    stages: traceStageIds.map((id, index) => ({
+      id,
+      state: index === 0 ? 'success' as const : 'pending' as const,
+      startedAt: index === 1 ? '2026-10-30T04:00:05.000Z' : index === 0 ? '2026-10-30T04:00:00.000Z' : null,
+      finishedAt: index === 0 ? '2026-10-30T04:00:01.000Z' : null,
+      ...(index === 0 ? { durationMs: 1_000 } : {})
+    }))
+  }
+  const client = fakeClient({ getProgress: vi.fn(async () => ({ state: 'running' as const, progress })) })
+  const dom = await renderPage(client)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel]')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+
+  const rail = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
+  const row = (id: string): HTMLElement => rail.querySelector<HTMLElement>(`[data-stage="${id}"]`)!
+  // One row finished, one running, the rest not started: the column follows the run.
+  expect(row('source').getAttribute('data-stage-state')).toBe('done')
+  expect(row('source').textContent).toContain('1 秒')
+  expect(row('candidates').getAttribute('data-stage-state')).toBe('running')
+  expect(row('candidates').textContent).toContain(text.generationProgress.running)
+  expect(row('writing').getAttribute('data-stage-state')).toBe('waiting')
+  expect(row('writing').textContent).toContain(text.generationTrace.states.notStarted)
+  // The attempt line names its instant as a start, in the column that shows it.
+  expect(rail.textContent).toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
+  // A run in flight shows the header action working, not merely disabled.
+  expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).toContain('ant-btn-loading')
+})
+
 it('leaves the archive out while generating a day that never produced one', async () => {
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const client = fakeClient({
