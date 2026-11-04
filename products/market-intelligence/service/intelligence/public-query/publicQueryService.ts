@@ -14,6 +14,7 @@ import {
   normalizeTimeWindow,
   VISIBLE_AT
 } from './asOfVisibility'
+import { crossAssetNotWired, crossAssetRejected, crossAssetThrew, readCrossAssetFailure, recordCrossAssetFailure } from './crossAssetFailureReason'
 import { parseCrossAssetSnapshot, type CrossAssetRange, type CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { buildEvidenceRef } from './evidenceSnapshotBuilder'
 import { buildEvidenceExcerpt } from './evidenceSnapshotBuilder'
@@ -122,6 +123,8 @@ export type MarketIntelligencePublicQueryService = {
    * parser the renderer uses, so the analysis can never read a shape the panel would reject.
    */
   queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string }) => Promise<CrossAssetSnapshot | undefined>
+  /** Why the last cross-asset read answered nothing; see `crossAssetFailureReason`. */
+  getCrossAssetQueryFailure?: () => string | null
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
   /** The scored-headline reader the news page and the analysis already share. */
   setNewsSentimentQuery: (query: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined) => void
@@ -338,14 +341,25 @@ export function createMarketIntelligencePublicQueryService(
       marketCalendarQuery = query
     },
     async queryCrossAssetSnapshot(queryInput) {
-      // Fail closed to `undefined`: a sparse or unvalidated snapshot must leave the domain
-      // `not-comparable`, which is what the analysis already knows how to explain.
-      try {
-        return parseCrossAssetSnapshot(crossAssetQuery?.query({ range: queryInput.range, asOf: queryInput.asOf }))
-      } catch {
+      // Fail closed, but never silently: the snapshot stays `undefined` (every consumer keeps its
+      // behaviour) and the reason is recorded, because "not wired", "threw" and "failed validation"
+      // have three different fixes and used to be one sentence at every surface.
+      if (!crossAssetQuery) {
+        recordCrossAssetFailure(crossAssetNotWired())
         return undefined
       }
+      let raw: unknown
+      try {
+        raw = crossAssetQuery.query({ range: queryInput.range, asOf: queryInput.asOf })
+      } catch (error) {
+        recordCrossAssetFailure(crossAssetThrew(error))
+        return undefined
+      }
+      const parsed = parseCrossAssetSnapshot(raw)
+      recordCrossAssetFailure(parsed ? null : crossAssetRejected())
+      return parsed
     },
+    getCrossAssetQueryFailure: () => readCrossAssetFailure(),
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
