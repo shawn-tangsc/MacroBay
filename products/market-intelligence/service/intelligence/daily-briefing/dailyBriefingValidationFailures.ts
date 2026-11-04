@@ -28,3 +28,22 @@ export function failAll(issues: readonly DailyBriefingValidationFailureEntry[]):
     failures: Object.freeze([...issues])
   })
 }
+
+/**
+ * Every defect in one line, for the reader and for the record.
+ *
+ * The repair prompt gets the full list with each field's legal form; what travels with the failure — into
+ * the attempt, into the edition's provenance and onto the panel — used to be the first defect alone, which
+ * is how "AI 输出格式不合规" became the only sentence a reader ever saw. The line names each field once, in
+ * order, and says how many more there were rather than truncating silently.
+ */
+export function describeFailures(failures: readonly Readonly<{ code: string; detail?: string }>[], maximum = 5): string | undefined {
+  const named: string[] = []
+  for (const failure of failures) {
+    const text = failure.detail ? `${failure.detail}（${failure.code}）` : failure.code
+    if (!named.includes(text)) named.push(text)
+  }
+  if (named.length === 0) return undefined
+  const shown = named.slice(0, maximum)
+  return named.length > maximum ? `${shown.join(' · ')} · +${named.length - maximum}` : shown.join(' · ')
+}

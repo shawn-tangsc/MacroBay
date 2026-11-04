@@ -2,6 +2,7 @@ import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, Brie
 import { DEFAULT_PERIOD_ID, dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
+import { describeFailures } from './dailyBriefingValidationFailures'
 import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
@@ -209,9 +210,10 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       failureDetail = validation.detail
       lastFailures = validation.failures
     }
-    // Close this check before repairing: the first failure code is kept for the loop's verdict, and
-    // the repair that follows gets its own window instead of nesting inside this one.
-    stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
+    // Every defect, not just the first: the code names the kind of problem, the detail names the fields,
+    // and a reader who only ever sees the kind cannot act on it.
+    const described = lastFailures ? describeFailures(lastFailures) : undefined
+    stage({ stage: 'validation', state: 'failed', failureCode, ...(described ? { failureDetail: described } : failureDetail ? { failureDetail } : {}) })
     if (attempt < maximumRepairRounds) {
       throwIfAborted(input.signal)
       const repairStage = `repair-${attempt + 1}` as DailyBriefTurnStage
@@ -222,9 +224,10 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       stage({ stage: repairStage, state: 'success' })
     }
   }
-  stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
+  const finalDetail = lastFailures ? describeFailures(lastFailures) ?? failureDetail : failureDetail
+  stage({ stage: 'validation', state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}) })
   await input.runner.finish(started.sessionId, 'failed')
-  return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
+  return { state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}), sessionId: started.sessionId, toolInvocations }
 }
 
 /**
