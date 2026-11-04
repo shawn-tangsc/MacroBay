@@ -1064,7 +1064,11 @@ describe('sending a test message from the row', () => {
       labels.channelTestAccepted.replace('{target}', 'Telegram · 贾维斯')
     )
     // 不许出现「已送达」这种我们证明不了的话。
-    expect(container.querySelector('[data-test-receipt]')?.textContent).not.toContain('送达')
+    const accepted = container.querySelector('[data-test-receipt]')?.textContent ?? ''
+    expect(accepted).not.toContain('送达')
+    // 也不许再挂免责长句：只说发了没、发给谁。
+    expect(accepted).not.toContain('确认不了')
+    expect(accepted).toBe('已发给 Telegram · 贾维斯')
   })
 
   it('falls back to the platform name when the conversation name is unknown, and never prints an id', async () => {
@@ -1093,8 +1097,9 @@ describe('sending a test message from the row', () => {
     await act(async () => {})
 
     const receipt = container.querySelector('[data-test-receipt]')?.textContent ?? ''
-    expect(receipt).toBe(labels.channelTestUnconfirmed.replace('{target}', 'Telegram · 8768'))
+    expect(receipt).toBe('已发给 Telegram · 8768，未拿到回执')
     expect(receipt).not.toContain('送达')
+    expect(receipt).not.toContain('可能收到')
   })
 
   it('points at enabling when the channel is not running instead of pretending', async () => {
