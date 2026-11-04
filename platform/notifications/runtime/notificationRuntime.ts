@@ -42,6 +42,8 @@ import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { decideDailyCap, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
 import { emitBackoffEvent } from './notificationBackoffEvents'
+import { reportProviderCredentialFlip } from './notificationCredentialHealth'
+import { pruneNotificationState } from './notificationRuntimePrune'
 import {
   normalizeRequestedChannels,
   routeTransientDelivery,
@@ -283,54 +285,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     return plan.outcome
   }
 
-  /**
-   * 供应商凭据的判定结果（P4a/P4b 的**唯一提交点**）。
-   *
-   * 只认 `ok` / `invalid` 两个值（调用方按 `classifyHttpFailure` 判：401/403 才算 invalid，
-   * 超时/代理/限流不许报进来）；**只在翻转时发事件**，重启后读同一份 state，不会再发一遍。
-   */
-  async function reportProviderCredential(input: {
-    providerId: string
-    state: 'ok' | 'invalid'
-  }): Promise<{ changed: boolean }> {
-    const state = await load()
-    const previous = state.providerCredentialHealth[input.providerId]
-    if (previous === input.state) return { changed: false }
-    await persistWithDiagnostics({
-      ...state,
-      providerCredentialHealth: { ...state.providerCredentialHealth, [input.providerId]: input.state }
-    })
-    notifyChanged()
-    const now = nowIso()
-    if (input.state === 'invalid') {
-      await submitEvent({
-        eventTypeId: 'platform.provider.credential-invalid',
-        producerId: 'platform',
-        dedupeVars: { builder: 'template', vars: { providerId: input.providerId } },
-        actions: [
-          {
-            id: 'open-model-settings',
-            labelKey: 'notification.action.open-settings',
-            kind: 'open',
-            deeplink: { scope: 'platform', settingsSectionId: 'model-service' }
-          }
-        ],
-        occurredAt: now
-      })
-    } else {
-      await submitEvent({
-        eventTypeId: 'platform.provider.credential-recovered',
-        producerId: 'platform',
-        dedupeVars: {
-          builder: 'template',
-          vars: { providerId: input.providerId, day: now.slice(0, 10) }
-        },
-        actions: [],
-        occurredAt: now
-      })
-    }
-    return { changed: true }
-  }
+  /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
+  const reportProviderCredential = (input: { providerId: string; state: 'ok' | 'invalid' }) =>
+    reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }
   const settingsSurface = composeNotificationSettingsSurface(settingsPorts, { load, exclusive, persistWithDiagnostics, notifyChanged })
@@ -352,24 +309,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       await load()
     },
 
-    /**
-     * 保留期清理：按天数 + 条数剪记录，同时丢掉窗口外的计数桶。
-     * 清理任务（`@platform/jobs`）与启动恢复都只调这一处，避免两条清理路径各剪一半。
-     */
-    async prune(): Promise<{ removedRecords: number; removedCounters: number }> {
-      return exclusive(async () => {
-      const state = await load()
-      const settings = await deps.getSettings()
-      const now = nowIso()
-      const pruned = pruneNotificationRecords(state.records, { retentionDays: settings.retentionDays, now })
-      const counters = pruneNotificationDailyCounters(state.dailyCounters ?? {}, now)
-      const removedCounters = Object.keys(state.dailyCounters ?? {}).length - Object.keys(counters).length
-      const removedRecords = state.records.length - pruned.records.length
-      if (removedRecords === 0 && removedCounters === 0) return { removedRecords: 0, removedCounters: 0 }
-      await persist({ ...state, records: pruned.records, dailyCounters: counters })
-      notifyChanged()
-      return { removedRecords, removedCounters }
-      })
+    /** 保留期清理（实现见 `notificationRuntimePrune.ts`）：只剪记录与计数桶，不碰判定状态。 */
+    prune(): Promise<{ removedRecords: number; removedCounters: number }> {
+      return pruneNotificationState({ load, retentionDays: async () => (await deps.getSettings()).retentionDays, persist, notifyChanged, exclusive, now: nowIso })
     },
 
     /**
