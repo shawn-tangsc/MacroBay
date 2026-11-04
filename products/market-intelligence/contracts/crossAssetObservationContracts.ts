@@ -123,6 +123,14 @@ export type CrossAssetSnapshot = {
   historyCoverage: Record<CrossAssetId, { count: number; expectedCount: number; complete: boolean }>
   curves: Record<CrossAssetId, { at: string; returnPercent: number | null }[]>
   /**
+   * The window's highest and lowest price, beside the close they are stated against.
+   *
+   * Optional so a main process that predates it still produces a snapshot this renderer accepts — the
+   * amplitude simply has nothing to show. `anchor` is the same window-start close `curves` divides by,
+   * never a bar's open: one window, one zero point, one definition of "how far it travelled".
+   */
+  extremes?: Record<CrossAssetId, { high: number; low: number; anchor: number } | null>
+  /**
    * The macro rows' own same-anchor curves, on the same grid as `curves` so the lines are comparable.
    *
    * Optional on purpose: a main process from before these lines existed must still produce a snapshot
@@ -316,7 +324,7 @@ export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
  *
  * The closed vocabulary is the contract's: `shape`, `schemaVersion`, `range`, `grid`, `indexSource`,
  * `keys`, `historyCoverage.<asset>`, `curves.<asset>.length`, `curves.<asset>.point`,
- * `closedReturns.<asset>.<window>`, `macroCurves.<proxy>`, `reading`. A caller that passes a sink
+ * `closedReturns.<asset>.<window>`, `macroCurves.<proxy>`, `reading`, `extremes.<asset>`. A caller that passes a sink
  * learns which check failed; a caller that passes nothing loses nothing (the answer is still
  * `undefined`, exactly as before).
  */
@@ -338,6 +346,9 @@ export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRe
     // Optional like `macroCurves`: an older main process sends no field at all and must still pass. A field
     // that *is* sent has to be a reading this renderer can phrase without inventing anything.
     if (value.reading !== undefined) fields.push('reading')
+    // Optional for the same reason: a main process from before the amplitude existed sends no
+    // `extremes`, and one that sends them must send a pair this renderer can print.
+    if (value.extremes !== undefined) fields.push('extremes')
     if (value.mode === 'current') fields.push('sourceState', 'quotes', 'forming', 'marketState', 'lastClosed')
     else if (value.mode !== 'historical') return reject('shape')
     if (!exact(value, fields) || ![value.servedAt, value.asOf, value.analysisEnd, value.windowStart].every(utc)) return reject('shape')
@@ -353,6 +364,19 @@ export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRe
     if (typeof value.indexSource !== 'string' || !(policy.indexSources as readonly string[]).includes(value.indexSource)) return reject('indexSource')
     if (!exact(value.historyCoverage, policy.assets) || !exact(value.curves, policy.assets) || !exact(value.closedReturns, policy.assets) ||
       !exact(value.correlations, ['indexBtc', 'indexEth']) || !exact(value.relativeReturns, ['btcMinusIndex', 'ethMinusBtc'])) return reject('keys')
+    if (value.extremes !== undefined) {
+      if (!exact(value.extremes, policy.assets)) return reject('keys')
+      for (const asset of policy.assets) {
+        const extremes = (value.extremes as Record<string, unknown>)[asset]
+        // `null` is a stated absence: the window has no complete pair. A present pair must be one.
+        if (extremes === null) continue
+        if (!exact(extremes, ['high', 'low', 'anchor'])) return reject(`extremes.${asset}`)
+        const { high, low, anchor } = extremes as Record<string, unknown>
+        if (typeof high !== 'number' || !Number.isFinite(high) || high <= 0) return reject(`extremes.${asset}`)
+        if (typeof low !== 'number' || !Number.isFinite(low) || low <= 0 || low > high) return reject(`extremes.${asset}`)
+        if (typeof anchor !== 'number' || !Number.isFinite(anchor) || anchor <= 0) return reject(`extremes.${asset}`)
+      }
+    }
     for (const asset of policy.assets) {
       const coverage = value.historyCoverage[asset]
       if (!exact(coverage, ['count', 'expectedCount', 'complete']) || !Number.isSafeInteger(coverage.count) ||

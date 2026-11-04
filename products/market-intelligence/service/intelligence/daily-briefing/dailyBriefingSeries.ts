@@ -1,4 +1,4 @@
-import type { BriefingCurveReason, BriefingCurveSegment, BriefingSeriesPoint } from '../../../contracts/dailyBriefing'
+import type { BriefingAmplitude, BriefingAmplitudeReason, BriefingCurveReason, BriefingCurveSegment, BriefingSeriesPoint } from '../../../contracts/dailyBriefing'
 
 /**
  * What the data region's two drawings are made of.
@@ -86,20 +86,28 @@ export function sampleSpan<T>(points: readonly T[], maximum: number): readonly T
  * the first point it keeps, which makes that point zero in the stored data instead of somewhere near
  * zero on screen.
  */
-export function briefingPriceCurve(input: Readonly<{
+export type BriefingCurveInput = Readonly<{
   points: readonly Readonly<{ at: string; returnPercent: number | null }>[] | undefined
   windowStart: string
   windowEnd: string
   windowHours: number
-}>): BriefingPriceCurve {
+}>
+
+/** The window's own points, or the reason there are none: one filter for the curve and the amplitude. */
+function windowPoints(input: BriefingCurveInput): Readonly<{ inWindow: readonly Readonly<{ at: string; returnPercent: number | null }>[] }> | Readonly<{ reason: BriefingCurveReason }> {
   if (input.windowHours > briefingSeriesPolicy.priceWindowMaximumHours) {
     // The snapshot is always read as a 24-hour window. Printing it under a 48-hour heading would be
     // two different time spans wearing one title, so the card states the curve is not applicable.
-    return { curveReason: 'window-too-long' }
+    return { reason: 'window-too-long' }
   }
-  const points = input.points
-  if (!points) return { curveReason: 'no-snapshot' }
-  const inWindow = points.filter((point) => point.at >= input.windowStart && point.at <= input.windowEnd)
+  if (!input.points) return { reason: 'no-snapshot' }
+  return { inWindow: input.points.filter((point) => point.at >= input.windowStart && point.at <= input.windowEnd) }
+}
+
+export function briefingPriceCurve(input: BriefingCurveInput): BriefingPriceCurve {
+  const window = windowPoints(input)
+  if ('reason' in window) return { curveReason: window.reason }
+  const inWindow = window.inWindow
   const anchor = inWindow.find((point) => typeof point.returnPercent === 'number')
   if (!anchor || typeof anchor.returnPercent !== 'number') return { curveReason: 'no-anchor' }
   const base = 1 + anchor.returnPercent / 100
@@ -107,6 +115,48 @@ export function briefingPriceCurve(input: Readonly<{
     ? Object.freeze({ at: point.at, returnPercent: roundPercent((((1 + point.returnPercent / 100) / base) - 1) * 100) })
     : null)
   return storedSegments(sampleSpan(rebased, briefingSeriesPolicy.priceMaximumPoints))
+}
+
+/**
+ * How far the reading travelled inside the window, and why it cannot be stated when it cannot.
+ *
+ * The definition is one line — `(high − low) / anchor × 100` — and it is computed here and nowhere
+ * else. `anchor` is the close the curve is also divided by, so the amplitude and the line describe one
+ * window from one zero point.
+ *
+ * Two things stop it, and neither invents a number: a window whose bars are not all there may be
+ * missing the real high or low (`partial-bars`, with the counts kept so the audit can say which
+ * window), and a window with no start close has no denominator (`no-anchor`).
+ *
+ * A caller with no snapshot at all gets no field: that is an absence, not a refusal.
+ */
+export function briefingAmplitude(input: Readonly<{
+  extremes?: Readonly<{ high: number; low: number; anchor: number }> | null
+  coverage?: Readonly<{ count: number; expectedCount: number; complete: boolean }>
+}>): Readonly<{
+  amplitude?: BriefingAmplitude
+  amplitudeReason?: BriefingAmplitudeReason
+  amplitudeCoverage?: Readonly<{ count: number; expectedCount: number }>
+}> {
+  if (!input.coverage) return {}
+  if (!input.coverage.complete) {
+    return {
+      amplitudeReason: 'partial-bars',
+      amplitudeCoverage: Object.freeze({ count: input.coverage.count, expectedCount: input.coverage.expectedCount })
+    }
+  }
+  const extremes = input.extremes
+  if (!extremes || !(extremes.anchor > 0) || !Number.isFinite(extremes.high) || !Number.isFinite(extremes.low)) {
+    return { amplitudeReason: 'no-anchor' }
+  }
+  return {
+    amplitude: Object.freeze({
+      percent: roundPercent(((extremes.high - extremes.low) / extremes.anchor) * 100),
+      high: extremes.high,
+      low: extremes.low,
+      anchor: extremes.anchor
+    })
+  }
 }
 
 /**

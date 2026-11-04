@@ -8,9 +8,38 @@ const end = Date.parse('2026-09-14T12:00:00.000Z')
 const series = (count: number, price: (index: number) => number) => Array.from({ length: count }, (_, index) => ({
   atMs: end - (count - 1 - index) * step, close: String(price(index))
 }))
+const ohlc = (count: number, price: (index: number) => number, widen = 1) => series(count, price).map((point, index) => ({
+  ...point,
+  high: String(price(index) * widen),
+  low: String(price(index) / widen)
+}))
 const rising = (count = 289) => series(count, index => 100 * Math.exp(index * .001 + Math.sin(index) * .0002))
 const run = (history: Parameters<typeof analyzeCrossAssetHistory>[0]['history'], range: '1h' | '24h' | '7d' = '1h', asOfMs = end) =>
   analyzeCrossAssetHistory({ history, range, asOfMs, mode: 'historical' })
+
+describe('the window extremes', () => {
+  it("takes the window's own high and low, anchored on the curve's start close", () => {
+    // The window opens at 100; the bars travel up to 110 and down to 90 inside it.
+    const inside = ohlc(13, index => [100, 105, 110, 95, 90, 92, 96, 99, 101, 103, 104, 102, 100][index]!, 1)
+    const result = run({ index: inside, btc: inside, eth: inside }, '1h')
+    // The anchor is the window-start close, never a bar's open: one zero point for curve and amplitude.
+    expect(result.extremes.index).toEqual({ high: 110, low: 90, anchor: 100 })
+  })
+
+  it('ignores bars outside the window and states nothing when the anchor is missing', () => {
+    // The 14th bar lands one step before the window opens and carries an absurd high: if it leaked in,
+    // the amplitude would describe a bar the window never covers.
+    const bars = series(14, index => 100 + index).map((point, index) => ({
+      ...point, high: index === 0 ? '999' : String((100 + index) * 1.5), low: String((100 + index) / 1.5)
+    }))
+    const result = run({ index: bars, btc: bars, eth: bars }, '1h')
+    expect(result.extremes.index?.high).toBeCloseTo(113 * 1.5, 6)
+    expect(result.extremes.index?.anchor).toBeCloseTo(101, 6)
+    // Drop the bar at the window start: there is then no close to divide by, so no denominator at all.
+    const missingAnchor = bars.filter((_, index) => index !== 1)
+    expect(run({ index: missingAnchor, btc: missingAnchor, eth: missingAnchor }, '1h').extremes.index).toBeNull()
+  })
+})
 
 describe('cross-asset closed history analytics', () => {
   it('keeps one-hour observation coverage and anchor prices independent of chart range', () => {

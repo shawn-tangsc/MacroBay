@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  briefingAmplitude,
   briefingOpenInterestSeries,
   briefingPriceCurve,
   briefingSeriesPolicy,
@@ -135,5 +136,36 @@ describe('the sampling rules themselves', () => {
   it('matches the source point-for-point when it already fits', () => {
     expect(sampleSpan([1, 2, 3], 48)).toEqual([1, 2, 3])
     expect(sampleBucketEnds([1, 2, 3], 24)).toEqual([1, 2, 3])
+  })
+})
+
+describe('the window amplitude', () => {
+  const covered = { count: 289, expectedCount: 289, complete: true }
+
+  it('is the window travel divided by the close the curve is anchored on', () => {
+    // (high − low) / anchor × 100, computed from the same close the curve divides by — never a bar's open.
+    expect(briefingAmplitude({ extremes: { high: 72_400, low: 69_800, anchor: 70_000 }, coverage: covered }))
+      .toEqual({ amplitude: { percent: 3.71, high: 72_400, low: 69_800, anchor: 70_000 } })
+  })
+
+  it('states a reason instead of a number when the window is not fully covered', () => {
+    const partial = briefingAmplitude({
+      extremes: { high: 72_400, low: 69_800, anchor: 70_000 },
+      coverage: { count: 231, expectedCount: 289, complete: false }
+    })
+    // A hole can hide the real high: the counts travel with the reason so the audit names the window.
+    expect(partial.amplitude).toBeUndefined()
+    expect(partial.amplitudeReason).toBe('partial-bars')
+    expect(partial.amplitudeCoverage).toEqual({ count: 231, expectedCount: 289 })
+  })
+
+  it('states no-anchor when there is no window-start close to divide by', () => {
+    expect(briefingAmplitude({ extremes: null, coverage: covered })).toEqual({ amplitudeReason: 'no-anchor' })
+    expect(briefingAmplitude({ extremes: { high: 10, low: 9, anchor: 0 }, coverage: covered })).toEqual({ amplitudeReason: 'no-anchor' })
+  })
+
+  it('says nothing at all when there is no snapshot to judge', () => {
+    // An absence is not a refusal: a row nobody read carries no field and no reason.
+    expect(briefingAmplitude({})).toEqual({})
   })
 })

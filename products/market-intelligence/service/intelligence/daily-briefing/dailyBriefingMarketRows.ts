@@ -20,7 +20,7 @@ import {
   pulseRowMateriality
 } from './dailyBriefingDataSelection'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
-import { briefingPriceCurve, type BriefingPriceCurve } from './dailyBriefingSeries'
+import { briefingAmplitude, briefingPriceCurve } from './dailyBriefingSeries'
 import { previousUsEquityTradingDay, tradingSessionsBehind } from '../macro-calendar/tradingDayCalendar'
 
 const gap: FactImportance = Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'gap' })
@@ -215,18 +215,22 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
   const realTenYear = rates?.state === 'available' || rates?.state === 'empty'
     ? rates.readings.find((reading) => reading.metricKey === 'US_REAL_YIELD_10Y')
     : undefined
-  // Only the two cards that draw one get a curve; the index row has no plot beside it, and a stored
-  // series nobody draws reads as a promise the layout never keeps.
-  const priceCurve = (id: 'btc' | 'eth'): BriefingPriceCurve => briefingPriceCurve({
-    points: cross?.curves?.[id],
-    windowStart: packet.windowStart,
-    windowEnd: packet.windowEnd,
-    windowHours: packet.windowHours
+  // Only the two cards that draw a curve get one; the index row has no plot beside it, and a stored
+  // series nobody draws reads as a promise the layout never keeps. The amplitude is asked for on the
+  // three readings that have continuous bars — BTC, ETH and the Nasdaq row — and on nothing else.
+  const drawing = (id: 'btc' | 'eth' | 'index') => ({
+    // Only the two cards draw a curve. The amplitude is asked for on the three readings with continuous
+    // bars; DXY, gold and the ten-year are not given a field at all, so nothing downstream can show one.
+    ...(id === 'index' ? {} : briefingPriceCurve({ points: cross?.curves?.[id], windowStart: packet.windowStart, windowEnd: packet.windowEnd, windowHours: packet.windowHours })),
+    ...briefingAmplitude({
+      extremes: cross?.extremes?.[id],
+      ...(cross?.historyCoverage?.[id] ? { coverage: cross.historyCoverage[id] } : {})
+    })
   })
   return [
-    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }, priceCurve('btc')),
-    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }, priceCurve('eth')),
-    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }),
+    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }, drawing('btc')),
+    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }, drawing('eth')),
+    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }, drawing('index')),
     macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf, 'fx-move'),
     macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf, 'gold-move'),
     ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf, 'yield-move'),
@@ -240,7 +244,7 @@ function crossRow(
   snapshot: DailyBriefingFactPacket['market']['crossAsset'],
   asOf: string,
   rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>,
-  priceCurve?: BriefingPriceCurve
+  drawing?: Readonly<{ curve?: BriefingMarketRow['curve']; curveReason?: BriefingMarketRow['curveReason']; amplitude?: BriefingMarketRow['amplitude']; amplitudeReason?: BriefingMarketRow['amplitudeReason']; amplitudeCoverage?: BriefingMarketRow['amplitudeCoverage'] }>
 ): BriefingMarketRow {
   const metric = snapshot?.closedReturns[id]?.['24h']
   const importance: FactImportance = rule.must
@@ -255,11 +259,11 @@ function crossRow(
       ...(stale ? { valueBasis: 'snapshot' as const } : {}),
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
       change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd,
-      ...(priceCurve ?? {})
+      ...(drawing ?? {})
     })
   }
   if (!snapshot) {
-    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(priceCurve ?? {}) }
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(drawing ?? {}) }
   }
   // The 24h pair is unavailable here; keep any persisted curve/last close.
   {
@@ -269,13 +273,13 @@ function crossRow(
     // returned nothing; a missing curve is a gap, not a crash on the way to the row.
     const curve = [...(snapshot.curves?.[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const, ...(priceCurve ?? {}) }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const, ...(drawing ?? {}) }
     }
     const last = snapshot.lastClosed?.[id]
     if (last) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const, ...(priceCurve ?? {}) }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const, ...(drawing ?? {}) }
     }
-    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(priceCurve ?? {}) }
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(drawing ?? {}) }
   }
 }
 

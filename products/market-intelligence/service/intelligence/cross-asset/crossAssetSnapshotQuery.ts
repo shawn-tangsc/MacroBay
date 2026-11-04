@@ -16,12 +16,14 @@ import {
 type LiveQuote = { state: 'live' | 'stale'; price: string; tradedAtMs: number; receivedAtMs: number } | { state: 'missing' }
 type Live = { state: 'disabled' | 'connecting' | 'live' | 'stale' | 'limited' | 'unavailable'; quotes: Record<CrossAssetId, LiveQuote>; priceDecimals?: Partial<Record<CrossAssetId, number>> }
 type Analysis = ReturnType<typeof analyzeCrossAssetHistory>
-type ClosePoint = Readonly<{ atMs: number; close: string }>
+type ClosePoint = Readonly<{ atMs: number; close: string; high?: string; low?: string }>
 type Presence = Readonly<{ real: boolean; proxy: boolean }>
 type Snapshot = {
   schemaVersion: 1; mode: 'current' | 'historical'; servedAt: string; asOf: string; range: CrossAssetRange
   analysisEnd: string; windowStart: string; historyCoverage: Analysis['historyCoverage']
   curves: Record<CrossAssetId, { at: string; returnPercent: number | null }[]>
+  /** The window's travel and the close it is stated against; null when the window cannot answer. */
+  extremes: Analysis['extremes']
   /** Written only when this build has a macro store to read, exactly as the wire contract says. */
   macroCurves?: Record<CrossAssetMacroProxyId, { at: string; returnPercent: number | null }[]>
   /** The cross-market reading (design 142), stated only in `current` mode and never for a past instant. */
@@ -100,7 +102,7 @@ export function createCrossAssetSnapshotQuery(deps: {
     return Object.fromEntries(crossAssetPolicy.storedSymbols.map(symbol => [symbol,
       bounds.slice(0, -1).flatMap((start, index) => deps.store.queryAt({
         symbol: symbol as StoredSymbol, fromMs: start, toMs: bounds[index + 1] as number, asOfMs: knowledgeMs
-      }) as readonly ClosedBar[]).map(bar => ({ atMs: bar.barEndMs, close: bar.close }))])) as Record<string, ClosePoint[]>
+      }) as readonly ClosedBar[]).map(bar => ({ atMs: bar.barEndMs, close: bar.close, high: bar.high, low: bar.low }))])) as Record<string, ClosePoint[]>
   }
   return {
     query(value: CrossAssetQueryInput): Snapshot {
@@ -168,6 +170,9 @@ export function createCrossAssetSnapshotQuery(deps: {
         historyCoverage: analysis.historyCoverage,
         curves: Object.fromEntries(assets.map(asset => [asset, analysis.curves[asset].map(point => ({ at: iso(point.atMs), returnPercent: point.returnPercent }))])) as Snapshot['curves'],
         closedReturns: analysis.closedReturns, correlations: analysis.correlations, relativeReturns: analysis.relativeReturns,
+        // The window's travel, with the close it is stated against: the document's amplitude is a
+        // subtraction of two numbers that must share one anchor, and the anchor is read here, once.
+        extremes: Object.fromEntries(assets.map(asset => [asset, analysis.extremes[asset]])) as Snapshot['extremes'],
         indexSource
       }
       /**

@@ -7,8 +7,8 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -156,6 +156,24 @@ export type BriefingCurveSegment = readonly BriefingCurvePoint[]
  */
 export type BriefingCurveReason = 'no-snapshot' | 'no-anchor' | 'too-few-points' | 'window-too-long'
 
+/**
+ * How far the reading travelled inside the edition's window.
+ *
+ * `percent = (high − low) / anchor × 100`, where `anchor` is the window-start close the curve is also
+ * divided by — never a bar's open, never the current price. One window, one zero point: otherwise the
+ * amplitude drifts with the day and the same data computes two different numbers.
+ */
+export type BriefingAmplitude = Readonly<{ percent: number; high: number; low: number; anchor: number }>
+
+/**
+ * Why a row states no amplitude.
+ *
+ * `partial-bars`: the window's bars are not all there, so the real high or low may be missing and the
+ * number would understate the day. `no-anchor`: no window-start close to divide by. Both are stated
+ * instead of a number with a caveat nobody reads.
+ */
+export type BriefingAmplitudeReason = 'partial-bars' | 'no-anchor'
+
 export type BriefingMarketRow = Readonly<{
   id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real'
   labelKey: string
@@ -191,6 +209,15 @@ export type BriefingMarketRow = Readonly<{
   curve?: readonly BriefingCurveSegment[]
   /** Stated only when `curve` is absent, so "no line" always has a reason the reader can be told. */
   curveReason?: BriefingCurveReason
+  /**
+   * The window's travel, on the three readings that have continuous bars. Absent on editions built
+   * before schema 11, on rows without a continuous series, and when the window's bars are incomplete.
+   */
+  amplitude?: BriefingAmplitude
+  /** Stated only when `amplitude` is absent, same rule as `curveReason`. */
+  amplitudeReason?: BriefingAmplitudeReason
+  /** The window's own bar count against what it should hold, when an amplitude was withheld for it. */
+  amplitudeCoverage?: Readonly<{ count: number; expectedCount: number }>
 }>
 
 export type BriefingPulseRow = Readonly<{

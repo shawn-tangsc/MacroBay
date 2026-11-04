@@ -778,6 +778,74 @@ describe('daily briefing document', () => {
       expect(single.data.leverage?.btc).not.toHaveProperty('series')
     })
 
+    it('states the window amplitude on the three readings with continuous bars, and on nothing else', () => {
+      const coverage = { count: 289, expectedCount: 289, complete: true }
+      const extremes = { high: 10_800, low: 10_100, anchor: 10_400 }
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: {
+                btc: { '24h': { state: 'available', value: 3.8 } },
+                eth: { '24h': { state: 'available', value: -1.18 } },
+                index: { '24h': { state: 'available', value: 0.82 } }
+              },
+              extremes: { btc: extremes, eth: extremes, index: extremes, dxy: null, gold: null },
+              historyCoverage: { btc: coverage, eth: coverage, index: coverage, dxy: coverage, gold: coverage }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      // (10 800 − 10 100) / 10 400 × 100, with the close the curve is also divided by.
+      expect(document.schemaVersion).toBe(11)
+      for (const id of ['btc', 'eth', 'index'] as const) {
+        expect(document.data.market.find((row) => row.id === id)?.amplitude)
+          .toEqual({ percent: 6.73, high: 10_800, low: 10_100, anchor: 10_400 })
+      }
+      // DXY, gold and the ten-year carry no continuous series: they are not given a field at all, so
+      // nothing downstream can show an amplitude for them.
+      for (const id of ['dxy', 'gold', 'us10y', 'us10y-real'] as const) {
+        const row = document.data.market.find((entry) => entry.id === id)!
+        expect(row).not.toHaveProperty('amplitude')
+        expect(row).not.toHaveProperty('amplitudeReason')
+      }
+    })
+
+    it('withholds the amplitude on an incomplete window and says how incomplete', () => {
+      const complete = { count: 289, expectedCount: 289, complete: true }
+      const partial = { count: 231, expectedCount: 289, complete: false }
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: { btc: { '24h': { state: 'available', value: 3.8 } }, eth: { '24h': { state: 'available', value: -1 } }, index: { '24h': { state: 'available', value: 0.8 } } },
+              extremes: { btc: { high: 10_800, low: 10_100, anchor: 10_400 }, eth: null, index: null },
+              historyCoverage: { btc: partial, eth: complete, index: complete }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      const btc = document.data.market.find((row) => row.id === 'btc')!
+      // A hole can hide the real high, so the number is withheld rather than understated — and the
+      // counts travel with the reason so a later reader can see which window it was.
+      expect(btc.amplitude).toBeUndefined()
+      expect(btc.amplitudeReason).toBe('partial-bars')
+      expect(btc.amplitudeCoverage).toEqual({ count: 231, expectedCount: 289 })
+      // Full coverage but no anchored pair: no denominator, no number.
+      const eth = document.data.market.find((row) => row.id === 'eth')!
+      expect(eth.amplitudeReason).toBe('no-anchor')
+    })
+
     it('keeps the price curve on the two cards that draw one, starting at the window and at zero', () => {
       const curve = Array.from({ length: 289 }, (_, index) => ({
         at: new Date(Date.parse(windowStart) + index * 300_000).toISOString(),
@@ -802,7 +870,7 @@ describe('daily briefing document', () => {
         date: '2026-10-30'
       })
 
-      expect(document.schemaVersion).toBe(10)
+      expect(document.schemaVersion).toBe(11)
       const btc = document.data.market.find((row) => row.id === 'btc')
       const points = btc?.curve?.[0] ?? []
       expect(btc?.curve).toHaveLength(1)

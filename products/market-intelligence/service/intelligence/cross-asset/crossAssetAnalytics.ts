@@ -70,7 +70,13 @@ type Asset = keyof typeof crossAssetPolicy.assets
 type Range = '1h' | '24h' | '7d'
 type Reason = 'missing' | 'insufficient' | 'zero-variance' | 'stale'
 type Metric = { state: 'available'; value: number } | { state: 'unavailable'; reason: Reason }
-type ClosePoint = Readonly<{ atMs: number; close: string }>
+/**
+ * One admitted bar: the close the returns use, and the high/low the amplitude needs.
+ *
+ * The bars were always OHLC — the store keeps all five fields — but only the close used to travel this
+ * far, so the window's travel had nothing to be measured from.
+ */
+type ClosePoint = Readonly<{ atMs: number; close: string; high?: string; low?: string }>
 /** The newest stored close at or before the analysis instant: what a closed row still has to show. */
 type LatestClosed = Readonly<{ atMs: number; close: string }>
 type Correlation = Metric & { sampleCount: number; expectedCount: number }
@@ -209,8 +215,33 @@ export function analyzeCrossAssetHistory(input: {
     if (b.state === 'unavailable') return b
     return metric(a.value - b.value)
   }
+  /**
+   * The window's own high and low, with the anchor they are stated against.
+   *
+   * The anchor is the same window-start close the curves divide by, never a bar's open: the amplitude
+   * and the curve then describe one window and one zero point, and the same data cannot produce two
+   * numbers. `null` when the window has no complete pair of extremes — the caller decides whether that
+   * is an incomplete window or no reading at all, because only it knows the coverage.
+   */
+  const extremes = Object.fromEntries(assets.map(asset => {
+    const anchor = anchorClose(asset)
+    let high: number | undefined
+    let low: number | undefined
+    for (const point of input.history[asset]) {
+      if (point.atMs < windowStartMs || point.atMs > analysisEndMs) continue
+      if (admittedClose(point) === undefined) continue
+      const barHigh = Number(point.high)
+      const barLow = Number(point.low)
+      if (!Number.isFinite(barHigh) || !Number.isFinite(barLow) || barHigh < barLow) continue
+      high = high === undefined ? barHigh : Math.max(high, barHigh)
+      low = low === undefined ? barLow : Math.min(low, barLow)
+    }
+    return [asset, anchor === undefined || high === undefined || low === undefined
+      ? null
+      : Object.freeze({ high, low, anchor }) as Readonly<{ high: number; low: number; anchor: number }>]
+  })) as Record<Asset, Readonly<{ high: number; low: number; anchor: number }> | null>
   return {
-    analysisEndMs, windowStartMs, curves, historyCoverage, closedReturns, latestClosed,
+    analysisEndMs, windowStartMs, curves, historyCoverage, closedReturns, latestClosed, extremes,
     anchorPrices: Object.fromEntries(assets.map(asset => [asset, anchorClose(asset) ?? null])) as Record<Asset, number | null>,
     latestClosedPresent: Object.fromEntries(assets.map(asset => [asset, prices[asset].has(analysisEndMs)])) as Record<Asset, boolean>,
     observationCoverage: Object.fromEntries(assets.map(asset => [asset,
