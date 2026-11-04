@@ -136,13 +136,19 @@ describe('ChannelInboundService', () => {
     const before = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
 
     // 读者在界面里把频道换给另一个助手：旧会话属于上一个助手，继续用它会在运行时第一毫秒抛错。
-    ;(service as unknown as { deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean> } } })
-      .deps.sessions.belongsToAgent = async () => false
+    const discarded: string[] = []
+    ;(service as unknown as {
+      deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean>; discardUnbound: (sessionId: string) => Promise<void> } }
+    }).deps.sessions.belongsToAgent = async () => false
+    ;(service as unknown as { deps: { sessions: { discardUnbound: (sessionId: string) => Promise<void> } } })
+      .deps.sessions.discardUnbound = async (sessionId: string) => { discarded.push(sessionId) }
     expect((await receive(service, 'channel-a', { providerEventKey: 'after-agent-switch' })).disposition).toBe('acknowledged')
 
     const after = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
     expect(after.agent_session_id).toBeTruthy()
     expect(after.agent_session_id).not.toBe(before.agent_session_id)
+    // 旧会话**不许删**：读者要能翻历史（换的是绑定，不是历史）。
+    expect(discarded).not.toContain(before.agent_session_id)
     // 切换要留痕：日志/审计里能查到这一个对话换过会话。
     expect(database.connection.prepare(
       "select count(*) as count from channel_runtime_audits where code = 'channel-conversation-switched'"
