@@ -6,6 +6,9 @@ const root = resolve(__dirname, '../../..')
 const read = (relativePath: string): string => readFileSync(resolve(root, relativePath), 'utf8')
 
 const page = read('shell/settings/channels/ChannelSettingsPage.tsx')
+// 页面级动作（停用/删除、启用自检、发测试消息、选文件夹、凭据回读）抽到了这个模块：
+// 它们仍然只是「过 preload 桥」的调用，边界判据必须连着它一起看，否则守卫会因为搬家而假绿。
+const actions = read('shell/settings/channels/channelSettingsActions.ts')
 const row = read('shell/settings/channels/ChannelRow.tsx')
 const createDialog = read('shell/settings/channels/ChannelCreateDialog.tsx')
 const handoff = read('shell/settings/channels/secureCredentialHandoff.ts')
@@ -25,14 +28,22 @@ describe('channel settings boundary', () => {
       'window.platform.channels.list',
       'window.platform.channels.create',
       'window.platform.channels.update',
-      'window.platform.channels.requestEnable',
       'window.platform.channels.disable',
       'window.platform.channels.remove',
       'window.platform.agents.listAgents'
     ]) {
       expect(page).toContain(call)
     }
-    for (const source of [page, row, createDialog]) {
+    for (const call of [
+      'window.platform.channels.requestEnable',
+      'window.platform.channels.sendTestMessage',
+      'window.platform.channels.get',
+      'window.platform.app.selectDirectory',
+      'window.platform.agents.ensureWorkspace'
+    ]) {
+      expect(actions).toContain(call)
+    }
+    for (const source of [page, actions, row, createDialog]) {
       expect(source).not.toContain('localStorage')
       expect(source).not.toMatch(/require\(|from ['"]node:|ipcRenderer/)
       expect(source).not.toMatch(/from ['"]@products\//)

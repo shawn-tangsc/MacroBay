@@ -2,6 +2,7 @@ import type {
   ChannelManagementCatalogEntry,
   ChannelManagementSafeView
 } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
+import type { ChannelTestMessageReceipt } from '@platform/ai/agent-platform/channels/channelTestMessage'
 import type { StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { platformText } from '../../../i18n/platformText'
@@ -222,4 +223,30 @@ export function readWorkspaces(value: unknown): { id: string; name: string; path
       ? [{ id, name, path }]
       : []
   })
+}
+
+/**
+ * 「发送测试消息」的回执 → 行内那一句话。
+ *
+ * **没有「已送达」**：我们只能证明通道接受了，证明不了读者手机上显示了。四种失败原因各一句，
+ * 都是动作导向（先启用 / 先绑定会话 / 只留一个 / 看日志），不把内部码印给读者。
+ */
+export function describeTestMessageReceipt(
+  receipt: ChannelTestMessageReceipt,
+  labels: Pick<
+    typeof platformText['en-US']['settings'],
+    | 'channelTestAccepted'
+    | 'channelTestUnconfirmed'
+    | 'channelTestNotReady'
+    | 'channelTestNoTarget'
+    | 'channelTestAmbiguousTarget'
+    | 'channelTestRejected'
+  >
+): { tone: 'muted' | 'bad'; text: string } {
+  if (receipt.state === 'accepted') return { tone: 'muted', text: labels.channelTestAccepted }
+  if (receipt.state === 'unconfirmed') return { tone: 'muted', text: labels.channelTestUnconfirmed }
+  if (receipt.reason === 'not-ready') return { tone: 'muted', text: labels.channelTestNotReady }
+  if (receipt.reason === 'no-target') return { tone: 'bad', text: labels.channelTestNoTarget }
+  if (receipt.reason === 'ambiguous-target') return { tone: 'bad', text: labels.channelTestAmbiguousTarget }
+  return { tone: 'bad', text: labels.channelTestRejected }
 }

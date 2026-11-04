@@ -1,4 +1,4 @@
-import { Switch } from 'antd'
+import { Button, Switch } from 'antd'
 import { FileText, Pencil, Trash2 } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -25,6 +25,11 @@ export function ChannelRow(props: {
   onLogs: (channel: Channel) => void
   /** 现场检查没过的原因：就地一行，开关已回弹。 */
   enableFailure?: string | null
+  /** 正在发测试消息：按钮禁用，回执就地更新，不堆行。 */
+  testBusy?: boolean
+  /** 上一次测试消息的回执（一句话 + 档位），同一位置替换。 */
+  testReceipt?: { tone: 'muted' | 'bad'; text: string } | null
+  onSendTest?: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
   // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
@@ -59,12 +64,26 @@ export function ChannelRow(props: {
             ? labels.channelTokenUnavailable
             : labels.channelTokenNone}
       </span>
+      {props.testReceipt === null || props.testReceipt === undefined ? null : (
+        <span className="channel-row-error" data-test-receipt data-test-tone={props.testReceipt.tone} role="note">
+          {props.testReceipt.text}
+        </span>
+      )}
       {props.enableFailure === null || props.enableFailure === undefined ? null : (
         <span className="channel-row-error" data-enable-failure role="note">
           {props.enableFailure}
         </span>
       )}
       <span className="channel-row-actions">
+        {/* 主动作，用文字而不是图标：它是这一版的「发」入口，藏进图标里就没人找得到。
+            真发一次（走通道投递），发送期间禁用，回执就地更新。 */}
+        <Button
+          disabled={props.testBusy === true || channel.state === 'deleting'}
+          onClick={() => props.onSendTest?.(channel)}
+          size="small"
+        >
+          {labels.channelTestSend}
+        </Button>
         <IconButton
           ariaLabelKey="settings.channels.logs"
           icon={FileText}

@@ -37,6 +37,7 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     listPolicies: vi.fn(async () => []),
     beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
     submitCredential: vi.fn(async () => ({})),
+    sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1' })),
     rotateCredential: vi.fn(async () => ({ ok: true, code: 'configuration-ready' })),
     ...overrides
   }
@@ -1032,5 +1033,93 @@ describe('the working folder picker', () => {
     )
     expect(selected).toContain('market-notes')
     expect(selected).not.toContain(labels.channelWorkspaceDefault)
+  })
+})
+
+/**
+ * 「发送测试消息」是这一版「发」的入口，**不许是假按钮**：真调 IPC，回执三态就地显示，
+ * 一条都不许写成「已送达」（我们只能证明通道接受了，证明不了手机显示了）。
+ */
+describe('sending a test message from the row', () => {
+  function testButton(container: HTMLElement): HTMLButtonElement {
+    return [...container.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === labels.channelTestSend
+    ) as HTMLButtonElement
+  }
+
+  it('really calls the channel send and says only that it was handed over', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1' }))
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    expect(channels.sendTestMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'channel-1', text: labels.channelTestMessageBody })
+    )
+    const receipt = container.querySelector('[data-test-receipt]')
+    expect(receipt?.textContent).toBe(labels.channelTestAccepted)
+    // 不许出现「已送达」这种我们证明不了的话。
+    expect(receipt?.textContent).not.toContain('已送达')
+    expect(receipt?.textContent).not.toContain('送达')
+  })
+
+  it('points at enabling when the channel is not running instead of pretending', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, state: 'disabled', allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(async () => ({ state: 'failed', reason: 'not-ready' }))
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    expect(container.querySelector('[data-test-receipt]')?.textContent).toBe(labels.channelTestNotReady)
+  })
+
+  it('disables the button while a send is in flight, so a double click cannot fire two messages', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const pending = new Promise((resolve) => {
+      release = resolve
+    })
+    const channels = installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(() => pending)
+    })
+    const container = await mount()
+
+    await act(async () => testButton(container).click())
+    expect(testButton(container).disabled).toBe(true)
+
+    await act(async () => {
+      release({ state: 'accepted', messageId: 'm-2' })
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(testButton(container).disabled).toBe(false)
+    expect(channels.sendTestMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the refusal for a rejected send and replaces the previous receipt instead of stacking lines', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi
+        .fn()
+        .mockResolvedValueOnce({ state: 'failed', reason: 'rejected' })
+        .mockResolvedValueOnce({ state: 'failed', reason: 'ambiguous-target' })
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+    expect(container.querySelector('[data-test-receipt]')?.textContent).toBe(labels.channelTestRejected)
+
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    const receipts = container.querySelectorAll('[data-test-receipt]')
+    expect(receipts).toHaveLength(1)
+    expect(receipts[0]?.textContent).toBe(labels.channelTestAmbiguousTarget)
   })
 })

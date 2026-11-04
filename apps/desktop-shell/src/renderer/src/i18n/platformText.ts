@@ -257,6 +257,15 @@ export type PlatformText = {
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
     channelEnableSwitch: string
+    /** 行内的「发送测试消息」：真发一次，回执三态就地显示。 */
+    channelTestSend: string
+    channelTestMessageBody: string
+    channelTestAccepted: string
+    channelTestUnconfirmed: string
+    channelTestNotReady: string
+    channelTestNoTarget: string
+    channelTestAmbiguousTarget: string
+    channelTestRejected: string
     /** 编辑弹层的六字段标签；新建与编辑共用同一套。 */
     channelFieldWorkspace: string
     channelFieldAllowedChats: string
@@ -1674,6 +1683,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: '仅本机显示：关掉这个眼睛就恢复点号，旧值始终不可见。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
+      channelTestSend: '发送测试消息',
+      channelTestMessageBody: '来自观潮的一条测试消息：收到它说明这个频道能把消息发到手机。',
+      channelTestAccepted: '已经交给系统发了：手机有没有收到，这边确认不了',
+      channelTestUnconfirmed: '已经交给通道，但没拿到回执：手机可能收到了',
+      channelTestNotReady: '这条频道没在运行，先启用',
+      channelTestNoTarget: '还没有接收消息的会话，先在频道里绑定一个',
+      channelTestAmbiguousTarget: '这个频道绑了多个会话，只保留一个再发',
+      channelTestRejected: '通道拒收了这条消息，具体原因写在日志里',
       channelFieldWorkspace: '工作目录',
       channelFieldAllowedChats: '允许的会话 ID',
       channelFieldPermissionMode: '频道权限模式',
@@ -3004,6 +3021,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it goes back to dots. A stored token is never shown.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
+      channelTestSend: 'Send test message',
+      channelTestMessageBody: 'A test message from MacroBay: if it arrives, this channel can reach your phone.',
+      channelTestAccepted: 'Handed to the system: whether the phone shows it cannot be confirmed here',
+      channelTestUnconfirmed: 'Handed to the channel without a receipt: the phone may have received it',
+      channelTestNotReady: 'This channel is not running; enable it first',
+      channelTestNoTarget: 'No conversation receives messages yet; bind one on the channel first',
+      channelTestAmbiguousTarget: 'This channel is bound to several conversations; keep one and send again',
+      channelTestRejected: 'The channel rejected this message; the reason is in the log',
       channelFieldWorkspace: 'Working folder',
       channelFieldAllowedChats: 'Allowed chat IDs',
       channelFieldPermissionMode: 'Channel permission mode',

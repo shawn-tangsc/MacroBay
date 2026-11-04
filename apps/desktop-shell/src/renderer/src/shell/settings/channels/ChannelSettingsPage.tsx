@@ -12,8 +12,10 @@ import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import {
   chooseWorkspaceFolder,
+  enableChannelWithSelfCheck,
   readCredentialConfigured,
   runChannelAction,
+  sendChannelTestMessage,
   workspacePayload
 } from './channelSettingsActions'
 import { ChannelEditDialog } from './ChannelEditDialog'
@@ -22,14 +24,7 @@ import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import {
-  enableFailureSentence,
-  mutationFailureSentence,
-  readAgents,
-  readWorkspaces,
-  toCatalog,
-  toChannel
-} from './channelSettingsPresentation'
+import { mutationFailureSentence, readAgents, readWorkspaces, toCatalog, toChannel } from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 
@@ -70,6 +65,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   /** 保存弹层里的就地报错：页面级那句在弹层后面，读者根本看不见。 */
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Channel | null>(null)
+  /** 正在发测试消息的那一条（发送期间按钮禁用）。 */
+  const [testBusyId, setTestBusyId] = useState<string | null>(null)
+  /** 每条频道上一次测试消息的回执：同一位置替换，不堆行。 */
+  const [testReceipts, setTestReceipts] = useState<
+    Readonly<Record<string, { tone: 'muted' | 'bad'; text: string }>>
+  >({})
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
 
   const reload = async (): Promise<void> => {
@@ -113,6 +114,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
 
   const actionDeps = { labels, setBusyId, setError, reload }
+  const enableDeps = { labels, setBusyId, setError, setEnableFailures, reload }
+  const testDeps = { labels, setTestBusyId, setTestReceipts }
 
   const toggle = (channel: Channel, next: boolean): void => {
     if (!next) {
@@ -123,32 +126,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       )
       return
     }
-    void enableWithSelfCheck(channel)
-  }
-
-  const enableWithSelfCheck = async (channel: Channel): Promise<void> => {
-    setBusyId(channel.id)
-    setError(null)
-    setEnableFailures((current) => {
-      const next = { ...current }
-      delete next[channel.id]
-      return next
-    })
-    try {
-      const result = await window.platform.channels.requestEnable({
-        id: channel.id,
-        actorId: 'settings-user'
-      })
-      const sentence = enableFailureSentence(result, labels)
-      if (sentence !== null) {
-        setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
-      }
-      await reload()
-    } catch {
-      setError(labels.channelOperationFailed)
-    } finally {
-      setBusyId(null)
-    }
+    void enableChannelWithSelfCheck(channel, enableDeps)
   }
 
   /** 打开编辑弹层时先看有没有显式放行名单：查不到就记「未知」，不默认成任何一种。 */
@@ -416,7 +394,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     onDelete={setDeleting}
                     onEdit={(channel) => void openEditor(channel)}
                     onLogs={setLogsFor}
+                    onSendTest={(channel) => void sendChannelTestMessage(channel, testDeps)}
                     onToggle={toggle}
+                    testBusy={testBusyId === channel.id}
+                    testReceipt={testReceipts[channel.id] ?? null}
                   />
                 ))}
               </div>
