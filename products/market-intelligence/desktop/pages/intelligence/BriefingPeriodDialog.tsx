@@ -66,6 +66,8 @@ export function BriefingPeriodDialog({ open, text, periods, editing, saving = fa
           value={draft.generationTime}
           onChange={(generationTime: string) => setDraft((current) => ({ ...current, generationTime }))}
           options={dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))}
+          // 48 fixed slots: render them all, so the list is the same for readers and tests alike.
+          virtual={false}
           style={{ width: 108 }}
         />
       </label>

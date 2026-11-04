@@ -38,13 +38,14 @@ export const dailyBriefingPolicy = Object.freeze({
  * When the brief is generated and what it covers.
  *
  * The generation time is a local wall-clock time: it is both the scheduler trigger and the edition
- * cutoff, so the two can never drift apart. Only whole and half hours in the morning window are
- * accepted, which keeps the cron expression readable and the cutoff reviewable.
+ * cutoff, so the two can never drift apart. A period may run at any half hour of the day (00:00 …
+ * 23:30): the morning-only table could not express an evening issue at all. The default stays 07:00,
+ * and every value the old nine-slot table allowed is still in the table.
  */
 export const dailyBriefingGenerationPolicy = Object.freeze({
   defaultGenerationTime: '07:00',
-  earliestGenerationHour: 6,
-  latestGenerationHour: 10,
+  earliestGenerationHour: 0,
+  latestGenerationHour: 23,
   generationMinuteStep: 30,
   defaultWindowHours: 24,
   windowHoursOptions: Object.freeze([12, 24, 48] as const)
@@ -53,7 +54,8 @@ export const dailyBriefingGenerationPolicy = Object.freeze({
 /** Local generation times a reader may choose, in order: 06:00 … 10:00. */
 export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
   Array.from(
-    { length: ((dailyBriefingGenerationPolicy.latestGenerationHour - dailyBriefingGenerationPolicy.earliestGenerationHour) * (60 / dailyBriefingGenerationPolicy.generationMinuteStep)) + 1 },
+    // Both ends of the last hour are usable (23:00 and 23:30), so the count covers whole hours.
+    { length: (dailyBriefingGenerationPolicy.latestGenerationHour + 1 - dailyBriefingGenerationPolicy.earliestGenerationHour) * (60 / dailyBriefingGenerationPolicy.generationMinuteStep) },
     (_, index) => {
       const minutes = dailyBriefingGenerationPolicy.earliestGenerationHour * 60 + index * dailyBriefingGenerationPolicy.generationMinuteStep
       return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`

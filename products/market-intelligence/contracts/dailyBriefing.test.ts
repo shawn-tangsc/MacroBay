@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   briefingEditionPeriod,
+  dailyBriefingGenerationPolicy,
+  dailyBriefingGenerationTimes,
+  isDailyBriefingGenerationTime,
   briefingGenerationDisplayRows,
   briefingGenerationStageIds,
   dailyBriefingPolicy,
@@ -208,5 +211,22 @@ describe('edition period identity', () => {
     expect(first.periodId).not.toBe(second.periodId)
     expect(first.periodKind).toBe('scheduled')
     expect(first.runTrigger).toBe('scheduled')
+  })
+})
+
+describe('generation times a period may run at', () => {
+  it('offers every half hour of the day, and keeps the old morning slots valid', () => {
+    expect(dailyBriefingGenerationTimes).toHaveLength(48)
+    expect(dailyBriefingGenerationTimes[0]).toBe('00:00')
+    expect(dailyBriefingGenerationTimes.at(-1)).toBe('23:30')
+    // The default is unchanged, and values an older install may have saved are still accepted.
+    expect(dailyBriefingGenerationPolicy.defaultGenerationTime).toBe('07:00')
+    for (const time of ['06:00', '07:00', '09:30', '10:00']) expect(isDailyBriefingGenerationTime(time)).toBe(true)
+    // Evening slots the morning-only table could not express.
+    expect(isDailyBriefingGenerationTime('12:00')).toBe(true)
+    expect(isDailyBriefingGenerationTime('21:30')).toBe(true)
+    // Still a closed set: no odd minutes, nothing outside the day.
+    expect(isDailyBriefingGenerationTime('12:15')).toBe(false)
+    expect(isDailyBriefingGenerationTime('24:00')).toBe(false)
   })
 })

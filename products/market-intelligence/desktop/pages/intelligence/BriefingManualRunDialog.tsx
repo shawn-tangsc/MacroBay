@@ -63,6 +63,7 @@ export function BriefingManualRunDialog({ open, text, running = false, onRun, on
             { value: 'now', label: copy.now },
             ...dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))
           ]}
+          virtual={false}
           style={{ width: 128 }}
         />
       </label>

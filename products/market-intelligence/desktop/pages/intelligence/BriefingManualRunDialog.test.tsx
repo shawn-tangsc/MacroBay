@@ -58,14 +58,20 @@ describe('briefing manual run dialog', () => {
 
   it('runs with the chosen cutoff, window and language', async () => {
     const { onRun } = await render()
-    // The fixed times come from the current table (06:00–10:00); 12:00 becomes selectable only when
-    // MI-2-R19 widens it.
-    await pick(text.manualRunDialog.cutoff, '09:30')
+    // An evening-free slot that the old morning-only table could not offer.
+    await pick(text.manualRunDialog.cutoff, '12:00')
     await pick(text.manualRunDialog.windowHours, text.manualRunDialog.windowValue.replace('{hours}', '12'))
     await pick(text.manualRunDialog.language, text.history.languages['en-US'])
     await act(async () => { runButton().click() })
 
-    expect(onRun).toHaveBeenCalledWith({ cutoff: '09:30', windowHours: 12, language: 'en-US' })
+    expect(onRun).toHaveBeenCalledWith({ cutoff: '12:00', windowHours: 12, language: 'en-US' })
+  })
+
+  it('offers an evening cutoff as a real option', async () => {
+    const { onRun } = await render()
+    await pick(text.manualRunDialog.cutoff, '21:30')
+    await act(async () => { runButton().click() })
+    expect(onRun).toHaveBeenCalledWith({ cutoff: '21:30', windowHours: 24, language: 'zh-CN' })
   })
 
   it('says the same combination may be generated again, and does not refuse the second press', async () => {
