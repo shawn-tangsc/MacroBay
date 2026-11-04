@@ -427,7 +427,10 @@ export const dailyBriefingText = {
       failedAt: 'Failed at: {stage}',
       notRecorded: 'Not recorded',
       states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notNeeded: 'No repair needed', notRun: 'Not run' },
-      stages: { source: 'Data collection', candidates: 'Candidate pool', selection: 'AI selection', 'field-backfill': 'Field response/backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Store/publish' },
+      // One word per stage, at most 14 characters: the rail's name column is narrow, and a truncated
+      // stage name tells the reader nothing about what the step does. The full sentence stays in the
+      // question mark's explanation (stageHelp), which is where a reader goes for detail.
+      stages: { source: 'Collect', candidates: 'Candidates', selection: 'AI pick', 'field-backfill': 'Backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Publish' },
       stageHelpLabel: 'About the {stage} stage',
       // One fixed line per stage, shown only in the question-mark tooltip.
       stageHelp: {

@@ -178,4 +178,17 @@ describe('briefing copy guard', () => {
     expect(bannedBriefingCopy([text])).toEqual([])
   })
 
+  it('keeps every English stage name short enough to print in full', () => {
+    // The rail's name column is narrow, and a stage name is the only thing that says what the step
+    // does: a name cut to "Field respons…" tells the reader nothing. English names are single words
+    // of at most 14 characters; the full sentence lives behind the question mark.
+    const english = (productText['en-US'] as unknown as {
+      pages: { intelligence: { portal: { dashboard: { dailyBriefing: { generationTrace: { stages: Record<string, string> } } } } } }
+    }).pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stages
+    for (const [id, name] of Object.entries(english)) {
+      expect(name.length, `${id}: ${name}`).toBeLessThanOrEqual(14)
+      expect(name, id).not.toMatch(/\s{2,}|^\s|\s$/)
+    }
+  })
+
 })
