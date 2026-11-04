@@ -4,6 +4,7 @@ import { isDailyBriefingEditionDate, isDailyBriefingLocale, type DailyBriefingLo
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
 import type { DailyBriefingPeriodDeletion } from '../daily-briefing/dailyBriefingPeriodDeletion'
 import type { DailyBriefingSettingsPatch, DailyBriefingSettingsService } from '../daily-briefing/dailyBriefingSettingsService'
+import { withRunDeadline } from '../daily-briefing/dailyBriefingRunDeadline'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -27,8 +28,11 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>
     service.list(readQuery(payload)))
+  // A run is the one long call here: it waits for the market and then for the model. Every part has
+  // its own budget, and this is the caller's — without it a promise that never settles leaves the
+  // reader with a spinner and no answer at all.
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.regenerate, async (payload) =>
-    service.regenerate(readQuery(payload)))
+    withRunDeadline(service.regenerate(readQuery(payload))))
   // Read-only and cheap: the answer is the live snapshot of the run in progress, never a new read
   // of the store, and it says `idle` as soon as that run settles.
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getProgress, async (payload) =>
