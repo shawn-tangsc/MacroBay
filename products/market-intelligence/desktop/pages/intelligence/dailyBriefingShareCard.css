@@ -68,7 +68,7 @@
 .mi-brief-poster__outlook, .mi-brief-poster__overturn { margin: 0; color: #3b382f; font-size: 13px; line-height: 1.6; }
 .mi-brief-poster__watch ul { margin: 0; padding-left: 16px; color: #4e493e; font-size: 12px; line-height: 1.55; }
 .mi-brief-poster__watch li { margin: 0; }
-.mi-brief-poster__overturn { margin-top: 2px; padding-top: 8px; border-top: 1px dashed #ded4c2; }
+.mi-brief-poster__overturn { margin-top: 2px; padding-top: 8px; border-top: 1px dashed #c9bda3; }
 
 /* What the earlier read deserved, as one line rather than two blocks that repeat the same point. */
 .mi-brief-poster__standing { margin: 0 0 9px; color: #4e493e; font-size: 11.5px; line-height: 1.55; }
