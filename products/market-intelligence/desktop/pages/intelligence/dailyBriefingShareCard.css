@@ -121,11 +121,6 @@
 .mi-brief-poster__signal small { margin-left: auto; color: #8a6633; font-size: 9px; white-space: nowrap; }
 .mi-brief-poster__visuals { display: grid; grid-template-columns: 1.15fr 1fr; gap: 26px; margin-top: 12px; }
 .mi-brief-poster__visual h3 { margin: 0 0 6px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
-.mi-brief-poster__flow { display: grid; grid-template-columns: 56px 1fr 78px; gap: 8px; align-items: center; padding: 2px 0; color: #6b695f; font-size: 9px; }
-.mi-brief-poster__flow b { color: #1b1d18; font-size: 9px; text-align: right; }
-.mi-brief-poster__flow-track { height: 8px; border-radius: 2px; background: #e8dfd0; overflow: hidden; }
-.mi-brief-poster__flow-track i { display: block; height: 100%; background: #be3a2b; }
-.mi-brief-poster__flow-track i[data-positive="true"] { background: #2f7d45; }
 .mi-brief-poster__polarity { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: #e8dfd0; }
 .mi-brief-poster__polarity i { display: block; height: 100%; }
 .mi-brief-poster__visual > small { display: block; margin-top: 4px; color: #8b8475; font-size: 8.5px; }
@@ -149,13 +144,6 @@
 .mi-brief-poster__next-row small { display: block; margin-top: 1px; color: #8b8475; font-size: 8.5px; }
 .mi-brief-poster__next-row > span { color: #6b695f; font-size: 9px; text-align: right; white-space: nowrap; }
 
-.mi-brief-poster__flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.mi-brief-poster__flow-head small { color: #8b8475; font-size: 8px; }
-.mi-brief-poster__flow-track { position: relative; height: 8px; border-radius: 2px; background: #e8dfd0; overflow: hidden; }
-.mi-brief-poster__flow-zero { position: absolute !important; left: 50%; top: 0; bottom: 0; width: 1px !important; height: 100% !important; background: #a89f8d !important; }
-.mi-brief-poster__flow-bar { position: absolute !important; top: 0; height: 100% !important; display: block; background: #be3a2b; }
-.mi-brief-poster__flow-bar[data-positive="true"] { background: #2f7d45; }
-.mi-brief-poster__flow-axis { display: flex; justify-content: space-between; margin-top: 3px; color: #8b8475; font-size: 8px; }
 
 .mi-brief-poster__key { padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; }
 .mi-brief-poster__key[data-tone="positive"] { background: #e4efe2; border-color: #c9ddc7; }

@@ -56,13 +56,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const keySet = new Set(keyRows.map((row) => row.id))
   const reference = rows.filter((row) => row.importance.tier === 'reference')
   const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support, ...reference]
-  const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
   const footnotes = groupCitations(doc.citations, text)
   const focusEvent = doc.next.focus ?? doc.next.items[0]
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
-  const flowMax = niceFlowMax(etfRows)
   // `符合预期` is the baseline, not a third scenario: only the two surprises get a card, and the
   // baseline survives at most as one small footnote when it carries an actionable implication.
   const focusWatch = orderWatch(focusEvent?.watch ?? [], text)
@@ -230,22 +228,8 @@ function daysUntil(at: string, from: string): number {
   return Number.isFinite(diff) ? Math.max(0, Math.floor(diff / 86_400_000)) : 0
 }
 
-function niceFlowMax(rows: readonly Readonly<{ value: Readonly<{ number: number }> | null }>[]): number {
-  const largest = rows.reduce((max, row) => Math.max(max, Math.abs(row.value?.number ?? 0)), 0)
-  if (largest <= 0) return 0
-  const step = largest >= 1_000_000_000 ? 500_000_000 : largest >= 100_000_000 ? 50_000_000 : 10_000_000
-  return Math.ceil(largest / step) * step
-}
 
-function flowLabel(max: number, locale: 'zh-CN' | 'en-US'): string {
-  return formatBriefingValue({ number: max, format: 'flow-usd' }, '—', locale).replace(' USD', '')
-}
 
-function flowBarStyle(value: number, max: number): { left: string; width: string } {
-  if (max <= 0) return { left: '50%', width: '0%' }
-  const percent = Math.min(50, Math.abs(value) / max * 50)
-  return value >= 0 ? { left: '50%', width: `${percent}%` } : { left: `${50 - percent}%`, width: `${percent}%` }
-}
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   'defillama-stablecoins': 'DefiLlama Stablecoins',
