@@ -10,6 +10,7 @@ import type { ChannelPayloadCipher } from '../../../secrets/channels/channelCred
 import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelContentGuard, ChannelInboundFacts } from './ChannelInboundContracts'
 import { createChannelInboundContentGuard } from './ChannelInboundContentGuard'
+import { autoBindDeliveryTarget } from './channelAutoTargetBinding'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
 import { seedChannelAdapterSupport } from './channelTestSupport'
@@ -39,6 +40,27 @@ describe('ChannelInboundService', () => {
     const dump = JSON.stringify(database.connection.prepare('select * from channel_conversations').all())
     expect(dump).not.toContain('conversation-a')
     expect(cipher.encrypt).toHaveBeenCalled()
+  })
+
+  it('auto-registers the first conversation that talks to the channel as its delivery target', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void } })
+      .deps.bindAutoTarget = ({ channelId, conversationId }) => { autoBindDeliveryTarget(database, { channelId, conversationId }) }
+
+    await receive(service, 'channel-a', { providerEventKey: 'auto-bind-1' })
+    const first = database.connection.prepare('select conversation_id, enabled from channel_delivery_targets').all()
+    expect(first).toHaveLength(1)
+    expect(first[0]).toMatchObject({ enabled: 1 })
+
+    // 第二条消息不许再建/覆盖目标。
+    await receive(service, 'channel-a', { providerEventKey: 'auto-bind-2' })
+    expect(database.connection.prepare('select conversation_id from channel_delivery_targets').all())
+      .toEqual([{ conversation_id: (first[0] as { conversation_id: string }).conversation_id }])
+    // 审计里留了 auto 那一行，读者查得到目标是谁加的。
+    expect(database.connection.prepare(
+      "select actor_id, summary_json from channel_management_audits where action = 'target-set'"
+    ).get()).toEqual({ actor_id: 'channel-auto-bind', summary_json: '{"auto":"true"}' })
   })
 
   it('keeps one session per (channel, provider conversation) across messages', async () => {
