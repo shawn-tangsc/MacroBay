@@ -66,7 +66,7 @@ import { createNewsSentimentBodyTranslationService } from './news-sentiment/news
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
-import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
@@ -926,7 +926,6 @@ export function getIntelligenceModule(
       cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
       isSourceEnabled,
       now: () => new Date().toISOString(),
-      onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
     })
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
@@ -943,6 +942,7 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
+      readiness: createDailyBriefReadinessFor(publicQueryService),
       generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
@@ -970,8 +970,7 @@ export function getIntelligenceModule(
         ensure: dailyBriefFactEnsure.ensure,
         locale: getAppLanguage,
         now: () => new Date().toISOString(),
-        onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
-      }))
+        }))
       .catch(() => undefined)
     const markAttemptCleaned = dailyBriefingStore.markAttemptCleaned?.bind(dailyBriefingStore)
     const rescheduleBriefingForDisplayTimeZone = wireDailyBriefingJobs({

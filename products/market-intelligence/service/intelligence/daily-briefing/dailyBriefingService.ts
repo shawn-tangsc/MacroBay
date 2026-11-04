@@ -24,9 +24,12 @@ import { createDailyBriefingGenerationRecorder } from './dailyBriefingGeneration
 import { createDailyBriefingReads } from './dailyBriefingReads'
 import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
+import { awaitDailyBriefReadiness, type DailyBriefReadiness } from './dailyBriefReadinessGate'
+export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
+import { withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
+import { previousEditionBefore } from './dailyBriefingPreviousEdition'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
-import { withCrossAssetFailureGap } from './dailyBriefCrossAssetGap'
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
@@ -301,6 +304,8 @@ export function createDailyBriefingService(deps: Readonly<{
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
   noticeSubmit?: DailyBriefingNoticeSubmit
+  /** Waits for the market the brief reads; absent means generate at once, as before. */
+  readiness?: DailyBriefReadiness
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -315,15 +320,6 @@ export function createDailyBriefingService(deps: Readonly<{
    * edition that actually exists is used. Its date travels with the baseline, which is what lets the
    * row state the real span instead of calling every move a day move.
    */
-  async function previousEditionBefore(
-    date: string,
-    locale: DailyBriefingLocale
-  ): Promise<DailyBriefingStoredEdition | undefined> {
-    const start = Date.parse(`${date}T00:00:00.000Z`) - dailyBriefingPolicy.retentionDays * 24 * 60 * 60 * 1_000
-    const from = Number.isFinite(start) ? new Date(start).toISOString().slice(0, 10) : date
-    const listed = await deps.store.list(from, previousDateOf(date), locale).catch(() => [])
-    return listed.at(-1)
-  }
 
   async function generation(): Promise<DailyBriefingGeneration> {
     if (!deps.generationSettings) return defaultGeneration
@@ -379,6 +375,8 @@ export function createDailyBriefingService(deps: Readonly<{
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
     // The attempt row is opened before any work: a run the process never finishes is still a
     // record of an attempt that did not succeed, instead of an attempt that never happened.
+    // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
+    await awaitDailyBriefReadiness(deps.readiness)
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     await attempts.open()
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
@@ -435,16 +433,15 @@ export function createDailyBriefingService(deps: Readonly<{
     recorder.begin('candidates')
     let document: DailyBriefingDocument
     try {
-      const previous = await previousEditionBefore(input.date, input.locale)
+      const previous = await previousEditionBefore(deps.store, input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
+      // The cross-asset read's named reason reaches the reader through the conclusion's own gaps.
+      document = withCrossAssetFailureGap(document, packet.market.crossAssetFailure, input.locale)
       recorder.end('candidates', 'success')
     } catch {
       recorder.end('candidates', 'failed', { failureCode: 'build-failed' })
       return fail('build-failed')
     }
-    // The cross-asset read's named reason reaches the reader through the conclusion's own gap list:
-    // same field, one more sentence. In memory only, so the stored shape does not move.
-    document = withCrossAssetFailureGap(document, packet.market.crossAssetFailure, input.locale)
     // A pool above the per-class budget fails before any editorial work or write: the builder caps
     // its rendered sections, and a capped selection would silently stand in for the whole day.
     if (candidateOverflow(packet, document)) {
@@ -670,7 +667,4 @@ function isCurrent(document: DailyBriefingDocument): boolean {
   return document.schemaVersion === dailyBriefingPolicy.schemaVersion && document.policyVersion === dailyBriefingPolicy.policyVersion
 }
 
-function previousDateOf(date: string): string {
-  return new Date(Date.parse(`${date}T00:00:00.000Z`) - 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
-}
 
