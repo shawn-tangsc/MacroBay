@@ -248,7 +248,7 @@ describe('daily brief share card in English', () => {
     // The cell leads with the stock and keeps the day's dollar move; the longer windows are the
     // copied text's, not a cell's.
     expect(poster).toContain('253B USD')
-    expect(poster).toContain('1d -843.9M USD')
+    expect(poster).toContain('-843.9M USD')
     expect(poster).not.toContain('7d -0.81%')
     expect(poster).not.toContain('30d')
     // Fear and greed leads with the score, then the step since the last release — no date span.

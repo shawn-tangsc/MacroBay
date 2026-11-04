@@ -496,3 +496,58 @@ describe('the block headings and the positioning card say what they mean', () =>
     expect(btc.textContent).not.toContain('OI $')
   })
 })
+
+describe('an old number says so where it is read', () => {
+  it('keeps the value and its marker in the same cell', async () => {
+    // Taking the instants off the paper left one thing behind that must not go with them: a reader has
+    // to see, in the cell itself, that the number is an older reading. The gaps list alone is somewhere
+    // else to look, and a cell with only a marker would be saying "nothing".
+    const stale = documentWithData()
+    const gold = stale.data.market.find((entry) => entry.id === 'gold')!
+    ;(gold as { state: string }).state = 'stale'
+    ;(gold as { valueBasis?: string }).valueBasis = 'last-close'
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(stale), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+
+    const cell = host.querySelector('[data-reading="gold"]')!
+    expect(cell.querySelector('.mi-brief-poster__stale')).not.toBeNull()
+    // The number is still there: a stale reading is old, not missing.
+    expect(cell.querySelector('b')!.textContent!.trim()).not.toBe('')
+    expect(cell.textContent).toContain('最近一次收盘')
+  })
+})
+
+describe("a cell does not repeat the block's window", () => {
+  it('leaves the stablecoin cell with its level and one comparison', async () => {
+    const doc = documentWithData()
+    const stablecoin = doc.data.funds.find((entry) => entry.id === 'stablecoin')!
+    ;(stablecoin as { auxiliaryChanges?: unknown }).auxiliaryChanges = [
+      { value: -1_700_000_000, unit: 'usd', window: '1d' },
+      { value: -1.57, unit: 'percent', window: '7d' },
+      { value: -3.44, unit: 'percent', window: '30d' }
+    ]
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    const cell = host.querySelector('[data-reading="stablecoin"]')!
+    // The block is "过去 24 小时数据": a day is its own window, so a `1d` inside a cell says nothing.
+    expect(cell.textContent).not.toContain('1d')
+    // The longer windows are detail; a cell carries one comparison.
+    expect(cell.textContent).not.toContain('7d')
+    expect(cell.textContent).not.toContain('30d')
+    // The level is still printed (the fixture's own value), and the one comparison is the dollar move.
+    expect(cell.querySelector('b')!.textContent!.trim()).not.toBe('')
+    expect(cell.textContent).toContain('-1.7B USD')
+  })
+})

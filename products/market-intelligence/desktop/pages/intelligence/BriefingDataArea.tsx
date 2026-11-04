@@ -94,8 +94,10 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
   const level = formatBriefingValue(row.value, text.noValue, locale)
   if (row.id === 'stablecoin') {
     const day = (row.auxiliaryChanges ?? []).find((change) => change.window === '1d' && change.unit === 'usd')
+    // No window word: a day is this block's own window, so `1d` repeats the heading. What stays is the
+    // number and its direction — the same rule the rest of the cells follow.
     const dayText = day && day.unit === 'usd' ? formatBriefingChange({ value: day.value, unit: 'usd' }, locale) : ''
-    return { primary: level, secondary: dayText ? `${text.changeWindows['1d']} ${dayText}` : '' }
+    return { primary: level, secondary: dayText }
   }
   if (row.id === 'fear-greed') {
     // The band is derived from the score by the collector's own table: the document holds the number,
