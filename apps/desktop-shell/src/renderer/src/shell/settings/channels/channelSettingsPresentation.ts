@@ -241,10 +241,18 @@ export function describeTestMessageReceipt(
     | 'channelTestNoTarget'
     | 'channelTestAmbiguousTarget'
     | 'channelTestRejected'
-  >
+  >,
+  /** 平台名（`Telegram`）：回执里的会话名读不到时用它兜底，**不许编一个名字**。 */
+  platformName: string
 ): { tone: 'muted' | 'bad'; text: string } {
-  if (receipt.state === 'accepted') return { tone: 'muted', text: labels.channelTestAccepted }
-  if (receipt.state === 'unconfirmed') return { tone: 'muted', text: labels.channelTestUnconfirmed }
+  // 会话名来自主进程（`Telegram · 贾维斯`）；为空就退回平台名，绝不编、也绝不带 id。
+  const target = receipt.state === 'failed' ? '' : (receipt.targetName ?? platformName)
+  if (receipt.state === 'accepted') {
+    return { tone: 'muted', text: labels.channelTestAccepted.replace('{target}', target) }
+  }
+  if (receipt.state === 'unconfirmed') {
+    return { tone: 'muted', text: labels.channelTestUnconfirmed.replace('{target}', target) }
+  }
   if (receipt.reason === 'not-ready') return { tone: 'muted', text: labels.channelTestNotReady }
   if (receipt.reason === 'no-target') return { tone: 'bad', text: labels.channelTestNoTarget }
   if (receipt.reason === 'ambiguous-target') return { tone: 'bad', text: labels.channelTestAmbiguousTarget }

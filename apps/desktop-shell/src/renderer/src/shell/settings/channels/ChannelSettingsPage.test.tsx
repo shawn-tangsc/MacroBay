@@ -1047,10 +1047,10 @@ describe('sending a test message from the row', () => {
     ) as HTMLButtonElement
   }
 
-  it('really calls the channel send and says only that it was handed over', async () => {
+  it('really calls the channel send, names who it went to, and claims nothing more', async () => {
     const channels = installPlatform({
       list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
-      sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1' }))
+      sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1', targetName: 'Telegram · 贾维斯' }))
     })
     const container = await mount()
     await act(async () => testButton(container).click())
@@ -1059,11 +1059,42 @@ describe('sending a test message from the row', () => {
     expect(channels.sendTestMessage).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'channel-1', text: labels.channelTestMessageBody })
     )
-    const receipt = container.querySelector('[data-test-receipt]')
-    expect(receipt?.textContent).toBe(labels.channelTestAccepted)
+    // 整句完全相等：换了措辞必须回来改用例，不能放宽成「包含‘发给’」。
+    expect(container.querySelector('[data-test-receipt]')?.textContent).toBe(
+      labels.channelTestAccepted.replace('{target}', 'Telegram · 贾维斯')
+    )
     // 不许出现「已送达」这种我们证明不了的话。
-    expect(receipt?.textContent).not.toContain('已送达')
-    expect(receipt?.textContent).not.toContain('送达')
+    expect(container.querySelector('[data-test-receipt]')?.textContent).not.toContain('送达')
+  })
+
+  it('falls back to the platform name when the conversation name is unknown, and never prints an id', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1', targetName: null }))
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    const receipt = container.querySelector('[data-test-receipt]')?.textContent ?? ''
+    expect(receipt).toBe(labels.channelTestAccepted.replace('{target}', labels.channelPlatformName.telegram))
+    // 不许编名字，也不许把 chat_id / 频道 id 拼进来。
+    expect(receipt).not.toContain('channel-1')
+    expect(receipt).not.toMatch(/-?\d{6,}/u)
+  })
+
+  it('says who an unconfirmed send went to, and still not that it arrived', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(async () => ({ state: 'unconfirmed', messageId: 'm-2', targetName: 'Telegram · 8768' }))
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    const receipt = container.querySelector('[data-test-receipt]')?.textContent ?? ''
+    expect(receipt).toBe(labels.channelTestUnconfirmed.replace('{target}', 'Telegram · 8768'))
+    expect(receipt).not.toContain('送达')
   })
 
   it('points at enabling when the channel is not running instead of pretending', async () => {

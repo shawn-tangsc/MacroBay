@@ -1684,8 +1684,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSwitch: '启用这个频道',
       channelTestSend: '发送测试消息',
       channelTestMessageBody: '来自观潮的一条测试消息：收到它说明这个频道能把消息发到手机。',
-      channelTestAccepted: '已经交给系统发了：手机有没有收到，这边确认不了',
-      channelTestUnconfirmed: '已经交给通道，但没拿到回执：手机可能收到了',
+      // `{target}` 是会话名（`Telegram · 贾维斯`）或平台名（读不到名字时）：
+      // 有多条对话时，读者必须知道这条发给了谁。**不许写「已送达」**。
+      channelTestAccepted: '已经交给系统发了：发给 {target}，手机有没有收到这边确认不了',
+      channelTestUnconfirmed: '已经交给通道，但没拿到回执：发给 {target}，手机可能收到了',
       channelTestNotReady: '这条频道没在运行，先启用',
       // 界面上**没有「绑定」入口**：不许把人指到做不到的地方（我们的红线）。
       // 真实可做的下一步是「先在手机上发一条」——入站到达且还没有目标时会自动记下这个对话。
@@ -3024,8 +3026,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSwitch: 'Enable this channel',
       channelTestSend: 'Send test message',
       channelTestMessageBody: 'A test message from MacroBay: if it arrives, this channel can reach your phone.',
-      channelTestAccepted: 'Handed to the system: whether the phone shows it cannot be confirmed here',
-      channelTestUnconfirmed: 'Handed to the channel without a receipt: the phone may have received it',
+      channelTestAccepted: 'Handed to the system: sent to {target}; whether the phone shows it cannot be confirmed here',
+      channelTestUnconfirmed: 'Handed to the channel without a receipt: sent to {target}; the phone may have received it',
       channelTestNotReady: 'This channel is not running; enable it first',
       channelTestNoTarget: 'Send this bot a message from your phone first; that conversation is then remembered automatically',
       channelTestAmbiguousTarget:

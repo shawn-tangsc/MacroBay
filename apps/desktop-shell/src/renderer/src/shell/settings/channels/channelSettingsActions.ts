@@ -116,7 +116,7 @@ export async function sendChannelTestMessage(channel: Channel, deps: SendTestDep
     })
     deps.setTestReceipts((current) => ({
       ...current,
-      [channel.id]: describeTestMessageReceipt(receipt, deps.labels)
+      [channel.id]: describeTestMessageReceipt(receipt, deps.labels, deps.labels.channelPlatformName[channel.type])
     }))
   } catch {
     deps.setTestReceipts((current) => ({
