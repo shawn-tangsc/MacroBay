@@ -50,10 +50,6 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.briefingReady)]: '今天这一期已经生成，点开可以看全文。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
 
-    [TITLE(IDS.calibrationResult)]: '预测校准出结果了',
-    [BODY(IDS.calibrationResult)]: '校准视图已经更新。',
-    [REASON(IDS.calibrationResult)]: '你订阅了校准结果。',
-
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
     [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。'
@@ -83,10 +79,6 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'Today’s edition has been generated; open it for the full text.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
-
-    [TITLE(IDS.calibrationResult)]: 'Prediction calibration finished',
-    [BODY(IDS.calibrationResult)]: 'The calibration view has been updated.',
-    [REASON(IDS.calibrationResult)]: 'You subscribed to calibration results.',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',

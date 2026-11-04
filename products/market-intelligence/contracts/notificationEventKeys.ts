@@ -31,6 +31,5 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   macroEventLanded: 'market-intelligence.macro.event-landed',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
-  calibrationResult: 'market-intelligence.calibration.result',
   timezoneInvalid: 'market-intelligence.timezone.invalid'
 })

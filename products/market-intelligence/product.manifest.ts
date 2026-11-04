@@ -290,9 +290,9 @@ export const marketIntelligenceProductManifest = {
    * 去重粒度的出处是情报通知目录 §四之一（`intelligence-notification-catalog.md`），
    * 键形状的出处是契约 §7 / §7.1；这里两处都只引用，不重写清单。
    *
-   * **完成类不声明**（`BACKLOG` §28，2026-11-03 定）：日报成功是常态，成功不通知，所以这里没有
-   * 「日报好了」这一条。删的是**声明**，不是调用点——声明一旦不存在，谁再把这条 id 提交上来都会被
-   * 平台以 `unknown-event-type` 拒收，不需要靠人记。
+   * **N8 不声明**（2026-11-04 撤回，编号不复用）：判定账本结算不产生通知。留着就是「生产一个没有
+   * 批准的事件」，运行时只会以 `unknown-event-type` 拒收。完成类（日报已完成）是读者翻案恢复的，
+   * 见下：只进中心、读者在情报页勾了才推手机、桌面不弹。
    */
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
@@ -349,14 +349,6 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
-    notificationEvent('market-intelligence.calibration.result', {
-      body: true,
-      requiresUserAction: false,
-      requestedDisruptionLevels: [],
-      dedupeKeyTemplate: 'calibration:{date}',
-      dedupeUnit: 'occurrence',
-      requestedBypassQuietHours: false
-    }),
     notificationEvent('market-intelligence.timezone.invalid', {
       body: true,
       requiresUserAction: true,
@@ -374,7 +366,7 @@ export const marketIntelligenceProductManifest = {
    * 采集是所有来源共用同一个 handler。
    */
   notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
-  /** 8 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
+  /** 7 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
   notificationCopy: marketIntelligenceNotificationCopy,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)

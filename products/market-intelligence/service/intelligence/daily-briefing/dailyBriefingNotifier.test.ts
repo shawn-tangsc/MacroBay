@@ -14,8 +14,8 @@ import { buildBriefingNoticeRequest, notifyDailyBriefing } from './dailyBriefing
 
 const NOW = '2026-11-03T00:30:00.000Z'
 const DATE = '2026-11-03'
-/** 已按 §28 删除的完成类事件 id：留成字面量，才能证明「它现在提交不进去」。 */
-const REMOVED_READY_EVENT_ID = 'market-intelligence.briefing.ready'
+/** 读者翻案恢复的完成类事件（2026-11-04）：它现在在表里，只进中心，读者在情报页勾了才推手机。 */
+const READY_EVENT_ID = 'market-intelligence.briefing.ready'
 
 const settings: NotificationRuntimeSettings = {
   desktopEnabled: true,
@@ -57,33 +57,57 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
 }
 
 describe('daily briefing notifier', () => {
-  it('does not declare a completion notice at all (§28: success is silent)', () => {
-    // 删的是**声明**，不是调用点：声明不在表里，同一个 id 再提交上来就会被平台拒收。
-    const ids = marketIntelligenceProductManifest.notificationEvents.map((event) => event.id)
-    expect(ids).not.toContain(REMOVED_READY_EVENT_ID)
-    expect(createNotificationEventCatalog({
+  it('declares the completion notice the reader asked back, with a date-only key and no desktop request', () => {
+    // 声明在表里才是可提交的前提；键里只许有日期——混进版本号或生成时刻，
+    // 同一天重新生成就会被当成新事件重推。
+    const ready = marketIntelligenceProductManifest.notificationEvents.find((event) => event.id === READY_EVENT_ID)
+    expect(ready).toMatchObject({
+      dedupeKeyTemplate: 'briefing-ready:{date}',
+      dedupeUnit: 'occurrence',
+      // 完成类只进中心与（读者勾选的）手机：桌面只对「失败 / 需修正 / 系统状态」开放。
+      requestedDisruptionLevels: []
+    })
+
+    const catalog = createNotificationEventCatalog({
       policy: NOTIFICATION_EVENT_POLICY,
       sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }]
-    }).has(REMOVED_READY_EVENT_ID)).toBe(false)
+    })
+    expect(catalog.has(READY_EVENT_ID)).toBe(true)
+    expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).toContain('center')
+    expect(catalog.get(READY_EVENT_ID)?.approvedDisruptionLevels).not.toContain('desktop')
   })
 
-  it('rejects a completion submission instead of dropping it silently, so re-adding one cannot pass unnoticed', async () => {
-    // 「没发」有两种：没人发（靠纪律），和发不出去（靠平台）。这里钉的是后者——
-    // 有人把这条请求塞回调用点，回执必须是 rejected，而不是 accepted 或静默丢弃。
+  it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {
     const { runtime, records } = createRuntime()
     const attempt: NotificationSubmitRequest = {
-      eventTypeId: REMOVED_READY_EVENT_ID,
+      eventTypeId: READY_EVENT_ID,
       producerId: 'market-intelligence.dailyBriefing',
-      dedupeVars: { builder: 'template', vars: { date: DATE, period: 'default' } },
+      dedupeVars: { builder: 'template', vars: { date: DATE } },
       actions: [],
       occurredAt: NOW
     }
 
-    await expect(runtime.submit(attempt)).resolves.toMatchObject({
-      kind: 'rejected',
-      reason: 'unknown-event-type'
+    await expect(runtime.submit(attempt)).resolves.toMatchObject({ kind: 'accepted' })
+    expect(records()).toHaveLength(1)
+    expect(records()[0]).toMatchObject({
+      eventTypeId: READY_EVENT_ID,
+      dedupeKey: `market-intelligence|briefing-ready:${DATE}`,
+      occurrenceCount: 1
     })
-    expect(records()).toHaveLength(0)
+    // 桌面不弹：声明没有申请桌面档，批准表也不给完成类。
+    expect(records()[0]?.delivery ?? {}).not.toHaveProperty('desktop')
+
+    // 同一天重新生成：并入同一条记录（同一次「今天这一期好了」），不新增第二行、不重推。
+    const firstRecordId = records()[0]?.id
+    await expect(runtime.submit({ ...attempt, occurredAt: '2026-11-03T01:30:00.000Z' }))
+      .resolves.toMatchObject({ kind: 'merged', recordId: firstRecordId })
+    expect(records()).toHaveLength(1)
+    expect(records()[0]).toMatchObject({
+      id: firstRecordId,
+      dedupeKey: `market-intelligence|briefing-ready:${DATE}`,
+      // `occurrence` 粒度：同一条键的重复提交算同一次事件，次数不累加。
+      occurrenceCount: 1
+    })
   })
 
   it('names the two failure bodies by the declared variant and gives the reader the open action', () => {

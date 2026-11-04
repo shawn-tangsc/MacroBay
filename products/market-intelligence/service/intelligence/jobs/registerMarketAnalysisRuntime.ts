@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { JobContext, JobRuntime } from '@platform/jobs'
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
 
 import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
@@ -30,7 +34,6 @@ import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisCo
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createPredictionVerificationService } from '../analysis/predictionVerificationService'
-import { notifyCalibrationResult, type CalibrationResultSubmit } from '../analysis/calibrationResultNotifier'
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
 import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { appendAnalysisEventEvidence } from '../analysis/analysisEventEvidence'
@@ -121,8 +124,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 固定值比「回落到运行机器的时区」诚实得多。
    */
   timeZone?: () => string
-  /** 通知端口：判定账本结算完成后提交 `calibration.result`；缺省表示未装配运行时，结算照常。 */
-  submitNotification?: CalibrationResultSubmit
+  /** 通知端口：宏观发布落地时提交 `macro.event-landed`；缺省表示未装配运行时，分析与结算照常。 */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {
   const now = input.now ?? (() => new Date().toISOString())
@@ -248,7 +251,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
           } } : undefined
         })
       })
-      if (result.verified > 0) await notifyCalibrationResult(input.submitNotification, asOf.slice(0, 10), now())
+      // 结算本身不发通知：N8 `calibration.result` 已从批准表撤回（编号不复用），结算结果由校准视图呈现。
       await context.log({
         level: 'info',
         message: `Verified ${result.verified} due market prediction(s); skipped ${result.skipped}.`,
