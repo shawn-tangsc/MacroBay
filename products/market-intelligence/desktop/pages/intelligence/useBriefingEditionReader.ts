@@ -24,18 +24,18 @@ export function useBriefingEditionReader(input: Readonly<{
   setPinnedDate: (date: string) => void
   setRegenerateFailure: (failure: null) => void
 }>): Readonly<{
-  readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean }>) => Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>>
-  openEdition: (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary) => void
+  readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>>
+  openEdition: (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string) => void
 }> {
   const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure } = input
-  const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean }> = {}): Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>> => {
-    const key = `${date}:${target}`
+  const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean; periodId?: string }> = {}): Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>> => {
+    const key = `${date}:${options.periodId ?? 'default'}:${target}`
     const cached = options.fresh ? undefined : cache.current.get(key)
     if (cached) {
       setView({ status: 'ready', document: cached, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })
       return { kind: 'available' }
     }
-    const result = await client.get({ date, locale: target }).catch(() => undefined)
+    const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) }).catch(() => undefined)
     if (result?.state === 'available') {
       cache.current.set(key, result.document)
       setView({ status: 'ready', document: result.document, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })
@@ -46,8 +46,8 @@ export function useBriefingEditionReader(input: Readonly<{
     return { kind: 'unknown' }
   }
 
-  const openEdition = (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary): void => {
-    const row = rowHint ?? editions.find((edition) => edition.date === date)
+  const openEdition = (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string): void => {
+    const row = rowHint ?? editions.find((edition) => edition.date === date && (periodId === undefined || edition.periodId === periodId))
     if (readyDocument && readyDocument.edition.date === date && readyDocument.edition.locale === target) return
     setPinnedDate(date)
     const request = ++requestRef.current
@@ -61,7 +61,7 @@ export function useBriefingEditionReader(input: Readonly<{
       if (!row.attemptCount) return
     }
     setView((current) => current.status === 'no-edition' && current.date === date ? current : { status: 'loading' })
-    void readEdition(date, target)
+    void readEdition(date, target, { ...(periodId ? { periodId } : {}) })
       .then((read) => {
         if (request !== requestRef.current) return
         if (read.kind === 'available') return

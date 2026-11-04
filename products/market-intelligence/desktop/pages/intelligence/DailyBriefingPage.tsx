@@ -33,7 +33,6 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
-import { useBriefingContentLocale } from './useBriefingContentLocale'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingPageActions } from './DailyBriefingPageActions'
@@ -57,7 +56,6 @@ import {
 } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
-import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { openBriefingEdition } from './openBriefingEdition'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
 import { useBriefingEditionReader } from './useBriefingEditionReader'
@@ -121,12 +119,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // One settings surface: the entry opens it at the top, the web-search banner and a failed attempt
   // open the same drawer aimed at its AI block. Two dialogs is what this replaces.
   const [settingsSection, setSettingsSection] = useState<BriefingSettingsSection | null>(null)
-  // Content language: one hook owns it; the tab's selection state derives from it.
-  const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
-  // The switch only exists when the brief may have more than one edition language at all.
-  const [englishEditionsEnabled, setEnglishEditionsEnabled] = useState(false)
-  // Until the settings answer arrives we do not know whether an English edition is even possible.
-  const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
+  // Which edition is on screen: language is part of its identity now, chosen by the row badges.
+  const [pickedLocale, setPickedLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
+  const [pickedPeriodId, setPickedPeriodId] = useState<string | undefined>(undefined)
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
   const [settingsReloadKey, setSettingsReloadKey] = useState(0)
   const { outcome: deleteOutcome, deletePeriod, takeSkipGenerate } = useDailyBriefingIssueDeletion({ client, onSettled: () => setReloadKey((key) => key + 1) })
@@ -155,7 +150,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const busyLocally = loading || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
-  const effectiveLocale = englishEditionsEnabled ? contentLocale : locale
+  const effectiveLocale = pickedLocale ?? locale
   const effectiveLocaleRef = useRef(effectiveLocale)
   effectiveLocaleRef.current = effectiveLocale
   useEffect(() => {
@@ -188,7 +183,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const afterDeleteLocale = afterDeleteLocaleRef.current
       afterDeleteLocaleRef.current = null
       const localeForLoad = afterDeleteLocale ?? effectiveLocaleRef.current
-      if (afterDeleteLocale && afterDeleteLocale !== effectiveLocaleRef.current) setContentLocale(afterDeleteLocale)
+      if (afterDeleteLocale && afterDeleteLocale !== effectiveLocaleRef.current) setPickedLocale(afterDeleteLocale)
       loadedLocaleRef.current = localeForLoad
       const todayPromise = skipGenerate
         ? Promise.resolve(undefined)
@@ -215,7 +210,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         const available = periodRow?.availableLocales ?? []
         const wanted = available.includes(localeForLoad) ? localeForLoad : available.find((candidate) => candidate !== localeForLoad)
         if (wanted) {
-          if (wanted !== localeForLoad) setContentLocale(wanted)
+          if (wanted !== localeForLoad) setPickedLocale(wanted)
           const read = await readEdition(periodDate, wanted, { fresh: true })
           if (!active) return
           if (read.kind === 'available') return
@@ -261,7 +256,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         const other = (row?.availableLocales ?? []).find((candidate) => candidate !== localeForLoad)
         if (other) {
           if (skipGenerate) {
-            setContentLocale(other)
+            setPickedLocale(other)
             openEditionRef.current(periodDate, other, row)
           } else {
             setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
@@ -299,30 +294,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
 
   useEffect(() => {
     let active = true
-    if (!client.getSettings) {
-      // No settings reader at all: there is no English edition to switch to.
-      setLanguageSettingsKnown(true)
-      return undefined
-    }
+    if (!client.getSettings) return undefined
     void client.getSettings().then((result) => {
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
-      setEnglishEditionsEnabled(result.view.language.settings.additional.includes('en-US'))
-      setLanguageSettingsKnown(true)
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
-    }).catch(() => { if (active) setLanguageSettingsKnown(true) })
+    }).catch(() => undefined)
     return () => { active = false }
   }, [client, settingsReloadKey])
 
-  // The stored edition language arrives with the settings answer, after the first read. Reading
-  // again here is the open path (it may generate today); the language tab never comes through it.
-  const initialLocaleAppliedRef = useRef(false)
-  useEffect(() => {
-    if (!languageSettingsKnown || initialLocaleAppliedRef.current) return
-    initialLocaleAppliedRef.current = true
-    if (loadedLocaleRef.current !== null && loadedLocaleRef.current !== effectiveLocale) setReloadKey((key) => key + 1)
-  }, [effectiveLocale, languageSettingsKnown])
 
   // A setting changed in the drawer (or in another window) takes effect without a reload.
   useEffect(() => {
@@ -347,7 +328,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setPinnedDate, setRegenerateFailure
   })
   openEditionRef.current = openEdition
-  const selectEdition = (date: string): void => openEdition(date, effectiveLocaleRef.current)
+  const selectEdition = (date: string): void => {
+    const row = editions.find((edition) => edition.date === date)
+    openEdition(date, effectiveLocaleRef.current, row, row?.periodId)
+  }
+  // A badge names the exact edition: date, period and language travel together.
+  const selectLocale = (next: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>): void => {
+    setPickedLocale(next.locale)
+    setPickedPeriodId(next.periodId)
+    openEdition(next.date, next.locale, undefined, next.periodId)
+  }
   const { regenerate, generateNow } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
@@ -464,7 +454,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       />
     </header>
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
+        onSelectLocale={selectLocale}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         gapCount={issueCounts.warning + issueCounts.info}
@@ -487,9 +478,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       }} />
       <DailyBriefingAppendix {...{
         text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime,
-        editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup,
-        setOpenGroup, listAttempts: client.listAttempts, generating, liveProgress,
-        onSwitch: (value) => { setContentLocale(value); openEdition(pinnedDate ?? todayDate, value) }
+        editionLocale, issuesOpen, setIssuesOpen, openGroup,
+        setOpenGroup, listAttempts: client.listAttempts, generating, liveProgress
       }} />
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}

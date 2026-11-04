@@ -9,7 +9,6 @@ import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { traceFromProgress } from './DailyBriefingGeneratingStates'
-import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { issueCountsText } from './dailyBriefingPageDerived'
 
 /**
@@ -19,7 +18,7 @@ import { issueCountsText } from './dailyBriefingPageDerived'
  * render only when the issue has an edition. Kept out of the page for size and because it is one
  * surface with one job: tell the reader what this edition is missing.
  */
-export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, onSwitch, generating = false, liveProgress }: Readonly<{
+export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, generating = false, liveProgress }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   contentBlocked: boolean
@@ -30,20 +29,16 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
   generationTrace: GenerationTrace | undefined
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   editionLocale: 'zh-CN' | 'en-US'
-  englishEditionsEnabled: boolean
-  contentLocale: 'zh-CN' | 'en-US'
   issuesOpen: boolean
   setIssuesOpen: (open: boolean) => void
   openGroup: Readonly<{ key: string; trigger: HTMLElement | null }> | null
   setOpenGroup: (group: Readonly<{ key: string; trigger: HTMLElement | null }> | null) => void
   listAttempts?: DailyBriefingClient['listAttempts']
-  onSwitch: (locale: 'zh-CN' | 'en-US') => void
   /** A run is in flight and this issue already has an edition: the steps report here, live. */
   generating?: boolean
   liveProgress?: BriefingGenerationProgress | undefined
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
-        {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale} onChange={onSwitch} /> : null}
         {hasArchive ? <>
         <section data-briefing-gaps="true">
         {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
