@@ -63,10 +63,12 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
         // The 24-hour change is the card's point: the amount is a level, and a level does not say
         // whether positioning is being added or taken off. The tone rides on this number, never on the
         // funding rate beside it, or the colour and the arrow would belong to different facts.
-        return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
-          <span>{asset.toUpperCase()}</span>
-          <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
-          <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
+        return <div className="mi-brief-poster__card mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
+          <span className="mi-brief-poster__leverage-copy" data-briefing-leverage-copy="true">
+            <span>{asset.toUpperCase()}</span>
+            <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
+            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
+          </span>
           {/* Only when the edition carries a series: no series means no element at all, never a flat
               placeholder line, because a flat line claims nothing moved. */}
           {spark ? <svg className="mi-brief-poster__leverage-spark" data-briefing-oi-spark={asset} viewBox={`0 0 ${OI_SPARK.width} ${OI_SPARK.height}`} role="img" aria-label={`${asset.toUpperCase()} ${text.sections.leverage}`}>
@@ -102,7 +104,7 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
   // Two columns, placed explicitly: the dial on the left, the reading on the right. Automatic placement
   // put the title into the dial's cell and the copy underneath it — attributes all correct, the printed
   // card wrong, which is exactly what a DOM without layout cannot catch.
-  return <div className="mi-brief-poster__policy-card" data-briefing-policy-card="true">
+  return <div className="mi-brief-poster__card mi-brief-poster__policy-card" data-briefing-policy-card="true">
     <span className="mi-brief-poster__policy-dial" data-briefing-policy-dial="true">
       <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
         <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
@@ -153,7 +155,7 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
   // The text column and the plot column, placed explicitly: with automatic placement the number landed
   // in the 100px plot column, on top of the chart, and the implicit second row pushed the card past its
   // 114px. Same attributes, wrong paper.
-  return <div className="mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
+  return <div className="mi-brief-poster__card mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
     <div className="mi-brief-poster__price-lead" data-briefing-price-lead="true">
       <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
       {/* The number and its amplitude share one baseline row: they are one reading, not two lines. */}

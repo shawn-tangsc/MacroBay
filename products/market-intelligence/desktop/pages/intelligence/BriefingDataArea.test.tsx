@@ -295,6 +295,38 @@ describe('the window amplitude', () => {
   })
 })
 
+describe('every card wears the shell', () => {
+  // A card that is only a pile of numbers has no background, no border and no padding — the paper shows
+  // it immediately, a DOM without styles cannot. So the shell's presence is asserted as a class: the
+  // three card roots must carry it beside their own name, and the tone that colours them must be theirs.
+  const shell = 'mi-brief-poster__card'
+
+  it('puts the shell on all three card roots', async () => {
+    const dom = await render()
+    const roots = [
+      ...dom.querySelectorAll('[data-briefing-price-card]'),
+      ...dom.querySelectorAll('[data-briefing-policy-card]'),
+      ...dom.querySelectorAll('[data-briefing-leverage-card]')
+    ]
+    // Two price cards, one rate card, two positioning cards.
+    expect(roots).toHaveLength(5)
+    for (const root of roots) expect(root.classList.contains(shell)).toBe(true)
+    // The tone that drives the shell's colour is on the card row, not on some inner element.
+    expect(dom.querySelector('[data-briefing-price-card="btc"]')!.getAttribute('data-tone')).toBe('up')
+    expect(dom.querySelector('[data-briefing-price-card="eth"]')!.getAttribute('data-tone')).toBe('up')
+  })
+
+  it("keeps the positioning card's text and its spark in separate columns", async () => {
+    const dom = await render()
+    for (const card of dom.querySelectorAll('[data-briefing-leverage-card]')) {
+      const copy = card.querySelector('[data-briefing-leverage-copy]')!
+      expect(copy).not.toBeNull()
+      // The spark is the second column, never a sixth line under the text (which overflowed 87px).
+      expect(copy.querySelector('[data-briefing-oi-spark]')).toBeNull()
+    }
+  })
+})
+
 describe('the cards place their parts in their own columns', () => {
   // A DOM without layout cannot measure where a box lands, so the placement is asserted as structure:
   // which container holds which part. Auto-placement once put the number and its amplitude into the

@@ -197,11 +197,18 @@
    100 wide (fills the card height), spark 60×26. Nothing here is responsive: the paper is a fixed
    1080px sheet, so a stacked variant at narrow widths would make the export and the preview differ. */
 .mi-brief-poster__data { display: flex; flex-direction: column; gap: 6px; }
+/* The card shell, once. Height is the OUTER box: `height` + border-box here means a padding or border
+   change cannot push the card row past 114px, which is what happened when the height lived on the grid
+   row and the shell was missing altogether. Tone drives the colour, so a card with a tone is a card
+   with a background — the two cannot drift apart. */
+.mi-brief-poster__card { box-sizing: border-box; border-radius: 8px; padding: 10px 14px 13px; background: #f8ecd2; border: 1px solid #e8d3a8; }
+.mi-brief-poster__card[data-tone='up'] { background: #e4efe2; border-color: #c9ddc7; }
+.mi-brief-poster__card[data-tone='down'] { background: #f7e2dc; border-color: #ebc9c0; }
 .mi-brief-poster__price-row { display: flex; gap: 8px; }
 /* Two columns, both placed: the reading on the left, the plot on the right. Leaving placement to the
    grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
    pushed the card past 114px — the DOM looked right and the paper did not. */
-.mi-brief-poster__price-card { display: grid; grid-template-columns: minmax(0, 1fr) 100px; grid-template-rows: 114px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+.mi-brief-poster__price-card { height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
 /* Two ends, not the middle: the label sits at the top and the time at the card's foot, matching the
    approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
 .mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; min-width: 0; }
@@ -219,7 +226,10 @@
 .mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
 /* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
    of the gauge, because only the svg had an explicit position. */
-.mi-brief-poster__policy-card { display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: 114px; align-items: center; gap: 10px; }
+.mi-brief-poster__policy-card { position: relative; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 10px; background: #f8ecd2; border-color: #e8d3a8; }
+/* The accent bar: inside the shell, inset from both ends, never a border (that would change the height). */
+.mi-brief-poster__policy-card::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #c2410c; }
+.mi-brief-poster__policy-title { color: #8a5a12; }
 .mi-brief-poster__policy-dial { position: relative; grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
 .mi-brief-poster__policy-copy { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mi-brief-poster__policy-gauge { width: 88px; height: 54px; display: block; }
@@ -236,11 +246,15 @@
 .mi-brief-poster__reading[data-tone='positive'] b { color: #1f5b32; }
 .mi-brief-poster__reading[data-tone='negative'] b { color: #8f2a1d; }
 .mi-brief-poster__etf { display: flex; gap: 12px; font-size: 11px; }
-.mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; height: 87px; }
+.mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
 .mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 11px; color: #6b695f; }
-.mi-brief-poster__leverage-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11px; }
-.mi-brief-poster__leverage-card b { font-size: 15px; font-variant-numeric: tabular-nums; }
-.mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; }
+.mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
+/* The positioning card keeps its own warm shell whatever the tone says: its tone belongs to the printed
+   change, not to the card's colour — the green/red shell is the price cards' vocabulary. */
+.mi-brief-poster__leverage-card[data-tone] { background: #fffaf1; border-color: #ded4c2; }
+.mi-brief-poster__leverage-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-brief-poster__leverage-card b { font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; overflow: hidden; text-overflow: ellipsis; }
 .mi-brief-poster__leverage-card[data-tone='up'] b { color: #1f5b32; }
 .mi-brief-poster__leverage-card[data-tone='down'] b { color: #8f2a1d; }
 .mi-brief-poster__leverage-change { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
