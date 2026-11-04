@@ -42,6 +42,21 @@ describe('ChannelInboundService', () => {
     expect(cipher.encrypt).toHaveBeenCalled()
   })
 
+  it('fills a missing conversation title without touching one that already exists', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { conversationTitle?: (input: { displayLabel?: string }) => Promise<string> } })
+      .deps.conversationTitle = async (input) => `Telegram · ${input.displayLabel ?? '8768'}`
+
+    await receive(service, 'channel-a', { providerEventKey: 'title-1', providerUserLabel: '贾维斯' })
+    const first = database.connection.prepare('select session_title from channel_conversations').get() as { session_title: string }
+    expect(first.session_title).toBe('Telegram · 贾维斯')
+
+    // 已经写了名字：后续消息不许改它（只有 /new 才会换新会话与新名字）。
+    await receive(service, 'channel-a', { providerEventKey: 'title-2', providerUserLabel: '别人' })
+    expect(database.connection.prepare('select session_title from channel_conversations').get()).toEqual(first)
+  })
+
   it('auto-registers the first conversation that talks to the channel as its delivery target', async () => {
     const { service, database } = createHarness()
     await allow(service, 'channel-a', 'user-a')

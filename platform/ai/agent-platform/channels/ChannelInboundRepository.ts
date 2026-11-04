@@ -7,6 +7,7 @@ import {
   deleteUnboundChannelConversation,
   insertChannelConversation,
   readChannelConversation,
+  fillChannelConversationTitle,
   releaseChannelConversationOperation,
   replaceChannelConversationSession,
   reserveChannelConversationOperation
@@ -270,6 +271,11 @@ export class ChannelInboundRepository {
       (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration),
       now
     ) as { record: ChannelConversationRecord; created: boolean } | null
+  }
+
+  /** 只补空名字；已有名字（含读者改过的）不动。 */
+  fillConversationTitle(channelId: string, keyHash: string, title: string): boolean {
+    return fillChannelConversationTitle(this.database, { channelId, keyHash, title })
   }
 
   deleteUnboundConversation(channelId: string, keyHash: string, sessionId: string): boolean {

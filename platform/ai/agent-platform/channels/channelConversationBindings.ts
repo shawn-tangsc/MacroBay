@@ -144,3 +144,20 @@ export function replaceChannelConversationSession(
     ).run(input.sessionId, input.sessionTitle ?? null, input.now.toISOString(), input.channelId, input.keyHash).changes === 1
   })
 }
+
+/**
+ * 给「还没名字」的老会话补一个名字。
+ *
+ * 为什么要补：会话名是这次才落库的，迁移之前建的会话行 `session_title` 是空的，
+ * 投递回执只能回退成平台名。**只补空值**——已有名字（不管是谁写的）一个字节都不动。
+ */
+export function fillChannelConversationTitle(
+  database: AgentPlatformDatabase,
+  input: { channelId: string; keyHash: string; title: string }
+): boolean {
+  if (!input.title.trim()) return false
+  return database.connection.prepare(
+    `update channel_conversations set session_title = ?, updated_at = updated_at
+     where channel_id = ? and conversation_key_hash = ? and (session_title is null or session_title = '')`
+  ).run(input.title, input.channelId, input.keyHash).changes === 1
+}

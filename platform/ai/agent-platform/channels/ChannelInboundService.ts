@@ -100,6 +100,20 @@ export class ChannelInboundService {
       let conversation: { record: ChannelConversationRecord; created: boolean } | null = null
       try {
         conversation = decision ? null : await this.resolveConversation(request, agentId, conversationHash, encryptedConversation)
+        if (conversation && !conversation.record.sessionTitle) {
+          // 老会话没有名字（名字是这次才落库的）：按入口素材补一个，只补空值，不覆盖任何已有名字。
+          const title = await this.deps.conversationTitle?.({
+            channelId: request.channelId,
+            agentId,
+            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+            providerConversationKey: request.providerConversationKey,
+            disambiguate: this.deps.repository.countConversations(request.channelId) > 1
+          })
+          if (title) {
+            this.deps.repository.fillConversationTitle(request.channelId, conversationHash, title)
+            conversation = { ...conversation, record: { ...conversation.record, sessionTitle: title } }
+          }
+        }
         if (!decision && conversation && !request.text?.trim().startsWith('/new')) {
           // 跟这条通道说过话的对话就是投递目标：界面上没有绑定入口，不能指望读者自己去绑。
           this.deps.bindAutoTarget?.({ channelId: request.channelId, conversationId: conversation.record.id })
