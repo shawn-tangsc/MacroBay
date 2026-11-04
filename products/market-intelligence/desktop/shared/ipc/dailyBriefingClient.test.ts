@@ -169,8 +169,8 @@ describe('daily briefing client', () => {
     }
     const current = (): DailyBriefingDocument => ({
       ...briefing,
-      schemaVersion: 11,
-      policyVersion: 'daily-briefing.v22',
+      schemaVersion: 12,
+      policyVersion: 'daily-briefing.v23',
       edition: { ...briefing.edition, windowHours: 24 },
       data: {
         ...briefing.data,

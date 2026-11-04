@@ -803,7 +803,7 @@ describe('daily briefing document', () => {
       })
 
       // (10 800 − 10 100) / 10 400 × 100, with the close the curve is also divided by.
-      expect(document.schemaVersion).toBe(11)
+      expect(document.schemaVersion).toBe(12)
       for (const id of ['btc', 'eth', 'index'] as const) {
         expect(document.data.market.find((row) => row.id === id)?.amplitude)
           .toEqual({ percent: 6.73, high: 10_800, low: 10_100, anchor: 10_400 })
@@ -902,7 +902,7 @@ describe('daily briefing document', () => {
         date: '2026-10-30'
       })
 
-      expect(document.schemaVersion).toBe(11)
+      expect(document.schemaVersion).toBe(12)
       const btc = document.data.market.find((row) => row.id === 'btc')
       const points = btc?.curve?.[0] ?? []
       expect(btc?.curve).toHaveLength(1)
@@ -917,5 +917,45 @@ describe('daily briefing document', () => {
       const legacy = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
       expect(legacy.data.market.find((row) => row.id === 'btc')?.curveReason).toBe('no-snapshot')
     })
+  })
+})
+
+describe('the level behind the percentage', () => {
+  it('records the close the window ended on, and which leg answered the index', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        market: {
+          crossAsset: {
+            analysisEnd: '2026-10-30T00:25:00.000Z',
+            indexSource: 'proxy',
+            closedReturns: {
+              btc: { '24h': { state: 'available', value: 3.8 } },
+              eth: { '24h': { state: 'available', value: -1 } },
+              index: { '24h': { state: 'available', value: 0.8 } }
+            },
+            lastClosed: {
+              btc: { at: '2026-10-30T00:20:00.000Z', close: '110432.1' },
+              eth: { at: '2026-10-30T00:20:00.000Z', close: '3840.55' },
+              index: { at: '2026-10-30T00:20:00.000Z', close: '21348.7' }
+            }
+          } as unknown as CrossAssetSnapshot,
+          macroMarket: packet().market.macroMarket,
+          macroRates: packet().market.macroRates
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    // A percentage without its base says nothing: the level travels with it, and its instant.
+    expect(document.data.market.find((row) => row.id === 'btc')?.close).toEqual({ value: 110432.1, at: '2026-10-30T00:20:00.000Z' })
+    expect(document.data.market.find((row) => row.id === 'eth')?.close?.value).toBe(3840.55)
+    // The index row states which leg answered, so a proxy's move is never read as the index's.
+    expect(document.data.market.find((row) => row.id === 'index')?.indexSource).toBe('proxy')
+    // A macro row is not a cross-asset leg: it carries neither field.
+    expect(document.data.market.find((row) => row.id === 'dxy')).not.toHaveProperty('close')
+    expect(document.data.market.find((row) => row.id === 'dxy')).not.toHaveProperty('indexSource')
+    // No closed bar at the cutoff is an absence, never a zero level.
+    const noBar = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    expect(noBar.data.market.find((row) => row.id === 'btc')).not.toHaveProperty('close')
   })
 })

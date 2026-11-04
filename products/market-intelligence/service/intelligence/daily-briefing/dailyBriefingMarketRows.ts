@@ -226,6 +226,10 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
     // Only the two cards draw a curve. The amplitude is asked for on the three readings with continuous
     // bars; DXY, gold and the ten-year are not given a field at all, so nothing downstream can show one.
     ...(id === 'index' ? {} : briefingPriceCurve({ points: cross?.curves?.[id], windowStart: packet.windowStart, windowEnd: packet.windowEnd, windowHours: packet.windowHours })),
+    // The level the card prints: the close this window ended on, from the same read that produced the
+    // curve. Absent when that read carried no closed bar — a zero would be a level nobody measured.
+    ...(cross?.lastClosed?.[id] ? { close: Object.freeze({ value: Number(cross.lastClosed[id]!.close), at: cross.lastClosed[id]!.at }) } : {}),
+    ...(id === 'index' && cross?.indexSource ? { indexSource: cross.indexSource } : {}),
     ...(id === 'index' && indexOnProxy ? {} : briefingAmplitude({
       extremes: cross?.extremes?.[id],
       ...(cross?.historyCoverage?.[id] ? { coverage: cross.historyCoverage[id] } : {})

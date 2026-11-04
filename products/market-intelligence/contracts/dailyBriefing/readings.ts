@@ -7,8 +7,8 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -214,6 +214,21 @@ export type BriefingMarketRow = Readonly<{
    * before schema 11, on rows without a continuous series, and when the window's bars are incomplete.
    */
   amplitude?: BriefingAmplitude
+  /**
+   * The close this row's window ended on, so the card can print a level and not only a percentage.
+   *
+   * A percentage alone leaves the reader without a base: `+0.9%` of what? Absent on editions built before
+   * schema 12, and whenever the read carried no closed bar at the cutoff — the card then shows its reason
+   * rather than a zero.
+   */
+  close?: Readonly<{ value: number; at: string }>
+  /**
+   * Which leg answered the index row: the licensed index or the tokenised proxy.
+   *
+   * Written down so a stored edition can say what its number was about — a proxy's move is not the index's,
+   * and a reader comparing it against the dollar or gold would be comparing different instruments.
+   */
+  indexSource?: 'real' | 'proxy'
   /** Stated only when `amplitude` is absent, same rule as `curveReason`. */
   amplitudeReason?: BriefingAmplitudeReason
   /** The window's own bar count against what it should hold, when an amplitude was withheld for it. */
