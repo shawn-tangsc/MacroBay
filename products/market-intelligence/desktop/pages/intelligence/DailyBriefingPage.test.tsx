@@ -1744,6 +1744,48 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(todayRow.textContent).toMatch(/生成中 · /)
 })
 
+it('keeps the edition readable and reports a run in the right column', async () => {
+  // The reader asked for this split: while a run replaces an issue that already has an edition, the
+  // edition stays readable and the nine steps report in the right column — not both in the body.
+  let settle: (value: unknown) => void = () => undefined
+  const client = fakeClient({
+    regenerate: vi.fn(() => new Promise((resolve) => { settle = resolve }))
+  })
+  const dom = await renderPage(client)
+  const before = dom.querySelector('.mi-daily-briefing-page__paper')?.textContent
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve(); await Promise.resolve()
+  })
+
+  // 1. No nine-step panel in the body.
+  expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel]')).toBeNull()
+  // 2. The edition on screen is the one that was there before the click, unchanged.
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toBe(before)
+  // The run reports in the right column, where the steps already live.
+  const rail = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
+  const railStages = rail.querySelector<HTMLElement>('[data-briefing-stages]')!
+  expect(railStages.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
+  for (const row of [...railStages.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
+    expect(row.textContent).toContain(text.generationTrace.states.notStarted)
+    expect(row.textContent).not.toContain(text.generationTrace.notRecorded)
+  }
+  // The attempt line is not invented while the run has reported nothing yet.
+  expect(railStages.textContent).not.toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
+  // 4. The header action shows it is working, not merely that it is unavailable.
+  const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
+  expect(action.className).toContain('ant-btn-loading')
+  expect(action.getAttribute('aria-label')).toBe(text.generationProgress.workingHint)
+
+  await act(async () => {
+    settle({ state: 'available', document: briefingDocument('2026-10-30', '重新生成版') })
+    await Promise.resolve(); await Promise.resolve()
+  })
+  // 3b. Success replaces the body with the new edition.
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('重新生成版')
+  expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).not.toContain('ant-btn-loading')
+})
+
 it('leaves the archive out while generating a day that never produced one', async () => {
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const client = fakeClient({

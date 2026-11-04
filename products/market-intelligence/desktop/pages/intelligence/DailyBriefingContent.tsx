@@ -58,6 +58,8 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   onConfigureSources: () => void
   onDeleteRetry: (target: BriefingDeleteOutcome['target']) => void
 }>): React.ReactElement {
+  // What the body is showing: one edition the reader can read, in this or an earlier version.
+  const showingEdition = view.status === 'ready' && !contentBlocked
   return <section className="mi-daily-briefing-page__content">
     {deleteOutcome ? <DailyBriefingDeleteOutcomeNote outcome={deleteOutcome} text={text} onRetry={(outcome) => onDeleteRetry(outcome.target)} /> : null}
     <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
@@ -66,11 +68,13 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
       <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
       <Button data-open-settings-section="ai" onClick={onOpenSettings}>{text.aiSettings.goEnable}</Button>
     </div> : null}
-    {/* A run in flight owns the pane, whatever local state says: the scheduled run and a run
-        started elsewhere land here too, and the nine steps must be visible while it works. */}
-    {mode === 'generating'
-      ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
-      : null}
+    {/* With nothing to read, the body is where the run reports itself. When this issue already has
+        an edition, that edition stays readable and the run reports in the right column instead. */}
+    {mode === 'generating' && showingEdition
+      ? null
+      : mode === 'generating'
+        ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
+        : null}
     {view.status === 'unavailable' && !failure && !generating
       ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onGenerate={onGenerate} text={text} timeZone={timeZone} todayDate={todayDate} />
       : null}
@@ -78,7 +82,7 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
     {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating} onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
     {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
-    {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <StateView
+    {showingEdition && view.document.status.readingsAvailable === 0 ? <StateView
       state="empty"
       reasonCode="nothing-enabled"
       productReason={{
@@ -87,7 +91,9 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
       }}
       action={{ labelKey: 'ui.state.action.open-settings', onSelect: onConfigureSources }}
     /> : null}
-    {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-page__paper">
+    {/* A run replaces this edition only when it succeeds: until then the reader keeps the one that
+        is already there, and the run reports in the right column. */}
+    {showingEdition ? <div className="mi-daily-briefing-page__paper">
       <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
     </div> : null}
   </section>

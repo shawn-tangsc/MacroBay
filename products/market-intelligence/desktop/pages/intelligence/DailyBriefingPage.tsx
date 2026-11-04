@@ -466,7 +466,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingAppendix {...{
         text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime,
         editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup,
-        setOpenGroup, listAttempts: client.listAttempts,
+        setOpenGroup, listAttempts: client.listAttempts, generating, liveProgress,
         onSwitch: (value) => { setContentLocale(value); openEdition(pinnedDate ?? todayDate, value) }
       }} />
     </div>

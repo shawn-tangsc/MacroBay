@@ -1,12 +1,14 @@
 import { Button } from 'antd'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 import type { DailyBriefingText } from './dailyBriefingText'
 import type { BriefingIssue, BriefingIssueGroup } from './dailyBriefingIssues'
 import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { traceFromProgress } from './DailyBriefingGeneratingStates'
 import { DailyBriefingLanguageSwitch } from './DailyBriefingLanguageSwitch'
 import { issueCountsText } from './dailyBriefingPageDerived'
 
@@ -17,7 +19,7 @@ import { issueCountsText } from './dailyBriefingPageDerived'
  * render only when the issue has an edition. Kept out of the page for size and because it is one
  * surface with one job: tell the reader what this edition is missing.
  */
-export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, onSwitch }: Readonly<{
+export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, englishEditionsEnabled, contentLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, onSwitch, generating = false, liveProgress }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   contentBlocked: boolean
@@ -36,6 +38,9 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
   setOpenGroup: (group: Readonly<{ key: string; trigger: HTMLElement | null }> | null) => void
   listAttempts?: DailyBriefingClient['listAttempts']
   onSwitch: (locale: 'zh-CN' | 'en-US') => void
+  /** A run is in flight and this issue already has an edition: the steps report here, live. */
+  generating?: boolean
+  liveProgress?: BriefingGenerationProgress | undefined
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         {englishEditionsEnabled ? <DailyBriefingLanguageSwitch value={contentLocale} onChange={onSwitch} /> : null}
@@ -63,7 +68,11 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
             </li>)}
           </ol>
         </details> : null}</section>
-        <div data-briefing-stages="true"><DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} /></div>
+        {/* The column's first block reports the run when one is in flight: same stepper, live states.
+            Otherwise it reports what the stored attempt recorded. */}
+        <div data-briefing-stages="true">{generating
+          ? <DailyBriefingGenerationTimeline running text={text} formatTime={formatTime} trace={liveProgress ? traceFromProgress(liveProgress) : undefined} />
+          : <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />}</div>
         {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={listAttempts ? (date, periodId, language) => listAttempts({ date, locale: language, periodId }) : undefined} /> : null}
         </> : null}
       </aside>

@@ -10,7 +10,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingStagePanel } from './DailyBriefingStagePanel'
 import { runningRowName } from './DailyBriefingLiveSteps'
-import { generationStageIds, type GenerationTrace } from './dailyBriefingGenerationTrace'
+import type { GenerationTrace } from './dailyBriefingGenerationTrace'
 
 /**
  * What the page shows while today's edition is still being generated.
@@ -61,24 +61,14 @@ export function DailyBriefingGeneratingView({ text, progress, progressUnreadable
       />
     </div>
     {progressUnreadable ? <p className="mi-daily-briefing-page__loading-hint" data-progress-unreadable="true">{text.generationProgress.unknown}</p> : null}
-    <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : pendingTrace()} />
+    {/* No progress yet means no attempt to describe: an invented start time beside "attempt" reads
+        as a real one, and while the run waits for data that number would not even be its start. */}
+    <DailyBriefingGenerationTimeline formatTime={formatTime ?? (() => '')} running text={text} trace={progress ? traceFromProgress(progress) : undefined} />
   </DailyBriefingStagePanel>
 }
 
-/** Before the first progress answer arrives every stage simply has not started; the rows still exist. */
-function pendingTrace(): GenerationTrace {
-  const startedAt = new Date().toISOString()
-  return {
-    attemptId: 'pending',
-    startedAt,
-    finishedAt: startedAt,
-    state: 'success',
-    stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
-  }
-}
-
 /** The stage list has one shape everywhere: a run in flight uses the same stepper as a failed one. */
-function traceFromProgress(progress: BriefingGenerationProgress): GenerationTrace {
+export function traceFromProgress(progress: BriefingGenerationProgress): GenerationTrace {
   return {
     attemptId: progress.attemptId,
     startedAt: progress.startedAt,
@@ -86,19 +76,4 @@ function traceFromProgress(progress: BriefingGenerationProgress): GenerationTrac
     state: 'success',
     stages: progress.stages.map((stage) => ({ ...stage })) as GenerationTrace['stages']
   }
-}
-
-/** The detail column while generating: the stage list, and nothing reader-facing below it. */
-export function DailyBriefingGeneratingAside({ text, progress, formatTime }: Readonly<{
-  text: DailyBriefingText
-  progress: BriefingGenerationProgress | undefined
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
-}>): React.ReactElement {
-  return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.generationProgress.title}>
-    <div data-briefing-stages="true">
-      {progress
-        ? <DailyBriefingGenerationTimeline formatTime={formatTime} running text={text} trace={traceFromProgress(progress)} />
-        : <DailyBriefingGenerationTimeline formatTime={formatTime} running text={text} trace={pendingTrace()} />}
-    </div>
-  </aside>
 }

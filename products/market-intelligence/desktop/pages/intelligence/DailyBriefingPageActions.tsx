@@ -43,6 +43,8 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
         showing a past day, no detail column — keeps it clickable, and its name always says whose
         day it acts on. A disabled control with no reason the reader can see is not allowed. */}
     <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
+      /* A run in flight is a wait, so the control shows it is working instead of looking broken. */
+      loading={generating}
       {...(generating
         ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
         : { 'aria-label': text.headerGenerateTarget.replace('{date}', targetDate) })}
