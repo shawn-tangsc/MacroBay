@@ -25,6 +25,9 @@ export const channelRuntimeFailureMirrorCodes = [
   'telegram-poll-failed',
   'telegram-update-invalid',
   'telegram-runtime-evidence-missing',
+  'channel-runtime-owner-missing',
+  'channel-runtime-generation-stale',
+  'channel-runtime-owner-lost',
   'telegram-runtime-start-failed'
 ] as const
 

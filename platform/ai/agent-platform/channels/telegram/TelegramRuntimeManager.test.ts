@@ -55,8 +55,40 @@ describe('TelegramRuntimeManager', () => {
     seedActive(database)
     const fetch = vi.fn() as unknown as typeof globalThis.fetch
     const manager = createManager(database, async () => 'token', fetch)
-    await expect(manager.start('channel-a', 1, '')).resolves.toMatchObject({ ok: false, reason: 'telegram-runtime-start-failed' })
-    await expect(manager.start('channel-a', 2, 'owner-a')).resolves.toMatchObject({ ok: false, reason: 'telegram-runtime-start-failed' })
+    // 三个检查各自一个码：这三处都报「启动失败」，就等于什么都没说。
+    await expect(manager.start('channel-a', 1, '')).resolves.toEqual({ ok: false, reason: 'channel-runtime-owner-missing' })
+    await expect(manager.start('channel-a', 2, 'owner-a')).resolves.toEqual({ ok: false, reason: 'channel-runtime-owner-missing' })
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('names the stale generation check separately from the owner checks', async () => {
+    const database = createAgentPlatformDatabase(':memory:')
+    seedActive(database)
+    // owner 还对得上，但代际已不活跃（频道被停用）：一个网络请求都不该发。
+    database.connection.prepare("update agent_channels set lifecycle_state='disabled', requested_enabled=0 where id='channel-a'").run()
+    const fetch = vi.fn() as unknown as typeof globalThis.fetch
+    const manager = createManager(database, async () => 'token', fetch)
+    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toEqual({
+      ok: false, reason: 'channel-runtime-generation-stale'
+    })
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('names the owner-lost check when the permit disappears between the two checks', async () => {
+    const database = createAgentPlatformDatabase(':memory:')
+    seedActive(database)
+    const fetch = vi.fn() as unknown as typeof globalThis.fetch
+    let checks = 0
+    const manager = new TelegramRuntimeManager({
+      inbound: new ChannelInboundRepository(database), inboundService: {} as never, offsets: new TelegramOffsetRepository(database),
+      vault: { get: async () => ({ bot_token: 'token' }) } as never, getPlatformFetch: () => fetch,
+      delivery: new TelegramDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }),
+      // 第一次检查还成立，第二次（stop 之后）已经丢了许可。
+      ownsLifecycleOwner: () => { checks += 1; return checks === 1 }
+    })
+    await expect(manager.start('channel-a', 1, 'owner-a')).resolves.toEqual({
+      ok: false, reason: 'channel-runtime-owner-lost'
+    })
     expect(fetch).not.toHaveBeenCalled()
   })
 

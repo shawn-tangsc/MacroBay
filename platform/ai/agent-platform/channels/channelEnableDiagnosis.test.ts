@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
+import { ChannelInboundRepository } from './ChannelInboundRepository'
+import { TelegramDeliveryTransport } from './telegram/TelegramDeliveryTransport'
+import { TelegramOffsetRepository } from './telegram/TelegramOffsetRepository'
+import { TelegramRuntimeManager } from './telegram/TelegramRuntimeManager'
 import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegistry'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { ChannelManagementService } from './ChannelManagementService'
@@ -120,6 +124,89 @@ describe('enabling a channel that has no seven-item evidence', () => {
     const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
 
     expect(result.code).toBe('channel-agent-missing')
+  })
+
+  it('starts the real Telegram runtime on the user-shaped row (configured / disabled / epoch 13, no evidence)', async () => {
+    // 用户的真实状态：凭据可用、频道停用、没有七项证据；点一次开关必须真的起来，
+    // 而不是在「当前代际是否活跃」那一步被判否（那里曾经也被算死在模块加载时）。
+    const database = createAgentPlatformDatabase(':memory:')
+    seedChannelAdapterSupport(database, [])
+    database.connection.exec(`insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
+      values('${AGENT_ID}','custom','每日简报编辑','[]','[]','a','2026-11-04','2026-11-04')`)
+    database.connection.prepare(
+      `insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,credential_ref,credential_revision,mutation_epoch,created_at,updated_at)
+       values(?,'telegram','test',?,'{}',0,'disabled','configured',?,2,13,'2026-11-04','2026-11-04')`
+    ).run(CHANNEL_ID, AGENT_ID, `channel-migration:${CHANNEL_ID}:ref`)
+
+    const repository = new ChannelManagementRepository(database)
+    const fetch = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => (String(url).includes('/getMe') ? { ok: true, result: { username: 'bot' } } : { ok: true, result: [] })
+    })) as unknown as typeof globalThis.fetch
+    const manager = new TelegramRuntimeManager({
+      inbound: new ChannelInboundRepository(database),
+      inboundService: { acknowledge: async () => undefined, reject: async () => undefined } as never,
+      offsets: new TelegramOffsetRepository(database),
+      vault: { get: async () => ({ bot_token: '8830:secret' }) } as never,
+      getPlatformFetch: () => fetch,
+      delivery: new TelegramDeliveryTransport(),
+      getCredential: (id) => repository.credentialMetadata(id),
+      ownsLifecycleOwner: (id, token, generation) => repository.ownsLifecycleOwner(id, { token, purpose: 'enable', generation }),
+      recordLifecycle: () => undefined
+    })
+    const service = new ChannelManagementService({
+      repository,
+      vault: { inspectSafe: async (ref: string) => ({ credentialRef: ref, revision: 2, maskedFields: {} }), get: async () => ({ bot_token: '8830:secret' }) } as never,
+      cipher: {} as never,
+      registry: new ChannelAdapterAcceptanceRegistry(),
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: (id, generation, token) => manager.start(id, generation, token), stop: (id) => manager.stop(id) },
+      smoke: async () => ({ ok: true }),
+      now: () => new Date('2026-11-04T08:10:00.000Z')
+    })
+
+    const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
+
+    expect(result).toMatchObject({ ok: true, code: 'runtime-ready' })
+    expect(fetch).toHaveBeenCalled()
+    expect(database.connection.prepare('select lifecycle_state, requested_enabled from agent_channels where id = ?').get(CHANNEL_ID)).toEqual({
+      lifecycle_state: 'enabled', requested_enabled: 1
+    })
+    manager.stop(CHANNEL_ID)
+  })
+
+  it('carries the runtime failure reason to the interface instead of a generic sentence', async () => {
+    // 服务层的契约：运行时给什么原因，界面就拿到什么原因（以前这里被硬编码成「网络连不通」）。
+    const database = createAgentPlatformDatabase(':memory:')
+    seedChannelAdapterSupport(database, [])
+    database.connection.exec(`insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
+      values('${AGENT_ID}','custom','每日简报编辑','[]','[]','a','2026-11-04','2026-11-04')`)
+    database.connection.prepare(
+      `insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,credential_ref,credential_revision,created_at,updated_at)
+       values(?,'telegram','test',?,'{}',0,'ready','configured',?,2,'2026-11-04','2026-11-04')`
+    ).run(CHANNEL_ID, AGENT_ID, `channel-migration:${CHANNEL_ID}:ref`)
+    const service = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: { inspectSafe: async (ref: string) => ({ credentialRef: ref, revision: 2, maskedFields: {} }) } as never,
+      cipher: {} as never,
+      registry: new ChannelAdapterAcceptanceRegistry(),
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: async () => ({ ok: false, reason: 'channel-runtime-generation-stale' }), stop: () => {} },
+      smoke: async () => ({ ok: true }),
+      now: () => new Date('2026-11-04T08:10:00.000Z')
+    })
+
+    const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
+
+    expect(result).toMatchObject({ ok: false, code: 'adapter-runtime-start-failed' })
+    expect(result.reason).toBe('channel-runtime-generation-stale')
+    // 审计里也留一份真实原因，下一次排查不用猜。
+    const audit = database.connection.prepare(
+      "select summary_json from channel_management_audits where channel_id = ? and action = 'request-enable' order by created_at desc limit 1"
+    ).get(CHANNEL_ID) as { summary_json: string }
+    expect(JSON.parse(audit.summary_json)).toEqual({ runtimeReason: 'channel-runtime-generation-stale' })
   })
 
   it('keeps the two original behaviours intact: failed self-check and unsupported adapter', async () => {

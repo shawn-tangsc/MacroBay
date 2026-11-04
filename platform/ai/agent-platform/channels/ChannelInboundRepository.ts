@@ -75,7 +75,9 @@ export type ChannelWorkItemRecord = {
 
 type ReceiptRow = { id: string; status: string }
 
-const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
+// 不能在模块加载时算死：支持判定里含进程内的「取证放行」（setChannelAcceptanceOverride），
+// 算死的常量会让运行时这一侧永远判「未支持」，用户点启用必然失败。
+const SUPPORTED_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 export class ChannelInboundRepository {
   private readonly database: AgentPlatformDatabase
@@ -118,7 +120,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId, generation) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -130,7 +132,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -148,7 +150,7 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.conversation_id = ? and w.dispatch_id = ?
          and w.status = 'dispatching' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
-         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and v.agent_session_id is not null`
     ).get(
       input.claim.workItemId, input.claim.receiptId, input.claim.channelId, input.conversationId, input.claim.dispatchId,
@@ -207,7 +209,7 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where r.channel_id = ? and r.provider_event_key_hash = ? and r.status = 'processing'
          and w.status = 'processing' and w.lease_token is not null and w.lease_expires_at > ?
-         and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+         and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(channelId, eventHash, now.toISOString()) as InitialClaimRow | undefined
     return row ? {
       workItemId: row.id,
@@ -229,7 +231,7 @@ export class ChannelInboundRepository {
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
          and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
          and r.generation = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(
       claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
       claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -338,7 +340,7 @@ export class ChannelInboundRepository {
 
   managedChannelExists(channelId: string): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
+      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL()}`
     ).get(channelId))
   }
 
@@ -593,7 +595,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = ? and r.generation = ? and g.lifecycle_state = 'active'
-               and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
         ).run(leaseToken, lease, now.toISOString(), row.id, row.receipt_id, row.generation).changes
         if (updated === 1) {
@@ -627,7 +629,7 @@ export class ChannelInboundRepository {
                join agent_channels c on c.id = g.channel_id
                join agent_entities a on a.id = c.agent_id
                where g.channel_id = channel_inbound_work_items.channel_id and g.lifecycle_state = 'active'
-                 and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+                 and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
              )`
         ).run(now.toISOString(), row.id).changes
         if (quarantined === 1) {
@@ -653,7 +655,7 @@ export class ChannelInboundRepository {
          where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
            and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
            and r.generation = ? and g.lifecycle_state = 'active'
-           and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+           and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
       ).get(
         claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
         claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -695,7 +697,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where g.channel_id = channel_inbound_work_items.channel_id
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.leaseToken, claim.generation).changes
       if (quarantined === 1) {
@@ -721,7 +723,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         leaseExpiresAt, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -743,7 +745,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         status, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -861,7 +863,7 @@ export class ChannelInboundRepository {
            join agent_channels c on c.id = g.channel_id
            join agent_entities a on a.id = c.agent_id
            where g.channel_id = w.channel_id and g.lifecycle_state = 'active'
-             and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+             and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          )
        order by w.lease_expires_at asc, w.id asc limit ?`
     ).all(now.toISOString(), Math.max(1, Math.min(limit, 500))) as Array<{ id: string; receipt_id: string; channel_id: string; generation: number }>

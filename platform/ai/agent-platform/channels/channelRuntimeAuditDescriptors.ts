@@ -78,6 +78,9 @@ export type ChannelTelegramFailureCopyKey =
   | 'telegramRateLimited'
   | 'telegramUpdateInvalid'
   | 'telegramRuntimeStartFailed'
+  | 'channelRuntimeOwnerMissing'
+  | 'channelRuntimeGenerationStale'
+  | 'channelRuntimeOwnerLost'
   | 'telegramRuntimeEvidenceMissing'
 
 export const channelTelegramFailureDescriptors: Readonly<
@@ -88,6 +91,9 @@ export const channelTelegramFailureDescriptors: Readonly<
   'telegram-network-unavailable': { level: 'ERROR', copyKey: 'telegramNetworkUnavailable' },
   'telegram-proxy-unavailable': { level: 'ERROR', copyKey: 'telegramProxyUnavailable' },
   'telegram-runtime-start-failed': { level: 'ERROR', copyKey: 'telegramRuntimeStartFailed' },
+  'channel-runtime-owner-missing': { level: 'WARN', copyKey: 'channelRuntimeOwnerMissing' },
+  'channel-runtime-generation-stale': { level: 'WARN', copyKey: 'channelRuntimeGenerationStale' },
+  'channel-runtime-owner-lost': { level: 'WARN', copyKey: 'channelRuntimeOwnerLost' },
   'telegram-runtime-evidence-missing': { level: 'ERROR', copyKey: 'telegramRuntimeEvidenceMissing' },
   'telegram-rate-limited': { level: 'WARN', copyKey: 'telegramRateLimited' },
   'telegram-poll-failed': { level: 'WARN', copyKey: 'telegramPollFailed' },

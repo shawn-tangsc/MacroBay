@@ -4,7 +4,9 @@ import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase
 import { larkChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const LARK_CHANNEL_C_SQL = larkChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
+// 不能在模块加载时算死：支持判定里含进程内的「取证放行」（setChannelAcceptanceOverride），
+// 算死的常量会让运行时这一侧永远判「未支持」，用户点启用必然失败。
+const RUNTIME_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 /** Lark runtime persistence is code-only metadata; events and provider identifiers remain encrypted C03 payload. */
 export class LarkRuntimeRepository {
@@ -15,7 +17,7 @@ export class LarkRuntimeRepository {
     return this.database.transact(() => {
       const current = this.database.connection.prepare(
         `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
-         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
+         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
       if (!current) return false
@@ -30,7 +32,7 @@ export class LarkRuntimeRepository {
     return this.database.connection.prepare(
       `insert into channel_lark_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
-         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
+         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }
