@@ -38,6 +38,8 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     beginCredential: vi.fn(async () => ({ sessionId: 's', mainPublicJwk: {} })),
     submitCredential: vi.fn(async () => ({})),
     sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1' })),
+    // 行内「查看会话」只问一件事：这条频道有没有绑定过会话。默认没有——出现按钮的用例自己覆盖。
+    listConversations: vi.fn(async () => []),
     rotateCredential: vi.fn(async () => ({ ok: true, code: 'configuration-ready' })),
     ...overrides
   }
@@ -54,7 +56,9 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
               { id: 'ws-system', name: 'System', path: '/Users/me/Library/app', type: 'system', orderKey: 'b' }
             ]
           })),
-          ensureWorkspace: vi.fn(async (path: string) => ({ ok: true, workspace: { id: 'ws-new', name: '新目录', path } }))
+          ensureWorkspace: vi.fn(async (path: string) => ({ ok: true, workspace: { id: 'ws-new', name: '新目录', path } })),
+          // 「查看会话」只做两件事：选中这条频道绑定的助手，然后落到智能体页。
+          selectAgent: vi.fn(async () => ({}))
         },
         app: { selectDirectory: vi.fn(async () => '/Users/me/new-folder') }
       }
@@ -1175,5 +1179,68 @@ describe('sending a test message from the row', () => {
     const receipts = container.querySelectorAll('[data-test-receipt]')
     expect(receipts).toHaveLength(1)
     expect(receipts[0]?.textContent).toBe(labels.channelTestAmbiguousTarget)
+  })
+})
+
+
+/**
+ * 「怎么没有会话」这条（用户 2026-11-04 报）：手机来的会话属于频道绑定的那个助手，
+ * 而侧栏只显示当前助手的会话。修法是**让读者显式点一下**跳过去——不是偷偷改当前助手。
+ */
+describe('opening the conversation a channel is bound to', () => {
+  /** 「有没有绑定会话」是一次 IPC，挂载后再排一轮：多刷两次微任务再断言。 */
+  async function mountSettled(): Promise<HTMLElement> {
+    const container = await mount()
+    await act(async () => {})
+    await act(async () => {})
+    return container
+  }
+
+  function conversationButton(container: HTMLElement): HTMLButtonElement | undefined {
+    return [...container.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === labels.channelOpenConversation
+    ) as HTMLButtonElement | undefined
+  }
+
+  it('offers the entry only when the channel has a bound conversation', async () => {
+    // 没绑过会话：给一个点了会跳到空列表的按钮，比不给更糟。
+    installPlatform()
+    const none = await mountSettled()
+    expect(conversationButton(none)).toBeUndefined()
+
+    installPlatform({
+      listConversations: vi.fn(async () => [
+        { id: 'c-1', kind: 'direct', hasBoundSession: false, targetEnabled: false, sessionTitle: null, createdAt: '2026-11-04' }
+      ])
+    })
+    const unbound = await mountSettled()
+    expect(conversationButton(unbound)).toBeUndefined()
+
+    installPlatform({
+      listConversations: vi.fn(async () => [
+        { id: 'c-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: 'Telegram · 贾维斯', createdAt: '2026-11-04' }
+      ])
+    })
+    const bound = await mountSettled()
+    expect(conversationButton(bound)).toBeTruthy()
+  })
+
+  it('selects the agent the channel is bound to and lands on the agents page', async () => {
+    installPlatform({
+      listConversations: vi.fn(async () => [
+        { id: 'c-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: 'Telegram · 贾维斯', createdAt: '2026-11-04' }
+      ])
+    })
+    const container = await mountSettled()
+    const navigations: unknown[] = []
+    const onNavigate = (event: Event): void => { navigations.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', onNavigate)
+
+    await act(async () => conversationButton(container)?.click())
+    await act(async () => {})
+
+    expect(window.platform.agents.selectAgent).toHaveBeenCalledWith('agent-1')
+    expect(navigations).toEqual([{ navKey: 'agents' }])
+    window.removeEventListener('app-shell:navigate', onNavigate)
   })
 })

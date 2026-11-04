@@ -23,6 +23,7 @@ import type { ChannelPolicyPresence } from './ChannelFields'
 import { ChannelLogsPanel } from './ChannelLogsPanel'
 import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
+import { useChannelConversationEntry } from './useChannelConversationEntry'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
 import { mutationFailureSentence, readAgents, readWorkspaces, toCatalog, toChannel } from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
@@ -72,6 +73,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     Readonly<Record<string, { tone: 'muted' | 'bad'; text: string }>>
   >({})
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
+  /** 「查看会话」：哪些频道有会话、点一下跳到哪（页面只给两句话，逻辑在 hook 里）。 */
+  const conversationEntry = useChannelConversationEntry({
+    failureMessage: labels.channelOperationFailedUnknown,
+    onError: setError
+  })
 
   const reload = async (): Promise<void> => {
     try {
@@ -83,7 +89,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         window.platform.agents.getState()
       ])
       setCatalog(nextCatalog.map(toCatalog))
-      setChannels(nextChannels.map(toChannel))
+      const rows = nextChannels.map(toChannel)
+      setChannels(rows)
+      // 「有没有绑定会话」是另一个口：列表先上屏，这一位后到，读不到就不给入口。
+      void conversationEntry.readFlags(rows)
       setAgents(readAgents(agentState))
       setWorkspaces(readWorkspaces(workspaceState))
       setReadError(false)
@@ -394,6 +403,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     onDelete={setDeleting}
                     onEdit={(channel) => void openEditor(channel)}
                     onLogs={setLogsFor}
+                    hasConversation={conversationEntry.hasConversationByChannel[channel.id] === true}
+                    onOpenConversation={(channel) => void conversationEntry.open(channel)}
                     onSendTest={(channel) => void sendChannelTestMessage(channel, testDeps)}
                     onToggle={toggle}
                     testBusy={testBusyId === channel.id}

@@ -14,6 +14,8 @@ import type { Channel } from './channelSettingsPresentation'
  *   那等于给「部分可看」开一个口子，用户已经否了。
  * - 出错的行走**红点 + 行内一句话**，不弹面板、不弹原始错误串——错误是这一行的属性，不是一次弹窗。
  * - 行本身不可点：四个动作各自是一个控件，点空白不会连带做别的事。
+ * - 「查看会话」只在**这条频道已经有绑定的会话**时出现：没有会话时给一个点了会跳到空列表的按钮，
+ *   比不给更糟。它跳到这条频道绑定的助手（手机会话就在那个助手的会话列表里）。
  */
 export function ChannelRow(props: {
   channel: Channel
@@ -30,6 +32,9 @@ export function ChannelRow(props: {
   /** 上一次测试消息的回执（一句话 + 档位），同一位置替换。 */
   testReceipt?: { tone: 'muted' | 'bad'; text: string } | null
   onSendTest?: (channel: Channel) => void
+  /** 这条频道有没有绑定过会话：决定「查看会话」出不出来。 */
+  hasConversation?: boolean
+  onOpenConversation?: (channel: Channel) => void
 }): React.ReactElement {
   const { channel, labels } = props
   // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
@@ -84,6 +89,15 @@ export function ChannelRow(props: {
         >
           {labels.channelTestSend}
         </Button>
+        {props.hasConversation === true ? (
+          <Button
+            disabled={channel.state === 'deleting'}
+            onClick={() => props.onOpenConversation?.(channel)}
+            size="small"
+          >
+            {labels.channelOpenConversation}
+          </Button>
+        ) : null}
         <IconButton
           ariaLabelKey="settings.channels.logs"
           icon={FileText}
