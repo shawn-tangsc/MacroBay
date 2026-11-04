@@ -25,8 +25,11 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 export type DailyBriefingNotice =
   | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
-  /** 完成类：读者 2026-11-04 翻案恢复的一条日报完成提醒，一天一期，重新生成不再发。 */
-  | Readonly<{ kind: 'ready'; date: string }>
+  /**
+   * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「推送到手机」核对；`deliver: false`
+   * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
+   */
+  | Readonly<{ kind: 'ready'; date: string; editionId: string; locale: string; deliver?: boolean }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -97,6 +100,10 @@ export function buildBriefingNoticeRequest(
     return {
       eventTypeId: EVENT_IDS.briefingReady,
       producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      // The record states which edition it carries, so a later manual push can check it is the one on
+      // screen; a manual regeneration writes the record without delivering anything.
+      edition: { editionId: notice.editionId, locale: notice.locale },
+      ...(notice.deliver === false ? { deliver: false } : {}),
       dedupeVars: { builder: 'template', vars: { date: notice.date } },
       actions: [{ ...OPEN_BRIEFING_ACTION }],
       deeplink: { ...OPEN_BRIEFING_DEEPLINK },

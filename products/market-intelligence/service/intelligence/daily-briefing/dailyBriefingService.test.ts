@@ -825,14 +825,21 @@ describe('briefing notices', () => {
     expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt|period/)
   })
 
-  it('does not submit the completion notice again when the reader regenerates the same day', async () => {
-    // 「同一天重新生成不新增第二行」：服务这一侧是不补发；合并那一半由通知运行时的去重保证。
+  it('writes the completion record without delivering it when the reader regenerates', async () => {
+    // The record is not a delivery: a manual run still states which edition exists, so "push to phone"
+    // has something to check, while `deliver: false` keeps the surfaces silent until the reader asks.
     const { service, notices } = completedRun()
 
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(notices).toHaveLength(1)
+    // One automatic record, one manual one: the manual keeps the row and drops the delivery.
+    expect(notices).toHaveLength(2)
+    expect(notices[0]).not.toHaveProperty('deliver')
+    expect(notices[1]).toMatchObject({ deliver: false })
+    expect(notices[1]).toHaveProperty('edition')
+    // Both name the edition they carry, so a later push can check it is the one on screen.
+    expect(notices[0]).toHaveProperty('edition')
   })
 
   it('N5 ①: a terminal failure says the edition was not generated', async () => {
