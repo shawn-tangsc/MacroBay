@@ -42,14 +42,15 @@ const zh: BriefingPushText = {
   sentAccepted: '已交给 {channel}',
   sentUnconfirmed: '已交给 {channel}（未拿到回执）',
   channelUnknown: '推送通道',
-  failedTitle: '没推出去',
+  failedTitle: '没发出去',
   failed: {
-    'channel-not-configured': '还没有配置推送通道，先去频道设置里配一条',
-    'channel-disconnected': '连不上 {channel}',
+    // 读者能做的动作写进句子：去频道页启用一条，而不是一句「未配置」。
+    'channel-not-configured': '还没有可用的频道，先到「频道」启用一条',
+    'channel-disconnected': '网络连不上 {channel}',
     'channel-rate-limited': '{channel} 限制了发送频率，过一会儿再试',
     'runtime-unavailable': '推送服务还没启动',
-    // 暂时性，不是配置问题：别让读者去改设置。
-    'push-paused': '推送暂时停了，过一会儿会自动恢复',
+    // 暂时性，不是配置问题：会自己恢复，也可以当场重试。
+    'push-paused': '推送暂停了：连续失败后会自己恢复，也可以现在重试',
     // 与版次不符同因同果：记录里没有读者眼前这一版。两句若分开写，读者会以为是两种毛病。
     'record-missing': '这一版还没进通知，先重新生成再看',
     'edition-mismatch': '这一版还没进通知，先重新生成再看',
@@ -74,11 +75,11 @@ const en: BriefingPushText = {
   channelUnknown: 'the push channel',
   failedTitle: 'Not sent',
   failed: {
-    'channel-not-configured': 'No push channel is configured yet; add one in channel settings',
-    'channel-disconnected': 'Cannot reach {channel}',
+    'channel-not-configured': 'No channel is available yet; enable one in Channels',
+    'channel-disconnected': 'Cannot reach {channel} over the network',
     'channel-rate-limited': '{channel} is rate-limiting sends; try again shortly',
     'runtime-unavailable': 'The push service is not running yet',
-    'push-paused': 'Push is paused for now; it comes back by itself',
+    'push-paused': 'Push is paused: it comes back after repeated failures, or retry now',
     'record-missing': 'This edition is not in the notifications yet; generate it again first',
     'edition-mismatch': 'This edition is not in the notifications yet; generate it again first',
     'surface-invalid': 'This send could not start; reopen this page and try again'

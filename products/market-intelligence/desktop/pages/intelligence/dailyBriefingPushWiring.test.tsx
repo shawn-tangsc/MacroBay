@@ -123,7 +123,7 @@ describe('the push copy', () => {
     expect(briefingPushText['zh-CN'].failed['edition-mismatch']).toBe('这一版还没进通知，先重新生成再看')
     expect(briefingPushText['zh-CN'].failed['record-missing']).toBe(briefingPushText['zh-CN'].failed['edition-mismatch'])
     // 推送暂停是暂时的，别把读者指去改配置。
-    expect(briefingPushText['zh-CN'].failed['push-paused']).toContain('自动恢复')
+    expect(briefingPushText['zh-CN'].failed['push-paused']).toContain('自己恢复')
     // 五个拒绝各有自己那句：不许一句通用失败盖住。
     const reasons: readonly BriefingPushFailureKey[] = [
       'channel-not-configured', 'channel-disconnected', 'channel-rate-limited', 'runtime-unavailable', 'push-paused', 'record-missing', 'edition-mismatch', 'surface-invalid'
