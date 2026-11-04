@@ -29,6 +29,53 @@ function store(beginAttempt: (input: unknown) => Promise<number>): DailyBriefing
   } as unknown as DailyBriefingStore
 }
 
+describe('the index is never a reason to wait', () => {
+  it('does not wait for the index row, which is often late', async () => {
+    // The cell that would otherwise burn fifteen minutes every morning: readable snapshot with BTC
+    // and ETH priced is ready, even though the index is not.
+    const sleep = vi.fn(async () => undefined)
+    const gate = createDailyBriefReadiness({ readSnapshot: async () => readySnapshot, sleep })
+    const service = createDailyBriefingService({
+      source: { readFacts: vi.fn(async () => { throw new Error('not under test') }) } as never,
+      store: store(async () => 1),
+      readiness: gate,
+      editorialEnabled: async () => false,
+      now: () => NOW
+    })
+
+    await service.getToday({ locale: 'zh-CN', timeZone: TIME_ZONE }).catch(() => undefined)
+
+    expect(sleep).not.toHaveBeenCalled()
+  })
+})
+
+describe('a wait that runs out still produces the edition once', () => {
+  it('reports the timeout and starts exactly one run afterwards', async () => {
+    const attempts: unknown[] = []
+    let clock = 0
+    const gate = createDailyBriefReadiness({
+      readSnapshot: async () => undefined,
+      sleep: async (ms) => { clock += ms },
+      now: () => clock,
+      pollMs: 30_000,
+      budgetMs: 60_000
+    })
+    const service = createDailyBriefingService({
+      source: { readFacts: vi.fn(async () => { throw new Error('not under test') }) } as never,
+      store: store(async (input) => { attempts.push(input); return 1 }),
+      readiness: gate,
+      editorialEnabled: async () => false,
+      now: () => NOW
+    })
+
+    await service.getToday({ locale: 'zh-CN', timeZone: TIME_ZONE }).catch(() => undefined)
+
+    // One attempt, opened only after the budget expired.
+    expect(attempts).toHaveLength(1)
+    expect(clock).toBeGreaterThan(0)
+  })
+})
+
 describe('generation waits before it records anything', () => {
   it('opens no attempt while the market is unreadable, and probes with the edition’s cutoff', async () => {
     const order: string[] = []

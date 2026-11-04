@@ -86,12 +86,15 @@ export function createDailyBriefReadiness(deps: Readonly<{
   readSnapshot: (asOf: string) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
   onTimeout?: (info: Readonly<{ polls: number; waitedMs: number }>) => void
   sleep?: (ms: number) => Promise<void>
+  /** Injected clock, so a test's sleeps and the budget agree without real waiting. */
+  now?: () => number
   pollMs?: number
   budgetMs?: number
 }>): DailyBriefReadiness {
   const gate = createDailyBriefReadinessGate({
     ready: async (asOf) => crossAssetQuotesReady(await deps.readSnapshot(asOf)),
     sleep: deps.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
+    ...(deps.now ? { now: deps.now } : {}),
     ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),
     ...(deps.budgetMs === undefined ? {} : { budgetMs: deps.budgetMs })
   })
