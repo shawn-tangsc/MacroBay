@@ -163,8 +163,10 @@ export function NotificationSettingsScreen(props: {
           <footer className="notification-footer">
             <span>{text.footerLine}</span>
             <Popover
-              lines={[{ labelKey: 'centerDesc' }, { labelKey: 'footerHint' }]}
-              resolveText={(key: 'centerDesc' | 'footerHint') => text[key]}
+              lines={[{ labelKey: 'notifications.center.desc' }, { labelKey: 'notifications.footer.hint' }]}
+              resolveText={(key: 'notifications.center.desc' | 'notifications.footer.hint') =>
+                key === 'notifications.center.desc' ? text.centerDesc : text.footerHint
+              }
               trigger={(triggerProps) => (
                 <IconButton
                   ariaLabelKey={HINT_KEY_FOOTER}
