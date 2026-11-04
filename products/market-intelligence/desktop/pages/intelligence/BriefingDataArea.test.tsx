@@ -838,24 +838,32 @@ describe('the index cell reads its stored close', () => {
     return host
   }
 
-  it('leads with the level and keeps the move beside it', async () => {
-    const host = await renderIndex(() => undefined)
+  it('leads with the level, puts the move beside it, and keeps the proxy mark', async () => {
+    const host = await renderIndex((doc) => {
+      const index = doc.data.market.find((entry) => entry.id === 'index') as { indexSource?: string }
+      index.indexSource = 'proxy'
+    })
     const cell = host.querySelector('[data-reading="nasdaq"]')!
-    // 19,842.5: the value the document carries, formatted by the one formatter (thousands, no fake digits).
-    expect(cell.querySelector('b')?.textContent)
-      .toBe(formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN'))
-    // The move survives as a change, arrow and tone included — it is what the row is watched for.
+    // The level is the level: thousands, no invented digits, produced by the one formatter.
+    const level = formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN')
+    expect(cell.querySelector('b')?.textContent).toBe(level)
+    // The percentage must not sit beside it as a second primary — it is the move, and it keeps its arrow.
+    expect(cell.querySelector('b')?.textContent).not.toContain('%')
     expect(cell.querySelector('.mi-brief-poster__figure-change')?.textContent).toContain('↑0.82%')
+    // A proxy level is not the Nasdaq's own number: the mark must survive the level arriving, or a
+    // reader would take 689.73 for an index that trades in the tens of thousands.
+    expect((cell.textContent?.match(/QQQ 永续代理/g) ?? [])).toHaveLength(1)
   })
 
-  it('falls back to the move alone when the edition stored no close', async () => {
+  it('falls back to the move alone when the edition stored no close, and the two never coexist', async () => {
     const host = await renderIndex((doc) => {
       const index = doc.data.market.find((entry) => entry.id === 'index') as { close?: unknown }
       delete index.close
     })
     const cell = host.querySelector('[data-reading="nasdaq"]')!
     // No level to print, and no dash either: the old shape is the honest one here.
-    expect(cell.querySelector('b')?.textContent).not.toContain('19,842')
+    expect(cell.querySelector('b')?.textContent).toContain('%')
+    expect(cell.textContent).not.toContain('19,842')
     expect(cell.textContent).not.toContain(text.noValue)
   })
 })

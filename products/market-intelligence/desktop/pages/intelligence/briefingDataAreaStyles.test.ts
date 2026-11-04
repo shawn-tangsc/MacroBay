@@ -187,3 +187,23 @@ describe('the dial colours follow the lead, not the segment name', () => {
     expect(declaration(rule('.mi-brief-poster__policy-range-line'), 'color')).toBe('#6b695f')
   })
 })
+
+describe('the money cell leads with its one real number', () => {
+  it('tints a signed flow in the primary slot, and leaves a level untinted', () => {
+    // The ETF row's only figure is the day's net flow: it takes the primary slot and carries a sign, so
+    // it uses the change palette. A level (a price, a stock) still prints in the body ink.
+    expect(declaration(rule(".mi-brief-poster__figure > b[data-tone='up']"), 'color')).toBe('#1f5b32')
+    expect(declaration(rule(".mi-brief-poster__figure > b[data-tone='down']"), 'color')).toBe('#8f2a1d')
+  })
+})
+
+describe('the paper has one divider colour', () => {
+  it('keeps every 1px row divider the same colour, and only that colour', () => {
+    // One colour for every divider: two depths on the same sheet beat nothing — the reader cannot tell
+    // what the deeper one means, and it becomes the next "why is this line darker" question. The value
+    // lives in 07-style-values.md; here only the count of distinct values is judged.
+    const dividers = [...css.matchAll(/border-top:\s*1px solid\s*(#[0-9a-fA-F]{3,8})/g)].map((match) => match[1])
+    expect(dividers.length).toBeGreaterThan(0)
+    expect([...new Set(dividers)]).toEqual(['#c9bda3'])
+  })
+})
