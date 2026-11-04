@@ -22,6 +22,8 @@ export class TelegramPollingHost {
     isCurrent: () => boolean
     signal: AbortSignal
     botUsername?: string
+    /** 退出回调：`not-current` = 失去资格（代际/启用状态变了），`stopped` = 被明确停掉。 */
+    onExit?: (reason: 'not-current' | 'stopped') => void
     setTimeout?: (callback: () => void, ms: number) => Timer
     clearTimeout?: (timer: Timer) => void
   }) {}
@@ -32,8 +34,11 @@ export class TelegramPollingHost {
     this.schedule(0)
   }
 
-  close(): void {
+  /** 退出时留一行记录：静默退出是最坏的表现，用户只能干看着没反应。 */
+  close(reason: 'not-current' | 'stopped' = 'stopped'): void {
+    if (this.stopped) return
     this.stopped = true
+    this.deps.onExit?.(reason)
     this.controller?.abort()
     this.controller = null
     if (this.timer) (this.deps.clearTimeout ?? clearTimeout)(this.timer)
@@ -56,12 +61,14 @@ export class TelegramPollingHost {
   }
 
   private async poll(): Promise<void> {
-    if (this.stopped || this.deps.signal.aborted || !this.deps.isCurrent()) return this.close()
+    if (this.stopped || this.deps.signal.aborted) return this.close('stopped')
+    if (!this.deps.isCurrent()) return this.close('not-current')
     this.controller = new AbortController()
     const signal = AbortSignal.any([this.controller.signal, this.deps.signal])
     const response = await this.deps.api.updates(this.deps.offsets.get(this.deps.channelId), signal)
     this.controller = null
-    if (this.stopped || this.deps.signal.aborted || !this.deps.isCurrent()) return this.close()
+    if (this.stopped || this.deps.signal.aborted) return this.close('stopped')
+    if (!this.deps.isCurrent()) return this.close('not-current')
     if (!response.ok) {
       const delay = response.retryAfterMs ?? this.backoffMs
       this.backoffMs = Math.min(60_000, Math.max(1_000, this.backoffMs * 2))
@@ -71,12 +78,12 @@ export class TelegramPollingHost {
     }
     let retry = false
     for (const update of response.value) {
-      if (this.deps.signal.aborted || !this.deps.isCurrent()) return this.close()
+      if (this.deps.signal.aborted || !this.deps.isCurrent()) return this.close('not-current')
       const fact = normalizeTelegramUpdate(update, this.deps.botUsername)
       if (!fact) {
         // A syntactically unusable update is audited without its body, then only current ownership may skip it.
         this.deps.offsets.auditIfCurrent(this.deps.channelId, this.deps.generation, 'telegram-update-invalid')
-        if (!this.deps.offsets.commitIfCurrent(this.deps.channelId, this.deps.generation, update.update_id + 1)) return this.close()
+        if (!this.deps.offsets.commitIfCurrent(this.deps.channelId, this.deps.generation, update.update_id + 1)) return this.close('not-current')
         continue
       }
       const result = await this.deps.inbound.receive({

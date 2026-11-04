@@ -8,7 +8,7 @@
  */
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import type { ChannelManagementResult, ChannelManagementSafeView } from './ChannelManagementContracts'
-import { setChannelAcceptanceOverride } from './channelAcceptanceOverride'
+import { releaseChannelAcceptance, retainChannelAcceptance } from './channelAcceptanceOverride'
 
 export type ChannelSmokeResult =
   | { ok: true }
@@ -79,10 +79,15 @@ export async function requestSmokeEnabledChannel(
     deps.audit(reason, Object.keys(detail).length > 0 ? detail : undefined)
     return { ok: false, code: 'channel-smoke-failed', channel, reason }
   }
-  setChannelAcceptanceOverride(channel.type)
+  // 放行必须活到这条通道停用/删除为止：收消息的轮询宿主第一拍就排在这次调用之后，
+  // 在 finally 里清掉它，等于让宿主一启动就判「没资格」并静默退出（用户 2026-11-04 的故障）。
+  retainChannelAcceptance(channel.type)
   try {
-    return await deps.enable()
-  } finally {
-    setChannelAcceptanceOverride(null)
+    const result = await deps.enable()
+    if (result.ok !== true) releaseChannelAcceptance(channel.type)
+    return result
+  } catch (error) {
+    releaseChannelAcceptance(channel.type)
+    throw error
   }
 }

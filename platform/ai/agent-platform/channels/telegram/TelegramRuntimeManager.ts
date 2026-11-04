@@ -32,6 +32,8 @@ export class TelegramRuntimeManager {
     recordLifecycle?: (channelId: string, generation: number, state: 'started' | 'stopped') => void
     /** 起不来时把**具体原因**写进运行审计（面板能读到），别再让上层拿一句兜底话冒充原因。 */
     recordFailure?: (channelId: string, generation: number, reason: string) => void
+    /** 轮询宿主退出时记一行（失去资格 / 被停掉）：**静默退出**是最坏的表现形式。 */
+    recordExit?: (channelId: string, generation: number, code: string) => void
   }) {}
 
   async start(channelId: string, generation: number, ownerToken: string): Promise<TelegramRuntimeStartResult> {
@@ -77,7 +79,11 @@ export class TelegramRuntimeManager {
       this.deps.delivery.setClient(channelId, client, { isCurrent, signal: lifetime.signal })
       const host = new TelegramPollingHost({
         channelId, generation, inbound: this.deps.inboundService, offsets: this.deps.offsets, api: client,
-        isCurrent, signal: lifetime.signal, botUsername: identity.value
+        isCurrent, signal: lifetime.signal, botUsername: identity.value,
+        onExit: (reason) => {
+          // 只有「失去资格」要单独记一笔：用户停用/重启那一路已经有「连接已停止」了。
+          if (reason === 'not-current') this.deps.recordExit?.(channelId, generation, 'channel-stale-generation')
+        }
       })
       this.hosts.set(channelId, host)
       this.hostGenerations.set(channelId, generation)

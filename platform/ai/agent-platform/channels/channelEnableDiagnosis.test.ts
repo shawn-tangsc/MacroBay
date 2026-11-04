@@ -139,12 +139,13 @@ describe('enabling a channel that has no seven-item evidence', () => {
     ).run(CHANNEL_ID, AGENT_ID, `channel-migration:${CHANNEL_ID}:ref`)
 
     const repository = new ChannelManagementRepository(database)
-    const fetch = vi.fn(async (url: string) => ({
+    const fetchMock = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
       headers: new Headers(),
       json: async () => (String(url).includes('/getMe') ? { ok: true, result: { username: 'bot' } } : { ok: true, result: [] })
-    })) as unknown as typeof globalThis.fetch
+    }))
+    const fetch = fetchMock as unknown as typeof globalThis.fetch
     const manager = new TelegramRuntimeManager({
       inbound: new ChannelInboundRepository(database),
       inboundService: { acknowledge: async () => undefined, reject: async () => undefined } as never,
@@ -170,10 +171,19 @@ describe('enabling a channel that has no seven-item evidence', () => {
     const result = await Promise.resolve(service.requestEnable({ id: CHANNEL_ID, actorId: 'user-a' }))
 
     expect(result).toMatchObject({ ok: true, code: 'runtime-ready' })
-    expect(fetch).toHaveBeenCalled()
     expect(database.connection.prepare('select lifecycle_state, requested_enabled from agent_channels where id = ?').get(CHANNEL_ID)).toEqual({
       lifecycle_state: 'enabled', requested_enabled: 1
     })
+
+    // 关键：启用成功**之后**跑一拍，轮询宿主必须真的有资格、真的发过 getUpdates。
+    // 以前「自检放行」在 enable 返回的 finally 里就被清掉，宿主第一拍判 not-current 直接静默退出。
+    await new Promise<void>((resolve) => { setTimeout(resolve, 20) })
+    const generation = (database.connection.prepare(
+      'select generation from channel_runtime_generations where channel_id = ?'
+    ).get(CHANNEL_ID) as { generation: number }).generation
+    expect(new ChannelInboundRepository(database).isCurrentActive(CHANNEL_ID, generation)).toBe(true)
+    const updatePolls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/getUpdates'))
+    expect(updatePolls.length).toBeGreaterThanOrEqual(1)
     manager.stop(CHANNEL_ID)
   })
 

@@ -28,6 +28,7 @@ import {
   createChannelInboundContentGuard
 } from '../../../ai/agent-platform/channels'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
+import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../../ai/agent-platform/channels/channelRuntimeFailureMirror'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createPlatformWebSocketFactory } from '../../../network/platformWebSocket'
@@ -194,6 +195,10 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 起不来时把**具体原因**写进同一张表：面板读得到，用户不用再对着一句「网络连不通」猜。
     recordFailure: (channelId, generation, reason) => {
       if (isChannelRuntimeFailureMirrorCode(reason)) mirrorRuntimeFailure(agentDatabase, channelId, generation, reason, new Date())
+    },
+    // 轮询宿主退出也留一行：静默退出会让用户完全看不出为什么没反应。
+    recordExit: (channelId, generation, code) => {
+      if (code === 'channel-stale-generation') recordRuntimeAudit(agentDatabase, channelId, generation, code, new Date())
     }
   })
   const slackRuntimeManager = new SlackRuntimeManager({

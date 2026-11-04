@@ -16,6 +16,7 @@ import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
 import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { requestSmokeEnabledChannel } from './channelSmokeEnable'
+import { releaseChannelAcceptance } from './channelAcceptanceOverride'
 import { getWithCredentialPreviews, listWithCredentialPreviews } from './channelCredentialProjection'
 import { createChannelInventory, type ChannelInventory } from './channelInventoryQueries'
 import { requireExistingChannel } from './channelLookup'
@@ -130,7 +131,11 @@ export class ChannelManagementService {
 
   disable(input: MutationInput): ChannelManagementResult {
     const id = this.requireMutableChannel(input.id)
+    const type = this.deps.repository.channelType(id)
+    if (!type) throw new Error('channel-not-found')
     const ok = this.deps.repository.disable(id, this.now())
+    // 停用就把这次启用拿到的放行还回去：它不该在进程里继续算「可用」。
+    if (ok) releaseChannelAcceptance(type)
     if (ok) this.deps.runtime?.stop(id)
     this.deps.repository.audit(id, assertIdentifier(input.actorId), 'disable', ok ? null : 'channel-not-found', this.now())
     return ok ? { ok: true, code: 'disabled', channel: this.deps.repository.query.get(id) ?? undefined } : { ok: false, code: 'channel-not-found' }
@@ -319,6 +324,8 @@ export class ChannelManagementService {
     if (!operation) return { ok: false, code: 'channel-not-found' } as ChannelManagementResult
     this.deps.runtime?.stop(id)
     return this.withChannelMutation(id, async () => {
+      const deletedType = this.deps.repository.channelType(id)
+      if (deletedType) releaseChannelAcceptance(deletedType)
       this.deps.repository.audit(id, assertIdentifier(input.actorId), 'delete', null, now)
       try {
         await this.credentials.finalizeDelete(operation)
