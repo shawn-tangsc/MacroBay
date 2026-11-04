@@ -261,6 +261,7 @@ const en: NotificationSettingsText = {
     'platform.channel.push-resumed': 'Sending to your phone is back',
     'platform.desktop.blocked': 'A desktop notification did not appear',
     'market-intelligence.briefing.failed': 'The daily briefing did not generate',
+    'market-intelligence.briefing.ready': 'The daily brief is ready',
     'market-intelligence.signal.triggered': 'Module signal fired',
     'market-intelligence.macro.event-landed': 'A macro event landed',
     'market-intelligence.source.consecutive-failed': 'A source keeps failing',
