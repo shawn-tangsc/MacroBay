@@ -567,7 +567,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
-  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings, intelligenceModule.deleteDailyBriefingPeriod)
+  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings, intelligenceModule.deleteDailyBriefingPeriod, join(getIntelligenceProductDataDir(), 'daily-briefing-periods.json'))
   // Read-only startup diagnostic. The timeline renders the same empty state for "the
   // table is empty" and "the read failed", so the main process states the count it
   // can actually read. Counts only: no row contents and no credentials.

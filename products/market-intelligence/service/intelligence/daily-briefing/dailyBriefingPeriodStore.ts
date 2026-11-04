@@ -43,12 +43,16 @@ export type BriefingPeriodRemoveResult =
   | Readonly<{ state: 'missing'; id: string }>
 
 export type BriefingPeriodStore = Readonly<{
-  /** The configured periods, or the one default period when nothing is configured. */
-  list: () => Promise<readonly BriefingPeriod[]>
-  create: (draft: BriefingPeriodDraft) => Promise<BriefingPeriodSaveResult>
+  /**
+   * The configured periods, or the one default period when nothing is configured. `language` is the
+   * reader's current interface language: the never-configured fallback period speaks it. When the
+   * caller does not know it, the store's own fallback is used.
+   */
+  list: (language?: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
+  create: (draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
   /** Replaces one period's values while keeping its id: moving the hour never changes identity. */
-  update: (id: string, draft: BriefingPeriodDraft) => Promise<BriefingPeriodSaveResult>
-  remove: (id: string) => Promise<BriefingPeriodRemoveResult>
+  update: (id: string, draft: BriefingPeriodDraft, language?: DailyBriefingLocale) => Promise<BriefingPeriodSaveResult>
+  remove: (id: string, language?: DailyBriefingLocale) => Promise<BriefingPeriodRemoveResult>
 }>
 
 export function createBriefingPeriodStore(deps: Readonly<{
@@ -60,10 +64,11 @@ export function createBriefingPeriodStore(deps: Readonly<{
 }>): BriefingPeriodStore {
   const newId = deps.newId ?? (() => `period_${randomUUID()}`)
 
-  const readEffective = async (): Promise<readonly BriefingPeriod[]> => {
+  const readEffective = async (language?: DailyBriefingLocale): Promise<readonly BriefingPeriod[]> => {
     const raw = await deps.storage.read()
-    // Never configured: one period, so a fresh install still has a schedule.
-    if (raw === undefined) return Object.freeze([createDefaultBriefingPeriod(deps.defaultLanguage())])
+    // Never configured: one period, so a fresh install still has a schedule, in the reader's own
+    // language (the caller passes it; the constructor's fallback is only for callers that cannot).
+    if (raw === undefined) return Object.freeze([createDefaultBriefingPeriod(language ?? deps.defaultLanguage())])
     // Configured and empty: the reader deleted every period. Inventing a default here would put a
     // 07:00 row back that nobody configured — the same class of lie as made-up data.
     return readBriefingPeriods(raw)
@@ -77,10 +82,10 @@ export function createBriefingPeriodStore(deps: Readonly<{
   return Object.freeze({
     list: readEffective,
 
-    async create(draft) {
+    async create(draft, language) {
       const issue = briefingPeriodDraftIssue(draft)
       if (issue) return { state: 'rejected', code: 'daily-briefing-period-invalid', issue }
-      const current = await readEffective()
+      const current = await readEffective(language)
       const conflict = briefingPeriodConflict(current, draft)
       if (conflict) return { state: 'rejected', code: 'daily-briefing-period-duplicate', conflict }
       const period: BriefingPeriod = Object.freeze({
@@ -95,10 +100,10 @@ export function createBriefingPeriodStore(deps: Readonly<{
       return { state: 'saved', period, periods: await persist(periods) }
     },
 
-    async update(id, draft) {
+    async update(id, draft, language) {
       const issue = briefingPeriodDraftIssue(draft)
       if (issue) return { state: 'rejected', code: 'daily-briefing-period-invalid', issue }
-      const current = await readEffective()
+      const current = await readEffective(language)
       const existing = current.find((entry) => entry.id === id)
       if (!existing) return { state: 'rejected', code: 'daily-briefing-period-missing', id }
       const conflict = briefingPeriodConflict(current, draft, id)
@@ -114,8 +119,8 @@ export function createBriefingPeriodStore(deps: Readonly<{
       return { state: 'saved', period, periods: await persist(periods) }
     },
 
-    async remove(id) {
-      const current = await readEffective()
+    async remove(id, language) {
+      const current = await readEffective(language)
       if (!current.some((entry) => entry.id === id)) return { state: 'missing', id }
       const periods = Object.freeze(current.filter((entry) => entry.id !== id))
       return { state: 'removed', id, periods: await persist(periods) }
