@@ -49,7 +49,12 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       <span className="mi-brief-poster__block-title">{text.sections.markets}</span>
       {/* Three columns by two lines; five cells leave the sixth empty rather than reflowing. */}
       <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div>
-      {readings.length > 3 ? <div className="mi-brief-poster__figure-line">{readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div> : null}
+      {/* The table has six cells; today's five leave the sixth blank rather than stretching the row. The
+          blank is a node, not an absence: "six cells, five readings" has to be countable. */}
+      {readings.length > 3 ? <div className="mi-brief-poster__figure-line">
+        {readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}
+        {Array.from({ length: Math.max(0, 3 - (readings.length - 3)) }, (_, index) => <div key={`empty-${index}`} data-reading-empty="true" aria-hidden="true" />)}
+      </div> : null}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
       <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>

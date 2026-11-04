@@ -108,6 +108,9 @@ describe('the data region', () => {
     // Order is fixed and not by movement: the three money cells, then the five market ones.
     expect(funds).toEqual(['etf-btc', 'etf-eth', 'stablecoin'])
     expect(market).toEqual(['nasdaq', 'dxy', 'gold', 'ust10y', 'fear-greed'])
+    // The market table has six cells; the sixth is a blank node, countable and never stretched.
+    expect(dom.querySelectorAll('[data-briefing-market-row] .mi-brief-poster__figure-line > *')).toHaveLength(6)
+    expect(dom.querySelectorAll('[data-briefing-market-row] [data-reading-empty]')).toHaveLength(1)
     expect([...funds, ...market]).toHaveLength(8)
     // The real yield stays in the document (gaps and the numeric whitelist count it) and never on a line.
     expect(dom.querySelector('[data-reading="us10y-real"]')).toBeNull()
