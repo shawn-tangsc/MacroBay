@@ -302,6 +302,9 @@ export const CHANNEL_FAILURE_CODES = [
   'channel-runtime-owner-conflict',
   'channel-runtime-owner-lost',
   'channel-runtime-owner-missing',
+  // 「打开这条频道的会话」两种打不开：没绑定会话 / 会话侧没有选中能力。
+  'conversation-session-missing',
+  'session-selection-unavailable',
   'channel-smoke-failed',
   'telegram-conflict',
   'telegram-credential-missing',

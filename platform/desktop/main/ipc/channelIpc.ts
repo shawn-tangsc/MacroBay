@@ -121,6 +121,14 @@ export function registerChannelIpc(
     const value = asChannelInput(input)
     return channelInboundService.ignoreCandidate(String(value.channelId ?? value.id), String(value.candidateId))
   })
+  ipcMain.handle(IpcChannels.channelsOpenConversation, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    // 会话 id 不经过这里返回：主进程查出来、用掉，只回成败与原因。
+    return channelInboundService.openConversation({
+      channelId: String(value.channelId ?? value.id),
+      conversationId: String(value.conversationId)
+    })
+  })
 
 }
 

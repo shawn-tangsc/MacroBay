@@ -261,6 +261,8 @@ export type PlatformText = {
     channelTestSend: string
     /** 行内的「查看会话」：跳到这条频道绑定的助手，再打开那条会话（只在有绑定会话的频道上出现）。 */
     channelOpenConversation: string
+    /** 「查看会话」打不开时的一句：两种原因都收在这一句里，不假装知道是哪一种。 */
+    channelOpenConversationFailed: string
     channelTestMessageBody: string
     channelTestAccepted: string
     channelTestUnconfirmed: string
@@ -1662,6 +1664,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'channel-runtime-owner-lost': '启用过程中运行许可被别的操作抢走了，再点一次就好',
       'channel-runtime-owner-missing': '这次启用已经没有对应的运行许可了，再点一次就好',
       'channel-smoke-failed': '这次没有通过检查',
+      'conversation-session-missing': '这条对话还没绑定会话，先让它收到一条消息',
+      'session-selection-unavailable': '会话列表现在打不开，稍后再试',
       'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
       'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
       'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
@@ -1687,6 +1691,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSwitch: '启用这个频道',
       channelTestSend: '发送测试消息',
       channelOpenConversation: '查看会话',
+      channelOpenConversationFailed: '这条对话还没绑定会话，或会话列表暂时打不开。',
       channelTestMessageBody: '来自观潮的一条测试消息：收到它说明这个频道能把消息发到手机。',
       // `{target}` 是会话名（`Telegram · 贾维斯`）或平台名（读不到名字时）。
       // **只给事实**：发了没、发给谁。「已发给」而不是「已送达」——后者我们证明不了，
@@ -3012,6 +3017,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'channel-runtime-owner-lost': 'another action took the run permit while enabling; try again',
       'channel-runtime-owner-missing': 'this enable no longer holds a runtime permit; try again',
       'channel-smoke-failed': 'the check did not pass',
+      'conversation-session-missing': 'this conversation has no session yet; send it one message first',
+      'session-selection-unavailable': 'the session list cannot be opened right now; try again shortly',
       'telegram-conflict': 'another program is using the same bot; stop that one first',
       'telegram-credential-missing': 'no token is stored yet; add one in Edit',
       'telegram-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
@@ -3036,6 +3043,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSwitch: 'Enable this channel',
       channelTestSend: 'Send test message',
       channelOpenConversation: 'Open conversation',
+      channelOpenConversationFailed: 'This conversation has no session yet, or the session list is unavailable right now.',
       channelTestMessageBody: 'A test message from MacroBay: if it arrives, this channel can reach your phone.',
       channelTestAccepted: 'Sent to {target}',
       channelTestUnconfirmed: 'Sent to {target}, no receipt yet',

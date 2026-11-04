@@ -11,7 +11,7 @@ import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelContentGuard, ChannelInboundFacts } from './ChannelInboundContracts'
 import { createChannelInboundContentGuard } from './ChannelInboundContentGuard'
 import { autoBindDeliveryTarget } from './channelAutoTargetBinding'
-import { touchChannelConversation } from './channelConversationBindings'
+import { readChannelConversationSession, touchChannelConversation } from './channelConversationBindings'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
 import { seedChannelAdapterSupport } from './channelTestSupport'
@@ -56,6 +56,36 @@ describe('ChannelInboundService', () => {
     // 已经写了名字：后续消息不许改它（只有 /new 才会换新会话与新名字）。
     await receive(service, 'channel-a', { providerEventKey: 'title-2', providerUserLabel: '别人' })
     expect(database.connection.prepare('select session_title from channel_conversations').get()).toEqual(first)
+  })
+
+  it('opens the exact bound session for a conversation, and never hands the session id back', async () => {
+    const { service, database, selectedSessionIds } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'open-1' })
+    const row = database.connection.prepare('select id, agent_session_id from channel_conversations').get() as
+      { id: string; agent_session_id: string }
+
+    const opened = await service.openConversation({ channelId: 'channel-a', conversationId: row.id })
+    // 成功时**不带**会话 id：那个值不出主进程。
+    expect(opened).toEqual({ ok: true })
+    // 选中的是这条对话绑着的**那一条**，不是「这个助手的第一个会话」。
+    expect(selectedSessionIds).toEqual([row.agent_session_id])
+  })
+
+  it('names why it cannot open a conversation instead of pretending it did', async () => {
+    const missing = createHarness()
+    await expect(missing.service.openConversation({ channelId: 'channel-a', conversationId: 'missing' }))
+      .resolves.toEqual({ ok: false, code: 'conversation-session-missing' })
+
+    const { service, database, selectedSessionIds } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'open-2' })
+    const row = database.connection.prepare('select id from channel_conversations').get() as { id: string }
+    // 会话侧没有选中能力时必须报原因：假装成功会让界面跳到一个其实没换过去的页面。
+    ;(service as unknown as { deps: { selectSession?: unknown } }).deps.selectSession = undefined
+    await expect(service.openConversation({ channelId: 'channel-a', conversationId: row.id }))
+      .resolves.toEqual({ ok: false, code: 'session-selection-unavailable' })
+    expect(selectedSessionIds).toEqual([])
   })
 
   it('refreshes the conversation updated_at on every inbound, without adding a second row', async () => {
@@ -1018,7 +1048,10 @@ function createHarness(
   seed = true,
   contentGuard: ChannelContentGuard = passthroughGuard
 ): {
-  database: AgentPlatformDatabase; repository: ChannelInboundRepository; service: ChannelInboundService; cipher: ChannelPayloadCipher & { encrypt: ReturnType<typeof vi.fn> }
+  database: AgentPlatformDatabase; repository: ChannelInboundRepository; service: ChannelInboundService
+  cipher: ChannelPayloadCipher & { encrypt: ReturnType<typeof vi.fn> }
+  /** 「打开会话」选中了哪一条：会话 id 只在主进程里出现，用例在这里核对。 */
+  selectedSessionIds: string[]
 } {
   if (seed) seedRuntimeReadyChannel(database, 'channel-a')
   if (seed) seedRuntimeReadyChannel(database, 'channel-b')
@@ -1026,10 +1059,12 @@ function createHarness(
   const repository = new ChannelInboundRepository(database)
   if (seed) { repository.start('channel-a'); repository.start('channel-b') }
   let sequence = 0
+  const selectedSessionIds: string[] = []
   return {
     database,
     repository,
     cipher,
+    selectedSessionIds,
     service: new ChannelInboundService({
       repository,
       encryption: { cipher },
@@ -1039,6 +1074,8 @@ function createHarness(
       touchConversation: ({ channelId, conversationId, now }) => {
         touchChannelConversation(database, { channelId, conversationId, now })
       },
+      conversationSessionId: ({ channelId, conversationId }) => readChannelConversationSession(database, { channelId, conversationId }),
+      selectSession: async (sessionId) => { selectedSessionIds.push(sessionId) },
       now: () => new Date('2026-07-18T00:00:00.000Z')
     })
   }

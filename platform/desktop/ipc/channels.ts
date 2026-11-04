@@ -82,6 +82,11 @@ export const IpcChannels = {
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',
+  /**
+   * 「打开这条频道的会话」：只收频道 id + 对话 id，**不回会话 id**。会话 id 留在主进程里被用掉，
+   * 渲染层拿到的是「可以跳了」或一个具名原因。
+   */
+  channelsOpenConversation: 'platform:channels-open-conversation',
   channelsSetTarget: 'platform:channels-set-target',
   channelsListCandidates: 'platform:channels-list-candidates',
   channelsAllowCandidate: 'platform:channels-allow-candidate',

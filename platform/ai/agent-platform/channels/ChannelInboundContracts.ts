@@ -40,6 +40,14 @@ export type ChannelInboundResult = {
   dispatchId?: string
 }
 
+/**
+ * 「打开这条频道的会话」的结果。**成功时不带会话 id**：那个值不出主进程，
+ * 渲染层拿到的只有「可以跳了」或一个具名原因。
+ */
+export type ChannelConversationOpenResult =
+  | { ok: true }
+  | { ok: false; code: 'conversation-session-missing' | 'session-selection-unavailable' }
+
 // Recovery exposes ownership only. Payload becomes available after the final lifecycle gate.
 export type ChannelExecutionClaim = {
   workItemId: string

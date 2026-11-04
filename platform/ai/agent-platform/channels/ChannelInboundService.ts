@@ -9,6 +9,7 @@ import {
   type ChannelSessionSuggestion,
   type ChannelInboundEncryption,
   type ChannelExecutionClaim,
+  type ChannelConversationOpenResult,
   type ChannelInboundRequest,
   type ChannelInboundResult,
   type ChannelSessionFactory
@@ -31,6 +32,13 @@ export type ChannelInboundServiceDependencies = {
    * 界面上没有绑定入口，所以这一步不能指望读者动手。
    */
   bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
+  /** 读这条对话绑着的 Agent 会话 id（主进程内用，绝不回给渲染层）。 */
+  conversationSessionId?: (input: { channelId: string; conversationId: string }) => string | null
+  /**
+   * 让会话侧把这一条设为当前会话。缺省时「打开会话」返回 `session-selection-unavailable`，
+   * 不假装成功——按钮点了没反应比给一句原因更糟。
+   */
+  selectSession?: (sessionId: string) => Promise<void>
   /**
    * 每次入站刷新这条对话的「最近活跃」时间。与 `bindAutoTarget` 同一个注入形状：
    * SQL 那一层不在这里，服务只报「这条对话刚有消息」。
@@ -55,6 +63,21 @@ export class ChannelInboundService {
 
   constructor(deps: ChannelInboundServiceDependencies) {
     this.deps = deps
+  }
+
+  /**
+   * 「打开这条频道的会话」：入参只有**频道 id + 对话 id**，会话 id 由主进程自己查、自己用。
+   *
+   * 为什么不把会话 id 交给渲染层：`ChannelManagementQueryRepository` 写着「session IDs never leave
+   * this repository」，会话 DTO 上还有守卫用例钉着。读者要的是「点一下到那条会话」，
+   * 不是「界面拿到一个内部 id」——所以选中动作在这里代做，返回一个只有成败与原因的结果。
+   */
+  async openConversation(input: { channelId: string; conversationId: string }): Promise<ChannelConversationOpenResult> {
+    const sessionId = this.deps.conversationSessionId?.(input)
+    if (!sessionId) return { ok: false, code: 'conversation-session-missing' }
+    if (!this.deps.selectSession) return { ok: false, code: 'session-selection-unavailable' }
+    await this.deps.selectSession(sessionId)
+    return { ok: true }
   }
 
   async receive(request: ChannelInboundRequest): Promise<ChannelInboundResult> {

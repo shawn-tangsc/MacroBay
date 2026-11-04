@@ -25,7 +25,14 @@ import { encryptChannelHandoff } from './secureCredentialHandoff'
 import { ChannelRow } from './ChannelRow'
 import { useChannelConversationEntry } from './useChannelConversationEntry'
 import { CHANNEL_PLATFORM_LOGOS } from './channelPlatformLogos'
-import { mutationFailureSentence, readAgents, readWorkspaces, toCatalog, toChannel } from './channelSettingsPresentation'
+import {
+  channelFailureReason,
+  mutationFailureSentence,
+  readAgents,
+  readWorkspaces,
+  toCatalog,
+  toChannel
+} from './channelSettingsPresentation'
 import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
 import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 
@@ -75,7 +82,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [logsFor, setLogsFor] = useState<Channel | null>(null)
   /** 「查看会话」：哪些频道有会话、点一下跳到哪（页面只给两句话，逻辑在 hook 里）。 */
   const conversationEntry = useChannelConversationEntry({
-    failureMessage: labels.channelOperationFailedUnknown,
+    // 具名原因走既有的失败码表；表外的码才用那句兜底。
+    failureMessageFor: (code) => channelFailureReason(code, labels) ?? labels.channelOpenConversationFailed,
     onError: setError
   })
 

@@ -146,6 +146,21 @@ export function replaceChannelConversationSession(
 }
 
 /**
+ * 读这条对话绑着的 Agent 会话 id。**只在主进程里用**：`ChannelManagementQueryRepository` 的规矩是
+ * 「session IDs never leave this repository」，所以这个值**不许进任何 IPC 响应**，
+ * 只用来让主进程替读者把那条会话选中。
+ */
+export function readChannelConversationSession(
+  database: AgentPlatformDatabase,
+  input: { channelId: string; conversationId: string }
+): string | null {
+  const row = database.connection.prepare(
+    'select agent_session_id from channel_conversations where id = ? and channel_id = ?'
+  ).get(input.conversationId, input.channelId) as { agent_session_id: string | null } | undefined
+  return row?.agent_session_id ?? null
+}
+
+/**
  * 每次入站刷新这一行的「最近活跃」时间。**只动 updated_at**：键、会话、名字都由别的路径管。
  *
  * 为什么必须有：这行以前只在建会话 / `/new` 时写，于是 22:38 明明有消息、库里还停在 19:16 ——

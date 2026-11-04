@@ -124,6 +124,16 @@ describe('desktop main IPC surface', () => {
     expect(preloadSource).not.toContain('channelsListRuntimeAudits, write')
   })
 
+  it('keeps "open this channel conversation" on both halves of the seam, without returning the session id', () => {
+    // 「怎么没有会话」那一条的修法：渲染层只发频道 id + 对话 id，会话 id 由主进程查、主进程用。
+    // 两半缺一条：只有 handler 渲染层调不到，只有 preload 调用会 reject。
+    expect(channelIpcSource).toContain('IpcChannels.channelsOpenConversation')
+    expect(channelIpcSource).toContain('channelInboundService.openConversation(')
+    expect(preloadSource).toContain('openConversation: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input)')
+    // 会话 id 不许从这里回给渲染层：会话 DTO 上那条「session IDs never leave this repository」还钉着。
+    expect(channelIpcSource).not.toMatch(/channelsOpenConversation[\s\S]{0,400}sessionId/)
+  })
+
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')

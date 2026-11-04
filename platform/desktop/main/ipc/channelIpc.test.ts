@@ -39,7 +39,8 @@ const MANAGEMENT_CHANNELS = [
 const INBOUND_CHANNELS = [
   'platform:channels-list-candidates',
   'platform:channels-allow-candidate',
-  'platform:channels-ignore-candidate'
+  'platform:channels-ignore-candidate',
+  'platform:channels-open-conversation'
 ]
 
 const EXPECTED_CHANNELS = [...MANAGEMENT_CHANNELS, ...INBOUND_CHANNELS]
@@ -99,7 +100,7 @@ const MANAGEMENT_METHODS = [
   'setTarget'
 ] as const
 
-const INBOUND_METHODS = ['listCandidates', 'allowCandidate', 'ignoreCandidate'] as const
+const INBOUND_METHODS = ['listCandidates', 'allowCandidate', 'ignoreCandidate', 'openConversation'] as const
 
 const JWK = { kty: 'EC', crv: 'P-256', x: 'x-value', y: 'y-value' }
 const HANDOFF = { sessionId: 'session-1', rendererPublicJwk: JWK, iv: new Uint8Array([1]), ciphertext: new Uint8Array([2]) }
@@ -122,7 +123,7 @@ function setup() {
 const event = { sender: { id: 42 } } as never
 
 describe('channel ipc surface', () => {
-  it('registers 25 management channels then 3 inbound channels, in that order', () => {
+  it('registers 25 management channels then 4 inbound channels, in that order', () => {
     const { channels, ipcMain } = record()
     const management = sentinelService('management', MANAGEMENT_METHODS)
     const inbound = sentinelService('inbound', INBOUND_METHODS)
@@ -179,11 +180,14 @@ describe('channel ipc surface', () => {
     })
     // 历史调用点只给 `id`：入站侧的回退规则必须保留。
     await listeners.get('platform:channels-ignore-candidate')!(event, { id: 'channel-1', candidateId: 'cand-2' })
+    // 「打开这条频道的会话」：只转发频道 id + 对话 id，会话 id 由服务自己查、自己用。
+    await listeners.get('platform:channels-open-conversation')!(event, { channelId: 'channel-1', conversationId: 'conv-1' })
 
     expect(inbound.calls).toEqual([
       { method: 'listCandidates', args: ['channel-1', 7] },
       { method: 'allowCandidate', args: [{ channelId: 'channel-1', candidateId: 'cand-1', enableTarget: true }] },
-      { method: 'ignoreCandidate', args: ['channel-1', 'cand-2'] }
+      { method: 'ignoreCandidate', args: ['channel-1', 'cand-2'] },
+      { method: 'openConversation', args: [{ channelId: 'channel-1', conversationId: 'conv-1' }] }
     ])
   })
 

@@ -136,6 +136,8 @@ const api = {
     listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
     deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,
+    // 只有频道 id + 对话 id；主进程用完会话 id 就丢，回的是成败与原因。
+    openConversation: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input) as Promise<{ ok: true } | { ok: false; code: string }>,
     setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
     listCandidates: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input) as Promise<readonly ChannelCandidateSafeView[]>,
     allowCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),

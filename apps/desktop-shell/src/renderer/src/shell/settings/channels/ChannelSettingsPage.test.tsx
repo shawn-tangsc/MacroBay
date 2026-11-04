@@ -40,6 +40,8 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
     sendTestMessage: vi.fn(async () => ({ state: 'accepted', messageId: 'm-1' })),
     // 行内「查看会话」只问一件事：这条频道有没有绑定过会话。默认没有——出现按钮的用例自己覆盖。
     listConversations: vi.fn(async () => []),
+    // 「打开这条对话的会话」由主进程自己查会话 id、自己选中，渲染层只发频道 id + 对话 id。
+    openConversation: vi.fn(async () => ({ ok: true })),
     rotateCredential: vi.fn(async () => ({ ok: true, code: 'configuration-ready' })),
     ...overrides
   }
@@ -1226,7 +1228,7 @@ describe('opening the conversation a channel is bound to', () => {
   })
 
   it('selects the agent the channel is bound to and lands on the agents page', async () => {
-    installPlatform({
+    const channels = installPlatform({
       listConversations: vi.fn(async () => [
         { id: 'c-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: 'Telegram · 贾维斯', createdAt: '2026-11-04' }
       ])
@@ -1239,8 +1241,32 @@ describe('opening the conversation a channel is bound to', () => {
     await act(async () => conversationButton(container)?.click())
     await act(async () => {})
 
-    expect(window.platform.agents.selectAgent).toHaveBeenCalledWith('agent-1')
+    // 渲染层只发频道 id + 对话 id：会话 id 不进渲染层（主进程查、主进程用）。
+    expect(channels.openConversation).toHaveBeenCalledWith({ channelId: 'channel-1', conversationId: 'c-1' })
     expect(navigations).toEqual([{ navKey: 'agents' }])
+    window.removeEventListener('app-shell:navigate', onNavigate)
+  })
+
+  it('does not pretend it jumped when the main process refuses to open the conversation', async () => {
+    const channels = installPlatform({
+      listConversations: vi.fn(async () => [
+        { id: 'c-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: 'Telegram · 贾维斯', createdAt: '2026-11-04' }
+      ]),
+      openConversation: vi.fn(async () => ({ ok: false, code: 'conversation-session-missing' }))
+    })
+    const container = await mountSettled()
+    const navigations: unknown[] = []
+    const onNavigate = (event: Event): void => { navigations.push((event as CustomEvent).detail) }
+    window.addEventListener('app-shell:navigate', onNavigate)
+
+    await act(async () => conversationButton(container)?.click())
+    await act(async () => {})
+
+    expect(channels.openConversation).toHaveBeenCalled()
+    // 打不开就**不许**跳：跳到旧助手的列表会让读者以为打开的是这一条。
+    expect(navigations).toEqual([])
+    // 具名原因直接给读者：读不到哪一条都收在一句通用失败里，等于什么都没说。
+    expect(container.textContent).toContain(labels.channelFailureReason['conversation-session-missing'])
     window.removeEventListener('app-shell:navigate', onNavigate)
   })
 })
