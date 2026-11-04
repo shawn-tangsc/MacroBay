@@ -307,7 +307,8 @@ export const marketIntelligenceProductManifest = {
     notificationEvent('market-intelligence.signal.triggered', {
       body: true,
       requiresUserAction: false,
-      requestedDisruptionLevels: ['desktop', 'channel'],
+      // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
+      requestedDisruptionLevels: ['channel'],
       dedupeKeyBuilder: 'moduleSignal',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
@@ -315,7 +316,8 @@ export const marketIntelligenceProductManifest = {
     notificationEvent('market-intelligence.macro.event-landed', {
       body: true,
       requiresUserAction: false,
-      requestedDisruptionLevels: ['desktop', 'channel'],
+      // 同上：信息类不申请桌面档。
+      requestedDisruptionLevels: ['channel'],
       dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false

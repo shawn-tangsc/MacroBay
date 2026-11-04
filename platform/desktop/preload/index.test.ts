@@ -136,12 +136,13 @@ describe('desktop preload platform api', () => {
 
     // 具名白名单：新增方法必须改这里，否则「渲染层能调什么」会悄悄变宽。
     // `deleteRead` 是唯一破坏性入口，其余都是读、标读、收起、稍后这类状态迁移。
+    // 订阅层撤销后，设置类只留两个总开关 + 情报三条的频道开关（契约 §5.1 / §5.4）。
     expect(Object.keys(api.notifications).sort()).toEqual([
       'acknowledge',
       'deleteRead',
       'dismiss',
+      'getChannelEvents',
       'getDeliverySettings',
-      'getSubscriptions',
       'getUnreadState',
       'list',
       'listEventCatalog',
@@ -151,8 +152,8 @@ describe('desktop preload platform api', () => {
       'onDelivered',
       'readDesktopPermission',
       'sendTest',
-      'setPushChannel',
-      'setSubscription',
+      'setChannelEvent',
+      'setDesktopEnabled',
       'setToastEnabled',
       'snooze'
     ])
