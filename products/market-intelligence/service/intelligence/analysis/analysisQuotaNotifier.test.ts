@@ -33,6 +33,8 @@ function createRuntime() {
     read: async () => JSON.parse(JSON.stringify(state)),
     write: async (next) => { state = JSON.parse(JSON.stringify(next)) as StoreState }
   }
+  /** 一次桌面投递就是一次「打扰」，合并不许再多打扰一次——所以要数它被调了几次。 */
+  let desktopDeliveries = 0
   const runtime = createNotificationRuntime({
     storage,
     catalog: createNotificationEventCatalog({
@@ -41,9 +43,15 @@ function createRuntime() {
     }),
     diagnostics: () => undefined,
     getSettings: async () => settings,
-    clock: { now: () => new Date(NOW), timeZone: () => 'UTC' }
+    clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
+    deliveryHooks: {
+      desktop: async () => {
+        desktopDeliveries += 1
+        return { ok: true }
+      }
+    }
   })
-  return { runtime, records: () => state.records }
+  return { runtime, records: () => state.records, desktopDeliveries: () => desktopDeliveries }
 }
 
 describe('analysis quota notifier (P3)', () => {
@@ -76,21 +84,33 @@ describe('analysis quota notifier (P3)', () => {
     expect(utcDayOf('2026-11-04T00:00:00.001Z')).toBe('2026-11-04')
   })
 
-  it('keeps one row a day: a second refusal the same UTC day merges instead of adding a row', async () => {
-    const { runtime, records } = createRuntime()
+  it('keeps one row a day: the second refusal merges, does not disturb the reader twice, and updates the pair', async () => {
+    const { runtime, records, desktopDeliveries } = createRuntime()
 
-    const first = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: NOW })
+    const first = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 47, limit: 48, occurredAt: NOW })
     expect(first).toMatchObject({ kind: 'accepted' })
     expect(records()).toHaveLength(1)
+    const firstRecordId = records()[0]?.id
     expect(records()[0]).toMatchObject({
       eventTypeId: 'platform.analysis.quota-exhausted',
       dedupeKey: 'platform|quota-exhausted:2026-11-03',
-      bodyParams: { used: '48', limit: '48' }
+      bodyParams: { used: '47', limit: '48' }
     })
+    // 第一次被拒时打扰过一次；同一天再被拒不许打扰第二次。
+    expect(desktopDeliveries()).toBe(1)
 
     const second = await notifyAnalysisQuota((request) => runtime.submit(request), { used: 48, limit: 48, occurredAt: '2026-11-03T10:30:00.000Z' })
-    expect(second).toMatchObject({ kind: 'merged' })
+    expect(second).toMatchObject({ kind: 'merged', recordId: firstRecordId })
     expect(records()).toHaveLength(1)
+    // 正文跟着**最新一次**取数。第二次换了一对数是夹具：真实链路里同一天通常都是 48/48，
+    // 但合并若保留第一次的数，读者就会看到过期的「已用」——这里钉的正是「取最新」。
+    expect(records()[0]).toMatchObject({
+      id: firstRecordId,
+      bodyParams: { used: '48', limit: '48' },
+      // `occurrenceCount` 是「这件事发生了几次」，不是「今天被拒了几次」——界面不许拿它当计数展示。
+      occurrenceCount: 1
+    })
+    expect(desktopDeliveries()).toBe(1)
   })
 
   it('starts the next UTC day as a second row', async () => {

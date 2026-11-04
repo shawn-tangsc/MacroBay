@@ -14,6 +14,8 @@ import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
  * 按读者时区切，跨时区会让同一个「今天」变成两个键、两条提醒。
  *
  * 正文必须带两个数（「今天已用 X / 上限 Y」）：只写「用尽了」，读者不知道差多少。
+ * 记录上的 `occurrenceCount` 是「这件事发生了几次」，**不是**「今天被拒了几次」——别拿它当
+ * 计数展示给读者，那会读成「第 5 次额度用尽」，比不显示更糊涂。
  * 一条通知发不出去不能把一次拒绝判成故障，所以这里吞掉提交异常、返回 null。
  */
 const ANALYSIS_QUOTA_EVENT_ID = 'platform.analysis.quota-exhausted'
