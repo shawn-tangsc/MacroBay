@@ -1080,9 +1080,10 @@ describe('agent session runtime service', () => {
       sessionId: 'session-1', toolCallId: 'tool-call-bash', toolName: 'Bash'
     })).resolves.toEqual({ behavior: 'deny', message: '这个操作要在应用里做。' })
 
-    // 两条都没有进「等待确认」队列，也没有任何待确认的 chunk。
+    // 两条都没有进「等待确认」队列，也**没有任何待确认的 chunk**——界面上不会出现卡片。
     expect(approvalRegistry.listPending()).toEqual([])
     expect(runtime.listToolApprovals()).toEqual([])
+    expect(runtime.getSnapshot().chunksBySessionId['session-1'] ?? []).toEqual([])
     // 复位：这条标记是进程内状态，不能漏给后面的用例。
     resetChannelSessions()
   })
