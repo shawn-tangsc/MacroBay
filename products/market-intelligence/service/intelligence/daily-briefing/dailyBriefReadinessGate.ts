@@ -12,7 +12,8 @@
  *
  * Waiting happens before the attempt row is opened, so a wait leaves no half-run behind.
  */
-import { briefingLateDataGraceMs, briefingMarketReady, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
+import { briefingLateDataGraceMs } from './dailyBriefGracePolicy'
+import { briefingMarketReady, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 
 export const dailyBriefReadinessPolicy = Object.freeze({
   pollMs: 30_000,

@@ -16,13 +16,9 @@ import { crossAssetQuotesReady } from './dailyBriefReadinessGate'
  * One function, both consumers: the gate's "is the market readable" and the body's read of the same
  * market must never become two opinions about one fact again.
  */
-export const briefingLateDataGraceMs = 30 * 60_000
+import { briefingLateDataGraceMs, briefingMarketKnowledgeAt } from './dailyBriefGracePolicy'
 
-/** The version cutoff for an edition: its own cutoff plus the late-data grace. */
-export function briefingMarketKnowledgeAt(asOf: string, graceMs: number = briefingLateDataGraceMs): string | undefined {
-  const cutoff = Date.parse(asOf)
-  return Number.isFinite(cutoff) ? new Date(cutoff + graceMs).toISOString() : undefined
-}
+export { briefingLateDataGraceMs, briefingMarketKnowledgeAt }
 
 /** The part of a cross-asset snapshot this policy talks about: the closed returns it judges. */
 export type BriefingMarketSnapshot = Readonly<{
