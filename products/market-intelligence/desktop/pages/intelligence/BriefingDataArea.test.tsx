@@ -668,16 +668,20 @@ describe('a level the document does not carry is a dash with a reason, never a m
     expect(stable?.textContent).not.toContain(text.noValue)
   })
 
-  it('gives the ETF cells a dash for the missing size and keeps the flow beside it', async () => {
+  it('leads the ETF cell with the net flow and keeps the size slot a dash with its reason', async () => {
     const host = await render((doc) => {
-      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { change?: unknown }
-      etf.change = { value: -398_600_000, unit: 'usd', window: '1d' }
+      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: { number: number; format: string } }
+      etf.value = { number: -398_600_000, format: 'flow-usd' }
     })
-    const cell = host.querySelector('[data-reading="etfBtc"]') ?? host.querySelector('[data-briefing-funds-row] [data-reading]')!
-    expect(cell.textContent).toContain(text.noValue)
-    expect(cell.textContent).toContain(text.aumMissing)
-    // The flow is still printed — as a change, not as the size.
-    expect(cell.textContent).toContain('398')
+    const cell = host.querySelector('[data-reading="etf-btc"]')!
+    // The row's one real number takes the primary slot; the size this version does not collect stays a
+    // dash with its reason underneath, so "no size" no longer hides "there was an outflow".
+    expect(cell.querySelector('b')?.textContent)
+      .toBe(formatBriefingValue({ number: -398_600_000, format: 'flow-usd' }, text.noValue, 'zh-CN'))
+    expect(cell.querySelector('b')?.getAttribute('data-tone')).toBe('down')
+    expect(cell.textContent).toContain(`${text.noValue} ${text.aumMissing}`)
+    // One dash in the cell: the size slot. Two would leave the reader guessing which number is missing.
+    expect((cell.textContent ?? '').split(text.noValue).length - 1).toBe(1)
   })
 })
 
@@ -722,5 +726,56 @@ describe('the dial has four colours and at most three arcs', () => {
     const arcs = [...host.querySelectorAll('path[data-outcome]')].map((node) => node.getAttribute('class'))
     expect(swatches.map((node) => node.getAttribute('class')?.split(' ').at(-1))).toEqual(['mi-brief-poster__gauge-hold', 'mi-brief-poster__gauge-other'])
     expect(arcs.slice(1)).toEqual(swatches.map((node) => node.getAttribute('class')?.split(' ').at(-1)))
+  })
+})
+
+describe('three kinds of missing are three sentences', () => {
+  async function renderEtf(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
+    const doc = documentWithData()
+    mutate(doc)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host
+  }
+
+  it('separates "not collected" from "not received", and marks a stale one', async () => {
+    const fresh = await renderEtf((doc) => {
+      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: { number: number; format: string } }
+      etf.value = { number: -398_600_000, format: 'flow-usd' }
+    })
+    const freshText = fresh.querySelector('[data-reading="etf-btc"]')!.textContent!
+    expect(freshText).toContain(text.aumMissing)
+    expect(freshText).not.toContain(text.aumUnavailable)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    const unavailable = await renderEtf((doc) => {
+      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { value: unknown; state: string }
+      etf.value = null
+      etf.state = 'unavailable'
+    })
+    const unavailableText = unavailable.querySelector('[data-reading="etf-btc"]')!.textContent!
+    // "We did not collect it" is our omission; "no data this time" is the reading's. Printing the first
+    // sentence for the second case blames the product for the venue's silence.
+    expect(unavailableText).toContain(text.aumUnavailable)
+    expect(unavailableText).not.toContain(text.aumMissing)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    const stale = await renderEtf((doc) => {
+      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { state: string; valueBasis?: string }
+      etf.state = 'stale'
+      etf.valueBasis = 'last-close'
+    })
+    const staleCell = stale.querySelector('[data-reading="etf-btc"]')!
+    // A stale row keeps the size sentence but wears the stale marker: same fact, different claim.
+    expect(staleCell.querySelector('.mi-brief-poster__stale')).not.toBeNull()
+    expect(staleCell.textContent).toContain(text.aumMissing)
   })
 })

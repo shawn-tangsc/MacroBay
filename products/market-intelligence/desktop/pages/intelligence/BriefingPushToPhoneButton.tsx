@@ -7,7 +7,8 @@ import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushState } from './dailyBriefingPushWiring'
 
 /**
- * 「推送到手机」这颗按钮：只负责长什么样、什么时候不能按、失败了说什么。
+ * 频道发布按钮（文案在 `briefingPushText`，改词只动表）：只负责长什么样、什么时候不能按、
+ * 失败了说什么。
  *
  * 它**不发请求**——`onPush` / `onRetry` 由页面接（状态机在 `dailyBriefingPushWiring` 里），所以这个
  * 文件里一条 IPC/传输 import 都没有。「页面接线归简报线」不靠自觉，靠这里没有东西可调。

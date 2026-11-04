@@ -99,7 +99,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
  */
 type CellChange = Readonly<{ text: string; window?: string; tone?: 'up' | 'down'; arrow?: string }>
 type CellBand = Readonly<{ text: string; tone?: 'up' | 'down' }>
-type CellCopy = Readonly<{ primary: string; band?: CellBand; change?: CellChange; note?: string }>
+type CellCopy = Readonly<{ primary: string; primaryTone?: 'up' | 'down'; band?: CellBand; change?: CellChange; note?: string }>
 
 function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords, arrows: changeArrowWords): CellCopy {
   const level = formatBriefingValue(row.value, text.noValue, locale)
@@ -129,12 +129,18 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     return { primary: level, ...(bandPart ? { band: bandPart } : {}), change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
-    // The cell's level is the fund's own size, and the document stores only the day's flow so far: the
-    // dash plus the reason is honest, printing the flow there would claim it is the size.
+    // The cell's one real number is the day's net flow, so it takes the primary slot: leaving the size
+    // (which this version does not collect) in front of it hid the only figure the row has. The size
+    // slot keeps its dash and its reason underneath, and the flow is tinted by its sign like any other
+    // signed change.
+    const flow = row.value === null ? text.noValue : formatBriefingValue(row.value, text.noValue, locale)
+    const flowValue = row.value?.number
     return {
-      primary: text.noValue,
-      note: text.aumMissing,
-      ...(row.change ? { change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: row.change.unit === 'points' ? 'percent' : row.change.unit }, locale)) } : {})
+      primary: flow,
+      ...(flowValue === undefined || flowValue === 0 ? {} : { primaryTone: flowValue > 0 ? 'up' as const : 'down' as const }),
+      // Three cases, three sentences: a missing reading says so, a stale one carries the stale
+      // marker from `fallbackLabel`, and only a fresh row can say "this version does not collect it".
+      note: `${text.noValue} ${row.value === null ? text.aumUnavailable : text.aumMissing}`
     }
   }
   return row.change
@@ -160,8 +166,9 @@ function Figure({ row, text, locale, buckets, arrows }: Readonly<{
         ? <span className="mi-brief-poster__price-proxy" data-briefing-price-proxy="true">{text.indexProxy}</span>
         : null}
     </span>
-    {/* The level is never tinted: only a move is. */}
-    <b>{cell.primary}</b>
+    {/* A level is never tinted; a signed change is — the net flow is the latter, and it carries its tone
+        through the same attribute the change column uses. */}
+    <b data-tone={cell.primaryTone}>{cell.primary}</b>
     {cell.band ? <small className="mi-brief-poster__figure-band" data-tone={cell.band.tone}>{cell.band.text}</small> : null}
     {cell.change ? <small className="mi-brief-poster__figure-change">
       {cell.change.window ? <span className="mi-brief-poster__figure-window">{cell.change.window}</span> : null}

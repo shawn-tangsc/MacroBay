@@ -310,6 +310,8 @@
 .mi-brief-poster__figure-change { flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 2px; margin-left: 4px; }
 .mi-brief-poster__figure-window { font-size: 9.5px; line-height: 1; color: #6b695f; }
 .mi-brief-poster__figure-change b { font-size: 12px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure > b[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__figure > b[data-tone='down'] { color: #8f2a1d; }
 .mi-brief-poster__figure-change b[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__figure-change b[data-tone='down'] { color: #8f2a1d; }
 /* The band word colours a judgement, not a move. The hexes are the move palette on purpose — one red, not a
