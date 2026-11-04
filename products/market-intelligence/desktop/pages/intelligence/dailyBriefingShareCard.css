@@ -265,7 +265,12 @@
 /* The line belongs to the row, never to a cell: a border per cell breaks at every column gap and at a
    missing cell, which is what made the separators stop halfway. One line per row, full content width,
    and `column-gap` (not a margin on a cell) so it has no gaps to break at. */
-.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; border-bottom: 1px solid #ded4c2; }
+/* One line per row, on the row container, in a colour that survives the paper tone (#ded4c2 is a 1.28:1
+   against it — present but invisible); the block's own last row draws none, because the space after it
+   already separates the blocks. */
+.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 32px; border-bottom: 1px solid #c9bda3; }
+.mi-brief-poster__funds-block > .mi-brief-poster__figure-line:last-of-type,
+.mi-brief-poster__market-block > .mi-brief-poster__figure-line:last-of-type { border-bottom: 0; }
 .mi-brief-poster__figure { display: flex; align-items: baseline; gap: 6px; min-height: 20px; padding: 2px 0; white-space: nowrap; font-size: 11px; overflow: hidden; }
 /* The name gives way, the number never does: a truncated label still says which row it is, a clipped
    number is simply wrong. The value also never wraps — a wrapped cell breaks the grid's line height. */
@@ -290,7 +295,7 @@
 /* The amount is the trunk: 26px/750 in body colour, never tinted. The change beside it is 14px/600 and
    carries the colour — the row and the cell follow the same rule, so a reader sees one thing at a time. */
 .mi-brief-poster__leverage-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.mi-brief-poster__leverage-amount { font-size: 26px; font-weight: 750; line-height: 1.1; color: var(--mi-dashboard-text, #26241c); font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-amount { font-size: 26px; font-weight: 750; line-height: 1.1; color: #1b1d18; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__leverage-change { font-size: 14px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-poster__leverage-card[data-tone='up'] .mi-brief-poster__leverage-change { color: #1f5b32; }
 .mi-brief-poster__leverage-card[data-tone='down'] .mi-brief-poster__leverage-change { color: #8f2a1d; }
