@@ -41,10 +41,21 @@ function row(
   }
 }
 
+/**
+ * The document these cases run against.
+ *
+ * Provenance: values and shape follow the 2026-11-04 edition (schemaVersion 12) as verified against the
+ * store on 11-05 — `index.close` 689.73 through the perpetual proxy, the 24h percentage in `value`,
+ * `change: null` on that row. It is **not** a dump of the stored document: no exporter exists yet. When
+ * one does, its output replaces this fixture rather than sitting beside it — two near-identical fixtures
+ * are the next "one concept, two definitions".
+ */
 function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}): DailyBriefingDocument {
   const withDistribution = overrides.distribution !== false
   return {
-    schemaVersion: 9,
+    // The edition this fixture is modelled on (2026-11-04) is schema 12; the renderer does not branch on
+    // the version, so the fixture uses the same one to avoid an undeclared difference.
+    schemaVersion: 12,
     policyVersion: 'v1',
     edition: { date: today, locale: 'zh-CN', generatedAt: `${today}T00:30:00.000Z`, windowStart: `${today}T00:00:00.000Z`, windowEnd: `${today}T00:00:00.000Z`, timeZone: 'Asia/Shanghai' },
     lede: { text: 'lede' },
