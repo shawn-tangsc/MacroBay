@@ -1,25 +1,4 @@
 
-.mi-daily-briefing__state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px 12px;
-  color: var(--mi-dashboard-muted);
-}
-
-.mi-daily-briefing__state h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 20px; }
-.mi-daily-briefing__state p { margin: 0; }
-.mi-daily-briefing__state button {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid #3c4a2a;
-  border-radius: 7px;
-  background: #1c2418;
-  color: var(--mi-dashboard-lime);
-  cursor: pointer;
-}
-
 
 
 
@@ -253,10 +232,6 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 
 /* Which languages an issue has: a fact, not a control — flat, muted, never in Tab order. */
 .mi-daily-briefing__rail-edition-lang { display: block; margin-top: 2px; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; }
-
-/* A run in flight centres its one loading block in the content area instead of hanging from the
-   top edge with an empty screen below it. */
-.mi-daily-briefing-page__content > .mi-daily-briefing__state { display: flex; flex-direction: column; justify-content: center; min-height: min(62vh, 520px); }
 
 /* 发布频道：与「重新生成」同一组，按钮用平台默认样式，这里只负责它和那句成功回执怎么排。
    成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
