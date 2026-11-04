@@ -44,7 +44,10 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
     // not the parent window that contains someone else's work. Between segments nothing accumulates —
     // the previous times are dropped, which is the contract "last segment wins".
     if (existing && existing.state === 'pending') return
-    stages.set(id, { id, state: 'pending', startedAt: input.now() })
+    // A second segment counts what came before it, so the row can say "×4" instead of showing only the
+    // last check's timestamp and leaving the reader to conclude nothing was retried.
+    const runs = (existing?.runs ?? (existing === undefined ? 0 : 1)) + 1
+    stages.set(id, { id, state: 'pending', runs, startedAt: input.now() })
     changed()
   }
   const end: DailyBriefingGenerationRecorder['end'] = (id, state, outcome) => {
@@ -59,6 +62,7 @@ export function createDailyBriefingGenerationRecorder(input: Readonly<{
     stages.set(id, Object.freeze({
       id,
       state,
+      ...(existing?.runs !== undefined ? { runs: existing.runs } : {}),
       startedAt: stageStartedAt,
       finishedAt,
       ...(durationMs !== undefined ? { durationMs } : {}),

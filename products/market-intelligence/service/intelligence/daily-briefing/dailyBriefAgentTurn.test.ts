@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { repairPromptFor } from './dailyBriefingPrompt'
 
 import type { BriefingNextItem, DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { DailyBriefTurnAbortedError, runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
+import { DailyBriefTurnAbortedError, maximumRepairRounds, runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
 
 const CJK = /[\u4e00-\u9fff]/
 
@@ -384,5 +384,27 @@ describe('daily brief agent turn copy', () => {
       const entry = hidden.find((candidate) => candidate.factId === `macro:${item.eventKey}`)
       expect(entry?.reason).toBe('macro display cap reached (at most 4)')
     }
+  })
+})
+
+describe('the repair budget', () => {
+  it('rewrites three times and checks four, and every round carries a name', async () => {
+    // A run that never produces a valid reply: the model says "{}" every time, so every check fails.
+    const { runner } = fakeRunner()
+    const stages: { id: string; state: string }[] = []
+    const result = await runDailyBriefAgentTurn({
+      runner: runner as never,
+      document: document('zh-CN'),
+      locale: 'zh-CN',
+      onStage: (event: { stage: string; state: string }) => { stages.push({ id: event.stage, state: event.state }) }
+    })
+
+    expect(result.state).toBe('failed')
+    // The number is one constant, and the run honours it: three repairs means four checks.
+    expect(maximumRepairRounds).toBe(3)
+    const repairs = stages.filter((stage) => stage.id.startsWith('repair-') && stage.state === 'begin').map((stage) => stage.id)
+    expect(repairs).toEqual(['repair-1', 'repair-2', 'repair-3'])
+    const checks = stages.filter((stage) => stage.id === 'validation' && stage.state === 'begin')
+    expect(checks).toHaveLength(maximumRepairRounds + 1)
   })
 })

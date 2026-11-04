@@ -122,7 +122,7 @@ export type BriefingComparison = Readonly<{
 
 /** The fixed generation stages, in the order a successful generation runs them. */
 export const briefingGenerationStageIds = [
-  'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair-1', 'repair-2', 'store'
+  'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair-1', 'repair-2', 'repair-3', 'store'
 ] as const
 
 /**
@@ -140,7 +140,7 @@ export const briefingGenerationDisplayRows = [
   { id: 'field-backfill', stages: ['field-backfill'] },
   { id: 'writing', stages: ['writing'] },
   { id: 'validation', stages: ['validation'] },
-  { id: 'repair', stages: ['repair-1', 'repair-2'] },
+  { id: 'repair', stages: ['repair-1', 'repair-2', 'repair-3'] },
   { id: 'store', stages: ['store'] }
 ] as const
 
@@ -152,6 +152,14 @@ export type BriefingGenerationStageState = 'success' | 'failed' | 'skipped' | 'p
 export type BriefingGenerationStage = Readonly<{
   id: BriefingGenerationStageId
   state: BriefingGenerationStageState
+  /**
+   * How many segments this stage ran, when it runs more than once (a validation after each repair).
+   *
+   * The row keeps the **last** segment's timing — that is the work it just did — so without this count
+   * a run that checked four times and a run that checked once look identical, which is how "it did not
+   * retry" became a believable reading of a run that retried three times.
+   */
+  runs?: number
   startedAt?: string
   finishedAt?: string
   durationMs?: number

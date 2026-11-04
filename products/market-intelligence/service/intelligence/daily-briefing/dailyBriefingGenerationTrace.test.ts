@@ -304,3 +304,24 @@ describe('a repeated stage reports its last segment', () => {
     expect(Date.parse(validation!.startedAt!)).toBeGreaterThan(Date.parse(repair!.finishedAt!))
   })
 })
+
+describe('a stage that runs more than once', () => {
+  it("counts its segments and keeps the last one's timing", () => {
+    // A clock that advances a second per read: the last segment's own start and end are then known
+    // apart from every other read the recorder makes (the constructor reads it once too).
+    let tick = Date.parse('2026-11-05T00:00:00.000Z')
+    const recorder = createDailyBriefingGenerationRecorder({ attemptId: 'a', now: () => new Date((tick += 1_000)).toISOString() })
+    // Validation ran, failed, ran again, failed again, ran a third time.
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    const trace = recorder.complete('failed')
+    const validation = trace.stages.find((stage) => stage.id === 'validation')!
+    // Three runs, one row, the last segment's own second: the count is what makes "it retried" visible
+    // instead of implied by a timestamp the reader has to compare against someone else's.
+    expect(validation.runs).toBe(3)
+    expect(validation.durationMs).toBe(1_000)
+    // A stage that ran once carries no count, so every existing trace keeps its shape.
+    expect(trace.stages.find((stage) => stage.id === 'writing')?.runs).toBeUndefined()
+  })
+})

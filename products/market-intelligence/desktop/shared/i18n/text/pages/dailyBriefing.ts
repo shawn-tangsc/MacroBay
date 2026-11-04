@@ -196,7 +196,7 @@ export const dailyBriefingText = {
       notRecorded: '未记录',
       // "Not recorded" is for a finished run that left no row; a run in flight has not started that step yet.
       states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notStarted: '未开始', notNeeded: '无需修正', notRun: '未执行' },
-      stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
+      stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', 'repair-3': '修正 3', store: '落库/发布' },
       stageHelpLabel: '查看{stage}的阶段说明',
       // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
       stageHelp: {
@@ -207,7 +207,8 @@ export const dailyBriefingText = {
         writing: '用已选 facts 生成 lede/items/hidden/importance/nextFocus；数字只能取自 facts，输出 JSON。',
         validation: '校验 schema、未知 fact/数字、hidden 覆盖、语言、citation、缺 why 与截断。',
         'repair-1': '带校验错误重写一次。',
-        'repair-2': '第二次带校验错误重写；仍失败就终止，不落库。',
+        'repair-2': '第二次带校验错误重写。',
+        'repair-3': '第三次带校验错误重写；仍失败就终止，不落库。',
         store: '写 edition、更新 banner、清理 attempt；失败不落库。'
       },
       durationUnits: { milliseconds: '{count} ms', seconds: '{count} 秒', minutes: '{count} 分 {seconds} 秒' }
@@ -450,7 +451,7 @@ export const dailyBriefingText = {
       // One word per stage, at most 14 characters: the rail's name column is narrow, and a truncated
       // stage name tells the reader nothing about what the step does. The full sentence stays in the
       // question mark's explanation (stageHelp), which is where a reader goes for detail.
-      stages: { source: 'Collect', candidates: 'Candidates', selection: 'AI pick', 'field-backfill': 'Backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Publish' },
+      stages: { source: 'Collect', candidates: 'Candidates', selection: 'AI pick', 'field-backfill': 'Backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', 'repair-3': 'Repair 3', store: 'Publish' },
       stageHelpLabel: 'About the {stage} stage',
       // One fixed line per stage, shown only in the question-mark tooltip.
       stageHelp: {
@@ -461,7 +462,8 @@ export const dailyBriefingText = {
         writing: 'Writes lede/items/hidden/importance/nextFocus from the selected facts, numbers only from facts, as JSON.',
         validation: 'Checks schema, unknown facts/numbers, hidden coverage, language, citations, missing why and truncation.',
         'repair-1': 'Rewrites once with the validation errors.',
-        'repair-2': 'Rewrites a second time with the validation errors; a further failure stops the run.',
+        'repair-2': 'Rewrites a second time with the validation errors.',
+        'repair-3': 'Rewrites a third time with the validation errors; a further failure stops the run.',
         store: 'Writes the edition, updates the banner and clears the attempt; a failure stores nothing.'
       },
       durationUnits: { milliseconds: '{count} ms', seconds: '{count} s', minutes: '{count} min {seconds} s' }

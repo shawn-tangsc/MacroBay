@@ -102,7 +102,9 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
         const failure = failed?.id === id ? stage : undefined
         return {
           id,
-          name: labels.stages[id],
+          // A stage that ran more than once says so: the row keeps the last segment's time, so without
+          // the count a run that checked four times reads exactly like a run that checked once.
+          name: stage && (stage.runs ?? 1) > 1 ? `${labels.stages[id]} ×${stage.runs}` : labels.stages[id],
           state: rowStateFor(stage, skipReason),
           detail: stage ? stageResult(stage, id, skipReason, text, formatTime, running) : running ? text.generationTrace.states.notStarted : labels.notRecorded,
           ...(labels.stageHelp?.[id]?.trim()

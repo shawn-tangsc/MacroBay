@@ -39,7 +39,16 @@ export type DailyBriefDataGap = Readonly<{
 /** The product's historical backfill tool, already bound to the edition cutoff. */
 export type DailyBriefBackfillExecutor = (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult>
 
-export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2'
+export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2' | 'repair-3'
+
+/**
+ * How many times the editor may rewrite after a failed check.
+ *
+ * Three, so a run makes four checks in all. The number was hard-coded as `attempt < 3` with a repair
+ * when `attempt < 2` — which reads like three rounds and is two, and nobody could tell without counting
+ * the loop's bounds. One constant, and a case that counts them.
+ */
+export const maximumRepairRounds = 3
 
 export type DailyBriefTurnStageEvent = Readonly<{
   stage: DailyBriefTurnStage
@@ -182,7 +191,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
   let lastFailures: readonly Readonly<{ code: string; detail?: string }>[] | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt <= maximumRepairRounds; attempt++) {
     // Each check times itself. A check that fails closes before the repair it triggers, so the repair
     // row owns the seconds it spends and the validation row does not silently include them.
     stage({ stage: 'validation', state: 'begin' })
@@ -203,9 +212,9 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     // Close this check before repairing: the first failure code is kept for the loop's verdict, and
     // the repair that follows gets its own window instead of nesting inside this one.
     stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
-    if (attempt < 2) {
+    if (attempt < maximumRepairRounds) {
       throwIfAborted(input.signal)
-      const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
+      const repairStage = `repair-${attempt + 1}` as DailyBriefTurnStage
       stage({ stage: repairStage, state: 'begin' })
       const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail, lastFailures), undefined, input.signal)
       response = repair.assistantText
