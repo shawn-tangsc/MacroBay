@@ -26,7 +26,7 @@ export const dailyBriefingText = {
     policyDaysAway: '{days} 天',
     // The card's heading names what the number is: a bare "BTC" over a big percentage says nothing about
     // whether the percentage is open interest or a price move.
-    positioningChange: '{asset} · 24h 持仓变化',
+    positioningChange: '{asset} · 持仓名义额',
     positioningFee: '费率',
     positioningOpenInterest: '持仓',
     comparison: { label: '较上一版', sameDirection: '方向未变', directionChanged: '方向由 {from} 转为 {to}', funding: '资金费率 BTC {value}', stablecoin: '稳定币 {value}', etf: '美国比特币现货基金 {value}', newMacro: '新增 {count} 条宏观事件' },
@@ -289,7 +289,7 @@ export const dailyBriefingText = {
     policyOutcomes: { 'no-change': 'No change', 'hike-25': 'Hike 25bp', 'hike-50-plus': 'Hike 50bp+', 'cut-25': 'Cut 25bp', 'cut-50-plus': 'Cut 50bp+' },
     policyOutcomeLead: '{outcome} in {month}',
     policyDaysAway: '{days} days',
-    positioningChange: '{asset} · 24h open interest',
+    positioningChange: '{asset} · open interest',
     positioningFee: 'Fee',
     positioningOpenInterest: 'OI',
     comparison: { label: 'vs previous edition', sameDirection: 'Direction unchanged', directionChanged: 'Direction turned from {from} to {to}', funding: 'BTC funding {value}', stablecoin: 'Stablecoins {value}', etf: 'US spot Bitcoin fund {value}', newMacro: '{count} new macro events' },

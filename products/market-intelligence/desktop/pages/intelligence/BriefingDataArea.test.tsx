@@ -489,10 +489,12 @@ describe('the block headings and the positioning card say what they mean', () =>
     const dom = await render()
     const btc = dom.querySelector('[data-briefing-leverage-card="btc"]')!
     // A bare "BTC" over a big percentage does not say whether it is open interest or a price move.
-    expect(btc.textContent).toContain('BTC · 24h 持仓变化')
+    expect(btc.textContent).toContain('BTC · 持仓名义额')
     // The small line's numbers each carry their subject: a rate without "费率" reads as another move.
     expect(btc.textContent).toContain('费率 +0.0100%')
-    expect(btc.textContent).toContain('持仓 $')
+    // The amount is the card's level, printed once and never tinted; the change sits beside it.
+    expect(btc.querySelector('.mi-brief-poster__leverage-amount')!.textContent).toBe('$7.75B')
+    expect(btc.querySelector('.mi-brief-poster__leverage-amount')!.hasAttribute('data-tone')).toBe(false)
     expect(btc.textContent).not.toContain('OI $')
   })
 })

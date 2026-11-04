@@ -69,8 +69,13 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
         return <div className="mi-brief-poster__card mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
           <span className="mi-brief-poster__leverage-copy" data-briefing-leverage-copy="true">
             <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())}</span>
-            <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
-            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {text.positioningFee} {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · {text.positioningOpenInterest} {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
+            {/* The level is the trunk and the change sits beside it: a percentage without its base says
+                nothing about how much is open, and the change keeps the colour and the arrow. */}
+            <span className="mi-brief-poster__leverage-figures">
+              <b className="mi-brief-poster__leverage-amount">{entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</b>
+              <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
+            </span>
+            <small>1h {entry.change1hPct !== undefined ? `${changeArrowFor(entry.change1hPct, changeArrows)}${Math.abs(entry.change1hPct).toFixed(1)}%` : text.noValue} · {text.positioningFee} {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)}</small>
           </span>
           {/* Only when the edition carries a series: no series means no element at all, never a flat
               placeholder line, because a flat line claims nothing moved. */}

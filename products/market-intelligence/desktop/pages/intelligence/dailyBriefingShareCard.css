@@ -248,7 +248,7 @@
 .mi-brief-poster__gauge-other { stroke: #d8cfbd; stroke-width: 8; }
 /* The ring's own number: 16px/750 sits inside a 60px bore without touching the arc. `top: 25` with
    line-height 1 puts it just above the chord, which is the "inside the ring" position of the sheet. */
-.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 25px; width: 88px; height: 16px; line-height: 1; text-align: center; font-size: 16px; font-weight: 750; color: #7a4c10; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 27px; width: 88px; height: 16px; line-height: 1; text-align: center; font-size: 15px; font-weight: 750; letter-spacing: -0.02em; color: #7a4c10; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; white-space: nowrap; }
 .mi-brief-poster__policy-outcome { font-size: 11px; color: #1b1d18; white-space: nowrap; }
 /* One line: the shares and the target range belong to the same sentence in the sheet. */
@@ -273,7 +273,7 @@
 .mi-brief-poster__figure b { flex: 0 0 auto; margin-left: auto; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__figure small { color: #6b695f; }
 /* The tone rides on the change, never on the cell: a tinted level reads as a move. */
-.mi-brief-poster__figure-change { display: inline-flex; align-items: baseline; gap: 2px; margin-left: 4px; }
+.mi-brief-poster__figure-change { flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 2px; margin-left: 4px; }
 .mi-brief-poster__figure-window { font-size: 9.5px; line-height: 1; color: #6b695f; }
 .mi-brief-poster__figure-change b { font-size: 12px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__figure-change b[data-tone='up'] { color: #1f5b32; }
@@ -287,7 +287,11 @@
 .mi-brief-poster__leverage-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mi-brief-poster__leverage-card b { font-variant-numeric: tabular-nums; }
 .mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; overflow: hidden; text-overflow: ellipsis; }
-.mi-brief-poster__leverage-card[data-tone='up'] b { color: #1f5b32; }
-.mi-brief-poster__leverage-card[data-tone='down'] b { color: #8f2a1d; }
-.mi-brief-poster__leverage-change { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* The amount is the trunk: 26px/750 in body colour, never tinted. The change beside it is 14px/600 and
+   carries the colour — the row and the cell follow the same rule, so a reader sees one thing at a time. */
+.mi-brief-poster__leverage-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.mi-brief-poster__leverage-amount { font-size: 26px; font-weight: 750; line-height: 1.1; color: var(--mi-dashboard-text, #26241c); font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-change { font-size: 14px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__leverage-card[data-tone='up'] .mi-brief-poster__leverage-change { color: #1f5b32; }
+.mi-brief-poster__leverage-card[data-tone='down'] .mi-brief-poster__leverage-change { color: #8f2a1d; }
 .mi-brief-poster__leverage-spark { width: 60px; height: 26px; color: #8a5a35; }

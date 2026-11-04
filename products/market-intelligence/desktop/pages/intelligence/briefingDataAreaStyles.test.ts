@@ -47,3 +47,31 @@ describe('the cell change is a number, sized to be read as one', () => {
     expect(css.includes('.mi-brief-poster__figure[data-tone=')).toBe(false)
   })
 })
+
+describe('the positioning card leads with the amount, and the ring keeps its number inside', () => {
+  it('sizes the amount as the trunk and the change beside it', () => {
+    // 26/750 in body colour: the change carries the colour, so the amount must not be tinted.
+    expect(declaration(rule('.mi-brief-poster__leverage-amount'), 'font-size')).toBe('26px')
+    expect(declaration(rule('.mi-brief-poster__leverage-amount'), 'font-weight')).toBe('750')
+    expect(declaration(rule('.mi-brief-poster__leverage-change'), 'font-size')).toBe('14px')
+    expect(declaration(rule('.mi-brief-poster__leverage-change'), 'font-weight')).toBe('600')
+    expect(declaration(rule(".mi-brief-poster__leverage-card[data-tone='up'] .mi-brief-poster__leverage-change"), 'color')).toBe('#1f5b32')
+    expect(declaration(rule(".mi-brief-poster__leverage-card[data-tone='down'] .mi-brief-poster__leverage-change"), 'color')).toBe('#8f2a1d')
+    // Nothing tints the card's own `b`: the amount is a level.
+    expect(css.includes(".mi-brief-poster__leverage-card[data-tone='up'] b {")).toBe(false)
+  })
+
+  it("keeps the ring's number inside the bore, at the size that fits", () => {
+    // 15px at top 27 is the one pair that satisfies both bounds: the widest bore row AND the chord line
+    // at y=44. At 16px the number's bottom edge lands at 46 and hangs outside the arc.
+    expect(declaration(rule('.mi-brief-poster__policy-probability'), 'top')).toBe('27px')
+    expect(declaration(rule('.mi-brief-poster__policy-probability'), 'font-size')).toBe('15px')
+    expect(declaration(rule('.mi-brief-poster__policy-probability'), 'line-height')).toBe('1')
+  })
+
+  it('never lets the change group shrink', () => {
+    // The label may be clipped; the number may not. Without this the inline-flex is only protected by an
+    // implicit `min-width: auto`, and one later `min-width: 0` would start cutting values.
+    expect(declaration(rule('.mi-brief-poster__figure-change'), 'flex')).toBe('0 0 auto')
+  })
+})
