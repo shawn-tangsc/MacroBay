@@ -132,6 +132,14 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     if (!row.change) return { primary: level, ...(bandPart ? { band: bandPart } : {}), ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
     return { primary: level, ...(bandPart ? { band: bandPart } : {}), change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
+  // The index row reads its close too — the level is what the reader came for, and the percentage is
+  // the move beside it. Without a stored close the cell keeps its old shape (the move as the number).
+  if ('close' in row && row.close !== undefined && row.change) {
+    return {
+      primary: formatBriefingValue({ number: row.close.value, format: 'level' }, text.noValue, locale),
+      change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: 'percent' }, locale))
+    }
+  }
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
     // The cell's one real number is the day's net flow, so it takes the primary slot: leaving the size
     // (which this version does not collect) in front of it hid the only figure the row has. The size

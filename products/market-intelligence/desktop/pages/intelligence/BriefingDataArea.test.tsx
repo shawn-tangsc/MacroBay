@@ -822,3 +822,40 @@ describe('a hold edition draws two arcs, not three', () => {
     expect(gauge.querySelector('[data-outcome="event"]')?.getAttribute('class')).toBe('mi-brief-poster__gauge-hold')
   })
 })
+
+describe('the index cell reads its stored close', () => {
+  async function renderIndex(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
+    const doc = documentWithData()
+    mutate(doc)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host
+  }
+
+  it('leads with the level and keeps the move beside it', async () => {
+    const host = await renderIndex(() => undefined)
+    const cell = host.querySelector('[data-reading="nasdaq"]')!
+    // 19,842.5: the value the document carries, formatted by the one formatter (thousands, no fake digits).
+    expect(cell.querySelector('b')?.textContent)
+      .toBe(formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN'))
+    // The move survives as a change, arrow and tone included — it is what the row is watched for.
+    expect(cell.querySelector('.mi-brief-poster__figure-change')?.textContent).toContain('↑0.82%')
+  })
+
+  it('falls back to the move alone when the edition stored no close', async () => {
+    const host = await renderIndex((doc) => {
+      const index = doc.data.market.find((entry) => entry.id === 'index') as { close?: unknown }
+      delete index.close
+    })
+    const cell = host.querySelector('[data-reading="nasdaq"]')!
+    // No level to print, and no dash either: the old shape is the honest one here.
+    expect(cell.querySelector('b')?.textContent).not.toContain('19,842')
+    expect(cell.textContent).not.toContain(text.noValue)
+  })
+})
