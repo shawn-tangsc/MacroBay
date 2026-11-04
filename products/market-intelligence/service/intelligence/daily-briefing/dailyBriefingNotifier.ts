@@ -6,10 +6,11 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../.
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 
 /**
- * 日报线的两条通知：`briefing.failed`（两种正文变体）、`timezone.invalid`。
+ * 日报线的三条通知：`briefing.ready`（一天一期完成提醒）、`briefing.failed`（两种正文变体）、
+ * `timezone.invalid`。
  *
- * **成功不通知**（`BACKLOG` §28）：日报每天自己会来，成功是常态，「今天有了」不需要提醒；
- * 所以这里没有完成类，声明表里也没有那条事件——加回来会被平台以 `unknown-event-type` 拒收。
+ * **完成类一天一期**（读者 2026-11-04 翻案恢复，撤销 §28 的「成功保持静默」）：日报生成并落盘后
+ * 发一条，键只带日期；同一天重新生成不新增第二条。只进中心，读者在情报页勾了才推手机，桌面不弹。
  *
  * 提交只带**参数**，键由平台按声明展开（契约 §3.2）：`brief-failed:{date}:{period}`、
  * `timezone-invalid:{date}` 的变量从这里进，拼键只在声明一处。
@@ -24,6 +25,8 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 export type DailyBriefingNotice =
   | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
+  /** 完成类：读者 2026-11-04 翻案恢复的一条日报完成提醒，一天一期，重新生成不再发。 */
+  | Readonly<{ kind: 'ready'; date: string }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -86,6 +89,17 @@ export function buildBriefingNoticeRequest(
         deeplink: { ...TIME_ZONE_SETTINGS_DEEPLINK }
       }],
       deeplink: { ...TIME_ZONE_SETTINGS_DEEPLINK },
+      occurredAt
+    }
+  }
+  if (notice.kind === 'ready') {
+    // 键只带日期：版本号、生成时刻或内容哈希任一混进去，同一天重新生成就会变成第二条提醒。
+    return {
+      eventTypeId: EVENT_IDS.briefingReady,
+      producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      dedupeVars: { builder: 'template', vars: { date: notice.date } },
+      actions: [{ ...OPEN_BRIEFING_ACTION }],
+      deeplink: { ...OPEN_BRIEFING_DEEPLINK },
       occurredAt
     }
   }

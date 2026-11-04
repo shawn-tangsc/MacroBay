@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import type {
-  NotificationRuntimeSettings,
-  NotificationSubmitRequest
-} from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
@@ -79,15 +76,19 @@ describe('daily briefing notifier', () => {
 
   it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {
     const { runtime, records } = createRuntime()
-    const attempt: NotificationSubmitRequest = {
+    const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE }, NOW)
+
+    // 键只许带日期：版本号、生成时刻、内容哈希任一混进去，同一天重新生成就成了一条新提醒。
+    expect(request).toMatchObject({
       eventTypeId: READY_EVENT_ID,
       producerId: 'market-intelligence.dailyBriefing',
       dedupeVars: { builder: 'template', vars: { date: DATE } },
-      actions: [],
+      deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' },
       occurredAt: NOW
-    }
+    })
+    expect(JSON.stringify(request.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt|period/)
 
-    await expect(runtime.submit(attempt)).resolves.toMatchObject({ kind: 'accepted' })
+    await expect(runtime.submit(request)).resolves.toMatchObject({ kind: 'accepted' })
     expect(records()).toHaveLength(1)
     expect(records()[0]).toMatchObject({
       eventTypeId: READY_EVENT_ID,
@@ -99,7 +100,7 @@ describe('daily briefing notifier', () => {
 
     // 同一天重新生成：并入同一条记录（同一次「今天这一期好了」），不新增第二行、不重推。
     const firstRecordId = records()[0]?.id
-    await expect(runtime.submit({ ...attempt, occurredAt: '2026-11-03T01:30:00.000Z' }))
+    await expect(runtime.submit({ ...request, occurredAt: '2026-11-03T01:30:00.000Z' }))
       .resolves.toMatchObject({ kind: 'merged', recordId: firstRecordId })
     expect(records()).toHaveLength(1)
     expect(records()[0]).toMatchObject({

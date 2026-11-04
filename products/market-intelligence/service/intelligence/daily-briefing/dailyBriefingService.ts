@@ -587,6 +587,8 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
+      // 完成类一天一期：只有自动运行发；读者按「重新生成」不补发（去重虽会并掉，那次提交本身就是错的）。
+      if (!force) await notifyDailyBriefing(deps.noticeSubmit, { kind: 'ready', date: input.date }, now())
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)

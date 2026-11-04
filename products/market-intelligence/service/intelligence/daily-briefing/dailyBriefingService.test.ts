@@ -791,14 +791,11 @@ describe('period run', () => {
 })
 
 describe('briefing notices', () => {
-  it('says nothing when an edition is stored (§28: success is silent)', async () => {
-    // 成功不通知是 §28 的口径，不是「这条路径还没接上」——端口就在下面这个依赖里活着，
-    // 同一个端口在失败用例里必须收到恰好一条；两半合起来，"0 条"才证明的是「不该发」，而不是「发不出去」。
-    const store = memoryStore()
+  function completedRun() {
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
       source: fakeSource(),
-      store,
+      store: memoryStore(),
       now: () => asOf,
       generationSettings: async () => ({ generationTime: '08:00', windowHours: 24 }),
       noticeSubmit: async (request) => {
@@ -806,11 +803,36 @@ describe('briefing notices', () => {
         return { kind: 'accepted', recordId: 'r1', levels: ['center'] }
       }
     })
+    return { service, notices }
+  }
+
+  it('submits one completion notice with a date-only key when an automatic run stores an edition', async () => {
+    // 读者 2026-11-04 翻案：完成也要一条。自动运行落盘后发一条；键里只有日期，
+    // 同一天再生成不是新的一期。
+    const { service, notices } = completedRun()
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.briefing.ready',
+      producerId: 'market-intelligence.dailyBriefing',
+      dedupeVars: { builder: 'template', vars: { date: '2026-10-30' } },
+      deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' }
+    })
+    // 版本号、生成时刻、内容哈希或期号任一混进键里，同一天的重新生成都会变成第二条提醒。
+    expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt|period/)
+  })
+
+  it('does not submit the completion notice again when the reader regenerates the same day', async () => {
+    // 「同一天重新生成不新增第二行」：服务这一侧是不补发；合并那一半由通知运行时的去重保证。
+    const { service, notices } = completedRun()
 
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(notices).toEqual([])
+    expect(notices).toHaveLength(1)
   })
 
   it('N5 ①: a terminal failure says the edition was not generated', async () => {
