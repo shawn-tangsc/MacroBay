@@ -142,3 +142,25 @@ describe('blocks are separated by space, not by a line', () => {
     expect(css).toContain('.mi-brief-poster__funds-block > .mi-brief-poster__figure-line:last-of-type')
   })
 })
+
+describe('the price card leads with the level, and the move is the only tinted thing', () => {
+  it('sizes the level, the move, the label and the proxy mark to the sheet', () => {
+    // 26px is the size that fits the 178px text column; 30px needed 187 and pushed the label over.
+    expect(declaration(rule('.mi-brief-poster__price-value'), 'font-size')).toBe('26px')
+    expect(declaration(rule('.mi-brief-poster__price-value'), 'font-weight')).toBe('750')
+    // The level never takes the card's tone: that colour belongs to the move beside it.
+    expect(declaration(rule('.mi-brief-poster__price-value'), 'color')).toBe('#1b1d18')
+    expect(declaration(rule('.mi-brief-poster__price-change'), 'font-size')).toBe('14px')
+    expect(declaration(rule('.mi-brief-poster__price-change'), 'font-weight')).toBe('600')
+    expect(declaration(rule(".mi-brief-poster__price-change[data-tone='up']"), 'color')).toBe('#1f5b32')
+    expect(declaration(rule(".mi-brief-poster__price-change[data-tone='down']"), 'color')).toBe('#8f2a1d')
+    // The label is a qualifier, and the proxy mark matches it rather than shouting.
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'font-size')).toBe('11px')
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'color')).toBe('#6b695f')
+    expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-size')).toBe('11px')
+    expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-weight')).toBe('400')
+    expect(declaration(rule('.mi-brief-poster__price-proxy'), 'color')).toBe('#6b695f')
+    // No stored close: the dash and its reason, in the card's muted ink.
+    expect(declaration(rule('.mi-brief-poster__price-missing'), 'color')).toBe('#6b695f')
+  })
+})

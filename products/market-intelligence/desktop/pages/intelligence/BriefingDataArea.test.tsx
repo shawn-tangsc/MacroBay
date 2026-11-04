@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
+import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingDataArea } from './BriefingDataArea'
@@ -23,14 +24,19 @@ function row(
   id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real' | 'stablecoin' | 'fear-greed' | 'etf-btc' | 'etf-eth',
   label: string,
   value: number,
-  amplitude?: { percent: number; high: number; low: number; anchor: number }
+  amplitude?: { percent: number; high: number; low: number; anchor: number },
+  /** The level behind the move (schema 12) and, on the index row, whether it came from a proxy. */
+  level?: Readonly<{ close: number; change: number; indexSource?: 'real' | 'proxy' }>
 ) {
   return {
     id, labelKey: `dailyBriefing.row.${label}`,
     importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
     state: 'available' as const,
     value: { number: value, format: 'percent' as const },
-    change: null, window: '24h' as const, observedAt: `${today}T00:00:00.000Z`,
+    change: level ? { value: level.change, unit: 'percent' as const, window: '24h' as const } : null,
+    window: '24h' as const, observedAt: `${today}T00:00:00.000Z`,
+    ...(level ? { close: { value: level.close, at: `${today}T00:00:00.000Z` } } : {}),
+    ...(level?.indexSource ? { indexSource: level.indexSource } : {}),
     ...(amplitude ? { amplitude } : {})
   }
 }
@@ -45,9 +51,9 @@ function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}):
     news: { items: [], macro: [], notes: {} },
     data: {
       market: [
-        row('btc', 'btc', 1.23, { percent: 3.2, high: 72_400, low: 69_800, anchor: 70_000 }),
-        row('eth', 'eth', 1.59, { percent: 2.4, high: 3_620, low: 3_520, anchor: 3_540 }),
-        row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }),
+        row('btc', 'btc', 1.23, { percent: 3.2, high: 72_400, low: 69_800, anchor: 70_000 }, { close: 110_432.1, change: 1.23 }),
+        row('eth', 'eth', 1.59, { percent: 2.4, high: 3_620, low: 3_520, anchor: 3_540 }, { close: 3_842.5, change: 1.59 }),
+        row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }, { close: 19_842.5, change: 0.82, indexSource: 'real' }),
         row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)
       ],
       funds: [row('stablecoin', 'stablecoin', 2530), row('etf-btc', 'etfBtc', 110_300_000), row('etf-eth', 'etfEth', -88_600_000)],
@@ -299,7 +305,11 @@ describe('the window amplitude', () => {
     // The number is gone, the card is not: the percentage and its time still say what the row is.
     expect([...host.querySelectorAll('[data-briefing-amplitude]')].map((node) => node.getAttribute('data-briefing-amplitude')))
       .toEqual(['eth', 'nasdaq'])
-    expect(host.querySelector('[data-briefing-price-card="btc"]')!.textContent).toContain('+1.23%')
+    // The level is the card's figure now, and the move keeps its arrow beside it.
+    const btcCard = host.querySelector('[data-briefing-price-card="btc"]')!
+    expect(btcCard.querySelector('[data-briefing-price-value="btc"]')?.textContent)
+      .toBe(formatBriefingValue({ number: 110_432.1, format: 'level' }, '—', 'zh-CN'))
+    expect(btcCard.textContent).toContain('↑1.2%')
   })
 })
 
@@ -597,5 +607,59 @@ describe('the fear-and-greed cell colours the judgement, never the score', () =>
     // 贪婪 is up, 中性 has no tone at all.
     expect((await renderBand(60)).querySelector('.mi-brief-poster__figure-band')!.getAttribute('data-tone')).toBe('up')
     expect((await renderBand(50)).querySelector('.mi-brief-poster__figure-band')!.hasAttribute('data-tone')).toBe(false)
+  })
+})
+
+describe('a level the document does not carry is a dash with a reason, never a move in disguise', () => {
+  async function render(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
+    const doc = documentWithData()
+    mutate(doc)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host
+  }
+
+  it('prints the dash and the reason when the close is missing, not the move', async () => {
+    const host = await render((doc) => {
+      const btc = doc.data.market.find((entry) => entry.id === 'btc') as { close?: unknown }
+      delete btc.close
+    })
+    const card = host.querySelector('[data-briefing-price-card="btc"]')!
+    expect(card.querySelector('[data-briefing-price-value="btc"]')?.textContent).toBe(text.noValue)
+    expect(card.textContent).toContain(text.closeMissing)
+    // The move is not printed in the level's place: that is the "flow read as size" defect.
+    expect(card.querySelector('.mi-brief-poster__price-change')).toBeNull()
+  })
+
+  it('marks the index as a proxy, once, and leaves a real one unmarked', async () => {
+    const proxy = await render((doc) => {
+      const index = doc.data.market.find((entry) => entry.id === 'index') as { indexSource?: string }
+      index.indexSource = 'proxy'
+    })
+    const proxyCell = proxy.querySelector('[data-reading="nasdaq"]')!
+    expect((proxyCell.textContent?.match(/QQQ 永续代理/g) ?? [])).toHaveLength(1)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    const real = await render(() => undefined)
+    expect(real.querySelector('[data-reading="nasdaq"]')?.textContent).not.toContain('QQQ 永续代理')
+  })
+
+  it('gives the ETF cells a dash for the missing size and keeps the flow beside it', async () => {
+    const host = await render((doc) => {
+      const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { change?: unknown }
+      etf.change = { value: -398_600_000, unit: 'usd', window: '1d' }
+    })
+    const cell = host.querySelector('[data-reading="etfBtc"]') ?? host.querySelector('[data-briefing-funds-row] [data-reading]')!
+    expect(cell.textContent).toContain(text.noValue)
+    expect(cell.textContent).toContain(text.aumMissing)
+    // The flow is still printed — as a change, not as the size.
+    expect(cell.textContent).toContain('398')
   })
 })

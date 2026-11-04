@@ -36,7 +36,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
   return <div className="mi-brief-poster__data" data-briefing-data-region="true">
     {/* One row, three cards: BTC, ETH, then the rate card — the order the approved sheet has. */}
     <div className="mi-brief-poster__card-row" data-briefing-card-row="true">
-      {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}
+      {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} changeArrows={changeArrows} />)}
       {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} locale={locale} formatTime={formatTime} words={policyWords} windowEnd={groups.windowEnd} editionDate={groups.editionDate} /> : null}
     </div>
     {groups.funds.length > 0 ? <div className="mi-brief-poster__funds-block" data-briefing-funds-row="true">
@@ -128,6 +128,15 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     if (!row.change) return { primary: level, ...(bandPart ? { band: bandPart } : {}), ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
     return { primary: level, ...(bandPart ? { band: bandPart } : {}), change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
+  if (row.id === 'etf-btc' || row.id === 'etf-eth') {
+    // The cell's level is the fund's own size, and the document stores only the day's flow so far: the
+    // dash plus the reason is honest, printing the flow there would claim it is the size.
+    return {
+      primary: text.noValue,
+      note: text.aumMissing,
+      ...(row.change ? { change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: row.change.unit === 'points' ? 'percent' : row.change.unit }, locale)) } : {})
+    }
+  }
   return row.change
     ? { primary: level, change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: row.change.unit === 'points' ? 'percent' : row.change.unit }, locale)) }
     : { primary: level, ...(keyMeta(row, text, locale) ? { note: keyMeta(row, text, locale) } : {}) }
@@ -144,7 +153,13 @@ function Figure({ row, text, locale, buckets, arrows }: Readonly<{
   const amplitude = 'amplitude' in row ? row.amplitude : undefined
   const cell = cellCopy(row, text, locale, buckets, arrows)
   return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-lead={cell.change ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
-    <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
+    <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}
+      {/* The index row sometimes reads a perpetual proxy: the level is not the index's own that day, and a
+          reader who is not told will use a QQQ level as if it were the Nasdaq's. */}
+      {'indexSource' in row && row.indexSource === 'proxy'
+        ? <span className="mi-brief-poster__price-proxy" data-briefing-price-proxy="true">{text.indexProxy}</span>
+        : null}
+    </span>
     {/* The level is never tinted: only a move is. */}
     <b>{cell.primary}</b>
     {cell.band ? <small className="mi-brief-poster__figure-band" data-tone={cell.band.tone}>{cell.band.text}</small> : null}
@@ -255,13 +270,22 @@ function shareCopy(segment: Readonly<{ outcome: string; share: number }>, words:
   return segment.outcome === 'other' ? words.rest.replace('{value}', share) : `${words.hold} ${share}`
 }
 
-function PriceCard({ row, text, locale, formatTime }: Readonly<{
+function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
   row: BriefingMarketRow
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   formatTime: (value: string, precision?: 'minute' | 'second') => string
+  changeArrows: changeArrowWords
 }>): React.ReactElement {
   const copy = changeLedRowCopy(row, text, locale)
+  /**
+   * The card leads with the level, not the move: a reader who sees `↑1.23%` alone still has to ask "from
+   * what". The level is the stored close; without one the card prints the dash and says why, because a
+   * zero is a claim that the level was zero rather than unread.
+   */
+  const level = row.close === undefined ? text.noValue : formatBriefingValue({ number: row.close.value, format: 'level' }, text.noValue, locale)
+  /** The move beside it: arrow plus magnitude, coloured, and no window — the label already carries that. */
+  const move = copy ? copy.primary : row.change === null ? '' : changeCopy(row.change.value, changeArrows, text.noValue)
   // The stored curve, drawn as stored: the segments are already rebased and thinned, so the renderer
   // neither resamples nor re-anchors. No curve is an empty column with its zero line and nothing else.
   const paths = priceCurvePaths(row.curve ?? [])
@@ -272,8 +296,10 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
     <div className="mi-brief-poster__price-lead" data-briefing-price-lead="true">
       <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
       <span className="mi-brief-poster__price-figures">
-        <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
-        {copy ? <small>{copy.secondary}</small> : null}
+        <b className="mi-brief-poster__price-value" data-briefing-price-value={row.id}>{level}</b>
+        {row.close === undefined
+          ? <small className="mi-brief-poster__price-missing">{text.closeMissing}</small>
+          : move === '' ? null : <small className="mi-brief-poster__price-change" data-tone={toneOf(row)}>{move}</small>}
       </span>
     </div>
     {/* The amplitude sits on the plot, not in the text column: the left column is two lines (the label and

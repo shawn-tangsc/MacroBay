@@ -8,6 +8,11 @@ export const dailyBriefingText = {
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     noValue: '—',
+    // 数值位缺数时说清缺的是哪一样：把变化率印在绝对值的位置上，读者会把它当规模。
+    closeMissing: '这一期没有存收盘价',
+    aumMissing: '这一期没有存基金规模',
+    // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
+    indexProxy: '（QQQ 永续代理）',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
       policyProbability: '利率概率',
@@ -278,6 +283,9 @@ export const dailyBriefingText = {
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
+    closeMissing: 'This edition stored no close',
+    aumMissing: 'This edition stored no fund size',
+    indexProxy: ' (QQQ perpetual proxy)',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },
