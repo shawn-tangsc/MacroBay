@@ -641,7 +641,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // 完成类一天一期。自动运行投递；读者按「重新生成」照常写记录但不投递——记录是「发布频道」
     // 要核对的那一版，投递与否由按钮决定，不再靠「不发」把它整个丢掉。
     await notifyDailyBriefing(deps.noticeSubmit, {
-      kind: 'ready', date: input.date, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
+      kind: 'ready', date: input.date, periodId: input.periodId, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
     }, now())
     return { state: 'available', document: traced }
   }

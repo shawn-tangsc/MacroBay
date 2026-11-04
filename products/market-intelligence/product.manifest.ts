@@ -344,8 +344,9 @@ export const marketIntelligenceProductManifest = {
       body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: [],
-      // 一天一期最多一条：键只带日期，**不许**混入版本号或生成时刻——否则同一天重新生成会被当成新事件重推。
-      dedupeKeyTemplate: 'briefing-ready:{date}',
+      // 一条版次一条提醒：键带日期、期号与语言，同一天两期（或同刻两种语言）各推一条。
+      // 仍**不许**混入版本号、生成时刻或内容哈希——否则同一天重新生成会被当成新事件重推。
+      dedupeKeyTemplate: 'briefing-ready:{date}:{periodId}:{locale}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),

@@ -86,7 +86,7 @@ describe('the publish control on the page', () => {
 
     await push()
     expect(redeliver).toHaveBeenCalledTimes(1)
-    expect(redeliver.mock.calls[0]?.[0]).toMatchObject({ dedupeKey: 'briefing-ready:2026-11-05', editionId: '2026-11-05:zh-CN:default', locale: 'zh-CN' })
+    expect(redeliver.mock.calls[0]?.[0]).toMatchObject({ dedupeKey: 'briefing-ready:2026-11-05:default:zh-CN', editionId: '2026-11-05:zh-CN:default', locale: 'zh-CN' })
   })
 
   it('sends once when a slow network invites three clicks', async () => {
@@ -163,7 +163,7 @@ describe('the publish control on the page', () => {
     expect(button().disabled).toBe(false)
     await push()
     expect(redeliver).toHaveBeenCalledWith({
-      dedupeKey: 'briefing-ready:2026-11-05',
+      dedupeKey: 'briefing-ready:2026-11-05:default:en-US',
       editionId: '2026-11-05:en-US:default',
       locale: 'en-US'
     })

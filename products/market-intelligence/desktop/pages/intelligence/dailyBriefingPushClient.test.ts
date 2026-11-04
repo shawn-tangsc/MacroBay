@@ -27,9 +27,11 @@ function stubBridge(result: unknown): ReturnType<typeof vi.fn> {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the push client', () => {
-  it('addresses the day, not the issue', () => {
-    // One completion record per day: a key carrying the period addresses a row that does not exist.
-    expect(briefingPushDedupeKey('2026-11-04')).toBe('briefing-ready:2026-11-04')
+  it('addresses the edition, so two issues of a day do not share one record', () => {
+    expect(briefingPushDedupeKey(edition)).toBe('briefing-ready:2026-11-04:default:en-US')
+    // Same day, another period or language: a different record, not the first issue's.
+    expect(briefingPushDedupeKey({ ...edition, periodId: 'period_x' })).toBe('briefing-ready:2026-11-04:period_x:en-US')
+    expect(briefingPushDedupeKey({ ...edition, locale: 'zh-CN' })).toBe('briefing-ready:2026-11-04:default:zh-CN')
     expect(briefingPushEditionId(edition)).toBe('2026-11-04:en-US:default')
   })
 
@@ -37,7 +39,7 @@ describe('the push client', () => {
     const redeliverPush = stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
     await redeliverBriefingPush(edition)
     expect(redeliverPush).toHaveBeenCalledWith({
-      dedupeKey: 'briefing-ready:2026-11-04',
+      dedupeKey: 'briefing-ready:2026-11-04:default:en-US',
       editionId: '2026-11-04:en-US:default',
       locale: 'en-US'
     })

@@ -29,7 +29,7 @@ export type DailyBriefingNotice =
    * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「发布频道」核对；`deliver: false`
    * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
    */
-  | Readonly<{ kind: 'ready'; date: string; editionId: string; locale: string; deliver?: boolean }>
+  | Readonly<{ kind: 'ready'; date: string; periodId: string; editionId: string; locale: string; deliver?: boolean }>
 
 export type DailyBriefingNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
@@ -96,7 +96,8 @@ export function buildBriefingNoticeRequest(
     }
   }
   if (notice.kind === 'ready') {
-    // 键只带日期：版本号、生成时刻或内容哈希任一混进去，同一天重新生成就会变成第二条提醒。
+    // 键带日期 + 期号 + 语言：同一天的两期、或同刻的两种语言，是两条提醒。
+    // 版本号、生成时刻或内容哈希仍不许混进去，同一天同一版次重新生成不该再提醒一次。
     return {
       eventTypeId: EVENT_IDS.briefingReady,
       producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
@@ -104,7 +105,7 @@ export function buildBriefingNoticeRequest(
       // screen; a manual regeneration writes the record without delivering anything.
       edition: { editionId: notice.editionId, locale: notice.locale },
       ...(notice.deliver === false ? { deliver: false } : {}),
-      dedupeVars: { builder: 'template', vars: { date: notice.date } },
+      dedupeVars: { builder: 'template', vars: { date: notice.date, periodId: notice.periodId, locale: notice.locale } },
       actions: [{ ...OPEN_BRIEFING_ACTION }],
       deeplink: { ...OPEN_BRIEFING_DEEPLINK },
       occurredAt

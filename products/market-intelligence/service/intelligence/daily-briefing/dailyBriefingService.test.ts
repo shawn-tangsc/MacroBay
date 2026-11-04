@@ -844,7 +844,10 @@ describe('briefing notices', () => {
       deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' }
     })
     // 版本号、生成时刻、内容哈希或期号任一混进键里，同一天的重新生成都会变成第二条提醒。
-    expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt|period/)
+    // The edition's identity is in the key now (a day may hold several issues); the content's
+    // revision, hash and generation moment must still stay out of it.
+    expect(JSON.stringify(notices[0]?.dedupeVars)).toMatch(/periodId/)
+    expect(JSON.stringify(notices[0]?.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt/)
   })
 
   it('writes the completion record without delivering it when the reader regenerates', async () => {

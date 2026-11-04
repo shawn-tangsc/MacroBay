@@ -54,12 +54,12 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
 }
 
 describe('daily briefing notifier', () => {
-  it('declares the completion notice the reader asked back, with a date-only key and no desktop request', () => {
-    // 声明在表里才是可提交的前提；键里只许有日期——混进版本号或生成时刻，
-    // 同一天重新生成就会被当成新事件重推。
+  it('declares the completion notice the reader asked back, keyed by edition, and no desktop request', () => {
+    // 声明在表里才是可提交的前提；键带日期、期号与语言——同一天两期各一条。
+    // 版本号或生成时刻仍不许混进去，否则同一版次重新生成会被当成新事件重推。
     const ready = marketIntelligenceProductManifest.notificationEvents.find((event) => event.id === READY_EVENT_ID)
     expect(ready).toMatchObject({
-      dedupeKeyTemplate: 'briefing-ready:{date}',
+      dedupeKeyTemplate: 'briefing-ready:{date}:{periodId}:{locale}',
       dedupeUnit: 'occurrence',
       // 完成类只进中心与（读者勾选的）手机：桌面只对「失败 / 需修正 / 系统状态」开放。
       requestedDisruptionLevels: []
@@ -76,23 +76,23 @@ describe('daily briefing notifier', () => {
 
   it('accepts a completion submission and keeps one row a day, so a same-day regeneration does not repeat it', async () => {
     const { runtime, records } = createRuntime()
-    const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE }, NOW)
+    const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:en-US:period_x`, locale: 'en-US' }, NOW)
 
-    // 键只许带日期：版本号、生成时刻、内容哈希任一混进去，同一天重新生成就成了一条新提醒。
+    // 键带日期 + 期号 + 语言：同一天两期各一条；版本号、生成时刻、内容哈希仍不许混进去。
     expect(request).toMatchObject({
       eventTypeId: READY_EVENT_ID,
       producerId: 'market-intelligence.dailyBriefing',
-      dedupeVars: { builder: 'template', vars: { date: DATE } },
+      dedupeVars: { builder: 'template', vars: { date: DATE, periodId: 'period_x', locale: 'en-US' } },
       deeplink: { scope: 'product', productId: 'market-intelligence', pageId: 'daily-briefing' },
       occurredAt: NOW
     })
-    expect(JSON.stringify(request.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt|period/)
+    expect(JSON.stringify(request.dedupeVars)).not.toMatch(/revision|documentId|hash|generatedAt/)
 
     await expect(runtime.submit(request)).resolves.toMatchObject({ kind: 'accepted' })
     expect(records()).toHaveLength(1)
     expect(records()[0]).toMatchObject({
       eventTypeId: READY_EVENT_ID,
-      dedupeKey: `market-intelligence|briefing-ready:${DATE}`,
+      dedupeKey: `market-intelligence|briefing-ready:${DATE}:period_x:en-US`,
       occurrenceCount: 1
     })
     // 桌面不弹：声明没有申请桌面档，批准表也不给完成类。
@@ -105,10 +105,17 @@ describe('daily briefing notifier', () => {
     expect(records()).toHaveLength(1)
     expect(records()[0]).toMatchObject({
       id: firstRecordId,
-      dedupeKey: `market-intelligence|briefing-ready:${DATE}`,
+      dedupeKey: `market-intelligence|briefing-ready:${DATE}:period_x:en-US`,
       // `occurrence` 粒度：同一条键的重复提交算同一次事件，次数不累加。
       occurrenceCount: 1
     })
+
+    // 同一版次再提交一次仍并进同一行；换成同一天另一期或另一种语言，则是另一条记录。
+    expect(runtime.submit({ ...request, occurredAt: '2026-11-03T01:40:00.000Z' }))
+      .resolves.toMatchObject({ kind: 'merged', recordId: firstRecordId })
+    await runtime.submit(buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'period_y', editionId: `${DATE}:en-US:period_y`, locale: 'en-US' }, NOW))
+    await runtime.submit(buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'period_x', editionId: `${DATE}:zh-CN:period_x`, locale: 'zh-CN' }, NOW))
+    expect(records()).toHaveLength(3)
   })
 
   it('names the two failure bodies by the declared variant and gives the reader the open action', () => {

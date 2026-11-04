@@ -7,16 +7,16 @@ import type { NotificationDeliveryState } from '@platform/notifications/contract
  * never touches its count); this module only turns "what is on screen" into the three values the
  * platform checks, and the answer back into something a card can show.
  *
- * The dedupe key is the day's, not the issue's: one completion record per day, and every language and
- * every regeneration writes into that same row. Sending the key with a period would silently address a
- * record that does not exist.
+ * The dedupe key names the edition — date, period and language — because a day may now hold several
+ * issues, and each writes its own completion record. Addressing the day alone would send the second
+ * issue's push to the first issue's record.
  */
 
 export type BriefingPushEdition = Readonly<{ date: string; periodId: string; locale: string }>
 
-/** The record this day's completion notice lives in. One key, one row, whoever wrote it. */
-export function briefingPushDedupeKey(date: string): string {
-  return `briefing-ready:${date}`
+/** The record one edition's completion notice lives in; the key must match the notifier's. */
+export function briefingPushDedupeKey(edition: Pick<BriefingPushEdition, 'date' | 'periodId' | 'locale'>): string {
+  return `briefing-ready:${edition.date}:${edition.periodId}:${edition.locale}`
 }
 
 /** Which edition the reader is looking at: the platform refuses to push a different one. */
@@ -119,7 +119,7 @@ export async function redeliverBriefingPush(edition: BriefingPushEdition): Promi
   let result: unknown
   try {
     result = await bridge.redeliverPush({
-      dedupeKey: briefingPushDedupeKey(edition.date),
+      dedupeKey: briefingPushDedupeKey(edition),
       editionId: briefingPushEditionId(edition),
       locale: edition.locale
     })
