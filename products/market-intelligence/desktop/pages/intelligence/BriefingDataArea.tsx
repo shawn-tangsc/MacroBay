@@ -64,7 +64,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
 }
 
 const READING_IDS: Readonly<Record<string, string>> = Object.freeze({
-  index: 'nasdaq', dxy: 'dxy', gold: 'gold', us10y: 'ust10y', 'us10y-real': 'ust10y-real', stablecoin: 'stablecoin', 'fear-greed': 'fear-greed'
+  index: 'nasdaq', dxy: 'dxy', gold: 'gold', us10y: 'ust10y', stablecoin: 'stablecoin', 'fear-greed': 'fear-greed'
 })
 
 function PolicyCard({ policy, text, formatTime }: Readonly<{

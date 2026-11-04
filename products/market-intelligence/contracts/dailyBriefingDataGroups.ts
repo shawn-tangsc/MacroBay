@@ -36,6 +36,11 @@ const PRICE_IDS: ReadonlySet<string> = new Set(['btc', 'eth'])
 const FUND_IDS: ReadonlySet<string> = new Set(['etf-btc', 'etf-eth', 'stablecoin'])
 /** Funding lives in the leverage block; printing it here too is the duplicate that started this. */
 const LEVERAGE_ONLY_FUND_IDS: ReadonlySet<string> = new Set(['funding-btc', 'funding-eth'])
+/**
+ * The real yield is not one of the six readings the line shows. It appears in the watch list as a
+ * sentence; the line carries the nominal yield only, which is what the approved layout draws.
+ */
+const READINGS_EXCLUDED: ReadonlySet<string> = new Set(['us10y-real'])
 
 export function briefingDataGroups(document: DailyBriefingDocument): BriefingDataGroups {
   const market = document.data.market.filter((row) => row.visibility !== 'hidden')
@@ -44,7 +49,7 @@ export function briefingDataGroups(document: DailyBriefingDocument): BriefingDat
   return Object.freeze({
     price: Object.freeze(market.filter((row) => PRICE_IDS.has(row.id))),
     readings: Object.freeze([
-      ...market.filter((row) => !PRICE_IDS.has(row.id)),
+      ...market.filter((row) => !PRICE_IDS.has(row.id) && !READINGS_EXCLUDED.has(row.id)),
       ...funds.filter((row) => FUND_IDS.has(row.id) && row.id === 'stablecoin'),
       ...sentiment
     ]),
