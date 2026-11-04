@@ -170,6 +170,7 @@ const zh: NotificationSettingsText = {
     'platform.channel.push-resumed': '推送到手机已恢复',
     'platform.desktop.blocked': '桌面通知没有弹出来',
     'market-intelligence.briefing.failed': '日报没生成出来',
+    'market-intelligence.briefing.ready': '日报已完成',
     'market-intelligence.signal.triggered': '模块信号触发',
     'market-intelligence.macro.event-landed': '宏观事件落地',
     'market-intelligence.source.consecutive-failed': '来源连续失败',

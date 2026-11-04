@@ -14,38 +14,40 @@ import { marketIntelligenceNotificationCopy } from './notifications'
 const lookup = (language: 'zh-CN' | 'en-US', key: string): string | undefined =>
   marketIntelligenceNotificationCopy[language][key]
 
-/** 已按 §28 删除的完成类事件 id；留成字面量才能证明「它真的不在表里」。 */
-const REMOVED_READY_EVENT_ID = 'market-intelligence.briefing.ready'
+/** 2026-11-04 用户翻案恢复的完成类事件 id：它现在**在**表里，且默认不勾。 */
+const READY_EVENT_ID = 'market-intelligence.briefing.ready'
 
 describe('market intelligence notification copy', () => {
-  it('has every sentence the 7 declarations point at, in both languages', () => {
+  it('has every sentence the 8 declarations point at, in both languages', () => {
     // 缺键的界面直接把键名印给读者，而且不报错——所以这条断言按事件 id + 键 + 语言点名。
     expect(findMissingNotificationEventCopy(marketIntelligenceProductManifest.notificationEvents, lookup)).toEqual([])
   })
 
-  it('leaves no sentence behind for the completion notice it no longer declares', () => {
-    // 声明删了、句子留着，就是一句没人能触达的文案：下一次有人「补回声明」时它会让门禁变绿，
-    // 于是一条被否决过的通知借着旧句子复活。所以两边一起删。
+  it('declares the completion notice the reader asked back, with all its sentences', () => {
+    // 翻案前这条被整条移除；现在它回来了，声明与句子必须同时在——少一边，界面就会印键名或静默不推。
+    expect(marketIntelligenceProductManifest.notificationEvents.map((event) => event.id)).toContain(READY_EVENT_ID)
     for (const language of ['zh-CN', 'en-US'] as const) {
-      expect(Object.keys(marketIntelligenceNotificationCopy[language]).filter((key) => key.includes(REMOVED_READY_EVENT_ID))).toEqual([])
+      const keys = Object.keys(marketIntelligenceNotificationCopy[language]).filter((key) => key.includes(READY_EVENT_ID))
+      // 标题 + 正文 + 理由，三格。
+      expect(keys).toHaveLength(3)
     }
   })
 
-  it('names the missing sentences when a completion declaration is put back', () => {
-    // 反向用例（Chief 的验收标准：把它改坏，用例必须红）。有人把声明加回来而没写句子，
-    // 门禁必须点名这条事件——否则「加回来」是静默的，第二天界面上就会出现一行键名。
-    const readded = {
-      id: REMOVED_READY_EVENT_ID,
-      titleKey: notificationEventTitleKey(REMOVED_READY_EVENT_ID),
-      bodyKey: notificationEventBodyKey(REMOVED_READY_EVENT_ID),
-      reasonKey: notificationEventReasonKey(REMOVED_READY_EVENT_ID)
+  it('still names the missing sentences when a declaration has no copy', () => {
+    // 反向用例（Chief 的验收标准：把它改坏，用例必须红）。用一个**没有文案**的声明喂进去，
+    // 门禁必须点名它——否则「加一条事件」是静默的，第二天界面上就会出现一行键名。
+    const undeclared = {
+      id: 'market-intelligence.copy-gate-fixture',
+      titleKey: notificationEventTitleKey('market-intelligence.copy-gate-fixture'),
+      bodyKey: notificationEventBodyKey('market-intelligence.copy-gate-fixture'),
+      reasonKey: notificationEventReasonKey('market-intelligence.copy-gate-fixture')
     }
 
-    const gaps = findMissingNotificationEventCopy([...marketIntelligenceProductManifest.notificationEvents, readded], lookup)
+    const gaps = findMissingNotificationEventCopy([...marketIntelligenceProductManifest.notificationEvents, undeclared], lookup)
 
     // 标题 / 正文 / 理由 × 中英两套 = 6 格全空。
     expect(gaps).toHaveLength(6)
-    expect(new Set(gaps.map((gap) => gap.eventTypeId))).toEqual(new Set([REMOVED_READY_EVENT_ID]))
+    expect(new Set(gaps.map((gap) => gap.eventTypeId))).toEqual(new Set([undeclared.id]))
   })
 
   it('leaves the action label to the platform key instead of inventing a product one', () => {

@@ -335,6 +335,16 @@ export const marketIntelligenceProductManifest = {
       notifyOnlyIfSubscribed: false,
       requestedBypassQuietHours: false
     }),
+    notificationEvent('market-intelligence.briefing.ready', {
+      body: true,
+      requiresUserAction: false,
+      requestedDisruptionLevels: [],
+      // 一天一期最多一条：键只带日期，**不许**混入版本号或生成时刻——否则同一天重新生成会被当成新事件重推。
+      dedupeKeyTemplate: 'briefing-ready:{date}',
+      dedupeUnit: 'occurrence',
+      notifyOnlyIfSubscribed: true,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.calibration.result', {
       body: true,
       requiresUserAction: false,
@@ -362,7 +372,7 @@ export const marketIntelligenceProductManifest = {
    * 采集是所有来源共用同一个 handler。
    */
   notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
-  /** 8 条事件的句子；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
+  /** 8 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
   notificationCopy: marketIntelligenceNotificationCopy,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)

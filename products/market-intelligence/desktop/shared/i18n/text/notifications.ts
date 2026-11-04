@@ -9,7 +9,7 @@ import {
 } from '../../../../contracts/notificationEventKeys'
 
 /**
- * 情报模块 7 条通知事件的文案（中英各一份）。**完成类不在此表**（§28 成功不通知）。
+ * 情报模块 8 条通知事件的文案（中英各一份）。完成类只有「日报已完成」一条，且默认不勾。
  *
  * 键全部由事件 id 机械生成（`contracts/notificationEventKeys.ts`），这里只给句子，不另起一套键：
  * 事件改名时句子跟着改，键不会落空。正文变体名与声明里的 `bodyKeyByVariant` 逐字对应。
@@ -46,6 +46,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceStale)]: '超过这个来源的新鲜度窗口仍没有新数据，去设置检查。',
     [REASON(IDS.sourceStale)]: '最后一次成功采集在窗口之前。',
 
+    [TITLE(IDS.briefingReady)]: '日报已完成',
+    [BODY(IDS.briefingReady)]: '今天这一期已经生成，点开可以看全文。',
+    [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
+
     [TITLE(IDS.calibrationResult)]: '预测校准出结果了',
     [BODY(IDS.calibrationResult)]: '校准视图已经更新。',
     [REASON(IDS.calibrationResult)]: '你订阅了校准结果。',
@@ -75,6 +79,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.sourceStale)]: '{sourceName} has no new data',
     [BODY(IDS.sourceStale)]: 'No new data for longer than this source’s freshness window. Check it in settings.',
     [REASON(IDS.sourceStale)]: 'The last successful collection was before the window.',
+
+    [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
+    [BODY(IDS.briefingReady)]: 'Today’s edition has been generated; open it for the full text.',
+    [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
 
     [TITLE(IDS.calibrationResult)]: 'Prediction calibration finished',
     [BODY(IDS.calibrationResult)]: 'The calibration view has been updated.',
