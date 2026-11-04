@@ -246,7 +246,6 @@ export class ChannelManagementService {
     }
   }
 
-
   async beginCredential(input: { id: unknown; senderId: unknown }) {
     const id = this.requireMutableChannel(input.id)
     // Release F enrollment is QR-only and its public protocol is not frozen; generic credential handoff is forbidden.
@@ -351,8 +350,9 @@ export class ChannelManagementService {
       ...this.enforcement(),
       resumableChannelIds: () => this.deps.repository.resumableChannelIds(),
       readChannel: (id) => this.deps.repository.query.get(id),
+      canEnableAdapter: (channel) => this.canEnableAdapter(channel.type as AgentChannelType),
       restart: (input) => this.restart(input), requestEnable: (input) => this.requestEnable(input),
-      disable: (input) => { this.disable(input) }
+      disable: (input) => this.disable(input)
     })
   }
 

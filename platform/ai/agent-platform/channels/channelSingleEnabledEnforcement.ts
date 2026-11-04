@@ -58,7 +58,9 @@ export function reconcileEnabledChannels(deps: EnforcementDeps): { keptChannelId
  */
 export async function resumeChannelsWithInvariant(deps: EnforcementDeps & {
   resumableChannelIds: () => string[]
-  readChannel: (id: string) => { state: string } | null
+  readChannel: (id: string) => { state: string; type: string } | null
+  /** 平台是否已声明支持：只有已声明支持的频道才走 restart（restart 没有自检放行）。 */
+  canEnableAdapter: (channel: { state: string; type: string }) => boolean
   restart: (input: { id: string; actorId: string }) => Promise<ChannelManagementResult> | ChannelManagementResult
   requestEnable: (input: { id: string; actorId: string }) => Promise<ChannelManagementResult> | ChannelManagementResult
   disable: (input: { id: string; actorId: string }) => void
@@ -66,12 +68,21 @@ export async function resumeChannelsWithInvariant(deps: EnforcementDeps & {
   reconcileEnabledChannels(deps)
   for (const id of deps.resumableChannelIds()) {
     const channel = deps.readChannel(id)
-    const result = channel?.state === 'runtime-ready'
+    const result = channel !== null && channel.state === 'runtime-ready' && deps.canEnableAdapter(channel)
       ? await deps.restart({ id, actorId: 'channel-startup' })
-      : await deps.requestEnable({ id, actorId: 'channel-startup' })
+      // 没声明支持的平台走启用那条路：它带「现场自检通过就只启用这一条」的放行，
+      // 否则一条靠自检启用的频道每次重启都要读者再点一次（用户 2026-11-04 报的 bug）。
+      // 先把状态归一成 `ready`：退出时只围栏了运行代际，频道仍是 `enabled`，
+      // 而「启用」这条路的 owner 只接受 ready/disabled，直接调会被当成「已经在跑」而不启动。
+      : (deps.repository.preserveResumeIntent(id, deps.now()), await deps.requestEnable({ id, actorId: 'channel-startup' }))
     if (!result.ok) {
-      if (result.code !== 'adapter-runtime-start-failed') deps.disable({ id, actorId: 'channel-startup' })
-      else deps.repository.preserveResumeIntent(id, deps.now())
+      // 瞬时失败（自检没过、运行时没起来）保留开启意图，下次启动再试；
+      // 只有凭据缺失/失效、频道不存在这类确定性问题才清掉意图。
+      if (result.code === 'adapter-runtime-start-failed' || result.code === 'channel-smoke-failed') {
+        deps.repository.preserveResumeIntent(id, deps.now())
+      } else {
+        deps.disable({ id, actorId: 'channel-startup' })
+      }
     }
   }
   reconcileEnabledChannels(deps)
