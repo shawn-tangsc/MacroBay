@@ -72,7 +72,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
     </summary>
     {trace
       ? <p className="mi-generation-trace__summary">
-        {labels.attempt} · {running ? formatTime(trace.startedAt) : formatRange(trace.startedAt, trace.finishedAt, formatTime)}
+        {labels.attempt} · {formatInstant(trace.startedAt, formatTime)}
         {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
       : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
@@ -176,9 +176,11 @@ function stageResult(
   text: DailyBriefingText,
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 ): string {
-  const range = formatRange(stage.startedAt, stage.finishedAt, formatTime)
+  // The start instant, not a range: the duration beside it already says how long the stage took,
+  // and "07:21:26 → 07:21:27" answers a question the reader did not ask.
+  const instant = formatInstant(stage.startedAt ?? stage.finishedAt, formatTime)
   const duration = stageDurationMs(stage)
-  const parts = [range, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
+  const parts = [instant, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
   if (parts.length > 0) return parts.join(' · ')
   if (stage.state === 'skipped') {
     if (skipReason === 'blocked') return text.generationTrace.states.notRun
@@ -189,39 +191,19 @@ function stageResult(
 }
 
 /**
- * A generation run rarely crosses midnight, so the date is noise on almost every row: print
- * `20:56:53 → 20:58:31` and only add `MM-DD` on the side that falls on another day.
+ * One instant per stage: the moment it started. A stage's end is not printed — the duration next to
+ * it says how long it took — so a row never reads as "from this time to that time".
+ *
+ * The shell formatter writes `YYYY-MM-DD HH:mm:ss`; the date is dropped here because an attempt
+ * lives inside one edition and the reader is looking at one day.
  */
-function formatRange(
-  startedAt: string | undefined,
-  finishedAt: string | undefined,
+function formatInstant(
+  value: string | undefined,
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 ): string {
-  const start = startedAt ? timePoint(startedAt, formatTime) : undefined
-  const finish = finishedAt ? timePoint(finishedAt, formatTime) : undefined
-  if (start && finish) {
-    // A run that starts and ends in the same second has one instant to print, not two joined by an
-    // arrow: "15:54:23 → 15:54:23" reads like a bug because it is one.
-    if (start.time === finish.time && (start.date ?? '') === (finish.date ?? '')) return start.time
-    const sameDay = !start.date || !finish.date || start.date === finish.date
-    return `${sameDay ? start.time : withDate(start)} → ${sameDay ? finish.time : withDate(finish)}`
-  }
-  const only = start ?? finish
-  return only ? only.time : ''
-}
-
-function timePoint(
-  value: string,
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
-): Readonly<{ date?: string; time: string }> {
-  // The shell formatter writes `YYYY-MM-DD HH:mm:ss GMT±n`; a test double may pass the clock alone.
+  if (!value) return ''
   const [first, second] = formatTime(value, 'second').split(' ')
-  if (second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '')) return { date: first, time: second }
-  return { time: first ?? '' }
-}
-
-function withDate(point: Readonly<{ date?: string; time: string }>): string {
-  return point.date ? `${point.date.slice(5)} ${point.time}` : point.time
+  return second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? second : first ?? ''
 }
 
 function formatDuration(milliseconds: number, text: DailyBriefingText): string {

@@ -167,7 +167,7 @@
 .mi-brief-steps__stepper .ant-steps-item-title { display: block; padding-inline-end: 0; color: #c4ccd2; font-size: 12px; font-weight: 600; line-height: 18px; }
 .mi-brief-steps__stepper .ant-steps-item-title::after { display: none; }
 .mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
-.mi-brief-steps__stepper .mi-brief-steps__row-content { display: flex; align-items: baseline; gap: 8px; }
+.mi-brief-steps__stepper .mi-brief-steps__row-content { display: flex; align-items: center; gap: 6px; }
 .mi-generation-trace__stage-title { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .mi-generation-trace__stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-generation-trace__stage-time { font-variant-numeric: tabular-nums; }
@@ -181,8 +181,10 @@
 
 /* The live run's own block: eight rows from the contract's mapping, no percentage anywhere. */
 .mi-brief-steps { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.mi-brief-steps__name { flex: 1 1 auto; min-width: 0; }
-.mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; }
+/* A stage name is one word, never a two-line cell: it keeps one line and truncates if the rail is
+   narrower than the name, so the connector column and the times stay where they are. */
+.mi-brief-steps__name { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
 
 /* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */

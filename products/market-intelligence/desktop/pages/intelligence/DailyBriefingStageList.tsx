@@ -52,7 +52,8 @@ export function DailyBriefingStageRowContent({ row, resolveText, extraAttributes
 }>): React.ReactElement {
   const help = row.help
   return <span className="mi-brief-steps__row-content" data-briefing-stage-row="true" data-stage={row.id} data-stage-state={row.state} {...extraAttributes}>
-    <span className="mi-brief-steps__name">{row.name}</span>
+    {/* The question mark comes before the name it explains, as everywhere else in the app: the
+        reader meets the explanation before the word it belongs to. */}
     {help && resolveText
       ? <Popover
         labelKey={help.labelKey}
@@ -69,6 +70,7 @@ export function DailyBriefingStageRowContent({ row, resolveText, extraAttributes
         />}
       />
       : null}
+    <span className="mi-brief-steps__name">{row.name}</span>
     <span className="mi-brief-steps__detail" data-stage-result={row.id} data-stage-result-state={row.state}>
       {row.detail}
       {/* The failure's code line belongs to the stage's recorded result, not beside it. */}

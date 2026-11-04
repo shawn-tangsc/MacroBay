@@ -183,7 +183,7 @@ export const dailyBriefingText = {
       failedAt: '失败于：{stage}',
       notRecorded: '未记录',
       states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notNeeded: '无需修正', notRun: '未执行' },
-      stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '字段响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
+      stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
       stageHelpLabel: '查看{stage}的阶段说明',
       // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
       stageHelp: {

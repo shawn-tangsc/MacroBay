@@ -18,6 +18,17 @@ describe('daily briefing layout', () => {
     expect(css).not.toContain('max-width: 1450px')
   })
 
+  it('keeps a stage name on one line, even when the rail is narrower than the name', () => {
+    // The stage name is a cell in a fixed column: wrapping it into two lines moved the times and the
+    // row pitch with it. It may shorten, never break.
+    const name = css.slice(css.indexOf('.mi-brief-steps__name {'))
+    const nameRule = name.slice(0, name.indexOf('}'))
+    expect(nameRule).toContain('white-space: nowrap')
+    expect(nameRule).toContain('text-overflow: ellipsis')
+    const detail = css.slice(css.indexOf('.mi-brief-steps__detail {'))
+    expect(detail.slice(0, detail.indexOf('}'))).toContain('white-space: nowrap')
+  })
+
   it('stacks only below a narrow window', () => {
     const narrow = css.slice(css.indexOf('@media (max-width: 980px) { .mi-daily-briefing-page__body--with-appendix'))
     expect(narrow).toContain('grid-template-columns: minmax(0, 1fr)')

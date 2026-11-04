@@ -153,11 +153,13 @@ describe('generation stage timeline', () => {
     expect(steps.every((entry) => entry.getAttribute('data-stage-state') === 'done')).toBe(true)
     expect(dom.textContent).toContain(text.generationTrace.title)
     expect(dom.textContent).toContain(text.generationTrace.allCompleted)
-    // Same-day attempts print only the clock; the date is noise inside one edition.
-    expect(dom.textContent).toContain('本次尝试 · 00:00:00 → 00:01:00')
+    // One instant per row: when the run began, and when each stage began. The date is noise inside
+    // one edition, and an end time would repeat what the duration already says.
+    expect(dom.textContent).toContain('本次尝试 · 00:00:00')
     expect(dom.textContent).toContain('耗时 1 分 0 秒')
     expect(dom.textContent).not.toContain('2026-10-30 00:00:00')
-    expect(resultOf(dom, 'source').textContent).toContain('00:00:05 → 00:00:06')
+    expect(dom.textContent).not.toContain('→')
+    expect(resultOf(dom, 'source').textContent).toContain('00:00:05')
     expect(resultOf(dom, 'source').textContent).toContain('1 秒')
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
     // The count in the summary is the number of rows the detail renders, not a literal.
@@ -170,12 +172,13 @@ describe('generation stage timeline', () => {
       stage('source', 'success', { startedAt: instant, finishedAt: instant, durationMs: 0 })
     ], { startedAt: instant, finishedAt: instant }))
 
-    // One fact, one time: the arrow with the same value on both sides reads like a defect.
+    // One fact, one time: the run begins and ends in the same second, so only the start is printed —
+    // and no row anywhere shows a range.
     const summary = dom.querySelector('.mi-generation-trace__summary')?.textContent ?? ''
     expect(summary).toContain('00:00:05')
     expect(summary).not.toContain('→')
     expect(resultOf(dom, 'source').textContent).toContain('00:00:05')
-    expect(resultOf(dom, 'source').textContent).not.toContain('00:00:05 → 00:00:05')
+    expect(dom.textContent).not.toContain('→')
   })
 
   it('maps finish, error and wait to the recorded stage states', () => {
@@ -227,16 +230,18 @@ describe('generation stage timeline', () => {
     expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05')
   })
 
-  it('adds the date only to the side that crosses midnight', () => {
+  it('prints the stage’s start instant across midnight, without a date and without a range', () => {
     const dom = render(trace('success', [
       stage('source', 'success', { startedAt: '2026-10-30T23:59:50.000Z', finishedAt: '2026-10-31T00:00:10.000Z' }),
       stage('candidates', 'success')
     ], { startedAt: '2026-10-30T23:59:00.000Z', finishedAt: '2026-10-31T00:01:00.000Z' }))
 
-    expect(dom.textContent).toContain('10-30 23:59:00 → 10-31 00:01:00')
-    expect(resultOf(dom, 'source').textContent).toContain('10-30 23:59:50 → 10-31 00:00:10')
-    expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05 → 00:00:06')
-    expect(resultOf(dom, 'candidates').textContent).not.toContain('2026-10-30')
+    // A run inside one edition reads as one day: the clock alone, the start of each row only.
+    expect(dom.textContent).toContain('23:59:00')
+    expect(resultOf(dom, 'source').textContent).toContain('23:59:50')
+    expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05')
+    expect(dom.textContent).not.toContain('→')
+    expect(dom.textContent).not.toContain('2026-10-30')
   })
 
   it('locates a source failure and keeps the later steps waiting', () => {
@@ -276,6 +281,20 @@ describe('generation stage timeline', () => {
       // The row draws no mark of its own at all: the stepper's circle is the only one.
       expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(0)
       expect(row.textContent ?? '').not.toMatch(/[✓✔√]/)
+    }
+  })
+
+  it('puts the question mark before the name it explains', () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    for (const id of allSucceeded) {
+      const row = stepOf(dom, id)
+      const help = row.querySelector<HTMLElement>(`[data-stage-help="${id}"]`)
+      const name = row.querySelector<HTMLElement>('.mi-brief-steps__name')
+      expect(help, id).not.toBeNull()
+      expect(name, id).not.toBeNull()
+      // The trigger is the row's first part: the reader meets the explanation before the word.
+      expect(row.firstElementChild?.contains(help), id).toBe(true)
+      expect(help!.compareDocumentPosition(name!) & Node.DOCUMENT_POSITION_FOLLOWING, id).toBeTruthy()
     }
   })
 
@@ -368,7 +387,7 @@ describe('generation stage timeline', () => {
     expect(dom.querySelector('[data-stage-help="writing"]')).toBeNull()
     expect(dom.querySelector('[data-stage-help="source"]')).not.toBeNull()
     // The stage itself, its timing and the rest of the stepper are untouched by the missing line.
-    expect(resultOf(dom, 'writing').textContent).toContain('00:00:05 → 00:00:06')
+    expect(resultOf(dom, 'writing').textContent).toContain('00:00:05')
   })
 
   it('still lists all nine stages when no trace was recorded, as never reached', () => {
