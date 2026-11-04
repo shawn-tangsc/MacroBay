@@ -77,6 +77,8 @@ export type ChannelsAndJobsPorts = Readonly<{
    * 传一个实例会拿到未就绪的那个，所以这里只传一个每次调用才解析一次的闭包。
    */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /** 主进程唯一日志口（`userData/logs/app.log`，写入前统一脱敏）：P8 提交失败要在这里留一行。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   repositories: Pick<
     ReturnType<typeof createRepositories>,
     | 'agentDatabase'
@@ -274,8 +276,16 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
             disconnectedAt,
             occurredAt: new Date().toISOString()
           })
-        } catch {
-          // 读库/读设置失败也只是少一条提醒：连接自己会继续重试，状态行与日志另有记录。
+        } catch (error) {
+          // 「不把应用带走」不等于「不留痕」（2026-11-04 立的规矩：失败不许静默）。最可能的失败是
+          // 提交被拒（unknown-event-type / 批准表不匹配 / bodyVariant 写错）——那时 P8 永远不响，
+          // 若这里也空白，就只剩「没反应」这一个现象，正是今晚反复出现的那类黑箱。
+          ports.log?.('error', 'channel.connection-lost.submit-failed', {
+            channelId,
+            cause,
+            disconnectedAt,
+            reason: error instanceof Error ? error.message : String(error)
+          })
         }
       })()
     }

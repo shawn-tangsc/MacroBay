@@ -424,6 +424,7 @@ const channelsAndJobs = createChannelsAndJobs({
   agentRuntimeService,
   // 通知运行时晚于通道构造就绪：这里只给闭包，调用时才解析，避免拿到未配置的实例。
   submitNotification: (request) => getNotificationRuntime().submit(request),
+  log: appLog.log,
   repositories: {
     agentDatabase,
     agentRepositories,

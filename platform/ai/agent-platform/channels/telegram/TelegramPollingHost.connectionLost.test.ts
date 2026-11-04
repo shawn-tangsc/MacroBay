@@ -6,10 +6,11 @@ import type { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramPollingHost } from './TelegramPollingHost'
 
 /**
- * 「频道连不上」在**真轮询循环**里的行为（需求 v2.17 §11.1）：自动重连失败之后一条，重试过程不刷屏。
+ * 「频道连不上」在**真轮询循环**里的行为（需求 v2.17 §11.1、第 8 条）：断开满 30 秒才一条，
+ * 重试过程不刷屏，7 秒抖动一条都不报。
  *
  * 这里不开真定时器：`setTimeout` 注入成一个队列，测试手动放行每一次尝试，时钟也注入，
- * 所以「几点断的」可以逐字段断言，不用等 7 秒。
+ * 所以「几点断的、断了多久」可以逐字段断言，不用真等半分钟。
  */
 function createHarness() {
   const timers: Array<() => void> = []
@@ -53,17 +54,19 @@ function createHarness() {
 }
 
 describe('Telegram polling host: channel connection lost', () => {
-  it('reports once after automatic reconnection fails, then stays quiet for the same outage', async () => {
+  it('reports once after 30 seconds of downtime, then stays quiet for the same outage', async () => {
     const harness = createHarness()
     harness.updates.mockResolvedValue({ ok: false, code: 'telegram-proxy-unavailable' })
     harness.host.start()
 
-    await harness.pump()
-    harness.advance(1_000)
-    await harness.pump()
+    // 真实的退避节奏：0s / 1s / 3s / 7s / 15s。
+    for (const step of [0, 1_000, 2_000, 4_000, 8_000]) {
+      harness.advance(step)
+      await harness.pump()
+    }
     expect(harness.lost).toHaveLength(0)
 
-    harness.advance(2_000)
+    harness.advance(16_000)
     await harness.pump()
     // 断开起始时刻是**第一次**失败那一刻，不是触发提交的那一次。
     expect(harness.lost).toEqual([{ cause: 'proxy', disconnectedAt: new Date(1_000).toISOString() }])
@@ -76,27 +79,27 @@ describe('Telegram polling host: channel connection lost', () => {
     expect(harness.lost).toHaveLength(1)
   })
 
-  it('never reports a blip that recovers, and treats the next outage as a new one', async () => {
+  it('reports nothing for a seven-second flutter, and treats the next real outage as new', async () => {
     const harness = createHarness()
     harness.updates.mockResolvedValue({ ok: false, code: 'telegram-network-unavailable' })
     harness.host.start()
-    await harness.pump()
-    harness.advance(1_000)
-    await harness.pump()
-
-    // 接到一条更新（哪怕没有新消息）＝连上了：这次断开到此为止。
+    // 7 秒内失败三次：这是合盖唤醒 / 切 Wi-Fi / 代理重连抖一下的样子，不是断线。
+    for (const step of [0, 1_000, 6_000]) {
+      harness.advance(step)
+      await harness.pump()
+    }
     harness.updates.mockResolvedValue({ ok: true, value: [] })
-    harness.advance(4_000)
     await harness.pump()
     expect(harness.lost).toHaveLength(0)
 
+    // 真的断了：从这次的第一刻起满 30 秒才报，且带这次自己的起始时刻。
     harness.updates.mockResolvedValue({ ok: false, code: 'telegram-network-unavailable' })
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      harness.advance(10_000)
-      await harness.pump()
-    }
-    // 恢复后第一次失败在 16s（前面 6s 是恢复那一跳），新的断开起始时刻就是它。
-    expect(harness.lost).toEqual([{ cause: 'network', disconnectedAt: new Date(16_000).toISOString() }])
+    const outageStart = 9_000
+    harness.advance(1_000)
+    await harness.pump()
+    harness.advance(30_000)
+    await harness.pump()
+    expect(harness.lost).toEqual([{ cause: 'network', disconnectedAt: new Date(outageStart).toISOString() }])
   })
 
   it('does not call a rate limit, a conflict or a rejected token a lost connection', async () => {
@@ -106,7 +109,7 @@ describe('Telegram polling host: channel connection lost', () => {
       harness.host.start()
       for (let attempt = 0; attempt < 5; attempt += 1) {
         await harness.pump()
-        harness.advance(1_000)
+        harness.advance(40_000)
       }
       expect(harness.lost, code).toHaveLength(0)
     }
@@ -116,10 +119,9 @@ describe('Telegram polling host: channel connection lost', () => {
     const transport = createHarness()
     transport.updates.mockRejectedValue(new TypeError('fetch failed'))
     transport.host.start()
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await transport.pump()
-      transport.advance(1_000)
-    }
+    await transport.pump()
+    transport.advance(31_000)
+    await transport.pump()
     expect(transport.lost).toEqual([{ cause: 'network', disconnectedAt: new Date(1_000).toISOString() }])
 
     // 入站/存储抛出的普通异常不是网络问题：报成「连不上」会把读者带去查错地方。
@@ -128,7 +130,7 @@ describe('Telegram polling host: channel connection lost', () => {
     internal.host.start()
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await internal.pump()
-      internal.advance(1_000)
+      internal.advance(40_000)
     }
     expect(internal.lost).toHaveLength(0)
   })

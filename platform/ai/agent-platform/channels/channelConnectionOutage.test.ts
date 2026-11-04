@@ -1,55 +1,61 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  CHANNEL_RECONNECT_FAILURES_BEFORE_REPORT,
+  CHANNEL_OFFLINE_REPORT_AFTER_MS,
   ChannelConnectionOutage,
   connectionCauseOfCode
 } from './channelConnectionOutage'
 
 /**
- * P8 判定（需求 v2.17 §11.1–§11.2）：**自动重连失败之后只提交一次**，重试过程一次都不提交；
- * 同一次断开只留一条。这里判的是「报几次」，不是「报得好不好看」。
+ * P8 判定（需求 v2.17 §11.1–§11.2、第 8 条）：**断开满 30 秒才算断线**，重试过程一次都不提交，
+ * 同一次断开只留一条。阈值按**时长**不按次数——几秒内的两三次失败只是抖动（合盖唤醒、切 Wi-Fi、
+ * 代理重连），按次数判就会为一次假断线弹桌面 + 记一条中心。
  */
 describe('channel connection outage', () => {
-  it('stays silent for a single blip and reports exactly once on the third failure', () => {
+  it('waits 30 seconds of downtime, not three failed attempts', () => {
     const outage = new ChannelConnectionOutage()
+    expect(CHANNEL_OFFLINE_REPORT_AFTER_MS).toBe(30_000)
     expect(outage.recordFailure(1_000)).toBeNull()
     expect(outage.recordFailure(2_000)).toBeNull()
-    // 第三次：退避已经 1s→2s→4s，约 7 秒没接上，才算「这条频道真的收不到消息了」。
-    expect(CHANNEL_RECONNECT_FAILURES_BEFORE_REPORT).toBe(3)
-    expect(outage.recordFailure(4_000)).toEqual({ disconnectedAt: 1_000 })
+    // 7 秒内连失败 3 次——旧口径会在这里报一条，那是假断线。
+    expect(outage.recordFailure(8_000)).toBeNull()
+    expect(outage.attempts).toBe(3)
+    // 差 1 毫秒都不算；断开起始时刻始终是第一次那一刻。
+    expect(outage.recordFailure(30_999)).toBeNull()
+    expect(outage.recordFailure(31_000)).toEqual({ disconnectedAt: 1_000 })
+  })
+
+  it('never reports a short flutter that recovers inside the 30 seconds', () => {
+    const outage = new ChannelConnectionOutage()
+    outage.recordFailure(1_000)
+    outage.recordFailure(2_000)
+    outage.recordFailure(8_000)
+    outage.recordSuccess()
+    expect(outage.attempts).toBe(0)
+    // 恢复之后重新数，24 秒的抖动同样不报。
+    outage.recordFailure(100_000)
+    outage.recordFailure(124_000)
+    expect(outage.attempts).toBe(2)
   })
 
   it('keeps quiet while the same outage keeps retrying: one outage, one record', () => {
     const outage = new ChannelConnectionOutage()
     outage.recordFailure(1_000)
-    outage.recordFailure(2_000)
-    expect(outage.recordFailure(4_000)).not.toBeNull()
+    expect(outage.recordFailure(31_000)).not.toBeNull()
     // 断网十分钟就是几十次失败——报过之后一次都不能再报。
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      expect(outage.recordFailure(8_000 + attempt * 60_000)).toBeNull()
+      expect(outage.recordFailure(31_000 + attempt * 60_000)).toBeNull()
     }
-  })
-
-  it('never reports a blip that recovers before the threshold', () => {
-    const outage = new ChannelConnectionOutage()
-    expect(outage.recordFailure(1_000)).toBeNull()
-    expect(outage.recordFailure(2_000)).toBeNull()
-    outage.recordSuccess()
-    expect(outage.recordFailure(3_000)).toBeNull()
-    expect(outage.recordFailure(4_000)).toBeNull()
   })
 
   it('counts a reconnect after recovery as a new outage with its own start', () => {
     const outage = new ChannelConnectionOutage()
     outage.recordFailure(1_000)
-    outage.recordFailure(2_000)
-    expect(outage.recordFailure(3_000)).toEqual({ disconnectedAt: 1_000 })
+    expect(outage.recordFailure(31_000)).toEqual({ disconnectedAt: 1_000 })
     outage.recordSuccess()
-    outage.recordFailure(90_000)
-    outage.recordFailure(91_000)
+    outage.recordFailure(900_000)
     // 新的一次断开带新的起始时刻：去重键不同，所以是另一条记录（契约要「一次断开一条」）。
-    expect(outage.recordFailure(92_000)).toEqual({ disconnectedAt: 90_000 })
+    expect(outage.recordFailure(930_000)).toEqual({ disconnectedAt: 900_000 })
   })
 
   it('treats only the two transport codes as a lost connection', () => {

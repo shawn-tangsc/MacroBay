@@ -10,8 +10,8 @@
  *     那等于没说，读者不知道该去查网络还是查代理；
  *  3. **不含手机**（批准表只给 center/toast/desktop）：本机状态不该再推到手机。
  *
- * 判定（数几次失败才算断线）在频道线 `channelConnectionOutage.ts`，这里只负责把一份已经成立的
- * 「这次断开了」翻成一条提交请求——两件事分开，判定才测得动。
+ * 判定（断多久才算断线：满 30 秒，不按失败次数）在频道线 `channelConnectionOutage.ts`，这里只负责
+ * 把一份已经成立的「这次断开了」翻成一条提交请求——两件事分开，判定才测得动。
  */
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../contracts/notificationContracts'
 
