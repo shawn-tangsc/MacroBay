@@ -53,8 +53,10 @@ function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}):
       market: [
         row('btc', 'btc', 1.23, { percent: 3.2, high: 72_400, low: 69_800, anchor: 70_000 }, { close: 110_432.1, change: 1.23 }),
         row('eth', 'eth', 1.59, { percent: 2.4, high: 3_620, low: 3_520, anchor: 3_540 }, { close: 3_842.5, change: 1.59 }),
-        // Production shape: the 24h percentage is `value`, and `change` is null on this row.
-        { ...row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }, { close: 19_842.5, change: 0.82, indexSource: 'real' }), change: null },
+        // Production shape, taken from the 2026-11-04 edition: 24h percentage in `value`, `change` null,
+        // `close` 689.73 read through the perpetual proxy. Numbers are the edition's own, not invented —
+        // a fixture that drifts from what the service writes is how a green suite hid this empty cell.
+        { ...row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }, { close: 689.73, change: 0.82, indexSource: 'proxy' }), change: null },
         row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)
       ],
       funds: [row('stablecoin', 'stablecoin', 2530), row('etf-btc', 'etfBtc', 110_300_000), row('etf-eth', 'etfEth', -88_600_000)],
@@ -661,7 +663,10 @@ describe('a level the document does not carry is a dash with a reason, never a m
 
     await act(async () => root?.unmount())
     root = undefined
-    const real = await render(() => undefined)
+    const real = await render((doc) => {
+      const index = doc.data.market.find((entry) => entry.id === 'index') as { indexSource?: string }
+      index.indexSource = 'real'
+    })
     expect(real.querySelector('[data-reading="nasdaq"]')?.textContent).not.toContain('QQQ 永续代理')
   })
 
@@ -846,7 +851,7 @@ describe('the index cell reads its stored close', () => {
     })
     const cell = host.querySelector('[data-reading="nasdaq"]')!
     // The level is the level: thousands, no invented digits, produced by the one formatter.
-    const level = formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN')
+    const level = formatBriefingValue({ number: 689.73, format: 'level' }, text.noValue, 'zh-CN')
     expect(cell.querySelector('b')?.textContent).toBe(level)
     // The percentage must not sit beside it as a second primary — it is the move, and it keeps its arrow.
     expect(cell.querySelector('b')?.textContent).not.toContain('%')
@@ -864,7 +869,7 @@ describe('the index cell reads its stored close', () => {
     const cell = host.querySelector('[data-reading="nasdaq"]')!
     // No level to print, and no dash either: the old shape is the honest one here.
     expect(cell.querySelector('b')?.textContent).toContain('%')
-    expect(cell.textContent).not.toContain('19,842')
+    expect(cell.textContent).not.toContain('689.73')
     expect(cell.textContent).not.toContain(text.noValue)
   })
 })
@@ -885,8 +890,10 @@ describe('the index row reads the production shape, not a convenient one', () =>
     })))
     const cell = host.querySelector('[data-reading="nasdaq"]')!
     expect(cell.querySelector('b')?.textContent)
-      .toBe(formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN'))
+      .toBe(formatBriefingValue({ number: 689.73, format: 'level' }, text.noValue, 'zh-CN'))
     // The move comes from `value`, which is where the percentage lives — not from the null `change`.
     expect(cell.querySelector('.mi-brief-poster__figure-change')?.textContent).toContain('0.82%')
+    // The level is the proxy's, not the index's own: the bracket is the only thing that says so.
+    expect((cell.textContent?.match(/QQQ 永续代理/g) ?? [])).toHaveLength(1)
   })
 })
