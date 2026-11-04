@@ -102,8 +102,6 @@
 .mi-brief-poster__numbers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .mi-brief-poster__numbers[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mi-brief-poster__numbers[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.mi-brief-poster__leverage { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; padding: 7px 0; border-top: 1px solid #ded4c2; font-size: 10px; color: #6b695f; }
-.mi-brief-poster__leverage b { color: #1b1d18; font-weight: 600; }
 .mi-brief-poster__policy { display: flex; gap: 10px; align-items: baseline; margin-top: 8px; padding: 7px 0; border-top: 1px solid #ded4c2; font-size: 10px; color: #6b695f; }
 .mi-brief-poster__policy b { color: #1b1d18; font-weight: 600; }
 .mi-brief-poster__policy small { color: #8b8475; font-size: 9px; }
@@ -196,7 +194,9 @@
    Sizes are the design's own: card row 114px, leverage card 87px, gauge 88×54, price area column
    100 wide (fills the card height), spark 60×26. Nothing here is responsive: the paper is a fixed
    1080px sheet, so a stacked variant at narrow widths would make the export and the preview differ. */
-.mi-brief-poster__data { display: flex; flex-direction: column; gap: 6px; }
+/* Blocks are separated by space alone — no line between them. Twelve is the distance the sheet had
+   before it was widened; the row lines inside a block are what separate rows, not blocks. */
+.mi-brief-poster__data { display: flex; flex-direction: column; gap: 12px; }
 /* The card shell, once. Height is the OUTER box: `height` + border-box here means a padding or border
    change cannot push the card row past 114px, which is what happened when the height lived on the grid
    row and the shell was missing altogether. Tone drives the colour, so a card with a tone is a card

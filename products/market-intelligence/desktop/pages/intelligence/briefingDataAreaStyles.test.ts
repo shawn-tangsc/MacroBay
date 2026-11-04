@@ -125,3 +125,20 @@ describe('the fear-and-greed band word has its own tone', () => {
     expect(css.includes('.mi-brief-poster__figure[data-tone=')).toBe(false)
   })
 })
+
+describe('blocks are separated by space, not by a line', () => {
+  it('keeps one distance between blocks and draws nothing between them', () => {
+    // 12 is the distance the sheet had before it was widened; the lines inside a block separate rows.
+    expect(declaration(rule('.mi-brief-poster__data'), 'gap')).toBe('12px')
+    // The positioning block was rewritten into two cards and an older rule kept a `border-top` plus its own
+    // margin — that leftover rule was the line the reader saw above 持仓与费率.
+    expect(css.match(/\.mi-brief-poster__leverage\s*\{/g) ?? []).toHaveLength(1)
+    expect(declaration(rule('.mi-brief-poster__leverage'), 'border-top')).toBeUndefined()
+    expect(declaration(rule('.mi-brief-poster__leverage'), 'margin-top')).toBeUndefined()
+    // Rows inside a block still have their line; only the block's last row drops it.
+    expect(declaration(rule('.mi-brief-poster__figure-line'), 'border-bottom')).toBe('1px solid #c9bda3')
+    // The group rule that drops the block's last row line is asserted where it is written (two selectors,
+    // one declaration), rather than through a single-selector lookup.
+    expect(css).toContain('.mi-brief-poster__funds-block > .mi-brief-poster__figure-line:last-of-type')
+  })
+})
