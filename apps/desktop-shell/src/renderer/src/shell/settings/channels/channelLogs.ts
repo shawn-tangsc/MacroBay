@@ -48,6 +48,15 @@ export type ChannelLogSources = {
 
 const MAX_ROWS = 50
 
+/**
+ * 投递审计里表示**成功**的码。它们不进「发送失败」那一类，一条都不画。
+ *
+ * 为什么用「成功名单」而不是「失败名单」：把不认识的成功码画成失败，正是用户今晚看到
+ * 「四条发送失败全是成功」的原因；而失败侧有文案表兜着（表里没有的码一律不显示），
+ * 两个方向都不会把成功说成失败。
+ */
+const DELIVERY_SUCCESS_CODES: ReadonlySet<string> = new Set(['channel-delivery-delivered'])
+
 export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels): ChannelLogRow[] {
   const rows: ChannelLogRow[] = []
 
@@ -105,6 +114,10 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     })
   }
   for (const entry of sources.deliveries ?? []) {
+    // 这一类的标题是「最近一次发送失败」，所以**只有失败才进来**。
+    // 成功码（`channel-delivery-delivered` 这类）一条都不画：画出来就是「发送失败：没有更多说明」，
+    // 用户看到的失败一半其实是成功——今晚就是这么失去信任的。
+    if (DELIVERY_SUCCESS_CODES.has(entry.code)) continue
     // 「交出去了、拿不到回执」既不是成功也不是失败：它是「不确定」，不进「发送失败」那一类。
     // 面板上仍要能看见它，所以单独用 WARN 行，前缀也说「不确定」。
     const uncertain = entry.code === 'unknown-after-send'
@@ -114,6 +127,9 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
       ? labels.channelLogDeliveryText.unknownAfterSend
       : (labels.channelLogDeliveryText[entry.code] ?? labels.channelLogsUnknownCode)
     const detail = typeof entry.detail === 'string' && entry.detail.trim() !== '' ? entry.detail.trim() : null
+    // 不认识的码：**不许画成失败**（宁可不显示）。只有表里有话的失败码才上屏，
+    // 不确定归属的码上屏也只能靠猜，而猜错的方向恰好是「把成功说成失败」。
+    if (!uncertain && labels.channelLogDeliveryText[entry.code] === undefined) continue
     rows.push({
       id: `delivery-${entry.id}`,
       at: entry.createdAt,

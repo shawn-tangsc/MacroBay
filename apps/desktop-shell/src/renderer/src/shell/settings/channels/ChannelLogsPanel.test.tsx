@@ -334,3 +334,40 @@ describe('the platform\'s own words ride along as a note, never as the reason', 
     expect(text).not.toContain('（）')
   })
 })
+
+describe('the failure list never paints a success as a failure', () => {
+  it('shows only the failed send when the audits also carry a delivered one', async () => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [
+          { id: 'd21', attemptId: 'x', code: 'channel-delivery-delivered', detail: null, createdAt: '2026-11-04T10:38:21.000Z' },
+          { id: 'd22', attemptId: 'y', code: 'delivery-provider-rejected', detail: 'Bad Request: chat not found', createdAt: '2026-11-04T10:38:26.000Z' }
+        ]
+      }))
+    })
+
+    const deliveryRows = [...container.querySelectorAll('.channel-log-row')].filter((node) =>
+      node.textContent?.includes(labels.channelLogDeliveryPrefix)
+    )
+    expect(deliveryRows).toHaveLength(1)
+    expect(deliveryRows[0]?.textContent).toContain(labels.channelLogDeliveryText['delivery-provider-rejected'])
+    // 成功那条一个红条都不许带，连行都不出现。
+    expect(container.textContent).not.toContain('channel-delivery-delivered')
+    expect(container.textContent).not.toContain(labels.channelLogsUnknownCode)
+  })
+
+  it('drops an unrecognised delivery code instead of guessing that it failed', async () => {
+    const container = await mount({
+      ...ok,
+      listDeliveryAudits: vi.fn(async () => ({
+        rows: [{ id: 'd23', attemptId: 'z', code: 'delivery-something-new', detail: null, createdAt: '2026-11-04T10:38:26.000Z' }]
+      }))
+    })
+
+    // 表里没有话的码：不上屏。猜错的方向恰好是「把成功说成失败」。
+    expect(container.textContent).not.toContain(labels.channelLogDeliveryPrefix)
+    expect(container.textContent).not.toContain(labels.channelLogsUnknownCode)
+    expect(container.textContent).not.toContain('delivery-something-new')
+  })
+})
