@@ -63,7 +63,26 @@ export const marketEventPattern = /CPI|PCE|GDP|PMI|FOMC|非农|议息|美联储|
 export const mechanismPattern = /因为|由于|导致|使得|进而|通过|传导|推动|压制|带动|引发|造成|驱动|\bbecause\b|\bleads?\s+to\b|\bled\s+to\b|\bleading\s+to\b|\bthrough\b|\bdriven\s+by\b|\bdrives?\b|\bpushes?\b|\bweighs?\s+on\b|\btransmits?\b/i
 
 export const outlookStancePattern = /偏多|偏空|震荡|区间|看多|看空|中性|\b(?:bullish|bearish|range|choppy|sideways|neutral)\b/i
-export const relativeStrengthPattern = /强于|弱于|跑赢|跑输|优于|落后|相对更强|相对更弱|更抗跌|领涨|领跌|\b(?:outperform(?:s|ed|ing)?|underperform(?:s|ed|ing)?|stronger|weaker|relative\s+strength)\b/i
+/**
+ * "BTC against ETH", in the ways a person actually writes it.
+ *
+ * The first list is the taut form the prompt suggests. Real output says "相对 BTC 更弱" and "比 ETH
+ * 更抗跌" — same fact, one word in between — and a pattern that only accepts the taut form rejects
+ * the model for not reciting the whitelist word for word. The asset may sit inside the comparison,
+ * so it is allowed to.
+ */
+const comparisonAsset = '(?:BTC|ETH|比特币|以太坊)'
+export const relativeStrengthPattern = new RegExp(
+  [
+    '强于', '弱于', '跑赢', '跑输', '优于', '落后', '相对更强', '相对更弱', '更抗跌', '领涨', '领跌',
+    `相对\\s*${comparisonAsset}\\s*[更偏]\\s*[强弱]`,
+    `(?:相对于|相较于|比)\\s*${comparisonAsset}[^，。；]{0,12}?[更偏]\\s*[强弱]`,
+    `[强弱]\\s*于\\s*${comparisonAsset}`,
+    '\\b(?:outperform(?:s|ed|ing)?|underperform(?:s|ed|ing)?|stronger|weaker|relative\\s+strength)\\b',
+    '\\b(?:stronger|weaker)\\s+than\\s+(?:BTC|ETH)\\b'
+  ].join('|'),
+  'i'
+)
 export const conditionalPattern = /若|如果|一旦|假如|假若|除非|\bif\b|\bwhen\b|\bunless\b/i
 
 /**
