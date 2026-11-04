@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
 import { channelCredentialRecovery } from './migrations/channelCredentialRecovery'
 import { channelDeliveryAuditDetail } from './migrations/channelDeliveryAuditDetail'
+import { channelConversationSessionTitle } from './migrations/channelConversationSessionTitle'
 
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
@@ -1514,7 +1515,8 @@ const migrations: AgentPlatformMigration[] = [
   },
   ...channelSettingsOverrides,
   ...channelCredentialRecovery,
-  ...channelDeliveryAuditDetail
+  ...channelDeliveryAuditDetail,
+  ...channelConversationSessionTitle
 ]
 
 export type AgentPlatformDatabase = {

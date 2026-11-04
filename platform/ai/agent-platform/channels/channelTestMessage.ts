@@ -11,17 +11,22 @@ import { resolveDeliveryTarget, type ChannelTargetView } from './channelDelivery
 export type ChannelTestMessageFailure = 'not-ready' | 'no-target' | 'ambiguous-target' | 'rejected'
 
 export type ChannelTestMessageReceipt =
-  | { state: 'accepted'; messageId: string | null }
-  | { state: 'unconfirmed'; messageId: string | null }
+  | { state: 'accepted'; messageId: string | null; targetName: string | null }
+  | { state: 'unconfirmed'; messageId: string | null; targetName: string | null }
   | { state: 'failed'; reason: ChannelTestMessageFailure }
 
 /** 测试消息的正文上限：够放一句话与时刻，又不至于让用户把整段文档推进来。 */
 export const CHANNEL_TEST_MESSAGE_MAX_LENGTH = 500
 
-/** 通道层回执 → 给读者的三种话。`unknown-after-send` 单独一档，不写成失败（手机很可能收到了）。 */
-export function toTestMessageReceipt(result: ChannelDeliveryResult): ChannelTestMessageReceipt {
-  if (result.status === 'delivered') return { state: 'accepted', messageId: result.attemptId }
-  if (result.status === 'unknown-after-send') return { state: 'unconfirmed', messageId: result.attemptId }
+/**
+ * 通道层回执 → 给读者的三种话。`unknown-after-send` 单独一档，不写成失败（手机很可能收到了）。
+ *
+ * `targetName` 是**会话名**（`Telegram · 贾维斯`），不是 chat_id、不是频道 id：
+ * 读者在有多个对话时要能看出这条发到了哪儿。读不到名字就给 `null`，由界面回退到平台名。
+ */
+export function toTestMessageReceipt(result: ChannelDeliveryResult, targetName: string | null = null): ChannelTestMessageReceipt {
+  if (result.status === 'delivered') return { state: 'accepted', messageId: result.attemptId, targetName }
+  if (result.status === 'unknown-after-send') return { state: 'unconfirmed', messageId: result.attemptId, targetName }
   return { state: 'failed', reason: 'rejected' }
 }
 
@@ -40,6 +45,9 @@ export async function sendChannelTestMessage(
       reason: resolved.reason === 'ambiguous' ? 'ambiguous-target' : resolved.reason
     }
   }
+  const targetName = deps.channels
+    .listConversations({ id: resolved.channelId, limit: 100 })
+    .find((conversation) => conversation.id === resolved.conversationId)?.sessionTitle ?? null
   const result = await deps.deliver({
     channelId: resolved.channelId,
     agentId: resolved.agentId,
@@ -50,7 +58,7 @@ export async function sendChannelTestMessage(
     sourceId: input.sourceId,
     text: input.text
   })
-  return toTestMessageReceipt(result)
+  return toTestMessageReceipt(result, targetName)
 }
 
 /**

@@ -5,7 +5,10 @@ import { supportedChannelSql } from './ChannelManagementPredicates'
 import {
   countChannelConversations,
   deleteUnboundChannelConversation,
+  insertChannelConversation,
+  readChannelConversation,
   releaseChannelConversationOperation,
+  replaceChannelConversationSession,
   reserveChannelConversationOperation
 } from './channelConversationBindings'
 import { recordRuntimeAudit } from './channelRuntimeAuditRetention'
@@ -25,6 +28,8 @@ export type ChannelInboundAuditCode =
   | 'channel-inbound-failed'
 
 export type ChannelConversationRecord = {
+  /** 创建时算好的会话名（`Telegram · 贾维斯`），用于投递回执「已发给谁」。 */
+  sessionTitle?: string | null
   id: string
   channelId: string
   keyCiphertext: Uint8Array
@@ -186,12 +191,8 @@ export class ChannelInboundRepository {
   }
 
   getConversation(channelId: string, keyHash: string): ChannelConversationRecord | null {
-    const row = this.database.connection.prepare(
-      `select id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
-              conversation_key_hash, conversation_kind, agent_session_id
-       from channel_conversations where channel_id = ? and conversation_key_hash = ?`
-    ).get(channelId, keyHash) as ConversationRow | undefined
-    return row ? mapConversation(row) : null
+    const row = readChannelConversation(this.database, channelId, keyHash)
+    return row === null ? null : { ...row, kind: row.kind as ChannelConversationRecord['kind'], keyCiphertext: row.keyCiphertext }
   }
 
   existingReceiptOutcome(channelId: string, eventHash: string, now = new Date()): 'duplicate' | 'retry' | null {
@@ -261,22 +262,14 @@ export class ChannelInboundRepository {
   }
 
   createConversation(record: ChannelConversationRecord, generation: number, agentId: string, now = new Date()): { record: ChannelConversationRecord; created: boolean } | null {
-    try {
-      return this.database.transact(() => {
-        if (this.getCurrentAgentId(record.channelId, generation) !== agentId) return null
-        this.database.connection.prepare(
-          `insert into channel_conversations (
-            id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
-            conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(record.id, record.channelId, record.keyCiphertext, record.keyRef, record.keyRevision, record.keyHash, record.kind, record.sessionId, now.toISOString(), now.toISOString())
-        return { record, created: true }
-      })
-    } catch {
-      const existing = this.getConversation(record.channelId, record.keyHash)
-      if (!existing) throw new Error('Channel conversation persistence failed.')
-      return { record: existing, created: false }
-    }
+    return insertChannelConversation(
+      this.database,
+      record as Parameters<typeof insertChannelConversation>[1],
+      generation,
+      agentId,
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration),
+      now
+    ) as { record: ChannelConversationRecord; created: boolean } | null
   }
 
   deleteUnboundConversation(channelId: string, keyHash: string, sessionId: string): boolean {
@@ -312,13 +305,20 @@ export class ChannelInboundRepository {
     this.database.connection.prepare('delete from channel_inbound_admission_reservations where id = ?').run(id)
   }
 
-  replaceConversationSession(channelId: string, keyHash: string, sessionId: string, generation: number, agentId: string, now = new Date()): boolean {
-    return this.database.transact(() => {
-      if (this.getCurrentAgentId(channelId, generation) !== agentId) return false
-      return this.database.connection.prepare(
-        `update channel_conversations set agent_session_id = ?, updated_at = ? where channel_id = ? and conversation_key_hash = ?`
-      ).run(sessionId, now.toISOString(), channelId, keyHash).changes === 1
-    })
+  replaceConversationSession(
+    channelId: string,
+    keyHash: string,
+    sessionId: string,
+    generation: number,
+    agentId: string,
+    sessionTitle?: string,
+    now = new Date()
+  ): boolean {
+    return replaceChannelConversationSession(
+      this.database,
+      { channelId, keyHash, sessionId, generation, agentId, ...(sessionTitle === undefined ? {} : { sessionTitle }), now },
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration)
+    )
   }
 
   setDeliveryTarget(channelId: string, conversationId: string, enabled: boolean, now = new Date()): boolean {
@@ -882,10 +882,6 @@ export class ChannelInboundRepository {
   }
 }
 
-type ConversationRow = {
-  id: string; channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string
-  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string | null
-}
 type WorkRow = {
   id: string; receipt_id: string; channel_id: string; conversation_id: string; dispatch_id: string; payload_ciphertext: Uint8Array
   payload_key_ref: string; payload_key_revision: number; status: ChannelWorkItemRecord['status']; lease_token: string | null; lease_expires_at: string | null; attempt_count: number
@@ -898,9 +894,6 @@ type InitialClaimRow = {
   id: string; receipt_id: string; channel_id: string; dispatch_id: string; lease_token: string; lease_expires_at: string; generation: number
 }
 
-function mapConversation(row: ConversationRow): ChannelConversationRecord {
-  return { id: row.id, channelId: row.channel_id, keyCiphertext: row.conversation_key_ciphertext, keyRef: row.conversation_key_ref, keyRevision: row.conversation_key_revision, keyHash: row.conversation_key_hash, kind: row.conversation_kind, sessionId: row.agent_session_id }
-}
 function encodeCleanupCursor(value: { kind: 'work' | 'receipt'; id: string; sort_at: string }): string {
   return Buffer.from(JSON.stringify({ sortAt: value.sort_at, kind: value.kind, id: value.id })).toString('base64url')
 }

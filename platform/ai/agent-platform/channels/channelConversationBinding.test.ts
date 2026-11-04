@@ -63,11 +63,12 @@ describe('delivery target resolution without an explicit binding', () => {
     }),
     listConversations: ({ limit = 50 }) => (database.connection.prepare(
       `select c.id as id, c.conversation_kind as kind, c.agent_session_id as agent_session_id,
-              coalesce(t.enabled,0) as target_enabled, c.created_at as created_at
+              c.session_title as session_title, coalesce(t.enabled,0) as target_enabled, c.created_at as created_at
        from channel_conversations c left join channel_delivery_targets t on t.conversation_id = c.id and t.channel_id = c.channel_id
        where c.channel_id = 'channel-a' order by c.created_at desc limit ?`
-    ).all(limit) as Array<{ id: string; kind: 'direct'; agent_session_id: string | null; target_enabled: number; created_at: string }>).map((row) => ({
-      id: row.id, kind: row.kind, hasBoundSession: Boolean(row.agent_session_id), targetEnabled: Boolean(row.target_enabled), createdAt: row.created_at
+    ).all(limit) as Array<{ id: string; kind: 'direct'; agent_session_id: string | null; session_title: string | null; target_enabled: number; created_at: string }>).map((row) => ({
+      id: row.id, kind: row.kind, hasBoundSession: Boolean(row.agent_session_id), targetEnabled: Boolean(row.target_enabled),
+      sessionTitle: row.session_title, createdAt: row.created_at
     }))
   })
 

@@ -6,6 +6,7 @@ import {
   createChannelDispatchId,
   encodeChannelInboundPayload,
   type ChannelContentGuard,
+  type ChannelSessionSuggestion,
   type ChannelInboundEncryption,
   type ChannelExecutionClaim,
   type ChannelInboundRequest,
@@ -32,6 +33,11 @@ export type ChannelInboundServiceDependencies = {
   bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
   /** 「没有权限」那句人话（按界面语言给）；缺省时只记审计、不回话。 */
   deniedReplyText?: () => Promise<string>
+  /**
+   * 会话名的拼装（平台名 + 显示名/后四位）。放在组合根是因为它要界面语言与平台目录表；
+   * 服务只把「素材」给它，并把算出来的名字落到 `channel_conversations.session_title`。
+   */
+  conversationTitle?: (suggestion: ChannelSessionSuggestion) => Promise<string>
 }
 
 export class ChannelInboundService {
@@ -216,13 +222,17 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({
+      const suggestion: ChannelSessionSuggestion = {
         channelId: input.channelId,
         agentId,
         providerConversationKey: input.providerConversationKey,
         disambiguate: this.deps.repository.countConversations(input.channelId) > 0
-      })
-      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(input.channelId, keyHash, sessionId, input.generation, agentId, this.now())) {
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
+      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
+        input.channelId, keyHash, sessionId, input.generation, agentId, title || undefined, this.now()
+      )) {
         throw new Error('Channel conversation session replacement failed.')
       }
       bound = true
@@ -329,14 +339,16 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({
+      const suggestion: ChannelSessionSuggestion = {
         channelId: input.channelId,
         agentId: input.agentId,
         providerConversationKey: input.keyHash,
         disambiguate: this.deps.repository.countConversations(input.channelId) > 0
-      })
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
       if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
-        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, this.now()
+        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, title || undefined, this.now()
       )) {
         throw new Error('Channel conversation session rebind failed.')
       }
@@ -379,17 +391,20 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({
+      const suggestion: ChannelSessionSuggestion = {
         channelId: request.channelId,
         agentId,
         ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
         providerConversationKey: request.providerConversationKey,
         disambiguate: this.deps.repository.countConversations(request.channelId) > 0
-      })
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
       if (!sessionId.trim()) throw new Error('Channel session factory returned no session.')
       const created = this.deps.repository.createConversation({
         id: randomUUID(), channelId: request.channelId, keyCiphertext: encrypted.ciphertext, keyRef: encrypted.keyRef,
-        keyRevision: encrypted.keyRevision, keyHash: hash, kind: request.conversationKind, sessionId
+        keyRevision: encrypted.keyRevision, keyHash: hash, kind: request.conversationKind, sessionId,
+        sessionTitle: title || null
       }, request.generation, agentId, this.now())
       if (!created) {
         throw new Error('Channel conversation lifecycle changed.')

@@ -77,7 +77,7 @@ export type ChannelSessionSuggestion = {
 }
 
 export type ChannelSessionFactory = {
-  createForConversation: (input: ChannelSessionSuggestion) => Promise<string>
+  createForConversation: (input: ChannelSessionSuggestion & { title: string }) => Promise<string>
   discardUnbound: (sessionId: string) => Promise<void>
   /** Optional existence probe; when provided, a deleted session is treated as unbound. */
   exists?: (sessionId: string) => Promise<boolean>

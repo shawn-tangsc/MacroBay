@@ -170,16 +170,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     sessions: {
       // 会话名要能认出「来自哪个平台、哪个人」：平台名只从目录表取，拼接处不写字面量。
       createForConversation: async (input) => {
-        const language = (await settingsStore.get()).language
-        const type = channelManagementRepository.channelType(input.channelId)
-        const adapter = type === 'feishu' ? 'lark' : type ?? 'telegram'
-        const name = channelConversationTitle({
-          adapter,
-          language,
-          ...(input.displayLabel ? { displayLabel: input.displayLabel } : {}),
-          providerConversationKey: input.providerConversationKey,
-          disambiguate: input.disambiguate
-        })
+        // 名字由入站服务通过 `conversationTitle` 算好并落库；这里只负责用它创建会话。
+        const name = input.title
         return (await agentServices.sessions.create({ agentId: input.agentId, name, workspace: { type: 'system' } })).id
       },
       discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
@@ -190,6 +182,19 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
       channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
     }),
     onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId),
+    // 会话名的拼装：平台名只从目录表取，语言跟界面走；算出来的名字会落到会话行上。
+    conversationTitle: async (suggestion) => {
+      const language = (await settingsStore.get()).language
+      const type = channelManagementRepository.channelType(suggestion.channelId)
+      const adapter = type === 'feishu' ? 'lark' : type ?? 'telegram'
+      return channelConversationTitle({
+        adapter,
+        language,
+        ...(suggestion.displayLabel ? { displayLabel: suggestion.displayLabel } : {}),
+        providerConversationKey: suggestion.providerConversationKey,
+        disambiguate: suggestion.disambiguate
+      })
+    },
     // 未授权会话的拒绝句：只有「你没有权限」这一句，不写频道 id / 管理员 / 配置。
     deniedReplyText: async () => (await settingsStore.get()).language === 'zh-CN'
       ? '你没有权限使用这个机器人，请联系管理员开放访问。'

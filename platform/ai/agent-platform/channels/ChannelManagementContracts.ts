@@ -63,6 +63,8 @@ export type ChannelConversationSafeView = {
   kind: 'direct' | 'group' | 'channel'
   hasBoundSession: boolean
   targetEnabled: boolean
+  /** 创建时算好的会话名（`Telegram · 贾维斯`）；读不到时说 `null`，界面回退到平台名，**不许编**。 */
+  sessionTitle: string | null
   createdAt: string
 }
 

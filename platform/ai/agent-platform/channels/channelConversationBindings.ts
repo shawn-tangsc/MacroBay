@@ -63,3 +63,84 @@ export function releaseChannelConversationOperation(
     'delete from channel_conversation_session_operations where channel_id = ? and conversation_key_hash = ? and operation_id = ?'
   ).run(channelId, keyHash, operationId)
 }
+
+export type ChannelConversationRow = {
+  id: string
+  channelId: string
+  keyCiphertext: Uint8Array
+  keyRef: string
+  keyRevision: number
+  keyHash: string
+  kind: string
+  sessionId: string | null
+  sessionTitle: string | null
+}
+
+export function readChannelConversation(
+  database: AgentPlatformDatabase,
+  channelId: string,
+  keyHash: string
+): ChannelConversationRow | null {
+  const row = database.connection.prepare(
+    `select id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+            conversation_key_hash, conversation_kind, agent_session_id, session_title
+     from channel_conversations where channel_id = ? and conversation_key_hash = ?`
+  ).get(channelId, keyHash) as {
+    id: string; channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string
+    conversation_key_revision: number; conversation_key_hash: string; conversation_kind: string
+    agent_session_id: string | null; session_title: string | null
+  } | undefined
+  return row
+    ? {
+      id: row.id, channelId: row.channel_id, keyCiphertext: row.conversation_key_ciphertext,
+      keyRef: row.conversation_key_ref, keyRevision: row.conversation_key_revision,
+      keyHash: row.conversation_key_hash, kind: row.conversation_kind,
+      sessionId: row.agent_session_id, sessionTitle: row.session_title
+    }
+    : null
+}
+
+/** 建会话绑定；唯一约束保证同一 (频道, 会话) 只有一行——重复时返回已有那行，`created=false`。 */
+export function insertChannelConversation(
+  database: AgentPlatformDatabase,
+  record: ChannelConversationRow,
+  generation: number,
+  agentId: string,
+  currentAgentId: (channelId: string, generation: number) => string | null,
+  now: Date
+): { record: ChannelConversationRow; created: boolean } | null {
+  try {
+    return database.transact(() => {
+      if (currentAgentId(record.channelId, generation) !== agentId) return null
+      database.connection.prepare(
+        `insert into channel_conversations (
+          id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+          conversation_key_hash, conversation_kind, agent_session_id, session_title, created_at, updated_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        record.id, record.channelId, record.keyCiphertext, record.keyRef, record.keyRevision, record.keyHash,
+        record.kind, record.sessionId, record.sessionTitle, now.toISOString(), now.toISOString()
+      )
+      return { record, created: true }
+    })
+  } catch {
+    const existing = readChannelConversation(database, record.channelId, record.keyHash)
+    if (!existing) throw new Error('Channel conversation persistence failed.')
+    return { record: existing, created: false }
+  }
+}
+
+/** `/new` 换会话：只改这一行的 session 与名字，旧的 Agent 会话留在存储里当历史。 */
+export function replaceChannelConversationSession(
+  database: AgentPlatformDatabase,
+  input: { channelId: string; keyHash: string; sessionId: string; generation: number; agentId: string; sessionTitle?: string; now: Date },
+  currentAgentId: (channelId: string, generation: number) => string | null
+): boolean {
+  return database.transact(() => {
+    if (currentAgentId(input.channelId, input.generation) !== input.agentId) return false
+    return database.connection.prepare(
+      `update channel_conversations set agent_session_id = ?, session_title = ?, updated_at = ?
+       where channel_id = ? and conversation_key_hash = ?`
+    ).run(input.sessionId, input.sessionTitle ?? null, input.now.toISOString(), input.channelId, input.keyHash).changes === 1
+  })
+}

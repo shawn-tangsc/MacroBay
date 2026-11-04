@@ -214,9 +214,15 @@ export class ChannelManagementQueryRepository {
          select 1 from agent_channels where id = c.channel_id and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by c.created_at desc, c.id desc limit ?`
     ).all(channelId, limit) as Array<{
-      id: string; conversation_kind: ChannelConversationSafeView['kind']; agent_session_id: string | null; target_enabled: number; created_at: string
+      id: string; conversation_kind: ChannelConversationSafeView['kind']; agent_session_id: string | null
+      session_title: string | null; target_enabled: number; created_at: string
     }>).map((row) => ({
-      id: row.id, kind: row.conversation_kind, hasBoundSession: Boolean(row.agent_session_id), targetEnabled: Boolean(row.target_enabled), createdAt: row.created_at
+      id: row.id,
+      kind: row.conversation_kind,
+      hasBoundSession: Boolean(row.agent_session_id),
+      targetEnabled: Boolean(row.target_enabled),
+      sessionTitle: row.session_title ?? null,
+      createdAt: row.created_at
     }))
   }
 
