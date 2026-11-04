@@ -85,4 +85,107 @@ describe('history rows take incompleteness from the run', () => {
     expect(summary?.state).toBe('missing')
     expect(summary?.attemptCount).toBe(2)
   })
+
+describe('the list projection decides the row, once', () => {
+  /** A stored edition whose document carries the period identity the run wrote. */
+  const withPeriod = (
+    periodId: string,
+    locale: 'zh-CN' | 'en-US',
+    identity: Readonly<{ periodTime: string; periodKind?: 'scheduled' | 'manual'; runTrigger?: 'scheduled' | 'catch-up' | 'retry' | 'manual'; generatedAt?: string }>
+  ): DailyBriefingStoredEdition => {
+    const base = edition(locale)
+    return {
+      ...base,
+      periodId,
+      generatedAt: identity.generatedAt ?? base.generatedAt,
+      document: {
+        ...base.document,
+        edition: {
+          ...base.document.edition,
+          periodId,
+          periodTime: identity.periodTime,
+          periodKind: identity.periodKind ?? 'scheduled',
+          runTrigger: identity.runTrigger ?? 'scheduled'
+        }
+      }
+    }
+  }
+
+  const two = (rows: readonly DailyBriefingStoredEdition[], runs: Record<string, ReturnType<typeof run>>) =>
+    briefingHistorySummaries({
+      dates: ['2026-11-02'],
+      primary: 'zh-CN',
+      primaryRows: rows.filter((row) => row.locale === 'zh-CN'),
+      otherRows: rows.filter((row) => row.locale === 'en-US'),
+      periodRun: vi.fn(async (_date: string, periodId: string) => runs[periodId])
+    })
+
+  it('sorts a day by nominal cutoff, and resolves the same moment by periodId', async () => {
+    const rows = [
+      withPeriod('period_late', 'zh-CN', { periodTime: '2026-11-02T12:00:00.000Z' }),
+      withPeriod('period_b', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' }),
+      withPeriod('period_a', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })
+    ]
+    const summaries = await two(rows, {})
+    expect(summaries.map((summary) => summary.periodId)).toEqual(['period_a', 'period_b', 'period_late'])
+    // Not generatedAt: the late run finishing first must not reorder the day.
+    const reordered = await two([...rows].reverse(), {})
+    expect(reordered.map((summary) => summary.periodId)).toEqual(['period_a', 'period_b', 'period_late'])
+  })
+
+  it('copies the identity each edition wrote, kind and trigger included', async () => {
+    const [summary] = await two([withPeriod('period_x', 'zh-CN', {
+      periodTime: '2026-11-02T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry'
+    })], {})
+    expect(summary).toMatchObject({
+      periodId: 'period_x',
+      periodTime: '2026-11-02T07:00:00.000Z',
+      periodKind: 'manual',
+      runTrigger: 'retry'
+    })
+    expect(summary?.isCurrent).toBe(true)
+  })
+
+  it('offers each language with its three-state, and names the reason for a missing one', async () => {
+    const rows = [withPeriod('default', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })]
+    const running = await two(rows, { default: run(['zh-CN', 'en-US']) })
+    expect(running[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'generating' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
+
+    const settled = await two(rows, { default: { ...run(['zh-CN', 'en-US']), state: 'partial' } })
+    expect(settled[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'not-published' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
+
+    const failed = await two(rows, { default: { ...run(['zh-CN', 'en-US']), state: 'failed' } })
+    expect(failed[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'run-failed' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
+  })
+
+  it('marks a period whose configuration is gone, without dropping its history', async () => {
+    const summaries = await briefingHistorySummaries({
+      dates: ['2026-11-02'],
+      primary: 'zh-CN',
+      primaryRows: [withPeriod('period_gone', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })],
+      otherRows: [],
+      periodActive: (periodId) => periodId !== 'period_gone'
+    })
+    expect(summaries[0]?.periodDeleted).toBe(true)
+    expect(summaries[0]?.state).toBe('generated')
+  })
+
+  it('marks exactly one current edition per day: the latest generatedAt, not the latest cutoff', async () => {
+    const rows = [
+      withPeriod('period_early', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z', generatedAt: '2026-11-02T09:00:00.000Z' }),
+      withPeriod('period_late', 'zh-CN', { periodTime: '2026-11-02T12:00:00.000Z', generatedAt: '2026-11-02T12:01:00.000Z' })
+    ]
+    const summaries = await two(rows, {})
+    expect(summaries.filter((summary) => summary.isCurrent).map((summary) => summary.periodId)).toEqual(['period_late'])
+  })
+})
 })

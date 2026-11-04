@@ -217,6 +217,30 @@ describe('daily briefing client', () => {
     expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
+  it('carries the period identity and the per-language three-state through the wire', async () => {
+    const summary = {
+      date: '2026-10-30', periodId: 'period_x', locale: 'zh-CN', availableLocales: ['zh-CN'],
+      state: 'generated' as const, generatedAt: '2026-10-30T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z',
+      readingsAvailable: 4,
+      periodTime: '2026-10-30T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry', windowHours: 24,
+      languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }, { locale: 'zh-CN', state: 'published' }],
+      periodDeleted: true, isCurrent: true
+    }
+    stubInvoke(() => ({ state: 'available', result: { editions: [summary] } }))
+    const listed = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(listed.state).toBe('available')
+    if (listed.state !== 'available') return
+    expect(listed.result.editions[0]).toMatchObject({
+      periodId: 'period_x', periodTime: '2026-10-30T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry',
+      windowHours: 24, periodDeleted: true, isCurrent: true,
+      languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }, { locale: 'zh-CN', state: 'published' }]
+    })
+
+    // A language list this build cannot read refuses the row with it: half a three-state is not shown.
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'gone' }] }] } }))
+    expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
+  })
+
   it('keeps a failed attempt trace and the stored edition trace, and drops a malformed one', async () => {
     const trace = {
       attemptId: '2026-10-30:zh-CN:2026-10-30T00:30:00.000Z',

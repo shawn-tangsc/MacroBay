@@ -329,12 +329,47 @@ export type BriefingDataAuditEntry = Readonly<{
   reason: 'incomplete-distribution' | 'inconsistent-totals'
 }>
 
+/** One language of one period, as the list can offer it. */
+export type DailyBriefingEditionLanguageState = 'published' | 'generating' | 'missing'
+
+/**
+ * Why a language has no edition to open. Closed on purpose: the rail prints the reason from this
+ * code, it never infers one from the absence itself.
+ */
+export type DailyBriefingEditionLanguageReason = 'not-published' | 'run-running' | 'run-failed'
+
+export type DailyBriefingEditionLanguage = Readonly<{
+  locale: DailyBriefingLocale
+  state: DailyBriefingEditionLanguageState
+  /** Present only when `state` is `missing`: the row says why, instead of leaving a bare grey chip. */
+  reason?: DailyBriefingEditionLanguageReason
+}>
+
 export type DailyBriefingEditionSummary = Readonly<{
   date: string
   /** Which issue of that day this row is; one row per (date, period), languages switch in place. */
   periodId: string
   locale: DailyBriefingLocale
   availableLocales: readonly DailyBriefingLocale[]
+  /**
+   * The identity and schedule facts of the edition this row shows, copied from its document once by
+   * the history projection. `periodTime` is the nominal cutoff (absent when nothing was generated);
+   * `periodKind` and `runTrigger` default to `scheduled` for editions written before they existed.
+   */
+  periodTime?: string
+  periodKind?: DailyBriefingPeriodKind
+  runTrigger?: DailyBriefingRunTrigger
+  windowHours?: number
+  /**
+   * Every language this period was meant to have, with what the list can offer for each — the single
+   * place that decides "published / generating / missing". Absent only on summaries built by callers
+   * outside the history projection.
+   */
+  languages?: readonly DailyBriefingEditionLanguage[]
+  /** The period's configuration is gone; the row still reads, marked as a deleted period. */
+  periodDeleted?: boolean
+  /** The latest completed edition of its day (exactly one per day). */
+  isCurrent?: boolean
   /** `partial`: this period was meant to have more versions than it published. */
   state: 'generated' | 'missing' | 'partial'
   /** What the run intended to publish; absent on rows written before the run record existed. */

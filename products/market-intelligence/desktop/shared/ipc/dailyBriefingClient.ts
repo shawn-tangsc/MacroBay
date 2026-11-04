@@ -13,6 +13,8 @@ import {
   type BriefingGenerationStageState,
   type BriefingGenerationTrace,
   type DailyBriefingDocument,
+  type DailyBriefingEditionLanguage,
+  type DailyBriefingRunTrigger,
   type DailyBriefingAttemptRecord,
   type DailyBriefingEditionSummary,
   type DailyBriefingListResult,
@@ -384,6 +386,9 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
   if (!isRecord(value) || !isText(value.date) || !isDailyBriefingLocale(value.locale) || !Array.isArray(value.availableLocales)) return undefined
   if (value.state !== 'generated' && value.state !== 'missing' && value.state !== 'partial') return undefined
   if (!value.availableLocales.every(isDailyBriefingLocale)) return undefined
+  // A list of languages this build cannot read is refused with the whole row, not shown half-read.
+  const languages = value.languages === undefined ? undefined : parseSummaryLanguages(value.languages)
+  if (languages === null) return undefined
   if (value.state === 'generated' && (!isText(value.generatedAt) || !isText(value.windowEnd))) return undefined
   return Object.freeze({
     date: value.date,
@@ -401,8 +406,35 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
     ...(isText(value.scheduledTime) ? { scheduledTime: value.scheduledTime } : {}),
     ...(Array.isArray(value.expectedLocales) && value.expectedLocales.every(isDailyBriefingLocale)
       ? { expectedLocales: Object.freeze([...value.expectedLocales]) as readonly ('zh-CN' | 'en-US')[] }
-      : {})
+      : {}),
+    ...(isText(value.periodTime) ? { periodTime: value.periodTime } : {}),
+    ...(value.periodKind === 'scheduled' || value.periodKind === 'manual' ? { periodKind: value.periodKind } : {}),
+    ...(RUN_TRIGGERS.includes(value.runTrigger as never) ? { runTrigger: value.runTrigger as DailyBriefingRunTrigger } : {}),
+    ...(typeof value.windowHours === 'number' && Number.isSafeInteger(value.windowHours) ? { windowHours: value.windowHours } : {}),
+    ...(languages ? { languages } : {}),
+    ...(value.periodDeleted === true ? { periodDeleted: true } : {}),
+    ...(value.isCurrent === true ? { isCurrent: true } : {})
   })
+}
+
+const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'manual'] as const
+
+/** The per-language three-state, or `null` when one entry is not a value this build understands. */
+function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLanguage[] | null {
+  if (!Array.isArray(value)) return null
+  const parsed: DailyBriefingEditionLanguage[] = []
+  for (const entry of value) {
+    if (!isRecord(entry) || !isDailyBriefingLocale(entry.locale)) return null
+    if (entry.state === 'published' || entry.state === 'generating') {
+      parsed.push(Object.freeze({ locale: entry.locale, state: entry.state }))
+      continue
+    }
+    if (entry.state !== 'missing') return null
+    const reason = entry.reason
+    if (reason !== 'not-published' && reason !== 'run-running' && reason !== 'run-failed') return null
+    parsed.push(Object.freeze({ locale: entry.locale, state: 'missing' as const, reason }))
+  }
+  return Object.freeze(parsed)
 }
 
 const STAGE_STATES: readonly BriefingGenerationStageState[] = ['success', 'failed', 'skipped', 'pending']

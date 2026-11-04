@@ -1,4 +1,13 @@
-import { DEFAULT_PERIOD_ID, briefingCompleteness, type DailyBriefingEditionSummary, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import {
+  DEFAULT_PERIOD_ID,
+  briefingCompleteness,
+  briefingEditionPeriod,
+  type DailyBriefingEditionLanguage,
+  type DailyBriefingEditionSummary,
+  type DailyBriefingLocale,
+  type DailyBriefingPeriodKind,
+  type DailyBriefingRunTrigger
+} from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 
 /** The stored rows of one reader's history window, grouped into rail rows. */
@@ -8,6 +17,8 @@ export async function readBriefingHistory(input: Readonly<{
   today: string
   retentionDays: number
   scheduledTime: string
+  /** Whether the period still has a configuration row; absent means the caller cannot tell. */
+  periodActive?: (periodId: string) => boolean | Promise<boolean>
 }>): Promise<readonly DailyBriefingEditionSummary[]> {
   const dates = lastDays(input.today, input.retentionDays)
   const from = dates[0]!
@@ -27,7 +38,8 @@ export async function readBriefingHistory(input: Readonly<{
       const read = input.store.listAttempts
       return read ? read(date, locale, periodId).then((attempts) => attempts.length) : Promise.resolve(0)
     },
-    scheduledTime: input.scheduledTime
+    scheduledTime: input.scheduledTime,
+    ...(input.periodActive ? { periodActive: input.periodActive } : {})
   })
 }
 
@@ -37,12 +49,20 @@ function lastDays(today: string, days: number): readonly string[] {
     new Date(start - (days - 1 - index) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)))
 }
 
+/** One (day, period) with every language row of it; the map keeps the primary language last. */
+type PeriodRows = Readonly<{
+  date: string
+  periodId: string
+  rows: ReadonlyMap<DailyBriefingLocale, DailyBriefingStoredEdition>
+}>
+
 /**
  * The history rail's rows, built once from the stored editions.
  *
- * One row per (date, period): the languages of a period share a row because they are versions of
- * the same issue, not separate issues. The partial state comes from the run record — the rail is
- * not allowed to recompute "was every version published" from a locale count.
+ * One row per (date, period). Everything the row draws is decided here and only here: the period's
+ * identity (nominal cutoff, kind, trigger) is copied from its document, the per-language three-state
+ * comes from the stored rows plus the run record, and the day is sorted by nominal cutoff with
+ * `periodId` as the stable tiebreak. The rail renders these conclusions; it does not recompute them.
  */
 export async function briefingHistorySummaries(input: Readonly<{
   dates: readonly string[]
@@ -52,75 +72,160 @@ export async function briefingHistorySummaries(input: Readonly<{
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
   scheduledTime?: string
+  periodActive?: (periodId: string) => boolean | Promise<boolean>
 }>): Promise<readonly DailyBriefingEditionSummary[]> {
-  const byPeriod = new Map<string, DailyBriefingStoredEdition>()
-  for (const row of input.otherRows) byPeriod.set(`${row.date}:${row.periodId ?? DEFAULT_PERIOD_ID}`, row)
-  for (const row of input.primaryRows) byPeriod.set(`${row.date}:${row.periodId ?? DEFAULT_PERIOD_ID}`, row)
+  // Group every language of a period together: the three-state needs to know which languages exist,
+  // not just which one is shown. The primary language is written last so it wins as the row's face.
+  const byPeriod = new Map<string, { date: string; periodId: string; rows: Map<DailyBriefingLocale, DailyBriefingStoredEdition> }>()
+  for (const row of [...input.otherRows, ...input.primaryRows]) {
+    const periodId = row.periodId ?? DEFAULT_PERIOD_ID
+    const key = `${row.date}:${periodId}`
+    const entry = byPeriod.get(key) ?? { date: row.date, periodId, rows: new Map() }
+    entry.rows.set(row.locale, row)
+    byPeriod.set(key, entry)
+  }
+
   const editions: DailyBriefingEditionSummary[] = []
   for (const date of [...input.dates].reverse()) {
-    const periodIds = new Set<string>([...byPeriod.keys()].filter((key) => key.startsWith(`${date}:`)).map((key) => key.slice(date.length + 1)))
-    if (periodIds.size === 0) periodIds.add(DEFAULT_PERIOD_ID)
-    for (const periodId of periodIds) {
-      const summary = summaryFor(date, periodId, input.primary, byPeriod.get(`${date}:${periodId}`), [input.primaryRows, input.otherRows])
-      const run = input.periodRun ? await input.periodRun(date, periodId) : undefined
-      const expectedLocales = run?.expectedLocales
-      const completeness = briefingCompleteness({
-        ...(expectedLocales ? { expectedLocales } : {}),
-        publishedLocales: summary.availableLocales,
-        readingsAvailable: summary.readingsAvailable,
-        readingsTotal: 4
-      })
-      // An issue with nothing published is "not run" unless that run actually failed. Attempts the
-      // reader deleted the editions of are history, not a status: showing "generation failed" for a
-      // day that succeeded and was then emptied would blame the pipeline for the reader's action.
-      const published = summary.availableLocales.length > 0
-      const failedRun = run?.state === 'failed'
-      let attempts: number | undefined
-      if (input.attemptCount && (summary.state === 'generated' || failedRun)) {
-        const countAttempts = input.attemptCount
-        try {
-          attempts = await countAttempts(date, periodId, summary.locale)
-        } catch {
-          attempts = undefined
-        }
-      }
-      editions.push({
-        ...summary,
-        ...(expectedLocales ? { expectedLocales } : {}),
-        ...(attempts === undefined ? {} : { attemptCount: attempts }),
-        ...(input.scheduledTime ? { scheduledTime: input.scheduledTime } : {}),
-        // "Missing one version" only describes an issue that still has a version to compare with.
-        ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {})
-      })
+    const periods: PeriodRows[] = [...byPeriod.values()]
+      .filter((entry) => entry.date === date)
+      .map((entry) => ({ date: entry.date, periodId: entry.periodId, rows: entry.rows }))
+    // A day with nothing stored still gets the one row it always had: "not run", not "no row".
+    if (periods.length === 0) periods.push({ date, periodId: DEFAULT_PERIOD_ID, rows: new Map() })
+
+    const day: DailyBriefingEditionSummary[] = []
+    for (const period of periods) {
+      day.push(await summaryOfPeriod(period, input))
     }
+    // A5.1, the one definition: nominal cutoff ascending, same moment resolved by the period id.
+    // Not by generatedAt and not by window, or the reader sees the list reshuffle between renders.
+    day.sort((left, right) => {
+      const leftTime = left.periodTime ?? ''
+      const rightTime = right.periodTime ?? ''
+      if (leftTime !== rightTime) return leftTime < rightTime ? -1 : 1
+      return left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
+    })
+    markCurrent(day)
+    editions.push(...day)
   }
   return Object.freeze(editions)
 }
 
-function summaryFor(
-  date: string,
-  periodId: string,
-  locale: DailyBriefingLocale,
-  row: DailyBriefingStoredEdition | undefined,
-  allRows: readonly (readonly DailyBriefingStoredEdition[])[]
-): DailyBriefingEditionSummary {
-  const availableLocales = allRows
-    .flat()
-    .filter((candidate) => candidate.date === date && (candidate.periodId ?? DEFAULT_PERIOD_ID) === periodId)
-    .map((candidate) => candidate.locale)
-  if (!row || row.locale !== locale) return { date, periodId, locale, availableLocales: [...new Set(availableLocales)], state: 'missing' }
-  const document = row.document
-  return {
+async function summaryOfPeriod(period: PeriodRows, input: Readonly<{
+  primary: DailyBriefingLocale
+  periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
+  attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
+  scheduledTime?: string
+  periodActive?: (periodId: string) => boolean | Promise<boolean>
+}>): Promise<DailyBriefingEditionSummary> {
+  const { date, periodId, rows } = period
+  // The row's face is the reader's language. Another language being published does not turn the
+  // reader's own gap into a generated row — `languages` says what exists; `state` stays about the
+  // language the row shows.
+  const shown = rows.get(input.primary)
+  const availableLocales = [...rows.keys()]
+  const identity = identityOf(shown ?? [...rows.values()][0])
+  const summary: DailyBriefingEditionSummary = {
     date,
     periodId,
-    locale: row.locale,
-    availableLocales: [...new Set(availableLocales)],
-    state: 'generated',
-    generatedAt: row.generatedAt,
-    ...(document.conclusion ? { direction: document.conclusion.direction } : {}),
-    ...(document.lede.text ? { summaryLine: document.lede.text.slice(0, 80) } : {}),
-    readingsAvailable: document.status.readingsAvailable,
-    windowEnd: row.windowEnd
+    locale: input.primary,
+    availableLocales,
+    ...identity,
+    state: shown ? 'generated' : 'missing',
+    ...(shown ? {
+      generatedAt: shown.generatedAt,
+      ...(shown.document.conclusion ? { direction: shown.document.conclusion.direction } : {}),
+      ...(shown.document.lede.text ? { summaryLine: shown.document.lede.text.slice(0, 80) } : {}),
+      readingsAvailable: shown.document.status.readingsAvailable,
+      windowEnd: shown.windowEnd
+    } : {})
+  }
+
+  const run = input.periodRun ? await input.periodRun(date, periodId) : undefined
+  const expectedLocales = run?.expectedLocales
+  const completeness = briefingCompleteness({
+    ...(expectedLocales ? { expectedLocales } : {}),
+    publishedLocales: availableLocales,
+    readingsAvailable: summary.readingsAvailable,
+    readingsTotal: 4
+  })
+  // An issue with nothing published is "not run" unless that run actually failed. Attempts the
+  // reader deleted the editions of are history, not a status: showing "generation failed" for a
+  // day that succeeded and was then emptied would blame the pipeline for the reader's action.
+  const published = availableLocales.length > 0
+  let attempts: number | undefined
+  if (input.attemptCount && (summary.state === 'generated' || run?.state === 'failed')) {
+    const countAttempts = input.attemptCount
+    try {
+      attempts = await countAttempts(date, periodId, summary.locale)
+    } catch {
+      attempts = undefined
+    }
+  }
+  const active = input.periodActive ? await input.periodActive(periodId) : undefined
+  return {
+    ...summary,
+    languages: languagesOf(availableLocales, run),
+    ...(expectedLocales ? { expectedLocales } : {}),
+    ...(attempts === undefined ? {} : { attemptCount: attempts }),
+    ...(input.scheduledTime ? { scheduledTime: input.scheduledTime } : {}),
+    ...(active === false ? { periodDeleted: true } : {}),
+    // "Missing one version" only describes an issue that still has a version to compare with.
+    ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {})
   }
 }
 
+/** The identity a period's edition carries; a period with no edition says what it would have been. */
+function identityOf(row: DailyBriefingStoredEdition | undefined): Readonly<{
+  periodTime?: string
+  periodKind: DailyBriefingPeriodKind
+  runTrigger: DailyBriefingRunTrigger
+  windowHours?: number
+}> {
+  if (!row) return { periodKind: 'scheduled', runTrigger: 'scheduled' }
+  const edition = briefingEditionPeriod(row.document.edition)
+  return {
+    periodTime: edition.periodTime,
+    periodKind: edition.periodKind,
+    runTrigger: edition.runTrigger,
+    ...(row.document.edition.windowHours === undefined ? {} : { windowHours: row.document.edition.windowHours })
+  }
+}
+
+/**
+ * Every language this period was meant to offer, with what the list can do with it.
+ *
+ * The run's `expectedLocales` is the only source of "was meant to have it": counting stored rows
+ * cannot tell one published language of a two-language period from a single-language edition. A
+ * language with no edition is `generating` while the run is still running, and `missing` with a
+ * named reason once it settled — a bare grey chip with no reason is what this prevents.
+ */
+function languagesOf(
+  publishedLocales: readonly DailyBriefingLocale[],
+  run: DailyBriefingPeriodRun | undefined
+): readonly DailyBriefingEditionLanguage[] {
+  const published = new Set(publishedLocales)
+  const expected = run?.expectedLocales
+  if (!expected) return publishedLocales.map((locale) => Object.freeze({ locale, state: 'published' as const }))
+  const locales = [...new Set([...expected, ...publishedLocales])].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+  return locales.map((locale) => {
+    if (published.has(locale)) return Object.freeze({ locale, state: 'published' as const })
+    if (run?.state === 'running') return Object.freeze({ locale, state: 'generating' as const })
+    return Object.freeze({
+      locale,
+      state: 'missing' as const,
+      reason: run?.state === 'failed' ? 'run-failed' as const : 'not-published' as const
+    })
+  })
+}
+
+/** A9.4: "本期" is the inequality on generatedAt, the latest completed edition of that day. */
+function markCurrent(day: DailyBriefingEditionSummary[]): void {
+  let winner = -1
+  for (let index = 0; index < day.length; index += 1) {
+    const generatedAt = day[index]?.generatedAt
+    if (!generatedAt) continue
+    if (winner < 0 || generatedAt > (day[winner]?.generatedAt ?? '')) winner = index
+  }
+  if (winner >= 0) day[winner] = { ...day[winner]!, isCurrent: true }
+}
