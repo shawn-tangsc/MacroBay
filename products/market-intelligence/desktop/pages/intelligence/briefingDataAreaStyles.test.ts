@@ -161,6 +161,9 @@ describe('the price card leads with the level, and the move is the only tinted t
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-weight')).toBe('400')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'color')).toBe('#6b695f')
     // No stored close: the dash and its reason, in the card's muted ink.
+    // The dash keeps the level's ink (it stands in the level's place); only the reason is a small grey
+    // comment. Writing the dash grey as well made it read as an annotation rather than a value.
     expect(declaration(rule('.mi-brief-poster__price-missing'), 'color')).toBe('#6b695f')
+    expect(declaration(rule('.mi-brief-poster__price-missing'), 'font-size')).toBe('9.5px')
   })
 })

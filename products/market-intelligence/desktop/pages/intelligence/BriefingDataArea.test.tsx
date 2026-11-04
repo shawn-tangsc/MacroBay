@@ -631,10 +631,13 @@ describe('a level the document does not carry is a dash with a reason, never a m
       delete btc.close
     })
     const card = host.querySelector('[data-briefing-price-card="btc"]')!
+    // All three survive: the dash stands in the level's place, the reason explains it, and the move is
+    // still printed — a missing level does not make the move missing.
     expect(card.querySelector('[data-briefing-price-value="btc"]')?.textContent).toBe(text.noValue)
     expect(card.textContent).toContain(text.closeMissing)
-    // The move is not printed in the level's place: that is the "flow read as size" defect.
-    expect(card.querySelector('.mi-brief-poster__price-change')).toBeNull()
+    expect(card.querySelector('.mi-brief-poster__price-change')?.textContent).toBe('↑1.2%')
+    // The move is not moved into the level's slot: one dash, one level position.
+    expect(card.querySelectorAll('[data-briefing-price-value="btc"]')).toHaveLength(1)
   })
 
   it('marks the index as a proxy, once, and leaves a real one unmarked', async () => {

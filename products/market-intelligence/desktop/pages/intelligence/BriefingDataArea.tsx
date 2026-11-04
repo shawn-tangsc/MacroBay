@@ -297,9 +297,11 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
       <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
       <span className="mi-brief-poster__price-figures">
         <b className="mi-brief-poster__price-value" data-briefing-price-value={row.id}>{level}</b>
-        {row.close === undefined
-          ? <small className="mi-brief-poster__price-missing">{text.closeMissing}</small>
-          : move === '' ? null : <small className="mi-brief-poster__price-change" data-tone={toneOf(row)}>{move}</small>}
+        {/* Three things, not one: the dash, the reason, and the move. A missing level does not mean the
+            move is missing — taking `↑0.90%` off the screen because the close is absent hides a number we
+            do have, and leaves the reader with a dash and no figures at all. */}
+        {row.close === undefined ? <small className="mi-brief-poster__price-missing">{text.closeMissing}</small> : null}
+        {move === '' ? null : <small className="mi-brief-poster__price-change" data-tone={toneOf(row)}>{move}</small>}
       </span>
     </div>
     {/* The amplitude sits on the plot, not in the text column: the left column is two lines (the label and

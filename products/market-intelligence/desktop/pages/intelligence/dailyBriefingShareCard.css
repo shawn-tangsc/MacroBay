@@ -230,7 +230,9 @@
 .mi-brief-poster__price-change[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__price-change[data-tone='down'] { color: #8f2a1d; }
 /* No stored close: the dash plus the reason, in the card's muted ink — never a zero standing in for it. */
-.mi-brief-poster__price-missing { font-size: 11px; line-height: 1.2; color: #6b695f; }
+/* The dash keeps the level's ink — it stands in the level's place; only the reason is a comment, and a
+   comment is small and grey. */
+.mi-brief-poster__price-missing { font-size: 9.5px; line-height: 1.2; color: #6b695f; }
 /* The plot column holds the drawing and its amplitude label; the label is HTML laid over the plot, so the
    drawing's own svg keeps zero text nodes. It sits on whichever side the filled area is not using. */
 .mi-brief-poster__price-plot { position: relative; grid-column: 2; grid-row: 1; width: 100%; height: 100%; display: block; }
