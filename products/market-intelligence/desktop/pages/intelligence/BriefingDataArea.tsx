@@ -30,10 +30,17 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
   const readings = groups.readings
   const leverage = groups.leverage
   return <div className="mi-brief-poster__data" data-briefing-data-region="true">
-    {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} words={policyWords} /> : null}
-    <div className="mi-brief-poster__price-row" data-briefing-price-row="true">
+    {/* One row, three cards: BTC, ETH, then the rate card — the order the approved sheet has. */}
+    <div className="mi-brief-poster__card-row" data-briefing-card-row="true">
       {groups.price.map((row) => <PriceCard key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}
+      {policy && policy.visibility !== 'hidden' ? <PolicyCard policy={policy} text={text} formatTime={formatTime} words={policyWords} /> : null}
     </div>
+    {groups.funds.length > 0 ? <div className="mi-brief-poster__etf" data-briefing-etf-line="true">
+      {groups.funds.map((row) => <span key={row.id}>
+        <span>{text.rows[row.labelKey.replace('dailyBriefing.row.', '') as keyof typeof text.rows] ?? row.labelKey}</span>
+        <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
+      </span>)}
+    </div> : null}
     {readings.length > 0 ? <div className="mi-brief-poster__readings-line" data-briefing-readings-line="true">
       {readings.map((row) => {
         const copy = changeLedRowCopy(row, text, locale)
@@ -46,12 +53,6 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
           {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
         </span>
       })}
-    </div> : null}
-    {groups.funds.length > 0 ? <div className="mi-brief-poster__etf" data-briefing-etf-line="true">
-      {groups.funds.map((row) => <span key={row.id}>
-        <span>{text.rows[row.labelKey.replace('dailyBriefing.row.', '') as keyof typeof text.rows] ?? row.labelKey}</span>
-        <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
-      </span>)}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
       <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
@@ -110,18 +111,28 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
         <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
         {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
       </svg>
-      {/* HTML, not svg text: the number stays selectable and the svg keeps zero text nodes. */}
-      <b className="mi-brief-poster__policy-probability">{probability}% · {policyOutcomeLabel(policy.outcome, text)}</b>
+      {/* The ring holds the number and nothing else: "3.4% · 加息 25bp" is twice as wide as the dial
+          and wraps across it, which is how it ended up printed as two lines over the copy. */}
+      <b className="mi-brief-poster__policy-probability" data-briefing-policy-probability="true">{probability}%</b>
     </span>
     <div className="mi-brief-poster__policy-copy" data-briefing-policy-copy="true">
-      <span className="mi-brief-poster__policy-title">{text.sections.policyPath}</span>
-      <span className="mi-brief-poster__policy-change">{text.sections.policyRange}</span>
-      <small>{policy.targetLower !== undefined ? `${policy.targetLower}–${policy.targetUpper}%` : text.sections.rangeUnavailable}</small>
-      {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
-        {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
-      </span> : null}
-      <small className="mi-brief-poster__policy-meeting">{policy.meetingDate}</small>
+      <span className="mi-brief-poster__policy-title">{text.sections.policyProbability}</span>
+      {/* The order is the sheet's: what the market prices, then by how much it moved and for which
+          meeting, then the bottom row of shares and the target range. */}
+      <span className="mi-brief-poster__policy-outcome" data-briefing-policy-outcome="true">{policyOutcomeLabel(policy.outcome, text)}</span>
+      <small className="mi-brief-poster__policy-change">{policy.probabilityChangePp !== undefined
+        ? `${policy.probabilityChangePp > 0 ? '+' : ''}${policy.probabilityChangePp}pp${INDEX_SEPARATOR}${policy.meetingDate}`
+        : policy.meetingDate}</small>
       <small className="mi-brief-poster__policy-observed">{formatTime(policy.observedAt, 'minute')}</small>
+      <span className="mi-brief-poster__policy-bottom">
+        {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
+          {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
+        </span> : null}
+        <span className="mi-brief-poster__policy-range">{text.sections.policyRange}{' '}
+          {policy.targetLower !== undefined && policy.targetUpper !== undefined
+            ? `${policy.targetLower.toFixed(2)}–${policy.targetUpper.toFixed(2)}%`
+            : text.sections.rangeUnavailable}</span>
+      </span>
     </div>
   </div>
 }

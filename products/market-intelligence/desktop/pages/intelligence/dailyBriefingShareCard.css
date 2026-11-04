@@ -204,7 +204,8 @@
 .mi-brief-poster__card { box-sizing: border-box; border-radius: 8px; padding: 10px 14px 13px; background: #f8ecd2; border: 1px solid #e8d3a8; }
 .mi-brief-poster__card[data-tone='up'] { background: #e4efe2; border-color: #c9ddc7; }
 .mi-brief-poster__card[data-tone='down'] { background: #f7e2dc; border-color: #ebc9c0; }
-.mi-brief-poster__price-row { display: flex; gap: 8px; }
+/* The three cards share one row: BTC, ETH, then the rate card. Equal widths, one row, no wrapping. */
+.mi-brief-poster__card-row { display: flex; gap: 8px; align-items: stretch; }
 /* Two columns, both placed: the reading on the left, the plot on the right. Leaving placement to the
    grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
    pushed the card past 114px — the DOM looked right and the paper did not. */
@@ -226,7 +227,7 @@
 .mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
 /* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
    of the gauge, because only the svg had an explicit position. */
-.mi-brief-poster__policy-card { position: relative; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 10px; background: #f8ecd2; border-color: #e8d3a8; }
+.mi-brief-poster__policy-card { position: relative; flex: 1 1 0; min-width: 0; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 10px; background: #f8ecd2; border-color: #e8d3a8; }
 /* The accent bar: inside the shell, inset from both ends, never a border (that would change the height). */
 .mi-brief-poster__policy-card::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #c2410c; }
 .mi-brief-poster__policy-title { color: #8a5a12; }
@@ -238,8 +239,12 @@
 .mi-brief-poster__gauge-rest { stroke: #a89f8d; stroke-width: 8; }
 .mi-brief-poster__gauge-other { stroke: #d8cfbd; stroke-width: 8; }
 .mi-brief-poster__policy-outcomes { font-size: 9.5px; color: #6b695f; }
-.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 26px; width: 88px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-.mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; }
+.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 26px; width: 88px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__policy-outcome { font-size: 11px; font-weight: 600; white-space: nowrap; }
+/* One line: the shares and the target range belong to the same sentence in the sheet. */
+.mi-brief-poster__policy-bottom { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 9.5px; color: #6b695f; }
+.mi-brief-poster__policy-range { white-space: nowrap; }
 .mi-brief-poster__readings-line { display: flex; flex-wrap: nowrap; gap: 0 10px; align-items: baseline; overflow: hidden; }
 .mi-brief-poster__reading { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; font-size: 11px; }
 .mi-brief-poster__reading small { color: #6b695f; }

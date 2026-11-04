@@ -111,7 +111,8 @@ describe('daily brief share card in English', () => {
     const rendered = await render()
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
     expect(poster).toContain(text.sections.leverage)
-    expect(poster).toContain(text.sections.policyPath)
+    // The card names what the dial is, not the section it sits in.
+    expect(poster).toContain(text.sections.policyProbability)
     // The label names what the value is (the target range), not a claim about how it was priced.
     expect(poster).toContain(text.sections.policyRange)
     expect(poster).toContain(text.sections.rangeUnavailable)

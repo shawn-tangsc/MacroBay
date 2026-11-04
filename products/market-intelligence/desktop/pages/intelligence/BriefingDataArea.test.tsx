@@ -117,9 +117,11 @@ describe('the data region', () => {
     expect(card.querySelectorAll('svg text')).toHaveLength(0)
     expect(card.querySelectorAll('svg rect')).toHaveLength(0)
     expect(dom.querySelector('[data-briefing-readings-line] svg')).toBeNull()
-    // The probability is HTML over the dial, printed once, outside the svg.
+    // The probability is HTML over the dial, printed once, outside the svg — and the ring holds the
+    // number alone: "3.4% · 加息 25bp" is wider than the dial and wraps across it.
     const matches = (card.textContent ?? '').split('77.5%').length - 1
     expect(matches).toBe(1)
+    expect(card.querySelector('[data-briefing-policy-probability]')!.textContent).toBe('77.5%')
     expect(card.querySelector('svg')!.textContent).toBe('')
   })
 })
@@ -327,6 +329,28 @@ describe('every card wears the shell', () => {
   })
 })
 
+describe("the data region's own order", () => {
+  it("puts the three cards under one parent, in the sheet's order", async () => {
+    const dom = await render()
+    const btc = dom.querySelector('[data-briefing-price-card="btc"]')!
+    const eth = dom.querySelector('[data-briefing-price-card="eth"]')!
+    const rate = dom.querySelector('[data-briefing-policy-card]')!
+    // Same parent, and BTC → ETH → rate: what a DOM without layout CAN prove. "One row" it cannot —
+    // that is the exported image's business, not a test's.
+    expect(eth.parentElement).toBe(btc.parentElement)
+    expect(rate.parentElement).toBe(btc.parentElement)
+    expect([...btc.parentElement!.children]).toEqual([btc, eth, rate])
+  })
+
+  it('puts the fund rows before the readings line', async () => {
+    const dom = await render()
+    const etf = dom.querySelector('[data-briefing-etf-line]')!
+    const readings = dom.querySelector('[data-briefing-readings-line]')!
+    // `compareDocumentPosition` answers document order, which is what the sheet's order is.
+    expect(etf.compareDocumentPosition(readings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
 describe('the cards place their parts in their own columns', () => {
   // A DOM without layout cannot measure where a box lands, so the placement is asserted as structure:
   // which container holds which part. Auto-placement once put the number and its amplitude into the
@@ -358,5 +382,32 @@ describe('the cards place their parts in their own columns', () => {
     const copy = dom.querySelector('[data-briefing-policy-copy]')!
     expect(copy.querySelector('.mi-brief-poster__policy-title')).not.toBeNull()
     expect(copy.querySelectorAll('[data-briefing-policy-outcomes]')).toHaveLength(1)
+    // The reading order is the sheet's: title, what the market prices, the move and the meeting, then
+    // the bottom row of shares and the range — the range never floats above the outcome.
+    const order = [...copy.children].map((node) => node.className.replace('mi-brief-poster__', ''))
+    expect(order.slice(0, 3)).toEqual(['policy-title', 'policy-outcome', 'policy-change'])
+    expect(order.at(-1)).toBe('policy-bottom')
+  })
+})
+
+describe('the rate card says one thing per line', () => {
+  it('prints the target range with two decimals, as the sheet does', async () => {
+    const dom = await render()
+    // `3.75–4.00%`, not `3.75–4%`: the range is a price band, and a band is quoted in full.
+    expect(dom.querySelector('[data-briefing-policy-card]')!.textContent).toContain('3.75–4.00%')
+  })
+
+  it('carries the move in points beside the meeting, when the edition has a previous one', async () => {
+    const shifted = documentWithData()
+    ;(shifted.data.policyPath as { probabilityChangePp?: number }).probabilityChangePp = 5.6
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(shifted), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN')
+    })))
+    expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp · 2026-12-09')
   })
 })
