@@ -10,6 +10,7 @@ import { createMacroCalendarEvidenceStore } from '../macroCalendarEvidenceStore'
 import { macroCalendarEvidenceArchivePolicy, type MacroCalendarEvidenceArchive } from '../macroCalendarEvidenceArchive'
 import type { MacroCalendarSqlite } from '../macroCalendarSqlite'
 import { createMarketCalendarPublicQueryService } from './marketCalendarPublicQueryService'
+import { notifyMacroEventLandings, selectLandedReleases, type MacroEventLandedSubmit } from '../../signals/macroEventLandedNotifier'
 import { marketCalendarPublicPolicy, type MarketCalendarRefreshResult, type MarketCalendarSource, type MarketCalendarRefreshAttempt, type MarketCalendarScope,
   isMarketCalendarScope } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
@@ -149,10 +150,17 @@ export function createStoredManualCalendar(deps: {
   getApiKey: CollectionDependencies['getApiKey']; requestJsonBody: CollectionDependencies['requestJsonBody']
   readReadiness: RefreshDependencies['readReadiness']
   readEnabledFeeds?: RefreshDependencies['readEnabledFeeds']
+  /**
+   * 这条腿的通知出口。**挂在采集侧**：一件事发生了就说一次，分析跑不跑是读者的选择，不决定
+   * 「发生了」要不要被说出来。缺省时采集行为与从前一字不差。
+   */
+  submitNotification?: MacroEventLandedSubmit
+  /** Clock of the composed calendar; production passes nothing and gets the wall clock. */
+  now?: () => Date
 }) {
   const { database, filePath } = deps.storage
   const runtime = createZeroXRouterCalendarManualRuntime({ ...deps, database, evidence: createMacroCalendarEvidenceStore(deps.archive),
-    now: () => new Date(), createCollectionId: randomUUID, cursorKey: randomBytes(32),
+    now: deps.now ?? (() => new Date()), createCollectionId: randomUUID, cursorKey: randomBytes(32),
     readCapacity: () => {
       const volume = statfsSync(dirname(filePath))
       let walBytes = 0
@@ -166,18 +174,51 @@ export function createStoredManualCalendar(deps: {
     }
   })
   const query = createMarketCalendarPublicQueryService({ repository: runtime.repository, readRefreshAttempt: runtime.readRefreshAttempt })
+  // One memory for the lifetime of this calendar: a release already spoken about in this process is
+  // not spoken about again, even though the platform's key would merge it anyway.
+  const announced = new Map<string, number>()
+  function forgetAnnounced(asOf: string): void {
+    const asOfMs = Date.parse(asOf)
+    if (!Number.isFinite(asOfMs)) return
+    for (const [key, expiresAt] of announced) if (expiresAt <= asOfMs) announced.delete(key)
+  }
+  async function announce(page: ReturnType<typeof query.queryMonth>, asOf: string): Promise<void> {
+    if (page.state !== 'available') return
+    forgetAnnounced(asOf)
+    const landings = selectLandedReleases(page.events, asOf, new Set(announced.keys()))
+    await notifyMacroEventLandings(deps.submitNotification, landings, announced)
+  }
   return Object.freeze({
     queryMonth: query.queryMonth,
     /** Readiness-gated automatic refresh for the interval scheduler. */
     async refreshAutomatic(enabledFeeds?: readonly string[]): Promise<RefreshResult> {
       if (!deps.evidenceReady) return { state: 'unavailable', failureCode: 'readiness-unavailable', items: [] }
-      return runtime.refreshAutomatic(enabledFeeds)
+      const result = await runtime.refreshAutomatic(enabledFeeds)
+      if (deps.submitNotification === undefined || result.items.length === 0) return result
+      // One read per month the batch touched, in one locale: the event identity is the same in both,
+      // and submitting twice would only depend on the platform to merge it back into one.
+      const asOf = (deps.now ?? (() => new Date()))().toISOString()
+      for (const month of new Set(result.items.map(item => item.month))) {
+        try {
+          await announce(query.queryMonth({ month, locale: 'zh', asOf }), asOf)
+        } catch {
+          // 一条通知说不上话，不改变这次采集的结论。
+        }
+      }
+      return result
     },
     async refresh(input: unknown): Promise<MarketCalendarRefreshResult> {
       if (!isMarketCalendarScope(input)) return { state: 'unavailable', failureCode: 'input-invalid', sources: [] }
       const result = await runtime.refreshManual(input)
       if (!result.items.length) return { state: 'unavailable', sources: [], ...(result.failureCode ? { failureCode: result.failureCode } : {}) }
-      const page = query.queryMonth({ ...input, asOf: new Date().toISOString() })
+      const asOf = (deps.now ?? (() => new Date()))().toISOString()
+      const page = query.queryMonth({ ...input, asOf })
+      // Same page the panel is built from: what the reader can see is exactly what may be announced.
+      try {
+        await announce(page, asOf)
+      } catch {
+        // 通知失败不改变刷新结果。
+      }
       const sources = marketCalendarPublicPolicy.kinds.map((eventType, index): MarketCalendarSource =>
         page.state === 'available' ? page.sources[index]! :
           { eventType, status: 'unavailable', sourceObservedAt: null })

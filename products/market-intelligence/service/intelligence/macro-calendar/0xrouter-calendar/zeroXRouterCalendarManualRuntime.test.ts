@@ -148,6 +148,43 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'economic-indicator'").get()?.n).toBe(0)
     expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'financial-event'").get()?.n).toBe(600)
   })
+  // 触发点在采集侧，不在分析闸门里：这条用例**没有装配任何分析运行时**，刷新一次就该说一次。
+  // 如果有人把提交点挪回分析闸门，这条会变红——这就是「把解耦丢掉」的反向用例。
+  it('announces a release as soon as the calendar collects it, with no analysis run at all', async () => {
+    const { createStoredManualCalendar } = await import('./zeroXRouterCalendarManualRuntime')
+    const directory = mkdtempSync(join(tmpdir(), 'mc-v1-landed-'))
+    const filePath = join(directory, 'calendar.sqlite')
+    const database = new DatabaseSync(filePath)
+    const archive = createMacroCalendarEvidenceArchive({ rawRecords: createRawRecordStore(), archiveDirectory: join(directory, 'evidence') })
+    const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse(time) })
+    const submitNotification = vi.fn(async () => ({ kind: 'recorded' } as never))
+    const body = JSON.stringify({ code: 200, msg: '', data: [{ calendarId: 'derived', id: 1, calendarName: 'Derived event',
+      locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '1', pubValue: '3' }] })
+    const calendar = createStoredManualCalendar({
+      storage: { database, filePath, close: () => database.close() }, archive, evidenceReady: true, requestGovernanceQueue: queue,
+      getApiKey: async () => 'derived-safe-key',
+      requestJsonBody: async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }),
+      readReadiness: async () => ({ enabled: true, hasCredential: true }),
+      now: () => new Date(time),
+      submitNotification
+    })
+    disposals.push(() => { void calendar.dispose().then(() => database.close()); queue.close(); rmSync(directory, { recursive: true, force: true }) })
+    expect(await calendar.refresh(scope)).toMatchObject({ state: 'completed' })
+    const requests = submitNotification.mock.calls.map(call => (call as unknown as [Record<string, unknown>])[0])
+    // 一次刷新、一条发布 = 一条通知；事件身份取稳定键（`observationKey`），不是每批都会变的 HMAC。
+    expect(requests).toHaveLength(1)
+    for (const request of requests) {
+      expect(request.eventTypeId).toBe('market-intelligence.macro.event-landed')
+      expect(request).toMatchObject({ dedupeVars: { builder: 'template', vars: { releaseAt: time } }, actions: [] })
+      expect(request).not.toHaveProperty('deeplink')
+    }
+    // 一次发布只出一条：同一个事件再采集一次，本进程里不再推，平台那边键也没有变。
+    await calendar.refresh(scope)
+    expect(submitNotification).toHaveBeenCalledTimes(1)
+    expect((submitNotification.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({
+      dedupeVars: { builder: 'template', vars: requests[0]!.dedupeVars && (requests[0]!.dedupeVars as { vars: unknown }).vars }
+    })
+  })
   it('rejects calendar over-budget responses before archive or storage and leaves no reservations', async () => {
     const h = await setup({ data: [{ payload: 'x'.repeat(2 * 1024 * 1024) }] })
     expect((await h.runtime.refreshManual(scope)).state).toBe('unavailable')
@@ -210,7 +247,7 @@ describe('MC-V1 manual archive and SQLite composition', () => {
       }
       finally { reopened.close() }
       process.stdout.write(`MC-V1 derived lifecycle: ${JSON.stringify({ cycles: 20, requests: requestJsonBody.mock.calls.length,
-        batchP95Ms: elapsed.toSorted((a, b) => a - b)[18] })}\n`)
+        batchP95Ms: [...elapsed].sort((a, b) => a - b)[18] })}\n`)
     } finally { queue.close(); rmSync(directory, { recursive: true, force: true }) }
   })
   it('stores three fixed endpoints in a real archive and database with independent economic values', async () => {

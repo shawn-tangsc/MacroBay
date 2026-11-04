@@ -75,7 +75,7 @@ import { createBlsPythonRequestsBridge } from './intelligence/macro-calendar/bls
 import { createBlsScheduleAndLatestValuesSyncWorkflow } from './intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndLatestValuesSyncWorkflow'
 import { createBlsScheduleAndValuesScheduler } from './intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndValuesScheduler'
 import { autoEnrollCalendarProviders } from './intelligence/macro-calendar/macroCalendarProviderAutoEnrollment'
-import { createStoredManualCalendar } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarManualRuntime'
+import { composeStoredManualCalendar } from './intelligence/macro-calendar/0xrouter-calendar/storedCalendarComposition'
 import { createSampleModeRuntime } from './demo/demoModule'
 
 const blsApiCompatibilityHost = createBlsApiCompatibilityHost()
@@ -336,7 +336,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     const byId = new Map(profiles.map((profile) => [profile.sourceId, profile.enabled]))
     return ids.filter((id) => byId.get(id) !== false)
   }
-  const marketCalendar = createStoredManualCalendar({ storage: macroCalendarBackend.storage,
+  const marketCalendar = composeStoredManualCalendar({ storage: macroCalendarBackend.storage,
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
