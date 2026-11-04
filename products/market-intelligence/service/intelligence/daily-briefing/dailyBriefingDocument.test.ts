@@ -713,6 +713,32 @@ describe('daily briefing document', () => {
       expect(partial.data.policyPath?.probability).toBe(77.5)
     })
 
+    it('never stores a dial share that contradicts the printed probability', () => {
+      const outcome = 'hike-25' as const
+      const fixture = (distribution: Readonly<Record<typeof outcome | 'no-change' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', number>>) =>
+        buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5, { distribution }) }), date: '2026-10-30' })
+
+      // The ordinary case: the venue's five buckets overshoot one by two tenths of a percent. After
+      // normalization the lead bucket is 77.35% against a printed 77.5% — one number, not two.
+      const overround = fixture({ 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.005, 'cut-50-plus': 0.002 })
+      expect(overround.data.policyPath?.distribution?.[outcome]).toBeCloseTo(0.7735, 3)
+      expect(Math.abs((overround.data.policyPath?.distribution?.[outcome] ?? 0) * 100 - 77.5)).toBeLessThanOrEqual(0.5)
+
+      // A payload whose buckets do not add up enough to be trusted with a dial. Normalizing would
+      // move the lead bucket to 85.2% while the card prints 77.5% — two odds for one fact — so the
+      // distribution is not stored and the card falls back to two segments.
+      const inconsistent = fixture({ 'no-change': 0.10, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.01, 'cut-50-plus': 0.01 })
+      expect(inconsistent.data.policyPath).not.toHaveProperty('distribution')
+      expect(inconsistent.data.policyPath?.probability).toBe(77.5)
+
+      // Whatever survives must satisfy the invariant, checked rather than assumed.
+      for (const document of [overround, inconsistent]) {
+        const share = document.data.policyPath?.distribution?.[outcome]
+        if (share === undefined) continue
+        expect(Math.abs(share * 100 - (document.data.policyPath?.probability ?? 0))).toBeLessThanOrEqual(0.5)
+      }
+    })
+
     it('keeps each positioning series, thinned, ending on the amount printed beside it', () => {
       // Fifteen-minute buckets across the whole window: the read this edition asked for.
       const readings = (offset: number) => Array.from({ length: 97 }, (_, index) => ({

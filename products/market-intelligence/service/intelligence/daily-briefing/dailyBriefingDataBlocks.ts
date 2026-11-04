@@ -42,7 +42,15 @@ export function buildPolicyPathBlock(
   // The venue prices five buckets, and the edition used to keep only the leading one — so the card
   // could state "77.5%" but had no way to say what the rest was priced at. `normalizeOutcomes` is the
   // policy block's own normalizer: same five names, sum corrected to one, refused when incomplete.
-  const distribution = probability.distribution ? normalizeOutcomes(probability.distribution) : undefined
+  //
+  // The card prints the lead probability and draws the dial from the same bucket, so the two are one
+  // fact with two carriers. Normalization can move a bucket: an overround of a few tenths keeps them
+  // within half a point, a payload that is off by more would draw an arc that contradicts the number
+  // beside it. Such a distribution is not usable here, and the card stays legitimately two-segment
+  // rather than showing two different odds for one market.
+  const normalized = probability.distribution ? normalizeOutcomes(probability.distribution) : undefined
+  const normalizedLead = normalized ? normalized[probability.outcome] * 100 : undefined
+  const distribution = normalizedLead !== undefined && Math.abs(normalizedLead - current) <= 0.5 ? normalized : undefined
   return Object.freeze({
     state: 'available' as const,
     meetingDate: policyPath.meetingDate,

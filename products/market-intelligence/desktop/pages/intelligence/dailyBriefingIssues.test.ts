@@ -318,6 +318,46 @@ describe('daily briefing issues', () => {
     expect(briefingIssues({ document: document(), text: zhText, formatTime })).toEqual([])
   })
 
+  /**
+   * "Not applicable" is not a limitation.
+   *
+   * A window longer than the 24-hour curve makes the two price cards state no curve — the read did
+   * answer, the curve simply cannot cover the window. Counting that as a gap would tell the reader the
+   * data is missing, and would make a 48-hour edition look worse than the 24-hour edition of the same
+   * day for a reason that is purely about the drawing.
+   */
+  it('does not turn an inapplicable curve into a limitation', () => {
+    const plain = briefingIssues({ document: withMarket([market()]), text: zhText, formatTime })
+    const withCurve = briefingIssues({
+      document: withMarket([market({ curve: [[
+        { at: '2026-10-29T00:30:00.000Z', returnPercent: 0 },
+        { at: '2026-10-30T00:30:00.000Z', returnPercent: 0.4 }
+      ]] })]),
+      text: zhText,
+      formatTime
+    })
+    const inapplicable = briefingIssues({
+      document: withMarket([market({ curveReason: 'window-too-long' })]),
+      text: zhText,
+      formatTime
+    })
+
+    // The same edition with and without a stored curve yields the same limitations, and a longer
+    // window adds none either: the only thing that changed is whether a line can be drawn.
+    expect(withCurve).toEqual(plain)
+    expect(inapplicable).toEqual(plain)
+
+    const longerWindow = briefingIssues({
+      document: document({
+        edition: { ...document().edition, windowStart: '2026-10-28T00:30:00.000Z', windowHours: 48 },
+        data: { market: [market({ curveReason: 'window-too-long' })], funds: [], sentiment: { fearGreed: null, news: { state: 'available' } } }
+      }),
+      text: zhText,
+      formatTime
+    })
+    expect(longerWindow).toEqual(plain)
+  })
+
   it('renders the same derivation in English', () => {
     const issues = briefingIssues({
       document: withFunds([pulse({ change: null, changeReason: 'no-baseline' })]),
