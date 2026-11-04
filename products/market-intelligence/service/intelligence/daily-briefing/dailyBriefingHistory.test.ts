@@ -148,13 +148,30 @@ describe('the list projection decides the row, once', () => {
 
   it('offers each language with its three-state, and names the reason for a missing one', async () => {
     const rows = [withPeriod('default', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })]
-    const running = await two(rows, { default: run(['zh-CN', 'en-US']) })
+    // "Generating" follows the live registry: a stored run still marked running with no live process
+    // is a dead run, and the row must not spin forever.
+    const settledRun = { ...run(['zh-CN', 'en-US']), state: 'partial' as const }
+    const running = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      periodRun: vi.fn(async () => settledRun),
+      isRunning: () => true
+    })
     expect(running[0]?.languages).toEqual([
       { locale: 'en-US', state: 'generating' },
       { locale: 'zh-CN', state: 'published' }
     ])
 
-    const settled = await two(rows, { default: { ...run(['zh-CN', 'en-US']), state: 'partial' } })
+    const dead = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: rows, otherRows: [],
+      periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'running' as const })),
+      isRunning: () => false
+    })
+    expect(dead[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'missing', reason: 'not-published' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
+
+    const settled = await two(rows, { default: settledRun })
     expect(settled[0]?.languages).toEqual([
       { locale: 'en-US', state: 'missing', reason: 'not-published' },
       { locale: 'zh-CN', state: 'published' }
@@ -167,17 +184,49 @@ describe('the list projection decides the row, once', () => {
     ])
   })
 
+  it('shows the languages old rows actually had, not every supported language', async () => {
+    // r18 data: one day one period, both versions stored under `default`. Two badges, not four.
+    const rows = [
+      withPeriod('default', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' }),
+      withPeriod('default', 'en-US', { periodTime: '2026-11-02T07:00:00.000Z' })
+    ]
+    const summaries = await two(rows, {})
+    expect(summaries[0]?.languages).toEqual([
+      { locale: 'en-US', state: 'published' },
+      { locale: 'zh-CN', state: 'published' }
+    ])
+  })
+
   it('marks a period whose configuration is gone, without dropping its history', async () => {
     const summaries = await briefingHistorySummaries({
       dates: ['2026-11-02'],
       primary: 'zh-CN',
       primaryRows: [withPeriod('period_gone', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })],
       otherRows: [],
-      periodActive: (periodId) => periodId !== 'period_gone'
+      periodPresence: (periodId) => periodId === 'period_gone' ? 'absent' as const : 'found' as const
     })
     expect(summaries[0]?.periodDeleted).toBe(true)
     expect(summaries[0]?.state).toBe('generated')
+
+    // "Could not read the configuration" is not "the period is gone": no mark is written.
+    const unreadable = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN',
+      primaryRows: [withPeriod('period_gone', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })],
+      otherRows: [],
+      periodPresence: () => 'unreadable'
+    })
+    expect(unreadable[0]?.periodDeleted).toBeUndefined()
   })
+
+  it('says nothing about kind or trigger for a period that never published', async () => {
+    const [summary] = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: []
+    })
+    expect(summary?.state).toBe('missing')
+    expect(summary?.periodKind).toBeUndefined()
+    expect(summary?.runTrigger).toBeUndefined()
+  })
+
 
   it('marks exactly one current edition per day: the latest generatedAt, not the latest cutoff', async () => {
     const rows = [
