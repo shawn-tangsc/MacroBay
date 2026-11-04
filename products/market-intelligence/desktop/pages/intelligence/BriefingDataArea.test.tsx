@@ -527,6 +527,7 @@ describe("a cell does not repeat the block's window", () => {
   it('leaves the stablecoin cell with its level and one comparison', async () => {
     const doc = documentWithData()
     const stablecoin = doc.data.funds.find((entry) => entry.id === 'stablecoin')!
+    ;(stablecoin as { value?: unknown }).value = { number: 249_100_000_000, format: 'usd' }
     ;(stablecoin as { auxiliaryChanges?: unknown }).auxiliaryChanges = [
       { value: -1_700_000_000, unit: 'usd', window: '1d' },
       { value: -1.57, unit: 'percent', window: '7d' },
@@ -546,8 +547,8 @@ describe("a cell does not repeat the block's window", () => {
     // The longer windows are detail; a cell carries one comparison.
     expect(cell.textContent).not.toContain('7d')
     expect(cell.textContent).not.toContain('30d')
-    // The level is still printed (the fixture's own value), and the one comparison is the dollar move.
-    expect(cell.querySelector('b')!.textContent!.trim()).not.toBe('')
+    // The level is still printed, and it is *this* value: "not empty" would pass on any string.
+    expect(cell.querySelector('b')!.textContent).toBe('249.1B USD')
     expect(cell.textContent).toContain('-1.7B USD')
   })
 })
