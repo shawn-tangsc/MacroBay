@@ -124,7 +124,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 固定值比「回落到运行机器的时区」诚实得多。
    */
   timeZone?: () => string
-  /** 通知端口：宏观发布落地时提交 `macro.event-landed`；缺省表示未装配运行时，分析与结算照常。 */
+  /** 通知端口（额度提醒等）；缺省表示未装配运行时，分析与结算照常。日历发布不走这里，见下。 */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {

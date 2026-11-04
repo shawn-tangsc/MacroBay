@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
@@ -19,6 +21,7 @@ function event(overrides: Partial<MarketCalendarEvent> = {}): MarketCalendarEven
     eventType: 'economic-indicator',
     importance: 'high',
     scheduledAt: released,
+    // 2 → 3 is +50% against consensus: over the release trigger's 5% for bare numbers.
     consensus: { displayValue: '2' },
     providerPrevious: { displayValue: '2' },
     providerActual: { displayValue: '3' },
@@ -47,36 +50,68 @@ describe('macro event landed notifier', () => {
     }
   })
 
-  it('reports only a release that has landed inside the window, once per event', () => {
-    const events = [
-      event(),
-      // Not yet due: the release time is still ahead, nothing has happened.
-      event({ eventKey: 'batch-2', observationKey: 'US.NFP.RELEASE.2026-M09', scheduledAt: '2026-09-11T10:00:00.000Z' }),
-      // Due but nothing published: the reader would open an empty detail.
-      event({ eventKey: 'batch-3', observationKey: 'US.PPI.RELEASE.2026-M08', providerActual: null }),
-      // Landed long ago: a first collection of a whole month must not read as news.
-      event({ eventKey: 'batch-4', observationKey: 'US.GDP.RELEASE.2026-Q2', scheduledAt: '2026-08-01T10:00:00.000Z' })
-    ]
-    const seen = new Set(['US.CPI.RELEASE.2026-M08:2026-09-10T10:00:00.000Z'])
-    expect(selectLandedReleases(events, asOf, seen)).toEqual([])
-    expect(selectLandedReleases(events, asOf)).toEqual([{ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }])
-    // `eventKey` is a per-batch HMAC: two refreshes of the same release carry different ones, so it
-    // may never be the identity. `observationKey` is what stays the same across collections.
-    expect(selectLandedReleases([event({ eventKey: 'a-different-hmac' })], asOf)).toEqual([
+  it('keeps the signed filter: only a US, high-importance release that beat its consensus', () => {
+    // Nothing here may widen what the analysis line already signs: a planned release that came in
+    // on consensus is not news, and a release the reader cannot compare is not news either.
+    const routine = event({ eventKey: 'batch-2', observationKey: 'US.NFP.RELEASE.2026-M09', providerActual: { displayValue: '2.05' } })
+    const incomparable = event({ eventKey: 'batch-3', observationKey: 'US.PPI.RELEASE.2026-M08', consensus: null })
+    const foreign = event({ eventKey: 'batch-4', observationKey: 'DE.CPI.RELEASE.2026-M08', countryCode: 'DE' })
+    const lowImportance = event({ eventKey: 'batch-5', observationKey: 'US.JOBS.RELEASE.2026-M08', importance: 'medium' })
+    const notYetDue = event({ eventKey: 'batch-6', observationKey: 'US.GDP.RELEASE.2026-Q3', scheduledAt: '2026-09-11T10:00:00.000Z' })
+    const noActual = event({ eventKey: 'batch-7', observationKey: 'US.RETAIL.RELEASE.2026-M08', providerActual: null })
+    const stale = event({ eventKey: 'batch-8', observationKey: 'US.ISM.RELEASE.2026-M07', scheduledAt: '2026-08-01T10:00:00.000Z' })
+
+    const selection = selectLandedReleases([event(), routine, incomparable, foreign, lowImportance, notYetDue, noActual, stale], asOf)
+    expect(selection.landings).toEqual([{ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }])
+    // The two that were dropped for a reason worth counting are counted: "signed filter kept" and
+    // "we read nothing" must not look the same in a log.
+    expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1 })
+    // A release this process already announced is not announced again, even though the key would merge.
+    expect(selectLandedReleases([event()], asOf, new Set(['US.CPI.RELEASE.2026-M08:2026-09-10T10:00:00.000Z'])).landings).toEqual([])
+    // `eventKey` is a per-batch HMAC: two collections of one release carry different ones, so identity
+    // has to be `observationKey` or every refresh would read as a new event.
+    expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([
       { eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }
     ])
   })
 
-  it('submits once, skips a release this process already spoke about, and lets a failed submit go', async () => {
+  it('submits once, remembers what it said, and leaves a readable trace when a submit fails', async () => {
     const submit = vi.fn(async () => ({ kind: 'recorded' } as never))
     const seen = new Map<string, number>()
     const landings = [{ eventId: 'US.CPI.RELEASE.2026-M08', releaseAt: released }]
     await expect(notifyMacroEventLandings(submit, landings, seen)).resolves.toBe(1)
     await expect(notifyMacroEventLandings(submit, landings, seen)).resolves.toBe(0)
     expect(submit).toHaveBeenCalledTimes(1)
-    // A notification that cannot be submitted must not fail the collection that already stored the data.
+    // A failed submit must not fail the collection that already stored the data - but it must be
+    // countable. An empty catch made a real failure look like "there was nothing to say".
+    const trace = vi.fn()
     const failing = vi.fn(async () => Promise.reject(new Error('no runtime')))
-    await expect(notifyMacroEventLandings(failing, landings, new Map())).resolves.toBe(0)
+    await expect(notifyMacroEventLandings(failing, landings, new Map(), trace)).resolves.toBe(0)
+    expect(trace).toHaveBeenCalledWith({ kind: 'submit-failed', count: 1, detail: 'Error: no runtime' })
     await expect(notifyMacroEventLandings(undefined, landings, new Map())).resolves.toBe(0)
+  })
+
+  // 反向用例的另一半：只断言「采集侧会发」不够——如果分析闸门那侧还留着一条提交，整条链删掉也绿。
+  it('has exactly one submitter: the collection side, and nothing from the analysis gate', () => {
+    const gate = readFileSync(new URL('../jobs/registerMarketAnalysisRuntime.ts', import.meta.url), 'utf8')
+    expect(gate).not.toContain('macro.event-landed')
+    expect(gate).not.toContain('notifyMacroEventLandings')
+    const callers: string[] = []
+    const walk = (directory: URL): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const child = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, directory)
+        if (entry.isDirectory()) { walk(child); continue }
+        if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue
+        // 定义处不算调用点：这一条要找的是「谁在发」。
+        if (entry.name === 'macroEventLandedNotifier.ts') continue
+        if (readFileSync(child, 'utf8').includes('notifyMacroEventLandings(')) callers.push(String(child))
+      }
+    }
+    walk(new URL('../macro-calendar/', import.meta.url))
+    walk(new URL('./', import.meta.url))
+    // One implementation, one call site: a second caller is how one release ends up announced twice.
+    expect(callers).toHaveLength(1)
+    expect(callers[0]).toContain('zeroXRouterCalendarManualRuntime.ts')
+    expect(join('signals', 'macroEventLandedNotifier.ts')).toContain('macroEventLandedNotifier')
   })
 })

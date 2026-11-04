@@ -158,8 +158,9 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     const archive = createMacroCalendarEvidenceArchive({ rawRecords: createRawRecordStore(), archiveDirectory: join(directory, 'evidence') })
     const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse(time) })
     const submitNotification = vi.fn(async () => ({ kind: 'recorded' } as never))
+    // US + 高重要性 + 经济指标，且实际值 3 对预期 2（相对 +50%）：这是签字表里「超出预期」的那一类。
     const body = JSON.stringify({ code: 200, msg: '', data: [{ calendarId: 'derived', id: 1, calendarName: 'Derived event',
-      locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '1', pubValue: '3' }] })
+      countryCode: 'US', locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '2', pubValue: '3' }] })
     const calendar = createStoredManualCalendar({
       storage: { database, filePath, close: () => database.close() }, archive, evidenceReady: true, requestGovernanceQueue: queue,
       getApiKey: async () => 'derived-safe-key',
@@ -184,6 +185,29 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect((submitNotification.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({
       dedupeVars: { builder: 'template', vars: requests[0]!.dedupeVars && (requests[0]!.dedupeVars as { vars: unknown }).vars }
     })
+  })
+  // 只挪触发点、不放松筛选：到点了、也有公布值，但跟预期一致 —— 签字表里这是「常规发布」，不发。
+  it('stays quiet for a planned release that landed on consensus', async () => {
+    const { createStoredManualCalendar } = await import('./zeroXRouterCalendarManualRuntime')
+    const directory = mkdtempSync(join(tmpdir(), 'mc-v1-quiet-'))
+    const filePath = join(directory, 'calendar.sqlite')
+    const database = new DatabaseSync(filePath)
+    const archive = createMacroCalendarEvidenceArchive({ rawRecords: createRawRecordStore(), archiveDirectory: join(directory, 'evidence') })
+    const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse(time) })
+    const submitNotification = vi.fn(async () => ({ kind: 'recorded' } as never))
+    const body = JSON.stringify({ code: 200, msg: '', data: [{ calendarId: 'derived', id: 1, calendarName: 'Derived event',
+      countryCode: 'US', locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '2', pubValue: '2.05' }] })
+    const calendar = createStoredManualCalendar({
+      storage: { database, filePath, close: () => database.close() }, archive, evidenceReady: true, requestGovernanceQueue: queue,
+      getApiKey: async () => 'derived-safe-key',
+      requestJsonBody: async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }),
+      readReadiness: async () => ({ enabled: true, hasCredential: true }),
+      now: () => new Date(time),
+      submitNotification
+    })
+    disposals.push(() => { void calendar.dispose().then(() => database.close()); queue.close(); rmSync(directory, { recursive: true, force: true }) })
+    expect(await calendar.refresh(scope)).toMatchObject({ state: 'completed' })
+    expect(submitNotification).not.toHaveBeenCalled()
   })
   it('rejects calendar over-budget responses before archive or storage and leaves no reservations', async () => {
     const h = await setup({ data: [{ payload: 'x'.repeat(2 * 1024 * 1024) }] })

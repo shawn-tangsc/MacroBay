@@ -185,8 +185,13 @@ export function createStoredManualCalendar(deps: {
   async function announce(page: ReturnType<typeof query.queryMonth>, asOf: string): Promise<void> {
     if (page.state !== 'available') return
     forgetAnnounced(asOf)
-    const landings = selectLandedReleases(page.events, asOf, new Set(announced.keys()))
-    await notifyMacroEventLandings(deps.submitNotification, landings, announced)
+    const selection = selectLandedReleases(page.events, asOf, new Set(announced.keys()))
+    const { notComparable, belowThreshold } = selection.suppressed
+    if (notComparable > 0 || belowThreshold > 0) {
+      // 筛掉的也要数得出来：否则「筛得对」和「读漏了」在日志里长得一模一样。
+      console.warn(`[macro-calendar] 本次没有通知的发布：算不出偏差 ${notComparable} 条、未过阈值 ${belowThreshold} 条`)
+    }
+    await notifyMacroEventLandings(deps.submitNotification, selection.landings, announced)
   }
   return Object.freeze({
     queryMonth: query.queryMonth,
