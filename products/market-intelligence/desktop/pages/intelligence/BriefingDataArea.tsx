@@ -102,6 +102,10 @@ type CellBand = Readonly<{ text: string; tone?: 'up' | 'down' }>
 type CellCopy = Readonly<{ primary: string; primaryTone?: 'up' | 'down'; band?: CellBand; change?: CellChange; note?: string }>
 
 function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords, arrows: changeArrowWords): CellCopy {
+  // Two kinds of missing, two rules: "this version does not do it" is permanent and needs no sentence
+  // (explaining it only invites the reader to guess what the dash stands for), while "not received this
+  // run" is temporary and worth one short line — the reader can wait for the next edition.
+  if (row.state === 'unavailable') return { primary: '', note: text.notAvailableThisRun }
   const level = formatBriefingValue(row.value, text.noValue, locale)
   // The arrow carries the direction, so the number beside it must not repeat it: "↓+1.7B" is one fact
   // stated twice, and the plus is what a reader trips over.
@@ -165,8 +169,9 @@ function Figure({ row, text, locale, buckets, arrows }: Readonly<{
         : null}
     </span>
     {/* A level is never tinted; a signed change is — the net flow is the latter, and it carries its tone
-        through the same attribute the change column uses. */}
-    <b data-tone={cell.primaryTone}>{cell.primary}</b>
+        through the same attribute the change column uses. An empty level prints nothing at all: when the
+        run received no data, the sentence is the whole cell, not a dash plus a sentence. */}
+    {cell.primary === '' ? null : <b data-tone={cell.primaryTone}>{cell.primary}</b>}
     {cell.band ? <small className="mi-brief-poster__figure-band" data-tone={cell.band.tone}>{cell.band.text}</small> : null}
     {cell.change ? <small className="mi-brief-poster__figure-change">
       {cell.change.window ? <span className="mi-brief-poster__figure-window">{cell.change.window}</span> : null}

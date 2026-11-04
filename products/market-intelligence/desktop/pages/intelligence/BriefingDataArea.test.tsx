@@ -753,3 +753,72 @@ describe('row labels name the row, not the window', () => {
     expect(index).not.toContain('涨跌')
   })
 })
+
+describe('two kinds of missing, two rules', () => {
+  async function renderRow(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
+    const doc = documentWithData()
+    mutate(doc)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host
+  }
+
+  it('says one short line when this run got nothing, and no more than that', async () => {
+    const host = await renderRow((doc) => {
+      const gold = doc.data.market.find((entry) => entry.id === 'gold') as { state: string; value: unknown }
+      gold.state = 'unavailable'
+      gold.value = null
+    })
+    const cell = host.querySelector('[data-reading="gold"]')!
+    expect(cell.textContent).toContain(text.notAvailableThisRun)
+    // The sentence is the whole cell: no dash (that reads as "the number is missing"), no amount, and no
+    // second explanation of what the product decided not to collect.
+    expect(cell.textContent).not.toContain(text.noValue)
+    expect(cell.querySelector('b')).toBeNull()
+  })
+
+  it('stays silent when the reading arrived, stale or fresh', async () => {
+    const fresh = await renderRow(() => undefined)
+    expect(fresh.querySelector('[data-reading="gold"]')!.textContent).not.toContain(text.notAvailableThisRun)
+
+    await act(async () => root?.unmount())
+    root = undefined
+    const stale = await renderRow((doc) => {
+      const gold = doc.data.market.find((entry) => entry.id === 'gold') as { state: string; valueBasis?: string }
+      gold.state = 'stale'
+      gold.valueBasis = 'last-close'
+    })
+    expect(stale.querySelector('[data-reading="gold"]')!.textContent).not.toContain(text.notAvailableThisRun)
+  })
+})
+
+describe('a hold edition draws two arcs, not three', () => {
+  it('drops the hold segment when the meeting itself is priced to hold', async () => {
+    const doc = documentWithData()
+    const policy = doc.data.policyPath as { outcome: string; distribution?: Record<string, number> }
+    // The third way to get two segments: a distribution is present, but the event *is* holding, so a
+    // separate hold arc would draw the same bucket twice. This path is separate from "no distribution".
+    policy.outcome = 'no-change'
+    policy.distribution = { 'no-change': 0.7, 'hike-25': 0.2, 'hike-50-plus': 0.05, 'cut-25': 0.03, 'cut-50-plus': 0.02 }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    const gauge = host.querySelector('[data-briefing-policy-gauge]')!
+    expect([...gauge.querySelectorAll('[data-outcome]')].map((node) => node.getAttribute('data-outcome')))
+      .toEqual(['event', 'other'])
+    expect(gauge.querySelectorAll('[data-outcome="hold"]')).toHaveLength(0)
+    // The event of a hold edition takes the hold blue, since that is what it is pricing.
+    expect(gauge.querySelector('[data-outcome="event"]')?.getAttribute('class')).toBe('mi-brief-poster__gauge-hold')
+  })
+})

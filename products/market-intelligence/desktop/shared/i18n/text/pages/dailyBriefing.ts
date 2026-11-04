@@ -8,6 +8,8 @@ export const dailyBriefingText = {
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     noValue: '—',
+    // 「这次没取到」是临时的：读者能做的是等下期、看缺口。与「我们本版不做」分开，两类不共用键。
+    notAvailableThisRun: '这次没取到',
     // 数值位缺数时说清缺的是哪一样：把变化率印在绝对值的位置上，读者会把它当规模。
     closeMissing: '这一期没有存收盘价',
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
@@ -283,6 +285,7 @@ export const dailyBriefingText = {
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
+    notAvailableThisRun: 'Not available this run',
     closeMissing: 'This edition stored no close',
     indexProxy: ' (QQQ perpetual proxy)',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
