@@ -1,3 +1,6 @@
+/** The printed sheet's width. One number: the page scales it, the export copies it, nothing re-derives it. */
+export const BRIEFING_PAPER_WIDTH = 1080
+
 /**
  * The paper colour the share poster is drawn on, read back from the rendered card.
  *

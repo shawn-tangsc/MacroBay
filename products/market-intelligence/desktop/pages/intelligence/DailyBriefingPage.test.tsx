@@ -711,6 +711,13 @@ describe('daily briefing page', () => {
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-11-02"]')!.click(); await Promise.resolve(); await Promise.resolve() })
     expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
 
+    // The sheet keeps its printed width inside a scaling wrapper: the page shrinks the whole sheet
+    // instead of re-flowing it, which is what collapsed the three cards. The width is inline so this
+    // is assertable at all — a DOM without layout reports 0 for every measured box.
+    const sheet = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper-scale > div')!
+    expect(sheet.style.width).toBe('1080px')
+    expect(dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper-scale')!.style.transformOrigin || 'top left').toBe('top left')
+
     for (const index of [1, 0, 1]) {
       await act(async () => { tabs()[index]!.click(); await Promise.resolve(); await Promise.resolve() })
       expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()

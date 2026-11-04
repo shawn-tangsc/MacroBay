@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 
 import { StateView } from '@platform/ui/components/state'
 
@@ -18,9 +19,18 @@ import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
+import { BRIEFING_PAPER_WIDTH } from './dailyBriefingExport'
 import { editorialFailureText } from './dailyBriefingPageDerived'
 import { resolveBriefingStateReason } from './dailyBriefingText'
 
+/**
+ * The sheet on screen is the sheet that is exported, scaled — never re-flowed.
+ *
+ * The poster is a printed page with absolute sizes (card row 114, dial 88, plot column 100, the number
+ * 30px). Stretching it to the column width re-lays it out and the cards collapse; scaling it keeps one
+ * layout and changes only how large it is drawn. `shareRef` in the page still points at the poster in
+ * its own 1080 box, so the export is untouched by this transform.
+ */
 /**
  * Everything the reading pane can show, in one place.
  *
@@ -59,6 +69,32 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   onConfigureSources: () => void
   onDeleteRetry: (target: BriefingDeleteOutcome['target']) => void
 }>): React.ReactElement {
+  const paperHostRef = useRef<HTMLDivElement>(null)
+  const paperSheetRef = useRef<HTMLDivElement>(null)
+  const [paperScale, setPaperScale] = useState(1)
+  const [paperHostHeight, setPaperHostHeight] = useState<number | undefined>(undefined)
+  const [paperOffsetX, setPaperOffsetX] = useState(0)
+  useEffect(() => {
+    const host = paperHostRef.current
+    const sheet = paperSheetRef.current
+    if (!host || !sheet || typeof ResizeObserver === 'undefined') return
+    const measure = (): void => {
+      const width = host.clientWidth
+      // Never enlarge: the sheet's own size is the design's, and upscaling only makes the text soft.
+      const scale = width > 0 ? Math.min(1, width / BRIEFING_PAPER_WIDTH) : 1
+      setPaperScale(scale)
+      setPaperHostHeight(sheet.offsetHeight > 0 ? sheet.offsetHeight * scale : undefined)
+      setPaperOffsetX(Math.max(0, (width - BRIEFING_PAPER_WIDTH) / 2))
+    }
+    // The container's width decides the scale; the sheet's own height decides the room. Neither
+    // observer watches the wrapper itself — a scaled element reports its scaled size, and observing it
+    // would feed its own output back into the measurement.
+    const observer = new ResizeObserver(measure)
+    observer.observe(host)
+    observer.observe(sheet)
+    measure()
+    return () => observer.disconnect()
+  }, [view])
   // What the body is showing: one edition the reader can read, in this or an earlier version.
   const showingEdition = view.status === 'ready' && !contentBlocked
   return <section className="mi-daily-briefing-page__content">
@@ -94,8 +130,15 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     /> : null}
     {/* A run replaces this edition only when it succeeds: until then the reader keeps the one that
         is already there, and the run reports in the right column. */}
-    {showingEdition ? <div className="mi-daily-briefing-page__paper">
-      <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+    {/* The paper is a fixed sheet, never a fluid column: the poster keeps its 1080 px and the page
+        scales the whole sheet down. Stretching it to the column width is what re-flowed the three cards
+        and wrapped the rate card's number across its dial. */}
+    {showingEdition ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
+      <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
+        <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
+          <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        </div>
+      </div>
     </div> : null}
   </section>
 }

@@ -6,7 +6,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
-import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
+import { BRIEFING_PAPER_WIDTH, briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { briefingTextForLocale, type DailyBriefingText } from './dailyBriefingText'
 import { withWindowHours } from './dailyBriefingWindowText'
 
@@ -54,6 +54,14 @@ export function useBriefingShareActions(deps: Readonly<{
       // The poster paints its own paper; the export reads that colour back instead of keeping a
       // second copy here, so a palette change cannot leave the downloaded image on the old paper.
       const poster = shareRef.current.querySelector<HTMLElement>('.mi-brief-poster') ?? shareRef.current
+      // The export must read the sheet at its printed width. A measured width of 0 is a DOM without
+      // layout (a test), where there is nothing to check; anything else that is not 1080 would produce
+      // a smaller, softer image without raising an error, which is the failure worth refusing.
+      const measured = Math.round(poster.getBoundingClientRect().width)
+      if (measured > 0 && measured !== BRIEFING_PAPER_WIDTH) {
+        setExportState('failed')
+        return
+      }
       const paper = posterExportBackground(poster)
       const dataUrl = await toPng(poster, { pixelRatio: 2, ...(paper ? { backgroundColor: paper } : {}), width: 1080, cacheBust: true })
       const link = document.createElement('a')
