@@ -557,3 +557,45 @@ describe("a cell does not repeat the block's window", () => {
     expect(cell.textContent).toContain('↓1.7B USD')
   })
 })
+
+describe('the fear-and-greed cell colours the judgement, never the score', () => {
+  const renderBand = async (score: number) => {
+    const doc = documentWithData()
+    const sentiment = doc.data.sentiment as { fearGreed?: unknown }
+    sentiment.fearGreed = {
+        id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed',
+        importance: { tier: 'must', source: 'rule', reasonCode: 'reading' },
+        state: 'available', value: { number: score, format: 'score' },
+        change: null, window: 'latest', observedAt: `${today}T00:00:00.000Z`
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host.querySelector('[data-reading="fear-greed"]')!
+  }
+
+  it('tints the band word and leaves the number alone', async () => {
+    const cell = await renderBand(26)
+    // 26 is 恐惧: the word is tinted, the score keeps the body ink — a tinted score reads as "falling".
+    expect(cell.querySelector('.mi-brief-poster__figure-band')!.getAttribute('data-tone')).toBe('down')
+    expect(cell.querySelector('.mi-brief-poster__figure-band')!.textContent).toBe('（恐惧）')
+    const score = cell.querySelector('b')!
+    expect(score.textContent).toBe('26')
+    expect(score.hasAttribute('data-tone')).toBe(false)
+  })
+
+  it('moves the band and its tone together at the boundary', async () => {
+    // 24 / 25 is the boundary in the one table that owns it: both bands are "down", but the words differ —
+    // and a second table for the colour would let one move without the other.
+    expect((await renderBand(24)).querySelector('.mi-brief-poster__figure-band')!.textContent).toBe('（极度恐惧）')
+    expect((await renderBand(25)).querySelector('.mi-brief-poster__figure-band')!.textContent).toBe('（恐惧）')
+    // 贪婪 is up, 中性 has no tone at all.
+    expect((await renderBand(60)).querySelector('.mi-brief-poster__figure-band')!.getAttribute('data-tone')).toBe('up')
+    expect((await renderBand(50)).querySelector('.mi-brief-poster__figure-band')!.hasAttribute('data-tone')).toBe(false)
+  })
+})

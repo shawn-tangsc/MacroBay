@@ -106,12 +106,18 @@ export const fearGreedSnapshotPolicy = {
   sourceId: 'alternative-fear-greed',
   metricKey: 'FEAR_GREED_INDEX',
   score: { minimum: 0, maximum: 100, integer: true },
+  /**
+   * The band a score falls in, with the tone that band prints in.
+   *
+   * One row per band: the range, its key and its colour. Giving the colour a table of its own is how a
+   * threshold moves in one and not the other, and a reader sees 恐惧 painted green.
+   */
   buckets: [
-    { maximum: 24, key: 'extreme-fear' },
-    { maximum: 49, key: 'fear' },
-    { maximum: 50, key: 'neutral' },
-    { maximum: 74, key: 'greed' },
-    { maximum: 100, key: 'extreme-greed' }
+    { maximum: 24, key: 'extreme-fear', tone: 'down' },
+    { maximum: 49, key: 'fear', tone: 'down' },
+    { maximum: 50, key: 'neutral', tone: 'flat' },
+    { maximum: 74, key: 'greed', tone: 'up' },
+    { maximum: 100, key: 'extreme-greed', tone: 'up' }
   ] as const,
   unavailableFailureCode: 'fear-greed-query-unavailable',
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
@@ -134,6 +140,18 @@ export function isFearGreedSnapshotScore(value: unknown): value is number {
 export function resolveFearGreedSnapshotBucket(value: unknown): FearGreedSnapshotBucket | undefined {
   if (!isFearGreedSnapshotScore(value)) return undefined
   return fearGreedSnapshotPolicy.buckets.find((bucket) => value <= bucket.maximum)?.key
+}
+
+/**
+ * The tone a band prints in, read from the same row that answers which band it is.
+ *
+ * These hexes are the move colours, but here they colour a *judgement*, not a direction: 恐惧 red is not
+ * "falling". The two meanings share a palette deliberately — one red, not a fifth — which is why the note
+ * lives here and beside the CSS rule.
+ */
+export function fearGreedBucketTone(value: unknown): 'up' | 'down' | 'flat' | undefined {
+  if (!isFearGreedSnapshotScore(value)) return undefined
+  return fearGreedSnapshotPolicy.buckets.find((bucket) => value <= bucket.maximum)?.tone
 }
 
 export type FundingRateHistoryQueryInput = { asOf: string }

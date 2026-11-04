@@ -5,7 +5,7 @@ import type { BriefingDataGroups } from '../../../contracts/dailyBriefingDataGro
 import type { BriefingMarketRow, BriefingPulseRow } from '../../../contracts/dailyBriefing'
 import type { PolicyPathOutcome } from '../../../contracts/policyPath'
 import type { DailyBriefingText } from './dailyBriefingText'
-import { resolveFearGreedSnapshotBucket } from '../../../contracts/intelligenceQueryContracts'
+import { fearGreedBucketTone, resolveFearGreedSnapshotBucket } from '../../../contracts/intelligenceQueryContracts'
 import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type fearGreedBucketWords, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
@@ -98,7 +98,8 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
  * reads as a move.
  */
 type CellChange = Readonly<{ text: string; window?: string; tone?: 'up' | 'down'; arrow?: string }>
-type CellCopy = Readonly<{ primary: string; change?: CellChange; note?: string }>
+type CellBand = Readonly<{ text: string; tone?: 'up' | 'down' }>
+type CellCopy = Readonly<{ primary: string; band?: CellBand; change?: CellChange; note?: string }>
 
 function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords, arrows: changeArrowWords): CellCopy {
   const level = formatBriefingValue(row.value, text.noValue, locale)
@@ -121,9 +122,11 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     // The band is derived from the score by the collector's own table: the document holds the number,
     // and a stored band would be the same fact twice — disagreeing at 24/25 the moment one moves.
     const band = row.value ? resolveFearGreedSnapshotBucket(row.value.number) : undefined
-    const scored = band ? `${level}（${buckets[band]}）` : level
-    if (!row.change) return { primary: scored, ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
-    return { primary: scored, change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
+    // The band's tone comes from the same row of the same table: band, word and colour move together.
+    const tone = row.value ? fearGreedBucketTone(row.value.number) : undefined
+    const bandPart = band ? { text: `（${buckets[band]}）`, ...(tone && tone !== 'flat' ? { tone } : {}) } : undefined
+    if (!row.change) return { primary: level, ...(bandPart ? { band: bandPart } : {}), ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
+    return { primary: level, ...(bandPart ? { band: bandPart } : {}), change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
   return row.change
     ? { primary: level, change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: row.change.unit === 'points' ? 'percent' : row.change.unit }, locale)) }
@@ -144,6 +147,7 @@ function Figure({ row, text, locale, buckets, arrows }: Readonly<{
     <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
     {/* The level is never tinted: only a move is. */}
     <b>{cell.primary}</b>
+    {cell.band ? <small className="mi-brief-poster__figure-band" data-tone={cell.band.tone}>{cell.band.text}</small> : null}
     {cell.change ? <small className="mi-brief-poster__figure-change">
       {cell.change.window ? <span className="mi-brief-poster__figure-window">{cell.change.window}</span> : null}
       <b data-tone={cell.change.tone}>{`${cell.change.arrow ?? ''}${cell.change.text}`}</b>

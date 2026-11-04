@@ -113,3 +113,12 @@ describe('the amplitude label lives on the plot, not in the drawing', () => {
     expect(declaration(rule('.mi-brief-poster__price-lead'), 'justify-content')).toBe('center')
   })
 })
+
+describe('the fear-and-greed band word has its own tone', () => {
+  it('tints the judgement in the move palette, and nothing else', () => {
+    expect(declaration(rule(".mi-brief-poster__figure-band[data-tone='down']"), 'color')).toBe('#8f2a1d')
+    expect(declaration(rule(".mi-brief-poster__figure-band[data-tone='up']"), 'color')).toBe('#1f5b32')
+    // The cell itself still carries no tone: the score keeps the body ink.
+    expect(css.includes('.mi-brief-poster__figure[data-tone=')).toBe(false)
+  })
+})
