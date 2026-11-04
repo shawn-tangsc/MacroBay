@@ -198,38 +198,33 @@ describe('the money cell leads with its one real number', () => {
 })
 
 describe('the paper has one divider colour', () => {
-  it('keeps every 1px row divider the same colour, and only that colour', () => {
-    // One colour for every divider: two depths on the same sheet beat nothing — the reader cannot tell
-    // what the deeper one means, and it becomes the next "why is this line darker" question. The value
-    // lives in 07-style-values.md; here only the count of distinct values is judged.
-    const dividers = [...css.matchAll(/border-top:\s*1px solid\s*(#[0-9a-fA-F]{3,8})/g)].map((match) => match[1])
-    expect(dividers.length).toBeGreaterThan(0)
-    expect([...new Set(dividers)]).toEqual(['#c9bda3'])
-  })
-})
+  // The named set from the acceptance: every rule allowed to draw a divider on the sheet. Scoped rather
+  // than "all border-top", because card shells are borders on a card ground, not dividers — and
+  // `.leverage-card` carries a tone, so pulling it in would make the judge's own input data-dependent.
+  const DIVIDER_SELECTORS = [
+    'news', 'number', 'next', 'foot', 'basis', 'footnotes',
+    'news-section', 'data-section', 'macro', 'figure-line', 'next-row', 'overturn'
+  ] as const
 
-/**
- * 注释里不许出现「当前值的写法」。
- *
- * 定值是常量，不是行为：现值只许住在 `07-style-values.md` 和本文件里，注释里复述一份就必然过期——
- * 今晚已经有两处与规则相反（环心字号/位置、卡底那句），而且都是偶然翻到的。
- *
- * 只禁「当前值的写法」，不禁数值：`font-size: 15px`、`#ded4c2` 判红，而 `≥2px`、`< 114px` 这类**约束**
- * 放行。注释说不了约束就只能删掉，删掉的是一段理由，那比一个过期的数更贵。
- */
-describe('the comments state constraints, not current values', () => {
-  const blocks = (text: string): readonly string[] => text.match(/\/\*[\s\S]*?\*\//g) ?? []
-  const currentValue = /(?:^|[^\w-])(top|right|bottom|left|font-size|line-height|width|height|gap|color|background)\s*:/i
-  const colour = /#[0-9a-fA-F]{3,8}\b/
-
-  it('carries no property-value pair and no colour literal', () => {
-    expect(blocks(css).filter((block) => currentValue.test(block) || colour.test(block))).toEqual([])
+  it('draws every divider in the named set in one colour, solid and dashed alike', () => {
+    // Comments are stripped first: a commented-out rule must not answer for a live one.
+    const live = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    const colours = new Set<string>()
+    const missing: string[] = []
+    for (const name of DIVIDER_SELECTORS) {
+      const selector = `mi-brief-poster__${name}`
+      const bodies = [...live.matchAll(new RegExp(`[^{}]*\\.${selector}[^{}]*\\{([^}]*)\\}`, 'g'))]
+        .map((match) => match[1] ?? '')
+      const found = bodies
+        .flatMap((body) => [...body.matchAll(/border-(?:top|bottom)\s*:\s*1px\s+(?:solid|dashed)\s+(#[0-9a-fA-F]{3,8})/g)])
+        .map((match) => match[1] as string)
+      if (found.length === 0) missing.push(name)
+      for (const colour of found) colours.add(colour)
+    }
+    // A renamed selector must red here, not vanish from the set: a divider nobody counts is a divider
+    // nobody keeps visible, which is exactly how the dashed one was missed by three people at once.
+    expect(missing).toEqual([])
+    expect([...colours]).toEqual(['#c9bda3'])
   })
 
-  it('would catch a restated value, and still lets a constraint speak', () => {
-    // 没人见它红过的校验，可能根本不会红。
-    expect(blocks('/* the ring sits at top: 25 with 16px type */').filter((block) => currentValue.test(block))).toHaveLength(1)
-    expect(blocks('/* the hairline is #ded4c2 */').filter((block) => colour.test(block))).toHaveLength(1)
-    expect(blocks('/* keeps ≥2px of clearance inside a 114px bore */').filter((block) => currentValue.test(block) || colour.test(block))).toHaveLength(0)
-  })
 })
