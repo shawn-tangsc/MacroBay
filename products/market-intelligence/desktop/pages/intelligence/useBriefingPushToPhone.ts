@@ -42,6 +42,12 @@ export function useBriefingPushToPhone(input: Readonly<{
   /** Which issue of that day this is; the platform keys the notice by all three values. */
   periodId: string
   text: BriefingPushText
+  /**
+   * Bumped when the channel may have changed elsewhere — the settings drawer closing, the window
+   * regaining focus. Without it the answer read at mount is the answer forever: a reader who goes off
+   * to configure a channel comes back to a disabled button still claiming this build cannot send.
+   */
+  refreshKey?: number
 }>): BriefingPushToPhone {
   const [channel, setChannel] = useState<BriefingPushChannel>({ wired: undefined, name: undefined })
 
@@ -51,7 +57,7 @@ export function useBriefingPushToPhone(input: Readonly<{
       if (active) setChannel(answer)
     })
     return () => { active = false }
-  }, [])
+  }, [input.refreshKey])
 
   const document = input.document
   const edition: BriefingPushEdition | undefined = document === undefined

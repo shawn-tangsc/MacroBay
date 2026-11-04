@@ -374,7 +374,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     generating,
     localeMissing: view.status === 'locale-missing',
     periodId: editions.find((row) => row.date === readyDocument?.edition.date)?.periodId ?? DEFAULT_PERIOD_ID,
-    text: briefingPushText[locale]
+    text: briefingPushText[locale],
+    // The channel is configured somewhere else (that drawer, or the platform's own settings). Re-read
+    // when it may have changed, or the button keeps the verdict it formed at mount.
+    refreshKey: settingsReloadKey
   })
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.

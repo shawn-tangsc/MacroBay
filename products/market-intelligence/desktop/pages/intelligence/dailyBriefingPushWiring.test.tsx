@@ -115,9 +115,14 @@ describe('the push copy', () => {
   })
 
   it('names the button after what it does, and gives one sentence to one situation', () => {
-    // 按钮要读者一眼认得出是做啥：「推送到手机」，不是「发布频道」这种要猜的词。
-    expect(briefingPushText['zh-CN'].button).toBe('推送到手机')
-    expect(briefingPushText['en-US'].button).toBe('Send to phone')
+    // 这颗按钮的动作是"把这一期发到读者的频道"，不是"发送到手机"：手机只是其中一个通道。
+    expect(briefingPushText['zh-CN'].button).toBe('发布频道')
+    expect(briefingPushText['en-US'].button).toBe('Publish to channel')
+    // 换动词不等于对方收到：失败那句只改动词，成功那句仍是"已交给 {channel}"。
+    expect(briefingPushText['zh-CN'].failedTitle).toBe('没发布出去')
+    expect(briefingPushText['en-US'].failedTitle).toBe('Not published')
+    expect(briefingPushText['zh-CN'].sentAccepted).toBe('已交给 {channel}')
+    expect(briefingPushText['zh-CN'].sentUnconfirmed).toBe('已交给 {channel}（未拿到回执）')
     // 版次不符与「没有同键记录」是同一件事（读者眼前这一版不在通知里），一句就够；
     // 两句分开写，读者会以为是两种毛病。
     expect(briefingPushText['zh-CN'].failed['edition-mismatch']).toBe('这一版还没进通知，先重新生成再看')

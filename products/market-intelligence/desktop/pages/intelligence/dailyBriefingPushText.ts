@@ -36,13 +36,13 @@ export type BriefingPushFailureKey =
 export type BriefingPushDisabledKey = 'generating' | 'no-edition' | 'missing-locale' | 'capability'
 
 const zh: BriefingPushText = {
-  button: '推送到手机',
-  sending: '正在推送…',
+  button: '发布频道',
+  sending: '正在发布…',
   retry: '重试',
   sentAccepted: '已交给 {channel}',
   sentUnconfirmed: '已交给 {channel}（未拿到回执）',
   channelUnknown: '推送通道',
-  failedTitle: '没发出去',
+  failedTitle: '没发布出去',
   failed: {
     // 读者能做的动作写进句子：去频道页启用一条，而不是一句「未配置」。
     'channel-not-configured': '还没有可用的频道，先到「频道」启用一条',
@@ -67,13 +67,13 @@ const zh: BriefingPushText = {
 }
 
 const en: BriefingPushText = {
-  button: 'Send to phone',
-  sending: 'Sending…',
+  button: 'Publish to channel',
+  sending: 'Publishing…',
   retry: 'Retry',
   sentAccepted: 'Handed to {channel}',
   sentUnconfirmed: 'Handed to {channel} (no receipt received)',
   channelUnknown: 'the push channel',
-  failedTitle: 'Not sent',
+  failedTitle: 'Not published',
   failed: {
     'channel-not-configured': 'No channel is available yet; enable one in Channels',
     'channel-disconnected': 'Cannot reach {channel} over the network',

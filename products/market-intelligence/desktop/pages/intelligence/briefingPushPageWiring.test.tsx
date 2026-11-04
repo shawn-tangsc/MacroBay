@@ -32,13 +32,15 @@ function Row(input: Readonly<{
   edition?: DailyBriefingDocument
   generating?: boolean
   localeMissing?: boolean
+  refreshKey?: number
 }>): React.ReactElement {
   const push = useBriefingPushToPhone({
     document: input.edition,
     generating: input.generating ?? false,
     localeMissing: input.localeMissing ?? false,
     periodId: 'default',
-    text: zh
+    text: zh,
+    ...(input.refreshKey === undefined ? {} : { refreshKey: input.refreshKey })
   })
   return <DailyBriefingPageActions
     text={text} resolveText={(key) => key} progress={undefined} loading={false}
@@ -165,6 +167,24 @@ describe('the publish control on the page', () => {
       editionId: '2026-11-05:en-US:default',
       locale: 'en-US'
     })
+  })
+
+  it('re-reads the channel when it may have been configured elsewhere', async () => {
+    // 读者跑去配通道再回来：按钮不能永远带着挂载时那个「这个版本推不了」的结论。
+    getDeliverySettings.mockResolvedValue({ pushWired: false, channels: [] })
+    render(<Row edition={document()} />)
+    await act(async () => { await Promise.resolve() })
+    expect(button().disabled).toBe(true)
+    expect(container.textContent).toContain(zh.disabled.capability)
+
+    getDeliverySettings.mockResolvedValue({ pushWired: true, channels: [{ id: 'c1', name: '贾维斯', deliverable: true }] })
+    render(<Row edition={document()} refreshKey={1} />)
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+    expect(getDeliverySettings).toHaveBeenCalledTimes(2)
+    expect(button().disabled).toBe(false)
+
+    await push()
+    expect(container.textContent).toContain('已交给 贾维斯')
   })
 
   it('keeps the button pressable when the platform never says a channel is missing', async () => {
