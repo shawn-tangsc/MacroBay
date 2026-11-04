@@ -13,6 +13,7 @@ import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLoca
 import type { DailyBriefingSource, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
+import { readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
 import {
   collectAnalysisPriorConclusions,
@@ -69,7 +70,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
+        safe(() => readBriefingMarketSnapshot(deps.publicQuery, input.asOf), undefined),
         buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)

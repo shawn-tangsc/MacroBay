@@ -12,9 +12,15 @@
  *
  * Waiting happens before the attempt row is opened, so a wait leaves no half-run behind.
  */
+import { briefingLateDataGraceMs, briefingMarketReady, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
+
 export const dailyBriefReadinessPolicy = Object.freeze({
   pollMs: 30_000,
-  budgetMs: 15 * 60_000
+  /**
+   * The wait is exactly the late-data grace: one number, so the gate cannot let go before the data it
+   * is waiting for would still count, and cannot hold longer than the edition accepts.
+   */
+  budgetMs: briefingLateDataGraceMs
 })
 
 /** What the run can tell the reader while it waits: how long, and how many times it asked. */
@@ -100,7 +106,7 @@ export function createDailyBriefReadiness(deps: Readonly<{
   budgetMs?: number
 }>): DailyBriefReadiness {
   const gate = createDailyBriefReadinessGate({
-    ready: async (asOf) => crossAssetQuotesReady(await deps.readSnapshot(asOf)),
+    ready: async (asOf) => briefingMarketReady(await deps.readSnapshot(asOf)),
     sleep: deps.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),
@@ -130,7 +136,7 @@ export async function awaitDailyBriefReadiness(
  * — but it is the one line an operator needs to find when a morning looks thin.
  */
 export function createDailyBriefReadinessFor(reader: Readonly<{
-  queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
+  queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt?: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
   /** Why the last cross-asset read failed, when it did; the probe's own record of "not available". */
   getCrossAssetQueryFailure?: () => unknown
 }>): DailyBriefReadiness {
@@ -139,7 +145,9 @@ export function createDailyBriefReadinessFor(reader: Readonly<{
     // Every probe says what it asked for and what came back: "waiting for the market" that nobody can
     // audit is how a run spends fifteen minutes for a reason no one can name afterwards.
     readSnapshot: async (asOf) => {
-      const snapshot = await reader.queryCrossAssetSnapshot({ range: '24h', asOf })
+      // The body's own read, late-data grace included: the gate must ask exactly the question the
+      // generation will ask, or it can report ready while the real read still fails.
+      const snapshot = await readBriefingMarketSnapshot(reader, asOf)
       console.log(JSON.stringify({
         marker: 'MI_DAILY_BRIEF_READINESS_PROBE',
         asOf,
@@ -151,6 +159,10 @@ export function createDailyBriefReadinessFor(reader: Readonly<{
       }))
       return snapshot
     },
-    onTimeout: (info) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', ...info }))
+    onTimeout: (info) => {
+      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CORE_FACTS_NOT_READY', ...info }))
+      // How late the data actually is, so an operator can tell a slow source from a broken one.
+      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_LATE_DATA_EXCEEDED', lateMinutes: Math.round(info.waitedMs / 60_000) }))
+    }
   })
 }

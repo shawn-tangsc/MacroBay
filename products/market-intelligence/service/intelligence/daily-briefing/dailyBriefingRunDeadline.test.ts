@@ -32,6 +32,6 @@ describe('one run has a caller deadline', () => {
   it('bounds the wait above the sum of the parts it covers', () => {
     // Fifteen minutes of readiness plus five of generation plus a minute of margin: the deadline may
     // only fire when every part has already passed its own budget.
-    expect(DAILY_BRIEF_RUN_DEADLINE_MS).toBe(900_000 + 300_000 + 60_000)
+    expect(DAILY_BRIEF_RUN_DEADLINE_MS).toBe(1_800_000 + 300_000 + 60_000)
   })
 })

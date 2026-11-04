@@ -38,9 +38,11 @@ export function withCoreFactsNotReadyGap(
 ): DailyBriefingDocument {
   if (!document.conclusion) return document
   const minutes = Math.max(1, Math.round(wait.waitedMs / 60_000))
+  // The sentence names the policy, not just the wait: the reader has to know the edition was still
+  // published as of its cutoff, and that data arriving after that is a different edition's business.
   const sentence = locale === 'en-US'
-    ? `Core market data was not ready: waited ${minutes} min (${wait.polls} probes) for BTC/ETH prices.`
-    : `核心行情未就绪：等待 ${minutes} 分钟（探测 ${wait.polls} 次）仍读不到 BTC/ETH 报价。`
+    ? `Core market data still missing after the ${minutes}-minute late-data grace: published as of the cutoff (${wait.polls} probes).`
+    : `截止后 ${minutes} 分钟仍缺核心行情：按截止时点发布（探测 ${wait.polls} 次）。`
   const gaps = document.conclusion.dataGaps
   if (gaps.includes(sentence)) return document
   return Object.freeze({

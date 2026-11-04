@@ -104,7 +104,12 @@ export type CrossAssetRange = typeof crossAssetContractPolicy.ranges[number]
  * market did, not what this machine had already downloaded at minute +35. Such readers ask for `latest`.
  */
 export type CrossAssetKnowledge = 'as-of' | 'latest'
-export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge }
+/**
+ * `knowledgeAt` is the version cutoff on its own, when "as of the window end" and "as of now" are both
+ * wrong: a reading that must admit what arrived *shortly after* its window end, but not what arrived
+ * hours later. The window still ends at `asOf`; only "when did we know it" moves.
+ */
+export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge; knowledgeAt?: string }
 export type CrossAssetInput = Record<string, never> | { leaseId: string } | CrossAssetQueryInput
 export type CrossAssetId = typeof crossAssetContractPolicy.assets[number]
 export type CrossAssetMacroProxyId = typeof crossAssetContractPolicy.macroProxies[number]
@@ -187,18 +192,28 @@ export function parseCrossAssetInput(method: string, value: unknown, nowMs: numb
         policy.leaseIdPattern.test(value.leaseId) ? { leaseId: value.leaseId } : undefined
     }
     if (method !== crossAssetMethods.query || !keys.includes('range') ||
-      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge') ||
+      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge' && key !== 'knowledgeAt') ||
       !policy.ranges.includes(value.range as CrossAssetRange)) return
     const range = value.range as CrossAssetRange
     const knowledge = value.knowledge
     if (knowledge !== undefined && knowledge !== 'as-of' && knowledge !== 'latest') return
     // A version rule only means something next to a window end; without `asOf` the query is current and
     // already reads the newest version of everything.
-    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined ? { range } : undefined
+    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined && value.knowledgeAt === undefined ? { range } : undefined
     const asOf = value.asOf
     if (typeof asOf !== 'string' || !policy.canonicalUtcPattern.test(asOf) || !Number.isFinite(Date.parse(asOf)) ||
       new Date(asOf).toISOString() !== asOf || Date.parse(asOf) > nowMs) return
-    return knowledge === undefined ? { range, asOf } : { range, asOf, knowledge }
+    const knowledgeAt = value.knowledgeAt
+    // A version cutoff with no window end has nothing to be the cutoff *of*, and it may not run ahead
+    // of what this process can know either.
+    if (knowledgeAt !== undefined && (typeof knowledgeAt !== 'string' || !policy.canonicalUtcPattern.test(knowledgeAt) ||
+      !Number.isFinite(Date.parse(knowledgeAt)) || new Date(knowledgeAt).toISOString() !== knowledgeAt ||
+      Date.parse(knowledgeAt) > nowMs || Date.parse(knowledgeAt) < Date.parse(asOf))) return
+    return {
+      range, asOf,
+      ...(knowledge === undefined ? {} : { knowledge }),
+      ...(knowledgeAt === undefined ? {} : { knowledgeAt })
+    }
   } catch { return }
 }
 

@@ -118,7 +118,12 @@ export function createCrossAssetSnapshotQuery(deps: {
        * ingested by the next poll, so asking "what was known at +35" routinely loses the right end, and
        * a window backfilled after downtime is invisible in its entirety.
        */
-      const knowledgeMs = input.knowledge === 'latest' ? now : asOfMs
+      // `knowledgeAt` names the version cutoff on its own: the window still ends at `asOf`, but the
+      // read admits what had arrived by that later instant. It exists for readings that must include
+      // a poll landing shortly after their window end, without admitting the rest of the day.
+      const knowledgeMs = input.knowledgeAt
+        ? Date.parse(input.knowledgeAt)
+        : input.knowledge === 'latest' ? now : asOfMs
       const end = Math.floor(asOfMs / crossAssetPolicy.intervalMs) * crossAssetPolicy.intervalMs
       const feedState: CrossAssetIndexFeedState = deps.indexFeed?.().state ?? 'pending'
       // The live runtime state is read once, and only for a current snapshot: a historical observation
