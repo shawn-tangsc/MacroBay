@@ -63,22 +63,16 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   })
 
 describe('daily briefing history rail', () => {
-  it('keeps the meta in unbreakable facts and leaves the attempt count to the list', () => {
-    render({ editions: [edition({ attemptCount: 2 })] })
+  it('prints the two clocks with their labels, and the item count as its own fact', () => {
+    render({ editions: [edition({ attemptCount: 2, periodTime: '2026-11-02T00:00:00.000Z' })] })
     const meta = host.querySelector('.mi-daily-briefing__rail-meta')
-    expect(meta?.textContent).toContain('4')
-    expect(meta?.textContent).toContain('项')
-    // "/4" and the word "生成" are the two things this row no longer says.
+    // A9.10: two clocks are both labelled, nominal first.
+    expect(meta?.textContent).toContain(`${text.history.timePlanned} 08:00`)
+    expect(meta?.textContent).toContain(`${text.history.timeActual} 08:00`)
     expect(meta?.textContent).not.toContain('/4')
-    expect(meta?.textContent).not.toContain('生成')
-    // Only the count and the clock: the date is already on the row's first line, the offset belongs
-    // to the settings page — repeating them here is what made the row read as crowded.
-    expect(meta?.textContent).not.toContain('2026-11-02')
     expect(meta?.textContent).not.toContain('GMT')
-    expect(meta?.textContent).toContain('08:00')
-    // The row is the clock and the item count; the attempt trail lives in the detail column, so a row
-    // here carries no expander and no count.
-    expect(meta?.textContent).not.toContain(text.history.attempts.times)
+    // The item count is a row fact, not part of the clock run.
+    expect(host.textContent).toContain(`4 ${text.readingsUnit}`)
     expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
   })
 
@@ -90,32 +84,39 @@ describe('daily briefing history rail', () => {
       edition({ date: '2026-11-01', direction: undefined })
     ] })
     expect(host.textContent).toContain(`${text.history.missingRun} · 08:00`)
+    // Past days start collapsed: expand the day before reading its rows.
+    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-10-28')!
+    act(() => pastHead.click())
     const past = host.querySelector('[data-date="2026-10-28"]')?.closest('.mi-daily-briefing__rail-item')
     expect(past?.textContent).toContain(text.history.missingRun)
-    expect(past?.textContent).not.toContain('08:00')
+    // A9.9: a day that did not run still names its time once — the row has no body to show instead.
+    expect(past?.textContent).toContain('08:00')
     // The missing row no longer repeats "not generated" and "app was not running" together.
     expect(host.textContent).not.toContain(`${text.history.missingRun}${text.history.generated}`)
     // A row without a verdict shows a dot; the word is only in the accessible name.
+    const head = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+      .find((node) => node.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!
+    act(() => head.click())
     const dot = host.querySelector('.mi-daily-briefing__rail-direction--none')
     expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)
     expect(host.textContent).not.toContain(text.history.noConclusion)
   })
 
-  it('names which languages an issue has, as a read-only tag', () => {
+  it('names each language the issue actually has, as a chip per language', () => {
     render({ editions: [
-      edition({ date: '2026-10-30', availableLocales: ['zh-CN'] }),
+      edition({ availableLocales: ['zh-CN'] }),
       edition({ date: '2026-10-29', availableLocales: ['en-US'] }),
       edition({ date: '2026-10-28', availableLocales: ['zh-CN', 'en-US'] }),
       edition({ date: '2026-10-27', state: 'missing', availableLocales: [], generatedAt: undefined })
     ] })
-    const tags = [...host.querySelectorAll<HTMLElement>('[data-edition-languages]')]
-
-    expect(tags.map((tag) => tag.getAttribute('data-edition-languages'))).toEqual(['zh', 'en', 'both'])
-    expect(tags[2].textContent).toBe(text.history.editionLanguages.both)
-    // A fact, not a control: nothing here is focusable, so the row keeps one Tab stop.
-    expect(tags.every((tag) => !tag.hasAttribute('tabindex'))).toBe(true)
-    // A day without an edition has nothing to name.
-    expect(host.querySelector('[data-date="2026-10-27"]')?.closest('.mi-daily-briefing__rail-item')?.querySelector('[data-edition-languages]')).toBeNull()
+    // Only today is open by default; the other days are headings with their issue count.
+    const todayChips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')].map((chip) => chip.getAttribute('data-edition-locale'))
+    expect(todayChips).toEqual(['zh-CN'])
+    const heads = [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-count')].map((node) => node.textContent)
+    expect(heads).toEqual(['共 1 期', '共 1 期', '共 1 期', '共 1 期'])
+    // A day without an edition has no language to name.
+    expect(host.querySelector('[data-day="2026-10-27"]')).not.toBeNull()
   })
 
   it('says a failed run on the row, without a count and without the reason', () => {
@@ -129,14 +130,23 @@ describe('daily briefing history rail', () => {
     expect(row.textContent).not.toContain(text.history.missingRun)
   })
 
-  it('keeps one row per issue and offers no language switch of its own', () => {
-    // Contract change: the edition language is chosen from the top tab, so a row that had two
-    // languages no longer renders a pair of buttons.
+  it('keeps one row per issue and puts the language choice on the row', () => {
+    // The top tab is gone (A6.1); the row carries one chip per language, and a chip is the control.
     const onSelect = vi.fn()
-    render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })], onSelect })
+    const onSelectLocale = vi.fn()
+    render({
+      editions: [edition({ availableLocales: ['zh-CN', 'en-US'], languages: [
+        { locale: 'zh-CN', state: 'published' }, { locale: 'en-US', state: 'published' }
+      ], locale: 'zh-CN' })],
+      selectedDate: '2026-11-02', onSelect, onSelectLocale
+    })
     expect(host.querySelectorAll('.mi-daily-briefing__rail-item')).toHaveLength(1)
     expect(host.querySelectorAll('[data-locale]')).toHaveLength(0)
-    expect(host.querySelectorAll('.mi-daily-briefing__rail-lang')).toHaveLength(0)
+    const chips = [...host.querySelectorAll<HTMLButtonElement>('[data-edition-locale]')]
+    expect(chips.map((chip) => chip.getAttribute('data-edition-locale'))).toEqual(['zh-CN', 'en-US'])
+    expect(chips[0].getAttribute('aria-pressed')).toBe('true')
+    act(() => chips[1].click())
+    expect(onSelectLocale).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'en-US' })
 
     act(() => host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.click())
     expect(onSelect).toHaveBeenCalledWith('2026-11-02')
@@ -205,7 +215,7 @@ describe('daily briefing history rail', () => {
     render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })] })
     const tag = host.querySelector('[data-briefing-locale-tag]')
     expect(tag).not.toBeNull()
-    expect(tag?.textContent).toBe(text.history.editionLanguages.both)
+    expect(tag?.getAttribute('data-briefing-locale-tag')).toBe('both')
 
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
     expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(0)
@@ -223,7 +233,7 @@ describe('daily briefing history rail', () => {
     render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 3, resolveText: (key: string) => key })
     const withGaps = host.querySelector('[data-briefing-gap-count]')
     expect(withGaps?.getAttribute('data-briefing-gap-count')).toBe('3')
-    expect(host.querySelectorAll('.mi-daily-briefing__rail-sep')).toHaveLength(2)
+    expect(host.textContent).toContain(text.history.gapCount.replace('{count}', '3'))
 
     render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 0, resolveText: (key: string) => key })
     expect(host.querySelector('[data-briefing-gap-count]')).toBeNull()

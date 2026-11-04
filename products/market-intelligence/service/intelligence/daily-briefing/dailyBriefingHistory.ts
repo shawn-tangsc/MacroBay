@@ -176,7 +176,9 @@ async function summaryOfPeriod(period: PeriodRows, input: Readonly<{
     ...(shown ? {
       generatedAt: shown.generatedAt,
       ...(shown.document.conclusion ? { direction: shown.document.conclusion.direction } : {}),
-      ...(shown.document.lede.text ? { summaryLine: shown.document.lede.text.slice(0, 80) } : {}),
+      // The full title, never a slice: the row clamps to two lines in CSS and the tooltip shows the
+      // whole sentence. Truncating here would make the clamp permanent and the copy wrong.
+      ...(shown.document.lede.text ? { summaryLine: shown.document.lede.text } : {}),
       readingsAvailable: shown.document.status.readingsAvailable,
       windowEnd: shown.windowEnd
     } : {})

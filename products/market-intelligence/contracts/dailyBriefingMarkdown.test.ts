@@ -341,3 +341,14 @@ describe('one number, one place', () => {
     expect(occurrences('dailyBriefing.row.funding-btc')).toBe(0)
   })
 })
+
+describe('the copied text carries the whole title', () => {
+  it('writes the lede in full, with no ellipsis', () => {
+    const long = 'Stablecoin contraction keeps the read defensive across every venue the desk covers today, and the funding leg still leans short'
+    const markdown = dailyBriefingToMarkdown(document({ lede: { source: 'template', text: long, generatedAt: '2026-10-30T00:30:00.000Z' } }), options)
+    // The export image may clamp to two lines (a separate implementation-period item); the copied
+    // text is the full sentence, and it must not arrive pre-truncated.
+    expect(markdown).toContain(long)
+    expect(markdown).not.toContain(`${long.slice(0, 40)}…`)
+  })
+})

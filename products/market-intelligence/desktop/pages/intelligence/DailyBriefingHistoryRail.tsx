@@ -1,54 +1,73 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
 import { ContextMenu, type MenuAnchor } from '@platform/ui/components/menu'
-import { LoadingState } from '@platform/ui/components/loading'
+import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
-import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import type {
+  DailyBriefingEditionLanguage,
+  DailyBriefingEditionSummary,
+  DailyBriefingLocale
+} from '../../../contracts/dailyBriefing'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
+/** Which edition is on screen: one identity, shared by the rail and the page. */
+export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
+
 /**
- * The history rail: one row per (day, issue), the languages of that issue switching in place.
+ * The history rail: one section per day, one row per issue of that day.
  *
- * The grouping is done by the service — this component never decides which rows belong together,
- * which languages an issue has, or whether an issue is incomplete. It renders what the list says;
- * the attempt trail belongs to the edition on screen and lives in the detail column, so a row here
- * stays one line of facts.
+ * The list projection decides everything the row draws — the day's issues, their order, the
+ * per-language three-state, the current edition and the deleted mark. This component groups by the
+ * date it was given and renders those conclusions; it does not re-sort, re-derive a language state,
+ * or invent a missing one.
  */
-export function DailyBriefingHistoryRail({ editions, failed = false, loading = false, onRetry, selectedDate, todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, gapCount, onDeletePeriod }: Readonly<{
+export function DailyBriefingHistoryRail({
+  editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
+  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, gapCount, onDeletePeriod
+}: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
-  /** True until the list has been read once: an empty rail then means "not read yet", not "none". */
   loading?: boolean
-  /** True when the read itself failed: an empty rail then means "could not read", not "none". */
   failed?: boolean
-  /** Reads the list again; only used by the failure state. */
   onRetry?: () => void
   selectedDate?: string
+  selectedPeriodId?: string
+  selectedLocale?: DailyBriefingLocale
   todayDate: string
   locale: DailyBriefingLocale
   text: DailyBriefingText
-  /** The reader's display zone; the row shows only HH:mm, so the date and the offset stay out. */
   timeZone: string
-  /** Set while today's edition is being generated, so the rail never says "not generated" then. */
   generatingStage?: string
-  /** Product text resolver for the status pill's key; absent means no pill. */
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
-  /** Gaps of the issue on screen, from the same list the rail's own gap block uses; 0 hides it. */
+  /** Picking a language badge selects that edition; absent keeps the badges read-only. */
+  onSelectLocale?: (selection: BriefingRailSelection) => void
   gapCount?: number
-  /** 删除某一天的一版；缺省时菜单项仍在但点了不做任何事（由宿主决定能不能删）。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
-  // The row menu: opened by right-click or by Shift+F10 / the menu key, and focus returns to the row.
   const confirm = useConfirm()
   const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; anchor: MenuAnchor }> | null>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
   const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void => setMenu({ date: edition.date, periodId: edition.periodId, anchor })
-  // One row for every edition this issue really has. A language it does not have is not offered:
-  // offering it produced "deleted the Chinese edition" for an issue with only an English one.
-  const menuRow = menu ? editions.find((edition) => edition.date === menu.date) : undefined
+  // Today opens by default; every other day starts collapsed. Collapsing today is remembered, and
+  // opening a past day is remembered too — the reader's shape of the list is not reset by a reload.
+  const [closedToday, setClosedToday] = useState(false)
+  const [openDays, setOpenDays] = useState<ReadonlySet<string>>(new Set())
+  const isOpen = (date: string): boolean => date === todayDate ? !closedToday : openDays.has(date)
+
+  const days = useMemo(() => {
+    const order: string[] = []
+    const rows = new Map<string, DailyBriefingEditionSummary[]>()
+    for (const edition of editions) {
+      if (!rows.has(edition.date)) { rows.set(edition.date, []); order.push(edition.date) }
+      rows.get(edition.date)!.push(edition)
+    }
+    return order.map((date) => ({ date, rows: rows.get(date)! }))
+  }, [editions])
+
+  const menuRow = menu ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId) : undefined
   const menuLanguages = [...(menuRow?.availableLocales ?? [])]
   const blocked = Boolean(menu && menu.date === todayDate && generatingStage)
   const menuItems = blocked
@@ -57,10 +76,19 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
       ? [{ key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
       : menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))
   const closeMenu = (): void => {
-    const date = menu?.date
+    const key = menu ? `${menu.date}:${menu.periodId}` : undefined
     setMenu(null)
-    if (date) rowRefs.current.get(date)?.focus()
+    if (key) rowRefs.current.get(key)?.focus()
   }
+
+  const rowSelected = (edition: DailyBriefingEditionSummary): boolean => {
+    if (selectedDate === undefined) return false
+    if (edition.date !== selectedDate) return false
+    // The day alone used to be the selection; a period-aware selection is stricter when it is known.
+    if (selectedPeriodId === undefined) return true
+    return edition.periodId === selectedPeriodId
+  }
+
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
     {loading && editions.length === 0 ? <LoadingState label={text.history.loading} /> : failed && editions.length === 0 && onRetry ? <StateView
@@ -78,83 +106,90 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
         resolve: (key, params) => resolveBriefingStateReason(text, key, params)
       }}
     /> : null}
-    <div role="list" className="mi-daily-briefing__rail-list">
-      {editions.map((edition) => {
-        const missing = edition.state === 'missing'
-        // One row is one issue, whatever language of it is on screen: the row stays current when the
-        // reader switches language in place, and the pressed language follows what is shown.
-        const selected = edition.date === selectedDate
-        const key = `${edition.date}:${edition.periodId}:${edition.locale}`
-        return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
-          {/* A day with no edition can still be selected: the pane then says whether it never ran
-              or failed, which is exactly what the rail's one word cannot carry. */}
-          <button type="button"
-            aria-current={selected ? 'true' : undefined}
-            data-date={edition.date} data-state={edition.state}
-            className="mi-daily-briefing__rail-row"
-            ref={(node) => { if (node) rowRefs.current.set(edition.date, node) }}
-            onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
-            onKeyDown={(event) => {
-              // Shift+F10 and the dedicated menu key are the keyboard equivalents of right-click.
-              if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
-              event.preventDefault()
-              const rect = event.currentTarget.getBoundingClientRect()
-              openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
-            }}
-            onClick={() => onSelect(edition.date)}>
-            <span className="mi-daily-briefing__rail-line">
-              <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
-              {/* The current issue, not the calendar day: before the generation hour this row is
-                  still yesterday's date, so calling it "today" would mislead the reader. */}
-              {edition.date === todayDate ? <em data-current-period="true">{text.history.currentPeriod}</em> : null}
-              {edition.state === 'partial' && resolveText
-                ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
-                : null}
-            </span>
-            {missing ? <small className="mi-daily-briefing__rail-missing">{
-              // Four states, one line each: a run in flight names its stage; a run that failed says
-              // so (its reason lives in the attempt list); a day that did not run says only that.
-              edition.date === todayDate && generatingStage
-                ? `${text.generationProgress.railRunning} · ${generatingStage}`
-                : edition.attemptCount
-                  ? `${text.history.generationFailed}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
-                  : `${text.history.missingRun}${edition.date === todayDate && edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
-            }</small> : <>
-              {edition.direction
-                // A direction, when present, is the row's word; when absent the dot alone carries
-                // it, with the word for screen readers instead of repeating "no conclusion" daily.
-                ? <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction}>{localizedDirectionTerm(edition.direction, locale)}</span>
-                : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
-              {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
-              <small className="mi-daily-briefing__rail-meta">
-                {edition.date === todayDate && generatingStage
-                  ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
-                  : <>
-                {/* Segments never break mid-word: the width is the fix, these keep each fact whole.
-                    A count nobody recorded is not zero: print it only when the list carries one. */}
-                {typeof edition.readingsAvailable === 'number' && edition.readingsAvailable > 0
-                  ? <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable} {text.readingsUnit}</span>
-                  : null}
-                {edition.generatedAt ? <>
-                  <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
-                  <span className="mi-daily-briefing__rail-fact">{railClock(edition.generatedAt, timeZone)}</span>
-                </> : null}
-                {/* The gap count is a separate fact from the item count, and only shown when it is
-                    not zero: "4 items" beside three dashes is exactly what misleads a reader. */}
-                {edition.date === selectedDate && gapCount !== undefined && gapCount > 0 ? <>
-                  <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
-                  <span className="mi-daily-briefing__rail-fact" data-briefing-gap-count={gapCount}>{text.history.gapCount.replace('{count}', String(gapCount))}</span>
-                </> : null}
-                  </>}
-              </small>
-              {/* Read-only fact about this issue, not a control: it stays flat and out of Tab order. */}
-              {languageTag(edition.availableLocales) ? <span className="mi-daily-briefing__rail-edition-lang" data-briefing-locale-tag="true" data-edition-languages={languageTag(edition.availableLocales)}>
-                {text.history.editionLanguages[languageTag(edition.availableLocales)!]}
-              </span> : null}
-            </>}
-          </button>
-        </div>
-      })}
+    <div className="mi-daily-briefing__rail-list">
+      {days.map((day) => <section className="mi-daily-briefing__rail-day" key={day.date} data-day={day.date}>
+        <button type="button" className="mi-daily-briefing__rail-day-head" aria-expanded={isOpen(day.date)}
+          onClick={() => { day.date === todayDate ? setClosedToday((current) => !current) : setOpenDays((current) => {
+            const next = new Set(current)
+            if (next.has(day.date)) next.delete(day.date); else next.add(day.date)
+            return next
+          }) }}>
+          <span className="mi-daily-briefing__rail-day-date">{formatDate(day.date, locale)}</span>
+          {day.date === todayDate ? <em data-current-period="true">{text.history.currentPeriod}</em> : null}
+          {/* The count stays on the head even when collapsed (A5.2). */}
+          <span className="mi-daily-briefing__rail-day-count" data-day-count={day.rows.length}>
+            {text.history.periodCount.replace('{count}', String(day.rows.length))}
+          </span>
+        </button>
+        {isOpen(day.date) ? <div role="list" className="mi-daily-briefing__rail-day-rows">
+          {day.rows.map((edition) => {
+            const missing = edition.state === 'missing'
+            const selected = rowSelected(edition)
+            const key = `${edition.date}:${edition.periodId}`
+            const active = renderedLanguages(edition).length > 0 || missing
+            return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
+              <button type="button"
+                aria-current={selected ? 'true' : undefined}
+                data-date={edition.date} data-state={edition.state} data-period-id={edition.periodId}
+                className="mi-daily-briefing__rail-row"
+                ref={(node) => { if (node) rowRefs.current.set(key, node) }}
+                onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
+                onKeyDown={(event) => {
+                  if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
+                  event.preventDefault()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
+                }}
+                onClick={() => onSelect(edition.date)}>
+                <span className="mi-daily-briefing__rail-line">
+                  {edition.isCurrent ? <em data-is-current="true">{text.history.currentPeriod}</em> : null}
+                  {edition.periodDeleted ? <small className="mi-daily-briefing__rail-deleted" data-period-deleted="true">{text.history.deletedPeriod}</small> : null}
+                  {edition.state === 'partial' && resolveText
+                    ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
+                    : null}
+                </span>
+                {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>{renderedLanguages(edition).map((language) => <LanguageBadge
+                  key={language.locale} language={language} text={text} locale={locale}
+                  selected={edition.date === selectedDate && language.locale === (selectedLocale ?? edition.locale)}
+                  {...(onSelectLocale ? { onSelect: () => onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: language.locale }) } : {})}
+                />)}</span> : null}
+                <small className="mi-daily-briefing__rail-meta">
+                  {edition.date === todayDate && generatingStage
+                    ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
+                    : <>
+                      {timeFacts(edition, text, timeZone).map((fact, index) => <span key={`${fact}-${index}`} className="mi-daily-briefing__rail-fact">{fact}</span>)}
+                      {typeof edition.windowHours === 'number'
+                        ? <span className="mi-daily-briefing__rail-fact" data-window-hours={edition.windowHours}>{text.history.windowHoursShort.replace('{hours}', String(edition.windowHours))}</span>
+                        : null}
+                    </>}
+                </small>
+                {missing ? <small className="mi-daily-briefing__rail-missing" data-run-reason={runReasonOf(edition) ?? 'not-run'}>{
+                  edition.date === todayDate && generatingStage
+                    ? `${text.generationProgress.railRunning} · ${generatingStage}`
+                    : runReasonOf(edition) === 'run-interrupted' ? text.history.runInterrupted
+                      : runReasonOf(edition) === 'run-failed' ? text.history.runFailed
+                        : edition.attemptCount ? `${text.history.generationFailed}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
+                          : `${text.history.missingRun}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
+                }</small> : <>
+                  {edition.direction
+                    ? <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction}>{localizedDirectionTerm(edition.direction, locale)}</span>
+                    : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
+                  {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
+                  {edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
+                    ? <small className="mi-daily-briefing__rail-run-trigger" data-run-trigger={edition.runTrigger}>{text.history.runCatchUp}</small>
+                    : null}
+                  {typeof edition.readingsAvailable === 'number' && edition.readingsAvailable > 0
+                    ? <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable} {text.readingsUnit}</span>
+                    : null}
+                  {edition.date === selectedDate && (selectedPeriodId === undefined || selectedPeriodId === edition.periodId) && gapCount !== undefined && gapCount > 0
+                    ? <span className="mi-daily-briefing__rail-fact" data-briefing-gap-count={gapCount}>{text.history.gapCount.replace('{count}', String(gapCount))}</span>
+                    : null}
+                </>}
+              </button>
+            </div>
+          })}
+        </div> : null}
+      </section>)}
     </div>
     <ContextMenu
       anchor={menu?.anchor ?? null}
@@ -181,6 +216,53 @@ export function DailyBriefingHistoryRail({ editions, failed = false, loading = f
       resolveText={resolveText ?? (() => '')}
     />
   </aside>
+}
+
+/** The per-language chips, from the projection's three-state; absent falls back to published rows. */
+function renderedLanguages(edition: DailyBriefingEditionSummary): readonly DailyBriefingEditionLanguage[] {
+  return edition.languages ?? edition.availableLocales.map((locale) => Object.freeze({ locale, state: 'published' as const }))
+}
+
+function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
+  return (edition.languages ?? []).find((language) => language.reason !== undefined)?.reason
+}
+
+function LanguageBadge({ language, text, locale, selected, onSelect }: Readonly<{
+  language: DailyBriefingEditionLanguage
+  text: DailyBriefingText
+  locale: DailyBriefingLocale
+  selected: boolean
+  onSelect?: () => void
+}>): React.ReactElement {
+  const name = text.history.languages[language.locale]
+  if (language.state === 'generating') {
+    return <span className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="generating">
+      <LoadingSpinner size="sm" />{name}
+    </span>
+  }
+  if (language.state === 'missing') {
+    const reason = language.reason === 'run-interrupted' ? text.history.runInterrupted
+      : language.reason === 'run-failed' ? text.history.runFailed
+        : text.history.languageNotPublished
+    // A grey chip without the reason is exactly what A9.2 forbids: the reader must know why it is grey.
+    return <span className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="missing" data-language-reason={language.reason}>
+      {name}<small className="mi-daily-briefing__rail-lang-reason">{reason}</small>
+    </span>
+  }
+  return <button type="button" className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="published"
+    aria-pressed={selected} disabled={!onSelect} onClick={onSelect}>{name}</button>
+}
+
+/** `HH:mm` facts: two clocks are both labelled, one clock is not (A9.10). */
+function timeFacts(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): readonly string[] {
+  if (edition.state === 'missing') return edition.scheduledTime ? [edition.scheduledTime] : []
+  const nominal = edition.periodTime ? railClock(edition.periodTime, timeZone) : edition.scheduledTime
+  const actual = edition.generatedAt ? railClock(edition.generatedAt, timeZone) : undefined
+  if (nominal && actual) return [
+    `${edition.periodKind === 'manual' ? text.history.timeCutoff : text.history.timePlanned} ${nominal}`,
+    `${text.history.timeActual} ${actual}`
+  ]
+  return nominal ? [nominal] : []
 }
 
 /** Which languages this issue has; absent when it has no edition at all. */

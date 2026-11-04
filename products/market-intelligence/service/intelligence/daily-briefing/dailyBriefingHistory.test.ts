@@ -133,6 +133,18 @@ describe('the list projection decides the row, once', () => {
     expect(reordered.map((summary) => summary.periodId)).toEqual(['period_a', 'period_b', 'period_late'])
   })
 
+  it('hands the whole title to the row: the two-line clamp is CSS, not a data-layer slice', async () => {
+    const long = 'Stablecoin contraction keeps the read defensive across every venue the desk covers today'
+    const row = withPeriod('default', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })
+    const [summary] = await two([{
+      ...row,
+      document: { ...row.document, lede: { ...row.document.lede, text: long } }
+    }], {})
+    // 80 characters used to be cut here, which made the clamp permanent and the copied text wrong.
+    expect(summary?.summaryLine).toBe(long)
+    expect(summary?.summaryLine?.length).toBeGreaterThan(80)
+  })
+
   it('copies the identity each edition wrote, kind and trigger included', async () => {
     const [summary] = await two([withPeriod('period_x', 'zh-CN', {
       periodTime: '2026-11-02T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry'

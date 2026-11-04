@@ -50,15 +50,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function readLanguage(payload: unknown): DailyBriefingLocale | undefined {
-  if (!isRecord(payload)) return undefined
-  return isDailyBriefingLocale(payload.locale) ? payload.locale : undefined
+/**
+ * The reader's interface language is required, never guessed.
+ *
+ * The never-configured fallback period speaks this language; defaulting it to Chinese would show a
+ * Chinese issue to an English reader and call it "the default". A caller that cannot say which
+ * language it is gets a refusal, not a guess.
+ */
+function readLanguage(payload: unknown): DailyBriefingLocale {
+  if (!isRecord(payload) || !isDailyBriefingLocale(payload.locale)) throw new Error('daily-briefing-locale-required')
+  return payload.locale
 }
 
 function readDraftRequest(payload: unknown, withId = false): Readonly<{
   id: string
   draft: BriefingPeriodDraft
-  locale: DailyBriefingLocale | undefined
+  locale: DailyBriefingLocale
 }> {
   if (!isRecord(payload) || !isRecord(payload.draft)) throw new Error('daily-briefing-invalid-request')
   const allowed = withId ? ['id', 'draft', 'locale'] : ['draft', 'locale']

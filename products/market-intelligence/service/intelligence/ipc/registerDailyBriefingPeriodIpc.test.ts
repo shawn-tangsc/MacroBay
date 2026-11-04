@@ -75,23 +75,23 @@ describe('the period write seam', () => {
 
   it('updates one row without touching its neighbour, and removes one without disturbing the rest', async () => {
     const { handlers } = setup()
-    await handlers.get(M.create)!({ draft: { generationTime: '07:00', windowHours: 24, language: 'zh-CN' } })
-    await handlers.get(M.create)!({ draft: { generationTime: '09:00', windowHours: 12, language: 'en-US' } })
+    await handlers.get(M.create)!({ draft: { generationTime: '07:00', windowHours: 24, language: 'zh-CN' }, locale: 'zh-CN' })
+    await handlers.get(M.create)!({ draft: { generationTime: '09:00', windowHours: 12, language: 'en-US' }, locale: 'zh-CN' })
 
-    const updated = await handlers.get(M.update)!({ id: 'period_new', draft: { generationTime: '08:00', windowHours: 48, language: 'en-US' } })
+    const updated = await handlers.get(M.update)!({ id: 'period_new', draft: { generationTime: '08:00', windowHours: 48, language: 'en-US' }, locale: 'zh-CN' })
     expect(updated).toMatchObject({ state: 'saved', period: { id: 'period_new', generationTime: '08:00' } })
-    const afterUpdate = await handlers.get(M.list)!({})
+    const afterUpdate = await handlers.get(M.list)!({ locale: 'zh-CN' })
     expect(afterUpdate).toMatchObject([
       { id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
       { id: 'period_new', generationTime: '08:00', windowHours: 48, language: 'en-US' }
     ])
 
-    const removed = await handlers.get(M.remove)!({ id: 'period_new' })
+    const removed = await handlers.get(M.remove)!({ id: 'period_new', locale: 'zh-CN' })
     expect(removed).toMatchObject({ state: 'removed', id: 'period_new' })
-    const afterRemove = await handlers.get(M.list)!({}) as readonly Readonly<{ id: string; generationTime: string }>[]
+    const afterRemove = await handlers.get(M.list)!({ locale: 'zh-CN' }) as readonly Readonly<{ id: string; generationTime: string }>[]
     expect(afterRemove).toHaveLength(1)
     expect(afterRemove[0]).toMatchObject({ id: 'default', generationTime: '07:00' })
-    expect(await handlers.get(M.remove)!({ id: 'period_x' })).toEqual({ state: 'missing', id: 'period_x' })
+    expect(await handlers.get(M.remove)!({ id: 'period_x', locale: 'zh-CN' })).toEqual({ state: 'missing', id: 'period_x' })
   })
 
   it('names the conflicting row instead of overwriting it', async () => {
@@ -100,6 +100,16 @@ describe('the period write seam', () => {
     const duplicate = await handlers.get(M.create)!({ draft: { generationTime: '07:00', windowHours: 24, language: 'zh-CN' }, locale: 'zh-CN' })
     expect(duplicate).toMatchObject({ state: 'rejected', code: 'daily-briefing-period-duplicate', conflict: { id: 'default' } })
     expect(await handlers.get(M.list)!({ locale: 'zh-CN' })).toEqual(before)
+  })
+
+  it('refuses to guess the reader language: no locale is a refusal, not Chinese', async () => {
+    const { memory, handlers } = setup()
+    // The never-configured fallback period speaks the reader's language; defaulting it to Chinese
+    // would show a Chinese issue to an English reader and call it "the default".
+    await expect(handlers.get(M.list)!({})).rejects.toThrow('daily-briefing-locale-required')
+    await expect(handlers.get(M.list)!(undefined)).rejects.toThrow('daily-briefing-locale-required')
+    await expect(handlers.get(M.remove)!({ id: 'default' })).rejects.toThrow('daily-briefing-locale-required')
+    expect(memory.storage.write).not.toHaveBeenCalled()
   })
 
   it('refuses a malformed draft before it reaches the store', async () => {
