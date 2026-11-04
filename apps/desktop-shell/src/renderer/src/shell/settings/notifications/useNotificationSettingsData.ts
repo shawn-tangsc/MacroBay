@@ -1,52 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import type { ChannelDeliveryTargetView } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
-import type { NotificationEventCatalogEntry } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { DeliveryAttempt } from '@platform/notifications/runtime/notificationRouting'
-import type {
-  NotificationSubscriptionLevel,
-  NotificationSubscriptionTable
-} from '@platform/notifications/contracts/notificationSubscriptions'
-
 
 /**
- * 这一屏需要的四份事实：目录、订阅表、投递设置、桌面权限。
- *
- * 四个都失败得起（各自降级），但**「读不到」和「没有」必须分开**：目录读不到时清单区说
- * 「没读出来」并给重试，绝不说「没有可订阅的事件」——后者会让读者以为平台没有事件。
+ * 这一屏要的两份事实：应用内提示开关、桌面提醒开关（`getDeliverySettings` 一次读回）。
+ * 读不到就是 `error`——**不许把「读不到」画成「两个都关着」**，那是拿默认值冒充现状。
  */
 export type NotificationSettingsData = {
-  catalog: readonly NotificationEventCatalogEntry[]
-  subscriptions: NotificationSubscriptionTable
   toastEnabled: boolean
-  /**
-   * 「发送到频道」那一行要的三样，全部来自主进程的同一个只读投影（`getDeliverySettings`）：
-   * 可选频道（`deliverable` 才算）、读者选的那条（`null` 就是推送关着）、最近一次失败的时刻。
-   *
-   * 不在这里另算「就绪」：那是 `channelRow.ts` 的判断，这一层只搬事实。
-   */
-  channelId: string | null
-  channels: readonly ChannelDeliveryTargetView[]
-  lastPushFailureAt: string | null
-  /** 与 `lastPushFailureAt` 取自**同一条记录**：拼两处的值会得到「这条的时刻 + 那条的原因」。 */
-  lastPushFailureReason: string | null
+  desktopEnabled: boolean
 }
 
 export type NotificationSettingsClient = {
-  listEventCatalog?: () => Promise<readonly NotificationEventCatalogEntry[]>
-  getSubscriptions?: () => Promise<NotificationSubscriptionTable>
-  getDeliverySettings?: () => Promise<{
-    toastEnabled?: boolean
-    channelId?: string | null
-    channels?: readonly ChannelDeliveryTargetView[]
-    lastPushFailureAt?: string | null
-    lastPushFailureReason?: string | null
-  }>
-  setSubscription?: (id: string, patch: Record<string, unknown>) => Promise<unknown>
+  getDeliverySettings?: () => Promise<{ toastEnabled?: boolean; desktopEnabled?: boolean }>
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
-  /** 选中哪条频道；`null` 就是关掉推送（契约里没有第二个「启用」布尔）。 */
-  setPushChannel?: (channelId: string | null) => Promise<unknown>
+  setDesktopEnabled?: (enabled: boolean) => Promise<unknown>
   /** 真实回执：一条记录 + 每一档投递的尝试结果（形状取自主进程运行时，不是我们自己拼的）。 */
   sendTest?: () => Promise<{ record: SafeNotificationRecord; delivery: readonly DeliveryAttempt[] }>
 }
@@ -57,10 +26,11 @@ export type NotificationSettingsState =
   | { status: 'ready'; data: NotificationSettingsData }
 
 /**
- * 写操作的回执。**只有主进程说 `ok: true` 才算存上**：
- * - 订阅写入失败时是正常返回 `{ ok: false, reasonCode }`，不抛错——不看它就会把「没存上」
- *   显示成勾上了（勾选状态是乐观更新，下一帧看起来已经生效，其实库里没有）；
- * - 提示开关与推送频道失败时是抛错；抛出也要变成同一张回执，别让调用方吞掉。
+ * 写操作的回执。
+ *
+ * **只有主进程没抛错才算存上**：开关是乐观更新的话，失败时它会自己亮起来、库里却没变，
+ * 读者下一次打开又弹回去。所以调用方必须等这个回执、失败时把开关留在原位并说明没存上。
+ * 方法缺失（旧构建 / preload 没接）同样按失败算，不许静默当成成功。
  */
 export type NotificationWriteResult = { ok: true } | { ok: false }
 
@@ -70,121 +40,76 @@ const WRITE_FAILED: NotificationWriteResult = { ok: false }
 export function useNotificationSettingsData(client: NotificationSettingsClient): {
   state: NotificationSettingsState
   reload: () => void
-  setSubscription: (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean) => Promise<NotificationWriteResult>
   setToast: (next: boolean) => Promise<NotificationWriteResult>
-  setPushChannel: (channelId: string) => Promise<NotificationWriteResult>
+  setDesktop: (next: boolean) => Promise<NotificationWriteResult>
 } {
   const [state, setState] = useState<NotificationSettingsState>({ status: 'loading' })
   const [nonce, setNonce] = useState(0)
 
   useEffect(() => {
     let alive = true
-    const read = (): void => {
-      // 四份事实一起读；**任何一份失败都整屏算「没读出来」**——半屏数据会让人把「没读到」
-      // 当成「本来就没有」，而这个屏幕上「没有」是一个必须被相信的结论。
-      type DeliveryShape = {
-        toastEnabled?: boolean
-        channelId?: string | null
-        channels?: readonly ChannelDeliveryTargetView[]
-        lastPushFailureAt?: string | null
-        lastPushFailureReason?: string | null
+    setState({ status: 'loading' })
+    const read = async (): Promise<void> => {
+      try {
+        const settings = await client.getDeliverySettings?.()
+        if (!alive) return
+        if (settings === undefined) {
+          // 桥缺失与「读到了、都是关的」是两件事：当作 error，交给 StateView 说「读不到」。
+          setState({ status: 'error' })
+          return
+        }
+        setState({
+          status: 'ready',
+          data: {
+            toastEnabled: settings.toastEnabled === true,
+            desktopEnabled: settings.desktopEnabled === true
+          }
+        })
+      } catch {
+        if (alive) setState({ status: 'error' })
       }
-      const readAll: Promise<
-        [readonly NotificationEventCatalogEntry[], NotificationSubscriptionTable, DeliveryShape]
-      > = Promise.all([
-        client.listEventCatalog?.() ?? Promise.resolve([]),
-        client.getSubscriptions?.() ?? Promise.resolve({}),
-        client.getDeliverySettings?.() ?? Promise.resolve({})
-      ])
-      void readAll
-        .then(([catalog, subscriptions, delivery]) => {
-          if (!alive) return
-          setState({
-            status: 'ready',
-            data: {
-              catalog,
-              subscriptions,
-              toastEnabled: delivery.toastEnabled === true,
-              channelId: typeof delivery.channelId === 'string' ? delivery.channelId : null,
-              // 不是数组就当作「没有任何可投递频道」：宁可少一条选择项，也不把形状不明的数据画出来。
-              channels: Array.isArray(delivery.channels) ? delivery.channels : [],
-              lastPushFailureAt:
-                typeof delivery.lastPushFailureAt === 'string' ? delivery.lastPushFailureAt : null,
-              lastPushFailureReason:
-                typeof delivery.lastPushFailureReason === 'string' ? delivery.lastPushFailureReason : null
-            }
-          })
-        })
-        .catch(() => {
-          if (alive) setState({ status: 'error' })
-        })
     }
-    read()
+    void read()
     return () => {
       alive = false
     }
   }, [client, nonce])
 
-  const reload = useCallback(() => {
-    setState({ status: 'loading' })
+  const reload = useCallback((): void => {
     setNonce((value) => value + 1)
   }, [])
 
-  const setSubscription = useCallback(
-    async (id: string, level: 'record' | NotificationSubscriptionLevel, next: boolean): Promise<NotificationWriteResult> => {
-      let result: unknown
+  /** 存上才改本地状态；没存上返回失败，开关留在原位。 */
+  const write = useCallback(
+    async (
+      call: ((next: boolean) => Promise<unknown>) | undefined,
+      apply: (data: NotificationSettingsData) => NotificationSettingsData,
+      next: boolean
+    ): Promise<NotificationWriteResult> => {
+      if (call === undefined) return WRITE_FAILED
       try {
-        result = await client.setSubscription?.(id, { [level]: next })
-      } catch {
-        return WRITE_FAILED
-      }
-      // 订阅写入失败是**正常返回** `{ ok:false, reasonCode }`：不看它，勾选会亮着而库里没有。
-      if (typeof result === 'object' && result !== null && (result as { ok?: boolean }).ok === false) return WRITE_FAILED
-      setState((current) => {
-        if (current.status !== 'ready') return current
-        const previous = current.data.subscriptions[id] ?? {}
-        return {
-          status: 'ready',
-          data: {
-            ...current.data,
-            subscriptions: { ...current.data.subscriptions, [id]: { ...previous, [level]: next } }
-          }
-        }
-      })
-      return WRITE_OK
-    },
-    [client]
-  )
-
-  const setToast = useCallback(
-    async (next: boolean): Promise<NotificationWriteResult> => {
-      try {
-        await client.setToastEnabled?.(next)
+        await call(next)
       } catch {
         return WRITE_FAILED
       }
       setState((current) =>
-        current.status === 'ready' ? { status: 'ready', data: { ...current.data, toastEnabled: next } } : current
+        current.status === 'ready' ? { status: 'ready', data: apply(current.data) } : current
       )
       return WRITE_OK
     },
-    [client]
+    []
   )
 
-  const setPushChannel = useCallback(
-    async (channelId: string): Promise<NotificationWriteResult> => {
-      try {
-        await client.setPushChannel?.(channelId)
-      } catch {
-        return WRITE_FAILED
-      }
-      setState((current) =>
-        current.status === 'ready' ? { status: 'ready', data: { ...current.data, channelId } } : current
-      )
-      return WRITE_OK
-    },
-    [client]
-  )
-
-  return { state, reload, setSubscription, setToast, setPushChannel }
+  return {
+    state,
+    reload,
+    setToast: useCallback(
+      (next: boolean) => write(client.setToastEnabled, (data) => ({ ...data, toastEnabled: next }), next),
+      [client, write]
+    ),
+    setDesktop: useCallback(
+      (next: boolean) => write(client.setDesktopEnabled, (data) => ({ ...data, desktopEnabled: next }), next),
+      [client, write]
+    )
+  }
 }

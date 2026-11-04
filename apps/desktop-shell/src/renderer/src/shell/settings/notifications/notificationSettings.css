@@ -1,9 +1,39 @@
 /*
- * 设置 → 通知（规范 v2.7 §6）。只用已定义 token，不新增硬编码色值。
- * 尺寸：内容宽 ≤ 900；清单列 `1fr / 64 / 84 / 84`；频道行高约 66。
+ * 设置 → 通知（规范 v2.27 §2）。只用已定义 token，不新增硬编码色值。
+ * 一卡两组：本机（两个开关）/ 测试（一个按钮）+ 页脚一行。没有事件清单、没有频道控件。
  */
 .notification-settings-pane {
-  max-width: 900px;
+  max-width: 960px;
+}
+
+/* 卡片：与频道页同一套（`--surface` 底 + 1px `--border` + 圆角 10 + 内边距 24）。 */
+.notification-card {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.notification-group + .notification-group {
+  margin-top: 8px;
+}
+
+.notification-group-title {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.notification-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .notification-rows {

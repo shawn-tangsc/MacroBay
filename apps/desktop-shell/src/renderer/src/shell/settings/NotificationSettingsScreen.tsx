@@ -1,26 +1,49 @@
 import { useState } from 'react'
+import { Info } from 'lucide-react'
+import { Button, Switch } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Popover } from '@platform/ui/components/popover'
 import { StateView } from '@platform/ui/components/state'
-import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { Button } from 'antd'
 
 import './notifications/notificationSettings.css'
-import { buildChannelRowState, channelColumnReady } from './notifications/channelRow'
-import { DeliveryRows } from './notifications/DeliveryRows'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
-import { SubscriptionMatrixView } from './notifications/SubscriptionMatrixView'
-import { buildSubscriptionRows } from './notifications/subscriptionMatrix'
 import { describeTestReceipt } from './notifications/testReceipt'
 import { useNotificationSettingsData, type NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
+/** ⓘ 的读屏名：只收键（点分、无空白、无中文），句子由这一屏的解析器给出。 */
+const HINT_KEY_TOAST = 'settings.notifications.hint.toast'
+const HINT_KEY_DESKTOP = 'settings.notifications.hint.desktop'
+const HINT_KEY_FOOTER = 'settings.notifications.hint.footer'
+
+type HintKey = typeof HINT_KEY_TOAST | typeof HINT_KEY_DESKTOP | typeof HINT_KEY_FOOTER
+
+function hintText(key: HintKey, text: NotificationSettingsText): string {
+  if (key === HINT_KEY_TOAST) return text.toastHint
+  if (key === HINT_KEY_DESKTOP) return text.desktopHint
+  return text.footerHint
+}
+
+/** 三个 ⓘ 的读屏名：按传入的键给出控件名，不是「不管什么键都吐同一句」。 */
+function hintLabel(key: string, text: NotificationSettingsText): string {
+  if (key === HINT_KEY_TOAST) return text.toastHintLabel
+  if (key === HINT_KEY_DESKTOP) return text.desktopHintLabel
+  if (key === HINT_KEY_FOOTER) return text.footerHintLabel
+  return ''
+}
+
 /**
- * 设置 → 通知（规范 v2.7）。
+ * 设置 → 通知（规范 v2.27 §2）。
  *
- * 这一屏的组织方式：**四份事实一处读**（`useNotificationSettingsData`），行与清单各自只画自己的形态。
- * 判断落在 `subscriptionMatrix.ts` 与 `DeliveryRows.tsx` 的纯函数里，所以「未批准不是禁用复选框」
- * 这类容易画错的规矩能写进用例，而不是靠评审时眼睛扫。
+ * 这一页只剩两个开关 + 一个测试按钮 + 页脚。**订阅矩阵、频道选择、「固定开启」在 v2.20 整块撤销**：
+ * 「其余的都是内置规则，只要用户开了就会推，没开就不会推」——不给逐条勾选，就没有清单。
+ *
+ * 三条硬规矩落在这里：
+ * - 说明只进 ⓘ，页面上每块最多一行；没有 ⓘ 的块一句话都不写；
+ * - 开关**存上才亮**：写失败时留在原位，就地一句「这次没有保存上」，不显示内部码；
+ * - 页面上不出现任何条数（事件类目数会跟批准表漂移，只在规范里记）。
  */
 export function NotificationSettingsScreen(props: {
   title: string
@@ -30,34 +53,32 @@ export function NotificationSettingsScreen(props: {
 }): React.ReactElement {
   const text = notificationSettingsText[props.language]
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
-  const { state, reload, setSubscription, setToast, setPushChannel } = useNotificationSettingsData(client)
+  const { state, reload, setToast, setDesktop } = useNotificationSettingsData(client)
   const [receipt, setReceipt] = useState<string | null>(null)
-  /** 写操作没存上：勾选与开关都不许自己亮起来，就地告诉他「没存上」。 */
+  /** 写失败只有一句、只在原地：不把开关自己点亮，也不给内部码。 */
   const [writeFailed, setWriteFailed] = useState(false)
-  // 失败时刻按**读者的设置时区**写：这是给人看的时间，不是记账。
-  const timeZone = useShellTimeZone()
 
-  const runWrite = async (write: Promise<{ ok: boolean }>): Promise<void> => {
+  const save = async (write: Promise<{ ok: boolean }>): Promise<void> => {
     const result = await write
     setWriteFailed(!result.ok)
   }
 
-  const channelRow =
-    state.status === 'ready'
-      ? buildChannelRowState({
-        channels: state.data.channels,
-        channelId: state.data.channelId,
-        lastPushFailureAt: state.data.lastPushFailureAt,
-        lastPushFailureReason: state.data.lastPushFailureReason
-      })
-      : ({ kind: 'not-wired' } as const)
-
-  const channelReady = channelColumnReady(channelRow)
-  // 列会消失、订阅不会：把「已经勾过通道、但现在这列看不到」的条数字出来，页脚替它说一句话。
-  const pendingChannelCount =
-    state.status === 'ready'
-      ? state.data.catalog.filter((entry) => state.data.subscriptions[entry.id]?.channel === true).length
-      : 0
+  const runTest = async (): Promise<void> => {
+    try {
+      // 类型由主进程标好：直接取字段，不再手写形状。
+      const result = await client.sendTest?.()
+      setReceipt(
+        describeTestReceipt({
+          delivery: result?.delivery ?? [],
+          toastEnabled: state.status === 'ready' && state.data.toastEnabled,
+          text
+        })
+      )
+    } catch {
+      // 抛出来连「交给系统了」都没拿到：只说失败，并如实写「原因不明」。
+      setReceipt(text.desktopFailed(text.reasonUnknown))
+    }
+  }
 
   return (
     <section className="settings-detail-pane preferences-pane notification-settings-pane">
@@ -69,90 +90,137 @@ export function NotificationSettingsScreen(props: {
       {state.status === 'loading' ? <LoadingState label={text.loading} /> : null}
 
       {state.status === 'error' ? (
-        // 「读不到」与「没有」是两件事：这里给重试，绝不说清单为空。
+        // 「读不到」与「两个都关着」是两件事：这里给重试，绝不拿默认值冒充现状。
         <StateView
           state="error"
           reasonCode="unreadable"
           action={{ labelKey: 'ui.state.action.retry', onSelect: reload }}
-          resolveText={(key) => (key === 'ui.state.action.retry' ? text.retry : key)}
         />
       ) : null}
 
       {state.status === 'ready' ? (
-        <>
-          {/* 写失败只有一句、只在原地：不把勾选/开关自己点亮，也不给内部码。 */}
+        <div className="notification-card" data-notification-settings-card>
           {writeFailed ? (
             <p className="notification-settings-write-failed" role="alert" data-notification-write-failed>
               {text.writeFailed}
             </p>
           ) : null}
-          <DeliveryRows
-            text={text}
-            toastEnabled={state.data.toastEnabled}
-            onToastChange={(next) => void runWrite(setToast(next))}
-            channel={channelRow}
-            channelTimeZone={timeZone}
-            onSelectChannel={(channelId) => void runWrite(setPushChannel(channelId))}
-          />
 
-          <div className="notification-settings-test">
-            <Button size="small" onClick={() => void sendTest(client, state.data.toastEnabled, text, setReceipt)}>
-              {text.sendTest}
-            </Button>
-            <p className="notification-settings-footnote">{text.sendTestHint}</p>
+          <section className="notification-group" aria-label={text.localGroup}>
+            <h3 className="notification-group-title">{text.localGroup}</h3>
+
+            <SwitchRow
+              name={text.toastRow}
+              hintKey={HINT_KEY_TOAST}
+              text={text}
+              control={
+                <Switch
+                  size="small"
+                  checked={state.data.toastEnabled}
+                  aria-label={text.toastRow}
+                  onChange={(next) => void save(setToast(next))}
+                  data-row-switch="toast"
+                />
+              }
+            />
+
+            <SwitchRow
+              name={text.desktopRow}
+              hintKey={HINT_KEY_DESKTOP}
+              text={text}
+              control={
+                <Switch
+                  size="small"
+                  checked={state.data.desktopEnabled}
+                  aria-label={text.desktopRow}
+                  onChange={(next) => void save(setDesktop(next))}
+                  data-row-switch="desktop"
+                />
+              }
+            />
+          </section>
+
+          <section className="notification-group" aria-label={text.testGroup}>
+            <h3 className="notification-group-title">{text.testGroup}</h3>
+            <div className="notification-row" data-row="test">
+              <span className="notification-row-copy">
+                <strong>{text.sendTestRow}</strong>
+              </span>
+              <span className="notification-row-control">
+                <Button size="small" onClick={() => void runTest()} data-send-test>
+                  {text.sendTest}
+                </Button>
+              </span>
+            </div>
             {receipt === null ? null : (
-              // aria-live：四种回执各播报一次，重复点击只更新同一处，不堆消息。
+              // aria-live：回执各播报一次，重复点击只更新同一处，不堆消息。
               <p className="notification-settings-result" role="status" aria-live="polite" data-send-test-result>
                 {receipt}
               </p>
             )}
-          </div>
+          </section>
 
-          <div className="notification-subs-section">
-            <h3 className="notification-subs-title">{text.subsHeading}</h3>
-            {state.data.catalog.length === 0 ? (
-              // 清单区自己的空态：上面四行照常显示，所以这里不是整屏空态。
-              <p className="preference-hint" data-subs-empty>
-                {text.subsEmpty} {text.subsEmptyReason}
-              </p>
-            ) : (
-              <SubscriptionMatrixView
-                rows={buildSubscriptionRows({
-                  entries: state.data.catalog,
-                  subscriptions: state.data.subscriptions,
-                  // 通道列只在「已接入 + 已选 + 目标已绑定」时出现；否则整列不画（规范 §2.2）。
-                  channelReady
-                })}
-                text={text}
-                onToggle={(id, level, next) => void runWrite(setSubscription(id, level, next))}
-              />
-            )}
-            {/* 列消失 ≠ 订阅消失：不写这句，读者会以为勾丢了，回头再勾一遍。 */}
-            {!channelReady && pendingChannelCount > 0 ? (
-              <p className="notification-settings-footnote" role="note" data-channel-column-pending>
-                {text.channelPendingEffective(pendingChannelCount)}
-              </p>
-            ) : null}
-            <p className="notification-settings-footnote">{text.subsScope}</p>
-          </div>
-        </>
+          <footer className="notification-footer">
+            <span>{text.footerLine}</span>
+            <Popover
+              lines={[{ labelKey: 'centerDesc' }, { labelKey: 'footerHint' }]}
+              resolveText={(key: 'centerDesc' | 'footerHint') => text[key]}
+              trigger={(triggerProps) => (
+                <IconButton
+                  ariaLabelKey={HINT_KEY_FOOTER}
+                  icon={Info}
+                  size="sm"
+                  variant="plain"
+                  resolveText={(key: string) => hintLabel(key, text)}
+                  onSelect={triggerProps.onSelect}
+                  onMouseEnter={triggerProps.onMouseEnter}
+                  onMouseLeave={triggerProps.onMouseLeave}
+                  onFocus={triggerProps.onFocus}
+                  onBlur={triggerProps.onBlur}
+                  expanded={triggerProps.expanded}
+                />
+              )}
+            />
+          </footer>
+        </div>
       ) : null}
     </section>
   )
 }
 
-async function sendTest(
-  client: NotificationSettingsClient,
-  toastEnabled: boolean,
-  text: NotificationSettingsText,
-  setReceipt: (value: string) => void
-): Promise<void> {
-  try {
-    // 类型已由主进程标好：直接取字段，不再手写形状（`as` 会把「少一个字段」变成运行时 undefined）。
-    const result = await client.sendTest?.()
-    setReceipt(describeTestReceipt({ delivery: result?.delivery ?? [], toastEnabled, text }))
-  } catch {
-    // 抛出来连「交给系统了」都没拿到：只能说失败，并如实写「原因不明」。
-    setReceipt(text.desktopFailed(text.reasonUnknown))
-  }
+/** 一行「名字 + ⓘ + 控件」。ⓘ 用平台 `Popover`（hover 开、点住、Esc 关并还焦）。 */
+function SwitchRow(props: {
+  name: string
+  hintKey: HintKey
+  text: NotificationSettingsText
+  control: React.ReactElement
+}): React.ReactElement {
+  const { text } = props
+  return (
+    <div className="notification-row" data-row={props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop'}>
+      <span className="notification-row-copy">
+        <strong>{props.name}</strong>
+        <Popover
+          labelKey={props.hintKey}
+          resolveText={(key: HintKey) => hintText(key, text)}
+          trigger={(triggerProps) => (
+            <IconButton
+              ariaLabelKey={props.hintKey}
+              icon={Info}
+              size="sm"
+              variant="plain"
+              resolveText={(key: string) => hintLabel(key, text)}
+              onSelect={triggerProps.onSelect}
+              onMouseEnter={triggerProps.onMouseEnter}
+              onMouseLeave={triggerProps.onMouseLeave}
+              onFocus={triggerProps.onFocus}
+              onBlur={triggerProps.onBlur}
+              expanded={triggerProps.expanded}
+            />
+          )}
+        />
+      </span>
+      <span className="notification-row-control">{props.control}</span>
+    </div>
+  )
 }
