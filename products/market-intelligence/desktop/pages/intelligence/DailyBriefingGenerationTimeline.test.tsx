@@ -266,6 +266,16 @@ describe('generation stage timeline', () => {
     expect(failed.textContent).not.toContain('/app/private/secret.js')
   })
 
+  it('shows one status mark per step, never a second check beside the name', () => {
+    // The reader counted two ticks on the same row: the stepper's circle and a bare glyph in front of
+    // the label. Only the circle stays.
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    for (const row of [...dom.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
+      expect(row.querySelectorAll('.mi-brief-steps__icon')).toHaveLength(0)
+      expect(row.textContent ?? '').not.toMatch(/[✓✔√]/)
+    }
+  })
+
   it('locates a validation failure', () => {
     const dom = render(failureTrace('validation', 'schema-validation-failed'))
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：校验')

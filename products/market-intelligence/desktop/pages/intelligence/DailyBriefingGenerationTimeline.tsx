@@ -113,7 +113,8 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
           }
           return {
             status: stepStatus(stage, skipReason),
-            title: <DailyBriefingStageRowContent row={row} resolveText={resolveText} extraAttributes={{ 'data-stage-state': state, 'data-stage-skip': skipReason ?? 'none' }} />,
+            // The stepper draws the status circle; the row must not add a second mark beside the name.
+            title: <DailyBriefingStageRowContent row={{ ...row, id: row.id, name: row.name }} resolveText={resolveText} showIcon={false} extraAttributes={{ 'data-stage-state': state, 'data-stage-skip': skipReason ?? 'none' }} />,
             description: null
           }
         })}

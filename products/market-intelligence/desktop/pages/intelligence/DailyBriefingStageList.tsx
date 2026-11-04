@@ -36,9 +36,11 @@ export type DailyBriefingStageRow = Readonly<{
  * says the same things in both: the same name, the same state word, the same detail, the same
  * failure code. The anchor is here because this is the row.
  */
-export function DailyBriefingStageRowContent({ row, resolveText, extraAttributes, children }: Readonly<{
+export function DailyBriefingStageRowContent({ row, resolveText, showIcon = true, extraAttributes, children }: Readonly<{
   row: DailyBriefingStageRow
   resolveText?: (key: string) => string
+  /** Off when the container already draws the status icon (the stepper's circle); one mark is enough. */
+  showIcon?: boolean
   /** Anchors a caller needs on the row itself (the trace's skip reason, for instance). */
   extraAttributes?: Readonly<Record<string, string>>
   /** The caller's own wrapper (a list item, a stepper item's title) goes around this content. */
@@ -46,7 +48,7 @@ export function DailyBriefingStageRowContent({ row, resolveText, extraAttributes
 }>): React.ReactElement {
   const help = row.help
   return <span className="mi-brief-steps__row-content" data-briefing-stage-row="true" data-stage={row.id} data-stage-state={row.state} {...extraAttributes}>
-    <StepIcon state={row.state} />
+    {showIcon ? <StepIcon state={row.state} /> : null}
     <span className="mi-brief-steps__name">{row.name}</span>
     {help && resolveText
       ? <Popover
