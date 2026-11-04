@@ -108,7 +108,8 @@ describe('notification quiet hours follow the reader time zone', () => {
 })
 
 describe('notification transient delivery wiring', () => {
-  const settings = { ...createDefaultNotificationRuntimeSettings(), toastEnabled: true }
+  // 桌面开关新装默认关（契约 §4.2）；这一组测的是「开关打开时」的接线，所以显式打开。
+  const settings = { ...createDefaultNotificationRuntimeSettings(), toastEnabled: true, desktopEnabled: true }
   const record = createNotificationFromRequest({
     owner: 'platform',
     sourceId: 'job-runtime',
