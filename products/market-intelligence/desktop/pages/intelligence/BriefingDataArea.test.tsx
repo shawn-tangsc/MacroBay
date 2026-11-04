@@ -19,7 +19,7 @@ import { briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBrie
 const today = '2026-11-04'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 
-function row(id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real' | 'stablecoin' | 'fear-greed', label: string, value: number) {
+function row(id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real' | 'stablecoin' | 'fear-greed' | 'etf-btc' | 'etf-eth', label: string, value: number) {
   return {
     id, labelKey: `dailyBriefing.row.${label}`,
     importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
@@ -29,7 +29,8 @@ function row(id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-rea
   }
 }
 
-function documentWithData(): DailyBriefingDocument {
+function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}): DailyBriefingDocument {
+  const withDistribution = overrides.distribution !== false
   return {
     schemaVersion: 9,
     policyVersion: 'v1',
@@ -38,7 +39,7 @@ function documentWithData(): DailyBriefingDocument {
     news: { items: [], macro: [], notes: {} },
     data: {
       market: [row('btc', 'btc', 1.23), row('eth', 'eth', 1.59), row('index', 'index', 0.82), row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)],
-      funds: [row('stablecoin', 'stablecoin', 2530)],
+      funds: [row('stablecoin', 'stablecoin', 2530), row('etf-btc', 'etfBtc', 110_300_000), row('etf-eth', 'etfEth', -88_600_000)],
       sentiment: { fearGreed: row('fear-greed', 'fearGreed', 26) as never },
       leverage: {
         state: 'available',
@@ -48,7 +49,9 @@ function documentWithData(): DailyBriefingDocument {
       policyPath: {
         state: 'available', meetingDate: '2026-12-09', outcome: 'hike-25', probability: 77.5,
         observedAt: `${today}T00:10:00.000Z`, targetLower: 3.75, targetUpper: 4,
-        distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+        ...(withDistribution
+          ? { distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 } }
+          : {})
       }
     } as never,
     conclusion: null,
@@ -65,11 +68,11 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function render(): Promise<HTMLElement> {
+async function render(overrides: Readonly<{ distribution?: boolean }> = {}): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  const groups = briefingDataGroups(documentWithData())
+  const groups = briefingDataGroups(documentWithData(overrides))
   await act(async () => root!.render(createElement(BriefingDataArea, {
     groups, text, locale: 'zh-CN', formatTime: () => '07:00',
     paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
@@ -142,6 +145,22 @@ describe('the drawings the data arrived for', () => {
     expect(bottom).toEqual(['hold', 'other'])
     expect(card.querySelector('[data-briefing-policy-outcomes]')!.textContent).toContain('20.5%')
     expect(card.querySelector('[data-briefing-policy-outcomes]')!.textContent).toContain('2%')
+  })
+
+  it('renders no legend at all when there is no distribution to list', async () => {
+    const dom = await render({ distribution: false })
+    // Two segments have no non-event item to name: the event is the number in the ring, and "the rest"
+    // is already the other arc. A lone "其余 22.5%" would be a second name for the same fact.
+    expect(dom.querySelector('[data-briefing-policy-outcomes]')).toBeNull()
+    const gauge = dom.querySelector('[data-briefing-policy-gauge]')!
+    expect([...gauge.querySelectorAll('[data-outcome]')].map((node) => node.getAttribute('data-outcome')))
+      .toEqual(['event', 'residual'])
+  })
+
+  it('keeps the ETF row free of charts', async () => {
+    const dom = await render()
+    expect(dom.querySelector('[data-briefing-etf-line]')).not.toBeNull()
+    expect(dom.querySelectorAll('[data-briefing-etf-line] svg')).toHaveLength(0)
   })
 
   it('draws the stored curve, and nothing where there is none', async () => {

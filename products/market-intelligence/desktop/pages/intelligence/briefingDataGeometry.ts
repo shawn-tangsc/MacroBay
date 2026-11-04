@@ -47,13 +47,39 @@ export function policyGaugeSegments(input: Readonly<{
   outcome: string
   distribution?: Readonly<Record<string, number>>
 }>): readonly PolicyGaugeSegment[] {
+  return shares(gaugeShares(input))
+}
+
+/**
+ * The legend's items: every non-event share, a zero one included.
+ *
+ * The arcs drop a zero share because a zero-degree arc is nothing to draw; the legend does not,
+ * because "维持 0.0%" is a fact about the board — the market prices no chance of holding — and a
+ * missing line would read as "we did not look". Without a distribution there is no non-event item to
+ * name, so the legend is empty rather than holding a lone "其余 100%".
+ */
+export function policyGaugeLegend(input: Readonly<{
+  probability: number
+  outcome: string
+  distribution?: Readonly<Record<string, number>>
+}>): readonly PolicyGaugeSegment[] {
+  if (!input.distribution) return Object.freeze([])
+  return Object.freeze(gaugeShares(input).filter((segment) => segment.outcome !== 'event'))
+}
+
+/** The three claims before any zero is dropped: one place, so the arcs and the legend cannot disagree. */
+function gaugeShares(input: Readonly<{
+  probability: number
+  outcome: string
+  distribution?: Readonly<Record<string, number>>
+}>): readonly PolicyGaugeSegment[] {
   const event = clamp(input.probability, 0, 100)
   const distribution = input.distribution
-  if (!distribution) return shares([{ outcome: 'event', share: event }, { outcome: 'residual', share: 100 - event }])
+  if (!distribution) return [{ outcome: 'event', share: event }, { outcome: 'residual', share: 100 - event }]
   const holdShare = input.outcome === 'no-change' ? 0 : clamp((distribution['no-change'] ?? 0) * 100, 0, 100)
-  const hold: PolicyGaugeSegment | undefined = holdShare > 0 ? { outcome: 'hold', share: holdShare } : undefined
+  const hold: PolicyGaugeSegment | undefined = input.outcome === 'no-change' ? undefined : { outcome: 'hold', share: holdShare }
   const remainder = 100 - event - (hold?.share ?? 0)
-  return shares([{ outcome: 'event', share: event }, ...(hold ? [hold] : []), { outcome: 'other', share: remainder }])
+  return [{ outcome: 'event', share: event }, ...(hold ? [hold] : []), { outcome: 'other', share: remainder }]
 }
 
 /** Drop the zero shares: a bucket nobody priced draws no arc. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
+import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
 /**
  * The geometry exists to be pinned by numbers, not looked at.
@@ -89,6 +89,35 @@ describe("the dial's shares", () => {
     const arcs = policyGaugeArcs(segments)
     expect(Math.abs(angleOf(arcs[0]!.path, 0))).toBeCloseTo(180, 1)
     expect(angleOf(arcs.at(-1)!.path, 1)).toBeCloseTo(0, 1)
+  })
+
+  it('sweeps every segment in proportion to its own share, not just the ends of the dial', () => {
+    const arcs = policyGaugeArcs(policyGaugeSegments({ probability: 77.5, outcome: 'hike-25', distribution }))
+    // Angles come back in (-180, 180] from the dial's centre; a sweep is measured going clockwise from
+    // the left end, so wrap the endpoints into [0, 360) first.
+    const wrap = (deg: number): number => ((deg % 360) + 360) % 360
+    const sweep = (path: string): number => {
+      const from = wrap(angleOf(path, 0))
+      const to = wrap(angleOf(path, 1))
+      return to >= from ? to - from : 360 - from + to
+    }
+    // Half a dial is 180 degrees, so a share of p is 1.8p degrees. Each arc is checked on its own: a
+    // dial whose first and last ends agree can still be wrong in the middle.
+    expect(sweep(arcs[0]!.path)).toBeCloseTo(77.5 * 1.8, 0)
+    expect(sweep(arcs[1]!.path)).toBeCloseTo(20.5 * 1.8, 0)
+    expect(sweep(arcs[2]!.path)).toBeCloseTo(2.0 * 1.8, 0)
+  })
+
+  it('lists the non-event shares in the legend, and nothing at all without a distribution', () => {
+    expect(policyGaugeLegend({ probability: 77.5, outcome: 'hike-25' })).toEqual([])
+    expect(policyGaugeLegend({ probability: 77.5, outcome: 'hike-25', distribution }).map((segment) => segment.outcome))
+      .toEqual(['hold', 'other'])
+    // A bucket nobody priced still prints: "维持 0.0%" is a fact, a missing line would be an omission.
+    const unpriced = policyGaugeLegend({
+      probability: 77.5, outcome: 'hike-25', distribution: { ...distribution, 'no-change': 0 }
+    })
+    expect(unpriced.map((segment) => segment.outcome)).toEqual(['hold', 'other'])
+    expect(unpriced[0]!.share).toBe(0)
   })
 
   it('does not draw the held bucket twice when holding is the event', () => {

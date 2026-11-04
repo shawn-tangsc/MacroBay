@@ -6,7 +6,7 @@ import type { PolicyPathOutcome } from '../../../contracts/policyPath'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { paymentDirectionFor, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
-import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
+import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
 /**
  * The data region, drawn once for the exported card.
@@ -87,9 +87,11 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
   // segments — the event and "not the event" — which is what `residual` names.
   const released = policy.distribution ? Math.round((policy.distribution[policy.outcome as PolicyPathOutcome] ?? 0) * 1000) / 10 : undefined
   const probability = released ?? Math.round(policy.probability * 10) / 10
-  const segments = policyGaugeSegments({ probability, outcome: policy.outcome, distribution: policy.distribution })
-  const arcs = policyGaugeArcs(segments)
-  const shares = segments.filter((segment) => segment.outcome === 'hold' || segment.outcome === 'other')
+  const dial = { probability, outcome: policy.outcome, distribution: policy.distribution }
+  const arcs = policyGaugeArcs(policyGaugeSegments(dial))
+  // The event is already the number in the middle of the dial; the legend only carries the other two,
+  // and a zero one is printed anyway — "维持 0.0%" is a fact, a missing line would be an omission.
+  const legend = policyGaugeLegend(dial)
   return <div className="mi-brief-poster__policy-card" data-briefing-policy-card="true">
     <span className="mi-brief-poster__policy-title">{text.sections.policyPath}</span>
     <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
@@ -98,8 +100,8 @@ function PolicyCard({ policy, text, formatTime, words }: Readonly<{
     </svg>
     {/* HTML, not svg text: the number stays selectable and the svg keeps zero text nodes. */}
     <b className="mi-brief-poster__policy-probability">{probability}% · {policyOutcomeLabel(policy.outcome, text)}</b>
-    {shares.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
-      {shares.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
+    {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
+      {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}{INDEX_SEPARATOR}</span>)}
     </span> : null}
     <span className="mi-brief-poster__policy-change">{text.sections.policyRange}</span>
     <small>{policy.targetLower !== undefined ? `${policy.targetLower}–${policy.targetUpper}%` : text.sections.rangeUnavailable}</small>
