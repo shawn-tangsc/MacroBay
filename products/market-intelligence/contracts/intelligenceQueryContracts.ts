@@ -3,6 +3,9 @@
  * Cross-product consumers must import from this module only.
  */
 
+// The stale window is the renderer's own constant, imported rather than copied: two copies would let
+// the contract call a snapshot valid while the row prints it as stale.
+import { marketPulsePolicy } from './marketPulse'
 import type {
   CapitalConditionsSnapshotQueryInput,
   CapitalConditionsSnapshotResult,
@@ -244,9 +247,43 @@ export function isValidEtfPublicSnapshot(value: unknown): value is EtfPublicSnap
     if (!isEtfPublicAsset(value.btc, 'BTC', value.verifiedAt) || !isEtfPublicAsset(value.eth, 'ETH', value.verifiedAt)) return false
     const btc = value.btc as EtfPublicAssetSnapshot
     const eth = value.eth as EtfPublicAssetSnapshot
-    if (btc.rows.length !== eth.rows.length || !btc.rows.every((row, index) => row.tradingDate === eth.rows[index]?.tradingDate)) return false
-    return btc.rows.at(-1)?.tradingDate === value.windowEnd && eth.rows.at(-1)?.tradingDate === value.windowEnd &&
-      isWithinEtfPublicSnapshotDtoBudget(value)
+    /**
+     * The two ETFs are separate products with separate reporting schedules: ETH's newest trading day is
+     * routinely one behind BTC's. Requiring both series to end on `windowEnd` therefore refused the whole
+     * snapshot on an ordinary day — and both cells went blank, so one product's lag erased the other's
+     * number too. A lag is a schedule, not a contract error: each asset's own age decides "stale" further
+     * down (`etfStaleAfterMs`), where a stale row still prints the flow it has.
+     *
+     * Four things stay contract errors, and each of them can be made to fail:
+     *
+     * - a series running past the window end (a row that has not happened yet);
+     * - a last row older than the stale window, measured with the renderer's own constant. Dropping the
+     *   equal-endpoint rule must not swing from "too strict" to "too loose": without a floor, a snapshot
+     *   from a month ago passes. One constant, because two copies drift into "valid but stale";
+     * - a pair with no shared trading day inside the window: never comparable, so nothing to show;
+     * - rows of the two series disagreeing on the days they do share (the order check below).
+     */
+    // Narrowed where the header guard proved it: `isTradingDate(value.windowEnd)` ran above.
+    const windowEnd = value.windowEnd as string
+    const dayOf = (tradingDate: string): number => Date.parse(`${tradingDate}T00:00:00.000Z`)
+    const pastWindow = (asset: EtfPublicAssetSnapshot): boolean => (asset.rows.at(-1)?.tradingDate ?? '') > windowEnd
+    if (pastWindow(btc) || pastWindow(eth)) return false
+    const tooOld = (asset: EtfPublicAssetSnapshot): boolean => {
+      const last = asset.rows.at(-1)?.tradingDate
+      return last === undefined || dayOf(windowEnd) - dayOf(last) > marketPulsePolicy.etfStaleAfterMs
+    }
+    if (tooOld(btc) || tooOld(eth)) return false
+    const ethDates = new Set(eth.rows.map((row) => row.tradingDate))
+    const btcDates = new Set(btc.rows.map((row) => row.tradingDate))
+    // The days the two actually share must line up one for one. Each series is already strictly
+    // increasing per asset, so this cannot fail today; it is written out because removing that per-asset
+    // check must not make a misaligned pair look aligned.
+    const shared = (rows: readonly { tradingDate: string }[], other: Set<string>): readonly string[] =>
+      rows.filter((row) => other.has(row.tradingDate)).map((row) => row.tradingDate)
+    const btcShared = shared(btc.rows, ethDates)
+    const ethShared = shared(eth.rows, btcDates)
+    if (btcShared.length === 0 || btcShared.length !== ethShared.length || btcShared.some((date, index) => date !== ethShared[index])) return false
+    return isWithinEtfPublicSnapshotDtoBudget(value)
   } catch {
     return false
   }

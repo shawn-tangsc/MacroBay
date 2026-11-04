@@ -100,6 +100,26 @@ describe('intelligenceQueryContracts', () => {
     expect(isVisibleEtfPublicSnapshot(snapshot, '2026-08-08T10:00:00.000Z')).toBe(true)
     expect(isVisibleEtfPublicSnapshot(snapshot, '2026-08-08T10:00:00.001Z')).toBe(false)
   })
+
+  it('lets one ETF report a trading day behind the other, and refuses only misalignment', () => {
+    const snapshot = safeEtfPublicSnapshot()
+    const rows = (dates: readonly string[], sign: number) => dates.map((tradingDate, index) => ({
+      tradingDate, netFlowUsd: sign * (index + 1), observedAt: snapshot.verifiedAt
+    }))
+    // ETH closes its books one session later than BTC. That used to invalidate the whole snapshot, which
+    // blanked both cells: one product's schedule erased the other product's number.
+    const lagging = { ...snapshot, eth: { asset: 'ETH' as const, rows: rows(['2026-07-31', '2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'], -1) } }
+    expect(isValidEtfPublicSnapshot(lagging)).toBe(true)
+    // The series may also be a different length: each asset carries its own rows.
+    expect(isValidEtfPublicSnapshot({ ...snapshot, eth: { asset: 'ETH' as const, rows: rows(['2026-07-30', ...['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05']], -1) } })).toBe(true)
+    // A series running past the window end is not a lag but an error.
+    expect(isValidEtfPublicSnapshot({ ...snapshot, eth: { asset: 'ETH' as const, rows: rows(['2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06'], -1) } })).toBe(false)
+    // A lag has a floor: dropping the equal-endpoint rule must not swing from too strict to too loose,
+    // or a snapshot from a month ago would pass. The bound is the renderer's own 96h constant.
+    expect(isValidEtfPublicSnapshot({ ...snapshot, eth: { asset: 'ETH' as const, rows: rows(['2026-07-27', '2026-07-28', '2026-07-29', '2026-07-30', '2026-07-31'], -1) } })).toBe(false)
+    // Two series that never share a trading day were never comparable inside this window.
+    expect(isValidEtfPublicSnapshot({ ...snapshot, eth: { asset: 'ETH' as const, rows: rows(['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05'], -1) } })).toBe(false)
+  })
 })
 
 function safeEtfPublicSnapshot() {
