@@ -1267,7 +1267,6 @@ export type PlatformText = {
     channelBlockedAdapterNotSupported: string
     channelBlockedCredentialMissing: string
     channelBlockedNotEnabled: string
-    channelBlockedNoTarget: string
     sendTestHint: string
     sendTestSent: string
     sendTestToastOff: string
@@ -2621,7 +2620,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelBlockedAdapterNotSupported: '这一类频道不能用来发通知，换一个已接入的类型。',
       channelBlockedCredentialMissing: '这个频道还没填凭据，在频道设置里填好才能发消息。',
       channelBlockedNotEnabled: '这个频道没有启用，或者没有启动起来，在频道设置里启用它。',
-      channelBlockedNoTarget: '这个频道已经能发消息，但还没有绑定要发到哪个会话，先选一个目标。',
       sendTestHint:
         '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
       centerRecordedGroup: '仅记录',
@@ -3970,7 +3968,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelBlockedAdapterNotSupported: 'Notifications cannot be delivered to this type of channel; choose a supported type.',
       channelBlockedCredentialMissing: 'No credential is saved for this channel; add one in the channel settings before it can send.',
       channelBlockedNotEnabled: 'This channel is not enabled, or its runtime is not up; enable it in the channel settings.',
-      channelBlockedNoTarget: 'This channel can send, but no conversation is bound yet; choose a target first.',
       sendTestHint:
         'This only proves the pipeline works; it describes no real event. Whether the desktop banner appears is up to the system — if you do not see it, allow notifications in System Settings as described above and press the button again.',
       centerRecordedGroup: 'Recorded only',
