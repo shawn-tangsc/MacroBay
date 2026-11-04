@@ -319,12 +319,15 @@ function macroRow(
     }
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
+    // The level is the fact a reader wants ("what is the dollar at"), and the 24-hour move is its own
+    // column. Printing the return under `format: percent` made "美元 -0.21%" read as a price.
     const materiality = marketMoveMateriality(normalize(value), briefingDataMaterialityPolicy.marketPercent, code)
     return Object.freeze({
       id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
       state: 'available' as const,
-      value: Object.freeze({ number: normalize(value), format: 'percent' as const }),
-      change: null, window: 'trading-day' as const, cadence: 'trading-day' as const, observedAt
+      value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
+      change: Object.freeze({ value: normalize(value), unit: 'percent' as const, window: '24h' as const }),
+      window: 'trading-day' as const, cadence: 'trading-day' as const, observedAt
     })
   }
   // The stored history answered the as-of level but not its 24h window. Printing the level keeps the

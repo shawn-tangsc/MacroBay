@@ -80,13 +80,16 @@ const packet = (input: PacketInput = {}): DailyBriefingFactPacket => {
           index: { '24h': { state: 'available', value: 0.82 } }
         }
       } as unknown as CrossAssetSnapshot,
+      // The packet's own macro-market shape: `asOf` is required, and the cast follows that shape
+      // rather than the interface this file used to import.
       macroMarket: {
         state: 'available',
+        asOf: asOf,
         readings: [
           { seriesId: 'dxy-real', level: 102.2, atMs: Date.parse(input.dxyAt ?? '2026-10-30T21:00:00.000Z'), returns: { '24h': 0.43 } },
           { seriesId: 'xau-usd', level: 3996, atMs: Date.parse(input.dxyAt ?? '2026-10-30T21:00:00.000Z'), returns: { '24h': -0.54 } }
         ]
-      } as unknown as MacroMarketSnapshotView,
+      } as unknown as DailyBriefingFactPacket['market']['macroMarket'],
       macroRates: input.rates ?? {
         state: 'available',
         readings: [
@@ -116,8 +119,10 @@ describe('daily briefing observation cadence', () => {
     const gold = rows.market.find((row) => row.id === 'gold')
 
     // Friday's close is the previous session: a 56-hour-old observation is not stale.
-    expect(dollar).toMatchObject({ state: 'available', cadence: 'trading-day', window: 'trading-day', value: { number: 0.43 } })
-    expect(gold).toMatchObject({ state: 'available', cadence: 'trading-day', value: { number: -0.54 } })
+    // The level is the row's value; the move is its own column, so a percent reading is never
+    // mistaken for a price.
+    expect(dollar).toMatchObject({ state: 'available', cadence: 'trading-day', window: 'trading-day', value: { format: 'level' }, change: { value: 0.43, unit: 'percent', window: '24h' } })
+    expect(gold).toMatchObject({ state: 'available', cadence: 'trading-day', value: { format: 'level' }, change: { value: -0.54, unit: 'percent', window: '24h' } })
     expect(tenYear).toMatchObject({
       state: 'available',
       cadence: 'trading-day',
