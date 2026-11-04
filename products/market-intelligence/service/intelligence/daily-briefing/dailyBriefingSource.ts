@@ -1,5 +1,6 @@
 import type { AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
 import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
+import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { MacroHistoryAsOfReading, MacroHistoryAsOfSeries } from '../public-query/macroHistoryAsOf'
@@ -13,7 +14,7 @@ import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLoca
 import type { DailyBriefingSource, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
-import { readBriefingMarketSnapshot } from './dailyBriefMarketReading'
+import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
 import {
   collectAnalysisPriorConclusions,
@@ -70,7 +71,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        safe(() => readBriefingMarketSnapshot(deps.publicQuery, input.asOf), undefined),
+        readBriefingMarketSnapshotWithMarker(deps.publicQuery, input.asOf),
         buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
@@ -309,4 +310,25 @@ function ratesAsOf(
     state: readings.length > 0 ? 'available' as const : 'empty' as const,
     readings: Object.freeze(readings)
   })
+}
+
+/**
+ * The brief's own market read, with the one log line that explains an empty row.
+ *
+ * A row that ends up empty has three possible causes — the query params, the snapshot, or the bar's
+ * own absence — and they were only distinguishable by digging through the database. One marker names
+ * all three, on the run that hit it.
+ */
+async function readBriefingMarketSnapshotWithMarker(
+  reader: Readonly<{ queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<CrossAssetSnapshot | undefined> }>,
+  asOf: string
+): Promise<CrossAssetSnapshot | undefined> {
+  try {
+    const snapshot = await readBriefingMarketSnapshot(reader, asOf)
+    logBriefingMarketRead({ asOf, knowledgeAt: briefingMarketKnowledgeAt(asOf), snapshot, failure: null })
+    return snapshot
+  } catch (error) {
+    logBriefingMarketRead({ asOf, knowledgeAt: briefingMarketKnowledgeAt(asOf), snapshot: undefined, failure: String(error).slice(0, 160) })
+    return undefined
+  }
 }

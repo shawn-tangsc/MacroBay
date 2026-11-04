@@ -30,7 +30,7 @@ export type BriefingMarketReader = Readonly<{
   queryCrossAssetSnapshot: (input: {
     range: '24h'
     asOf: string
-    knowledgeAt?: string
+    knowledgeAt: string
   }) => Promise<BriefingMarketSnapshot | undefined>
 }>
 
@@ -38,11 +38,14 @@ export type BriefingMarketReader = Readonly<{
  * The market this edition is about: the window that ends at its cutoff, read with the late-data grace.
  */
 export function readBriefingMarketSnapshot<T extends BriefingMarketSnapshot>(
-  reader: Readonly<{ queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt?: string }) => Promise<T | undefined> }>,
+  reader: Readonly<{ queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<T | undefined> }>,
   asOf: string
 ): Promise<T | undefined> {
+  // Required, never defaulted: an unreadable cutoff cannot produce a knowledge instant, and asking
+  // without one silently falls back to the frozen as-of view.
   const knowledgeAt = briefingMarketKnowledgeAt(asOf)
-  return reader.queryCrossAssetSnapshot({ range: '24h', asOf, ...(knowledgeAt ? { knowledgeAt } : {}) })
+  if (!knowledgeAt) return Promise.reject(new Error('invalid-cutoff'))
+  return reader.queryCrossAssetSnapshot({ range: '24h', asOf, knowledgeAt })
 }
 
 /**
@@ -53,4 +56,23 @@ export function readBriefingMarketSnapshot<T extends BriefingMarketSnapshot>(
  */
 export function briefingMarketReady(snapshot: BriefingMarketSnapshot | undefined): boolean {
   return crossAssetQuotesReady(snapshot)
+}
+
+/** One log line that answers "why is this row empty" without a database dig. */
+export function logBriefingMarketRead(input: Readonly<{
+  asOf: string
+  knowledgeAt: string | undefined
+  snapshot: BriefingMarketSnapshot | undefined
+  failure: string | null | undefined
+}>): void {
+  console.log(JSON.stringify({
+    marker: 'MI_DAILY_BRIEF_MARKET_READ',
+    asOf: input.asOf,
+    knowledgeAt: input.knowledgeAt ?? null,
+    snapshot: input.snapshot !== undefined,
+    btc: input.snapshot?.closedReturns.btc?.['24h']?.state ?? 'missing',
+    eth: input.snapshot?.closedReturns.eth?.['24h']?.state ?? 'missing',
+    index: input.snapshot?.closedReturns.index?.['24h']?.state ?? 'missing',
+    failure: input.failure ?? null
+  }))
 }

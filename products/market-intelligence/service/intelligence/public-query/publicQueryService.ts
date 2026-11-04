@@ -122,7 +122,8 @@ export type MarketIntelligencePublicQueryService = {
    * where the cross-asset store and runtime live. The payload is validated with the same
    * parser the renderer uses, so the analysis can never read a shape the panel would reject.
    */
-  queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string }) => Promise<CrossAssetSnapshot | undefined>
+  /** `knowledgeAt` is required: a caller that forgets it silently asks the frozen as-of view. */
+  queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string; knowledgeAt: string }) => Promise<CrossAssetSnapshot | undefined>
   /** Why the last cross-asset read answered nothing; see `crossAssetFailureReason`. */
   getCrossAssetQueryFailure?: () => string | null
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
@@ -174,7 +175,7 @@ type MarketCalendarQuery = {
 }
 
 type CrossAssetQuery = {
-  query: (input: { range: CrossAssetRange; asOf?: string }) => unknown
+  query: (input: { range: CrossAssetRange; asOf?: string; knowledgeAt?: string }) => unknown
 }
 
 type MacroMarketSnapshotQuery = {
@@ -350,7 +351,8 @@ export function createMarketIntelligencePublicQueryService(
       }
       let raw: unknown
       try {
-        raw = crossAssetQuery.query({ range: queryInput.range, asOf: queryInput.asOf })
+        // Forwarded whole: dropping `knowledgeAt` reverted every caller to the frozen as-of view.
+        raw = crossAssetQuery.query({ range: queryInput.range, asOf: queryInput.asOf, knowledgeAt: queryInput.knowledgeAt })
       } catch (error) {
         recordCrossAssetFailure(crossAssetThrew(error))
         return undefined
@@ -426,7 +428,8 @@ export function createMarketIntelligencePublicQueryService(
 }
 
 function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string, newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined): DivergenceLegReader {
-  const readPriceLeg = createPriceLegReader(input => service.queryCrossAssetSnapshot(input))
+  // The divergence legs read the window's own view: the price leg's instant is its knowledge cutoff.
+  const readPriceLeg = createPriceLegReader((input) => service.queryCrossAssetSnapshot({ ...input, knowledgeAt: input.asOf }))
   return {
     stablecoin: async () => {
       const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })

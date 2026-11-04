@@ -188,25 +188,25 @@ describe('publicQueryService hindsight regressions', () => {
     const service = createMarketIntelligencePublicQueryService({ pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => [] })
 
     // Nothing wired yet: the analysis must read "no cross-asset evidence", not crash.
-    expect(await service.queryCrossAssetSnapshot({ range: '24h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '24h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     service.setCrossAssetQuery({ query })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toMatchObject({ mode: 'historical', range: '1h' })
-    expect(query).toHaveBeenCalledWith({ range: '1h', asOf: AS_OF })
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toMatchObject({ mode: 'historical', range: '1h' })
+    expect(query).toHaveBeenCalledWith({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })
   })
 
   it('fails closed on a throwing or malformed cross-asset query instead of leaking an unvalidated shape', async () => {
     const service = createMarketIntelligencePublicQueryService({ pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => [] })
 
     service.setCrossAssetQuery({ query: () => { throw new Error('store-unavailable') } })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     // A snapshot the renderer would reject is not evidence the analysis may cite.
     service.setCrossAssetQuery({ query: () => ({ schemaVersion: 1, mode: 'historical' }) })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     service.setCrossAssetQuery(undefined)
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
   })
 
   it('reads the macro history through one late-bound reader, and fails closed when it is unwired', () => {
@@ -612,7 +612,7 @@ describe('publicQueryService hindsight regressions', () => {
 
   it('serves the wired 0xRouter market calendar page and stops serving it after it is unset', () => {
     const page = { state: 'available' as const, month: '2026-09', locale: 'zh' as const, asOf: AS_OF, events: [],
-      sources: ['economic-indicator', 'financial-event', 'central-bank-activity'].map(eventType => ({ eventType,
+      sources: (['economic-indicator', 'financial-event', 'central-bank-activity'] as const).map(eventType => ({ eventType,
         status: 'success' as const, sourceObservedAt: AS_OF })) }
     const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
     service.setMarketCalendarQuery({ queryMonth: () => page })

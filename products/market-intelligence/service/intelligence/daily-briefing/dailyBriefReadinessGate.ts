@@ -137,7 +137,7 @@ export async function awaitDailyBriefReadiness(
  * — but it is the one line an operator needs to find when a morning looks thin.
  */
 export function createDailyBriefReadinessFor(reader: Readonly<{
-  queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt?: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
+  queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<Parameters<typeof crossAssetQuotesReady>[0]>
   /** Why the last cross-asset read failed, when it did; the probe's own record of "not available". */
   getCrossAssetQueryFailure?: () => unknown
 }>): DailyBriefReadiness {
