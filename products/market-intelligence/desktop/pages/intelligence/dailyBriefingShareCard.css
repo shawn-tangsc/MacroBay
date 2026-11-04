@@ -202,7 +202,9 @@
    grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
    pushed the card past 114px — the DOM looked right and the paper did not. */
 .mi-brief-poster__price-card { display: grid; grid-template-columns: minmax(0, 1fr) 100px; grid-template-rows: 114px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
-.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+/* Two ends, not the middle: the label sits at the top and the time at the card's foot, matching the
+   approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; min-width: 0; }
 .mi-brief-poster__price-label { font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The number and its amplitude on one baseline row: one reading, not two lines. */
 .mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
