@@ -33,6 +33,7 @@ import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../.
 import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
 import { channelAdapterDescriptor } from '../../../ai/agent-platform/channels/channelAdapterDescriptors'
 import { autoBindDeliveryTarget } from '../../../ai/agent-platform/channels/channelAutoTargetBinding'
+import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
 import { getPlatformFetch } from '../../../network/platformFetch'
@@ -67,17 +68,22 @@ import type { createRepositories } from './repositories'
  * 这里只在启动恢复时按库里的 active 行起停，不自己拍证据。
  */
 export type ChannelsAndJobsPorts = Readonly<{
-  settingsStore: ReturnType<typeof createPlatformCore>['settingsStore']
+  /**
+   * 平台核心（与 `agentRuntime` / `assistantsAndRuntimes` 同一个口）：设置、时区、**日志写入器**都从这里取。
+   * 用整块 core 而不是逐个字段，是因为这条事件的失败留痕要写 `app.log`，而 `app.ts` 是受保护接缝，
+   * 不该为一条通知再长长——频道自己的装配留在频道自己的分片里。
+   */
+  core: ReturnType<typeof createPlatformCore>
   /** 三条状态广播的唯一出口；发送那一刻才去取主窗。 */
   agentBroadcasts: AgentBroadcasts
   /** 入站消息要推进的那台运行时；与智能体线共用同一实例，不另建。 */
   agentRuntimeService: ReturnType<typeof createAgentRuntime>['agentRuntimeService']
   /**
-   * 通知提交口（P8「频道连不上」用）。**现取**：通知运行时晚于这里构造，
-   * 传一个实例会拿到未就绪的那个，所以这里只传一个每次调用才解析一次的闭包。
+   * 通知提交口（P8「频道连不上」用）。缺省就是主进程那个通知运行时——**调用时才解析**，
+   * 因为它晚于这里构造。留成可选口只为一个理由：单独测这一片时能换成假的。
    */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-  /** 主进程唯一日志口（`userData/logs/app.log`，写入前统一脱敏）：P8 提交失败要在这里留一行。 */
+  /** 日志口（缺省是主进程唯一写入器）。同样是「留个口子好测」，不为别的。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   repositories: Pick<
     ReturnType<typeof createRepositories>,
@@ -101,7 +107,13 @@ export type ChannelsAndJobsPorts = Readonly<{
 }>
 
 export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
-  const { settingsStore, agentBroadcasts, agentRuntimeService } = ports
+  const { core, agentBroadcasts, agentRuntimeService } = ports
+  const { settingsStore, appLog } = core
+  // P8 的两根线在这里收口：`app.ts` 是受保护接缝，不该因为多一条事件就长长——频道自己的装配
+  // 留在频道自己的组合分片里，`app.ts` 只留一次调用。
+  const submitNotification = ports.submitNotification ??
+    ((request: NotificationSubmitRequest) => getNotificationRuntime().submit(request))
+  const log = ports.log ?? appLog.log
   const {
     agentDatabase,
     agentRepositories,
@@ -269,7 +281,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
         try {
           const name = channelManagementRepository.query.get(channelId)?.name ?? null
           const language = (await settingsStore.get()).language
-          await notifyChannelConnectionLost(ports.submitNotification, {
+          await notifyChannelConnectionLost(submitNotification, {
             channelId,
             channelName: name ?? channelAdapterDescriptor('telegram').displayName[language],
             cause,
@@ -280,7 +292,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
           // 「不把应用带走」不等于「不留痕」（2026-11-04 立的规矩：失败不许静默）。最可能的失败是
           // 提交被拒（unknown-event-type / 批准表不匹配 / bodyVariant 写错）——那时 P8 永远不响，
           // 若这里也空白，就只剩「没反应」这一个现象，正是今晚反复出现的那类黑箱。
-          ports.log?.('error', 'channel.connection-lost.submit-failed', {
+          log('error', 'channel.connection-lost.submit-failed', {
             channelId,
             cause,
             disconnectedAt,
