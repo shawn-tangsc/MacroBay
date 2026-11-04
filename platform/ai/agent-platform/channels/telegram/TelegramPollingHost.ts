@@ -2,6 +2,7 @@ import type { ChannelInboundService } from '../ChannelInboundService'
 import type { ChannelInboundResult } from '../ChannelInboundContracts'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramApiClient } from './TelegramApiClient'
+import { telegramChatId } from './TelegramDeliveryTransport'
 import { normalizeTelegramUpdate } from './TelegramUpdateNormalizer'
 
 type Timer = ReturnType<typeof setTimeout>
@@ -87,6 +88,12 @@ export class TelegramPollingHost {
         continue
       }
       const result = await this.deps.inbound.receive({
+        // 没有权限这类「必须回一句」的场景：走同一条通道、同一个会话键。
+        reply: async (text: string) => {
+          const chatId = telegramChatId(fact.conversationKey)
+          if (!chatId) return
+          await this.deps.api.sendMessage(chatId, text, true, this.deps.signal)
+        },
         channelId: this.deps.channelId,
         generation: this.deps.generation,
         providerEventKey: fact.eventKey,

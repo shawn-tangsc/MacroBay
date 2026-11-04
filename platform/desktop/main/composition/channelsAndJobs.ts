@@ -190,6 +190,10 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
       channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
     }),
     onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId),
+    // 未授权会话的拒绝句：只有「你没有权限」这一句，不写频道 id / 管理员 / 配置。
+    deniedReplyText: async () => (await settingsStore.get()).language === 'zh-CN'
+      ? '你没有权限使用这个机器人，请联系管理员开放访问。'
+      : "You don't have permission to use this bot. Ask the administrator to grant access.",
     // 入站消息到达且这条频道还没有投递目标时，自动把它记成唯一目标（不覆盖已有绑定）。
     bindAutoTarget: ({ channelId, conversationId }) => {
       autoBindDeliveryTarget(agentDatabase, { channelId, conversationId, now: new Date() })

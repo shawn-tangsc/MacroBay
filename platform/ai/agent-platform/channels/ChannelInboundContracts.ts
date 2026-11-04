@@ -28,6 +28,11 @@ export type ChannelInboundFacts = {
 
 export type ChannelInboundRequest = ChannelInboundFacts & {
   acknowledge: () => Promise<void>
+  /**
+   * 回一句话给发起人（宿主提供，走同一条通道）。
+   * 目前只用于「没有权限」这一档：静默忽略是装死，读者不知道自己被挡住。
+   */
+  reply?: (text: string) => Promise<void>
 }
 
 export type ChannelInboundResult = {

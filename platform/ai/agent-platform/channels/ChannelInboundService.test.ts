@@ -107,6 +107,45 @@ describe('ChannelInboundService', () => {
     expect(rebound.agent_session_id).not.toBe(first.agent_session_id)
   })
 
+  it('answers an unauthorized conversation once, and never leaks internals in the refusal', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { deniedReplyText?: () => Promise<string> } }).deps.deniedReplyText =
+      async () => '你没有权限使用这个机器人，请联系管理员开放访问。'
+    const replies: string[] = []
+    const request = {
+      ...baseFacts({ providerConversationKey: 'conversation-denied', providerUserKey: 'stranger', providerEventKey: 'denied-1' }),
+      channelId: 'channel-a',
+      acknowledge: async () => {},
+      reply: async (text: string) => { replies.push(text) }
+    }
+
+    await service.receive(request)
+    await service.receive({ ...request, providerEventKey: 'denied-2' })
+
+    // 十分钟内同一个未授权会话只回一次。
+    expect(replies).toEqual(['你没有权限使用这个机器人，请联系管理员开放访问。'])
+    // 正文里不许出现频道 id 这类内部信息。
+    expect(replies[0]).not.toContain('channel-a')
+    // 审计照旧记 channel-policy-denied。
+    expect(database.connection.prepare(
+      "select count(*) as count from channel_runtime_audits where channel_id = 'channel-a' and code = 'channel-policy-denied'"
+    ).get()).toEqual({ count: 2 })
+  })
+
+  it('answers a different unauthorized conversation separately', async () => {
+    const { service } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { deniedReplyText?: () => Promise<string> } }).deps.deniedReplyText = async () => 'no access'
+    const replies: string[] = []
+    const base = { ...baseFacts(), channelId: 'channel-a', acknowledge: async () => {}, reply: async (text: string) => { replies.push(text) } }
+
+    await service.receive({ ...base, providerConversationKey: 'conversation-x', providerUserKey: 'stranger-x', providerEventKey: 'denied-x' })
+    await service.receive({ ...base, providerConversationKey: 'conversation-y', providerUserKey: 'stranger-y', providerEventKey: 'denied-y' })
+
+    expect(replies).toHaveLength(2)
+  })
+
   it('requires explicit allow policy and structured mention for groups and channels, without turning discovery into targets', async () => {
     const { service, database, repository } = createHarness()
     await allow(service, 'channel-a', 'user-a', 'group')

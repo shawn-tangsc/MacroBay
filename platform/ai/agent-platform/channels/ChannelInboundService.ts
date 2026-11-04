@@ -30,10 +30,14 @@ export type ChannelInboundServiceDependencies = {
    * 界面上没有绑定入口，所以这一步不能指望读者动手。
    */
   bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
+  /** 「没有权限」那句人话（按界面语言给）；缺省时只记审计、不回话。 */
+  deniedReplyText?: () => Promise<string>
 }
 
 export class ChannelInboundService {
   private readonly conversationResolutions = new Map<string, Promise<{ record: ChannelConversationRecord; created: boolean }>>()
+  /** 「拒绝回话」的限频：每 (频道, 会话) 十分钟最多一次，免得对方狂发变成我们刷屏。 */
+  private readonly deniedReplies = new Map<string, number>()
   // This queue is main-process-only; provider-facing results never expose execution ownership.
   private readonly initialClaims = new Map<string, ChannelExecutionClaim>()
   private readonly deps: ChannelInboundServiceDependencies
@@ -77,6 +81,8 @@ export class ChannelInboundService {
       const decision = guarded.rejection ?? await this.policyDecision(request, userHash, conversationHash)
       if (decision === 'channel-policy-denied') {
         this.recordCandidate(request, { encryptedUser, encryptedConversation, userHash, conversationHash, now })
+        // 静默忽略是装死：明确回一句拒绝，但**限频**——同一个人十分钟内只回一次。
+        await this.replyDeniedOnce(request, conversationHash, now)
       } else if (decision === null && this.deps.repository.allowList(request.channelId).length === 0) {
         // 「允许所有」时把见过的会话记进**候选表**，方便读者以后照着填允许列表。
         // 绝不写进允许列表本身：一写，列表就非空，语义会在第一条消息后静默收紧成「只允许这一个」。
@@ -244,6 +250,25 @@ export class ChannelInboundService {
 
   setDeliveryTarget(input: { channelId: string; conversationId: string; enabled: boolean }): boolean {
     return this.deps.repository.setDeliveryTarget(input.channelId, input.conversationId, input.enabled, this.now())
+  }
+
+  /**
+   * 未授权会话的明确拒绝：回一句话、同会话十分钟一次。
+   * 正文由组合根按界面语言给，这里不加频道 id、管理员、配置——拒绝句只回答「你没有权限」。
+   */
+  private async replyDeniedOnce(request: ChannelInboundRequest, conversationHash: string, now: Date): Promise<void> {
+    if (!request.reply || !this.deps.deniedReplyText) return
+    const key = `${request.channelId}:${conversationHash}`
+    const last = this.deniedReplies.get(key)
+    const windowMs = 10 * 60_000
+    if (last !== undefined && now.getTime() - last < windowMs) return
+    this.deniedReplies.set(key, now.getTime())
+    try {
+      await request.reply(await this.deps.deniedReplyText())
+    } catch {
+      // 回不出去不影响审计与准入：拒绝句失败不该把一个被挡的消息变成重试风暴。
+      this.deniedReplies.delete(key)
+    }
   }
 
   private recordCandidate(
