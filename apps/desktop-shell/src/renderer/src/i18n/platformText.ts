@@ -1765,7 +1765,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeAgentMissing: '绑定的助手不在了，收不到消息',
         runtimeWorkCapacityExhausted: '待处理的消息太多，暂停接收',
         runtimeLifecycleFenced: '运行的代际变了，这次处理被放弃',
-        runtimeInboundFailed: '收到的消息没能处理成功'
+        runtimeInboundFailed: '收到的消息没能处理成功',
+        runtimeConversationSwitched: '这个对话已切换到新助手的会话'
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: '连接已启动',
@@ -1786,12 +1787,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegramUpdateInvalid: '收到一条看不懂的消息，已跳过'
       }),
       channelLogDeliveryText: Object.freeze({
-        'channel-delivery-skipped': '这一次没有发出去',
         // 具体码优先：有它就不再显示下面那句兜底。
         'delivery-provider-rejected': '平台拒绝了这条消息（可能是找不到这个会话）',
         'delivery-target-invalid': '目标会话的 ID 不合法，一个请求都没发出去',
         'delivery-rate-limited': '被平台限流了，等一会儿会自动重试',
         'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去',
+        'channel-delivery-unavailable': '通道暂时不可用，这条没有发出去',
+        'delivery-target-disabled': '接收的目标已停用，这条没有发出去',
+        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去',
+        'delivery-not-authorized': '没有权限发到这条对话，这条没有发出去',
+        'delivery-permission-denied': '没有权限发到这条对话，这条没有发出去',
         // 兜底：只有拿不到具体码时才会出现，别把它当解释。
         'channel-delivery-failed': '这次没有发出去，具体原因没有记录',
         'delivery-send-lease-expired': '发送没有回音，按未确认处理',
@@ -3102,7 +3107,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         runtimeAgentMissing: 'the bound agent is gone, so messages are not handled',
         runtimeWorkCapacityExhausted: 'too many messages are waiting, so receiving paused',
         runtimeLifecycleFenced: 'the runtime generation changed, so this handling was dropped',
-        runtimeInboundFailed: 'an incoming message could not be handled'
+        runtimeInboundFailed: 'an incoming message could not be handled',
+        runtimeConversationSwitched: "this conversation now uses the new assistant's session"
       }),
       channelLogLifecycleText: Object.freeze({
         runtimeStarted: 'connection started',
@@ -3123,11 +3129,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegramUpdateInvalid: 'an incoming update could not be understood and was skipped'
       }),
       channelLogDeliveryText: Object.freeze({
-        'channel-delivery-skipped': 'this one was not sent',
         'delivery-provider-rejected': 'the platform rejected this message (the conversation may not exist)',
         'delivery-target-invalid': 'the target conversation ID is not valid, so nothing was sent',
         'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly',
         'delivery-host-unavailable': 'the channel host is not running, so nothing was sent',
+        'channel-delivery-unavailable': 'the channel is temporarily unavailable, so nothing was sent',
+        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent',
+        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent',
+        'delivery-not-authorized': 'no permission to send to that conversation, so nothing was sent',
+        'delivery-permission-denied': 'no permission to send to that conversation, so nothing was sent',
         'channel-delivery-failed': 'this one was not sent, and no specific reason was recorded',
         'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
         'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',

@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { DELIVERY_NOT_SHOWN_CODES } from './channelLogs'
 import { platformText } from '../../../i18n/platformText'
 import { CHANNEL_FAILURE_REASON_CODES } from './channelSettingsPresentation'
 import { CHANNEL_SUCCESS_CODES } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
@@ -21,6 +22,8 @@ const channelServiceDir = resolve(root, '../../platform/ai/agent-platform/channe
  * 「会一路传到读者眼前」的那几个出口。豁免表加一条，等于公开承认「这个码不给读者看」。
  */
 const EXEMPT_LOG_ONLY: Readonly<Record<string, string>> = {
+  'dispatch-conversation-unbound':
+    '入站分发失败码：手机上那句回答由组合根的文案表给出（channelsAndJobs.ts），不进设置页失败码表',
   'lark-network-unavailable': '本版界面只接 Telegram；飞书未接入时的运行时码，用户看不到',
   'lark-provider-rejected': '同上',
   'lark-rate-limited': '同上',
@@ -30,6 +33,22 @@ const EXEMPT_LOG_ONLY: Readonly<Record<string, string>> = {
 }
 
 const CODE_PATTERN = /(?:code|stableErrorCode|runtimeReason)\s*:\s*'([a-z][a-z0-9-]*)'/gu
+
+/** 投递链上的码：它们可能出现在审计里，界面必须给它们一个明确的归属（显示 / 不显示 / 豁免）。 */
+const DELIVERY_CODE_PATTERN = /'(channel-delivery-[a-z-]+|delivery-[a-z-]+|unknown-after-send)'/gu
+
+/** 只在日志/内部状态里用、不上这一栏的投递码：每条都写清为什么不给读者看。 */
+const DELIVERY_EXEMPT: Readonly<Record<string, string>> = {
+  'channel-delivery-unknown': '投递层「结果不明」的内部状态；读者看到的那一档由 unknown-after-send 表达',
+  'delivery-empty-output': '渲染出空正文的内部状态，属于实现缺陷，不是读者可理解的原因',
+  'delivery-owner-invalid': '投递租约内部状态，读者无法据此做任何事',
+  'delivery-retry-not-permitted': '重试是否允许的内部判定，读者看到的是最终结果',
+  'delivery-transport-unknown': '传输层未知态；具体原因由 provider/network 码给出'
+}
+
+export function deliveryCodesIn(source: string): string[] {
+  return [...source.matchAll(DELIVERY_CODE_PATTERN)].map((match) => match[1]!)
+}
 
 /** 把一段源码里的码位置上出现的字面量连同行号取出来（导出给「该命中」夹具用）。 */
 export function scanCodeLiterals(source: string): { code: string; line: number }[] {
@@ -87,6 +106,34 @@ describe('every code the channel service can return has words', () => {
         expect(sentence).not.toContain('not reported')
       }
     }
+  })
+
+  it('gives every delivery code an owner: shown with copy, deliberately hidden, or exempt with a reason', () => {
+    const files: string[] = []
+    collect(channelServiceDir, files)
+    const deliveryCopy = new Set(Object.keys(platformText['zh-CN'].settings.channelLogDeliveryText))
+    const unclassified: string[] = []
+    const seen = new Set<string>()
+    for (const file of files) {
+      for (const code of deliveryCodesIn(readFileSync(file, 'utf8'))) {
+        if (seen.has(code)) continue
+        seen.add(code)
+        // `unknown-after-send` 有自己的整句（中性「不确定」那档），不在失败码表里。
+        const classified =
+          deliveryCopy.has(code) ||
+          DELIVERY_NOT_SHOWN_CODES.has(code) ||
+          Object.hasOwn(DELIVERY_EXEMPT, code) ||
+          code === 'unknown-after-send'
+        if (!classified) unclassified.push(`${code} (${relative(root, file)})`)
+      }
+    }
+    // 扫不到东西的绿是假绿：先证明真的扫到了投递码。
+    expect(seen.size).toBeGreaterThan(3)
+    expect(unclassified).toEqual([])
+  })
+
+  it('catches an unknown delivery code — the fixture must fail, not pass', () => {
+    expect(deliveryCodesIn("audit(id, 'delivery-brand-new-code')")).toEqual(['delivery-brand-new-code'])
   })
 
   it('catches an unknown code in a code position — the fixture must fail, not pass', () => {

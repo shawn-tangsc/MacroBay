@@ -49,13 +49,19 @@ export type ChannelLogSources = {
 const MAX_ROWS = 50
 
 /**
- * 投递审计里表示**成功**的码。它们不进「发送失败」那一类，一条都不画。
+ * 投递审计里**不属于「发送失败」**的码，一条都不画。两种：
+ * - 成功（`channel-delivery-delivered`）：画出来就是「发送失败：没有更多说明」；
+ * - 按规则没发（`channel-delivery-skipped`：未订阅、被抑制、免打扰之类）：这不是通道坏了，
+ *   放进失败类会让读者以为通道故障——和把成功说成失败是同一类错。
  *
- * 为什么用「成功名单」而不是「失败名单」：把不认识的成功码画成失败，正是用户今晚看到
- * 「四条发送失败全是成功」的原因；而失败侧有文案表兜着（表里没有的码一律不显示），
- * 两个方向都不会把成功说成失败。
+ * 用「不显示名单」而不是「失败名单」：把不认识的成功码画成失败，正是用户今晚看到
+ * 「四条发送失败全是成功」的原因；失败侧另有文案表兜着（表里没有的码一律不显示）。
+ * 边界：**码表覆盖守卫必须一直在**，否则「不显示」会变成掩盖遗漏的办法。
  */
-const DELIVERY_SUCCESS_CODES: ReadonlySet<string> = new Set(['channel-delivery-delivered'])
+export const DELIVERY_NOT_SHOWN_CODES: ReadonlySet<string> = new Set([
+  'channel-delivery-delivered',
+  'channel-delivery-skipped'
+])
 
 export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels): ChannelLogRow[] {
   const rows: ChannelLogRow[] = []
@@ -117,7 +123,7 @@ export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels):
     // 这一类的标题是「最近一次发送失败」，所以**只有失败才进来**。
     // 成功码（`channel-delivery-delivered` 这类）一条都不画：画出来就是「发送失败：没有更多说明」，
     // 用户看到的失败一半其实是成功——今晚就是这么失去信任的。
-    if (DELIVERY_SUCCESS_CODES.has(entry.code)) continue
+    if (DELIVERY_NOT_SHOWN_CODES.has(entry.code)) continue
     // 「交出去了、拿不到回执」既不是成功也不是失败：它是「不确定」，不进「发送失败」那一类。
     // 面板上仍要能看见它，所以单独用 WARN 行，前缀也说「不确定」。
     const uncertain = entry.code === 'unknown-after-send'
