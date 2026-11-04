@@ -53,7 +53,8 @@ function documentWithData(overrides: Readonly<{ distribution?: boolean }> = {}):
       market: [
         row('btc', 'btc', 1.23, { percent: 3.2, high: 72_400, low: 69_800, anchor: 70_000 }, { close: 110_432.1, change: 1.23 }),
         row('eth', 'eth', 1.59, { percent: 2.4, high: 3_620, low: 3_520, anchor: 3_540 }, { close: 3_842.5, change: 1.59 }),
-        row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }, { close: 19_842.5, change: 0.82, indexSource: 'real' }),
+        // Production shape: the 24h percentage is `value`, and `change` is null on this row.
+        { ...row('index', 'index', 0.82, { percent: 1.1, high: 21_300, low: 21_070, anchor: 21_100 }, { close: 19_842.5, change: 0.82, indexSource: 'real' }), change: null },
         row('dxy', 'dxy', 0.43), row('gold', 'gold', -0.54), row('us10y', 'us10y', 4.12), row('us10y-real', 'us10yReal', 2.62)
       ],
       funds: [row('stablecoin', 'stablecoin', 2530), row('etf-btc', 'etfBtc', 110_300_000), row('etf-eth', 'etfEth', -88_600_000)],
@@ -865,5 +866,27 @@ describe('the index cell reads its stored close', () => {
     expect(cell.querySelector('b')?.textContent).toContain('%')
     expect(cell.textContent).not.toContain('19,842')
     expect(cell.textContent).not.toContain(text.noValue)
+  })
+})
+
+describe('the index row reads the production shape, not a convenient one', () => {
+  it('leads with the level even though this row carries no change', async () => {
+    const doc = documentWithData()
+    const index = doc.data.market.find((entry) => entry.id === 'index')!
+    // The shape the service actually writes: the 24h percentage sits in `value`, and `change` is null.
+    expect(index.change).toBeNull()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    const cell = host.querySelector('[data-reading="nasdaq"]')!
+    expect(cell.querySelector('b')?.textContent)
+      .toBe(formatBriefingValue({ number: 19_842.5, format: 'level' }, text.noValue, 'zh-CN'))
+    // The move comes from `value`, which is where the percentage lives — not from the null `change`.
+    expect(cell.querySelector('.mi-brief-poster__figure-change')?.textContent).toContain('0.82%')
   })
 })

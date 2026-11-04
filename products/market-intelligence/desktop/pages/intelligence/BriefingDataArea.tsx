@@ -132,12 +132,14 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     if (!row.change) return { primary: level, ...(bandPart ? { band: bandPart } : {}), ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
     return { primary: level, ...(bandPart ? { band: bandPart } : {}), change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
-  // The index row reads its close too — the level is what the reader came for, and the percentage is
-  // the move beside it. Without a stored close the cell keeps its old shape (the move as the number).
-  if ('close' in row && row.close !== undefined && row.change) {
+  // The index row reads its close too — the level is what the reader came for, and the 24h percentage is
+  // the move beside it. Note where that percentage lives: this row's `change` is null by construction and
+  // the percentage sits in `value`, so requiring `change` here made the branch unreachable in production
+  // while a fixture that invented a `change` kept it green.
+  if ('close' in row && row.close !== undefined && row.value !== null) {
     return {
       primary: formatBriefingValue({ number: row.close.value, format: 'level' }, text.noValue, locale),
-      change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: 'percent' }, locale))
+      change: changeOf(row.value.number, row.window, formatBriefingChange({ value: row.value.number, unit: 'percent' }, locale))
     }
   }
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
