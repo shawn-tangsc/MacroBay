@@ -5,7 +5,8 @@ import type { BriefingDataGroups } from '../../../contracts/dailyBriefingDataGro
 import type { BriefingMarketRow, BriefingPulseRow } from '../../../contracts/dailyBriefing'
 import type { PolicyPathOutcome } from '../../../contracts/policyPath'
 import type { DailyBriefingText } from './dailyBriefingText'
-import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
+import { resolveFearGreedSnapshotBucket } from '../../../contracts/intelligenceQueryContracts'
+import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type fearGreedBucketWords, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
@@ -17,7 +18,7 @@ import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, pol
  * arithmetic and the price geometry live in pure functions next door, because the assertions count
  * vertices and compare two renders — numbers, not pixels.
  */
-export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact, policyWords, changeArrows }: Readonly<{
+export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact, policyWords, changeArrows, fearGreedBuckets }: Readonly<{
   groups: BriefingDataGroups
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
@@ -26,6 +27,8 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
   policyWords: policyGaugeWords
   /** The ↑/↓ glyphs, owned by the positioning copy; the card prints no arrow of its own. */
   changeArrows: changeArrowWords
+  /** The fear-and-greed band words: the band itself is derived from the score, never stored. */
+  fearGreedBuckets: fearGreedBucketWords
 }>): React.ReactElement {
   const policy = groups.policyPath
   const readings = groups.readings
@@ -40,13 +43,13 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       <span className="mi-brief-poster__block-title">{text.groups.funds}</span>
       {/* Three fixed columns: a missing row leaves its cell empty instead of stretching the other two,
           so a value stays under the same heading on every edition. */}
-      <div className="mi-brief-poster__figure-line">{groups.funds.map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div>
+      <div className="mi-brief-poster__figure-line">{groups.funds.map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div>
     </div> : null}
     {readings.length > 0 ? <div className="mi-brief-poster__market-block" data-briefing-market-row="true">
       <span className="mi-brief-poster__block-title">{text.sections.markets}</span>
       {/* Three columns by two lines; five cells leave the sixth empty rather than reflowing. */}
-      <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div>
-      {readings.length > 3 ? <div className="mi-brief-poster__figure-line">{readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} formatTime={formatTime} />)}</div> : null}
+      <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div>
+      {readings.length > 3 ? <div className="mi-brief-poster__figure-line">{readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div> : null}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
       <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
@@ -60,9 +63,9 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
         // funding rate beside it, or the colour and the arrow would belong to different facts.
         return <div className="mi-brief-poster__card mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
           <span className="mi-brief-poster__leverage-copy" data-briefing-leverage-copy="true">
-            <span>{asset.toUpperCase()}</span>
+            <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())}</span>
             <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
-            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
+            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {text.positioningFee} {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · {text.positioningOpenInterest} {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
           </span>
           {/* Only when the edition carries a series: no series means no element at all, never a flat
               placeholder line, because a flat line claims nothing moved. */}
@@ -82,7 +85,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
  * and greed leads with the score and keeps the step since the last release. Everything else is a level
  * or a move with its window, and no cell prints an instant — the block stamps that once.
  */
-function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): Readonly<{ primary: string; secondary: string }> {
+function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords): Readonly<{ primary: string; secondary: string }> {
   const level = formatBriefingValue(row.value, text.noValue, locale)
   if (row.id === 'stablecoin') {
     const day = (row.auxiliaryChanges ?? []).find((change) => change.window === '1d' && change.unit === 'usd')
@@ -90,20 +93,24 @@ function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefing
     return { primary: level, secondary: dayText ? `${text.changeWindows['1d']} ${dayText}` : '' }
   }
   if (row.id === 'fear-greed') {
-    if (!row.change) return { primary: level, secondary: row.changeReason ? text.changeReasons[row.changeReason] ?? '' : '' }
-    return { primary: level, secondary: `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim() }
+    // The band is derived from the score by the collector's own table: the document holds the number,
+    // and a stored band would be the same fact twice — disagreeing at 24/25 the moment one moves.
+    const band = row.value ? resolveFearGreedSnapshotBucket(row.value.number) : undefined
+    const scored = band ? `${level}（${buckets[band]}）` : level
+    if (!row.change) return { primary: scored, secondary: row.changeReason ? text.changeReasons[row.changeReason] ?? '' : '' }
+    return { primary: scored, secondary: `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim() }
   }
   return { primary: level, secondary: keyMeta(row, text, locale) }
 }
 
-function Figure({ row, text, locale }: Readonly<{
+function Figure({ row, text, locale, buckets }: Readonly<{
   row: BriefingMarketRow | BriefingPulseRow
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
+  buckets: fearGreedBucketWords
 }>): React.ReactElement {
   const amplitude = 'amplitude' in row ? row.amplitude : undefined
-  const cell = cellCopy(row, text, locale)
+  const cell = cellCopy(row, text, locale, buckets)
   return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={cell.secondary ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
     <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
     <b>{cell.primary}</b>

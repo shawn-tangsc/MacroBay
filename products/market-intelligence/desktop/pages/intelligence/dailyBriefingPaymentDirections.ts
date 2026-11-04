@@ -49,3 +49,16 @@ export function changeArrowFor(value: number | undefined, words: changeArrowWord
   if (value === undefined || value === 0) return ''
   return value > 0 ? words.up : words.down
 }
+
+/**
+ * The fear-and-greed band words, resolved once from the copy that owns them.
+ *
+ * The band is derived from the score by the same table the collector uses (`resolveFearGreedSnapshotBucket`),
+ * so the document stores the score and nothing else: a stored band would be the same fact in two places,
+ * and the two disagree at a boundary. Only the words travel, and they travel from this one table.
+ */
+export type fearGreedBucketWords = Readonly<Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string>>
+
+export function briefingFearGreedBuckets(locale: 'zh-CN' | 'en-US'): fearGreedBucketWords {
+  return productText[locale].pages.intelligence.portal.dashboard.fearGreed.buckets
+}

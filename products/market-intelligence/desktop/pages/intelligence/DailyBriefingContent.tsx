@@ -17,7 +17,7 @@ import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
-import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
+import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { BRIEFING_PAPER_WIDTH } from './dailyBriefingExport'
 import { editorialFailureText } from './dailyBriefingPageDerived'
@@ -138,7 +138,7 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {showingEdition ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
       <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
         <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
-          <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+          <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} fearGreedBuckets={briefingFearGreedBuckets(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div>
       </div>
     </div> : null}

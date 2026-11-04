@@ -8,7 +8,7 @@ export const dailyBriefingText = {
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     noValue: '—',
-    sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '杠杆', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
+    sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
       policyProbability: '利率概率',
       // Two headings with meaning: "资金" covers flows and the stablecoin stock, so it is not "流向";
@@ -24,6 +24,11 @@ export const dailyBriefingText = {
     // tell 12 月 from 3 月, and the sheet pairs the move with the countdown on one line.
     policyOutcomeLead: '{month} 月{outcome}',
     policyDaysAway: '{days} 天',
+    // The card's heading names what the number is: a bare "BTC" over a big percentage says nothing about
+    // whether the percentage is open interest or a price move.
+    positioningChange: '{asset} · 24h 持仓变化',
+    positioningFee: '费率',
+    positioningOpenInterest: '持仓',
     comparison: { label: '较上一版', sameDirection: '方向未变', directionChanged: '方向由 {from} 转为 {to}', funding: '资金费率 BTC {value}', stablecoin: '稳定币 {value}', etf: '美国比特币现货基金 {value}', newMacro: '新增 {count} 条宏观事件' },
     groups: { market: '行情', funds: '资金', sentiment: '情绪' },
     tiers: { must: '重点', support: '补充', reference: '参考' },
@@ -273,7 +278,7 @@ export const dailyBriefingText = {
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
-    sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Leverage', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
+    sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },
     newsFocus: 'Focus',
@@ -284,6 +289,9 @@ export const dailyBriefingText = {
     policyOutcomes: { 'no-change': 'No change', 'hike-25': 'Hike 25bp', 'hike-50-plus': 'Hike 50bp+', 'cut-25': 'Cut 25bp', 'cut-50-plus': 'Cut 50bp+' },
     policyOutcomeLead: '{outcome} in {month}',
     policyDaysAway: '{days} days',
+    positioningChange: '{asset} · 24h open interest',
+    positioningFee: 'Fee',
+    positioningOpenInterest: 'OI',
     comparison: { label: 'vs previous edition', sameDirection: 'Direction unchanged', directionChanged: 'Direction turned from {from} to {to}', funding: 'BTC funding {value}', stablecoin: 'Stablecoins {value}', etf: 'US spot Bitcoin fund {value}', newMacro: '{count} new macro events' },
     groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
     tiers: { must: 'Must', support: 'Support', reference: 'Reference' },

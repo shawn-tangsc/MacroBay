@@ -7,7 +7,7 @@ import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingDataArea } from './BriefingDataArea'
-import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
+import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
  * What the data region actually renders.
@@ -87,7 +87,7 @@ async function render(overrides: Readonly<{ distribution?: boolean }> = {}): Pro
   await act(async () => root!.render(createElement(BriefingDataArea, {
     groups, text, locale: 'zh-CN', formatTime: () => '07:00',
     paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-    changeArrows: briefingChangeArrows('zh-CN')
+    changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
   })))
   return host
 }
@@ -192,7 +192,7 @@ describe('the drawings the data arrived for', () => {
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(withCurves), text, locale: 'zh-CN', formatTime: () => '07:00',
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN')
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
     const areas = host.querySelectorAll('[data-briefing-price-area="btc"]')
     expect(areas).toHaveLength(1)
@@ -214,7 +214,7 @@ describe('the drawings the data arrived for', () => {
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(withSeries), text, locale: 'zh-CN', formatTime: () => '07:00',
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN')
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
     // One card has a series, so one spark exists: `= 1` is the state the criterion calls red, and
     // this fixture is the half-data case that must still draw the one it has.
@@ -251,7 +251,7 @@ describe('the positioning card points at its change', () => {
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(falling), text, locale: 'zh-CN', formatTime: () => '07:00',
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN')
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
     const btc = host.querySelector('[data-briefing-leverage-card="btc"]')!
     expect(btc.getAttribute('data-tone')).toBe('down')
@@ -291,7 +291,7 @@ describe('the window amplitude', () => {
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(withheld), text, locale: 'zh-CN', formatTime: () => '07:00',
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN')
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
     // The number is gone, the card is not: the percentage and its time still say what the row is.
     expect([...host.querySelectorAll('[data-briefing-amplitude]')].map((node) => node.getAttribute('data-briefing-amplitude')))
@@ -423,7 +423,7 @@ describe('the rate card says one thing per line', () => {
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(shifted), text, locale: 'zh-CN', formatTime: () => '07:00',
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
-      changeArrows: briefingChangeArrows('zh-CN')
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
     expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp · 12-09 · 35 天')
   })
@@ -470,5 +470,26 @@ describe('the row lines', () => {
       // The heading groups on its own; a line under it is where the misalignment showed.
       expect(title.children).toHaveLength(0)
     }
+  })
+})
+
+describe('the block headings and the positioning card say what they mean', () => {
+  it('gives every block heading the heading class, and names the positioning block for its contents', async () => {
+    const dom = await render()
+    const titles = [...dom.querySelectorAll('.mi-brief-poster__block-title, .mi-brief-poster__leverage-title')]
+      .map((node) => node.textContent)
+    // Three headings, and "持仓与费率" rather than "杠杆": leverage names the instrument, not the numbers.
+    expect(titles).toEqual(['资金', '行情与情绪', '持仓与费率'])
+  })
+
+  it('names the change and the rate inside each positioning card', async () => {
+    const dom = await render()
+    const btc = dom.querySelector('[data-briefing-leverage-card="btc"]')!
+    // A bare "BTC" over a big percentage does not say whether it is open interest or a price move.
+    expect(btc.textContent).toContain('BTC · 24h 持仓变化')
+    // The small line's numbers each carry their subject: a rate without "费率" reads as another move.
+    expect(btc.textContent).toContain('费率 +0.0100%')
+    expect(btc.textContent).toContain('持仓 $')
+    expect(btc.textContent).not.toContain('OI $')
   })
 })

@@ -219,14 +219,16 @@
 /* The number and its amplitude on one baseline row: one reading, not two lines. */
 .mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .mi-brief-poster__price-value { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.mi-brief-poster__price-observed { font-size: 10px; color: #6b695f; white-space: nowrap; }
 .mi-brief-poster__price-area { grid-column: 2; grid-row: 1; width: 100%; height: 100%; }
 .mi-brief-poster__price-zero { stroke: #a89f8d; stroke-width: 1; opacity: .5; }
 .mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
 .mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__price-card[data-tone='down'] { color: #8f2a1d; }
 /* The window's travel: one size down, the muted ink, and no tone of its own — it is not a direction. */
-.mi-brief-poster__amplitude { font-size: 10.5px; color: #6b695f; white-space: nowrap; }
+/* It sits at the foot of the column, in the row the instant used to take: `margin-top: auto` keeps the
+   label and the number together at the top and pushes this line down, so the empty middle is between
+   them and the plot beside it stays balanced. */
+.mi-brief-poster__amplitude { margin-top: auto; font-size: 10.5px; color: #6b695f; white-space: nowrap; }
 /* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
    of the gauge, because only the svg had an explicit position. */
 /* Three stacked rows, as the sheet has them: heading across the card, dial beside two lines of reading,
@@ -257,7 +259,9 @@
 /* Two blocks, each a titled table of cells: one row of three for the money, three columns by two lines
    for markets and sentiment. Fixed columns, so a missing cell is a hole rather than a stretched row. */
 .mi-brief-poster__funds-block, .mi-brief-poster__market-block { display: flex; flex-direction: column; gap: 2px; }
-.mi-brief-poster__block-title { font-size: 10px; color: #6b695f; }
+/* A block heading differs from the body by hue and tracking, not by size: 10px/700 with .1em tracking in
+   the card's own brown. At body size and body colour it read as ordinary text. */
+.mi-brief-poster__block-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
 /* The line belongs to the row, never to a cell: a border per cell breaks at every column gap and at a
    missing cell, which is what made the separators stop halfway. One line per row, full content width,
    and `column-gap` (not a margin on a cell) so it has no gaps to break at. */
@@ -273,7 +277,7 @@
 .mi-brief-poster__figure[data-tone='up'] b { color: #1f5b32; }
 .mi-brief-poster__figure[data-tone='down'] b { color: #8f2a1d; }
 .mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
-.mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 11px; color: #6b695f; }
+.mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
 .mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
 /* The positioning card keeps its own warm shell whatever the tone says: its tone belongs to the printed
    change, not to the card's colour — the green/red shell is the price cards' vocabulary. */

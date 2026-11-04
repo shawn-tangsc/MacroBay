@@ -8,14 +8,14 @@ import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { BriefingDataArea } from './BriefingDataArea'
-import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
+import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
  * The image edition. It deliberately drops the app chrome and the rail: a reader posts one page,
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, paymentDirectionsCompact, policyWords, changeArrows, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, paymentDirectionsCompact, policyWords, changeArrows, fearGreedBuckets, formatTime }: Readonly<{
   document: DailyBriefingDocument
   /** Already produced by the one place that decides completeness; the card only renders it. */
   completenessNote?: string
@@ -28,6 +28,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   policyWords: policyGaugeWords
   /** The ↑/↓ glyphs, owned by the positioning copy. */
   changeArrows: ChangeArrows
+  /** The fear-and-greed band words; the band is derived from the score, never stored. */
+  fearGreedBuckets: FearGreedBuckets
   readOnly?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
@@ -111,7 +113,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
-      <BriefingDataArea groups={groups} text={text} locale={locale} formatTime={formatTime} paymentDirectionsCompact={paymentDirectionsCompact} policyWords={policyWords} changeArrows={changeArrows} />
+      <BriefingDataArea groups={groups} text={text} locale={locale} formatTime={formatTime} paymentDirectionsCompact={paymentDirectionsCompact} policyWords={policyWords} changeArrows={changeArrows} fearGreedBuckets={fearGreedBuckets} />
     </section> : null}
 
     {newsTotal > 0 ? <p className="mi-brief-poster__news-summary">{text.visuals.news} · {text.newsCount.replace('{count}', String(newsTotal))}{text.labelSeparator}{text.polarity.bearish} {newsCounts?.bearish ?? 0} · {text.polarity.bullish} {newsCounts?.bullish ?? 0} · {text.polarity.mixed} {newsCounts?.mixed ?? 0} · {text.polarity.neutral} {newsCounts?.neutral ?? 0}</p> : null}
