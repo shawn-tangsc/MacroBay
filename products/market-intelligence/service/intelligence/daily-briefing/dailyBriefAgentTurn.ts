@@ -181,6 +181,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   stage({ stage: 'writing', state: 'success' })
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
+  let lastFailures: readonly Readonly<{ code: string; detail?: string }>[] | undefined
   for (let attempt = 0; attempt < 3; attempt++) {
     // Each check times itself. A check that fails closes before the repair it triggers, so the repair
     // row owns the seconds it spends and the validation row does not silently include them.
@@ -197,6 +198,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       }
       failureCode = validation.failureCode
       failureDetail = validation.detail
+      lastFailures = validation.failures
     }
     // Close this check before repairing: the first failure code is kept for the loop's verdict, and
     // the repair that follows gets its own window instead of nesting inside this one.
@@ -205,7 +207,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       throwIfAborted(input.signal)
       const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
       stage({ stage: repairStage, state: 'begin' })
-      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail), undefined, input.signal)
+      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail, lastFailures), undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })

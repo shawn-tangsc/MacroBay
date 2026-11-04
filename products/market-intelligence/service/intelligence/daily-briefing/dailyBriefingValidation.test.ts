@@ -186,6 +186,22 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   // MI-2-R16: the refusal must carry the one thing the model needs to fix — which citation is wrong.
+  it('reports every independent defect in one pass, not only the first', () => {
+    // The 2026-11-04 loop: round one heard "unknown fact", round two heard "forbidden content", and
+    // the field that actually blocked publication was never mentioned. One reply, three defects.
+    const reply = validateDailyBriefingEditorial({
+      ...validOutput,
+      items: [{ factId: 'news:nope', why: 'x' }],
+      lede: 'https://example.com 说 ETF 流入 999 亿美元'
+    }, document(), 'zh-CN')
+
+    expect(reply).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
+    const codes = reply.ok ? [] : (reply.failures ?? []).map((failure) => failure.code)
+    expect(codes).toContain('unknown-fact')
+    expect(codes).toContain('forbidden-content')
+    expect(codes.length).toBeGreaterThan(1)
+  })
+
   it('names the citation it refused and the number it could not find', () => {
     const unknownFact = validateDailyBriefingEditorial({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }, document(), 'zh-CN')
     expect(unknownFact).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
@@ -213,8 +229,9 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   it('translates only when the conclusion is in the other language', () => {
-    const chinese = document()
-    chinese.conclusion!.summary = '稳定币收缩把买盘推走。'
+    // The document is readonly by contract; a fixture mutates a copy instead of the shared one.
+    const base = document()
+    const chinese = { ...base, conclusion: { ...base.conclusion!, summary: '稳定币收缩把买盘推走。' } }
     expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: '译文' }, chinese, 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'invalid-translation' })
     expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: 'Stablecoin contraction pulls bids away.' }, document(), 'zh-CN'))
@@ -222,10 +239,14 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   it('keeps the must floor even when the model asks to downgrade it', () => {
-    const applied = applyDailyBriefingEditorial(document(), {
+    // Typed by the call's own parameter: the fixture spreads `validOutput`, whose `tier` widens to
+    // string, and this file sits outside the main typecheck so that widening went unnoticed.
+    const downgrade: Parameters<typeof applyDailyBriefingEditorial>[1] = {
       ...validOutput,
+      hiddenData: [],
       importance: [{ factId: 'data:btc', tier: 'reference', reasonText: 'less important' }]
-    }, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    }
+    const applied = applyDailyBriefingEditorial(document(), downgrade, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
   })
 

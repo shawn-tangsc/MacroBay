@@ -301,6 +301,17 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
  * there leaves the next attempt guessing — the loop that produced three identical failures in one
  * evening (MI-2-R16).
  */
-export function repairPromptFor(failureCode: string, failureDetail: string | undefined): string {
+export function repairPromptFor(
+  failureCode: string,
+  failureDetail: string | undefined,
+  failures?: readonly Readonly<{ code: string; detail?: string }>[]
+): string {
+  // Every independent defect in one message. Given one, a repair round fixes that one and the next
+  // round finds the next — which is how three writes each cleared a different field and the edition
+  // still failed on a field the model was never told about.
+  if (failures && failures.length > 1) {
+    const lines = failures.map((failure) => `- ${failure.code}${failure.detail ? `: ${failure.detail}` : ''}`).join('\n')
+    return `Your previous JSON failed validation in ${failures.length} places:\n${lines}\nFix every item above and rewrite the full JSON, using only facts from the prompt.`
+  }
   return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
 }
