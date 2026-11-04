@@ -370,10 +370,19 @@ describe('the cards place their parts in their own columns', () => {
       expect(lead.querySelector('[data-briefing-price-area]')).toBeNull()
       expect(lead.parentElement!.querySelector(':scope > [data-briefing-price-area]')).not.toBeNull()
     }
-    // Both amplitudes live in the lead column, on the same figures row as the number.
+    // Both amplitudes are the lead column's third line — the row the instant used to take — not a
+    // second fragment beside the number: two lines left the middle of the card empty.
     const amplitudes = [...dom.querySelectorAll('[data-briefing-price-lead] [data-briefing-amplitude]')]
     expect(amplitudes.map((node) => node.getAttribute('data-briefing-amplitude'))).toEqual(['btc', 'eth'])
-    for (const node of amplitudes) expect(node.closest('.mi-brief-poster__price-figures')).not.toBeNull()
+    for (const node of amplitudes) {
+      expect(node.closest('.mi-brief-poster__price-figures')).toBeNull()
+      expect(node.parentElement!.classList.contains('mi-brief-poster__price-lead')).toBe(true)
+      // Small, grey, and never toned: amplitude says how far, not which way.
+      expect(node.hasAttribute('data-tone')).toBe(false)
+    }
+    // The cell form is different on purpose: a reading cell has one line, so its amplitude stays
+    // beside the value rather than inventing a second line.
+    expect(dom.querySelector('[data-reading="nasdaq"] .mi-brief-poster__amplitude')).not.toBeNull()
   })
 
   it('keeps the dial and the printed number together, and the copy out of that cell', async () => {

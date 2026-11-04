@@ -212,7 +212,9 @@
 .mi-brief-poster__price-card { height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
 /* Two ends, not the middle: the label sits at the top and the time at the card's foot, matching the
    approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
-.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; min-width: 0; }
+/* Three lines, top-aligned: label, the number, then the amplitude in the row the instant used to take.
+   With two lines the column spread out and left the middle of the card empty. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; min-width: 0; }
 .mi-brief-poster__price-label { font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The number and its amplitude on one baseline row: one reading, not two lines. */
 .mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }

@@ -226,13 +226,14 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
   return <div className="mi-brief-poster__card mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
     <div className="mi-brief-poster__price-lead" data-briefing-price-lead="true">
       <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-      {/* The number and its amplitude share one baseline row: they are one reading, not two lines. */}
       <span className="mi-brief-poster__price-figures">
         <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
         {copy ? <small>{copy.secondary}</small> : null}
-        {/* Small, and never toned: amplitude is how much it moved, not which way. */}
-        {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
       </span>
+      {/* The third line is the amplitude, where the instant used to sit: three lines keep the column
+          balanced against the plot, and two left the middle of the card empty. Small, grey, never toned
+          — amplitude says how far it travelled, not which way. */}
+      {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
     </div>
     <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
       <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
