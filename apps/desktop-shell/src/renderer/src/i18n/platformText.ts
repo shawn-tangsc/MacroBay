@@ -1688,8 +1688,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTestAccepted: '已经交给系统发了：手机有没有收到，这边确认不了',
       channelTestUnconfirmed: '已经交给通道，但没拿到回执：手机可能收到了',
       channelTestNotReady: '这条频道没在运行，先启用',
-      channelTestNoTarget: '还没有接收消息的会话，先在频道里绑定一个',
-      channelTestAmbiguousTarget: '这个频道绑了多个会话，只保留一个再发',
+      // 界面上**没有「绑定」入口**：不许把人指到做不到的地方（我们的红线）。
+      // 真实可做的下一步是「先在手机上发一条」——入站到达且还没有目标时会自动记下这个对话。
+      channelTestNoTarget: '先在手机上给这个机器人发一条消息，它就会自动记下这个对话',
+      // 同样不许指路到没有入口的地方：界面里现在没有「选一个对话」的操作，只能如实说清限制。
+      channelTestAmbiguousTarget: '这个频道绑了不止一个对话，所以这条没有发：现在还不能在界面里选发到哪一个',
       channelTestRejected: '通道拒收了这条消息，具体原因写在日志里',
       channelFieldWorkspace: '工作目录',
       channelFieldAllowedChats: '允许的会话 ID',
@@ -3026,8 +3029,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTestAccepted: 'Handed to the system: whether the phone shows it cannot be confirmed here',
       channelTestUnconfirmed: 'Handed to the channel without a receipt: the phone may have received it',
       channelTestNotReady: 'This channel is not running; enable it first',
-      channelTestNoTarget: 'No conversation receives messages yet; bind one on the channel first',
-      channelTestAmbiguousTarget: 'This channel is bound to several conversations; keep one and send again',
+      channelTestNoTarget: 'Send this bot a message from your phone first; that conversation is then remembered automatically',
+      channelTestAmbiguousTarget:
+        'This channel is bound to more than one conversation, so nothing was sent: picking which one is not possible in the UI yet',
       channelTestRejected: 'The channel rejected this message; the reason is in the log',
       channelFieldWorkspace: 'Working folder',
       channelFieldAllowedChats: 'Allowed chat IDs',

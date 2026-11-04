@@ -1078,6 +1078,24 @@ describe('sending a test message from the row', () => {
     expect(container.querySelector('[data-test-receipt]')?.textContent).toBe(labels.channelTestNotReady)
   })
 
+  it('points at something the reader can actually do when no conversation is known yet', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]),
+      sendTestMessage: vi.fn(async () => ({ state: 'failed', reason: 'no-target' }))
+    })
+    const container = await mount()
+    await act(async () => testButton(container).click())
+    await act(async () => {})
+
+    const receipt = container.querySelector('[data-test-receipt]')?.textContent ?? ''
+    expect(receipt).toBe(labels.channelTestNoTarget)
+    // 界面上没有「绑定」入口：这句话不许再把人指到那里。
+    expect(receipt).not.toContain('绑定')
+    // 真实的下一步要写出来：先在手机上发一条，入站会自动记下这个对话。
+    expect(receipt).toContain('手机上')
+    expect(receipt).toContain('自动')
+  })
+
   it('disables the button while a send is in flight, so a double click cannot fire two messages', async () => {
     let release: (value: unknown) => void = () => undefined
     const pending = new Promise((resolve) => {
