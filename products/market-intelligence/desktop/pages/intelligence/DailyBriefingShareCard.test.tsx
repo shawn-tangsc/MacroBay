@@ -111,7 +111,8 @@ describe('daily brief share card in English', () => {
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
     expect(poster).toContain(text.sections.leverage)
     expect(poster).toContain(text.sections.policyPath)
-    expect(poster).toContain(text.sections.marketImplied)
+    // The label names what the value is (the target range), not a claim about how it was priced.
+    expect(poster).toContain(text.sections.policyRange)
     expect(poster).toContain(text.sections.rangeUnavailable)
     expect(poster).toContain(text.policyOutcomes['hike-25'])
     expect(poster).toContain('4 items:')

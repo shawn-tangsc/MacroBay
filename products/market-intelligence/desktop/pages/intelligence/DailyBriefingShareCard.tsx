@@ -6,6 +6,8 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
+import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
+import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type paymentDirectionWords as PayDirectionWords } from './dailyBriefingPaymentDirections'
 
 /**
@@ -107,45 +109,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
-      <div className="mi-brief-poster__numbers" data-count={keyRows.length}>
-        {keyRows.map((row) => {
-          // The poster and the Markdown copy read one rule: a change-led row headlines its move and
-          // keeps the level in the caption, so a screenshot and an export cannot disagree.
-          const copy = changeLedRowCopy(row, text, locale)
-          return <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-            <strong>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</strong>
-            <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
-          </div>
-        })}
-      </div>
-      {doc.data.leverage && doc.data.leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
-        <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
-        {(['btc', 'eth'] as const).map((asset) => {
-          const entry = doc.data.leverage![asset]
-          // The rate is the funds row of the same asset; the block explains it rather than repeating it.
-          const rate = groups.funding.find((row) => row.id === `funding-${asset}`)?.value?.number
-          const direction = paymentDirectionFor(rate, paymentDirectionsCompact)
-          return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={rate === undefined ? 'flat' : rate > 0 ? 'up' : rate < 0 ? 'down' : 'flat'}>
-            <span>{asset.toUpperCase()}</span>
-            <b>{rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`}</b>
-            <small>{direction}</small>
-            <small>OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
-            <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · 24h {entry.change24hPct !== undefined ? `${entry.change24hPct.toFixed(1)}%` : text.noValue}</small>
-          </div>
-        })}
-      </div> : null}
-      {doc.data.policyPath && doc.data.policyPath.visibility !== 'hidden' ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
-      {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
-        {metricRows.map((row) => {
-          const copy = changeLedRowCopy(row, text, locale)
-          return <div key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
-            <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
-            {copy ? <small>{copy.secondary}</small> : null}
-          </div>
-        })}
-      </div> : null}
+      <BriefingDataArea groups={groups} text={text} locale={locale} formatTime={formatTime} paymentDirectionsCompact={paymentDirectionsCompact} />
     </section> : null}
 
     {newsTotal > 0 ? <p className="mi-brief-poster__news-summary">{text.visuals.news} · {text.newsCount.replace('{count}', String(newsTotal))}{text.labelSeparator}{text.polarity.bearish} {newsCounts?.bearish ?? 0} · {text.polarity.bullish} {newsCounts?.bullish ?? 0} · {text.polarity.mixed} {newsCounts?.mixed ?? 0} · {text.polarity.neutral} {newsCounts?.neutral ?? 0}</p> : null}
@@ -223,24 +187,6 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       <span>MI · DAILY BRIEF · {formatTime(doc.provenance.readAt, 'minute')}</span>
     </footer>
   </article>
-}
-
-function toneFor(row: BriefingMarketRow | BriefingPulseRow): 'positive' | 'negative' | 'neutral' {
-  if (row.id === 'fear-greed') return 'neutral'
-  const value = row.change?.value ?? row.value?.number ?? 0
-  return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
-}
-
-function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
-  // The qualifier names the baseline: a session close is never described as a day move.
-  const change = row.change
-    ? `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim()
-    : ''
-  if (row.id === 'etf-btc' || row.id === 'etf-eth') {
-    const flow = (row.value?.number ?? 0) >= 0 ? text.flow.in : text.flow.out
-    return `${flow}${row.observedAt ? ` · ${row.observedAt.slice(0, 10)}` : ''}`
-  }
-  return change || (row.observedAt ? formatTime(row.observedAt, 'minute') : '')
 }
 
 function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles: Record<string, string> | undefined, locale: 'zh-CN' | 'en-US'): string {
@@ -339,35 +285,6 @@ function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, f
   return match ? formatTime(match[0], 'minute') : ''
 }
 
-function rowLabel(text: DailyBriefingText, labelKey: string): string {
-  return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
-}
-
-type StaleBasis = NonNullable<BriefingMarketRow['valueBasis']>
-
-/**
- * The label a fallback reading wears on the page: which source it came from and over what window.
- *
- * Only the page shows it — the exported image omits these rows entirely — so this exists to tell the
- * reader judging the day where the number came from, never to travel with the image.
- */
-function fallbackLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
-  if (row.state !== 'stale') return null
-  const basis: StaleBasis | undefined = 'valueBasis' in row ? row.valueBasis : undefined
-  // Only say something when the number is not the thing its name promises. A 24-hour move computed
-  // from a curve or from the daily series is still a 24-hour move, and the timestamp under the row
-  // already says which instant it is — repeating "about 24 hours ago (from the curve)" tells the
-  // reader how we computed it, which is ours to know, not theirs to read.
-  const spoken: Partial<Record<StaleBasis, string>> = {
-    'last-close': text.staleBasis.lastClose,
-    'series-level': text.staleBasis.seriesLevel,
-    published: text.staleBasis.published
-  }
-  const label = basis === undefined ? undefined : spoken[basis]
-  if (!label) return null
-  return <em className="mi-brief-poster__stale" data-basis={basis}>{label}</em>
-}
-
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {
   if (row.state === 'source-disabled') return text.states['source-disabled']
   if (row.state === 'unavailable') return text.states.unavailable
@@ -423,10 +340,6 @@ function macroTime(value: string, formatTime: (value: string, precision: 'minute
 function clockWithZone(value: string, formatTime: (value: string, precision: 'minute') => string): string {
   const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
   return `${date}\n${[time, ...zone].filter(Boolean).join(' ')}`
-}
-
-function policyOutcomeLabel(outcome: string, text: DailyBriefingText): string {
-  return text.policyOutcomes[outcome as keyof DailyBriefingText['policyOutcomes']] ?? outcome
 }
 
 /**

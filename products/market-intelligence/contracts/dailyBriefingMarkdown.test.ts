@@ -319,3 +319,25 @@ describe('the data region has one partition', () => {
     expect(ids.filter((id) => id === 'etf-eth')).toHaveLength(1)
   })
 })
+
+describe('one number, one place', () => {
+  it('prints each ETF row once, alongside the funding block rather than inside it', () => {
+    const base = document()
+    const fund = (id: 'etf-btc' | 'etf-eth', value: number) => ({
+      id, group: 'funds' as const, labelKey: `dailyBriefing.row.${id}`,
+      importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+      state: 'available' as const, value: { number: value, format: 'flow-usd' as const },
+      change: null, window: 'trading-day' as const, observedAt: base.edition.windowEnd
+    })
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, funds: [...base.data.funds, fund('etf-btc', -398_600_000), fund('etf-eth', -139_700_000)] }
+    }, options)
+    // The fixture carries the label keys, so the ids are what identifies a row here.
+    const occurrences = (needle: string): number => markdown.split(needle).length - 1
+    expect(occurrences('dailyBriefing.row.etf-btc')).toBe(1)
+    expect(occurrences('dailyBriefing.row.etf-eth')).toBe(1)
+    // The funding rows are excluded from the data list: the leverage block is their only home.
+    expect(occurrences('dailyBriefing.row.funding-btc')).toBe(0)
+  })
+})

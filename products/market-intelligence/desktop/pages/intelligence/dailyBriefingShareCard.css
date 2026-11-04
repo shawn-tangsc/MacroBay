@@ -203,3 +203,39 @@
 @container (max-width: 640px) {
   .mi-brief-poster__next-watch-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── Data region (v35): one partition feeds this block, in both exports ─────────────────────────
+   Sizes are the design's own: card row 114px, leverage card 87px, gauge 88×54, price area column
+   100 wide (fills the card height), spark 60×26. Nothing here is responsive: the paper is a fixed
+   1080px sheet, so a stacked variant at narrow widths would make the export and the preview differ. */
+.mi-brief-poster__data { display: flex; flex-direction: column; gap: 6px; }
+.mi-brief-poster__price-row { display: flex; gap: 8px; }
+.mi-brief-poster__price-card { display: grid; grid-template-columns: minmax(0, 1fr) 100px; grid-template-rows: 114px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+.mi-brief-poster__price-label { font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi-brief-poster__price-value { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__price-observed { font-size: 10px; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__price-area { grid-column: 2; grid-row: 1 / span 3; width: 100%; height: 100%; }
+.mi-brief-poster__price-zero { stroke: #a89f8d; stroke-width: 1; opacity: .5; }
+.mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
+.mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__price-card[data-tone='down'] { color: #8f2a1d; }
+.mi-brief-poster__policy-card { position: relative; display: grid; grid-template-columns: 88px minmax(0, 1fr); grid-template-rows: 114px; align-items: center; gap: 10px; }
+.mi-brief-poster__policy-gauge { grid-column: 1; grid-row: 1; width: 88px; height: 54px; }
+.mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
+.mi-brief-poster__gauge-event { stroke: #c2410c; stroke-width: 8; }
+.mi-brief-poster__gauge-rest { stroke: #a89f8d; stroke-width: 8; }
+.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 26px; width: 88px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; }
+.mi-brief-poster__readings-line { display: flex; flex-wrap: nowrap; gap: 0 10px; align-items: baseline; overflow: hidden; }
+.mi-brief-poster__reading { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; font-size: 11px; }
+.mi-brief-poster__reading small { color: #6b695f; }
+.mi-brief-poster__reading[data-tone='positive'] b { color: #1f5b32; }
+.mi-brief-poster__reading[data-tone='negative'] b { color: #8f2a1d; }
+.mi-brief-poster__etf { display: flex; gap: 12px; font-size: 11px; }
+.mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; height: 87px; }
+.mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 11px; color: #6b695f; }
+.mi-brief-poster__leverage-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11px; }
+.mi-brief-poster__leverage-card b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; }
+.mi-brief-poster__leverage-card[data-tone='up'] b { color: #1f5b32; }
+.mi-brief-poster__leverage-card[data-tone='down'] b { color: #8f2a1d; }
