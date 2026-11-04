@@ -11,7 +11,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -66,6 +66,8 @@ import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
+import { briefingPushText } from './dailyBriefingPushText'
+import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -123,6 +125,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
   // The switch only exists when the brief may have more than one edition language at all.
   const [englishEditionsEnabled, setEnglishEditionsEnabled] = useState(false)
+  // Which language the channel receives: the plan's primary, not the tab the reader happens to be on.
+  const [primaryEditionLocale, setPrimaryEditionLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
   // Until the settings answer arrives we do not know whether an English edition is even possible.
   const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
@@ -306,6 +310,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
       setEnglishEditionsEnabled(result.view.language.settings.additional.includes('en-US'))
+      setPrimaryEditionLocale(result.view.language.plan.primary.used)
       setLanguageSettingsKnown(true)
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
@@ -360,6 +365,21 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { failure, editorialBlocked } = briefingFailure({ view, regenerateFailure })
   // A stored edition under a failure notice is content, not a blocked state.
   const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
+  /**
+   * The reader's own publication, of the edition on screen.
+   *
+   * The issue is the one being read, so its `periodId` comes from that date's row: the platform keys the
+   * notice by date, language and issue, and a wrong issue is refused rather than quietly sent as another
+   * one. The words are interface chrome, so they follow the interface language, not the edition's.
+   */
+  const pushToPhone = useBriefingPushToPhone({
+    document: contentBlocked ? undefined : readyDocument,
+    generating,
+    localeMissing: view.status === 'locale-missing',
+    primaryLocale: primaryEditionLocale,
+    periodId: editions.find((row) => row.date === readyDocument?.edition.date)?.periodId ?? DEFAULT_PERIOD_ID,
+    text: briefingPushText[locale]
+  })
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
   const selectedDate = readyDocument ? readyDocument.edition.date : (pinnedDate ?? todayDate)
@@ -435,6 +455,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         exportable={readyDocument !== undefined && !contentBlocked}
         exportState={exportState}
         copyState={copyState}
+        push={pushToPhone}
+        pushText={briefingPushText[locale]}
         onExport={() => void exportImage()}
         onCopy={() => void copy()}
         onOpenSettings={() => setSettingsSection('generation')}

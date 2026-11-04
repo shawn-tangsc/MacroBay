@@ -257,3 +257,8 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* A run in flight centres its one loading block in the content area instead of hanging from the
    top edge with an empty screen below it. */
 .mi-daily-briefing-page__content > .mi-daily-briefing__state { display: flex; flex-direction: column; justify-content: center; min-height: min(62vh, 520px); }
+
+/* 发布频道：与「重新生成」同一组，按钮用平台默认样式，这里只负责它和那句成功回执怎么排。
+   成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
+.mi-daily-briefing__push-slot { display: inline-flex; align-items: center; gap: 8px; }
+.mi-daily-briefing__push-toast { color: var(--mi-dashboard-muted); font-size: 12px; line-height: 18px; }

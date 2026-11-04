@@ -26,7 +26,7 @@ export type DailyBriefingNotice =
   | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
   /**
-   * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「推送到手机」核对；`deliver: false`
+   * 完成类：一天一期。`edition` 是读者眼前那一版的身份，落库供「发布频道」核对；`deliver: false`
    * 用于手动重新生成——照常建/合并记录，但不投递任何表面，读者点按钮时才有东西可重投。
    */
   | Readonly<{ kind: 'ready'; date: string; editionId: string; locale: string; deliver?: boolean }>

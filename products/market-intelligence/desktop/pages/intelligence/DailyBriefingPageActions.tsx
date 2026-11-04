@@ -2,6 +2,9 @@ import { Button } from 'antd'
 import { Settings2 } from 'lucide-react'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
+import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
+import type { BriefingPushText } from './dailyBriefingPushText'
+import type { BriefingPushToPhone } from './useBriefingPushToPhone'
 import { DailyBriefingGeneratingStatus } from './DailyBriefingGeneratingStates'
 import type { DailyBriefingText } from './dailyBriefingText'
 import type { BriefingCopyState, BriefingExportState } from './useBriefingShareActions'
@@ -14,7 +17,7 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
  * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
  * not layout, and the page is a layout.
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, push, pushText, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -29,6 +32,9 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   exportable: boolean
   exportState: BriefingExportState
   copyState: BriefingCopyState
+  /** The reader's own publication: same group as the generate action, its own words and its own state. */
+  push: BriefingPushToPhone
+  pushText: BriefingPushText
   onExport: () => void
   onCopy: () => void
   onOpenSettings: () => void
@@ -51,6 +57,15 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
       {regenerating ? text.regenerating : hasTodayEdition ? text.regenerateToday : text.generateToday}
     </Button>
+    {/* Beside the generate action, in the same group: both are about this issue, and a reader who just
+        generated is one click from publishing it. Its state lives in the machine, not here — this row
+        only places it. */}
+    <span className="mi-daily-briefing__push-slot">
+      <BriefingPushToPhoneButton state={push.state} text={pushText} onPush={push.onPush} onRetry={push.onRetry} />
+      {/* The success sentence is the only thing that appears and leaves on its own. It states what we
+          know — handed to the channel — and its timer is its whole lifetime. */}
+      {push.sentence === undefined ? null : <span className="mi-daily-briefing__push-toast" role="status">{push.sentence}</span>}
+    </span>
     {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
       {/* The settings zone was unusable, so the window was computed in the machine's zone. The

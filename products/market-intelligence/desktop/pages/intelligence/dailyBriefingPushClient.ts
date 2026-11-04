@@ -52,8 +52,20 @@ export type BriefingPushFailure =
   | 'record-missing'
   | 'edition-mismatch'
 
+/**
+ * The channel the phone receives through, read from the platform rather than named here.
+ *
+ * `wired: undefined` means the platform answered without saying: the capabilities are unknown, so the
+ * button stays pressable and a missing channel is reported by the send itself. Only an explicit
+ * `false` disables it — "this build cannot send" is a claim, and a claim needs evidence.
+ */
+export type BriefingPushChannel = Readonly<{ wired: boolean | undefined; name: string | undefined }>
+
 /** The bridge, or nothing: a build without the notification runtime disables the button instead of throwing. */
-type PushBridge = Readonly<{ redeliverPush: (input: { dedupeKey: string; editionId: string; locale: string }) => Promise<unknown> }>
+type PushBridge = Readonly<{
+  redeliverPush: (input: { dedupeKey: string; editionId: string; locale: string }) => Promise<unknown>
+  getDeliverySettings?: () => Promise<{ pushWired?: boolean; channels?: readonly unknown[] }>
+}>
 
 function pushBridge(): PushBridge | undefined {
   const platform = (globalThis as { window?: { platform?: { notifications?: unknown } } }).window?.platform
@@ -64,6 +76,33 @@ function pushBridge(): PushBridge | undefined {
 /** Whether this build can push at all; the fourth disabled state reads it. */
 export function briefingPushAvailable(): boolean {
   return pushBridge() !== undefined
+}
+
+/**
+ * Which channel would carry this publication, and whether the port that carries it is assembled.
+ *
+ * The name is the platform's own label for the channel the reader configured — never a product word and
+ * never a channel brand: a hard-coded name is how a build keeps announcing one channel after the reader
+ * switched to another. When several exist, the deliverable one is the one a send would reach.
+ */
+export async function readBriefingPushChannel(): Promise<BriefingPushChannel> {
+  const bridge = pushBridge()
+  if (!bridge) return { wired: false, name: undefined }
+  if (typeof bridge.getDeliverySettings !== 'function') return { wired: undefined, name: undefined }
+  try {
+    const settings = await bridge.getDeliverySettings()
+    const channels = Array.isArray(settings?.channels) ? settings.channels : []
+    const named = channels.find((entry) => isRecord(entry) && entry.deliverable === true) ?? channels.find(isRecord)
+    const name = isRecord(named) && typeof named.name === 'string' ? named.name.trim() : ''
+    return {
+      // Absent `pushWired` is not `false`: an older platform that does not answer the question must not
+      // disable a button that would have worked.
+      wired: typeof settings?.pushWired === 'boolean' ? settings.pushWired : undefined,
+      name: name === '' ? undefined : name
+    }
+  } catch {
+    return { wired: undefined, name: undefined }
+  }
 }
 
 /**

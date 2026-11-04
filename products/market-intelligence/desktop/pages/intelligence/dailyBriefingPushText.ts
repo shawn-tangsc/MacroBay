@@ -13,6 +13,11 @@ export type BriefingPushText = Readonly<{
   /** `{channel}` is filled with the platform's own label, e.g. "Telegram · 贾维斯". */
   sentAccepted: string
   sentUnconfirmed: string
+  /**
+   * The word `{channel}` falls back to when the platform has not named one. Not a channel name: an
+   * unnamed channel must not be printed as a placeholder brace or as an invented brand.
+   */
+  channelUnknown: string
   failedTitle: string
   failed: Readonly<Record<BriefingPushFailureKey, string>>
   disabled: Readonly<Record<BriefingPushDisabledKey, string>>
@@ -30,12 +35,13 @@ export type BriefingPushFailureKey =
 export type BriefingPushDisabledKey = 'generating' | 'no-edition' | 'missing-locale' | 'capability' | 'non-primary-locale'
 
 const zh: BriefingPushText = {
-  button: '推送到手机',
-  sending: '正在推送…',
+  button: '发布频道',
+  sending: '正在发布…',
   retry: '重试',
   sentAccepted: '已交给 {channel}',
   sentUnconfirmed: '已交给 {channel}（未拿到回执）',
-  failedTitle: '没发出去',
+  channelUnknown: '发布通道',
+  failedTitle: '没发布出去',
   failed: {
     'channel-not-configured': '还没有配置推送通道',
     'channel-disconnected': '连不上 {channel}',
@@ -57,12 +63,13 @@ const zh: BriefingPushText = {
 }
 
 const en: BriefingPushText = {
-  button: 'Push to phone',
-  sending: 'Sending…',
+  button: 'Publish to channel',
+  sending: 'Publishing…',
   retry: 'Retry',
   sentAccepted: 'Handed to {channel}',
   sentUnconfirmed: 'Handed to {channel} (no receipt received)',
-  failedTitle: 'Not sent',
+  channelUnknown: 'the publishing channel',
+  failedTitle: 'Not published',
   failed: {
     'channel-not-configured': 'No push channel is configured yet',
     'channel-disconnected': 'Cannot reach {channel}',
