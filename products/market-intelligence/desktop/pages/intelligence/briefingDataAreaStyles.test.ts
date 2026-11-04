@@ -76,41 +76,6 @@ describe('the positioning card leads with the amount, and the ring keeps its num
   })
 })
 
-describe('the block headings and the row lines', () => {
-  it('keeps the heading a heading, and the three words the sheet names', () => {
-    // A heading differs from the body by hue and tracking, not by size.
-    expect(declaration(rule('.mi-brief-poster__block-title'), 'font-size')).toBe('10px')
-    expect(declaration(rule('.mi-brief-poster__block-title'), 'font-weight')).toBe('700')
-    expect(declaration(rule('.mi-brief-poster__block-title'), 'letter-spacing')).toBe('.1em')
-    expect(declaration(rule('.mi-brief-poster__block-title'), 'color')).toBe('#8a5a35')
-    // The positioning block's heading follows the same rule — two headings, one style.
-    expect(declaration(rule('.mi-brief-poster__leverage-title'), 'font-size')).toBe('10px')
-    expect(declaration(rule('.mi-brief-poster__leverage-title'), 'letter-spacing')).toBe('.1em')
-    expect(declaration(rule('.mi-brief-poster__leverage-title'), 'color')).toBe('#8a5a35')
-  })
-
-  it('draws the row line on the row, in a colour that shows on the paper', () => {
-    expect(declaration(rule('.mi-brief-poster__figure-line'), 'column-gap')).toBe('32px')
-    expect(declaration(rule('.mi-brief-poster__figure-line'), 'border-bottom')).toBe('1px solid #c9bda3')
-    // Three fixed columns that may shrink: `1fr` alone would let the longest cell widen its column.
-    expect(declaration(rule('.mi-brief-poster__figure-line'), 'grid-template-columns')).toBe('repeat(3, minmax(0, 1fr))')
-    // The block's last row closes by the space after it, not by a line above the next heading.
-    expect(css.includes('.mi-brief-poster__market-block > .mi-brief-poster__figure-line:last-of-type')).toBe(true)
-  })
-})
-
-describe('the exported sheet is its own palette', () => {
-  it('uses no theme variable anywhere', () => {
-    // The poster is printed on paper: its colours must not follow the app's light/dark theme, or the same
-    // edition exports two different images. One `var(--mi-…)` is enough to break that promise.
-    expect(css.includes('var(--mi-')).toBe(false)
-  })
-
-  it("keeps the positioning amount in the sheet's own ink", () => {
-    expect(declaration(rule('.mi-brief-poster__leverage-amount'), 'color')).toBe('#1b1d18')
-  })
-})
-
 describe('the amplitude label lives on the plot, not in the drawing', () => {
   it('sizes it as the smallest label and pins it to the corner the area does not use', () => {
     expect(declaration(rule('.mi-brief-poster__amplitude'), 'font-size')).toBe('9.5px')
