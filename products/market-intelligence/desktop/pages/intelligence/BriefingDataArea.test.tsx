@@ -412,13 +412,16 @@ describe('the cards place their parts in their own columns', () => {
     expect(card.firstElementChild!.className).toContain('policy-title')
     expect(dial.querySelector('.mi-brief-poster__policy-title')).toBeNull()
     const copy = dom.querySelector('[data-briefing-policy-copy]')!
-    // The shares and the range are one line across the card's foot, not a line of the reading column.
+    // The shares are the card's foot, not a line of the reading column; the target range has moved up
+    // into the reading column, where it belongs beside the meeting it applies to.
     expect(copy.querySelector('[data-briefing-policy-outcomes]')).toBeNull()
     expect(card.querySelectorAll('[data-briefing-policy-outcomes]')).toHaveLength(1)
-    // The reading order is the sheet's: title, what the market prices, the move and the meeting, then
-    // the bottom row of shares and the range — the range never floats above the outcome.
+    expect(copy.querySelector('[data-briefing-policy-range]')).not.toBeNull()
+    expect(card.querySelector('[data-briefing-policy-outcomes]')!.textContent).not.toContain('政策区间')
+    // The reading order is the sheet's: what the market prices, the move, then the meeting with its
+    // countdown and the range.
     const order = [...copy.children].map((node) => node.className.replace('mi-brief-poster__', ''))
-    expect(order).toEqual(['policy-outcome', 'policy-change'])
+    expect(order).toEqual(['policy-outcome', 'policy-change', 'policy-range-line'])
   })
 })
 
@@ -440,7 +443,10 @@ describe('the rate card says one thing per line', () => {
       paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
       changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
     })))
-    expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp · 12-09 · 35 天')
+    // The move is its own line; the meeting, the countdown and the target range share the line below it.
+    expect(host.querySelector('.mi-brief-poster__policy-change')!.textContent).toBe('+5.6pp')
+    expect(host.querySelector('[data-briefing-policy-range]')!.textContent)
+      .toBe('12-09 · 35 天 · 政策区间 3.75–4.00%')
   })
 })
 
@@ -654,6 +660,14 @@ describe('a level the document does not carry is a dash with a reason, never a m
     expect(real.querySelector('[data-reading="nasdaq"]')?.textContent).not.toContain('QQQ 永续代理')
   })
 
+  it('never puts the dash on the stablecoin cell, which does have a value', async () => {
+    const host = await render(() => undefined)
+    const stable = host.querySelector('[data-briefing-funds-row] [data-reading="stablecoin"]')
+    // It has a level of its own, so the "size not collected" dash would be a lie here.
+    expect(stable?.querySelector('b')?.textContent).toBeTruthy()
+    expect(stable?.textContent).not.toContain(text.noValue)
+  })
+
   it('gives the ETF cells a dash for the missing size and keeps the flow beside it', async () => {
     const host = await render((doc) => {
       const etf = doc.data.funds.find((entry) => entry.id === 'etf-btc') as { change?: unknown }
@@ -664,5 +678,49 @@ describe('a level the document does not carry is a dash with a reason, never a m
     expect(cell.textContent).toContain(text.aumMissing)
     // The flow is still printed — as a change, not as the size.
     expect(cell.textContent).toContain('398')
+  })
+})
+
+describe('the dial has four colours and at most three arcs', () => {
+  async function renderPolicy(mutate: (doc: DailyBriefingDocument) => void): Promise<HTMLElement> {
+    const doc = documentWithData()
+    mutate(doc)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    return host
+  }
+
+  it('takes the event arc into the lead’s colour, never a fixed orange', async () => {
+    const hike = await renderPolicy(() => undefined)
+    expect([...hike.querySelectorAll('path[data-outcome]')].map((node) => node.getAttribute('class')))
+      .toEqual(['mi-brief-poster__gauge-hike', 'mi-brief-poster__gauge-hold', 'mi-brief-poster__gauge-other'])
+
+    await act(async () => root?.unmount())
+    root = undefined
+    // A priced cut swaps the event's colour to the cut green; the palette has four, the dial never more.
+    const cut = await renderPolicy((doc) => {
+      const policy = doc.data.policyPath as { outcome: string; distribution?: Record<string, number> }
+      policy.outcome = 'cut-25'
+      policy.distribution = { 'no-change': 0.3, 'cut-25': 0.6, 'cut-50-plus': 0.05, 'hike-25': 0.03, 'hike-50-plus': 0.02 }
+    })
+    const arcs = [...cut.querySelectorAll('path[data-outcome]')]
+    expect(arcs).toHaveLength(3)
+    expect(arcs[0]?.getAttribute('class')).toBe('mi-brief-poster__gauge-cut')
+  })
+
+  it('keys the foot with the same colours as the arcs it labels', async () => {
+    const host = await renderPolicy(() => undefined)
+    // One swatch per foot item, and each carries the class of the arc it names — the colour cannot drift
+    // between the drawing and its key, because both read the same function.
+    const swatches = [...host.querySelectorAll('.mi-brief-poster__policy-swatch')]
+    const arcs = [...host.querySelectorAll('path[data-outcome]')].map((node) => node.getAttribute('class'))
+    expect(swatches.map((node) => node.getAttribute('class')?.split(' ').at(-1))).toEqual(['mi-brief-poster__gauge-hold', 'mi-brief-poster__gauge-other'])
+    expect(arcs.slice(1)).toEqual(swatches.map((node) => node.getAttribute('class')?.split(' ').at(-1)))
   })
 })

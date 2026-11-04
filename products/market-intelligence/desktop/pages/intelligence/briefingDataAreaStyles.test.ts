@@ -167,3 +167,23 @@ describe('the price card leads with the level, and the move is the only tinted t
     expect(declaration(rule('.mi-brief-poster__price-missing'), 'font-size')).toBe('9.5px')
   })
 })
+
+describe('the dial colours follow the lead, not the segment name', () => {
+  it('keeps four colours in the palette and paints each arc from its role', () => {
+    expect(declaration(rule('.mi-brief-poster__gauge-hike'), 'stroke')).toBe('#c2410c')
+    expect(declaration(rule('.mi-brief-poster__gauge-cut'), 'stroke')).toBe('#1f5b32')
+    expect(declaration(rule('.mi-brief-poster__gauge-hold'), 'stroke')).toBe('#3f6d8f')
+    expect(declaration(rule('.mi-brief-poster__gauge-other'), 'stroke')).toBe('#8c8474')
+    // The old role-named colours are gone: two names for the same arc is how a dial ends up painted
+    // one colour and keyed another.
+    expect(css.includes('.mi-brief-poster__gauge-event')).toBe(false)
+    expect(css.includes('.mi-brief-poster__gauge-rest')).toBe(false)
+    // The swatch beside a share takes the arc's own class, so it cannot drift from the drawing.
+    expect(declaration(rule('.mi-brief-poster__policy-swatch'), 'width')).toBe('8px')
+    expect(declaration(rule('.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-hold'), 'background')).toBe('#3f6d8f')
+    expect(declaration(rule('.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-other'), 'background')).toBe('#8c8474')
+    // The target range moved into the reading column, small and grey, on the meeting's own line.
+    expect(declaration(rule('.mi-brief-poster__policy-range-line'), 'font-size')).toBe('9.5px')
+    expect(declaration(rule('.mi-brief-poster__policy-range-line'), 'color')).toBe('#6b695f')
+  })
+})

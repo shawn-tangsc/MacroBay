@@ -203,7 +203,7 @@ function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editio
     <span className="mi-brief-poster__policy-dial" data-briefing-policy-dial="true">
       <svg className="mi-brief-poster__policy-gauge" data-briefing-policy-gauge="true" viewBox={`0 0 ${POLICY_GAUGE.width} ${POLICY_GAUGE.height}`} role="img" aria-label={`${probability}%`}>
         <path className="mi-brief-poster__gauge-track" d={policyGaugeTrack()} fill="none" vectorEffect="non-scaling-stroke" />
-        {arcs.map((arc) => <path key={arc.outcome} className={GAUGE_CLASS[arc.outcome]} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
+        {arcs.map((arc) => <path key={arc.outcome} className={gaugeClass(arc.outcome, policy.outcome)} d={arc.path} fill="none" vectorEffect="non-scaling-stroke" data-outcome={arc.outcome} />)}
       </svg>
       {/* The ring is the number's only home: "3.4% · 加息 25bp" is wider than the dial and wrapped across
           the copy, which is how it came to be printed as two broken lines. */}
@@ -212,23 +212,24 @@ function PolicyCard({ policy, text, locale, formatTime, words, windowEnd, editio
     <div className="mi-brief-poster__policy-copy" data-briefing-policy-copy="true">
       {/* Which meeting, then how much it moved and how far away that meeting is — the sheet's order. */}
       <span className="mi-brief-poster__policy-outcome" data-briefing-policy-outcome="true">{outcomeLead(policy.meetingDate, policy.outcome, text, locale)}</span>
+      {/* The move on its own line; the meeting, its countdown and the target range below it. The range
+          used to sit in the card's foot beside the shares, which read as one more share. */}
       <small className="mi-brief-poster__policy-change">
-        {policy.probabilityChangePp !== undefined ? <><b>{`${policy.probabilityChangePp > 0 ? '+' : ''}${policy.probabilityChangePp}pp`}</b>{INDEX_SEPARATOR}</> : null}
-        {`${policy.meetingDate.slice(5)}${days === undefined ? '' : `${INDEX_SEPARATOR}${text.policyDaysAway.replace('{days}', String(days))}`}`}
+        {policy.probabilityChangePp !== undefined ? <b>{`${policy.probabilityChangePp > 0 ? '+' : ''}${policy.probabilityChangePp}pp`}</b> : null}
+      </small>
+      <small className="mi-brief-poster__policy-range-line" data-briefing-policy-range="true">
+        {`${policy.meetingDate.slice(5)}${days === undefined ? '' : `${INDEX_SEPARATOR}${text.policyDaysAway.replace('{days}', String(days))}`}${INDEX_SEPARATOR}${text.sections.policyRange} ${policy.targetLower !== undefined && policy.targetUpper !== undefined ? `${policy.targetLower.toFixed(2)}–${policy.targetUpper.toFixed(2)}%` : text.sections.rangeUnavailable}`}
       </small>
     </div>
     </span>
-    {/* One line, as the sheet has it: the shares, then the target range, joined and never trailing. */}
-    <span className="mi-brief-poster__policy-bottom">
-      {legend.length > 0 ? <span className="mi-brief-poster__policy-outcomes" data-briefing-policy-outcomes="true">
-        {legend.map((segment) => <span key={segment.outcome} data-outcome={segment.outcome}>{shareCopy(segment, words)}</span>).reduce<React.ReactNode[]>((joined, node, index) => (index === 0 ? [node] : [...joined, INDEX_SEPARATOR, node]), [])}
-      </span> : null}
-      {legend.length > 0 ? INDEX_SEPARATOR : null}
-      <span className="mi-brief-poster__policy-range">{text.sections.policyRange}{' '}
-        {policy.targetLower !== undefined && policy.targetUpper !== undefined
-          ? `${policy.targetLower.toFixed(2)}–${policy.targetUpper.toFixed(2)}%`
-          : text.sections.rangeUnavailable}</span>
-    </span>
+    {/* The foot carries the remaining shares only, each with a swatch in the colour of its own arc, so a
+        reader can match the line to the dial without reading a legend. */}
+    {legend.length > 0 ? <span className="mi-brief-poster__policy-bottom" data-briefing-policy-outcomes="true">
+      {legend.map((segment) => <span className="mi-brief-poster__policy-outcome-item" key={segment.outcome} data-outcome={segment.outcome}>
+        <i aria-hidden="true" className={`mi-brief-poster__policy-swatch ${gaugeClass(segment.outcome, policy.outcome)}`} />
+        {shareCopy(segment, words)}
+      </span>).reduce<React.ReactNode[]>((joined, node, index) => (index === 0 ? [node] : [...joined, INDEX_SEPARATOR, node]), [])}
+    </span> : null}
   </div>
 }
 
@@ -254,12 +255,21 @@ function countdownDays(editionDate: string, meetingDate: string): number | undef
   return days >= 0 ? days : undefined
 }
 
-const GAUGE_CLASS: Readonly<Record<string, string>> = Object.freeze({
-  event: 'mi-brief-poster__gauge-event',
-  hold: 'mi-brief-poster__gauge-rest',
-  other: 'mi-brief-poster__gauge-other',
-  residual: 'mi-brief-poster__gauge-rest'
-})
+/**
+ * The arc's colour: four in the palette, at most three on the dial.
+ *
+ * The event is not always an increase — a meeting that is priced to cut gets the cut green, and one
+ * priced to hold gets the hold blue — so its class follows the lead rather than the segment's name.
+ * `other`/`residual` share the grey: both mean "everything not named above".
+ */
+function gaugeClass(outcome: string, lead: string): string {
+  if (outcome === 'event') {
+    if (lead.startsWith('hike')) return 'mi-brief-poster__gauge-hike'
+    if (lead.startsWith('cut')) return 'mi-brief-poster__gauge-cut'
+    return 'mi-brief-poster__gauge-hold'
+  }
+  return outcome === 'hold' ? 'mi-brief-poster__gauge-hold' : 'mi-brief-poster__gauge-other'
+}
 
 /** The dial's own separator: the copy is a word plus a number, so the join is punctuation, not prose. */
 const INDEX_SEPARATOR = ' · '
