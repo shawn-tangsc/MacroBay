@@ -4,7 +4,7 @@ import type { BriefingDataGroups } from '../../../contracts/dailyBriefingDataGro
 import type { BriefingMarketRow, BriefingPulseRow } from '../../../contracts/dailyBriefing'
 import type { PolicyPathOutcome } from '../../../contracts/policyPath'
 import type { DailyBriefingText } from './dailyBriefingText'
-import { paymentDirectionFor, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
+import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
@@ -16,13 +16,15 @@ import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, pol
  * arithmetic and the price geometry live in pure functions next door, because the assertions count
  * vertices and compare two renders — numbers, not pixels.
  */
-export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact, policyWords }: Readonly<{
+export function BriefingDataArea({ groups, text, locale, formatTime, paymentDirectionsCompact, policyWords, changeArrows }: Readonly<{
   groups: BriefingDataGroups
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   paymentDirectionsCompact: paymentDirectionWords
   policyWords: policyGaugeWords
+  /** The ↑/↓ glyphs, owned by the positioning copy; the card prints no arrow of its own. */
+  changeArrows: changeArrowWords
 }>): React.ReactElement {
   const policy = groups.policyPath
   const readings = groups.readings
@@ -53,13 +55,15 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       {(['btc', 'eth'] as const).map((asset) => {
         const entry = leverage[asset]
         const rate = entry.fundingRate
+        const change = entry.change24hPct
         const spark = entry.series ? oiSparkPoints(entry.series.map((point) => point.value)) : ''
-        return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={rate === undefined || rate === 0 ? undefined : rate > 0 ? 'up' : 'down'}>
+        // The 24-hour change is the card's point: the amount is a level, and a level does not say
+        // whether positioning is being added or taken off. The tone rides on this number, never on the
+        // funding rate beside it, or the colour and the arrow would belong to different facts.
+        return <div className="mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
           <span>{asset.toUpperCase()}</span>
-          <b>{rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`}</b>
-          <small>{paymentDirectionFor(rate, paymentDirectionsCompact)}</small>
-          <small>OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
-          <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · 24h {entry.change24hPct !== undefined ? `${entry.change24hPct.toFixed(1)}%` : text.noValue}</small>
+          <b className="mi-brief-poster__leverage-change" data-briefing-oi-change={asset}>{changeCopy(change, changeArrows, text.noValue)}</b>
+          <small>1h {entry.change1hPct !== undefined ? `${entry.change1hPct.toFixed(1)}%` : text.noValue} · {rate === undefined ? text.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`} {paymentDirectionFor(rate, paymentDirectionsCompact)} · OI {entry.openInterestUsd !== undefined ? `$${(entry.openInterestUsd / 1e9).toFixed(2)}B` : text.noValue}</small>
           {/* Only when the edition carries a series: no series means no element at all, never a flat
               placeholder line, because a flat line claims nothing moved. */}
           {spark ? <svg className="mi-brief-poster__leverage-spark" data-briefing-oi-spark={asset} viewBox={`0 0 ${OI_SPARK.width} ${OI_SPARK.height}`} role="img" aria-label={`${asset.toUpperCase()} ${text.sections.leverage}`}>
@@ -153,6 +157,21 @@ function toneOf(row: BriefingMarketRow | BriefingPulseRow): 'up' | 'down' | unde
   const value = row.change?.value ?? row.value?.number
   if (value === undefined || value === 0) return undefined
   return value > 0 ? 'up' : 'down'
+}
+
+/**
+ * The card's main number: an arrow and a magnitude, or a signed zero.
+ *
+ * The arrow already says which way, so the number beside it carries no sign — "↑+3.5%" is the same fact
+ * twice. A zero has no arrow and prints as "+0.0%", which is the one value a reader must not confuse
+ * with a missing reading.
+ */
+function changeCopy(change: number | undefined, arrows: changeArrowWords, noValue: string): string {
+  if (change === undefined) return noValue
+  const arrow = changeArrowFor(change, arrows)
+  const magnitude = `${Math.abs(change).toFixed(1)}%`
+  if (arrow) return `${arrow}${magnitude}`
+  return `${change < 0 ? '' : '+'}${magnitude}`
 }
 
 /** The last plotted point, for the "now" dot: one dot, at the end of the line, never a marker per point. */

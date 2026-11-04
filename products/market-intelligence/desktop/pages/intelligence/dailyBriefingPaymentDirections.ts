@@ -36,3 +36,16 @@ export function briefingPolicyGaugeWords(locale: 'zh-CN' | 'en-US'): policyGauge
   const words = productText[locale].pages.intelligence.portal.dashboard.policyPath
   return { hold: words.shortOutcomes['no-change'], rest: words.topRest }
 }
+
+/** The arrows a signed change prints, resolved from the positioning copy that owns them. */
+export type changeArrowWords = Readonly<{ up: string; down: string }>
+
+export function briefingChangeArrows(locale: 'zh-CN' | 'en-US'): changeArrowWords {
+  return productText[locale].pages.intelligence.portal.dashboard.positioning.changeArrows
+}
+
+/** The arrow for a signed change, and none at all for zero or an unknown value. */
+export function changeArrowFor(value: number | undefined, words: changeArrowWords): string {
+  if (value === undefined || value === 0) return ''
+  return value > 0 ? words.up : words.down
+}

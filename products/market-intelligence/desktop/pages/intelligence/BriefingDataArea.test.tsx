@@ -7,7 +7,7 @@ import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingDataArea } from './BriefingDataArea'
-import { briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
+import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 /**
  * What the data region actually renders.
@@ -75,7 +75,8 @@ async function render(overrides: Readonly<{ distribution?: boolean }> = {}): Pro
   const groups = briefingDataGroups(documentWithData(overrides))
   await act(async () => root!.render(createElement(BriefingDataArea, {
     groups, text, locale: 'zh-CN', formatTime: () => '07:00',
-    paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
+    paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+    changeArrows: briefingChangeArrows('zh-CN')
   })))
   return host
 }
@@ -174,7 +175,8 @@ describe('the drawings the data arrived for', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(withCurves), text, locale: 'zh-CN', formatTime: () => '07:00',
-      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN')
     })))
     const areas = host.querySelectorAll('[data-briefing-price-area="btc"]')
     expect(areas).toHaveLength(1)
@@ -195,7 +197,8 @@ describe('the drawings the data arrived for', () => {
     root = createRoot(host)
     await act(async () => root!.render(createElement(BriefingDataArea, {
       groups: briefingDataGroups(withSeries), text, locale: 'zh-CN', formatTime: () => '07:00',
-      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN')
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN')
     })))
     // One card has a series, so one spark exists: `= 1` is the state the criterion calls red, and
     // this fixture is the half-data case that must still draw the one it has.
@@ -203,5 +206,39 @@ describe('the drawings the data arrived for', () => {
     expect([...sparks].map((node) => node.getAttribute('data-briefing-oi-spark'))).toEqual(['btc'])
     expect(sparks[0]!.querySelectorAll('polyline')).toHaveLength(1)
     expect(sparks[0]!.querySelectorAll('circle').length).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('the positioning card points at its change', () => {
+  it('makes the 24-hour change the card number, with the arrow and the tone on it', async () => {
+    const dom = await render()
+    const change = dom.querySelectorAll('[data-briefing-oi-change]')
+    expect([...change].map((node) => node.getAttribute('data-briefing-oi-change'))).toEqual(['btc', 'eth'])
+    // The fixture's BTC change is 0: no arrow, no tone — a zero is not "up".
+    expect(change[0]!.textContent).toBe('+0.0%')
+    expect(change[1]!.textContent).toBe('↑3.5%')
+    // The tone belongs to the change, so it must agree with it rather than with the funding rate.
+    const btc = dom.querySelector('[data-briefing-leverage-card="btc"]')!
+    expect(btc.getAttribute('data-tone')).toBeNull()
+    expect(dom.querySelector('[data-briefing-leverage-card="eth"]')!.getAttribute('data-tone')).toBe('up')
+    // The funding rate is still on the card exactly once, now inside the small line.
+    expect((btc.textContent ?? '').split('0.0100%').length - 1).toBe(1)
+  })
+
+  it('draws a down card in the down tone, and never a green one on a negative change', async () => {
+    const falling = documentWithData()
+    ;(falling.data.leverage!.btc as { change24hPct?: number; fundingRate?: number }).change24hPct = -3.5
+    ;(falling.data.leverage!.btc as { fundingRate?: number }).fundingRate = 0.02
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(falling), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN')
+    })))
+    const btc = host.querySelector('[data-briefing-leverage-card="btc"]')!
+    expect(btc.getAttribute('data-tone')).toBe('down')
+    expect(btc.querySelector('[data-briefing-oi-change="btc"]')!.textContent).toBe('↓3.5%')
   })
 })

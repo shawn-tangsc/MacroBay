@@ -229,4 +229,5 @@
 .mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; }
 .mi-brief-poster__leverage-card[data-tone='up'] b { color: #1f5b32; }
 .mi-brief-poster__leverage-card[data-tone='down'] b { color: #8f2a1d; }
+.mi-brief-poster__leverage-change { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__leverage-spark { width: 60px; height: 26px; color: #8a5a35; }

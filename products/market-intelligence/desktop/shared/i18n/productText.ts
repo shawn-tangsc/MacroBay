@@ -525,7 +525,10 @@ mi: miText['zh-CN'],
               paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
               // The brief's small line has ~280px; the full English wording does not fit. Same meaning,
               // same keys; the Chinese values are the full ones because there is nothing shorter to say.
-              paymentDirectionsCompact: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
+              paymentDirectionsCompact: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
+              // The arrow a signed change prints. A glyph in the copy table, not in the component: the two
+              // languages may disagree later, and a literal in a card is a word nobody can edit.
+              changeArrows: { up: '↑', down: '↓' }
             },
             divergence: {
               title: '跨面板背离',
@@ -1806,7 +1809,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' },
-              paymentDirectionsCompact: { 'long-pays-short': 'Longs pay', 'short-pays-long': 'Shorts pay', neutral: 'Neutral' }
+              paymentDirectionsCompact: { 'long-pays-short': 'Longs pay', 'short-pays-long': 'Shorts pay', neutral: 'Neutral' },
+              changeArrows: { up: '↑', down: '↓' }
             },
             divergence: {
               title: 'Cross-panel divergence',

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
-import { briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
+import { briefingChangeArrows, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -94,7 +94,7 @@ const renderWith = async (
     document: doc, text: copy, locale, formatTime,
     // The card never owns these words; the page hands them in, so the test hands them in too.
     paymentDirectionsCompact: briefingPaymentDirections(locale),
-    policyWords: briefingPolicyGaugeWords(locale)
+    policyWords: briefingPolicyGaugeWords(locale), changeArrows: briefingChangeArrows(locale)
   })))
   return host
 }
