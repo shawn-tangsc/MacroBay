@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { createBriefingPeriodStore } from './dailyBriefingPeriodStore'
 
-function memoryStorage(initial: unknown = { version: 1, periods: [] }) {
+function memoryStorage(initial: unknown = undefined) {
   let stored = initial
   return {
     read: vi.fn(async () => stored),
@@ -20,13 +20,20 @@ const store = (storage: ReturnType<typeof memoryStorage>, overrides: Readonly<{ 
   })
 
 describe('briefing period store', () => {
-  it('reads an empty configuration as the one default period, without writing', async () => {
+  it('reads a configuration that was never written as the one default period, without writing', async () => {
     const storage = memoryStorage()
     const periods = await store(storage).list()
     expect(periods).toEqual([{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }])
     expect(storage.write).not.toHaveBeenCalled()
     // The fallback follows the caller's interface language rather than inventing one.
     expect((await store(storage, { defaultLanguage: () => 'en-US' }).list())[0]?.language).toBe('en-US')
+  })
+
+  it('keeps a file whose periods were all deleted empty, instead of reviving a default', async () => {
+    const storage = memoryStorage({ version: 1, periods: [] })
+    // The reader deleted every period; showing a 07:00 row again would invent one they never made.
+    expect(await store(storage).list()).toEqual([])
+    expect(storage.write).not.toHaveBeenCalled()
   })
 
   it('adds a period and persists the whole list', async () => {
@@ -112,6 +119,9 @@ describe('briefing period store', () => {
     const removed = await store(storage).remove('period_a')
     expect(removed).toMatchObject({ state: 'removed', id: 'period_a' })
     expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_b'])
+    // Deleting the last one leaves a real empty configuration, not the never-configured fallback.
+    await store(storage).remove('period_b')
+    expect(await store(storage).list()).toEqual([])
     expect(await store(storage).remove('period_x')).toEqual({ state: 'missing', id: 'period_x' })
   })
 })

@@ -17,13 +17,18 @@ import {
  * The reader's period configuration, in its own file.
  *
  * It is a new store rather than the old "one period per day" settings shape: a period is an entity
- * with an identity that editions point at, not a daily setting. Reads never write — an empty file
- * reads as one default period in memory, so a fresh install still has a schedule without the store
- * inventing a row nobody asked for.
+ * with an identity that editions point at, not a daily setting. Reads never write. A file that was
+ * never written reads as one default period in memory, so a fresh install still has a schedule; a
+ * file that exists and holds no periods is a reader who deleted them all, and it stays empty.
  */
 export type BriefingPeriodStorage = Readonly<{
-  /** Whatever is on disk, unparsed: reading is the pure reader's job. */
-  read: () => Promise<unknown>
+  /**
+   * Whatever is on disk, unparsed: reading is the pure reader's job.
+   *
+   * `undefined` means the file does not exist — never configured. A file that exists with an empty
+   * `periods` array is a different fact: the reader deleted every period, and that is a real state.
+   */
+  read: () => Promise<unknown | undefined>
   write: (value: Readonly<{ version: 1; periods: readonly BriefingPeriod[] }>) => Promise<void>
 }>
 
@@ -56,9 +61,12 @@ export function createBriefingPeriodStore(deps: Readonly<{
   const newId = deps.newId ?? (() => `period_${randomUUID()}`)
 
   const readEffective = async (): Promise<readonly BriefingPeriod[]> => {
-    const stored = readBriefingPeriods(await deps.storage.read())
-    // An empty configuration is still one period to every consumer: this build's fixed schedule.
-    return stored.length > 0 ? stored : Object.freeze([createDefaultBriefingPeriod(deps.defaultLanguage())])
+    const raw = await deps.storage.read()
+    // Never configured: one period, so a fresh install still has a schedule.
+    if (raw === undefined) return Object.freeze([createDefaultBriefingPeriod(deps.defaultLanguage())])
+    // Configured and empty: the reader deleted every period. Inventing a default here would put a
+    // 07:00 row back that nobody configured — the same class of lie as made-up data.
+    return readBriefingPeriods(raw)
   }
 
   const persist = async (periods: readonly BriefingPeriod[]): Promise<readonly BriefingPeriod[]> => {
