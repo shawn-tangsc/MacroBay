@@ -139,6 +139,21 @@ describe('daily briefing service', () => {
     expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24, zoneSource: 'settings' })
   })
 
+  it('stops the run when its attempt row cannot be written, instead of running unrecorded', async () => {
+    // A run with no attempt row cannot be found afterwards. Before this, the write error was
+    // swallowed and the run continued: afterwards "no attempt" meant both "nothing ran" and
+    // "something ran and could not say so".
+    const store = { ...memoryStore(), beginAttempt: async () => { throw new Error('database is locked') } } as DailyBriefingStore
+    const source = fakeSource()
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result).toMatchObject({ state: 'unavailable', failureCode: 'attempt-not-recorded' })
+    // Nothing was collected, stored or published for a run that has no record of itself.
+    expect(source.calls).toBe(0)
+  })
+
   it('moves the cutoff with the configured generation time', () => {
     // 08:30 local is before a 09:30 cutoff, so the open belongs to the previous edition.
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
@@ -231,7 +246,14 @@ describe('daily briefing service', () => {
     const source: DailyBriefingSource = {
       async readFacts(input) {
         await gate
-        return emptyPacket({ asOf: input.asOf, windowHours: input.windowHours })
+        // The service consumes a frozen snapshot, not the raw packet: the same conversion the other
+        // fakes use, so this fake cannot drift into returning the wrong shape unnoticed.
+        return factSnapshotFromPacket(emptyPacket({ asOf: input.asOf, windowHours: input.windowHours ?? 24 }))
+      },
+      // Required by the source contract even though this run is held at `readFacts`: a fake that
+      // omits a required member only compiles while the file is outside the typecheck's scope.
+      async renderPacket(_facts, locale, timeZone) {
+        return Object.freeze({ ...emptyPacket(), locale, timeZone })
       }
     }
     const service = createDailyBriefingService({ source, store, now: () => asOf })

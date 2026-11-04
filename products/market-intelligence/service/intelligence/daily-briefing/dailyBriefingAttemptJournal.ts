@@ -13,7 +13,8 @@ import type { DailyBriefingAttemptEnd, DailyBriefingStore } from './dailyBriefin
  * run should look like to a later reader.
  */
 export type DailyBriefingAttemptJournal = Readonly<{
-  open: () => Promise<void>
+  /** Whether this run has an attempt row; false means the store refused to write one. */
+  open: () => Promise<boolean>
   /** The settled row, for the call that has to write it together with the edition. */
   build: (
     state: 'succeeded' | 'failed',
@@ -61,12 +62,20 @@ export function createDailyBriefingAttemptJournal(
 
   return Object.freeze({
     async open() {
-      attemptNo = await store.beginAttempt?.({
-        date: input.date,
-        periodId: input.periodId,
-        locale: input.locale,
-        startedAt: input.now()
-      }).catch(() => undefined)
+      // Never swallowed: a run that leaves no attempt row cannot be audited afterwards — "no attempt"
+      // would then mean either "nothing ran" or "it ran and could not record itself". The answer goes
+      // back to the caller, which fails the run instead of continuing unrecorded.
+      try {
+        attemptNo = await store.beginAttempt?.({
+          date: input.date,
+          periodId: input.periodId,
+          locale: input.locale,
+          startedAt: input.now()
+        })
+        return true
+      } catch {
+        return false
+      }
     },
     build,
     settle

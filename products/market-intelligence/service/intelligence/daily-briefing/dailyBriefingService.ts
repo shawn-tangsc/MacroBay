@@ -196,8 +196,8 @@ function withTimeZoneSource(
 
 export type DailyBriefingTodayFailureCode =
   | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
-  /** Not a failure: a read-only open found nothing written for this issue yet. */
-  | 'not-generated'
+  | 'attempt-not-recorded' // The store refused the attempt row: stop, never run unrecorded.
+  | 'not-generated' // Not a failure: a read-only open found nothing written for this issue yet.
 
 export type DailyBriefingTodayResult =
   | Readonly<{
@@ -383,7 +383,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // made a waiting run indistinguishable from a stuck one.
     const readinessWait = await awaitDailyBriefReadinessPublished(deps.readiness, input.asOf, (progress) => runs.progress.set(progressKey, progress), now)
     const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
-    await attempts.open()
+    if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
       attemptId: `${input.date}:${input.locale}:${input.asOf}`,
       now,
