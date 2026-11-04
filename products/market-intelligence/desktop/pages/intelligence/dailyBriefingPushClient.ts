@@ -51,6 +51,7 @@ export type BriefingPushFailure =
   | 'push-paused'
   | 'record-missing'
   | 'edition-mismatch'
+  | 'surface-invalid'
 
 /**
  * The channel the phone receives through, read from the platform rather than named here.
@@ -141,7 +142,7 @@ function rejectionReason(code: unknown): BriefingPushFailure {
   switch (code) {
     case 'redeliver-target-missing': return 'record-missing'
     case 'redeliver-edition-mismatch': return 'edition-mismatch'
-    case 'redeliver-surface-invalid': return 'runtime-unavailable'
+    case 'redeliver-surface-invalid': return 'surface-invalid'
     case 'push-paused': return 'push-paused'
     case 'channel-missing': return 'channel-not-configured'
     default: return 'runtime-unavailable'

@@ -39,8 +39,6 @@ export function useBriefingPushToPhone(input: Readonly<{
   generating: boolean
   /** The pane says this language has no edition, which is its own sentence. */
   localeMissing: boolean
-  /** The primary edition language from the settings plan; the channel only ever receives that one. */
-  primaryLocale: DailyBriefingDocument['edition']['locale'] | undefined
   /** Which issue of that day this is; the platform keys the notice by all three values. */
   periodId: string
   text: BriefingPushText
@@ -65,8 +63,7 @@ export function useBriefingPushToPhone(input: Readonly<{
       : input.generating ? 'generating'
         : input.localeMissing ? 'missing-locale'
           : edition === undefined ? 'no-edition'
-            : input.primaryLocale !== undefined && edition.locale !== input.primaryLocale ? 'non-primary-locale'
-              : undefined
+            : undefined
 
   const { state, toast, push, retry } = useBriefingPush({
     edition,

@@ -125,8 +125,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [contentLocale, setContentLocale] = useBriefingContentLocale(locale)
   // The switch only exists when the brief may have more than one edition language at all.
   const [englishEditionsEnabled, setEnglishEditionsEnabled] = useState(false)
-  // Which language the channel receives: the plan's primary, not the tab the reader happens to be on.
-  const [primaryEditionLocale, setPrimaryEditionLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
   // Until the settings answer arrives we do not know whether an English edition is even possible.
   const [languageSettingsKnown, setLanguageSettingsKnown] = useState(false)
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
@@ -310,7 +308,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active || result.state !== 'available') return
       setWebSearchEnabled(result.view.settings.webSearchEnabled)
       setEnglishEditionsEnabled(result.view.language.settings.additional.includes('en-US'))
-      setPrimaryEditionLocale(result.view.language.plan.primary.used)
       setLanguageSettingsKnown(true)
       setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
       const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
@@ -376,7 +373,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     document: contentBlocked ? undefined : readyDocument,
     generating,
     localeMissing: view.status === 'locale-missing',
-    primaryLocale: primaryEditionLocale,
     periodId: editions.find((row) => row.date === readyDocument?.edition.date)?.periodId ?? DEFAULT_PERIOD_ID,
     text: briefingPushText[locale]
   })

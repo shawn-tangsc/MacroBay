@@ -32,13 +32,11 @@ function Row(input: Readonly<{
   edition?: DailyBriefingDocument
   generating?: boolean
   localeMissing?: boolean
-  primaryLocale?: 'zh-CN' | 'en-US'
 }>): React.ReactElement {
   const push = useBriefingPushToPhone({
     document: input.edition,
     generating: input.generating ?? false,
     localeMissing: input.localeMissing ?? false,
-    primaryLocale: input.primaryLocale ?? 'zh-CN',
     periodId: 'default',
     text: zh
   })
@@ -132,15 +130,14 @@ describe('the publish control on the page', () => {
     expect(redeliver).toHaveBeenCalledTimes(2)
   })
 
-  it('explains each of the five situations in its own words and blocks the button', async () => {
+  it('explains each blocked situation in its own words and blocks the button', async () => {
     const cases = [
       { props: { generating: true }, reason: 'generating' as const },
       { props: { localeMissing: true }, reason: 'missing-locale' as const },
-      { props: { document: undefined }, reason: 'no-edition' as const },
-      { props: { document: document('en-US'), primaryLocale: 'zh-CN' as const }, reason: 'non-primary-locale' as const }
+      { props: { document: undefined }, reason: 'no-edition' as const }
     ]
     for (const entry of cases) {
-      render(<Row edition={entry.props.document} generating={entry.props.generating} localeMissing={entry.props.localeMissing} primaryLocale={entry.props.primaryLocale} />)
+      render(<Row edition={entry.props.document} generating={entry.props.generating} localeMissing={entry.props.localeMissing} />)
       await act(async () => { await Promise.resolve() })
       expect(button().disabled).toBe(true)
       expect(container.textContent).toContain(zh.disabled[entry.reason])
@@ -153,6 +150,21 @@ describe('the publish control on the page', () => {
     await act(async () => { await Promise.resolve() })
     expect(button().disabled).toBe(true)
     expect(container.textContent).toContain(zh.disabled.capability)
+  })
+
+  it('pushes the English edition the reader is looking at, not the master-language one', async () => {
+    // 读者切成英文、点推送，收到的必须是英文版：只要这一版真在通知里（editionId+locale 对得上）就推，
+    // 不为「非主语言」另设禁用分支——那会把「去重新生成」的出路堵掉。
+    const english = document('en-US')
+    render(<Row edition={english} />)
+    await act(async () => { await Promise.resolve() })
+    expect(button().disabled).toBe(false)
+    await push()
+    expect(redeliver).toHaveBeenCalledWith({
+      dedupeKey: 'briefing-ready:2026-11-05',
+      editionId: '2026-11-05:en-US:default',
+      locale: 'en-US'
+    })
   })
 
   it('keeps the button pressable when the platform never says a channel is missing', async () => {

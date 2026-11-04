@@ -42,7 +42,7 @@ function button(host: HTMLElement): HTMLButtonElement {
 describe('the push button speaks for every blocked reason', () => {
   it('gives each blocked reason its own sentence, wired to the control', async () => {
     const sentences = new Set<string>()
-    for (const reason of ['generating', 'no-edition', 'missing-locale', 'capability', 'non-primary-locale'] as const) {
+    for (const reason of ['generating', 'no-edition', 'missing-locale', 'capability'] as const) {
       const { host } = await mount({ kind: 'disabled', reason })
       const control = button(host)
       expect(control.disabled).toBe(true)
@@ -55,8 +55,8 @@ describe('the push button speaks for every blocked reason', () => {
       await act(async () => root?.unmount())
       root = undefined
     }
-    // Five reasons, five sentences: folding them into one is the "never says why" defect this guards.
-    expect(sentences.size).toBe(5)
+    // Four reasons, four sentences: folding them into one is the "never says why" defect this guards.
+    expect(sentences.size).toBe(4)
   })
 })
 

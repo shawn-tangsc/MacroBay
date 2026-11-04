@@ -22,7 +22,7 @@ export type BriefingPushState =
   | Readonly<{ kind: 'failed'; reason: BriefingPushFailure }>
   | Readonly<{ kind: 'disabled'; reason: BriefingPushDisabledReason }>
 
-export type BriefingPushDisabledReason = 'generating' | 'no-edition' | 'missing-locale' | 'capability' | 'non-primary-locale'
+export type BriefingPushDisabledReason = 'generating' | 'no-edition' | 'missing-locale' | 'capability'
 
 /** How long each success sentence stays. The unconfirmed one is weaker and needs longer to be read. */
 export const briefingPushToastMs = Object.freeze({ accepted: 3_000, unconfirmed: 6_000 })

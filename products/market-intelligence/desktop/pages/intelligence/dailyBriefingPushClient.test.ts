@@ -51,10 +51,11 @@ describe('the push client', () => {
     expect(await redeliverBriefingPush(edition)).toEqual({ state: 'sent', delivery: 'sent-accepted' })
   })
 
-  it('names each rejection in words a reader can act on', async () => {
+  it('names each of the five rejections in words a reader can act on', async () => {
     for (const [code, reason] of [
       ['redeliver-target-missing', 'record-missing'],
       ['redeliver-edition-mismatch', 'edition-mismatch'],
+      ['redeliver-surface-invalid', 'surface-invalid'],
       ['push-paused', 'push-paused'],
       ['channel-missing', 'channel-not-configured']
     ] as const) {

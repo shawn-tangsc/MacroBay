@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { briefingPushText, fillBriefingPush } from './dailyBriefingPushText'
+import { briefingPushText, fillBriefingPush, type BriefingPushFailureKey } from './dailyBriefingPushText'
 import { briefingPushToastMs, useBriefingPush, type BriefingPushState } from './dailyBriefingPushWiring'
 
 /**
@@ -91,8 +91,8 @@ describe('the push state machine', () => {
 
   it('does nothing while the page says why it cannot send', async () => {
     const send = vi.fn()
-    const harness = mount({ edition, blocked: 'non-primary-locale', send: send as never })
-    expect(harness.last.state).toEqual({ kind: 'disabled', reason: 'non-primary-locale' })
+    const harness = mount({ edition, blocked: 'generating', send: send as never })
+    expect(harness.last.state).toEqual({ kind: 'disabled', reason: 'generating' })
     await act(async () => { harness.api.push() })
     expect(send).not.toHaveBeenCalled()
     harness.unmount()
@@ -112,5 +112,25 @@ describe('the push copy', () => {
     }
     expect(fillBriefingPush(briefingPushText['zh-CN'].sentAccepted, { channel: 'Telegram · 贾维斯' })).toBe('已交给 Telegram · 贾维斯')
     expect(fillBriefingPush(briefingPushText['en-US'].sentUnconfirmed, { channel: 'Telegram · Jarvis' })).toBe('Handed to Telegram · Jarvis (no receipt received)')
+  })
+
+  it('names the button after what it does, and gives one sentence to one situation', () => {
+    // 按钮要读者一眼认得出是做啥：「推送到手机」，不是「发布频道」这种要猜的词。
+    expect(briefingPushText['zh-CN'].button).toBe('推送到手机')
+    expect(briefingPushText['en-US'].button).toBe('Send to phone')
+    // 版次不符与「没有同键记录」是同一件事（读者眼前这一版不在通知里），一句就够；
+    // 两句分开写，读者会以为是两种毛病。
+    expect(briefingPushText['zh-CN'].failed['edition-mismatch']).toBe('这一版还没进通知，先重新生成再看')
+    expect(briefingPushText['zh-CN'].failed['record-missing']).toBe(briefingPushText['zh-CN'].failed['edition-mismatch'])
+    // 推送暂停是暂时的，别把读者指去改配置。
+    expect(briefingPushText['zh-CN'].failed['push-paused']).toContain('自动恢复')
+    // 五个拒绝各有自己那句：不许一句通用失败盖住。
+    const reasons: readonly BriefingPushFailureKey[] = [
+      'channel-not-configured', 'channel-disconnected', 'channel-rate-limited', 'runtime-unavailable', 'push-paused', 'record-missing', 'edition-mismatch', 'surface-invalid'
+    ]
+    for (const reason of reasons) {
+      expect(briefingPushText['zh-CN'].failed[reason].trim().length).toBeGreaterThan(0)
+      expect(briefingPushText['zh-CN'].failed[reason]).not.toMatch(/失败$|操作失败/)
+    }
   })
 })
