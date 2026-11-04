@@ -733,3 +733,23 @@ describe('the dial has four colours and at most three arcs', () => {
   })
 })
 
+
+describe('row labels name the row, not the window', () => {
+  it('drops "24h change" from the three price rows and keeps the asset names', async () => {
+    const dom = await render()
+    const labels = ['btc', 'eth'].map((id) =>
+      dom.querySelector(`[data-briefing-price-card="${id}"] .mi-brief-poster__price-label`)?.textContent ?? '')
+    // The block heading already says "past 24 hours"; the arrow and its colour already say "change".
+    for (const label of labels) {
+      expect(label).not.toContain('24h')
+      expect(label).not.toContain('涨跌')
+    }
+    // The asset name must survive — dropping it would name nothing at all.
+    expect(labels[0]).toContain('BTC')
+    expect(labels[1]).toContain('ETH')
+    const index = dom.querySelector('[data-reading="nasdaq"] .mi-brief-poster__figure-label')?.textContent ?? ''
+    expect(index).toContain('纳指')
+    expect(index).not.toContain('24h')
+    expect(index).not.toContain('涨跌')
+  })
+})
