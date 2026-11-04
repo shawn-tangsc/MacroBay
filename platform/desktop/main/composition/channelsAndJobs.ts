@@ -33,6 +33,7 @@ import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../../.
 import { channelConversationTitle } from '../../../ai/agent-platform/channels/channelConversationName'
 import { channelAdapterDescriptor } from '../../../ai/agent-platform/channels/channelAdapterDescriptors'
 import { autoBindDeliveryTarget } from '../../../ai/agent-platform/channels/channelAutoTargetBinding'
+import { touchChannelConversation } from '../../../ai/agent-platform/channels/channelConversationBindings'
 import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
@@ -250,6 +251,10 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     // 入站消息到达且这条频道还没有投递目标时，自动把它记成唯一目标（不覆盖已有绑定）。
     bindAutoTarget: ({ channelId, conversationId }) => {
       autoBindDeliveryTarget(agentDatabase, { channelId, conversationId, now: new Date() })
+    },
+    // 同一刻刷新这条对话的「最近活跃」：只有时间，不动键/会话/名字。
+    touchConversation: ({ channelId, conversationId, now }) => {
+      touchChannelConversation(agentDatabase, { channelId, conversationId, now })
     }
   })
   const telegramRuntimeManager = new TelegramRuntimeManager({

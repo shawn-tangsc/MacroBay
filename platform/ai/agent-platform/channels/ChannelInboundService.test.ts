@@ -11,6 +11,7 @@ import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelContentGuard, ChannelInboundFacts } from './ChannelInboundContracts'
 import { createChannelInboundContentGuard } from './ChannelInboundContentGuard'
 import { autoBindDeliveryTarget } from './channelAutoTargetBinding'
+import { touchChannelConversation } from './channelConversationBindings'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
 import { seedChannelAdapterSupport } from './channelTestSupport'
@@ -55,6 +56,24 @@ describe('ChannelInboundService', () => {
     // 已经写了名字：后续消息不许改它（只有 /new 才会换新会话与新名字）。
     await receive(service, 'channel-a', { providerEventKey: 'title-2', providerUserLabel: '别人' })
     expect(database.connection.prepare('select session_title from channel_conversations').get()).toEqual(first)
+  })
+
+  it('refreshes the conversation updated_at on every inbound, without adding a second row', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'touch-1' })
+    const before = database.connection.prepare('select id, updated_at from channel_conversations').get() as
+      { id: string; updated_at: string }
+    expect(before.updated_at).toBe('2026-07-18T00:00:00.000Z')
+
+    // 同一对话再收一条：行不新增，但「最近活跃」要跟着消息走（以前停在建会话那一刻，是假数据）。
+    ;(service as unknown as { deps: { now: () => Date } }).deps.now = () => new Date('2026-07-18T00:05:00.000Z')
+    await receive(service, 'channel-a', { providerEventKey: 'touch-2' })
+    const after = database.connection.prepare('select id, updated_at from channel_conversations').all() as
+      Array<{ id: string; updated_at: string }>
+    expect(after).toHaveLength(1)
+    expect(after[0]!.id).toBe(before.id)
+    expect(after[0]!.updated_at).toBe('2026-07-18T00:05:00.000Z')
   })
 
   it('auto-registers the first conversation that talks to the channel as its delivery target', async () => {
@@ -1016,6 +1035,10 @@ function createHarness(
       encryption: { cipher },
       sessions: { createForConversation: async ({ agentId }) => `${agentId}-session-${++sequence}`, discardUnbound: async () => {} },
       contentGuard,
+      // 与组合根同一形状的注入：SQL 那一层不在服务里。
+      touchConversation: ({ channelId, conversationId, now }) => {
+        touchChannelConversation(database, { channelId, conversationId, now })
+      },
       now: () => new Date('2026-07-18T00:00:00.000Z')
     })
   }

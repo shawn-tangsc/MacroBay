@@ -31,6 +31,11 @@ export type ChannelInboundServiceDependencies = {
    * 界面上没有绑定入口，所以这一步不能指望读者动手。
    */
   bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
+  /**
+   * 每次入站刷新这条对话的「最近活跃」时间。与 `bindAutoTarget` 同一个注入形状：
+   * SQL 那一层不在这里，服务只报「这条对话刚有消息」。
+   */
+  touchConversation?: (input: { channelId: string; conversationId: string; now: Date }) => void
   /** 「没有权限」那句人话（按界面语言给）；缺省时只记审计、不回话。 */
   deniedReplyText?: () => Promise<string>
   /**
@@ -117,6 +122,10 @@ export class ChannelInboundService {
         if (!decision && conversation && !request.text?.trim().startsWith('/new')) {
           // 跟这条通道说过话的对话就是投递目标：界面上没有绑定入口，不能指望读者自己去绑。
           this.deps.bindAutoTarget?.({ channelId: request.channelId, conversationId: conversation.record.id })
+          // 「最近活跃」跟着消息走：同一对话不新增行，但时间必须是真的（以前只在建会话时写一次）。
+          this.deps.touchConversation?.({
+            channelId: request.channelId, conversationId: conversation.record.id, now
+          })
         }
         // /new is a durable provider event but never Agent work. Replacement remains generation-bound.
         // The first /new creates its initial binding only; replacing that just-created session would orphan it.

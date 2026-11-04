@@ -146,6 +146,21 @@ export function replaceChannelConversationSession(
 }
 
 /**
+ * 每次入站刷新这一行的「最近活跃」时间。**只动 updated_at**：键、会话、名字都由别的路径管。
+ *
+ * 为什么必须有：这行以前只在建会话 / `/new` 时写，于是 22:38 明明有消息、库里还停在 19:16 ——
+ * 「数据自己说谎」比没有这个字段更糟。目前没有消费者按它排序，先修准。
+ */
+export function touchChannelConversation(
+  database: AgentPlatformDatabase,
+  input: { channelId: string; conversationId: string; now: Date }
+): boolean {
+  return database.connection.prepare(
+    'update channel_conversations set updated_at = ? where id = ? and channel_id = ?'
+  ).run(input.now.toISOString(), input.conversationId, input.channelId).changes === 1
+}
+
+/**
  * 给「还没名字」的老会话补一个名字。
  *
  * 为什么要补：会话名是这次才落库的，迁移之前建的会话行 `session_title` 是空的，

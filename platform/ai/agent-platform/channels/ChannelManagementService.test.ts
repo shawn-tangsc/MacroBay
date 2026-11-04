@@ -860,6 +860,16 @@ describe('ChannelManagementService', () => {
     expect(JSON.stringify(service.listConversations({ id, limit: 100 }))).not.toMatch(/payload-ref|opaque-hash|session-a/i)
   })
 
+  it('returns the stored conversation title instead of null (the column was selected but never read)', () => {
+    const { service, database } = harness()
+    const id = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(`insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,session_title,created_at,updated_at) values('conversation-a',?,x'01','payload-ref',1,'opaque-hash','direct','session-a','Telegram · 贾维斯','2026-07-19','2026-07-19')`).run(id)
+    // `session_title` 以前只写在类型里、没进 select：界面读到的名字永远是 null（会话列表回退成平台名）。
+    expect(service.listConversations({ id, limit: 100 })).toEqual([
+      expect.objectContaining({ id: 'conversation-a', sessionTitle: 'Telegram · 贾维斯', hasBoundSession: true })
+    ])
+  })
+
   it('rejects begin-delete-submit credential and policy handoffs without new Vault or policy writes', async () => {
     const { service, database, vault, cipher } = harness()
     const id = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id

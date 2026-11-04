@@ -215,7 +215,8 @@ export class ChannelManagementQueryRepository {
 
   conversations(channelId: string, limit: number): ChannelConversationSafeView[] {
     return (this.database.connection.prepare(
-      `select c.id, c.conversation_kind, c.agent_session_id, c.created_at, coalesce(t.enabled, 0) as target_enabled
+      `select c.id, c.conversation_kind, c.agent_session_id, c.session_title, c.created_at,
+              coalesce(t.enabled, 0) as target_enabled
        from channel_conversations c left join channel_delivery_targets t on t.conversation_id = c.id and t.channel_id = c.channel_id
        where c.channel_id = ? and exists (
          select 1 from agent_channels where id = c.channel_id and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
@@ -228,6 +229,7 @@ export class ChannelManagementQueryRepository {
       kind: row.conversation_kind,
       hasBoundSession: Boolean(row.agent_session_id),
       targetEnabled: Boolean(row.target_enabled),
+      // `session_title` 以前只写在类型里、没进 select：会话列表读到的名字永远是 null（2026-11-05 修）。
       sessionTitle: row.session_title ?? null,
       createdAt: row.created_at
     }))
