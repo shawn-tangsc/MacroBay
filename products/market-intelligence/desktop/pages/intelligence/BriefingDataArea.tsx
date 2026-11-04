@@ -271,17 +271,30 @@ function PriceCard({ row, text, locale, formatTime }: Readonly<{
         <b className="mi-brief-poster__price-value">{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
         {copy ? <small>{copy.secondary}</small> : null}
       </span>
-      {/* The third line is the amplitude, where the instant used to sit: three lines keep the column
-          balanced against the plot, and two left the middle of the card empty. Small, grey, never toned
-          — amplitude says how far it travelled, not which way. */}
-      {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id}>{amplitudeCopy(row.amplitude, text)}</small> : null}
     </div>
-    <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
-      <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
-      {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
-      {paths.lines.map((line, index) => <polyline key={`line-${index}`} points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
-    </svg>
+    {/* The amplitude sits on the plot, not in the text column: the left column is two lines (the label and
+        the figure), and the travel is a shape beside the shape it describes. It is HTML over the plot —
+        never an `svg` `<text>`, so the card's svg keeps zero text nodes. */}
+    <span className="mi-brief-poster__price-plot" data-briefing-price-plot="true">
+      <svg className="mi-brief-poster__price-area" data-briefing-price-area={row.id} viewBox={`0 0 ${PRICE_AREA.width} ${PRICE_AREA.height}`} preserveAspectRatio="none">
+        <line x1="0" y1={PRICE_AREA.zeroY} x2={PRICE_AREA.width} y2={PRICE_AREA.zeroY} className="mi-brief-poster__price-zero" vectorEffect="non-scaling-stroke" />
+        {paths.areas.map((area, index) => area ? <path key={`area-${index}`} d={area} className="mi-brief-poster__price-fill" fill="currentColor" opacity=".18" /> : null)}
+        {paths.lines.map((line, index) => <polyline key={`line-${index}`} points={line} className="mi-brief-poster__price-line" fill="none" stroke="currentColor" vectorEffect="non-scaling-stroke" />)}
+      </svg>
+      {row.amplitude ? <small className="mi-brief-poster__amplitude" data-briefing-amplitude={row.id} data-side={amplitudeSide(row)}>{amplitudeCopy(row.amplitude, text)}</small> : null}
+    </span>
   </div>
+}
+
+/**
+ * Which side of the plot the amplitude label goes on: the one the filled area is not using.
+ *
+ * The fill only exists above the zero axis, so a window that rose has its ink at the top and puts the label
+ * at the bottom; a window that only fell leaves the top free.
+ */
+function amplitudeSide(row: BriefingMarketRow): 'above' | 'below' {
+  const points = (row.curve ?? []).flat()
+  return points.some((point) => point.returnPercent > 0) ? 'below' : 'above'
 }
 
 function toneOf(row: BriefingMarketRow | BriefingPulseRow): 'up' | 'down' | undefined {

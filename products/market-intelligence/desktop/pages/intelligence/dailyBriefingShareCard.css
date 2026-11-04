@@ -214,12 +214,16 @@
    approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
 /* Three lines, top-aligned: label, the number, then the amplitude in the row the instant used to take.
    With two lines the column spread out and left the middle of the card empty. */
-.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; min-width: 0; }
+/* Two lines, centred: the label and the figure as one block, the plot beside them filling the row. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 .mi-brief-poster__price-label { font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The number and its amplitude on one baseline row: one reading, not two lines. */
 .mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .mi-brief-poster__price-value { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.mi-brief-poster__price-area { grid-column: 2; grid-row: 1; width: 100%; height: 100%; }
+/* The plot column holds the drawing and its amplitude label; the label is HTML laid over the plot, so the
+   drawing's own svg keeps zero text nodes. It sits on whichever side the filled area is not using. */
+.mi-brief-poster__price-plot { position: relative; grid-column: 2; grid-row: 1; width: 100%; height: 100%; display: block; }
+.mi-brief-poster__price-area { width: 100%; height: 100%; display: block; }
 .mi-brief-poster__price-zero { stroke: #a89f8d; stroke-width: 1; opacity: .5; }
 .mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
 .mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
@@ -228,7 +232,9 @@
 /* It sits at the foot of the column, in the row the instant used to take: `margin-top: auto` keeps the
    label and the number together at the top and pushes this line down, so the empty middle is between
    them and the plot beside it stays balanced. */
-.mi-brief-poster__amplitude { margin-top: auto; font-size: 10.5px; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__amplitude { font-size: 9.5px; line-height: 1; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__price-plot > .mi-brief-poster__amplitude { position: absolute; right: 3px; bottom: 3px; }
+.mi-brief-poster__price-plot > .mi-brief-poster__amplitude[data-side='above'] { bottom: auto; top: 3px; }
 /* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
    of the gauge, because only the svg had an explicit position. */
 /* Three stacked rows, as the sheet has them: heading across the card, dial beside two lines of reading,

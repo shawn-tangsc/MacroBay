@@ -369,19 +369,21 @@ describe('the cards place their parts in their own columns', () => {
       expect(lead.querySelector('.mi-brief-poster__price-value')).not.toBeNull()
       // No instant in the cell: the block stamps its observation once at the heading.
       expect(lead.querySelector('.mi-brief-poster__price-observed')).toBeNull()
-      // The plot is a sibling of the text column, never inside it.
+      // The plot is a sibling of the text column, never inside it; the drawing lives in the plot box.
       expect(lead.querySelector('[data-briefing-price-area]')).toBeNull()
-      expect(lead.parentElement!.querySelector(':scope > [data-briefing-price-area]')).not.toBeNull()
+      expect(lead.parentElement!.querySelector(':scope > [data-briefing-price-plot] [data-briefing-price-area]')).not.toBeNull()
     }
-    // Both amplitudes are the lead column's third line — the row the instant used to take — not a
-    // second fragment beside the number: two lines left the middle of the card empty.
-    const amplitudes = [...dom.querySelectorAll('[data-briefing-price-lead] [data-briefing-amplitude]')]
+    // The left column is two elements: the label and the figure. The amplitude moved onto the plot.
+    for (const lead of leads) expect(lead.children.length).toBe(2)
+    const amplitudes = [...dom.querySelectorAll('[data-briefing-price-plot] [data-briefing-amplitude]')]
     expect(amplitudes.map((node) => node.getAttribute('data-briefing-amplitude'))).toEqual(['btc', 'eth'])
     for (const node of amplitudes) {
-      expect(node.closest('.mi-brief-poster__price-figures')).toBeNull()
-      expect(node.parentElement!.classList.contains('mi-brief-poster__price-lead')).toBe(true)
+      // On the plot, never inside its drawing: the card's svg keeps zero text nodes.
+      expect(node.closest('svg')).toBeNull()
+      expect(node.parentElement!.hasAttribute('data-briefing-price-plot')).toBe(true)
       // Small, grey, and never toned: amplitude says how far, not which way.
       expect(node.hasAttribute('data-tone')).toBe(false)
+      expect(node.getAttribute('data-side')).toBe('above')
     }
     // The cell form is different on purpose: a reading cell has one line, so its amplitude stays
     // beside the value rather than inventing a second line.

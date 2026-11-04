@@ -110,3 +110,18 @@ describe('the exported sheet is its own palette', () => {
     expect(declaration(rule('.mi-brief-poster__leverage-amount'), 'color')).toBe('#1b1d18')
   })
 })
+
+describe('the amplitude label lives on the plot, not in the drawing', () => {
+  it('sizes it as the smallest label and pins it to the corner the area does not use', () => {
+    expect(declaration(rule('.mi-brief-poster__amplitude'), 'font-size')).toBe('9.5px')
+    expect(declaration(rule('.mi-brief-poster__amplitude'), 'color')).toBe('#6b695f')
+    // HTML over the plot: an `svg` <text> would break the card's zero-text rule.
+    expect(declaration(rule('.mi-brief-poster__price-plot > .mi-brief-poster__amplitude'), 'position')).toBe('absolute')
+    expect(declaration(rule('.mi-brief-poster__price-plot > .mi-brief-poster__amplitude'), 'right')).toBe('3px')
+    expect(declaration(rule('.mi-brief-poster__price-plot > .mi-brief-poster__amplitude'), 'bottom')).toBe('3px')
+    // A rising window fills above the axis, so the label moves to the free side.
+    expect(declaration(rule(".mi-brief-poster__price-plot > .mi-brief-poster__amplitude[data-side='above']"), 'top')).toBe('3px')
+    // The text column is two lines and centred, not three lines spread out.
+    expect(declaration(rule('.mi-brief-poster__price-lead'), 'justify-content')).toBe('center')
+  })
+})
