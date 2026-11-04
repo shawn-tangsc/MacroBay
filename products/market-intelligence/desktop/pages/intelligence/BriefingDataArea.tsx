@@ -43,16 +43,16 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       <span className="mi-brief-poster__block-title">{text.groups.funds}</span>
       {/* Three fixed columns: a missing row leaves its cell empty instead of stretching the other two,
           so a value stays under the same heading on every edition. */}
-      <div className="mi-brief-poster__figure-line">{groups.funds.map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div>
+      <div className="mi-brief-poster__figure-line">{groups.funds.map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} arrows={changeArrows} />)}</div>
     </div> : null}
     {readings.length > 0 ? <div className="mi-brief-poster__market-block" data-briefing-market-row="true">
       <span className="mi-brief-poster__block-title">{text.sections.markets}</span>
       {/* Three columns by two lines; five cells leave the sixth empty rather than reflowing. */}
-      <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}</div>
+      <div className="mi-brief-poster__figure-line">{readings.slice(0, 3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} arrows={changeArrows} />)}</div>
       {/* The table has six cells; today's five leave the sixth blank rather than stretching the row. The
           blank is a node, not an absence: "six cells, five readings" has to be countable. */}
       {readings.length > 3 ? <div className="mi-brief-poster__figure-line">
-        {readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} />)}
+        {readings.slice(3).map((row) => <Figure key={row.id} row={row} text={text} locale={locale} buckets={fearGreedBuckets} arrows={changeArrows} />)}
         {Array.from({ length: Math.max(0, 3 - (readings.length - 3)) }, (_, index) => <div key={`empty-${index}`} data-reading-empty="true" aria-hidden="true" />)}
       </div> : null}
     </div> : null}
@@ -85,43 +85,65 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
 }
 
 /**
- * One cell of the money or market line, in the density a cell has room for: a name, one number and at
- * most one comparison. The stablecoin cell leads with its stock and keeps the day's dollar move; fear
- * and greed leads with the score and keeps the step since the last release. Everything else is a level
- * or a move with its window, and no cell prints an instant — the block stamps that once.
+ * One cell, in two parts: the level it reports and the change beside it.
+ *
+ * A change is a number, not a sentence: `↑0.08%` with its arrow and colour is a figure, while "24h" and
+ * "+0.08%" at one weight read as prose. The window word appears only when it is *not* the block's own —
+ * the block already says 过去 24 小时数据 — and the tone rides on the change alone, because a tinted level
+ * reads as a move.
  */
-function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords): Readonly<{ primary: string; secondary: string }> {
+type CellChange = Readonly<{ text: string; window?: string; tone?: 'up' | 'down'; arrow?: string }>
+type CellCopy = Readonly<{ primary: string; change?: CellChange; note?: string }>
+
+function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords, arrows: changeArrowWords): CellCopy {
   const level = formatBriefingValue(row.value, text.noValue, locale)
+  // The arrow carries the direction, so the number beside it must not repeat it: "↓+1.7B" is one fact
+  // stated twice, and the plus is what a reader trips over.
+  const magnitude = (value: string): string => value.replace(/^[+\-]/, '')
+  const windowWord = (window: string): string =>
+    window === '24h' || window === '1d' ? '' : (text.changeWindows[window as keyof typeof text.changeWindows] ?? window)
+  const changeOf = (value: number, window: string, printed: string): CellChange => {
+    const word = windowWord(window)
+    const tone = value === 0 ? undefined : value > 0 ? 'up' as const : 'down' as const
+    return { text: magnitude(printed), ...(word ? { window: word } : {}), ...(tone ? { tone, arrow: changeArrowFor(value, arrows) } : {}) }
+  }
   if (row.id === 'stablecoin') {
     const day = (row.auxiliaryChanges ?? []).find((change) => change.window === '1d' && change.unit === 'usd')
-    // No window word: a day is this block's own window, so `1d` repeats the heading. What stays is the
-    // number and its direction — the same rule the rest of the cells follow.
-    const dayText = day && day.unit === 'usd' ? formatBriefingChange({ value: day.value, unit: 'usd' }, locale) : ''
-    return { primary: level, secondary: dayText }
+    if (!day || day.unit !== 'usd') return { primary: level }
+    return { primary: level, change: changeOf(day.value, '1d', formatBriefingChange({ value: day.value, unit: 'usd' }, locale)) }
   }
   if (row.id === 'fear-greed') {
     // The band is derived from the score by the collector's own table: the document holds the number,
     // and a stored band would be the same fact twice — disagreeing at 24/25 the moment one moves.
     const band = row.value ? resolveFearGreedSnapshotBucket(row.value.number) : undefined
     const scored = band ? `${level}（${buckets[band]}）` : level
-    if (!row.change) return { primary: scored, secondary: row.changeReason ? text.changeReasons[row.changeReason] ?? '' : '' }
-    return { primary: scored, secondary: `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim() }
+    if (!row.change) return { primary: scored, ...(row.changeReason ? { note: text.changeReasons[row.changeReason] ?? '' } : {}) }
+    return { primary: scored, change: changeOf(row.change.value, row.change.window, formatRowChange(row.change, text, locale)) }
   }
-  return { primary: level, secondary: keyMeta(row, text, locale) }
+  return row.change
+    ? { primary: level, change: changeOf(row.change.value, row.change.window, formatBriefingChange({ value: row.change.value, unit: row.change.unit === 'points' ? 'percent' : row.change.unit }, locale)) }
+    : { primary: level, ...(keyMeta(row, text, locale) ? { note: keyMeta(row, text, locale) } : {}) }
 }
 
-function Figure({ row, text, locale, buckets }: Readonly<{
+
+function Figure({ row, text, locale, buckets, arrows }: Readonly<{
   row: BriefingMarketRow | BriefingPulseRow
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   buckets: fearGreedBucketWords
+  arrows: changeArrowWords
 }>): React.ReactElement {
   const amplitude = 'amplitude' in row ? row.amplitude : undefined
-  const cell = cellCopy(row, text, locale, buckets)
-  return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-tone={toneFor(row)} data-lead={cell.secondary ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
+  const cell = cellCopy(row, text, locale, buckets, arrows)
+  return <span className="mi-brief-poster__figure" data-reading={READING_IDS[row.id] ?? row.id} data-lead={cell.change ? 'change' : 'value'} {...(amplitude ? { 'data-briefing-amplitude': READING_IDS[row.id] ?? row.id } : {})}>
     <span className="mi-brief-poster__figure-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
+    {/* The level is never tinted: only a move is. */}
     <b>{cell.primary}</b>
-    {cell.secondary ? <small>{cell.secondary}</small> : null}
+    {cell.change ? <small className="mi-brief-poster__figure-change">
+      {cell.change.window ? <span className="mi-brief-poster__figure-window">{cell.change.window}</span> : null}
+      <b data-tone={cell.change.tone}>{`${cell.change.arrow ?? ''}${cell.change.text}`}</b>
+    </small> : null}
+    {cell.note ? <small>{cell.note}</small> : null}
     {amplitude ? <small className="mi-brief-poster__amplitude">{amplitudeCopy(amplitude, text)}</small> : null}
   </span>
 }

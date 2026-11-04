@@ -549,6 +549,7 @@ describe("a cell does not repeat the block's window", () => {
     expect(cell.textContent).not.toContain('30d')
     // The level is still printed, and it is *this* value: "not empty" would pass on any string.
     expect(cell.querySelector('b')!.textContent).toBe('249.1B USD')
-    expect(cell.textContent).toContain('-1.7B USD')
+    // The arrow says which way; the number is the magnitude.
+    expect(cell.textContent).toContain('↓1.7B USD')
   })
 })

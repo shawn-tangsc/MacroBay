@@ -272,10 +272,12 @@
 .mi-brief-poster__figure-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #6b695f; }
 .mi-brief-poster__figure b { flex: 0 0 auto; margin-left: auto; font-variant-numeric: tabular-nums; }
 .mi-brief-poster__figure small { color: #6b695f; }
-.mi-brief-poster__figure[data-tone='positive'] b { color: #1f5b32; }
-.mi-brief-poster__figure[data-tone='negative'] b { color: #8f2a1d; }
-.mi-brief-poster__figure[data-tone='up'] b { color: #1f5b32; }
-.mi-brief-poster__figure[data-tone='down'] b { color: #8f2a1d; }
+/* The tone rides on the change, never on the cell: a tinted level reads as a move. */
+.mi-brief-poster__figure-change { display: inline-flex; align-items: baseline; gap: 2px; margin-left: 4px; }
+.mi-brief-poster__figure-window { font-size: 9.5px; line-height: 1; color: #6b695f; }
+.mi-brief-poster__figure-change b { font-size: 12px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure-change b[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__figure-change b[data-tone='down'] { color: #8f2a1d; }
 .mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
 .mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
 .mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
