@@ -20,7 +20,7 @@ import { DailyBriefingHistoryRail, railClock } from './DailyBriefingHistoryRail'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { useBriefingShareActions } from './useBriefingShareActions'
 import { runBriefingRegenerate } from './runBriefingRegenerate'
-import { useDailyBriefingIssueDeletion } from './useDailyBriefingIssueDeletion'
+import { useBriefingEditionDelete } from './useBriefingEditionDelete'
 import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
@@ -30,6 +30,7 @@ import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { DailyBriefingPageBar } from './DailyBriefingPageBar'
 import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
+import { useBriefingSettingsFacts } from './useBriefingSettingsFacts'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
@@ -68,6 +69,7 @@ import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
+import { briefingManualRunReport } from './briefingManualRunOutcome'
 import { briefingPageChrome } from './briefingPageChrome'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
@@ -127,24 +129,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // Which edition is on screen: language is part of its identity now, chosen by the row badges.
   const [pickedLocale, setPickedLocale] = useState<'zh-CN' | 'en-US' | undefined>(undefined)
   const [pickedPeriodId, setPickedPeriodId] = useState<string | undefined>(undefined)
-  // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
-  const [settingsReloadKey, setSettingsReloadKey] = useState(0)
-  const { outcome: deleteOutcome, deletePeriod, takeSkipGenerate } = useDailyBriefingIssueDeletion({ client, onSettled: () => setReloadKey((key) => key + 1) })
-  // 删除一个入口、一套行为：工具栏第五颗与行右键都走这里。进行中是一个可见状态，不是"没反应"。
-  const [deleting, setDeleting] = useState(false)
-  const deleteEdition = (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string }>): void => {
-    // 删完之后读哪一版，删除开始前就定：这一期剩下的另一种语言，没有就是空。
-    const row = editions.find((edition) => edition.date === target.date && edition.periodId === target.periodId)
-    afterDeleteLocaleRef.current = (row?.availableLocales ?? []).find((language) => language !== target.language) ?? null
-    setDeleting(true)
-    void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language, ...(target.clock === undefined ? {} : { clock: target.clock }) }).finally(() => setDeleting(false))
-  }
-  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
-  // The language this reader asked for but this version cannot write in; a state, not an explanation.
-  const [languageFallback, setLanguageFallback] = useState<string | null>(null)
-  // Automatic generation is paused when the stored zone cannot be read; a manual run still works,
-  // but it then means the UTC clock, and the panel says so instead of letting the reader guess.
-  const [zoneInvalid, setZoneInvalid] = useState<string | null>(null)
+  // 删除一个入口、一套行为：工具栏第五颗与行右键都走这里；"删哪一版"和"是否正在删"各只有一个答案。
+  const { deleteOutcome, deleting, deleteEdition, takeSkipGenerate, retryDelete } = useBriefingEditionDelete({
+    client, editions, afterDeleteLocaleRef, onSettled: () => setReloadKey((key) => key + 1)
+  })
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   // Open by default: the reader asked to see the groups without a click; the counts stay on the
@@ -307,30 +295,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     return () => { active = false }
   }, [client, reloadKey])
 
-  useEffect(() => {
-    let active = true
-    if (!client.getSettings) return undefined
-    void client.getSettings().then((result) => {
-      if (!active || result.state !== 'available') return
-      setWebSearchEnabled(result.view.settings.webSearchEnabled)
-      setZoneInvalid(result.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
-      const plan = result.view.language.plan.primary; setLanguageFallback(plan.fallbackReason === 'ui-language-unsupported' ? plan.requested : null)
-    }).catch(() => undefined)
-    return () => { active = false }
-  }, [client, settingsReloadKey])
-
-
-  // A setting changed in the drawer (or in another window) takes effect without a reload.
-  useEffect(() => {
-    const bump = (): void => setSettingsReloadKey((key) => key + 1)
-    const onVisibility = (): void => { if (document.visibilityState === 'visible') bump() }
-    window.addEventListener('focus', bump)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('focus', bump)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [])
+  // 三项事实一次读出来（web search、时区、写不了的语言），外加"该重读了"这个计数：抽屉关了、窗口
+  // 重新聚焦、别的窗口改了设置，都只是把计数 +1。
+  const { webSearchEnabled, languageFallback, zoneInvalid, settingsReloadKey, reloadSettings } = useBriefingSettingsFacts(client)
 
   /**
    * The one way an edition is read: a row click and a language switch both land here, with the
@@ -365,20 +332,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       return existing === undefined ? undefined : { periodId: existing.periodId }
     }
   })
-  const onManualRun = (draft: Parameters<typeof runManual>[0]): Readonly<{
-    outcome: ReturnType<typeof runManual>['outcome']
-    duplicate?: Readonly<{ label: string; replace: () => void }>
-  }> => {
-    const result = runManual(draft)
-    if (result.outcome !== 'duplicate' || result.duplicate === undefined) return { outcome: result.outcome }
-    const { periodId, asOf, windowHours, language } = result.duplicate
-    const languageName = text.history.editionLanguages[language === 'en-US' ? 'en' : 'zh']
-    const label = [asOf.slice(0, 10), railClock(asOf, timeZone), text.history.windowHoursShort.replace('{hours}', String(windowHours)), languageName].join(' · ')
-    return {
-      outcome: 'duplicate',
-      duplicate: { label, replace: () => { void regenerate({ periodId, locale: language }) } }
-    }
-  }
+  // 说什么（重复时点名哪一版、点下去替换哪一版）与"能不能跑"分开：文案和替换动作在同一个模块里，
+  // 页面只把结果交给工具栏。
+  const onManualRun = (draft: Parameters<typeof runManual>[0]) =>
+    briefingManualRunReport({ result: runManual(draft), text, timeZone, regenerate })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: readyDocument,
@@ -499,7 +456,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
         onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
-        onDeleteRetry: (target) => void deletePeriod(target)
+        onDeleteRetry: retryDelete
       }} />
       <DailyBriefingAppendix {...{
         text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime,
@@ -515,7 +472,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       onClose={() => {
         setSettingsSection(null)
         // Saving may have added or removed the English edition: read the settings again.
-        setSettingsReloadKey((key) => key + 1)
+        reloadSettings()
       }} /> : null}
     {readyDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
