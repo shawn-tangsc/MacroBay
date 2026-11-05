@@ -298,10 +298,13 @@ describe('a collapsed day is readable on its own, and only today is 本期', () 
         edition({ date: '2026-11-03', periodId: 'p2', isCurrent: true, state: 'generated', summaryLine: '前天的摘要', scheduledTime: '07:00' })
       ] as never
     })
-    // 折叠态下没有行，但每天都有一行摘要；「本期」一个都不出现。
+    // 折叠行只有三段：时刻 · 语言 · 方向。**标题不进侧栏**（反向断言：拿已知标题去搜，出现即红）。
     const summaries = [...host.querySelectorAll<HTMLElement>('[data-day-summary]')]
     expect(summaries.length).toBeGreaterThan(0)
-    expect(summaries.map((node) => node.textContent).join(' ')).toContain('摘要')
+    const text_ = summaries.map((node) => node.textContent ?? '').join(' ')
+    expect(text_).toContain('07:00')
+    expect(text_).not.toContain('昨天的摘要')
+    expect(text_).not.toContain('前天的摘要')
     expect(host.querySelectorAll('[data-is-current="true"]')).toHaveLength(0)
   })
 })
