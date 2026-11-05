@@ -793,6 +793,8 @@ export type PlatformText = {
     /** 一次检测 run 结束后的汇总（成功 / 失败 / 跳过）。 */
     detectionRunSummary: (ok: number, failed: number, skipped: number) => string
     providerNames: Record<string, string>
+    /** 供应商没有名字时的兜底说法：**绝不用 providerId**（契约 v2.41 第三档；id 是我们生成的 `provider-<时间戳>`）。 */
+    providerFallback: string
     modelRetiredTag: string
     /** PLAT-80：模型服务页顶部「默认模型」区块。 */
     defaultModelAssistant: string
@@ -2049,6 +2051,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: '供应商',
+      providerFallback: '供应商',
       providersStaleNotice: '没能更新，下面是上一次读到的供应商列表',
       providerDetail: '供应商配置',
       addProvider: '新增供应商',
@@ -3392,6 +3395,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: 'Providers',
+      providerFallback: 'Provider',
       providersStaleNotice: 'Could not refresh — these providers are from the last read',
       providerDetail: 'Provider Settings',
       addProvider: 'Add Provider',

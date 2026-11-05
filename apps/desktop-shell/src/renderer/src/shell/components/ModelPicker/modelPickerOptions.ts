@@ -46,7 +46,10 @@ export function buildModelPickerOptions(
   models: readonly ModelPickerCandidate[],
   providers: readonly SafeModelProvider[],
   constraints: ModelPickerConstraints = {},
-  labels: Pick<PlatformText['models'], 'providerNames'> = { providerNames: {} }
+  labels: Pick<PlatformText['models'], 'providerNames' | 'providerFallback'> = {
+    providerNames: {},
+    providerFallback: ''
+  }
 ): ModelPickerOptions {
   const providerById = new Map(providers.map((provider) => [provider.id, provider]))
   const showProtocolFilter = constraints.showProtocolFilter !== false
@@ -74,7 +77,9 @@ export function buildModelPickerOptions(
     const value = `${provider.id}:${model.id}`
     if (seenValues.has(value)) continue
     seenValues.add(value)
-    const providerName = resolveProviderDisplayName(labels, provider)
+    // 名字拿不到时用兜底词：这里是选择器与 `@` 面板**共同的**来源，两者都从这里取名字，
+    // 所以只改这一处就够——绝不退到 `provider.id`（自建 id 是 `provider-<时间戳>`，契约 v2.41 第三档）。
+    const providerName = resolveProviderDisplayName(labels, provider) || labels.providerFallback
     const availability = resolveModelAvailabilityView(provider, model)
     options.push({
       value,
@@ -250,7 +255,10 @@ export function resolveModelPickerSelection(
   value: string | null,
   options: readonly ModelPickerOption[],
   providers: readonly SafeModelProvider[],
-  labels: Pick<PlatformText['models'], 'providerNames'> = { providerNames: {} }
+  labels: Pick<PlatformText['models'], 'providerNames' | 'providerFallback'> = {
+    providerNames: {},
+    providerFallback: ''
+  }
 ): ModelPickerSelection | null {
   if (!value) return null
   const option = options.find((entry) => entry.value === value)

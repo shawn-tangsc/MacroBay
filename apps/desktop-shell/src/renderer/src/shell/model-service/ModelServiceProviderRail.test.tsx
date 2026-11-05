@@ -78,6 +78,18 @@ describe('PLAT-61 供应商左栏排序', () => {
     expect(arrangeProvidersForRail(initial).map((provider) => provider.id)).toEqual(['bravo', 'delta', 'alpha', 'charlie'])
   })
 
+  it('供应商没有名字时，头像用兜底词的缩写，绝不显示内部 id（契约 v2.41 第三档）', async () => {
+    // 自建供应商的真实形状：id 是我们生成的时间戳，名字是读者填的（这里留空）。
+    const container = await mountRail({
+      providers: [{ id: 'provider-1730000000000', name: '', enabled: true }]
+    })
+
+    expect(container.textContent).not.toContain('provider-1730000000000')
+    // 行名与头像都用兜底词：英文文案表里是 `Provider`，缩写取前两位。
+    expect(container.textContent).toContain('Provider')
+    expect(container.querySelector('.visual-avatar')?.textContent).toBe('PR')
+  })
+
   it('moves a newly enabled provider into the enabled group (stable, source order)', async () => {
     // 启用最后一项 ⇒ 落到已启用区末尾。
     const enabledLast = await mountRail({ providers: withEnabledFlags(['bravo', 'charlie', 'delta']) })

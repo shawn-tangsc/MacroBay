@@ -248,13 +248,26 @@ function toIdentity(key: string, seed: VisualSeed): VisualIdentity {
   }
 }
 
-export function resolveProviderVisual(providerId: string, providerName?: string): VisualIdentity {
+/**
+ * 供应商的名字与图标。**预置供应商**走 `providerVisuals`（那本身就是显示名）；
+ * 未收录的（读者自建）用调用方给的 `providerName`。
+ *
+ * `fallbackLabel` 是两者都没有时的兜底说法（「供应商」/`Provider`），由调用方传：
+ * 这个模块是纯的、不读文案，读文案就是第二处真相。**不许退到 `providerId`**——
+ * 自建供应商的 id 是我们生成的 `provider-<时间戳>`，印到界面上读者只会以为界面坏了
+ * （契约 v2.41 第三档）。
+ */
+export function resolveProviderVisual(
+  providerId: string,
+  providerName?: string,
+  fallbackLabel?: string
+): VisualIdentity {
   const normalizedId = normalizeKey(providerId)
   const aliasKey = providerAliases[normalizedId] ?? normalizedId
   const seed = providerVisuals[aliasKey]
   if (seed) return toIdentity(aliasKey, seed)
 
-  const label = providerName?.trim() || providerId
+  const label = providerName?.trim() || fallbackLabel?.trim() || providerId
   return toIdentity(normalizedId, {
     label,
     shortLabel: createShortLabel(label),
@@ -267,7 +280,9 @@ export function resolveModelVisual(
   modelId: string,
   modelName: string | undefined,
   providerId: string,
-  providerName?: string
+  providerName?: string,
+  /** 供应商没有名字时的兜底说法，透传给 `resolveProviderVisual`（同上：由调用方给字）。 */
+  providerFallbackLabel?: string
 ): VisualIdentity {
   const target = `${modelId} ${modelName ?? ''}`
   for (const [pattern, visualKey] of modelVisualPatterns) {
@@ -277,5 +292,5 @@ export function resolveModelVisual(
       return visual
     }
   }
-  return resolveProviderVisual(providerId, providerName)
+  return resolveProviderVisual(providerId, providerName, providerFallbackLabel)
 }

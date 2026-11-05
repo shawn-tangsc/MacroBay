@@ -194,7 +194,9 @@ export function ModelServiceProviderRail({
               {collapsed
                 ? null
                 : group.providers.map((provider) => {
-                    const displayName = resolveProviderDisplayName(labels, provider)
+                    // 名字拿不到时用兜底词：空标题与内部 id 都不该出现（契约 v2.41 第三档）。
+                    const displayName =
+                      resolveProviderDisplayName(labels, provider) || labels.providerFallback
                     const statusLabel = provider.enabled ? labels.providerEnabled : labels.providerDisabled
                     // PLAT-62 追加：可达性只做行内提示（proxy 用网络图标），不改行结构/行高。
                     const reachability = providerReachabilityOf(provider.id)
@@ -215,7 +217,14 @@ export function ModelServiceProviderRail({
                           setContextMenu({ x: event.clientX, y: event.clientY, provider })
                         }}
                         onClick={() => onSelect(provider.id)}>
-                        <VisualIdentityAvatar visual={resolveProviderVisual(provider.id, provider.name)} size={22} />
+                        <VisualIdentityAvatar
+                          visual={resolveProviderVisual(
+                            provider.id,
+                            resolveProviderDisplayName(labels, provider),
+                            labels.providerFallback
+                          )}
+                          size={22}
+                        />
                         <span className="model-service-rail-name">{displayName}</span>
                         {reachability === 'proxy' ? (
                           <span

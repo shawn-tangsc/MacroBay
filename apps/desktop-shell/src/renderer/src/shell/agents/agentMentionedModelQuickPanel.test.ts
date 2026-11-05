@@ -156,7 +156,8 @@ describe('@ panel shares the model picker data layer', () => {
   )
   const buildGroups = (): ModelPickerGroup[] =>
     buildModelPickerOptions(candidates, providers, AGENT_MENTION_MODEL_CONSTRAINTS, {
-      providerNames: { silicon: 'SiliconFlow' }
+      providerNames: { silicon: 'SiliconFlow' },
+      providerFallback: '供应商'
     }).groups
 
   it('filters retired models out and keeps two same-name models with different values', () => {
