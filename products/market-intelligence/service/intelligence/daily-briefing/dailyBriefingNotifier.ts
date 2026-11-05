@@ -74,6 +74,12 @@ export async function notifyDailyBriefing(
   }
 }
 
+/** 版次日期写成读者一眼能认的形状（`11/06`）：ISO 串在通知里太长，也太像机器。 */
+export function monthDay(date: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  return match === null ? date : `${match[2]}/${match[3]}`
+}
+
 /** 纯函数：同样的通知与时刻永远得到同一份请求，便于逐字段断言。 */
 export function buildBriefingNoticeRequest(
   notice: DailyBriefingNotice,
@@ -104,6 +110,9 @@ export function buildBriefingNoticeRequest(
       // The record states which edition it carries, so a later manual push can check it is the one on
       // screen; a manual regeneration writes the record without delivering anything.
       edition: { editionId: notice.editionId, locale: notice.locale },
+      // 正文说的是**哪一期**，不说"今天"（`02` v2.129 G3）：凌晨收到"今天这一期"的读者，
+      // 按日历今天去列表里找 11/06，而这一版其实落在 11/05 或反过来。
+      bodyParams: { date: monthDay(notice.date) },
       ...(notice.deliver === false ? { deliver: false } : {}),
       dedupeVars: { builder: 'template', vars: { date: notice.date, periodId: notice.periodId, locale: notice.locale } },
       actions: [{ ...OPEN_BRIEFING_ACTION }],

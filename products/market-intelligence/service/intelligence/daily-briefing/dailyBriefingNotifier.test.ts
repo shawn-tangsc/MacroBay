@@ -7,7 +7,8 @@ import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
-import { buildBriefingNoticeRequest, notifyDailyBriefing } from './dailyBriefingNotifier'
+import { notificationEventBodyKey } from '@platform/notifications/contracts/platformNotificationEvents'
+import { buildBriefingNoticeRequest, monthDay, notifyDailyBriefing } from './dailyBriefingNotifier'
 
 const NOW = '2026-11-03T00:30:00.000Z'
 const DATE = '2026-11-03'
@@ -221,5 +222,32 @@ describe('daily briefing notifier', () => {
       { kind: 'failed', variant: 'not-generated', date: DATE, periodId: 'default' }, NOW)
 
     expect(notified).toBeNull()
+  })
+})
+
+describe('the completion notice names the edition date, never "today"', () => {
+  // `02` v2.129 G3：凌晨收到的"今天这一期已经生成"，读者按日历今天去列表里找，找不到。
+  // 通知说的必须是**版次日期**：11/06 这一期。
+  it('passes the edition day to the copy and keeps the word "today" out of it', () => {
+    const request = buildBriefingNoticeRequest(
+      { kind: 'ready', date: '2026-11-06', periodId: 'default', editionId: '2026-11-06:zh-CN:default', locale: 'zh-CN' }, NOW)
+    expect(request.bodyParams).toEqual({ date: '11/06' })
+  })
+
+  it('writes the day the way a reader reads a day', () => {
+    expect(monthDay('2026-11-06')).toBe('11/06')
+    // 不是 ISO 就原样透传，不许在这里编一个日期出来。
+    expect(monthDay('not-a-date')).toBe('not-a-date')
+  })
+
+  it('says the same for both interface languages: a date, not "today"', async () => {
+    const { marketIntelligenceNotificationCopy } = await import('../../../desktop/shared/i18n/text/notifications')
+    const key = notificationEventBodyKey(READY_EVENT_ID)
+    const zh = marketIntelligenceNotificationCopy['zh-CN'][key]
+    const en = marketIntelligenceNotificationCopy['en-US'][key]
+    expect(zh).toContain('{date}')
+    expect(zh).not.toContain('今天')
+    expect(en).toContain('{date}')
+    expect(en).not.toContain('Today')
   })
 })

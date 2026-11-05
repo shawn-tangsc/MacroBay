@@ -47,7 +47,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceStale)]: '最后一次成功采集在窗口之前。',
 
     [TITLE(IDS.briefingReady)]: '日报已完成',
-    [BODY(IDS.briefingReady)]: '今天这一期已经生成，点开可以看全文。',
+    [BODY(IDS.briefingReady)]: '{date} 这一期已经生成，点开可以看全文。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
@@ -77,7 +77,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [REASON(IDS.sourceStale)]: 'The last successful collection was before the window.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
-    [BODY(IDS.briefingReady)]: 'Today’s edition has been generated; open it for the full text.',
+    [BODY(IDS.briefingReady)]: 'The {date} edition is ready; open it for the full text.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
