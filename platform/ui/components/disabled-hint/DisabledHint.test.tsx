@@ -16,13 +16,17 @@ afterEach(async () => {
 
 const resolve = (key: string): string => (key === 'ui.test.needAssistant' ? '先选一个助手' : '')
 
-async function mount(resolveText: (key: string) => string = resolve, describedBy?: string): Promise<HTMLElement> {
+async function mount(
+  resolveText: (key: string) => string = resolve,
+  describedBy?: string,
+  reasonDisplay?: 'inline' | 'sr-only'
+): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <DisabledHint labelKey="ui.test.needAssistant" resolveText={resolveText}>
+      <DisabledHint labelKey="ui.test.needAssistant" resolveText={resolveText} reasonDisplay={reasonDisplay}>
         <button aria-describedby={describedBy} disabled type="button">
           new session
         </button>
@@ -101,5 +105,53 @@ describe('DisabledHint', () => {
 
     expect(control.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(control.parentElement).toBe(reason.parentElement)
+  })
+})
+
+describe('reasonDisplay', () => {
+  it('is inline by default: the reason stays visible and readable', async () => {
+    const host = await mount()
+    const reason = host.querySelector<HTMLElement>('.disabled-hint__reason')!
+
+    expect(reason.getAttribute('data-reason-display')).toBe('inline')
+    expect(reason.classList.contains('disabled-hint__reason--sr-only')).toBe(false)
+    expect(reason.textContent).toBe('先选一个助手')
+  })
+
+  it('keeps the sr-only reason in the DOM and still describes the control', async () => {
+    const host = await mount(resolve, undefined, 'sr-only')
+    const control = host.querySelector('button')!
+    const reason = host.querySelector<HTMLElement>('.disabled-hint__reason')!
+
+    // 两半都不能丢：藏了节点 = 读屏听不到；丢了关联 = 听得到控件也不知道为什么不能点。
+    expect(reason.textContent).toBe('先选一个助手')
+    expect(reason.getAttribute('data-reason-display')).toBe('sr-only')
+    expect(reason.classList.contains('disabled-hint__reason--sr-only')).toBe(true)
+    expect(control.getAttribute('aria-describedby')).toBe(reason.id)
+    expect(document.getElementById(reason.id)).toBe(reason)
+  })
+
+  it('still appends to an existing description in sr-only mode', async () => {
+    const host = await mount(resolve, 'field-error', 'sr-only')
+    const control = host.querySelector('button')!
+    const ids = (control.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+
+    expect(ids[0]).toBe('field-error')
+    expect(ids).toHaveLength(2)
+    expect(ids.some((id) => document.getElementById(id)?.classList.contains('disabled-hint__reason'))).toBe(true)
+  })
+
+  it('hides visually with the 1px clip technique, never with display:none', async () => {
+    // `display:none` 会把节点从可访问树里摘掉，`aria-describedby` 指向一个读不到的元素——
+    // 那条关联看起来还在，实际什么也说不出来。所以这里读真实样式文件，不用计算样式（happy-dom 里没有）。
+    const { readFileSync } = await import('node:fs')
+    const { resolve: resolvePath } = await import('node:path')
+    const css = readFileSync(resolvePath(__dirname, 'disabledHint.css'), 'utf8')
+    const block = css.split('.disabled-hint__reason--sr-only')[1] ?? ''
+
+    expect(block).toContain('clip-path: inset(50%)')
+    expect(block).toContain('width: 1px')
+    expect(block).not.toContain('display: none')
+    expect(block).not.toContain('visibility: hidden')
   })
 })

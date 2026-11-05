@@ -12,8 +12,11 @@ import './disabledHint.css'
  *
  * 三条写进结构、不靠评审：
  *
- * 1. **可见文字与 `aria-describedby` 两者都要。** 只挂 `role="note"` 不关联，读屏走到控件时听不到
- *    原因；只关联不显示，鼠标用户看不到。所以这里既渲染文本节点、也把它的 id 挂到控件上。
+ * 1. **读屏两者都要；视觉上显不显示由调用方按位置决定。** 只挂关联不渲染，读屏走到控件时听不到
+ *    原因；只渲染不关联，等于一句没人读得到的旁白。所以文本节点和 `aria-describedby` 永远都在。
+ *    但「看得见」是可选的（`reasonDisplay`）：动作行、工具栏这类一排按钮的位置本来就窄，
+ *    原因常驻在按钮旁边会变成噪音（用户 2026-11-05 当场否掉「这一天还没有生成过」那句）；
+ *    表单与设置页里那块地方本来就要解释，仍用默认的 `inline`。
  * 2. **不接 `Tooltip`，这是组件级的不是临时的。** 禁用的控件接不到焦点，提示就只剩鼠标能看；
  *    而「禁用控件不能靠悬停解释自己」这条，换个组件也还是同一条。
  * 3. **原因的真假由调用方实时算，组件不缓存、不记住。** 它收的是键，不是结论：用户去系统设置打开
@@ -29,12 +32,22 @@ export type DisabledHintProps<K extends string = string> = {
   resolveText: (key: K) => string
   /** 被禁用的控件。必须可聚焦（禁用的 `<button>` 也符合：它可聚焦，只是不能激活）。 */
   children: ReactElement<{ 'aria-describedby'?: string }>
+  /**
+   * 原因的视觉呈现：
+   * - `inline`（默认）：看得见的那一行，表单与设置页用；
+   * - `sr-only`：仍渲染在 DOM、仍是 `aria-describedby` 的落点，只是视觉上按屏读样式裁掉——
+   *   给动作行/工具栏用。**不是 `display:none`**：那就把读屏一起藏了。
+   *
+   * 两个档位都保留原因本身，差的只是「读者看不看得见」，不改变语义。
+   */
+  reasonDisplay?: 'inline' | 'sr-only'
 }
 
 export function DisabledHint<K extends string = string>({
   labelKey,
   resolveText,
-  children
+  children,
+  reasonDisplay = 'inline'
 }: DisabledHintProps<K>): ReactElement {
   const reasonId = useId()
   const reason = resolveText(labelKey).trim()
@@ -52,7 +65,14 @@ export function DisabledHint<K extends string = string>({
       {/* 控件在 DOM 里在前、原因在后；视觉顺序由 `flex-direction: row-reverse` 反过来。
           DOM 顺序才是读屏和 Tab 走的那条，视觉顺序只是它的一种排法——两者不能混为一谈。 */}
       {cloneElement(children, { 'aria-describedby': describedBy })}
-      <span className="disabled-hint__reason" id={reasonId}>
+      <span
+        className={
+          reasonDisplay === 'sr-only'
+            ? 'disabled-hint__reason disabled-hint__reason--sr-only'
+            : 'disabled-hint__reason'
+        }
+        id={reasonId}
+        data-reason-display={reasonDisplay}>
         {reason}
       </span>
     </span>

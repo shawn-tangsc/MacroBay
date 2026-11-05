@@ -25,3 +25,22 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/*
+ * 只有读屏看得到的原因（`reasonDisplay="sr-only"`）：给动作行、工具栏这类一排按钮的位置用。
+ *
+ * 用 1px 裁剪，**不用 `display:none`**——那会把节点从可访问树里一起摘掉，`aria-describedby`
+ * 就指向一个读不到的元素。这里的写法与 `drawer__sr-only` / `modal__sr-only` 同一套：
+ * 仍然占一个可被读屏读到的位置，只是视觉上不可见。
+ */
+.disabled-hint__reason--sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
