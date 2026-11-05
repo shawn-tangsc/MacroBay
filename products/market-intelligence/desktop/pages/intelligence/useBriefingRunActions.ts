@@ -50,6 +50,8 @@ export function useBriefingRunActions(input: Readonly<{
   setCurrentPeriodDate?: (date: string) => void
   /** 今天（期次自己的日期定义）；给了才能先挂一行"生成中"。 */
   todayDate?: string
+  /** 这一次跑用了哪个期号——进度查询要用它，不是"当前选中的那一期"。 */
+  onRunStarted?: (periodId: string) => void
   /** Read the list again once the run settles: the row must show what just landed. */
   onSettled?: () => void
 }>): Readonly<{
@@ -83,9 +85,11 @@ export function useBriefingRunActions(input: Readonly<{
     input.setRegenerateFailure(null)
     input.setRegenerating(true)
     if (input.todayDate === undefined) return
+    const startedPeriodId = options.periodId ?? 'default'
+    input.onRunStarted?.(startedPeriodId)
     input.setEditions((current) => withGeneratingRow(current, {
       date: input.todayDate!,
-      periodId: options.periodId ?? 'default',
+      periodId: startedPeriodId,
       locale: options.locale ?? input.locale,
       ...(options.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
     }))

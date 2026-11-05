@@ -22,8 +22,11 @@ import { briefingWindow } from './dailyBriefingWindow'
 export function liveProgressFor(
   progress: ReadonlyMap<string, BriefingGenerationProgress>,
   date: string,
-  locale: DailyBriefingLocale
+  locale: DailyBriefingLocale,
+  /** 这一次跑的期号：给了就**只认它**，并行时不会串到另一跑；不给才退回最近一条。 */
+  periodId?: string
 ): BriefingGenerationProgress | undefined {
+  if (periodId !== undefined) return progress.get(`${date}:${periodId}:${locale}`)
   let found: BriefingGenerationProgress | undefined
   for (const [key, value] of progress) {
     if (key.startsWith(`${date}:`) && key.endsWith(`:${locale}`)) found = value
@@ -34,14 +37,14 @@ export function liveProgressFor(
 export function createBriefingProgressReader(deps: Readonly<{
   now: () => string
   readGeneration: () => Promise<DailyBriefingGeneration>
-  /** The key of one edition's live progress, from the run journal. */
-  progressOf: (date: string, locale: DailyBriefingLocale) => BriefingGenerationProgress | undefined
+  /** The key of one edition's live progress, from the run journal. `periodId` names the run itself. */
+  progressOf: (date: string, locale: DailyBriefingLocale, periodId?: string) => BriefingGenerationProgress | undefined
 }>): (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingProgressResult> {
-  return async (input) => {
+  return async (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string }>) => {
     const window = briefingWindow(deps.now(), input.timeZone, await deps.readGeneration())
     // A schedule the reader has not set a valid hour for cannot say which edition is running.
     if (!window) return { state: 'idle' }
-    const running = deps.progressOf(window.date, input.locale)
+    const running = deps.progressOf(window.date, input.locale, input.periodId)
     return running === undefined ? { state: 'idle' } : { state: 'running', progress: running }
   }
 }

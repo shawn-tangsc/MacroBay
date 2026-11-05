@@ -19,9 +19,11 @@ export function useDailyBriefingProgress(input: Readonly<{
   running: boolean
   locale: 'zh-CN' | 'en-US'
   timeZone: string
+  /** 这一次跑的期号（发起时记下的），不是"当前选中的期"：并行时两者可能不是同一跑。 */
+  periodId?: string
   intervalMs?: number
 }>): DailyBriefingClientProgressResult | undefined {
-  const { client, running, locale, timeZone, intervalMs = 1_000 } = input
+  const { client, running, locale, timeZone, periodId, intervalMs = 1_000 } = input
   const [result, setResult] = useState<DailyBriefingClientProgressResult | undefined>(undefined)
   // The client object may be rebuilt on every render; polling must not restart because of that.
   const clientRef = useRef(client)
@@ -39,7 +41,7 @@ export function useDailyBriefingProgress(input: Readonly<{
       if (inFlight) return
       inFlight = true
       try {
-        const next = await clientRef.current.getProgress({ locale, timeZone })
+        const next = await clientRef.current.getProgress({ locale, timeZone, ...(periodId === undefined ? {} : { periodId }) })
         if (!cancelled) setResult(next)
       } finally {
         inFlight = false
@@ -51,7 +53,7 @@ export function useDailyBriefingProgress(input: Readonly<{
       cancelled = true
       clearInterval(timer)
     }
-  }, [running, locale, timeZone, intervalMs])
+  }, [running, locale, timeZone, periodId, intervalMs])
 
   return result
 }

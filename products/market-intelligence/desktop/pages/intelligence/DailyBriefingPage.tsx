@@ -167,7 +167,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (ready) lastReadyRef.current = ready
   }, [view])
   // Always polling: the run that matters may have been started by the schedule, not by this page.
-  const progress = useDailyBriefingProgress({ client, running: true, locale, timeZone, intervalMs: 1_500 })
+  // 这一次跑的期号：发起时记下，进度查询用它——并行跑两期时，按日期+语言取会显示另一次。
+  const [runningPeriodId, setRunningPeriodId] = useState<string | undefined>(undefined)
+  const progress = useDailyBriefingProgress({ client, running: true, locale, timeZone, ...(runningPeriodId === undefined ? {} : { periodId: runningPeriodId }), intervalMs: 1_500 })
   // One question, every source: what this page started, what it is loading for, and what the service
   // says is running right now (a scheduled run, or one started in another window).
   const generating = busyLocally || progress?.state === 'running'
@@ -321,7 +323,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { regenerate, generateNow } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, todayDate, onSettled: () => setReloadKey((key) => key + 1)
+    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId,
+    onSettled: () => { setRunningPeriodId(undefined); setReloadKey((key) => key + 1) }
   })
   const runManual = useBriefingManualRun({
     timeZone,

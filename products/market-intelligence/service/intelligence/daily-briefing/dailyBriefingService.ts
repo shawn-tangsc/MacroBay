@@ -288,7 +288,7 @@ export type DailyBriefingService = Readonly<{
    * Reads the live snapshot only; a finished attempt is never reported here, because its trace
    * already travels with the result or with the stored edition. One attempt, one owner.
    */
-  getProgress: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingProgressResult>
+  getProgress: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string }>) => Promise<DailyBriefingProgressResult>
   /** Which table shape the store is on, and a way to retry an upgrade that did not finish. */
   getStorageState: () => DailyBriefingStorageState
   retryUpgrade: () => Promise<DailyBriefingStorageState>
@@ -666,8 +666,13 @@ export function createDailyBriefingService(deps: Readonly<{
   const getProgress = createBriefingProgressReader({
     now,
     readGeneration: generation,
-    // 按 (日期, 语言) 找在跑的那一份，不按默认期号：手动生成自带一次性期号。
-    progressOf: (date, locale) => liveProgressFor(runs.progress, date, locale)
+    /**
+     * 先按**这一次跑的期号**精确取（调用方发起时就记下了这个值）；取不到才退回 (日期, 语言) 的最近一条。
+     * 退回只在调用方没给期号时发生——并行跑两期时，按日期+语言取"后写入"会显示另一次，那不是默认路径。
+     */
+    progressOf: (date, locale, periodId) => periodId === undefined
+      ? liveProgressFor(runs.progress, date, locale)
+      : runs.progress.get(runs.key(date, periodId, locale)) ?? liveProgressFor(runs.progress, date, locale)
   })
   const publishToPhone = createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, now })
   return { getToday, regenerate, publishToPhone, list, ...reads, getProgress }
