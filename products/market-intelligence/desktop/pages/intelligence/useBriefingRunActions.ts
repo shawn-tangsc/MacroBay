@@ -152,6 +152,9 @@ export function useBriefingRunActions(input: Readonly<{
       }
       input.onRunIntent?.(null)
       input.setRegenerating(false)
+      // #29：跑完必须**清掉这一次跑的期号**并让页面重读一次。期号留着不清，下一次定时/另一个窗口
+      // 发起的运行会用上一跑的期号去查进度，查不到 → 界面完全不显示"生成中"（比显示错更难查）。
+      input.onSettled?.()
     }
   }
 }

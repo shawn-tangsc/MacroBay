@@ -334,7 +334,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
     setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId, onRunIntent: setRunIntent,
-    onSettled: () => { setRunningPeriodId(undefined); setReloadKey((key) => key + 1) }
+    // #29：跑完**必须清掉这一次的期号**。不清，下一次定时/另一窗口的运行会拿它去查进度，
+    // 查不到 → 界面完全不显示"生成中"。这里**不顺手整页重读**：重读走的是 `getToday`（默认期），
+    // 会把刚跑出来的那一期正文顶掉——列表那一行已由 runBriefing 自己按新文档合并。
+    onSettled: () => setRunningPeriodId(undefined)
   })
   const runManual = useBriefingManualRun({
     timeZone,
