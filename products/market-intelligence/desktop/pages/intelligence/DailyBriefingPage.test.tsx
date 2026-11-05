@@ -11,7 +11,6 @@ import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingPage } from './DailyBriefingPage'
-import { CONTENT_LOCALE_STORAGE_KEY } from './useBriefingContentLocale'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
