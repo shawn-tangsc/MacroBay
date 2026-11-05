@@ -98,71 +98,6 @@ const intelligenceSourcesSafeRequestBudgetPolicy = {
 
 export type IntelligenceSourcesService = ReturnType<typeof createIntelligenceSourcesService>
 
-/** What one source did inside the top-up budget. `timeout` is not a failure: the downstream copy differs. */
-export type SourceCollectNowOutcome = Readonly<{
-  sourceId: string
-  outcome: 'collected' | 'unchanged' | 'failed' | 'timeout'
-}>
-
-const COLLECT_NOW_TIMEOUT = Symbol('collect-now-timeout')
-
-/**
- * Runs a top-up collection for a handful of sources inside **one shared budget**.
- *
- * Two facts decide the shape:
- * - `collectSource` only means "raw rows landed"; the rows reach the calendar query table through
- *   normalization. So normalization runs here, inside the same budget, before an outcome is reported —
- *   otherwise a caller reads the calendar one moment later and still sees nothing, which is the same
- *   bug in a new costume.
- * - the budget is a deadline, not a promise of completion: `runNow` only enqueues, and queued work is
- *   not bounded by us. When the deadline passes the answer is `timeout`, and the caller degrades to
- *   "unreadable" rather than claiming the run failed.
- */
-export async function collectSourcesNow(
-  deps: Readonly<{ pipeline: Pick<IntelligencePipeline, 'collectSource' | 'normalizeRawRecords'> }>,
-  input: Readonly<{ sourceIds: readonly string[]; timeoutMs: number; runIdPrefix?: string }>
-): Promise<readonly SourceCollectNowOutcome[]> {
-  const deadline = Date.now() + Math.max(0, input.timeoutMs)
-  const remaining = (): number => Math.max(0, deadline - Date.now())
-
-  const withBudget = async <T>(work: Promise<T>): Promise<T | typeof COLLECT_NOW_TIMEOUT> => {
-    const ms = remaining()
-    if (ms <= 0) {
-      void work.catch(() => undefined)
-      return COLLECT_NOW_TIMEOUT
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      return await Promise.race([
-        work,
-        new Promise<typeof COLLECT_NOW_TIMEOUT>((resolve) => {
-          timer = setTimeout(() => resolve(COLLECT_NOW_TIMEOUT), ms)
-        })
-      ])
-    } finally {
-      if (timer !== undefined) clearTimeout(timer)
-    }
-  }
-
-  const one = async (sourceId: string): Promise<SourceCollectNowOutcome> => {
-    const runId = `${input.runIdPrefix ?? 'collect-now'}-${sourceId}-${Date.now()}`
-    let collected: Awaited<ReturnType<IntelligencePipeline['collectSource']>> | typeof COLLECT_NOW_TIMEOUT
-    try {
-      collected = await withBudget(deps.pipeline.collectSource({ sourceId, runId }))
-    } catch {
-      return { sourceId, outcome: 'failed' }
-    }
-    if (collected === COLLECT_NOW_TIMEOUT) return { sourceId, outcome: 'timeout' }
-    if (collected.outcome === 'failed') return { sourceId, outcome: 'failed' }
-    // Normalization is part of "the calendar can see it now", so it shares the same deadline.
-    const normalized = await withBudget(Promise.resolve(deps.pipeline.normalizeRawRecords({ sourceId })))
-    if (normalized === COLLECT_NOW_TIMEOUT) return { sourceId, outcome: 'timeout' }
-    return { sourceId, outcome: collected.outcome }
-  }
-
-  return Promise.all(input.sourceIds.map(one))
-}
-
 export function createIntelligenceSourcesService(deps: {
   profileStore: SourceProfileStore
   focusSettingsStore?: IntelligenceFocusSettingsStore
@@ -545,13 +480,6 @@ export function createIntelligenceSourcesService(deps: {
       } satisfies SafeConnectionTestResult)
     },
 
-    /**
-     * Top-up collection for the sources a generation depends on (the 0xRouter market calendar).
-     * In-process, no IPC, no new schedule: the caller decides when, and gets four states back.
-     */
-    async collectNow(input: { sourceIds: readonly string[]; timeoutMs: number; runIdPrefix?: string }) {
-      return collectSourcesNow(deps, input)
-    },
     async runNow(input: { sourceId: string }) {
       const definition = requireDefinition(input.sourceId)
       if (blocksProductionCollection(definition) || !definition.supportsRunNow) {

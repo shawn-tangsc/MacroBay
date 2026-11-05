@@ -91,13 +91,7 @@ export type IntelligencePipelineHealth = {
 }
 
 export type IntelligencePipeline = {
-  collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<{
-    queuedJobs: string[]
-    /** Raw rows this run appended; 0 means "ran, nothing new". */
-    appended: number
-    /** `failed` covers "not ready" and "the collector threw" — both are "we did not get it". */
-    outcome: 'collected' | 'unchanged' | 'failed'
-  }>
+  collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<{ queuedJobs: string[] }>
   normalizeRawRecords: (input: { sourceId?: string; limit?: number }) => Promise<{
     processedCount: number
     queuedJobs: string[]
@@ -435,7 +429,7 @@ export function createIntelligencePipeline(deps?: {
     async collectSource({ sourceId, runId, fixtureText }) {
       const queuedJobs: string[] = []
       if (isDefillamaStablecoinRetiredPath(sourceId)) {
-        return { queuedJobs: [], appended: 0, outcome: 'unchanged' as const }
+        return { queuedJobs: [] }
       }
       const definition = getIntelligenceSourceDefinition(sourceId)
       if (!definition) throw new Error(`Unknown intelligence source "${sourceId}".`)
@@ -448,7 +442,7 @@ export function createIntelligencePipeline(deps?: {
       })
       if (issues.length > 0) {
         await recordCollectionFailure(sourceId, issues[0]?.message ?? 'Source is not ready to run.')
-        return { queuedJobs: [], appended: 0, outcome: 'failed' as const }
+        return { queuedJobs: [] }
       }
 
       const adapter = getIntelligenceAdapter(sourceId)
@@ -491,19 +485,13 @@ export function createIntelligencePipeline(deps?: {
           checkpoint,
           formatSourceCheckpointPreview(checkpoint)
         )
-        // `appended` is what tells a caller whether this run produced anything; without it
-        // "ran fine, nothing new" and "failed" were the same answer.
-        return {
-          queuedJobs: [...queuedJobs],
-          appended,
-          outcome: (appended > 0 ? 'collected' : 'unchanged') as 'collected' | 'unchanged'
-        }
+        return { queuedJobs: [...queuedJobs] }
       } catch (error) {
         await recordCollectionFailure(
           sourceId,
           error instanceof Error ? error.message : 'Collection failed.'
         )
-        return { queuedJobs: [], appended: 0, outcome: 'failed' as const }
+        return { queuedJobs: [] }
       }
     },
 
