@@ -208,8 +208,19 @@ describe('the report actions do not scroll', () => {
 
     const scroll = rule('.mi-daily-briefing-page__report-scroll {')
     expect(scroll).toContain('overflow-y: auto;')
+    // `min-height: 0` is the condition that makes it scroll at all: a flex child defaults to
+    // `min-height: auto`, grows with its content, and never overflows — "cannot scroll".
+    expect(scroll).toContain('min-height: 0;')
+    expect(scroll).toContain('flex: 1 1 auto;')
     // Equal insets: the overlay scrollbar floats in the right-hand dark band, not on the cream sheet.
     expect(scroll).toContain('padding: 12px;')
+  })
+
+  it('gives the grid row a bounded height, or the card grows and nothing scrolls', () => {
+    // An auto grid row grows with its content, so the card inside it grows as well and the scroll area
+    // never becomes shorter than the sheet. The symptom is "the report cannot scroll".
+    expect(rule('.mi-daily-briefing-page__body {')).toContain('grid-template-rows: minmax(0, 1fr);')
+    expect(rule('.mi-daily-briefing-page__content {')).toContain('overflow: hidden;')
   })
 
   it('keeps the row out of every scroll container and stops being sticky', () => {
