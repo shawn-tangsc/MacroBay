@@ -262,7 +262,19 @@ export type DailyBriefingService = Readonly<{
     /** `false` opens the page as a read; no run. */
     generate?: boolean
   }>) => Promise<DailyBriefingTodayResult>
-  regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
+  /**
+   * 手动生成/重新生成**一次**。
+   *
+   * `periodId` 与 `generation` 是可选的：不带就是"这一期按排期跑"（旧调用点原来的意思）；带上
+   * `generation.asOf` 就是读者在弹框里选定的一次性截止时刻——**只影响这一次运行**，不写回任何期
+   * 配置（写回去就会污染列表，那正是"每次手动生成都多一条排期"的来源）。
+   */
+  regenerate: (input: Readonly<{
+    locale: DailyBriefingLocale
+    timeZone: string
+    periodId?: string
+    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
   listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>
@@ -394,8 +406,17 @@ export function createDailyBriefingService(deps: Readonly<{
     })
   }
 
-  async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string }>): Promise<DailyBriefingTodayResult> {
-    const window = briefingWindow(now(), input.timeZone, await generation())
+  async function regenerate(input: Readonly<{
+    locale: DailyBriefingLocale
+    timeZone: string
+    periodId?: string
+    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  }>): Promise<DailyBriefingTodayResult> {
+    // 手动那一刻选定的截止时刻就是这次运行的名义时刻；「现在」是它最常见的一个取值，不是开关。
+    const chosen = input.generation?.asOf
+    const window = chosen === undefined
+      ? briefingWindow(now(), input.timeZone, await generation())
+      : briefingWindow(chosen, input.timeZone, { ...(await generation()), ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours }) })
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     // One run per edition, whichever path asked for it. The open path already coalesced, but a
     // reader who presses 重新生成 three times started three concurrent runs, and each of them
