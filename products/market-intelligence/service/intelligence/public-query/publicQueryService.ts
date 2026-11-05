@@ -76,7 +76,8 @@ import type {
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
 import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
-import { isMarketCalendarFreshness, type MarketCalendarFreshness } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { MarketCalendarFreshness } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { createMarketCalendarReadSurface, type MarketCalendarBinding } from './marketCalendarReadSurface'
 import type { PolicyPathContextRead } from '../policy-path/policyPathQueryService'
 
 export type MarketIntelligencePublicQueryService = {
@@ -116,18 +117,7 @@ export type MarketIntelligencePublicQueryService = {
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
   queryMarketCalendarMonth: (input: unknown) => MarketCalendarPage
   setMarketCalendarQuery: (query: MarketCalendarBinding | undefined) => void
-  /**
-   * How old the calendar actually is, and why its last attempt ended (acceptance `A0.8`).
-   *
-   * Read-only, and bound with the month reader above so the briefing reads the calendar through one
-   * door. The arithmetic stays in the calendar runtime — the oldest latest-success across the enabled
-   * sources — and is never repeated here; this is a forwarder.
-   *
-   * Two different failures arrive here and both answer `unavailable`: the calendar runtime was never
-   * bound (a build-time wiring gap), and a bound reader that threw or returned a shape the contract
-   * rejects (a run-time failure). Downstream both are "we could not read it", and neither may ever
-   * become "there was nothing" — that is the defect this method exists to make impossible.
-   */
+  /** 日历实际有多旧、最后一次尝试为什么结束（`A0.8`）；语义与两种失败见 `marketCalendarReadSurface`。 */
   queryMarketCalendarFreshness: () => Promise<MarketCalendarFreshness>
   /**
    * The cross-asset snapshot the analysis reads for price and relative returns.
@@ -184,22 +174,6 @@ type MacroEconomicCalendarQuery = {
   queryMonth: (input: unknown) => MacroEconomicCalendarMonthResult
 }
 
-type MarketCalendarQuery = {
-  queryMonth: (input: unknown) => MarketCalendarPage
-}
-
-/**
- * The 0xRouter calendar reads this surface exposes: one month reader, one freshness reader.
- *
- * They travel as one binding because they come from one runtime and are bound at one point in the
- * composition root. The freshness reader stays optional on purpose: a surface wired before the
- * calendar runtime exists must answer "not readable", and that is a different branch from a reader
- * that exists and fails at run time.
- */
-type MarketCalendarBinding = Pick<MarketCalendarQuery, 'queryMonth'> & {
-  readCollectionFreshness?: () => Promise<unknown>
-}
-
 type CrossAssetQuery = {
   query: (input: { range: CrossAssetRange; asOf?: string; knowledgeAt?: string }) => unknown
 }
@@ -227,7 +201,7 @@ export function createMarketIntelligencePublicQueryService(
 ): MarketIntelligencePublicQueryService {
   const listSourceDefinitions = input.listSourceDefinitions ?? listIntelligenceSourceDefinitions
   let macroEconomicCalendarQuery = input.macroEconomicCalendarQuery
-  let marketCalendarQuery = input.marketCalendarQuery
+  const marketCalendar = createMarketCalendarReadSurface(input.marketCalendarQuery)
   let crossAssetQuery: CrossAssetQuery | undefined
   let newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
@@ -361,25 +335,9 @@ export function createMarketIntelligencePublicQueryService(
     setMacroEconomicCalendarQuery(query) {
       macroEconomicCalendarQuery = query
     },
-    queryMarketCalendarMonth: (queryInput) => marketCalendarQuery?.queryMonth(queryInput) ?? ({
-      state: 'unavailable', failureCode: 'query-unavailable'
-    }),
-    setMarketCalendarQuery(query) {
-      marketCalendarQuery = query
-    },
-    async queryMarketCalendarFreshness() {
-      const reader = marketCalendarQuery?.readCollectionFreshness
-      // ① No binding, or a binding without the reader: the composition root never handed the calendar
-      //    runtime over. A test constructs this shape on purpose and asserts it degrades, not crashes.
-      if (!reader) return { state: 'unavailable' as const, failureCode: 'query-unavailable' as const }
-      // ② A bound reader that threw, or returned a shape the contract rejects. Separate branch from ①
-      //    because the fix differs, yet the reader-visible answer is the same "could not read it".
-      try {
-        const value = await reader()
-        if (isMarketCalendarFreshness(value)) return value
-      } catch {}
-      return { state: 'unavailable' as const, failureCode: 'query-unavailable' as const }
-    },
+    queryMarketCalendarMonth: (queryInput) => marketCalendar.queryMonth(queryInput),
+    setMarketCalendarQuery: (query) => marketCalendar.bind(query),
+    queryMarketCalendarFreshness: () => marketCalendar.freshness(),
     async queryCrossAssetSnapshot(queryInput) {
       // Fail closed, but never silently: the snapshot stays `undefined` (every consumer keeps its
       // behaviour) and the reason is recorded, because "not wired", "threw" and "failed validation"

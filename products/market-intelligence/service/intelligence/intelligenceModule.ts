@@ -67,6 +67,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
 import { createBriefingPeriodsSource } from './daily-briefing/dailyBriefingPeriodsSource'
@@ -295,15 +296,7 @@ export type IntelligenceModule = {
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
-  /**
-   * Bind the one calendar write the brief may perform: the bounded catch-up before it judges
-   * freshness. Injected by the composition root once, because the calendar runtime is built after
-   * this module; the brief never builds a calendar client of its own.
-   *
-   * It is a command, not a query — network requests and attempt rows — so it deliberately does not
-   * live on the read-only public query surface.
-   */
-  bindBriefingCalendarRefresh: (refresh: (input: { timeoutMs: number }) => Promise<unknown>) => void
+  bindBriefingCalendarRefresh: (refresh: BriefingCalendarRefresh) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
@@ -937,10 +930,7 @@ export function getIntelligenceModule(
       isSourceEnabled,
       now: () => new Date().toISOString(),
     })
-    // The brief's calendar catch-up, bound once by the composition root after the calendar runtime
-    // exists. A holder rather than a plain function so "not bound yet" stays `undefined` and remains
-    // distinguishable from a bound command that fails when called.
-    const briefingCalendarCommands: { refreshNow?: (input: { timeoutMs: number }) => Promise<unknown> } = {}
+    const briefingCalendar = createBriefingCalendarCommands()
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -951,13 +941,10 @@ export function getIntelligenceModule(
         briefEditions: dailyBriefingStore,
         news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
         profiles: profileStore,
-        calendarCommands: briefingCalendarCommands
+        calendarCommands: briefingCalendar.commands
       }),
       store: dailyBriefingStore,
-      // 通知端口在这里交给服务：没有它，日报完成/失败/时区三条只存在于代码里，从不落记录
-      // （2026-11-05 用户实测「按钮说这一版还没进通知」的根因就是这条装配从来没接上）。
-      ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
-      ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {}),
+      ...briefingNotificationPorts(hooks),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
@@ -1064,9 +1051,7 @@ export function getIntelligenceModule(
           }
         })
       },
-      bindBriefingCalendarRefresh: (refresh) => {
-        briefingCalendarCommands.refreshNow = refresh
-      }
+      bindBriefingCalendarRefresh: briefingCalendar.bind
     }
   }
   return intelligenceModule

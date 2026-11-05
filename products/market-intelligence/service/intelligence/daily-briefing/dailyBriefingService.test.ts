@@ -15,6 +15,7 @@ import {
   DAILY_BRIEF_GENERATION_BUDGET_MS,
   localDate,
   type DailyBriefingSource,
+  type DailyBriefingPeriodRun,
   type DailyBriefingStore,
   type DailyBriefingStoredEdition
 } from './dailyBriefingService'
@@ -41,20 +42,76 @@ const emptyPacket = (input: PacketInput = { asOf, windowHours: 24 }): DailyBrief
   enabled: { fearGreed: false, funding: false, stablecoin: false, etf: false, calendar: false }
 })
 
-function memoryStore(): DailyBriefingStore & { rows: Map<string, DailyBriefingStoredEdition>; pruned: string[] } {
+function memoryStore(): DailyBriefingStore & {
+  rows: Map<string, DailyBriefingStoredEdition>
+  /** 运行记录：与版次分开存，「有运行没版次」和「有版次没运行」才构造得出来。 */
+  runs: DailyBriefingPeriodRun[]
+  pruned: string[]
+} {
   const rows = new Map<string, DailyBriefingStoredEdition>()
+  const runs: DailyBriefingPeriodRun[] = []
   const pruned: string[] = []
   const key = (date: string, locale: string) => `${date}:${locale}`
   return {
     rows,
+    runs,
     pruned,
     async get(date, locale) { return rows.get(key(date, locale)) },
     async put(edition) { rows.set(key(edition.date, edition.locale), edition) },
     async list(from, to, locale) {
       return [...rows.values()].filter((row) => row.locale === locale && row.date >= from && row.date <= to)
     },
+    async listPeriodRuns(from, to) {
+      return runs.filter((run) => run.date >= from && run.date <= to)
+    },
+    async getPeriodRun(date, periodId = 'default') {
+      return runs.find((run) => run.date === date && run.periodId === periodId)
+    },
     async prune(beforeDate) { pruned.push(beforeDate) }
   }
+}
+
+function storedEdition(date: string): DailyBriefingStoredEdition {
+  const at = `${date}T00:00:00.000Z`
+  return {
+    date,
+    periodId: 'default',
+    locale: 'zh-CN',
+    generatedAt: at,
+    windowStart: at,
+    windowEnd: at,
+    document: {
+      schemaVersion: 1,
+      policyVersion: 'daily-briefing.v1',
+      edition: { date, locale: 'zh-CN', generatedAt: at, windowStart: at, windowEnd: at, timeZone: 'Asia/Shanghai' },
+      status: { readings: [], readingsAvailable: 4, readingsTotal: 4 },
+      lede: { source: 'template', text: '', generatedAt: at },
+      news: { items: [], macro: [], notes: {} },
+      data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' } } },
+      conclusion: null,
+      next: { items: [] },
+      citations: [],
+      provenance: { summaryId: null, readAt: at }
+    }
+  } as DailyBriefingStoredEdition
+}
+
+function periodRun(date: string): DailyBriefingPeriodRun {
+  return {
+    date,
+    periodId: 'default',
+    expectedLocales: ['zh-CN'],
+    primaryRequested: 'zh-CN',
+    primaryUsed: 'zh-CN',
+    snapshotId: 'bs_seed',
+    snapshotHash: 'seed',
+    contentVersion: 1,
+    writingRounds: 1,
+    direction: 'undecided',
+    editionRows: [],
+    state: 'published',
+    startedAt: `${date}T00:00:00.000Z`
+  } as DailyBriefingPeriodRun
 }
 
 function fakeSource(
@@ -532,19 +589,25 @@ describe('daily briefing service', () => {
     expect(source.calls).toBe(1)
   })
 
-  it('lists the last 14 local days with explicit gaps', async () => {
+  it('draws a day only where there is a trace: an edition, a run, or today', async () => {
+    // 三向规则（2026-11-05 定，`9456b52`）：有版次或有运行的日子出现，今天永远出现，**空着的过去日子不出现**。
+    // 这条用例以前断言「固定铺满 14 天」，那是旧口径；现在按规则本身断言，两个来源各构造一次。
     const store = memoryStore()
-    const source = fakeSource()
-    const service = createDailyBriefingService({ source, store, now: () => asOf })
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    // 有版次、没有运行：这一版还在，日子必须出现。
+    store.rows.set('2026-10-28:zh-CN', storedEdition('2026-10-28'))
+    // 有运行、版次已被删：天头仍要在（读者删过这一版，运行记录留着）。
+    store.runs.push(periodRun('2026-10-27'))
 
     const listed = await service.list({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(listed.state).toBe('available')
     if (listed.state !== 'available') return
-    expect(listed.result.editions).toHaveLength(14)
-    expect(listed.result.editions[0]).toMatchObject({ date: '2026-10-30', state: 'generated' })
-    expect(listed.result.editions[1]).toMatchObject({ date: '2026-10-29', state: 'missing' })
-    expect(listed.result.editions[13]?.date).toBe('2026-10-17')
+    // 新到旧；今天在最上，空着的 10-29 不出现。
+    expect(listed.result.dates).toEqual(['2026-10-30', '2026-10-28', '2026-10-27'])
+    expect(listed.result.dates).not.toContain('2026-10-29')
+    expect(listed.result.editions.map((edition) => edition.date)).toEqual(expect.arrayContaining(['2026-10-30', '2026-10-28']))
   })
 
   it('returns the stored edition and missing for an unknown date', async () => {
