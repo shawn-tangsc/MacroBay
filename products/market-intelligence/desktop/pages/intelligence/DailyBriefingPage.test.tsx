@@ -856,8 +856,8 @@ describe('daily briefing page', () => {
     await act(async () => { button.click(); await Promise.resolve() })
     await confirmManualRun()
     const running = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
-    // 手动发起的那一次，按钮说的是"在写哪一期"（时刻 + 语言），不再沿用「正在重新生成…」。
-    expect(running.textContent).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
+    // 手动发起的那一次，按钮说的是"在写哪一天哪一期"（日期 + 时刻 + 语言），不再沿用「正在重新生成…」。
+    expect(running.textContent).toMatch(/^正在生成 \d{2}\/\d{2} \d{2}:\d{2} 中文$/)
     expect(running.disabled).toBe(true)
     await act(async () => { running.click(); await Promise.resolve() })
     expect(client.regenerate).toHaveBeenCalledTimes(1)
@@ -1783,6 +1783,27 @@ it('never lets another issue\u2019s document stand in for the selected one', asy
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
 })
 
+it('stays on the edition the run just wrote when it landed on another day', async () => {
+  // 用户实测（`02` v2.129 G4）：凌晨手动生成落在 11/06，页面跑完还按 11/05 重读 → 落回空态
+  // 「这里还没有内容」。跑完必须停在**刚生成的那一版**：选中项换成它的 (日期, 期号, 语言)。
+  const client = fakeClient({
+    regenerate: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument('2026-10-31', '落到次日的那一版') }))
+  })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve()
+  })
+  await confirmManualRun()
+  for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+  // 正文是刚生成的那一版，不是"这一天还没有简报"。
+  const paper = dom.querySelector('.mi-daily-briefing-page__paper')
+  expect(paper?.textContent).toContain('落到次日的那一版')
+  expect(dom.querySelector('.mi-daily-briefing-page__content .state-view')).toBeNull()
+  // 列表也收到了这一版：它自己那一天出现在天头里（不是"今天"那一天）。
+  expect(dom.querySelector('[data-day="2026-10-31"]')).not.toBeNull()
+})
+
 it('jumps to the issue it started, then follows the reader when they switch away', async () => {
   // 用户 11-05：点生成 → 跳到**这一期**正在生成的页面；随后切到别的已完成版 → 看那一版正文。
   let settle: (value: unknown) => void = () => undefined
@@ -1820,12 +1841,13 @@ it('jumps to the issue it started, then follows the reader when they switch away
   for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).toBeNull()
-  // 4. 工具栏说的是"这一次在写哪一期"（时刻 + 语言），不是"正在重新生成"。
+  // 4. 工具栏说的是"这一次在写哪一天、哪一期"（日期 + 时刻 + 语言），不是"正在重新生成"。
+  // `02` v2.129 G4 补了**日期**这一维：只写时刻，读者不知道它写的是哪一天。
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.className).toContain('ant-btn-loading')
-  expect(action.textContent).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
+  expect(action.textContent).toMatch(/^正在生成 \d{2}\/\d{2} \d{2}:\d{2} 中文$/)
   expect(action.textContent).not.toContain(text.regenerating)
-  expect(action.getAttribute('aria-label')).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
+  expect(action.getAttribute('aria-label')).toMatch(/^正在生成 \d{2}\/\d{2} \d{2}:\d{2} 中文$/)
 
   const replaced = briefingDocument('2026-10-30', '重新生成版')
   await act(async () => {

@@ -67,9 +67,15 @@ export function useBriefingRunActions(input: Readonly<{
   setRegenerating: (busy: boolean) => void
   setRegenerateFailure: (failure: BriefingRegenerateFailure | null) => void
   setEditions: (next: (current: readonly DailyBriefingEditionSummary[]) => readonly DailyBriefingEditionSummary[]) => void
-  setCurrentPeriodDate?: (date: string) => void
   /** 今天（期次自己的日期定义）；给了才能先挂一行"生成中"。 */
   todayDate?: string
+  /**
+   * 跑成功、拿到这一版之后：页面据此把**选中项**换成它的 `(日期, 期号, 语言)`。
+   *
+   * 少了这一步，跑完还按跑之前的日期重读，而那一版可能落在另一天——读者看到的是一屏空态
+   * （用户实测：跑完落回「这里还没有内容」，`02` v2.129 G4）。
+   */
+  onDocument?: (document: DailyBriefingDocument) => void
   /** 这一次跑用了哪个期号——进度查询要用它，不是"当前选中的那一期"。 */
   onRunStarted?: (periodId: string) => void
   /** 这一次**在做什么**（手动的一期 / 重跑当前版），跑完置空。 */
@@ -167,8 +173,8 @@ export function useBriefingRunActions(input: Readonly<{
         input.setEditions((current) => current.filter((row) => !(row.date === started.date
           && row.periodId === started.periodId && row.locale === started.locale)))
         input.setView({ status: 'ready', document, kind: 'today' })
-        // 手动期可能落在另一天/另一期：切到它自己的日期，否则正文写的是新的一版、列表还停在旧那天。
-        input.setCurrentPeriodDate?.(document.edition.date)
+        // 跑完停在**刚生成的那一版**：选中项按它的身份设全，正文与列表读的是同一版。
+        input.onDocument?.(document)
         // 只替换读到的那一行（日期 + 期号 + 语言）：同一天另一语言的行必须原样留着，
         // 否则两行会变成同一版次，键相同、语言相同，看上去像"选中了两个"。
         input.setEditions((current) => mergeEditionSummary(current, document))

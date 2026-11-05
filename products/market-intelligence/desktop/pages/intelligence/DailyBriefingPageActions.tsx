@@ -114,7 +114,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   </div>
 }
 
-export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
+export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, runningLabel, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   /** 有可读版次：五颗一起亮；没有就一起禁用，原因写在整组下面一句。 */
@@ -125,6 +125,8 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   deleteTarget?: BriefingEditionDeleteTarget
   deleting?: boolean
   generating: boolean
+  /** 手动那一期在写时的按钮文案（含日期、时刻与语言）；缺省沿用「正在重新生成…」。 */
+  runningLabel?: string
   onExport: () => void
   onCopy: () => void
   /** 这一版的删除：与行右键共用 `briefingEditionDeleteCopy` 那一句话与同一个确认框。 */
@@ -185,7 +187,8 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition" disabled={blocked || generating}
         loading={generating}
         onClick={() => { void onRegenerate() }}>
-        {generating ? text.regenerating : text.regenerate}
+        {/* 手动那一路不许退回「正在重新生成…」：写的是新的一期，不是读者眼前这一版（G4）。 */}
+        {generating ? (runningLabel ?? text.regenerating) : text.regenerate}
       </Button>
       {/* 发布频道与这一组同源：读者刚生成完，下一件事就是发出去。状态在状态机里，这里只摆位置。 */}
       <span className="mi-daily-briefing__push-slot">

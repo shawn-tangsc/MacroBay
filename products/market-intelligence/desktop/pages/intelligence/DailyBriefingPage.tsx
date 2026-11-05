@@ -245,8 +245,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const onScreenPeriodId = screenDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
   const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
-    setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, todayDate,
+    setView, setRegenerating, setRegenerateFailure, setEditions, todayDate,
+    // 跑完停在**刚生成的那一版**：选中项按它的身份设全（`02` v2.129 G4）。
+    onDocument: (document) => {
+      setPinnedDate(document.edition.date)
+      setPickedPeriodId(briefingEditionPeriod(document.edition).periodId)
+      setPickedLocale(document.edition.locale)
+    },
     // 发起即跳转 = 把选中项一次设全（日期 + 期号 + 语言）；正文是否跟着换由身份闸门决定。
     // 「我在读哪一版」只由读者的动作改。运行只交给 `running`：
     // 手动是**新建一期**，那一版本来没有正文，所以选中项跟着切过去（= 发起即跳转）；
@@ -285,8 +290,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * 缺任何一样就退回「正在重新生成…」的旧说法——宁可不说，也不留一个 `{time}` 空洞。
    */
   const runningClock = runIntent?.kind === 'manual' && runIntent.asOf ? formattedClock(formatTime(runIntent.asOf, 'minute')) : undefined
-  const manualRunningLabel = runIntent?.kind === 'manual' && runningClock !== undefined
+  // 文案带**这一期的日期**：只说「正在生成 00:00 中文版」时，读者不知道自己写的是哪一天（G4）。
+  const runningDate = runIntent?.kind === 'manual' && runIntent.date !== ''
+    ? `${runIntent.date.slice(5, 7)}/${runIntent.date.slice(8, 10)}`
+    : undefined
+  const manualRunningLabel = runIntent?.kind === 'manual' && runningClock !== undefined && runningDate !== undefined
     ? text.manualRunning
+      .replace('{date}', runningDate)
       .replace('{time}', runningClock)
       .replace('{language}', text.history.languages[runIntent.locale])
     : undefined
@@ -424,6 +434,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           exportState={exportState}
           copyState={copyState}
           generating={generating}
+          {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
           {...(deleteTarget === undefined ? {} : { deleteTarget })}
           deleting={deleting}
           onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
