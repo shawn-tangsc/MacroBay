@@ -182,14 +182,18 @@ export function DailyBriefingHistoryRail({
                 }}
                 onClick={() => onSelect(edition.date)}>
                 <span className="mi-daily-briefing__rail-line">
-                  {/* 「本期」只属于今天：`isCurrent` 是"那一天完成最晚的一条"，每天各有一条，直接用它
-                      会把「本期」标到昨天去。今天没有版次时，今天的占位行才是本期。 */}
-                  {edition.isCurrent && edition.date === todayDate ? <em data-is-current="true">{text.history.currentPeriod}</em> : null}
                   {edition.periodDeleted ? <small className="mi-daily-briefing__rail-deleted" data-period-deleted="true">{text.history.deletedPeriod}</small> : null}
                   {edition.state === 'partial' && resolveText
                     ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
                     : null}
                 </span>
+                {/* 第二行：这一份讲什么——**决定读者点不点开**，所以它在行内，单行省略。
+                    失败与未运行那两行没有正文，标题位写一句原因：留白会被读成"还在加载"。 */}
+                {edition.state === 'missing'
+                  ? <span className="mi-daily-briefing__rail-title" data-rail-title="reason" data-missing-reason="true">{runReasonOf(edition) === 'run-interrupted' ? text.history.runInterrupted : runReasonOf(edition) === 'run-failed' ? text.history.runFailed : text.history.missingRun}</span>
+                  : edition.summaryLine
+                    ? <span className="mi-daily-briefing__rail-title" data-rail-title="summary">{edition.summaryLine}</span>
+                    : null}
                 {/* 行末：来源词（永远有且只有一个）+ 语言标签（只在真有版次时出现）。 */}
                 <span className="mi-daily-briefing__rail-source" data-run-source={edition.state === 'missing' ? 'none' : edition.periodKind === 'manual' ? 'manual' : edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry' ? 'catch-up' : 'scheduled'}>{sourceWord(edition, text)}</span>
                 {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>
@@ -220,9 +224,6 @@ export function DailyBriefingHistoryRail({
                     : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
                   {edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
                     ? <small className="mi-daily-briefing__rail-run-trigger" data-run-trigger={edition.runTrigger}>{text.history.runCatchUp}</small>
-                    : null}
-                  {typeof edition.readingsAvailable === 'number' && edition.readingsAvailable > 0
-                    ? <span className="mi-daily-briefing__rail-fact">{edition.readingsAvailable} {text.readingsUnit}</span>
                     : null}
                   {edition.date === selectedDate && (selectedPeriodId === undefined || selectedPeriodId === edition.periodId) && gapCount !== undefined && gapCount > 0
                     ? <span className="mi-daily-briefing__rail-fact" data-briefing-gap-count={gapCount}>{text.history.gapCount.replace('{count}', String(gapCount))}</span>

@@ -77,8 +77,8 @@ describe('daily briefing history rail', () => {
     const irregular = host.querySelector('.mi-daily-briefing__rail-meta')
     expect(irregular?.textContent).toContain(`${text.history.timePlanned} 08:00`)
     expect(irregular?.textContent).toContain(`${text.history.timeActual} 08:00`)
-    // The item count is a row fact, not part of the clock run.
-    expect(host.textContent).toContain(`4 ${text.readingsUnit}`)
+    // 项数是正文元数据，两行制之后不进行。
+    expect(host.textContent).not.toMatch(/\d+\s*项/)
     expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
   })
 
@@ -129,11 +129,10 @@ describe('daily briefing history rail', () => {
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })] })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
 
-    expect(row.textContent).toContain(`${text.history.generationFailed} · 08:00`)
-    // No item count (there is no edition) and no reason (its length would break the row height).
-    expect(row.textContent).not.toMatch(/\d+\s*项/)
-    expect(row.textContent).not.toContain(text.aiSettings.failure['model-unavailable'])
-    expect(row.textContent).not.toContain(text.history.missingRun)
+    // 两行制：第二行是标题位，失败那行写一句原因（留白会被读成"还在加载"）；项数一律不进行。
+    expect(row.querySelector('[data-rail-title="reason"]')).not.toBeNull()
+    expect(row.textContent).toContain(text.history.runFailed)
+    expect(row.textContent).not.toMatch(/\d+\s*项|\d+\s*缺口/)
   })
 
   it('prints one badge per row — the row\'s own language, never a choice of two', () => {

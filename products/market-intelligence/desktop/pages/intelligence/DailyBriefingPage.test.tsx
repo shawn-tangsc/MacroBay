@@ -905,7 +905,8 @@ describe('daily briefing page', () => {
     // The row is the clock and the item count; no expander, no "N attempts".
     expect(row.querySelector('[data-attempts-toggle]')).toBeNull()
     // The row carries the item count and the clocks; the attempt count stays in the detail column.
-    expect(row.textContent).toContain(`4 ${text.readingsUnit}`)
+    // 两行制：项数是正文元数据，不进行。
+    expect(row.textContent).not.toMatch(/\d+\s*项/)
     expect(row.textContent).not.toContain(text.history.attempts.times)
 
     // The trail lives in the one detail column, and only there: one disclosure, no toggle button.
