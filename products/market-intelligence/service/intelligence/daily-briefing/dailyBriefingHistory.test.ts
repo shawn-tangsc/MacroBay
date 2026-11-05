@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
-import { briefingHistorySummaries, briefingRailDates } from './dailyBriefingHistory'
+import { briefingHistorySummaries, briefingRailDates, readBriefingHistory } from './dailyBriefingHistory'
 
 /**
  * Guard: "incomplete" comes from the run's intent, not from counting the rows that exist.
@@ -361,5 +361,38 @@ describe('the rail draws a head only where the day has a trace', () => {
     // 排期每天都配（07:00 天天都有），按它算等于每天都成立。
     const listed = briefingRailDates({ dates, editionDates: new Set(), runDates: new Set(), today: '2026-10-01' })
     expect(listed).toEqual([])
+  })
+})
+
+describe('the history window never cuts off a day that has an edition', () => {
+  const store = (rows: readonly DailyBriefingStoredEdition[]) => ({
+    list: vi.fn(async (from: string, to: string, locale: 'zh-CN' | 'en-US') =>
+      rows.filter((row) => row.date >= from && row.date <= to && row.locale === locale)),
+    getPeriodRun: vi.fn(async () => undefined),
+    listAttempts: vi.fn(async () => [])
+  })
+
+  // `02` v2.129 G2：读者日历的 11/05，而一版落了 11/06（截止时刻在读者时区跨了日）。
+  // 窗口右端只到"今天"时那一版一天都显示不出来，页面写「共 0 期」——比失败更像失败。
+  it('keeps a day filed after "today" and shows its edition', async () => {
+    const fixture = store([edition('zh-CN', '2026-11-06')])
+    const listed = await readBriefingHistory({
+      store: fixture, locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: '07:00'
+    })
+    expect(listed.editions.map((summary) => summary.date)).toContain('2026-11-06')
+    expect(listed.dates).toContain('2026-11-06')
+    // 往右多问一天，往左一天都不多问：14 天可见范围不放宽。
+    expect(fixture.list).toHaveBeenCalledWith('2026-10-23', '2026-11-06', 'zh-CN')
+    expect(listed.dates).not.toContain('2026-10-22')
+  })
+
+  it('does not put an empty day after today into the rail', async () => {
+    // 多问的那一天只在**有东西**时出现；否则列表每天凭空多一行空日子。
+    const listed = await readBriefingHistory({
+      store: store([edition('zh-CN', '2026-11-05')]),
+      locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: '07:00'
+    })
+    expect(listed.dates).not.toContain('2026-11-06')
+    expect(listed.dates).toContain('2026-11-05')
   })
 })

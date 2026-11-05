@@ -52,7 +52,11 @@ export async function readBriefingHistory(input: Readonly<{
   /** The language set of the period's configuration, once configuration is the source (post-S8). */
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
 }>): Promise<Readonly<{ editions: readonly DailyBriefingEditionSummary[]; dates: readonly string[] }>> {
-  const dates = lastDays(input.today, input.retentionDays)
+  // 窗口右端多留**一天**：`today` 是读者日历上的一天，而版次的日期由截止时刻所在的读者本地
+  // 日期决定，两者可以差一天（`02` v2.129 G2：有版次的日期一律不许被窗口截掉）。往后的日子不会
+  // 无条件出现——`briefingRailDates` 只放行"有版次 / 有过运行记录 / 是今天"。
+  // 往左不多留一天：14 天可见范围不放宽。
+  const dates = [...lastDays(input.today, input.retentionDays), dayAfter(input.today)]
   const from = dates[0]!
   const to = dates[dates.length - 1]!
   const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
@@ -86,6 +90,11 @@ export async function readBriefingHistory(input: Readonly<{
       today: input.today
     })
   })
+}
+
+/** 次日（UTC 日期串上的一天）。只用于日期窗口，不参与任何"现在是哪一期"的推导。 */
+function dayAfter(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00.000Z`) + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
 }
 
 function lastDays(today: string, days: number): readonly string[] {
