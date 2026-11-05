@@ -205,14 +205,17 @@ describe('the report actions stick to the report', () => {
     // At rest: no fill, no hairline — a painted box reads as a second panel on the document.
     expect(bar).toContain('background: transparent;')
     expect(bar).toContain('border-bottom: 1px solid transparent;')
-    // The bleed cancels the container's padding in both states, so switching the paint cannot shift
-    // the report: the box is the same box when stuck and when not. No bottom margin either — the row
-    // sits on the document's top edge instead of hovering a gap above it.
-    expect(bar).toContain('margin: -20px -22px 0;')
-    expect(bar).toContain('padding: 8px 22px 0;')
+    // The row sits inside the card's own inset — no bleed — so it belongs to the card's rounded
+    // border rather than hanging over its edge.
+    expect(bar).toContain('margin: 0;')
+    expect(bar).toContain('padding: 8px 0 12px;')
 
     const stuck = rule('.mi-daily-briefing-page__report-bar[data-stuck="true"] {')
     expect(stuck).toContain('background: var(--mi-dashboard-surface);')
+    // The card's padding band is inside the scrollport, so pinned the row paints it too — with offset
+    // shadows, because a single spread would paint over the paper just below the row.
+    expect(stuck).toContain('0 -22px 0 var(--mi-dashboard-surface)')
+    expect(stuck).not.toContain('0 0 0 22px')
     // A faint seam: it is inside the document, not the edge of a new section.
     expect(stuck).toContain('border-bottom-color: color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent);')
     // Nothing about the box may change on stuck, or the report jumps when the bar pins.
@@ -225,6 +228,26 @@ describe('the report actions stick to the report', () => {
     const zIndex = Number(bar.slice(bar.indexOf('z-index: ') + 'z-index: '.length).split(';')[0])
     expect(zIndex).toBeGreaterThan(0)
     expect(zIndex).toBeLessThan(10)
+  })
+})
+
+/**
+ * The four plain buttons used to render as empty boxes: their colour came from a single-class rule that
+ * ties with antd's injected `.ant-btn`, and the injected sheet wins on order — only the destructive
+ * button kept its word, because its colour came from a compound selector. Text at the wrong colour is
+ * not a styling preference; it is missing text.
+ */
+describe('the toolbar buttons keep their word visible', () => {
+  it('scopes the ink so the token wins over antd', () => {
+    const scoped = rule('.mi-daily-briefing-page__bar .mi-briefing-tool__btn,')
+    expect(scoped).toContain('.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn')
+    expect(scoped).toContain('color: var(--mi-dashboard-muted);')
+  })
+
+  it('keeps a disabled button readable instead of letting antd grey it out of sight', () => {
+    const disabled = rule('.mi-daily-briefing-page__bar .mi-briefing-tool__btn:disabled,')
+    expect(disabled).toContain('.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn:disabled')
+    expect(disabled).toContain('color: var(--mi-dashboard-muted);')
   })
 })
 
