@@ -94,7 +94,13 @@ export function snapshotFacts(document: DailyBriefingDocument, facts: DailyBrief
         publishedAt: item.publishedAt
       }))
     },
-    next: document.next.items.map((item) => ({ eventKey: item.eventKey, at: item.at }))
+    next: document.next.items.map((item) => ({ eventKey: item.eventKey, at: item.at })),
+    // 「事件优先」的边界（`A0.12`）：没有实际值的高影响事件照常显示，但**不进**喂给模型的分析素材。
+    // 这份清单就是那条边界的可查记录——排查时能看出分析里少了哪几条、为什么少，而不是只剩
+    // "模型没提到它"这一个谜。只放事件键与原因，不放事件内容：清单本身不该变成第二份素材。
+    macroAnalysisExcluded: document.news.macro
+      .filter((item) => item.actual === undefined)
+      .map((item) => ({ eventKey: item.eventKey, reason: 'value-missing' }))
   }
 }
 

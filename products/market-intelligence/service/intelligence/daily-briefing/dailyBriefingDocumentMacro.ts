@@ -7,12 +7,18 @@ import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dail
  * 每次改选取口径都要在 600 行的文件里找位置。
  */
 
+/**
+ * 窗口里的高影响事件——**不看有没有实际值**（`02` `A0.12`）。
+ *
+ * 以前这里是 `released && Boolean(actual)`：没有值的事件直接被丢掉，于是"有事件、我们没拿到值"
+ * 在版面上变成了"没有事件"。现在能不能进候选只看事件本身；值缺席只影响值那一格怎么写。
+ */
 export function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([])
   const start = Date.parse(packet.windowStart)
   const end = Date.parse(packet.windowEnd)
   return Object.freeze(packet.calendar.events
-    .filter((event) => event.lifecycleState === 'released' && event.importance === 'high' && Boolean(event.actual))
+    .filter((event) => event.importance === 'high')
     .filter((event) => {
       const at = Date.parse(event.scheduledAt)
       return Number.isFinite(at) && at >= start && at < end

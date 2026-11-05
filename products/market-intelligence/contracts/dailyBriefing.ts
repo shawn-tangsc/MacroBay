@@ -231,7 +231,15 @@ export type DailyBriefingDocument = Readonly<{
      * `macroEmptyCount` 同理：「有 N 条高影响事件、但截至这一刻还没拿到实际值」要念出 N，而 N 只能
      * 从这一版读到的窗口里数出来（`02` v2.120）。缺它就不许印那句话，而不是印一个没说清的 0。
      */
-    notes: Readonly<{ newsEmpty?: string; macroEmpty?: string; macroEmptyHours?: number; macroEmptyCount?: number }>
+    notes: Readonly<{
+      newsEmpty?: string
+      macroEmpty?: string
+      macroEmptyHours?: number
+      /** 窗口内高影响事件总数（不看有没有实际值）——「事件优先」那一步的数（`A0.12`）。 */
+      macroHighImpactCount?: number
+      /** 其中**我们没拿到实际值**的条数：缺值不等于没发生，所以跟列表一起出现，不只在空态里说。 */
+      macroHighImpactValuesMissing?: number
+    }>
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]

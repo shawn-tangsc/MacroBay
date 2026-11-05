@@ -718,9 +718,9 @@ describe('daily briefing document', () => {
     expect(document.edition.readAt).toBe('2026-10-30T00:00:20.000Z')
   })
 
-  it('never calls it "nothing happened" when the window had releases whose actuals had not arrived', () => {
-    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都还没回补。
-    // 「没有」是断言事实，「还没拿到」说的是我们手里有什么——两者不能互相冒充。
+  it('keeps high-impact events whose actuals never arrived on the page (A0.12)', () => {
+    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都没回补。
+    // 事件优先：它们照样是候选、照样进正文，缺的只是值那一格；空态那句「没有」根本不该出现。
     const events = Array.from({ length: 9 }, (_, index) => ({
       eventKey: `EV.${index}`,
       title: `Event ${index}`,
@@ -738,12 +738,16 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    expect(document.news.notes.macroEmpty).toBe('past-24h-high-impact-actuals-pending')
-    expect(document.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
-    // 数要跟着写：句子念得出"有几条"。
-    expect(document.news.notes.macroEmptyCount).toBe(9)
-    // 正文不编数值：一条都没有进宏观列表。
-    expect(document.news.macro).toHaveLength(0)
+    // 九条都在候选里（页面按上限取前四条，其余留在候选表备查）。
+    expect(document.news.macroCandidates).toHaveLength(9)
+    expect(document.news.macro.length).toBeGreaterThan(0)
+    // 总数与缺值数一起写：句子念得出"共几条、其中几条没拿到"。
+    expect(document.news.notes.macroHighImpactCount).toBe(9)
+    expect(document.news.notes.macroHighImpactValuesMissing).toBe(9)
+    // 正文不编数值。
+    expect(document.news.macro.every((item) => item.actual === undefined)).toBe(true)
+    // 也没有"没有事件"那句话——事件在。
+    expect(document.news.notes.macroEmpty).toBeUndefined()
   })
 
   it('keeps the plain "nothing" sentence when the window really had no high-impact event', () => {
@@ -761,7 +765,8 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
     expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
-    expect(document.news.notes.macroEmptyCount).toBeUndefined()
+    // 窗口里连高影响事件都没有：总数与缺值数都不写，也没有「未拿到」那句。
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
   })
 
   it('does not let stale or unavailable readings look available', () => {

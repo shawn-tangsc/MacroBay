@@ -54,12 +54,15 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const macroEmpty = briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: text.macroEmptyCodes,
     emptyMacro: text.empty.macro,
-    macroUnreadable: text.macroUnreadable,
-    ...(timeZone === undefined
-      ? {}
-      : { clock: { formatTime: (value: string) => formatTime(value, 'minute'), zoneLabel: formatShellTimeZoneLabel(timeZone) } })
+    macroUnreadable: text.macroUnreadable
   })
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
+  // 总数与缺值数：写在文档里（`A0.12`），版面只照抄。缺这个数就不许编，句子整段不出现。
+  const macroCount = doc.news.notes.macroHighImpactCount
+  const macroMissing = doc.news.notes.macroHighImpactValuesMissing
+  const macroHighImpact = typeof macroCount === 'number' && typeof macroMissing === 'number' && macroMissing > 0
+    ? { count: macroCount, missing: macroMissing }
+    : undefined
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null || macroHighImpact !== undefined
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -136,7 +139,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
-          <small>{text.macro.actual} {item.actual ?? '—'} · {item.consensus ? `${text.macro.consensus} ${item.consensus}` : text.macro.noConsensus}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}</small>
+          {/* 值缺席不是「没有这条事件」（`A0.12`）：事件照旧显示，只在这一格写「未拿到」。
+              以前这里写的是破折号，读者读不出是"没发生"还是"没拿到"。 */}
+          <small>{text.macro.actual} {item.actual ?? text.macroValueMissing}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
@@ -144,7 +149,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           由同一个推导决定，正文与限制清单说的是同一句话。
           **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，
           把这句放成行的兄弟，`grid-column` 不会生效，「跨两列」就悄悄做不到。 */}
-      {macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.pending ? 'pending' : macroEmpty.unreadable ? 'unreadable' : 'empty'}>
+      {/* 事件优先的总说明（`A0.12`）：窗口里到底有几条、其中几条我们没拿到值。它跟列表一起出现，
+          不是"空态"的一种——列表有内容时也要说得出这件事。 */}
+      {macroHighImpact ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-high-impact-note="true">
+        <span className="mi-brief-poster__macro-empty">{text.macroHighImpactNote
+          .replace('{count}', String(macroHighImpact.count))
+          .replace('{missing}', String(macroHighImpact.missing))}</span>
+      </div> : null}
+      {macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
         <span className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</span>
       </div> : null}
     </section> : null}

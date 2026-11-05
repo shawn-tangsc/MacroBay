@@ -57,16 +57,19 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const macro = selectMacro(packet, macroCandidates)
   // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
   const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
+  // 总数与缺值数：总数是"窗口里到底有多少高影响事件"（不看有没有值），缺值数是"其中多少条
+  // 我们没拿到实际值"。两句都挂在版面上——缺值是"我们没拿到"，不是"没有发生"（`A0.12`）。
+  const highImpact = highImpactEventsInWindow(packet)
+  const macroTotals = highImpact.length === 0 ? {} : {
+    macroHighImpactCount: highImpact.length,
+    macroHighImpactValuesMissing: highImpact.filter((event) => event.actual === undefined).length
+  }
   const macroEmptyNotes = macroEmpty === undefined ? {} : {
     macroEmpty,
     // The stale sentence names the age; nothing else can fill it truthfully, and the number
     // rides beside the code rather than inside it so the copy stays in the text table.
     ...(macroEmpty === 'calendar-stale' && macroEmptyHours(packet) !== undefined
       ? { macroEmptyHours: macroEmptyHours(packet)! }
-      : {}),
-    // 有事件、只是实际值还没到：条数也一起写，那句话要念出"有几条"。
-    ...(macroEmpty === 'past-24h-high-impact-actuals-pending'
-      ? { macroEmptyCount: highImpactEventsInWindow(packet).length }
       : {})
   }
   const nextCandidates = selectNextCandidates(packet)
@@ -123,7 +126,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
       ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
-        ...(macroEmpty === undefined ? {} : macroEmptyNotes)
+        ...(macroEmpty === undefined ? {} : macroEmptyNotes),
+        ...macroTotals
       })
     }),
     data: Object.freeze({
@@ -531,11 +535,8 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
     ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
     dataAsOf: packet.asOf
   })
-  // 「数据是新的 + 窗口一条都没有」才是「确实没有」。窗口里有高影响事件、只是截至这一刻还没拿到
-  // 它们的实际值，那是「我们没拿到」，不许写成「没有」（用户 2026-11-05 报的那一版）。
-  if (reason === 'past-24h-no-high-impact-release' && highImpactEventsInWindow(packet).length > 0) {
-    return 'past-24h-high-impact-actuals-pending'
-  }
+  // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
+  // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
   return reason
 }
 

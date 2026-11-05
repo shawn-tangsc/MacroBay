@@ -181,32 +181,32 @@ describe('an empty macro section says why (A0.8)', () => {
     expect(line?.textContent).not.toContain(text.macroUnreadable)
   })
 
-  it('counts the events whose actuals had not arrived, instead of claiming there were none', async () => {
-    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件、截至冻结时一条实际值都没拿到。
-    // 这一档既不是「没有」，也不是「未公布」——讲的是"截至那一刻我们手里没有"。
-    // 句里的时刻是**统计截止**，与读取时刻无关：夹具的时间来自 `windowEnd`。
-    const doc = emptyMacro({ macroEmpty: 'past-24h-high-impact-actuals-pending', macroEmptyCount: 9 })
-    const rendered = await render({ ...doc, edition: { ...doc.edition, readAt: '2026-10-30T12:20:00.000Z' } })
-    const line = rendered.querySelector<HTMLElement>('[data-macro-empty="pending"]')
-
-    expect(line).not.toBeNull()
-    expect(line!.textContent).toBe(text.macroEmptyCodes['past-24h-high-impact-actuals-pending']
-      .replace('{count}', '9')
-      .replace('{time}', '2026-10-30 00:30')
-      .replace('{zone}', 'GMT'))
-    // 两句假话都不许出现：既不许说"没有"，也不许说"未公布"（那是替数据源下结论）。
-    expect(rendered.textContent).not.toContain(text.macroEmptyCodes['past-24h-no-high-impact-release'])
-    expect(rendered.textContent).not.toContain('未公布')
-    // 正文不编数值：这一档列表是空的，值一个都不出现。
-    expect(line!.textContent).not.toContain('3.4%')
+  it('keeps an event with no actual and marks only its value as not captured', async () => {
+    // `A0.12` 反证：把值删掉，事件行必须还在，只多一个「未拿到」。事件是否存在不取决于有没有值。
+    const doc = briefing()
+    const rendered = await render({
+      ...doc,
+      news: {
+        ...doc.news,
+        macro: [{ ...doc.news.macro[0]!, actual: undefined }],
+        notes: { macroHighImpactCount: 9, macroHighImpactValuesMissing: 9 }
+      }
+    })
+    const rows = rendered.querySelectorAll('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    expect(rows).toHaveLength(1)
+    expect(rendered.textContent).toContain(doc.news.macro[0]!.title)
+    expect(rendered.textContent).toContain(text.macroValueMissing)
+    expect(rendered.textContent).not.toContain('3.4%')
+    // 总数与缺值数一起说，不是只留一个空列表。
+    const note = rendered.querySelector<HTMLElement>('[data-macro-high-impact-note]')!
+    expect(note).not.toBeNull()
+    expect(note.textContent).toBe(text.macroHighImpactNote.replace('{count}', '9').replace('{missing}', '9'))
   })
 
-  it('says "not readable" rather than guessing when the count is missing', async () => {
-    // 半套数据（旧文档或写坏了）：没有条数就不印那句话，更不许印 0。
-    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-high-impact-actuals-pending' }))
-    const line = rendered.querySelector<HTMLElement>('[data-macro-empty="unreadable"]')!
-    expect(line).not.toBeNull()
-    expect(line.textContent).not.toContain('0 ')
+  it('says nothing about missing values when every event has one', async () => {
+    // 没有缺值就不印那句：多一句"0 条没拿到"只是噪音。
+    const rendered = await render(briefing())
+    expect(rendered.querySelector('[data-macro-high-impact-note]')).toBeNull()
   })
 
   it('prints the timeout as its own sentence, not as a failed collection', async () => {
