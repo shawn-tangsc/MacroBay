@@ -1,6 +1,7 @@
 import type { ChannelManagementResult } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
 import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 
+import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 import type { PlatformText } from '../../../i18n/platformText'
 import type { Channel } from './channelSettingsPresentation'
 import { describeTestMessageReceipt, enableFailureSentence, mutationFailureSentence } from './channelSettingsPresentation'
@@ -92,6 +93,7 @@ export type TestReceipt = { tone: 'muted' | 'bad'; text: string }
 
 export type SendTestDeps = {
   labels: Labels
+  language: 'zh-CN' | 'en-US'
   setTestBusyId: (id: string | null) => void
   setTestReceipts: (update: (current: Readonly<Record<string, TestReceipt>>) => Readonly<Record<string, TestReceipt>>) => void
 }
@@ -116,7 +118,7 @@ export async function sendChannelTestMessage(channel: Channel, deps: SendTestDep
     })
     deps.setTestReceipts((current) => ({
       ...current,
-      [channel.id]: describeTestMessageReceipt(receipt, deps.labels, deps.labels.channelPlatformName[channel.type])
+      [channel.id]: describeTestMessageReceipt(receipt, deps.labels, CHANNEL_DISPLAY_NAME[channel.type][deps.language])
     }))
   } catch {
     deps.setTestReceipts((current) => ({

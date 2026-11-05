@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { platformText } from '../../../i18n/platformText'
+import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 import { ChannelSettingsPage } from './ChannelSettingsPage'
 
 const labels = platformText['zh-CN'].settings
@@ -523,7 +524,7 @@ describe('platforms that are not implemented', () => {
     installPlatform()
     const container = await mount()
 
-    const feishu = [...container.querySelectorAll('button')].find((node) => node.textContent?.includes(labels.channelPlatformName.feishu))
+    const feishu = [...container.querySelectorAll('button')].find((node) => node.textContent?.includes(CHANNEL_DISPLAY_NAME.feishu['zh-CN']))
     await act(async () => feishu?.click())
 
     expect(container.textContent).toContain(labels.channelUnsupportedPane)
@@ -1087,7 +1088,7 @@ describe('sending a test message from the row', () => {
     await act(async () => {})
 
     const receipt = container.querySelector('[data-test-receipt]')?.textContent ?? ''
-    expect(receipt).toBe(labels.channelTestAccepted.replace('{target}', labels.channelPlatformName.telegram))
+    expect(receipt).toBe(labels.channelTestAccepted.replace('{target}', CHANNEL_DISPLAY_NAME.telegram['zh-CN']))
     // 不许编名字，也不许把 chat_id / 频道 id 拼进来。
     expect(receipt).not.toContain('channel-1')
     expect(receipt).not.toMatch(/-?\d{6,}/u)

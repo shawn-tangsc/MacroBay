@@ -7,6 +7,7 @@ import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
+import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 
 import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
@@ -132,7 +133,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const actionDeps = { labels, setBusyId, setError, reload }
   const enableDeps = { labels, setBusyId, setError, setEnableFailures, reload }
-  const testDeps = { labels, setTestBusyId, setTestReceipts }
+  const testDeps = { labels, language, setTestBusyId, setTestReceipts }
 
   const toggle = (channel: Channel, next: boolean): void => {
     if (!next) {
@@ -326,7 +327,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             <span aria-hidden="true" className="channel-platform-logo" data-platform-logo={type}>
               {CHANNEL_PLATFORM_LOGOS[type]()}
             </span>
-            <span>{labels.channelPlatformName[type]}</span>
+            <span>{CHANNEL_DISPLAY_NAME[type][language]}</span>
           </button>
         ))}
       </nav>
@@ -351,7 +352,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           <>
             <header className="channel-detail-header">
               <div>
-                <h2 className="channel-detail-title">{labels.channelPlatformName[selectedType]}</h2>
+                <h2 className="channel-detail-title">{CHANNEL_DISPLAY_NAME[selectedType][language]}</h2>
                 {/* 三样都要：名字、一句用途、以及「为什么现在不能用」——缺用途那版只剩一句原因，
                     读者不知道这个平台是干什么的。 */}
                 <p className="channel-detail-purpose">{labels.channelPlatformPurpose[selectedType]}</p>
@@ -485,7 +486,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           }}
           labels={labels}
           onClose={() => setLogsFor(null)}
-          platformName={labels.channelPlatformName[selectedType]}
+          platformName={CHANNEL_DISPLAY_NAME[selectedType][language]}
         />
       )}
     </section>
