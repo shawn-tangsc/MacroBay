@@ -317,15 +317,15 @@ describe('daily briefing page', () => {
     // 1. A day that never ran: the pane names it, gives the schedule, and offers no false action.
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    const never = dom.querySelector('[data-briefing-no-edition="2026-10-28"]')
-    expect(never?.textContent).toContain(text.history.notRunTitle)
+    const never = dom.querySelector('.mi-daily-briefing-page__no-edition')
+    // 历史日的空态与今天**同一个标题**（`02` v2.97），差异只在副句。
+    expect(never?.textContent).toContain(text.history.emptyBodyHistorical)
+    expect(never?.textContent).toContain(text.history.emptyBodyHistorical)
     // The schedule when the list carries one, otherwise the honest "no attempt recorded".
-    const scheduleSentence = text.history.notRunPlanned.split('{')[0]!
-    expect([scheduleSentence, text.history.notRunUnknownPlanned].some((sentence) => never?.textContent?.includes(sentence))).toBe(true)
-    const backfill = never?.querySelector<HTMLButtonElement>('button')!
-    // The one thing this version cannot do is disabled, and its accessible name says why.
-    expect(backfill.disabled).toBe(true)
-    expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+
+    // 空态里**零按钮**（`02` v2.98）：历史日报不支持补生成，就不放一颗"生成这一天"的灰按钮，
+    // 免得把读者指向做不到的事。
+    expect(never?.querySelectorAll('button') ?? []).toHaveLength(0)
     expect(dom.querySelector('[data-date="2026-10-28"]')?.getAttribute('aria-current')).toBe('true')
 
     // 2. A day that failed: the reason and the nine steps, not just one word in the rail.
@@ -581,8 +581,7 @@ describe('daily briefing page', () => {
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
     const trigger = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!
     expect(trigger.disabled).toBe(true)
-    // 原因不在吸顶栏里另写一句（会把栏撑高），正文空态已经说明这一版为什么没有内容。
-    expect(dom.textContent).toContain(text.history.notRunTitle)
+    // 原因不挂在吸顶栏上（会把栏撑高）；正文归它自己说明。
   })
 
   it('keeps both languages of one period as two rows after today\'s document lands', async () => {
@@ -656,8 +655,8 @@ describe('daily briefing page', () => {
     expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
     // 2. The pane is the ordinary "not generated" state — one state, one name — and never the
     //    unreadable one: no read was attempted, so none can have failed.
-    const pane = dom.querySelector('[data-briefing-no-edition="2026-10-30"]')
-    expect(pane?.textContent).toContain(text.history.notRunTitle)
+    const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')
+    expect(pane?.textContent).toContain('本期没有简报')
     expect(dom.textContent).not.toContain(text.stateReasons.unreadable)
     expect(dom.textContent).not.toContain(text.stateReasons.unreadableSince.split('{')[0]!)
     // What the reader did is said once, by the delete note, not by the empty state.
@@ -1831,19 +1830,20 @@ it('takes the current issue from the service, not from the wall clock', async ()
   expect(first.hasAttribute('disabled')).toBe(false)
 
   await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
-  const pane = dom.querySelector('[data-briefing-no-edition="2026-10-29"]')!
-  expect(pane.getAttribute('data-current-period')).toBe('true')
-  expect(pane.textContent).toContain(text.history.emptyTitle)
+  const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')!
+  // 今天那档的副句带时间与"怎么手动补"；历史日那档不带。标题两档都由平台提供，不写句子。
+  expect(pane.textContent).toContain('本期没有简报')
+  expect(pane.textContent).toContain(text.history.emptyToday.split('{time}')[1]!.split('{zone}')[0]!.trim())
   // Not the historical framing, and the action stays clickable.
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.disabled).toBe(false)
   expect(action.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-29'))
 
-  // Another day without an edition is history: there the backfill reason does appear.
+  // 历史日：同一个空态、同一个平台标题，副句换成"这一天没有留下简报"，并且**零按钮**。
   await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
-  const backfill = dom.querySelector<HTMLButtonElement>('[data-briefing-no-edition="2026-10-28"] button')!
-  expect(backfill.disabled).toBe(true)
-  expect(backfill.getAttribute('aria-label')).toBe(text.history.backfillBlocked)
+  const historical = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
+  expect(historical.textContent).toContain(text.history.emptyBodyHistorical)
+  expect(historical.querySelectorAll('button')).toHaveLength(0)
 })
 
 // Three minimal inputs, each asserting the view state directly. The delete chain went two rounds
@@ -1908,7 +1908,7 @@ it('allows "no edition" only when the issue has no language at all', async () =>
     if (dom.querySelector('[data-briefing-no-edition]') || dom.querySelector('[data-briefing-locale-missing]')) break
   }
 
-  expect(dom.querySelector('[data-briefing-no-edition="2026-11-03"]')).not.toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__no-edition')).not.toBeNull()
   expect(dom.querySelector('[data-briefing-locale-missing]')).toBeNull()
 })
 
@@ -1977,8 +1977,8 @@ it('selects the current issue as soon as the page opens, with no button of its o
 
   const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
   expect(first.getAttribute('aria-current')).toBe('true')
-  const pane = dom.querySelector('[data-briefing-no-edition="2026-10-30"]')!
-  expect(pane.getAttribute('data-current-period')).toBe('true')
+  const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')!
+  expect(pane.textContent).toContain('本期没有简报')
   // The header owns the action for the current issue; the pane does not offer a second, disabled one.
   expect(pane.querySelector('button')).toBeNull()
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)

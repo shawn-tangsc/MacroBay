@@ -1,9 +1,16 @@
-import { Button } from 'antd'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
+import { StateView } from '@platform/ui/components/state'
 
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingFailurePanel } from './DailyBriefingFailurePanel'
 import type { DailyBriefingText } from './dailyBriefingText'
+
+/** 今天的副句：什么时候会出、想现在看怎么走。手动期没有固定时刻，换成对应那句。 */
+function noEditionToday(text: DailyBriefingText, timeZone: string, scheduledTime?: string): string {
+  const labels = text.history
+  if (scheduledTime === undefined) return labels.emptyTodayManual
+  return labels.emptyToday.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
+}
 
 /** What the pane says for one day the reader selected that has nothing to read. */
 export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, currentPeriodDate, formatTime, onOpenSettings }: Readonly<{
@@ -17,12 +24,6 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
   onOpenSettings: () => void
 }>): React.ReactElement {
   const labels = text.history
-  // The one thing this version cannot do. The control is disabled and says so in its accessible
-  // name: a day without an edition is not an invitation to write today's into its place.
-  const backfill = <Button disabled aria-label={labels.backfillBlocked} title={labels.backfillBlocked}>
-    {labels.backfillAction}
-  </Button>
-
   if (view.failed) {
     return <DailyBriefingFailurePanel
       failure={{ kind: 'generation', ...(view.failureCode ? { code: view.failureCode } : {}), ...(view.generationTrace ? { generationTrace: view.generationTrace } : {}) }}
@@ -35,21 +36,26 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
     />
   }
 
-  // The current issue is not a past day: it says which issue it is and when that issue closes,
-  // instead of the historical "backfill is not supported" framing.
-  const currentIssue = view.date === currentPeriodDate && scheduledTime !== undefined
-  return <div className="mi-daily-briefing-page__no-edition" data-briefing-no-edition={view.date}
-    {...(currentIssue ? { 'data-current-period': 'true' } : {})} role="status">
-    {/* 用户拍板的空态：**一句话说清有没有、什么时候有、想现在看怎么走**。整期没有版次与
-        缺当前语言共用这一处（`02` v2.94/v2.95），卡片里不放按钮——动作入口在页面顶部。 */}
-    <h2>{currentIssue ? labels.emptyTitle : labels.notRunTitle}</h2>
-    <p>{currentIssue
-      ? labels.emptyBody.replace('{time}', scheduledTime ?? '').replace('{zone}', formatShellTimeZoneLabel(timeZone))
-      : scheduledTime
-        ? labels.notRunPlanned.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
-        : labels.notRunUnknownPlanned}</p>
-    {/* The current issue's action is the header's, named once. A second, disabled button here
-        would be a second name for the same thing — and a disabled one at that. */}
-    {currentIssue ? null : backfill}
-  </div>
+  // 今天与历史日**共用同一块平台空态**（`02` v2.98）：标题由 `ui.state.empty` 提供，两块自动逐字
+  // 相同；差异只在副句，副句走 `productReason` 的 key（字面键，守卫要求可判断前缀）。
+  const isCurrent = view.date === currentPeriodDate
+  if (isCurrent) {
+    return <StateView
+      state="empty"
+      /* 「还没发生」这一档。**不许 `never-ran`**——它配的动作是"现在跑一次"，而历史日报不支持补生成；
+         **不许 `error`**——那会把"还没有"和"读不到"合成一句。 */
+      reasonCode="not-yet"
+      size="md"
+      className="mi-daily-briefing-page__no-edition"
+      productReason={{ key: 'mi.dailyBriefing.emptyToday', resolve: () => noEditionToday(text, timeZone, scheduledTime) }}
+    />
+  }
+  return <StateView
+    state="empty"
+    /* 历史日：「那段时间确实没有」，不是"还没跑"。 */
+    reasonCode="nothing-in-window"
+    size="md"
+    className="mi-daily-briefing-page__no-edition"
+    productReason={{ key: 'mi.dailyBriefing.emptyHistorical', resolve: () => text.history.emptyBodyHistorical }}
+  />
 }
