@@ -209,6 +209,47 @@ describe('the macro section draws events, never a message about missing data (v2
     const rendered = await render({ ...briefing(), news: { ...briefing().news, macro: [], notes: {} } })
     expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
   })
+
+  it('marks a cancelled event and draws it without a value cell (v2.125)', async () => {
+    // 那天原定有一场、后来取消了：行在、含「已取消」、值格不渲染。藏起来读者会以为数据漏了。
+    const doc = briefing()
+    const rendered = await render({
+      ...doc,
+      news: { ...doc.news, macro: [{ ...doc.news.macro[0]!, actual: undefined, lifecycleState: 'cancelled' }], notes: {} }
+    })
+    const row = rendered.querySelector('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    expect(row).not.toBeNull()
+    expect(row!.textContent).toContain(text.macro.cancelled)
+    expect(rendered.textContent).not.toContain(text.macro.actual)
+    expect(row!.querySelector('small')).toBeNull()
+    assertClean(rendered)
+  })
+
+  it('states shown and hidden counts only when the section is truncated (v2.125)', async () => {
+    // 条数 = 本栏真实画出的行数：候选六个、摆出来四个，栏尾写「共 4 条（另 2 条未列出）」。
+    const doc = briefing()
+    const candidates = Array.from({ length: 6 }, (_, index) => ({ ...doc.news.macro[0]!, eventKey: `EV.${index}`, title: `Event ${index}` }))
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: candidates.slice(0, 4), macroCandidates: candidates } })
+    const line = rendered.querySelector<HTMLElement>('[data-macro-coverage]')
+    expect(line?.textContent).toBe(text.macroCoverage.replace('{shown}', '4').replace('{hidden}', '2'))
+    // 没截断就不写这一行：多一句「另 0 条」只是噪音。
+    expect((await render(doc)).querySelector('[data-macro-coverage]')).toBeNull()
+  })
+
+  it('still renders an edition written at schema 13, before the lifecycle field existed', async () => {
+    // 库里已有旧版本文档（A11.2）：读 13 的文档不许报错、不许丢字段，缺 lifecycleState 就当没取消。
+    const base = briefing()
+    const old: DailyBriefingDocument = {
+      ...base,
+      schemaVersion: 13,
+      policyVersion: 'daily-briefing.v23',
+      edition: { ...base.edition, periodId: 'default', periodTime: '2026-10-30T00:30:00.000Z', periodKind: 'scheduled', runTrigger: 'scheduled' }
+    }
+    const rendered = await render(old)
+    expect(rendered.textContent).toContain('3.4%')
+    expect(rendered.querySelector('.mi-brief-poster__macro-cancelled')).toBeNull()
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).not.toBeNull()
+  })
 })
 
 describe('daily brief share card in English', () => {

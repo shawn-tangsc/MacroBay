@@ -12,6 +12,7 @@ import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRates
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 const asOf = '2026-10-30T00:30:00.000Z'
@@ -271,13 +272,14 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 
-  it('writes the period identity into the edition at schema 13', () => {
+  it('writes the period identity into the edition at the current schema', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({ asOf: '2026-10-30T00:30:12.345Z', windowEnd: asOf }),
       date: '2026-10-30'
     })
 
-    expect(document.schemaVersion).toBe(13)
+    // schema 14 起宏观事件带自己的 `lifecycleState`（`02` v2.125），当前文档就是 14。
+    expect(document.schemaVersion).toBe(14)
     // The id is a name, not the clock: this version's single fixed period.
     expect(document.edition.periodId).toBe('default')
     // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
@@ -768,9 +770,9 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroHighImpactCount).toBeUndefined()
   })
 
-  it('does not turn a cancelled event into an event whose value never arrived (A0.12)', () => {
-    // 取消的事件永远不会有实际值：把它当成"还没拿到"是把"取消了"说成"数据没到"。
-    // 它既不进候选，也不计进「共几条」——总数与列表必须读同一个判断。
+  it('keeps a cancelled event on the page and marks it, without inventing a value (A0.12)', () => {
+    // 取消的事件照常显示并标「已取消」（`02` v2.125）：那天原定有一场、后来取消了，这是真实的
+    // 排期变化，藏起来读者会以为数据漏了。它没有值，所以值格不渲染，也不进分析素材。
     const events = [{
       eventKey: 'EV.CANCELLED', title: 'Cancelled release', scheduledAt: '2026-10-29T12:30:00.000Z',
       importance: 'high' as const, lifecycleState: 'cancelled' as const, category: 'economic-indicator' as const,
@@ -784,10 +786,14 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    expect(document.news.macroCandidates).toBeUndefined()
-    expect(document.news.macro).toHaveLength(0)
-    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
-    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    // 行在、标记在、计入条数；「没有已发布的高影响事件」那句不出现（它是事实，不是"没有"）。
+    expect(document.news.macro).toHaveLength(1)
+    expect(document.news.macro[0]).toMatchObject({ eventKey: 'EV.CANCELLED', lifecycleState: 'cancelled' })
+    expect(document.news.macro[0]?.actual).toBeUndefined()
+    expect(document.news.notes.macroHighImpactCount).toBe(1)
+    expect(document.news.notes.macroEmpty).toBeUndefined()
+    // 分析素材里没有它：取消是"不会有了"，不是"我们没拿到"，模型更不该拿它讲故事。
+    expect(selectMacroAnalysisCandidates(document.news.macroCandidates ?? [])).toHaveLength(0)
   })
 
   it('does not let stale or unavailable readings look available', () => {

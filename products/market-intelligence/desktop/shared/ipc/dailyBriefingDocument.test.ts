@@ -105,7 +105,10 @@ describe('daily briefing document guard at schema 13', () => {
     expect(isDocument({ ...old, schemaVersion: 12, edition: { ...old.edition, periodId: 'default' } })).toBe(false)
   })
 
-  it('refuses a version past 13', () => {
-    expect(isDocument({ ...document(), schemaVersion: 14 as unknown as 13 })).toBe(false)
+  it('accepts the current schema 14 row and refuses only a version past it', () => {
+    // 14 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本，不拒绝当前的 14。
+    const current = { ...document(), schemaVersion: 14 as const, policyVersion: 'daily-briefing.v24' as const }
+    expect(isDocument(current)).toBe(true)
+    expect(isDocument({ ...current, schemaVersion: 15 as unknown as 14 })).toBe(false)
   })
 })

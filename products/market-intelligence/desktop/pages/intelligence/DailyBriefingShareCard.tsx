@@ -50,7 +50,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const visibleNews = doc.news.items.filter((item) => item.visibility !== 'hidden')
   const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
   // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
-  // 数量仍写在文档里，供分析快照与内部核查用，不在版面上露出来。
+  // 「几条真摆出来了 / 几条没列」只在本栏有截断时说（`02` v2.125）：条数 = 本栏展示行数，
+  // 候选总数不许当成事件条数——那是把"有限"说成"全部"。
+  const macroCandidateCount = (doc.news.macroCandidates ?? doc.news.macro).length
+  const macroShown = visibleMacro.length
+  const macroHidden = Math.max(0, macroCandidateCount - macroShown)
   // 宏观那一栏：有事件才有这一栏；**读不到或确实没有都不在正文里画**（用户 2026-11-06）。
   // 「读不到」进右列「数据缺口与限制」说（那里有原因与重试），正文里一个字都不提。
   const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
@@ -129,13 +133,20 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
-          <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
+          <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}{item.lifecycleState === 'cancelled' ? <span className="mi-brief-poster__macro-cancelled">{text.macro.cancelled}</span> : null}</p>
           {/* 没有实际值就**整格不渲染**（用户 2026-11-06）：不占位、不写破折号、不写「未拿到」——
               正文里出现"没数据/没拿到"会让读者觉得这张简报不可信。事件本身照旧显示（时刻、国家、名称）。 */}
           {item.actual === undefined ? null : <small>{text.macro.actual} {item.actual}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>}
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
+      {/* 截断时说清"摆出来的有几条、另几条没列"（`02` v2.125）：条数 = 上面真实画出的行数，
+          候选总数不许冒充事件条数。没截断就不写这一行。 */}
+      {macroHidden > 0 ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-coverage="true">
+        <span className="mi-brief-poster__macro-empty">{text.macroCoverage
+          .replace('{shown}', String(macroShown))
+          .replace('{hidden}', String(macroHidden))}</span>
+      </div> : null}
       {/* 一行，正文段落样式：不是错误、不给图标、不给重试。「确实没有」那一档用另一句，
           由同一个推导决定，正文与限制清单说的是同一句话。
           **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，

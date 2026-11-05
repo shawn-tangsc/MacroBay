@@ -169,6 +169,8 @@
 .mi-brief-poster__macro > div > p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
 .mi-brief-poster__macro > div > small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
+/* 「已取消」是排期事实，不是错误：同「重点」小签的几何，换成次级墨色，不刷警示色。 */
+.mi-brief-poster__macro-cancelled { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 3px; background: #efe9dc; color: #625f55; font-size: 8px; font-weight: 700; vertical-align: 1px; }
 /* What the section says when it has nothing to list: it was read, and here is why it is empty — or that
    there genuinely was nothing. One row in the same rhythm as a macro row (so the block keeps its height
    and the heading is not orphaned), in the section's secondary ink. No warning colour, no icon, no
