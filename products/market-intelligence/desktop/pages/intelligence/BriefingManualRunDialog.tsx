@@ -1,7 +1,10 @@
 import { Button, Select } from 'antd'
+import { CircleHelp } from 'lucide-react'
 import { useState } from 'react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
+import { Popover } from '@platform/ui/components/popover'
 
 import { dailyBriefingGenerationPolicy, dailyBriefingGenerationTimes, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -49,6 +52,8 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
     language: 'zh-CN'
   })
   const windowLabel = (hours: number): string => copy.windowValue.replace('{hours}', String(hours))
+  // 两句话合成一个问号：「可选时刻有档位」和「截止 = 按下那一刻」。正文里不再铺说明。
+  const cutoffHelp = `${briefingGenerationGridHint(text)} ${copy.nowHint}`
   // 「正在生成」是整期状态，不是字段错：它放底部、让确定键禁用，并同屏写出原因。
   const blockedReason = problem === 'already-running' ? copy.alreadyRunning : undefined
   // 字段级的拒绝贴在该字段下面，作为它的兄弟节点；同一时刻只出现一处提示。
@@ -77,7 +82,23 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
   >
     <div className="mi-briefing-period-dialog" data-manual-run-dialog="true">
       <label className="mi-briefing-period-dialog__field">
-        <strong>{copy.cutoff}</strong>
+        {/* 说明不铺在正文里：三句描述收进问号，hover 与键盘聚焦都能展开（平台 `Popover`）。
+            标题在前、问号在**标题前面**，`sm` 档随组件走，不写死像素。 */}
+        <span className="mi-daily-briefing__field-label">
+          <Popover
+            labelKey="manual.cutoffHelp"
+            resolveText={(key) => (key === 'manual.cutoffHelp' ? cutoffHelp : '')}
+            trigger={(triggerProps) => <IconButton
+              ariaLabelKey="manual.cutoffHelpLabel"
+              icon={CircleHelp}
+              resolveText={(key) => (key === 'manual.cutoffHelpLabel' ? `${copy.cutoffHintLabel}` : '')}
+              size="sm"
+              variant="plain"
+              {...triggerProps}
+            />}
+          />
+          <strong>{copy.cutoff}</strong>
+        </span>
         <Select
           aria-label={copy.cutoff}
           value={draft.cutoff}
@@ -95,9 +116,7 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
         data-tone={cutoffProblem === 'cutoff-in-future' ? 'invalid' : undefined} data-manual-problem={cutoffProblem}>
         {cutoffProblemText}
       </p>}
-      {/* 指定时刻取自同一张表，所以档位说明也从那张表算——「现在」是第三种选择，不受档位约束。 */}
-      <p className="mi-briefing-period-dialog__hint" data-time-grid="true">{briefingGenerationGridHint(text)}</p>
-      {draft.cutoff === 'now' ? <p className="mi-briefing-period-dialog__hint">{copy.nowHint}</p> : null}
+
       <label className="mi-briefing-period-dialog__field">
         <strong>{copy.windowHours}</strong>
         <Select
@@ -127,7 +146,6 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
         <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-duplicate="true">{duplicate.label}</p>
         <p className="mi-briefing-period-dialog__note">{copy.duplicateBody}</p>
       </>}
-      {duplicate === undefined ? <p className="mi-briefing-period-dialog__note">{copy.repeatable}</p> : null}
       {blockedReason === undefined ? null : <p className="mi-briefing-period-dialog__conflict" id="manual-run-blocked-reason" role="alert" data-manual-problem={problem}>
         {blockedReason}
       </p>}

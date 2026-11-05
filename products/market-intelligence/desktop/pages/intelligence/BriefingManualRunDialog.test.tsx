@@ -23,7 +23,7 @@ const render = async (running = false) => {
   document.body.append(host)
   root = createRoot(host)
   const onRun = vi.fn()
-  await act(async () => { root.render(<BriefingManualRunDialog open text={text} running={running} onRun={onRun} onClose={vi.fn()} />) })
+  await act(async () => { root.render(<BriefingManualRunDialog open text={text} running={running} onRun={onRun} onReplace={vi.fn()} onClose={vi.fn()} />) })
   await act(async () => { await Promise.resolve() })
   return { onRun }
 }
@@ -57,17 +57,21 @@ describe('briefing manual run dialog', () => {
     expect(options.map((node) => node.textContent?.trim())).toContain(text.manualRunDialog.now)
   })
 
-  it('names the same half-hour grid the cutoff list offers, from the policy table', async () => {
+  it('moves the cutoff explanation into its question mark, and keeps it out of the body', async () => {
     await render()
-    const hint = document.querySelector<HTMLElement>('[data-time-grid]')
-    expect(hint, 'the form never names its grid').not.toBeNull()
+    // A7.9（v2.53）：说明性正文不许铺在弹框里，收进问号。
+    expect(document.querySelector('[data-time-grid]')).toBeNull()
+    expect(document.body.textContent).not.toContain(text.manualRunDialog.nowHint)
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.cutoffHintLabel}"]`)
+    expect(trigger, 'the cutoff has no question mark').not.toBeNull()
+    // 展开后是同一张表算出来的档位说明：读者看得到，正文里不占一行。
     const grid = dailyBriefingGenerationGrid
-    expect(hint!.textContent).toContain(grid.first)
-    expect(hint!.textContent).toContain(grid.last)
-    expect(hint!.textContent).toContain(String(grid.count))
-    expect(hint!.textContent).toContain(String(grid.stepMinutes))
-    // "Now" is a third choice and is not one of the slots — it stays out of the grid sentence.
-    expect(hint!.textContent).not.toContain(text.manualRunDialog.now)
+    await act(async () => { trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await Promise.resolve() })
+    const bubble = document.body.textContent ?? ''
+    expect(bubble).toContain(grid.first)
+    expect(bubble).toContain(grid.last)
+    expect(bubble).toContain(String(grid.stepMinutes))
   })
 
   it('says why a future cutoff was refused, and stays open to fix it', async () => {
@@ -75,7 +79,7 @@ describe('briefing manual run dialog', () => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
-    await act(async () => { root.render(<BriefingManualRunDialog open text={text} problem="cutoff-in-future" onRun={vi.fn()} onClose={vi.fn()} />) })
+    await act(async () => { root.render(<BriefingManualRunDialog open text={text} problem="cutoff-in-future" onRun={vi.fn()} onReplace={vi.fn()} onClose={vi.fn()} />) })
     await act(async () => { await Promise.resolve() })
     const problem = document.querySelector('[data-manual-problem="cutoff-in-future"]')
     expect(problem?.textContent).toBe(text.manualRunDialog.cutoffInFuture)
@@ -101,8 +105,8 @@ describe('briefing manual run dialog', () => {
 
   it('says the same combination may be generated again, and does not refuse the second press', async () => {
     const { onRun } = await render()
-    // A7.9: without this sentence the second press looks like a mistake.
-    expect(document.body.textContent).toContain(text.manualRunDialog.repeatable)
+    // A7.9（v2.53）：这句说明已不在正文里（说明性正文命中 0），第二次按下仍然不拒绝。
+    expect(document.body.textContent).not.toContain(text.manualRunDialog.repeatable)
     await act(async () => { runButton().click() })
     await act(async () => { runButton().click() })
     // A7.4: no uniqueness rule here — the reader asked twice, so two runs are requested.

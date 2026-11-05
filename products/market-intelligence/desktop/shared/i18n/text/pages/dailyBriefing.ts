@@ -85,7 +85,7 @@ export const dailyBriefingText = {
       invalid: '这一期的取值无效，请重新选择。', cancel: '取消', save: '保存', saving: '保存中…'
     },
     manualRunDialog: {
-      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。',
+      title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。', cutoffHintLabel: '解释：截止时刻',
       windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
       repeatable: '同一组合可以重复生成：选同样的时刻、窗口和语言再点一次，会再生成新的一期。',
       cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一窗口、同一语言已经生成过一版。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
@@ -378,7 +378,7 @@ export const dailyBriefingText = {
       invalid: 'One of these values is not valid; choose again.', cancel: 'Cancel', save: 'Save', saving: 'Saving…'
     },
     manualRunDialog: {
-      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.',
+      title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.', cutoffHintLabel: 'Explain: cutoff',
       windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
       repeatable: 'The same combination can be generated again: choose the same time, window and language and press again, and it creates another issue.',
       cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'The same cutoff, window and language were generated already. Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',
