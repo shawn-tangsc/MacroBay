@@ -65,6 +65,11 @@ export type SafeTranslationStatus = {
 
 export type SafeTranslationDisplayText = {
   title: string
+  /**
+   * 这条 `title` 是哪种语言。译文必须带上来，否则调用方只能靠"有没有译文"去猜——日报就是这么把
+   * 中文标题丢掉的（`titleLocale` 未设，判断 `titleLocale === 本期语言` 永远不成立）。
+   */
+  titleLocale?: string
   summary?: string
   body?: string
   originalTitle: string

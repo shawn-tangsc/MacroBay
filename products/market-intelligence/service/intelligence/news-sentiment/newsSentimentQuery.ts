@@ -22,7 +22,7 @@ type TranslationReader = {
   resolveDisplayTexts: (input: {
     itemIds: string[]
     textMode?: 'translated' | 'original'
-  }) => Promise<Record<string, { title?: string; status?: string } | undefined>>
+  }) => Promise<Record<string, { title?: string; status?: string; titleLocale?: string } | undefined>>
 }
 
 export type NewsSentimentItemView = {
@@ -277,13 +277,19 @@ function toSignal(
 function toItemView(
   row: NewsSentimentRecord,
   item: { itemId: string; title: string; url?: string; sourceId: string } | undefined,
-  translation: { title?: string; status?: string } | undefined
+  translation: { title?: string; status?: string; titleLocale?: string } | undefined
 ): NewsSentimentItemView {
   const definition = getIntelligenceSourceDefinition(row.sourceId)
   return {
     itemId: row.itemId,
     title: item?.title ?? '',
-    ...(translation?.status === 'translated' && translation.title ? { displayTitle: translation.title } : {}),
+    ...(translation?.status === 'translated' && translation.title
+      ? {
+        displayTitle: translation.title,
+        // 只接受这一版认识的两种语言；别的一律不标，调用方按"不等于本期语言"处理。
+        ...(translation.titleLocale === 'zh-CN' || translation.titleLocale === 'en-US' ? { titleLocale: translation.titleLocale } : {})
+      }
+      : {}),
     sourceId: row.sourceId,
     sourceName: definition?.displayName ?? row.sourceId,
     ...(item?.url ? { url: item.url } : {}),
@@ -324,7 +330,7 @@ async function readReadiness(
 async function readTranslations(
   reader: TranslationReader | undefined,
   itemIds: string[]
-): Promise<Record<string, { title?: string; status?: string } | undefined>> {
+): Promise<Record<string, { title?: string; status?: string; titleLocale?: string } | undefined>> {
   if (!reader) return {}
   try {
     return await reader.resolveDisplayTexts({ itemIds, textMode: 'translated' })

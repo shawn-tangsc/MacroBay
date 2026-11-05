@@ -488,8 +488,11 @@ function resolveDisplayTextForItem(
   const translatedSummary = active?.summaryTranslated
   const translatedBody = active?.bodyTranslated
 
+  const usingTranslated = useTranslated && active?.status === 'translated' && translatedTitle !== undefined
   return {
-    title: useTranslated && active?.status === 'translated' && translatedTitle ? translatedTitle : originalTitle,
+    title: usingTranslated ? translatedTitle! : originalTitle,
+    // 有译文就把译文语言一起交出去：调用方按"等于本期语言才用"判断，既不串语言，也不丢同语言译文。
+    ...(usingTranslated ? { titleLocale: context.targetLocale } : {}),
     summary: useTranslated && active?.status === 'translated' && translatedSummary ? translatedSummary : originalSummary,
     body: useTranslated && active?.status === 'translated' && translatedBody ? translatedBody : body,
     originalBody: body,
