@@ -31,11 +31,11 @@ export type NotificationEventDeclaration = {
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
   /**
-   * 读者面向的类型标签（契约 v2.37）：**只能声明、不许推导**。
+   * 读者面向的类型标签（契约 v2.38）：**只能声明、不许推导**。
    *
    * 判据只有一条：**一次性（failure）还是一直不对劲（needs-action）**；`completed` 是"好了/做完了"，
-   * `reminder` 是"发生了但你不用动手"。`failure` 另有一条**必要条件**：错误对读者可见、重试也许就好
-   * （它只挡方向、不改档）。
+   * `reminder` 是"发生了但你不用动手"。**「错误对读者可见、能重试」只是 `failure` 的典型样子，
+   * 是说明、不参与判定**——只要它还叫"必要条件"，就仍在参与判定，N6 那类事件上能得出相反结论。
    *
    * 不许从 `severity`/`actions`/`requiresUserAction`/文案键反推：`severity` 在计划器里两处写死 `info`，
    * 推出来所有事件同一个标签——比推错更难发现。

@@ -44,6 +44,7 @@ function event(overrides: Record<string, unknown> = {}): Record<string, unknown>
     titleKey: 'notification.event.market-intelligence.briefing.ready.title',
     reasonKey: 'notification.event.market-intelligence.briefing.ready.reason',
     requiresUserAction: false,
+    category: 'reminder',
     requestedDisruptionLevels: ['desktop', 'channel'],
     dedupeKeyTemplate: 'brief-done:{date}:{period}',
     dedupeUnit: 'occurrence',
@@ -72,6 +73,9 @@ describe('notification event declarations', () => {
     ['an unknown dedupe unit', { dedupeUnit: 'window' }],
     ['condition without a window', { dedupeUnit: 'condition' }],
     ['occurrence with a window', { dedupeUnit: 'occurrence', conditionWindowMs: 3_600_000 }],
+    // 类型标签（契约 v2.38）：必填、闭集，漏声明或自造词都在生成期红，不许实现时猜一个。
+    ['a missing category', { category: undefined }],
+    ['a category outside the closed set', { category: 'urgent' }],
     // 字段已随订阅层撤销删除，但「布尔字段必须校验」这份覆盖要保住：换成现存的布尔字段。
     ['a non-boolean requiresUserAction', { requiresUserAction: 'yes' }]
   ])('rejects %s', (_label, overrides) => {
