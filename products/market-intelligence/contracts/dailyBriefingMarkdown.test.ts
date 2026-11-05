@@ -76,6 +76,32 @@ const options = {
   formatTime: (value: string) => value.slice(0, 16)
 }
 
+describe('the copied text reads the same figures as the card', () => {
+  it('prints the level and the move for a price row, exactly as the card does', () => {
+    // 生产形态：`close` 有值、`value` 是 percent、`change: null`。以前只读 `change`，复制出来只剩一个
+    // 百分比、连点位都没有——图上是 `80,682.1 · ↑1.2%`，文本是 `+1.23%`，同一份内容两个样子。
+    const base = document()
+    const doc = {
+      ...base,
+      data: {
+        ...base.data,
+        market: [{
+          ...base.data.market[0]!,
+          close: { value: 80_682.1, at: '2026-10-30T00:25:00.000Z' },
+          value: { number: 1.23, format: 'percent' as const },
+          change: null
+        }]
+      }
+    }
+    const markdown = dailyBriefingToMarkdown(doc, options)
+    const line = markdown.split('\n').find((entry) => entry.startsWith('- ') && entry.includes('BTC'))!
+    // 点位与涨跌幅两个数都在，而且与卡片同一份读取函数给出（一位小数）。
+    expect(line, markdown).toBeDefined()
+    expect(line).toContain('80,682.1')
+    expect(line).toContain('1.2%')
+  })
+})
+
 describe('daily briefing markdown', () => {
   it('leaves the readings count out of the copy header', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)

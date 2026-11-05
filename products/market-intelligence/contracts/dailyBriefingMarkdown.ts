@@ -2,6 +2,7 @@ import { editionNewsTitle } from './dailyBriefing/readings'
 import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
 import { briefingDataGroups, briefingDataRowsFromGroups } from './dailyBriefingDataGroups'
+import { briefRowFigures, formatRowMove } from './dailyBriefingRowFigures'
 
 export type DailyBriefingMarkdownLabels = Readonly<{
   title: string
@@ -260,8 +261,15 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
         .filter(Boolean).join(' · ')
       return `- ${label}: ${copy.primary}${meta ? ` (${meta})` : ''}`
     }
-    const value = formatBriefingValue(row.value, options.labels.noValue, options.locale)
-    const change = row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
+    // 点位与涨跌幅都走同一个读取函数（卡片也走它）：价格行把百分比放在 `value` 里、`change` 恒为
+    // `null`，只读 `change` 会让复制出来的文本只剩一个百分比、连点位都没了。
+    const figures = briefRowFigures(row)
+    const value = figures.level === undefined
+      ? formatBriefingValue(row.value, options.labels.noValue, options.locale)
+      : formatBriefingValue({ number: figures.level, format: 'level' }, options.labels.noValue, options.locale)
+    const change = figures.move === undefined
+      ? row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
+      : formatRowMove(figures.move, options.labels.noValue)
     const reason = row.changeReason ? options.labels.changeReasons[row.changeReason] ?? '' : ''
     const suffix = [change, reason].filter(Boolean).join(' · ')
     return `- ${label}: ${value}${suffix ? ` (${suffix})` : ''}`

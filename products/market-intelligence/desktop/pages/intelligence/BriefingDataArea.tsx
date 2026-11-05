@@ -8,6 +8,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { fearGreedBucketTone, resolveFearGreedSnapshotBucket } from '../../../contracts/intelligenceQueryContracts'
 import { changeArrowFor, paymentDirectionFor, type changeArrowWords, type fearGreedBucketWords, type paymentDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
+import { briefRowFigures } from '../../../contracts/dailyBriefingRowFigures'
 import { OI_SPARK, POLICY_GAUGE, PRICE_AREA, oiSparkPoints, policyGaugeArcs, policyGaugeLegend, policyGaugeSegments, policyGaugeTrack, priceCurvePaths } from './briefingDataGeometry'
 
 /**
@@ -313,7 +314,8 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
    * what". The level is the stored close; without one the card prints the dash and says why, because a
    * zero is a claim that the level was zero rather than unread.
    */
-  const level = row.close === undefined ? text.noValue : formatBriefingValue({ number: row.close.value, format: 'level' }, text.noValue, locale)
+  const figures = briefRowFigures(row)
+  const level = figures.level === undefined ? text.noValue : formatBriefingValue({ number: figures.level, format: 'level' }, text.noValue, locale)
   /**
    * The move beside it: arrow plus magnitude, coloured, and no window — the label already carries that.
    *
@@ -323,11 +325,7 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
    */
   const move = copy
     ? copy.primary
-    : row.change !== null
-      ? changeCopy(row.change.value, changeArrows, text.noValue)
-      : row.value !== null && row.value.format === 'percent'
-        ? changeCopy(row.value.number, changeArrows, text.noValue)
-        : ''
+    : figures.move === undefined ? '' : changeCopy(figures.move, changeArrows, text.noValue)
   // The stored curve, drawn as stored: the segments are already rebased and thinned, so the renderer
   // neither resamples nor re-anchors. No curve is an empty column with its zero line and nothing else.
   const paths = priceCurvePaths(row.curve ?? [])
