@@ -20,7 +20,7 @@ describe('buildProductGroups', () => {
           sourceProductId: 'sample-product',
           sourceProductName: 'Sample Product'
         })
-      ])
+      ], '这个产品')
     ).toEqual([
       {
         id: 'sample-product',
@@ -28,6 +28,23 @@ describe('buildProductGroups', () => {
         count: 2
       }
     ])
+  })
+})
+
+describe('assistant library product group fallback', () => {
+  it('产品摘要里没有名字时用兜底说法，绝不把 productId 印上屏（契约 v2.41 第三档）', () => {
+    const groups = buildProductGroups([
+      catalogItem({
+        templateId: 'product:market-intelligence:review-helper',
+        sourceKind: 'product',
+        sourceProductId: 'market-intelligence',
+        sourceProductName: ''
+      })
+    ], '这个产品')
+
+    expect(groups).toEqual([{ id: 'market-intelligence', name: '这个产品', count: 1 }])
+    // 分组标题曾经直接印 sourceProductId：英文读者会看到 `market-intelligence`，以为是界面坏了。
+    expect(groups[0]?.name).not.toContain('market-intelligence')
   })
 })
 

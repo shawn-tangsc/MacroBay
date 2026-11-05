@@ -8,6 +8,8 @@ import type {
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
+import { platformText } from '../../../i18n/platformText'
+
 export type AssistantLibraryProductGroup = {
   id: string
   name: string
@@ -51,7 +53,10 @@ export function useAssistantLibrary(language: AppLanguage): {
     [search, selectedGroup, selectedProductId]
   )
 
-  const productGroups = useMemo(() => buildProductGroups(allItems), [allItems])
+  const productGroups = useMemo(
+    () => buildProductGroups(allItems, platformText[language].assistants.library.productGroupFallback),
+    [allItems, language]
+  )
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -152,7 +157,17 @@ function matchesSearch(item: AssistantTemplateCatalogItem, search: string): bool
     .includes(keyword)
 }
 
-export function buildProductGroups(items: AssistantTemplateCatalogItem[]): AssistantLibraryProductGroup[] {
+/**
+ * 产品助手分组。`fallbackName` 是**产品摘要里没有名字时**用的兜底说法（契约 v2.41 第三档）。
+ *
+ * 以前这里退 `sourceProductId`：于是产品名读不到时，助手库分组标题直接印出
+ * `market-intelligence` 这种内部 id。读者看不出那是什么，只会以为界面坏了——
+ * **拿不到名字就用兜底说法，绝不用 id 垫背**。
+ */
+export function buildProductGroups(
+  items: AssistantTemplateCatalogItem[],
+  fallbackName: string
+): AssistantLibraryProductGroup[] {
   const groups = new Map<string, AssistantLibraryProductGroup>()
   for (const item of items) {
     if (item.sourceKind !== 'product' || !item.sourceProductId) continue
@@ -163,7 +178,7 @@ export function buildProductGroups(items: AssistantTemplateCatalogItem[]): Assis
     }
     groups.set(item.sourceProductId, {
       id: item.sourceProductId,
-      name: item.sourceProductName || item.sourceProductId,
+      name: item.sourceProductName || fallbackName,
       count: 1
     })
   }

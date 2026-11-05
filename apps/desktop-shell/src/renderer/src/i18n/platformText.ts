@@ -565,6 +565,8 @@ export type PlatformText = {
       sourcePlatform: string
       sourceProduct: (name: string) => string
       productGroupsTitle: string
+      /** 产品助手分组的兜底名：产品摘要里没有名字时用它，**绝不用 productId**（契约 v2.41 第三档）。 */
+      productGroupFallback: string
       detailPromptTitle: string
       addToAssistant: string
       emptyTitle: string
@@ -1988,6 +1990,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         sourcePlatform: '平台',
         sourceProduct: (name) => `产品：${name}`,
         productGroupsTitle: '产品助手',
+        productGroupFallback: '这个产品',
         detailPromptTitle: '提示词',
         addToAssistant: '添加到助手',
         emptyTitle: '没有匹配的助手',
@@ -3330,6 +3333,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         sourcePlatform: 'Platform',
         sourceProduct: (name) => `Product: ${name}`,
         productGroupsTitle: 'Product assistants',
+        productGroupFallback: 'This product',
         detailPromptTitle: 'Prompt',
         addToAssistant: 'Add to Assistants',
         emptyTitle: 'No matching assistants',
