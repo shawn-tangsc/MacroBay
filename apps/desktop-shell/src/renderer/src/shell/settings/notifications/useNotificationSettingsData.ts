@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterItem } from '@platform/notifications/contracts/notificationContracts'
 import type { DeliveryAttempt } from '@platform/notifications/runtime/notificationRouting'
 
 /**
@@ -17,7 +17,7 @@ export type NotificationSettingsClient = {
   setToastEnabled?: (enabled: boolean) => Promise<unknown>
   setDesktopEnabled?: (enabled: boolean) => Promise<unknown>
   /** 真实回执：一条记录 + 每一档投递的尝试结果（形状取自主进程运行时，不是我们自己拼的）。 */
-  sendTest?: () => Promise<{ record: SafeNotificationRecord; delivery: readonly DeliveryAttempt[] }>
+  sendTest?: () => Promise<{ record: NotificationCenterItem; delivery: readonly DeliveryAttempt[] }>
 }
 
 export type NotificationSettingsState =

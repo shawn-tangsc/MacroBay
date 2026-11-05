@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { NotificationUnreadState, SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterItem, NotificationUnreadState } from '@platform/notifications/contracts/notificationContracts'
 
 import { platformText } from '../../i18n/platformText'
 
@@ -20,12 +20,16 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-function record(overrides: Partial<SafeNotificationRecord> & { id: string }): SafeNotificationRecord {
+/**
+ * 渲染层拿到的那一份：**句子里已经解析好**，没有 `titleKey`、没有参数表。
+ * 工厂照这个形状造，捏不出一个「带键的记录」——这正是这条约束想要的效果。
+ */
+function record(overrides: Partial<NotificationCenterItem> & { id: string }): NotificationCenterItem {
   return {
     owner: 'platform',
     sourceId: 'platform.test',
-    titleKey: 'notification.taskFailed.title',
-    titleParams: { taskName: overrides.id },
+    title: `任务失败：${overrides.id}`,
+    body: '',
     severity: 'warning',
     priority: 'normal',
     channels: ['center'],
@@ -35,7 +39,7 @@ function record(overrides: Partial<SafeNotificationRecord> & { id: string }): Sa
     createdAt: '2026-11-02T00:00:00.000Z',
     updatedAt: '2026-11-02T00:00:00.000Z',
     ...overrides
-  } as SafeNotificationRecord
+  } as NotificationCenterItem
 }
 
 const deeplink = { scope: 'platform' as const, entityType: 'job', entityId: 'job-1' }
@@ -67,7 +71,6 @@ async function mount(
         open
         onClose={() => undefined}
         labels={platformText[language].notifications}
-        language={language}
         onOpenDeeplink={onOpenDeeplink}
         source={source}
       />
@@ -269,21 +272,34 @@ describe('清空与删除是两件事', () => {
   })
 })
 
-describe('记录里存的是键，句子在展示时解析', () => {
-  it('句子按当前语言解析，缺的参数原样留下', async () => {
+describe('句子由主进程解析，渲染层只负责画', () => {
+  it('画的就是载荷里那两句：这里没有表可查，也没有参数要填', async () => {
     const source = fakeSource({
       list: async () => ({
         items: [
-          record({ id: 'zh', deeplink, titleParams: { taskName: '央行' } }),
-          record({ id: 'missing-param', deeplink, titleParams: {} })
+          record({ id: 'zh', deeplink, title: '任务失败：央行', body: '这一次没有跑完。' })
         ]
       })
     })
     await mount(source)
 
-    expect(document.body.textContent).toContain('央行')
-    // 缺参不许静默消失：`{taskName}` 留在句子里，看得见才会被修。
-    expect(document.body.textContent).toContain('{taskName}')
+    expect(document.body.textContent).toContain('任务失败：央行')
+    expect(document.body.textContent).toContain('这一次没有跑完。')
+  })
+
+  it('解析失败时界面上只有那一句兜底句，不留 {taskName}（N24①）', async () => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({ id: 'degraded', deeplink, title: '有一条新通知，点开看详情', body: '' })
+        ]
+      })
+    })
+    await mount(source)
+
+    expect(document.body.textContent).toContain('有一条新通知，点开看详情')
+    // 占位符原样打出来与露键同罪：读者看到 `{taskName}` 就是在看我们的内部形状。
+    expect(document.body.textContent).not.toContain('{')
   })
 
   it('主位行的动作是通知自己要做的事，点击真的把 deeplink 交出去', async () => {
@@ -294,7 +310,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't1',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -319,7 +335,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't2',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -338,7 +354,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't3',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -359,7 +375,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
 
 describe('首次进入不闪错误或空态', () => {
   it('读数还没回来时只画加载中：既不画错误，也不画「没有」', async () => {
-    let resolveList: ((page: { items: SafeNotificationRecord[] }) => void) | undefined
+    let resolveList: ((page: { items: NotificationCenterItem[] }) => void) | undefined
     const source = fakeSource({
       list: () =>
         new Promise((resolve) => {
@@ -410,7 +426,6 @@ describe('首次进入不闪错误或空态', () => {
         open,
         onClose: () => undefined,
         labels,
-        language: 'zh-CN',
         onOpenDeeplink: () => undefined,
         source
       })
@@ -440,7 +455,10 @@ describe('长正文的展开/收起', () => {
     const english = platformText['en-US'].notifications
     const source = fakeSource({
       list: async () => ({
-        items: [record({ id: 'n-long', bodyKey: 'notification.test.body' })]
+        items: [record({
+          id: 'n-long',
+          body: 'If you can read this line, the notification pipeline is wired end to end, and this sentence is long enough to be clamped before the reader expands it.'
+        })]
       })
     })
     await mount(source, () => undefined, 'en-US')
@@ -460,27 +478,4 @@ describe('长正文的展开/收起', () => {
     expect(toggle?.textContent).toBe(english.centerCollapse)
   })
 
-  it('never prints a key name when the copy table misses the key', async () => {
-    // 这条兜底曾经写成 `?? labelKey`：查不到就把 `notification.xxx` 印在按钮上，等于把内部标识
-    // 当文案给了读者。表是 `Record<语言, 表>`，类型上每个键两种语言都必须有值，所以那个回退
-    // 永远走不到——它唯一的作用是让缺键这件事看起来"有字"。
-    // 这里用 cast 绕开类型，模拟表被改坏/被绕过的那一种：
-    const source = fakeSource({
-      list: async () => ({
-        items: [
-          record({
-            id: 't3',
-            deeplink,
-            actions: [
-              { id: 'x', labelKey: 'notification.thisKeyDoesNotExist' as never, kind: 'open', deeplink }
-            ]
-          })
-        ]
-      })
-    })
-
-    // 抛错（开发期就红），而不是安静地渲染出键名。
-    await expect(mount(source)).rejects.toThrow(/notification copy missing/)
-    expect(document.body.textContent ?? '').not.toContain('notification.thisKeyDoesNotExist')
-  })
 })

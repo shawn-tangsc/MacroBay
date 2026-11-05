@@ -1750,7 +1750,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           queueMicrotask(() => document.querySelector<HTMLElement>('[data-notification-bell] button')?.focus())
         }}
         labels={t.notifications}
-        language={settings.language}
       />
 
       <InUseModelRetiredBanner

@@ -1,5 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
-import type { NotificationApprovedLevel } from './notificationEventCatalog'
+import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
@@ -94,6 +94,42 @@ export type SafeNotificationRecord = Omit<NotificationRecord, 'safeMetadata'> & 
   safeMetadata?: Record<string, unknown>
 }
 
+/**
+ * 通知自带动作在界面上的样子：标签已经是句子，不再是键。
+ *
+ * 为什么动作标签也要在主进程解析：渲染层一旦拿得到 `labelKey`，它就得有一张文案表去查——
+ * 那张表正是 `notification.event.…` 被印到屏幕上的入口。动作标签只有平台键，没有产品键。
+ */
+export type NotificationCenterAction = Omit<NotificationAction, 'labelKey'> & { label: string }
+
+/**
+ * 渲染层看到的一条通知（落地约束 v1.2 §1）：句子已由主进程在**读的那一刻**按当前界面语言解析。
+ *
+ * 键与参数**不在这份载荷里**——渲染层拿不到键，就印不出 `notification.event.…` 这种串，
+ * 不靠评审记得。记录本身仍存 ref（契约 §3.3），所以切了语言，历史通知跟着变。
+ *
+ * `category` 与 `createdAt` 是**结构字段**，不参与文案解析：文案解析失败、整条降级成兜底句时，
+ * 它们照旧在——否则「点开看详情」只剩一句兜底句，等于点了没反应。
+ */
+export type NotificationCenterItem = Omit<
+  SafeNotificationRecord,
+  'titleKey' | 'titleParams' | 'bodyKey' | 'bodyParams' | 'reasonKey' | 'reasonParams' | 'actions'
+> & {
+  /** 标题句；解析不到时是平台兜底句，**不是键**。 */
+  title: string
+  /** 正文句；没有正文是空串。 */
+  body: string
+  /** 「为什么推了」的解析句；没有就省略，不拿键顶上。 */
+  reason?: string
+  /** 动作标签已解析；解析不出标签的动作整条不出现（按不动的按钮不该摆在读者面前）。 */
+  actions: NotificationCenterAction[]
+  /**
+   * 类型标签（契约 v2.34）。目录里已经没有这条事件（旧记录、已撤事件）时没有标签——
+   * 界面不编一个，缺失本身是事实。
+   */
+  category?: NotificationCategory
+}
+
 export type NotificationRequest = {
   owner: 'platform' | 'product'
   productId?: string
@@ -132,7 +168,7 @@ export type NotificationListQuery = {
 }
 
 export type NotificationListPage = {
-  items: SafeNotificationRecord[]
+  items: NotificationCenterItem[]
   nextCursor?: string
 }
 
@@ -324,6 +360,13 @@ export type NotificationDiagnosticsEntry = {
     | 'persist-failed'
   eventTypeId?: string
   producerId?: string
+  /**
+   * `copy-unresolved` 用：哪一条记录、哪个键、哪种语言解析不出来。
+   * 用途是回答「这条为什么显示成兜底句」，**不是给读者看的**——它只进日志与开发工具。
+   */
+  recordId?: string
+  key?: string
+  language?: 'zh-CN' | 'en-US'
   at: string
 }
 export type NotificationDiagnosticsSink = (entry: NotificationDiagnosticsEntry) => void

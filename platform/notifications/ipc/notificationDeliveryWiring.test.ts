@@ -25,9 +25,11 @@ describe('应用内投递的接线', () => {
   it('运行时把 toast 与 popup 两个钩子都接上', () => {
     // 两个都要：只接 toast 的话，弹窗那档仍然是「勾了没反应」。
     // 通道方案 §2.2：两个钩子都收 (record, content)，且 content 由运行时解析一次。
-    expect(runtime).toContain('toast: (record, _content: NotificationDeliveryContent) =>')
-    expect(runtime).toContain('popup: (record, _content: NotificationDeliveryContent) =>')
+    expect(runtime).toContain('toast: (record, content: NotificationDeliveryContent) =>')
+    expect(runtime).toContain('popup: (record, content: NotificationDeliveryContent) =>')
     expect(runtime).toContain('broadcastNotificationDelivered')
+    // 载荷必须走运行时那一个投影：横幅自己拼一份，就会和中心显示不同的句子。
+    expect(runtime).toContain('toCenterItem(record, content)')
   })
 
   it('投递事件有自己的通道，不和「记录有变化」混用', () => {

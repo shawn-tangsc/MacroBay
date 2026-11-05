@@ -17,6 +17,11 @@ export type NotificationCopyTable = {
   'notification.taskFailed.open': string
   /** 熔断聚合记录的稳定标识；界面按 `collapsedCount` 出文案，不直接显示这句。 */
   'notification.aggregate.title': string
+  /**
+   * 解析失败的兜底句（平台需求 v2.19 §12 三，逐字）：中心列表、条目详情、桌面通知、应用内提示
+   * **四个表面同一句**。它不是任何事件的文案，是「有一件事发生了但我说不清」时唯一能说的话。
+   */
+  'notification.fallback.title': string
   /** 发送测试通知：只用来验证链路，不描述任何业务事实。 */
   'notification.test.title': string
   'notification.test.body': string
@@ -72,6 +77,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.taskFailed.body': '运行过程中出错，这一次没有完成。',
     'notification.taskFailed.open': '打开任务',
     'notification.aggregate.title': '同类通知较多',
+    'notification.fallback.title': '有一条新通知，点开看详情',
     'notification.test.title': '测试通知',
     'notification.test.body': '如果你看到这条，说明通知管道是通的；桌面通知没弹出，多半是系统没有放行。',
     'notification.event.platform.job.failed-terminal.title': "任务失败：{taskName}",
@@ -116,6 +122,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.taskFailed.body': 'It hit an error and did not finish this run.',
     'notification.taskFailed.open': 'Open task',
     'notification.aggregate.title': 'Many similar notifications',
+    'notification.fallback.title': 'A new notification arrived — open it for details.',
     'notification.test.title': 'Test notification',
     'notification.test.body': 'If you can see this, the pipeline works; if no desktop banner appeared, the system is probably blocking it.',
     'notification.event.platform.job.failed-terminal.title': "Task failed: {taskName}",

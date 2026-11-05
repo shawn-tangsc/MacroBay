@@ -1,7 +1,7 @@
 import type { IpcRenderer } from 'electron'
 
 import { IpcChannels } from '../../ipc/channels'
-import type { SafeNotificationRecord, NotificationUnreadState } from '../../../notifications/contracts/notificationContracts'
+import type { NotificationCenterItem, NotificationUnreadState } from '../../../notifications/contracts/notificationContracts'
 import type { NotificationRuntime } from '../../../notifications/runtime/notificationRuntime'
 
 /** 测试通知的真实回执：一条记录 + 每一档投递的尝试结果。形状取自运行时签名，不在这里抄第二份。 */
@@ -31,7 +31,7 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
         input
       ) as Promise<Awaited<ReturnType<NotificationRuntime['getUnreadState']>>>,
     markRead: (id: string) =>
-      ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<SafeNotificationRecord>,
+      ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }) as Promise<NotificationCenterItem>,
     /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
     sendTest: () =>
       ipcRenderer.invoke(IpcChannels.notificationsSendTest) as Promise<NotificationSelfTestReceipt>,
@@ -39,14 +39,14 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
     markAllRead: (input?: { productId?: string }) =>
       ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input) as Promise<NotificationUnreadState>,
     acknowledge: (id: string) =>
-      ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }) as Promise<SafeNotificationRecord>,
+      ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }) as Promise<NotificationCenterItem>,
     /** 真删除已读记录；返回实际删掉的条数。**未读不受影响**，与 `markAllRead` 不是一回事。 */
     // 单行形态是那条接线守卫的断言原文（`appIpcSurface.test.ts`），别为了排版拆开它。
     deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead) as Promise<{ deleted: number }>,
     dismiss: (id: string) =>
-      ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }) as Promise<SafeNotificationRecord>,
+      ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }) as Promise<NotificationCenterItem>,
     snooze: (id: string, until: string) =>
-      ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }) as Promise<SafeNotificationRecord>,
+      ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }) as Promise<NotificationCenterItem>,
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
     readDesktopPermission: () =>
       ipcRenderer.invoke(
@@ -85,8 +85,8 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
         desktopEnabled: boolean
       }>,
     /**
-     * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是那条记录本身（键与参数）。
-     * 渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。
+     * 订阅「应用内投递」：`toast` / `popup` 两档真的投出去时才推，载荷是**已解析好句子**的那一条
+     * （主进程投影，键与参数不在里面）。渲染层据此画右上角横幅；不用轮询 `list()` 猜「有没有新的」。
      */
     onDelivered: (callback: (delivery: { channel: 'toast' | 'popup'; record: unknown }) => void) => {
       const listener = (_event: unknown, delivery: { channel: 'toast' | 'popup'; record: unknown }): void =>

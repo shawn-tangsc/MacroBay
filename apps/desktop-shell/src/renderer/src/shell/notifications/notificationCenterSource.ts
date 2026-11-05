@@ -1,7 +1,7 @@
 import type {
+  NotificationCenterItem,
   NotificationListPage,
-  NotificationUnreadState,
-  SafeNotificationRecord
+  NotificationUnreadState
 } from '@platform/notifications/contracts/notificationContracts'
 
 /**
@@ -16,7 +16,7 @@ export type NotificationCenterSource = {
   unread: () => Promise<NotificationUnreadState>
   markAllRead: () => Promise<NotificationUnreadState>
   deleteRead: () => Promise<{ deleted: number }>
-  markRead: (id: string) => Promise<SafeNotificationRecord>
+  markRead: (id: string) => Promise<NotificationCenterItem>
   /** 订阅「记录有变化」；返回退订函数。 */
   onChanged: (callback: (change: { version: number }) => void) => () => void
 }
@@ -65,7 +65,7 @@ export function createNotificationCenterSource(
     unread: async () => (await bridge.getUnreadState()) as NotificationUnreadState,
     markAllRead: async () => (await bridge.markAllRead()) as NotificationUnreadState,
     deleteRead: async () => (await bridge.deleteRead()) as { deleted: number },
-    markRead: async (id: string) => (await bridge.markRead(id)) as SafeNotificationRecord,
+    markRead: async (id: string) => (await bridge.markRead(id)) as NotificationCenterItem,
     onChanged: (callback) => bridge.onChanged(callback)
   }
 }

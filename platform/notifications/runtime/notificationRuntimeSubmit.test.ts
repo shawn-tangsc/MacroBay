@@ -134,6 +134,8 @@ function request(overrides: Partial<NotificationSubmitRequest> = {}): Notificati
   return {
     eventTypeId: 'platform.failed',
     dedupeVars: { builder: 'template', vars: { id: 'job-1', date: '2026-11-03' } },
+    // 标题模板里有 `{taskName}`：生产者提交时一定带参数，缺了整条会降级成兜底句（N24①）。
+    titleParams: { taskName: 'job-1' },
     actions: [],
     occurredAt: '2026-11-03T00:00:00.000Z',
     ...overrides

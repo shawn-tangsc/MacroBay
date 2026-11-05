@@ -4,9 +4,15 @@
  *
  * 文案与短编号在这里解析一次，四个钩子拿同一份 `content`；端口不再解析、不再拼时刻。
  */
-import { notificationCopyText, resolveNotificationCopyText } from '../../i18n/notificationCopy'
+import {
+  notificationCopyText,
+  resolveNotificationCopyText,
+  type NotificationCopyLanguage
+} from '../../i18n/notificationCopy'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type {
+  NotificationAction,
+  NotificationDiagnosticsSink,
   NotificationPushBackoff,
   NotificationRecord,
   NotificationRuntimeSettings
@@ -26,35 +32,95 @@ export type NotificationDeliveryInput = {
   clock: NotificationClock
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   copy?: NotificationCopyPort
+  diagnostics?: NotificationDiagnosticsSink
   now: () => string
 }
 
 export function createNotificationDelivery(input: NotificationDeliveryInput) {
-  async function resolveContent(record: NotificationRecord): Promise<NotificationDeliveryContent> {
-    const language = (await input.getLanguage?.()) ?? 'zh-CN'
-    const fallback = language === 'en-US' ? 'A notification' : '有一条通知'
+  /**
+   * 已经报过「这条解析不出来」的记录：**一条记录只报一次**。
+   * 每条记录每次读都会解析一次（切语言、翻页都会再读），不去重的话，打开一次中心就写进几十条同样的诊断，
+   * 真正「第一次坏掉」的那一刻反而被淹掉。
+   */
+  const reportedUnresolved = new Set<string>()
+  /**
+   * 一条记录的文案，**在读者读到的那一刻**按当前语言解析一次（契约 §3.3）。
+   *
+   * 解析不到时**整条降级**：标题换成定稿兜底句、正文清空——不显示半句，也不拿键顶上。
+   * 同时留一条 `copy-unresolved` 诊断（键 + 记录 id），它只进日志与开发工具、不进界面。
+   *
+   * `language` 可由调用方一次取好传进来（列表要解析一整页，不该每条读一次设置）。
+   */
+  async function resolveContent(
+    record: NotificationRecord,
+    language?: NotificationCopyLanguage
+  ): Promise<NotificationDeliveryContent> {
+    const resolvedLanguage = language ?? (await input.getLanguage?.()) ?? 'zh-CN'
+    const fallback = notificationCopyText(resolvedLanguage, 'notification.fallback.title')
+    let unresolvedKey: string | undefined
     const resolve = (
       key: NotificationRecord['titleKey'] | undefined,
       params: Readonly<Record<string, string>> | undefined
-    ): string => {
+    ): string | null => {
       if (key === undefined) return ''
       const ref = record.productId === undefined
         ? { scope: 'platform' as const, key, ...(params === undefined ? {} : { params }) }
         : { scope: 'product' as const, productId: record.productId, key, ...(params === undefined ? {} : { params }) }
-      const resolved = input.copy?.resolve(ref, language)
+      const resolved = input.copy?.resolve(ref, resolvedLanguage)
       if (typeof resolved === 'string' && resolved.length > 0) return resolved
-      const text = notificationCopyText(language, key)
-      if (typeof text !== 'string' || text.length === 0) return fallback
+      const text = notificationCopyText(resolvedLanguage, key)
+      if (typeof text !== 'string' || text.length === 0) {
+        unresolvedKey = key
+        return null
+      }
       // 参数缺失时不许把 `{taskName}` 印到读者面前：回退兜底句。
-      const filled = resolveNotificationCopyText(language, text, params ?? {})
-      return /\{\w+\}/.test(filled) ? fallback : filled
+      const filled = resolveNotificationCopyText(resolvedLanguage, text, params ?? {})
+      if (/\{\w+\}/.test(filled)) {
+        unresolvedKey = key
+        return null
+      }
+      return filled
+    }
+
+    const title = resolve(record.titleKey, record.titleParams)
+    const body = resolve(record.bodyKey, record.bodyParams)
+    const reason = resolve(record.reasonKey, record.reasonParams)
+    if (title === null && !reportedUnresolved.has(record.id)) {
+      reportedUnresolved.add(record.id)
+      input.diagnostics?.({
+        code: 'copy-unresolved',
+        at: input.now(),
+        recordId: record.id,
+        eventTypeId: record.eventTypeId,
+        key: unresolvedKey ?? record.titleKey,
+        language: resolvedLanguage
+      })
     }
     return {
-      title: resolve(record.titleKey, record.titleParams),
-      body: resolve(record.bodyKey, record.bodyParams),
-      reason: resolve(record.reasonKey, record.reasonParams),
+      // 整条降级：标题没有可用句子时，正文也不许留半句。
+      title: title ?? fallback,
+      body: title === null ? '' : (body ?? ''),
+      reason: title === null ? '' : (reason ?? ''),
+      actionLabels: title === null ? {} : resolveActionLabels(record.actions, resolvedLanguage),
       ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink }),
       shortId: record.id.slice(0, 8)
+    }
+
+    /**
+     * 动作标签和正文用**同一次**语言、同一张表解析。解析不出来就整条不给（`null`）：
+     * 一个按不动的按钮比没有按钮更糟，而拿 `labelKey` 顶上去正是今晚要灭的那种露键。
+     */
+    function resolveActionLabels(
+      actions: readonly NotificationAction[],
+      language: NotificationCopyLanguage
+    ): Readonly<Record<string, string>> {
+      const labels: Record<string, string> = {}
+      for (const action of actions) {
+        const text = notificationCopyText(language, action.labelKey)
+        if (typeof text !== 'string' || text.length === 0) continue
+        labels[action.id] = text
+      }
+      return labels
     }
   }
 

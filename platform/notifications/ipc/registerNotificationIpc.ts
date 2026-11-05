@@ -6,7 +6,6 @@ import { IpcChannels } from '../../desktop/ipc/channels'
 import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
 import { createDesktopNotificationAdapter } from '../desktop/desktopNotificationAdapter'
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
-import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDiagnosticsSink, NotificationRecord, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { DeliveryHooks, NotificationClock, NotificationDeliveryContent } from '../runtime/notificationRouting'
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
@@ -66,8 +65,16 @@ export function configureNotificationRuntime(deps: {
  * 打开了、路由算完「该弹」、`hooks.toast` 缺席，记录被写成 `skipped: toast-unavailable`。
  * 效果与假开关相同：用户勾了它，屏幕上什么都没发生。
  */
-function broadcastNotificationDelivered(record: NotificationRecord, channel: 'toast' | 'popup'): void {
-  const payload = { channel, record: toSafeNotificationRecord(record) }
+async function broadcastNotificationDelivered(
+  record: NotificationRecord,
+  content: NotificationDeliveryContent,
+  channel: 'toast' | 'popup'
+): Promise<void> {
+  // 同一个投影、同一份正文：横幅和中心必须逐字一样，各解析一次就会出现两种说法。
+  const runtime = notificationRuntime
+  if (runtime === null) return
+  const item = await runtime.toCenterItem(record, content)
+  const payload = { channel, record: item }
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) continue
     window.webContents.send(IpcChannels.notificationsDelivered, payload)
@@ -113,9 +120,9 @@ export function getNotificationRuntime() {
       producerOwnership: notificationProducerOwnership ?? undefined,
       productIds: notificationProductIds ?? undefined,
       deliveryHooks: {
-        // 应用内两档直接推给渲染层：句子由渲染层按当前语言解析（记录里只有键与参数）。
-        toast: (record, _content: NotificationDeliveryContent) => broadcastNotificationDelivered(record, 'toast'),
-        popup: (record, _content: NotificationDeliveryContent) => broadcastNotificationDelivered(record, 'popup'),
+        // 应用内两档推给渲染层时，句子里已经解析好：渲染层没有键，也就印不出键。
+        toast: (record, content: NotificationDeliveryContent) => { void broadcastNotificationDelivered(record, content, 'toast') },
+        popup: (record, content: NotificationDeliveryContent) => { void broadcastNotificationDelivered(record, content, 'popup') },
         // 四个钩子拿运行时解析好的**同一份** content（通道方案 §2.2）：端口不再解析一遍。
         desktop: async (_record, content: NotificationDeliveryContent) =>
           desktopAdapter.show({

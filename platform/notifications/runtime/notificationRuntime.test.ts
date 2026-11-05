@@ -45,6 +45,8 @@ function request(id: string, overrides: Partial<NotificationSubmitRequest> = {})
   return {
     eventTypeId: 'platform.test',
     dedupeVars: { builder: 'template', vars: { id } },
+    // 生产者提交时一定带参数：标题模板里有 `{taskName}`，缺了它整条会降级成兜底句（N24①）。
+    titleParams: { taskName: id },
     actions: [],
     occurredAt: '2026-11-01T12:00:00.000Z',
     ...overrides
@@ -259,7 +261,8 @@ describe('test notifications do not spend the daily cap', () => {
     if (outcome.kind !== 'accepted') return
     const record = await recordById(runtime, outcome.recordId)
     expect(record.collapsedCount).toBeUndefined()
-    expect(record.titleKey).toBe('notification.taskFailed.title')
+    // 读出来的是句子不是键：键留主进程（落地约束 v1.2 §1）。
+    expect(record.title).toBe('任务失败：real')
   })
 })
 

@@ -37,6 +37,7 @@ const CONTENT: NotificationDeliveryContent = {
   title: '日报已生成',
   body: '10 月 31 日的情报日报已经生成。',
   reason: '日报生成完成',
+  actionLabels: {},
   shortId: RECORD.id.slice(0, 8)
 }
 

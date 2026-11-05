@@ -20,6 +20,12 @@ export type NotificationDeliveryContent = {
   body: string
   /** 「为什么推了」那一句 */
   reason: string
+  /**
+   * 动作标签，按动作 id 取（`{ actionId: '打开任务' }`）。**连同正文一起解析一次**：
+   * 界面拿到的是句子而不是 `labelKey`，否则它就得自己带一张文案表来查。
+   * 解析不出标签的动作不出现在这张表里，界面据此不画那个按钮。
+   */
+  actionLabels: Readonly<Record<string, string>>
   deeplink?: NotificationDeeplink
   /** 记录 id 前 8 位；通道正文末尾 `#xxxxxxxx`，与中心同串 */
   shortId: string
@@ -211,6 +217,7 @@ export function buildDeliveryContent(record: NotificationRecord): NotificationDe
     title: String(record.titleKey),
     body: record.bodyKey === undefined ? '' : String(record.bodyKey),
     reason: record.reasonKey === undefined ? '' : String(record.reasonKey),
+    actionLabels: {},
     ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink }),
     shortId: record.id.slice(0, 8)
   }

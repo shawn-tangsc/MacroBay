@@ -29,12 +29,13 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest,
   NotificationUnreadState,
-  SafeNotificationRecord
+  NotificationCenterItem
 } from '../contracts/notificationContracts'
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
-import { toSafeNotificationRecord } from '../contracts/notificationContracts'
+import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
+import { toNotificationCenterItem } from './notificationCenterItem'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
@@ -49,7 +50,8 @@ import {
   routeTransientDelivery,
   type DeliveryAttempt,
   type DeliveryHooks,
-  type NotificationClock
+  type NotificationClock,
+  type NotificationDeliveryContent
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
@@ -296,11 +298,35 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     clock: deps.clock,
     getLanguage: deps.getLanguage,
     copy: deps.copy,
+    diagnostics: deps.diagnostics,
     now: nowIso
   })
 
+  /**
+   * 一条记录给渲染层的样子：句子在这里解析（读的那一刻），键与参数留在这边。
+   *
+   * `category` 从**事件目录**取而不是存在记录上：目录是类型标签唯一来源（契约 v2.34），
+   * 记录只存 id。目录里没有这条事件（旧记录、已撤事件）就没有标签——界面不编一个。
+   * `language` 可由调用方一次取好传进来：列表要解析一整页，不该每条读一次设置。
+   */
+  async function centerItem(
+    record: NotificationRecord,
+    content?: NotificationDeliveryContent
+  ): Promise<NotificationCenterItem> {
+    // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
+    const resolved = content ?? await delivery.resolveContent(record)
+    return toNotificationCenterItem(record, resolved, deps.catalog?.get(record.eventTypeId)?.category)
+  }
+
   return {
     submit,
+
+    /**
+     * 渲染层看到的那一份（落地约束 v1.2 §1）：应用内投递与列表共用**同一个**投影。
+     * 同一记录在两处显示不同句子，比显示得难看严重得多。
+     */
+    toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
+      centerItem(record, content),
 
     ...settingsSurface,
     reportProviderCredential,
@@ -339,7 +365,11 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       const sorted = [...filtered].sort((left, right) => compareNotifications(left, right, unreadFirst))
       const start = query.cursor ? resumeIndex(sorted, query.cursor, unreadFirst) : 0
       const end = Math.min(start + limit, sorted.length)
-      const page = sorted.slice(start, end).map(toSafeNotificationRecord)
+      // 一整页只读一次语言：每条读一次设置，同屏就可能出现两种语言。
+      const language = await deps.getLanguage?.()
+      const page = await Promise.all(
+        sorted.slice(start, end).map(async (record) => centerItem(record, await delivery.resolveContent(record, language)))
+      )
       const last = end > start ? sorted[end - 1] : undefined
       const nextCursor = end < sorted.length && last ? notificationCursorKey(last) : undefined
       return { items: page, nextCursor }
@@ -357,7 +387,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      * 只落库等于横幅永不出现；而用户点它的目的本来就是判断「系统放没放行」，
      * 把 `desktop` 那条的 `ok` / `reason` 丢掉，这次测试就白点了。不占熔断额度仍由调用方负责。
      */
-    async submitSelfTest(request: NotificationRequest): Promise<{ record: SafeNotificationRecord; delivery: DeliveryAttempt[] }> {
+    async submitSelfTest(request: NotificationRequest): Promise<{ record: NotificationCenterItem; delivery: DeliveryAttempt[] }> {
       return exclusive(async () => {
       const state = await load()
       const settings = await deps.getSettings()
@@ -371,8 +401,10 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       )
       await persist({ ...state, records: [record, ...state.records] })
       notifyChanged()
-      const delivery = await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
-      return { record: toSafeNotificationRecord(record), delivery }
+      // 正文先解析再路由：这条记录走的四个表面必须拿到同一份句子（测试通知以前会把键当标题发出去）。
+      const content = await delivery.resolveContent(record)
+      const attempts = await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock, content)
+      return { record: await centerItem(record), delivery: attempts }
       })
     },
 
@@ -428,19 +460,19 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       })
     },
 
-    async markRead(id: string): Promise<SafeNotificationRecord> {
+    async markRead(id: string): Promise<NotificationCenterItem> {
       return transition(id, (record) => markNotificationRead(record))
     },
 
-    async acknowledge(id: string): Promise<SafeNotificationRecord> {
+    async acknowledge(id: string): Promise<NotificationCenterItem> {
       return transition(id, (record) => acknowledgeNotification(record))
     },
 
-    async dismiss(id: string): Promise<SafeNotificationRecord> {
+    async dismiss(id: string): Promise<NotificationCenterItem> {
       return transition(id, (record) => dismissNotification(record))
     },
 
-    async snooze(id: string, until: string): Promise<SafeNotificationRecord> {
+    async snooze(id: string, until: string): Promise<NotificationCenterItem> {
       if (until <= nowIso()) {
         throw new Error('Snooze time must be in the future.')
       }
@@ -469,7 +501,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   async function transition(
     id: string,
     transform: (record: NotificationRecord) => NotificationRecord
-  ): Promise<SafeNotificationRecord> {
+  ): Promise<NotificationCenterItem> {
     return exclusive(async () => {
     const state = await load()
     const index = state.records.findIndex((record: NotificationRecord) => record.id === id)
@@ -480,7 +512,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     nextRecords[index] = nextRecord
     await persist({ ...state, records: nextRecords })
     notifyChanged()
-    return toSafeNotificationRecord(nextRecord)
+    return centerItem(nextRecord)
     })
   }
 }
