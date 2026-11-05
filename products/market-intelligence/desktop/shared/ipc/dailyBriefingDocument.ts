@@ -27,7 +27,7 @@ function isDocument(value: unknown): value is DailyBriefingDocument {
 }
 
 function isEdition(value: unknown, schemaVersion: unknown): boolean {
-  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours', 'periodId', 'periodTime', 'periodKind', 'runTrigger'])) return false
+  if (!hasFields(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'])) return false
   if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
   // From schema 7 the edition states the window it actually covered; older rows may omit it.
   if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
@@ -58,7 +58,7 @@ function isIsoMilliseconds(value: unknown): value is string {
 }
 
 function isStatus(value: unknown): boolean {
-  if (!isExact(value, ['readings', 'readingsAvailable', 'readingsTotal'])) return false
+  if (!hasFields(value, ['readings', 'readingsAvailable', 'readingsTotal'])) return false
   if (!Array.isArray(value.readings) || value.readings.length !== 4) return false
   if (typeof value.readingsAvailable !== 'number' || !Number.isSafeInteger(value.readingsAvailable) ||
     value.readingsAvailable < 0 || value.readingsAvailable > 4) return false
@@ -76,7 +76,7 @@ function isLede(value: unknown): boolean {
 }
 
 function isNews(value: unknown): boolean {
-  if (!isExact(value, ['items', 'macro', 'notes'], ['macroCandidates'])) return false
+  if (!hasFields(value, ['items', 'macro', 'notes'])) return false
   if (!Array.isArray(value.items) || value.items.length > dailyBriefingPolicy.maximumNewsItems) return false
   if (!Array.isArray(value.macro) || value.macro.length > dailyBriefingPolicy.maximumMacroItems) return false
   if (!Array.isArray(value.items) || !value.items.every(isNewsItem)) return false
@@ -99,7 +99,7 @@ function isMacroItem(value: unknown): boolean {
 }
 
 function isData(value: unknown): boolean {
-  if (!isExact(value, ['market', 'funds', 'sentiment'], ['leverage', 'policyPath'])) return false
+  if (!hasFields(value, ['market', 'funds', 'sentiment'])) return false
   if (!Array.isArray(value.market) || value.market.length > 7) return false
   if (!Array.isArray(value.funds) || value.funds.length > 5) return false
   if (!Array.isArray(value.market) || !value.market.every(isMarketRow)) return false
@@ -162,10 +162,17 @@ function isEditorial(value: unknown): boolean {
     (value.invalidationNote === undefined || typeof value.invalidationNote === 'string')
 }
 
-function isExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
+/**
+ * 只要求**必需字段在**，不认识的字段一律忽略（`02` v2.129 `G5` 前向兼容）。
+ *
+ * 以前这里是"白名单外即拒"：服务端给文档加了 `readAt`/`generatedAs`/`isBackfill` 之后，渲染层把
+ * 整份文档判成不可信，页面报"失败"且没有原因——一次服务端加字段就把"成功"显示成"失败"。
+ * 前向兼容的边界只留一条：**文档版本号更高才拒**（版本低/未知字段都能照常渲染）。
+ */
+function hasFields(value: unknown, required: readonly string[]): value is Record<string, unknown> {
   if (!isRecord(value)) return false
   const keys = Object.keys(value)
-  return required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+  return required.every((key) => keys.includes(key))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -183,4 +190,14 @@ function isText(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
-export { isDocument, isRecord, isText, isExact }
+/**
+ * 严格版：白名单外即拒。**文档不用它**（`G5` 前向兼容），设置视图仍用它——设置是本地契约，
+ * 多出字段说明两边版本错位，早失败比悄悄忽略好。
+ */
+export function isExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
+  if (!isRecord(value)) return false
+  const keys = Object.keys(value)
+  return required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+}
+
+export { isDocument, isRecord, isText }

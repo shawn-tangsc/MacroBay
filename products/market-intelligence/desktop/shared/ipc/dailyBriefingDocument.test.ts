@@ -105,10 +105,20 @@ describe('daily briefing document guard at schema 13', () => {
     expect(isDocument({ ...old, schemaVersion: 12, edition: { ...old.edition, periodId: 'default' } })).toBe(false)
   })
 
-  it('accepts the current schema 14 row and refuses only a version past it', () => {
-    // 14 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本，不拒绝当前的 14。
-    const current = { ...document(), schemaVersion: 14 as const, policyVersion: 'daily-briefing.v24' as const }
+  it('accepts the current schema row and refuses only a version past it', () => {
+    // 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本。
+    const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v24' as const }
     expect(isDocument(current)).toBe(true)
-    expect(isDocument({ ...current, schemaVersion: 15 as unknown as 14 })).toBe(false)
+    expect(isDocument({ ...current, schemaVersion: 16 as unknown as 15 })).toBe(false)
+  })
+
+  it('ignores unknown fields instead of rejecting the whole document', () => {
+    // `02` v2.129 `G5`：服务端加字段不许把"成功"显示成"失败"。未知字段一律忽略；
+    // 只有版本号比当前更高才拒（那是真的读不懂）。
+    const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v24' as const }
+    expect(isDocument({
+      ...current,
+      edition: { ...current.edition, readAt: '2026-11-06T00:00:00.000Z', generatedAs: '2026-11-06T00:00:00.000Z', isBackfill: false, futureField: 1 }
+    })).toBe(true)
   })
 })
