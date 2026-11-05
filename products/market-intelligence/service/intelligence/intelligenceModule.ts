@@ -67,6 +67,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import type { WebSearchProductHooks } from './webSearchProductHooks'
 import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
@@ -197,7 +198,7 @@ const intelligenceRawRecordStartupRecoveryPolicy = {
   }
 } as const
 
-export type IntelligenceModulePlatformHooks = {
+export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
   getProviderState?: () => Promise<ProviderState>
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
@@ -226,13 +227,6 @@ export type IntelligenceModulePlatformHooks = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
-  isWebSearchProviderReady?: () => Promise<boolean>
-  /**
-   * 只读搜索入口：日报在缺实际值时用它取一次（`A0.12`）。由宿主透传平台的
-   * `WebSearchService.searchKeywords`；开关、授权与代理沿用平台那一套，产品侧不自己发请求。
-   * 未注入 = 这一次没有取值能力，缺值就什么也不印（不是错误）。
-   */
-  searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>
   /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
