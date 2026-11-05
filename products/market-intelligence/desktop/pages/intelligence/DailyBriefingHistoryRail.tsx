@@ -183,11 +183,29 @@ export function DailyBriefingHistoryRail({
     <div className="mi-daily-briefing__rail-list">
       {days.map((day) => <section className="mi-daily-briefing__rail-day" key={day.date} data-day={day.date}>
         <button type="button" className="mi-daily-briefing__rail-day-head" aria-expanded={isOpen(day.date)}
-          onClick={() => setClosedDays((current) => {
-            const next = new Set(current)
-            if (next.has(day.date)) next.delete(day.date); else next.add(day.date)
-            return next
-          })}>
+          onClick={() => {
+            // 天头可点（`02` `A9.14`）：点开那天 **`periodTime` 最晚**的一版——与列表排序同一口径
+            // （`A5.1`：名义时刻升序、同刻按期号稳定序）。选中态落在那一行，日期本身不变色。
+            const opening = !isOpen(day.date)
+            setClosedDays((current) => {
+              const next = new Set(current)
+              if (opening) next.delete(day.date); else next.add(day.date)
+              return next
+            })
+            // 只在"展开这一天"时顺带打开最近一版；再点一次是收起来，不改变右边在看的哪一版。
+            if (!opening) return
+            const selectedInDay = day.rows.some((edition) => rowSelected(edition))
+            if (selectedInDay || day.rows.length === 0) return
+            const latest = [...day.rows].sort((left, right) => {
+              const moment = (row: DailyBriefingEditionSummary): string => row.periodTime ?? row.generatedAt ?? ''
+              const leftAt = moment(left)
+              const rightAt = moment(right)
+              if (leftAt !== rightAt) return leftAt < rightAt ? -1 : 1
+              return left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
+            }).at(-1)!
+            if (onSelectLocale) onSelectLocale({ date: latest.date, periodId: latest.periodId, locale: latest.locale })
+            else onSelect(latest.date)
+          }}>
           <span className="mi-daily-briefing__rail-day-date">{formatDate(day.date, locale)}</span>
           {/* 「今天」是副标签：和「共 N 期」同档同色（CSS 里是同一条规则），不许比日期更显眼。
               **没有「本期」这个词**：是不是今天由这个标签说，哪一份最新由排序说。 */}

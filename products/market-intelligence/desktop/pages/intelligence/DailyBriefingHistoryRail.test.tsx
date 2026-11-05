@@ -345,6 +345,26 @@ describe('the second line is never blank', () => {
   })
 })
 
+describe('the day head opens the latest edition of that day', () => {
+  it('picks the row with the latest nominal cutoff, and marks only that row', () => {
+    // 同一天两期：点日期打开 `periodTime` 最晚的那一版（与列表排序同一口径 `A5.1`），
+    // 选中态落在那一行；再点一次是收起，不改变右边在看哪一版。
+    const onSelectLocale = vi.fn()
+    render({
+      editions: [
+        edition({ date: '2026-10-31', periodId: 'p_early', periodTime: '2026-10-31T00:00:00.000Z', summaryLine: '早的那期' }),
+        edition({ date: '2026-10-31', periodId: 'p_late', periodTime: '2026-10-31T05:00:00.000Z', summaryLine: '晚的那期' })
+      ],
+      onSelectLocale
+    })
+    const head = (): HTMLElement => [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-head')]
+      .find((node) => node.closest('[data-day]')?.getAttribute('data-day') === '2026-10-31')!
+    act(() => { head().click() })  // 先收起
+    act(() => { head().click() })  // 再展开 → 应打开最晚那版
+    expect(onSelectLocale).toHaveBeenLastCalledWith({ date: '2026-10-31', periodId: 'p_late', locale: 'zh-CN' })
+  })
+})
+
 describe('a row is two lines: the facts, then what it says', () => {
   it('prints exactly one source badge, out of the five, and never 本期', () => {
     // 第一行最右那一格"这一份怎么来的"：五个值，恰一枚；「本期」这个词不进侧栏。

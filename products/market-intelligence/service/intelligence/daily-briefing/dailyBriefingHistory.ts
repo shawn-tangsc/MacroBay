@@ -118,15 +118,17 @@ export async function briefingHistorySummaries(input: Readonly<{
     const periods: PeriodRows[] = [...byPeriod.values()]
       .filter((entry) => entry.date === date)
       .map((entry) => ({ date: entry.date, periodId: entry.periodId, rows: entry.rows }))
-    // A run that wrote no edition still names its period: without this merge, a failed or
-    // interrupted run would simply vanish from the list.
+    // 列表只显示三类行（用户 2026-11-05 拍板）：跑过且有内容的、正在跑的、失败/没跑完的。
+    // 一个期没有任何版次时，只有**运行记录说它失败或还在跑**才留一行——那是"发生过的事"；
+    // 跑成功却没有版次 = 那一版被删了，**整行不显示**，不解释也不留位（`A9.13` 的占位口径作废）；
+    // 从来没有运行记录 → 同样不显示（"今天 13:00 那期还没到点"不再占一行，排期去设置页看）。
     const runsToday = runsByDate.get(date) ?? new Map<string, DailyBriefingPeriodRun>()
     const known = new Set(periods.map((period) => period.periodId))
-    for (const periodId of runsToday.keys()) {
-      if (!known.has(periodId)) periods.push({ date, periodId, rows: new Map() })
+    for (const [periodId, run] of runsToday) {
+      if (known.has(periodId)) continue
+      if (run.state !== 'failed' && run.state !== 'running') continue
+      periods.push({ date, periodId, rows: new Map() })
     }
-    // A day with nothing stored still gets the one row it always had: "not run", not "no row".
-    if (periods.length === 0) periods.push({ date, periodId: DEFAULT_PERIOD_ID, rows: new Map() })
 
     const day: DailyBriefingEditionSummary[] = []
     for (const period of periods) {

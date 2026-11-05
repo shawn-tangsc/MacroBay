@@ -54,30 +54,31 @@ describe('history rows take incompleteness from the run', () => {
     expect(summary?.state).toBe('generated')
   })
 
-  it('treats a run whose editions were all deleted as not run, not as failed or partial', async () => {
-    // The reader emptied this issue. The run succeeded, the attempts are history: the row describes
-    // what is true now — no edition — and must not blame the pipeline or point at a missing version.
-    const [summary] = await briefingHistorySummaries({
+  it('shows no row at all for a run whose editions were all deleted', async () => {
+    // 用户 2026-11-05 拍板：跑成功却没有版次 = 那一版被删了 → **整行不显示**，不解释也不留位。
+    // 旧行为留一行"未运行"，读者看到的是"没跑过"，跟他刚删过的那件事对不上。
+    const listed = await briefingHistorySummaries({
       dates: ['2026-11-02'],
       primary: 'zh-CN',
       primaryRows: [],
       otherRows: [],
+      runs: [{ ...run(['zh-CN', 'en-US']), state: 'published' as const }],
       periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'published' as const })),
       attemptCount: vi.fn(async () => 5),
       scheduledTime: '07:00'
     })
 
-    expect(summary?.state).toBe('missing')
-    expect(summary?.attemptCount).toBeUndefined()
-    expect(summary?.scheduledTime).toBe('07:00')
+    expect(listed).toHaveLength(0)
   })
 
   it('still reports a failed run as failed when nothing was published', async () => {
+    // 失败是"发生过的事"，不是占位：没有版次也要留一行，带原因和重试入口。
     const [summary] = await briefingHistorySummaries({
       dates: ['2026-11-02'],
       primary: 'zh-CN',
       primaryRows: [],
       otherRows: [],
+      runs: [{ ...run(['zh-CN']), state: 'failed' as const }],
       periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'failed' as const })),
       attemptCount: vi.fn(async () => 2)
     })
@@ -231,13 +232,12 @@ describe('the list projection decides the row, once', () => {
     expect(unreadable[0]?.periodDeleted).toBeUndefined()
   })
 
-  it('says nothing about kind or trigger for a period that never published', async () => {
-    const [summary] = await briefingHistorySummaries({
+  it('shows no row for a period that never ran at all', async () => {
+    // 从来没有运行记录 → 不显示（"今天 13:00 那期还没到点"不再占一行；排期在设置页看）。
+    const listed = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: []
     })
-    expect(summary?.state).toBe('missing')
-    expect(summary?.periodKind).toBeUndefined()
-    expect(summary?.runTrigger).toBeUndefined()
+    expect(listed).toHaveLength(0)
   })
 
 
