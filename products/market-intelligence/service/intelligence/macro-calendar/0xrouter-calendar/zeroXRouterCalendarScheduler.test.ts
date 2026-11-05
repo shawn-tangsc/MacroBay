@@ -101,7 +101,7 @@ describe('zeroXRouter calendar scheduler', () => {
 
   it('runs one automatic batch when the source is enabled and configured, and fails the run when nothing usable came back', async () => {
     const { handlers, jobRuntime } = schedulerHarness()
-    const refreshAutomatic = vi.fn(async () => ({ state: 'succeeded', items: [] }))
+    const refreshAutomatic = vi.fn(async (): Promise<{ state: string; failureCode?: string; items: readonly unknown[] }> => ({ state: 'succeeded', items: [] }))
     const scheduler = createZeroXRouterCalendarScheduler({
       jobRuntime: jobRuntime as never,
       readReadiness: () => ({ enabled: true, hasCredential: true }),
@@ -113,6 +113,25 @@ describe('zeroXRouter calendar scheduler', () => {
 
     refreshAutomatic.mockResolvedValueOnce({ state: 'unavailable', failureCode: 'transport', items: [] })
     await expect(handlers.get(firstHandlerId)?.()).rejects.toThrow()
+    scheduler.dispose()
+  })
+
+  // The 39-hour outage left only "did not complete" in `last_error`: the batch had no code of
+  // its own, the verdict sat on the per-source item, and both were dropped. A refused request
+  // must now name itself in the job's error.
+  it('names the per-source verdict in the job error when the batch itself carries none', async () => {
+    const { handlers, jobRuntime } = schedulerHarness()
+    const scheduler = createZeroXRouterCalendarScheduler({
+      jobRuntime: jobRuntime as never,
+      readReadiness: () => ({ enabled: true, hasCredential: true }),
+      refreshAutomatic: async () => ({
+        state: 'unavailable',
+        items: [{ state: 'unavailable', failureCode: 'response-unavailable' }, { state: 'unavailable', failureCode: 'response-unavailable' }]
+      })
+    })
+    await scheduler.initialize()
+    await expect(handlers.get(firstHandlerId)?.()).rejects.toThrow(
+      'Market calendar automatic refresh did not complete for macro-calendar-0xrouter-economic-data (response-unavailable).')
     scheduler.dispose()
   })
 

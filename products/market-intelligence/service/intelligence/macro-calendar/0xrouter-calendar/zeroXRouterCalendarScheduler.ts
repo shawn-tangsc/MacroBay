@@ -97,7 +97,10 @@ export function createZeroXRouterCalendarScheduler(deps: Readonly<{
       const result = await deps.refreshAutomatic([feed.sourceId])
       if (result.failureCode === 'disabled') return
       if (policy.unsuccessfulStates.includes(result.state as typeof policy.unsuccessfulStates[number])) {
-        throw new Error(`Market calendar automatic refresh did not complete for ${feed.sourceId}.`)
+        // The verdict rides into `last_error`: a run that says only "did not complete" cannot be
+        // read afterwards, and 39 hours once passed with no way to tell a dead source from a
+        // refused write. The batch code is often absent while the per-source ones are not.
+        throw new Error(`Market calendar automatic refresh did not complete for ${feed.sourceId} (${batchFailureDetail(result)}).`)
       }
       try {
         await deps.onRefreshCompleted?.(result.items as readonly { state: string; storedRows?: number }[])
@@ -144,6 +147,25 @@ async function readSafe(read: () => { enabled: boolean; hasCredential: boolean }
   } catch {
     return undefined
   }
+}
+
+/**
+ * Why one automatic tick ended without a usable batch, as one short token.
+ *
+ * `Result.failureCode` only carries the batch-level verdict (storage-pressure, storage-unavailable);
+ * when a request was refused or the account was not cleared, the reason sits on the per-source item
+ * instead. Both are read, and the length is bounded because this string lands in `last_error`.
+ */
+function batchFailureDetail(result: { state: string; failureCode?: string; items: readonly unknown[] }): string {
+  if (result.failureCode) return result.failureCode
+  const codes = new Set<string>()
+  for (const item of result.items) {
+    if (!item || typeof item !== 'object') continue
+    const value = item as { state?: unknown; failureCode?: unknown }
+    if (value.state === 'unavailable' && typeof value.failureCode === 'string' && value.failureCode.length > 0) codes.add(value.failureCode)
+    if (codes.size >= 4) break
+  }
+  return codes.size > 0 ? [...codes].join(',') : result.state
 }
 
 /** The three descriptors an automatic tick covers; exported for the acceptance marker. */
