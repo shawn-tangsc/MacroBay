@@ -30,3 +30,29 @@ export function briefingEditionSelection(input: Readonly<{
     }
   }
 }
+
+/**
+ * 删掉一版之后，下一版是哪一个——**身份三样一次定全**，不许按日期猜。
+ *
+ * 同一天里按期号稳定序取被删行的下一个（没有就取上一个）；**当天删空就返回 `undefined`**——
+ * 列表停在读者原来那一天给空态，不跨天把读者送走。
+ */
+export function nextEditionAfterDelete(
+  rows: readonly Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; state?: string }>[],
+  deletedDate: string,
+  deleted?: Readonly<{ periodId: string; locale: 'zh-CN' | 'en-US' }>
+): Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }> | undefined {
+  const byOrder = (left: { periodId: string }, right: { periodId: string }) => left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
+  // 列表可能把刚删掉的那一行仍旧列出来（`state: 'missing'`，或列表还没刷新），它没有版次可读，
+  // 不能当自己的邻居；`state === 'missing'` 的整行也不参与。
+  const sameDay = rows
+    .filter((row) => row.date === deletedDate && row.state !== 'missing')
+    .filter((row) => deleted === undefined || row.periodId !== deleted.periodId || row.locale !== deleted.locale)
+    .sort(byOrder)
+  const index = deleted === undefined
+    ? -1
+    : sameDay.findIndex((row) => row.periodId === deleted.periodId && row.locale === deleted.locale)
+  const neighbour = sameDay[index + 1] ?? sameDay[index - 1] ?? sameDay[0]
+  if (neighbour !== undefined) return { date: neighbour.date, periodId: neighbour.periodId, locale: neighbour.locale }
+  return undefined
+}

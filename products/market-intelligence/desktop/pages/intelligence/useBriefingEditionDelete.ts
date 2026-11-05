@@ -17,6 +17,8 @@ export function useBriefingEditionDelete(input: Readonly<{
   client: Parameters<typeof useDailyBriefingIssueDeletion>[0]['client']
   editions: readonly DailyBriefingEditionSummary[]
   afterDeleteLocaleRef: { current: DailyBriefingLocale | null }
+  /** 被删掉那一版的身份：删完之后"下一版是谁"要按它取邻居，不能按日期猜。 */
+  afterDeleteRef: { current: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> | null }
   onSettled: () => void
 }>): Readonly<{
   deleteOutcome: ReturnType<typeof useDailyBriefingIssueDeletion>['outcome']
@@ -31,6 +33,7 @@ export function useBriefingEditionDelete(input: Readonly<{
   const deleteEdition = (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string }>): void => {
     const row = input.editions.find((edition) => edition.date === target.date && edition.periodId === target.periodId)
     input.afterDeleteLocaleRef.current = (row?.availableLocales ?? []).find((language) => language !== target.language) ?? null
+    input.afterDeleteRef.current = { date: target.date, periodId: target.periodId, locale: target.language }
     setDeleting(true)
     void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language, ...(target.clock === undefined ? {} : { clock: target.clock }) }).finally(() => setDeleting(false))
   }

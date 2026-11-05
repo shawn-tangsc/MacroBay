@@ -31,13 +31,14 @@ import { DailyBriefingPageBar } from './DailyBriefingPageBar'
 import { DailyBriefingLiveSteps, runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { useBriefingSettingsFacts } from './useBriefingSettingsFacts'
+import { useBriefingReload } from './useBriefingReload'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
-import { briefingEditionSelection } from './briefingEditionSelection'
+import { briefingEditionSelection, nextEditionAfterDelete } from './briefingEditionSelection'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -107,6 +108,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // consumed by the reload. Choosing it here keeps "which language to show" ahead of "read it",
   // so the pane and the switch cannot disagree.
   const afterDeleteLocaleRef = useRef<'zh-CN' | 'en-US' | null>(null)
+  // 被删掉那一版的身份。删完之后"下一版是谁"按它取邻居——只按日期取当天第一行，会把读者送到
+  // 不是邻居的那一期（11-03 这种一天两期的地方当场看得出来）。
+  const afterDeleteRef = useRef<Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }> | null>(null)
   // The language this component last loaded for; a change means the stored edition language arrived.
   const loadedLocaleRef = useRef<'zh-CN' | 'en-US' | null>(null)
   // The last readable edition, kept so a failed retry keeps the content under the failure notice.
@@ -134,7 +138,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [pickedPeriodId, setPickedPeriodId] = useState<string | undefined>(undefined)
   // 删除一个入口、一套行为：工具栏第五颗与行右键都走这里；"删哪一版"和"是否正在删"各只有一个答案。
   const { deleteOutcome, deleting, deleteEdition, takeSkipGenerate, retryDelete } = useBriefingEditionDelete({
-    client, editions, afterDeleteLocaleRef, onSettled: () => setReloadKey((key) => key + 1)
+    client, editions, afterDeleteLocaleRef, afterDeleteRef, onSettled: () => setReloadKey((key) => key + 1)
   })
   const [regenerating, setRegenerating] = useState(false)
   // 这一次在做什么：手动的一期，还是重跑当前那一版。工具栏与正文都读它，不各判一遍。
@@ -186,129 +190,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const runningStage = generating && !progressUnreadable && liveProgress ? runningRowName(liveProgress, text) : undefined
   const runningElapsedMs = runningStage === undefined || liveProgress === undefined ? undefined : runningElapsedMsFor(liveProgress)
 
-  useEffect(() => {
-    let active = true
-    setView({ status: 'loading' })
-    setEditions([])
-    setRailDates(undefined)
-    setEditionsLoading(true)
-    setEditionsFailed(false)
-    setRegenerateFailure(null)
-    void (async () => {
-      // One-shot: only the reload a delete asked for skips the generation; the next ordinary open
-      // must be able to generate today again.
-      const skipGenerate = takeSkipGenerate()
-      // Opening the page may generate today's edition; everything else is a read. The language tab
-      // therefore never comes through here — it calls the same read path a row click does.
-      const afterDeleteLocale = afterDeleteLocaleRef.current
-      afterDeleteLocaleRef.current = null
-      const localeForLoad = afterDeleteLocale ?? effectiveLocaleRef.current
-      if (afterDeleteLocale && afterDeleteLocale !== effectiveLocaleRef.current) setPickedLocale(afterDeleteLocale)
-      loadedLocaleRef.current = localeForLoad
-      const todayPromise = skipGenerate
-        ? Promise.resolve(undefined)
-        : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current, generate: false }), 15_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
-      if (!active) return
-      // The issue day this load is about: the service's, when the list answered.
-      const periodDate = listed?.state === 'available' && typeof listed.result.today === 'string' ? listed.result.today : todayDate
-      setCurrentPeriodDate(periodDate)
-      periodDateRef.current = periodDate
-      let rows: readonly DailyBriefingEditionSummary[] = listed?.state === 'available' ? [...listed.result.editions] : []
-      setEditions(rows.slice(0, 14))
-      setRailDates(listed?.state === 'available' ? listed.result.dates : undefined)
-      // The list has been read: from here an empty rail means "none" — unless the read itself failed.
-      setEditionsLoading(false)
-      setEditionsFailed(listed?.state !== 'available')
-      // The row this load is about. `periodDate` is the list's own answer; using the wall-clock
-      // `todayDate` here is what made a delete reload look at a day the list does not contain, find
-      // nothing, and report the whole issue as empty.
-      const periodRow = rows.find((row) => row.date === periodDate)
-      if (skipGenerate) {
-        // A delete reload reads the edition that is left, in the language that is left. The language
-        // is decided before the read, so the switch and the pane cannot disagree; the deleted entry
-        // is dropped from the cache so the read cannot answer with what was just removed.
-        const available = periodRow?.availableLocales ?? []
-        const wanted = available.includes(localeForLoad) ? localeForLoad : available.find((candidate) => candidate !== localeForLoad)
-        if (wanted) {
-          if (wanted !== localeForLoad) setPickedLocale(wanted)
-          const read = await readEdition(periodDate, wanted, { fresh: true })
-          if (!active) return
-          if (read.kind === 'available') return
-        }
-        setView({ status: 'no-edition', date: periodDate, failed: false })
-        return
-      }
-      const today = await todayPromise
-      if (!active) return
-      if (today?.state === 'available') {
-        const date = today.document.edition.date
-        setCurrentPeriodDate(date)
-        // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
-        // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
-        rows = mergeEditionSummary(rows, today.document)
-        setView({
-          status: 'ready',
-          document: today.document,
-          kind: 'today',
-          ...(today.timeZoneSource === 'system' ? { timeZoneSource: 'system' as const } : {})
-        })
-        setRegenerateFailure(null)
-      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated'
-        && rows.some((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))) {
-        // The list says this language exists, so the answer "nothing written" is the read's miss, not
-        // the truth. Read that edition by its date and put the answer on screen here — handing it to
-        // the row path made the result depend on state that was still settling after a delete.
-        const recovered = await readEdition(periodDate, localeForLoad, { fresh: true })
-        if (!active) return
-        if (recovered.kind === 'available') {
-          setRegenerateFailure(null)
-          return
-        }
-        setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
-      } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated') {
-        // Nothing is written in this language. Whether that means "the issue has no content" or
-        // "this issue has the other language" is the list's answer, not this branch's guess.
-        const row = rows.find((edition) => edition.date === periodDate)
-        const other = (row?.availableLocales ?? []).find((candidate) => candidate !== localeForLoad)
-        if (other) {
-          if (skipGenerate) {
-            setPickedLocale(other)
-            openEditionRef.current(periodDate, other, row)
-          } else {
-            setView({ status: 'locale-missing', locale: localeForLoad, date: periodDate })
-          }
-        } else setView({ status: 'no-edition', date: periodDate, failed: false })
-      } else if (false) {
-        // Nothing is left for that day — same sentence as any day that never generated.
-        setView({ status: 'no-edition', date: pinnedDate ?? periodDate, failed: false })
-      } else {
-        // A read that failed still says so. The delete reload is the opposite case: today was never
-        // read, so it must not be reported as unreadable — the row the list already returned stands.
-        const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
-        const stale = lastReadyRef.current
-        // A retry that failed after an earlier success: the issue still has an edition, so the reader
-        // keeps reading it under the failure notice. Only a day that never produced one goes blank.
-        // The stale copy is what a failed retry keeps on screen. A delete reload is the opposite:
-        // the reader removed that edition, so putting it back would undo their action.
-        if (!skipGenerate && stale && stale.edition.date === todayDate && rows.some((row) => row.date === todayDate && row.state !== 'missing')) {
-          setView({ status: 'ready', document: stale, kind: 'today' })
-          setShowingStale(true)
-          setRegenerating(false)
-          return
-        }
-        setView({
-          status: 'unavailable',
-          ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
-          ...(generationTrace ? { generationTrace } : {})
-        })
-      }
-      setEditions(rows.slice(0, 14))
-      setRailDates(listed?.state === 'available' ? listed.result.dates : undefined)
-      setRegenerating(false)
-    })()
-    return () => { active = false }
-  }, [client, reloadKey])
 
   // 三项事实一次读出来（web search、时区、写不了的语言），外加"该重读了"这个计数：抽屉关了、窗口
   // 重新聚焦、别的窗口改了设置，都只是把计数 +1。
@@ -325,6 +206,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setPinnedDate, setRegenerateFailure
   })
   openEditionRef.current = openEdition
+
+  // 一次读取的全部分支（列表、今天、删完落到哪一行、读失败时旧正文留不留）都在这里；重读由
+  // `reloadKey` 触发。页面上只看得见这一次调用，看不见 145 行分支。
+  useBriefingReload({
+    client, reloadKey, todayDate, pinnedDate, readEdition, takeSkipGenerate,
+    setView, setEditions, setRailDates, setEditionsLoading, setEditionsFailed, setRegenerateFailure, setRegenerating, setShowingStale,
+    setPickedLocale, setPickedPeriodId, setPinnedDate, setCurrentPeriodDate,
+    afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef, lastReadyRef, openEditionRef, periodDateRef, timeZoneRef
+  })
   const { selectEdition, selectLocale } = briefingEditionSelection({
     editions, effectiveLocale: () => effectiveLocaleRef.current, openEdition, setPickedLocale, setPickedPeriodId
   })
@@ -339,9 +229,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setRegenerating, setRegenerateFailure, setEditions,
     setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId,
     // 发起即跳转 = 把选中项一次设全（日期 + 期号 + 语言）；正文是否跟着换由身份闸门决定。
+    // 「我在读哪一版」只由读者的动作改。运行只交给 `running`：
+    // 手动是**新建一期**，那一版本来没有正文，所以选中项跟着切过去（= 发起即跳转）；
+    // 重跑当前版/历史版是**替换已有那一版**，选中项不动，旧正文继续可读。
     onRunIntent: (intent) => {
       setRunIntent(intent)
-      if (intent === null) return
+      if (intent === null || intent.kind !== 'manual') return
       setPinnedDate(intent.date === '' ? todayDate : intent.date)
       setPickedPeriodId(intent.periodId)
       setPickedLocale(intent.locale)
