@@ -155,6 +155,31 @@ function deps(overrides: {
   }
 }
 
+describe('the market window ends at the cutoff, not at the read moment', () => {
+  // 方向性用例（Chief 2026-11-06 要求）：下午生成一版"截止 08:00"的日报，
+  // 任何窗口读的版本截止都不得落在未来——反例就是 11/06 那三版整块跨资产读不到。
+  it('asks the cross-asset read with the cutoff as the window end, and never with a future knowledge cutoff', async () => {
+    const input = { asOf: '2026-11-05T15:30:00.000Z', windowEnd: '2026-11-05T00:00:00.000Z', windowHours: 24, locale: 'zh-CN' as const, timeZone: 'Asia/Shanghai' }
+    const asked: Readonly<{ range: string; asOf: string; knowledgeAt: string }>[] = []
+    const base = deps()
+    const source = makeSource({
+      ...base,
+      publicQuery: {
+        ...(base.publicQuery as object),
+        queryCrossAssetSnapshot: async (queryInput: Readonly<{ range: string; asOf: string; knowledgeAt: string }>) => {
+          asked.push(queryInput)
+          return undefined
+        }
+      } as never
+    })
+    await source.buildPacket(input)
+    expect(asked).toHaveLength(1)
+    // 窗口末端 = 这一版的统计截止（08:00 本地），不是读数那一刻（15:30Z）。
+    expect(asked[0]!.asOf).toBe(input.windowEnd)
+    expect(Date.parse(asked[0]!.knowledgeAt)).toBeLessThanOrEqual(Date.parse(input.asOf))
+  })
+})
+
 describe('daily briefing source', () => {
   it('reads the latest published conclusion, the 24h news, the readings and both calendars', async () => {
     const packet = await makeSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })

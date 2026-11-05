@@ -112,7 +112,10 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        readBriefingMarketSnapshotWithMarker(deps.publicQuery, input.asOf),
+        // 跨资产是**窗口读**：窗口的末端是这一版的统计截止 `windowEnd`，不是读数那一刻 `asOf`。
+        // 拿运行时刻当窗口末端，版本截止（截止 + 迟到宽限）就落在未来，查询端口按契约拒绝
+        // （`threw:invalid-query`），BTC/ETH/纳指三行整块变成"读不到"。
+        readBriefingMarketSnapshotWithMarker(deps.publicQuery, input.windowEnd),
         buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)

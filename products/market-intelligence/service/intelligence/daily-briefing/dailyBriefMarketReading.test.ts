@@ -4,6 +4,7 @@ import { createCrossAssetSnapshotQuery } from '../cross-asset/crossAssetSnapshot
 import { createMarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import { createIntelligencePipeline } from '../application/intelligencePipeline'
 import { createRawRecordStore } from '../application/rawRecordStore'
+import { parseCrossAssetInput, crossAssetMethods } from '../../../contracts/crossAssetObservationContracts'
 import { briefingLateDataGraceMs, briefingMarketKnowledgeAt, briefingMarketReady, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 
@@ -120,5 +121,44 @@ describe('the grace survives every layer it passes through', () => {
       asOf: CUTOFF,
       knowledgeAt: new Date(Date.parse(CUTOFF) + briefingLateDataGraceMs).toISOString()
     })
+  })
+})
+
+/**
+ * `02` v2.129 之后补的一条回归：**窗口读的版本截止不许落在未来**。
+ *
+ * 手动生成按"现在"起跑时，窗口末端就是此刻，再加三十分钟迟到宽限就成了未来；跨资产端口按契约
+ * 直接拒绝（`threw:invalid-query`），BTC/ETH/纳指三行于是整块"读不到"——今晚 11/06 那三版正是如此。
+ */
+describe('a window read never asks for a version cutoff that has not happened', () => {
+  const readMoment = Date.parse('2026-11-05T18:59:48.618Z')
+  const capture = async (asOf: string, nowMs: number) => {
+    const asked: { range: string; asOf: string; knowledgeAt: string }[] = []
+    await readBriefingMarketSnapshot(
+      { queryCrossAssetSnapshot: async (input) => { asked.push(input); return undefined } },
+      asOf, nowMs
+    )
+    return asked[0]!
+  }
+
+  it('clips the grace at "now" when the edition is generated as it starts', async () => {
+    const asked = await capture(new Date(readMoment).toISOString(), readMoment)
+    expect(Date.parse(asked.knowledgeAt)).toBeLessThanOrEqual(readMoment)
+  })
+
+  it('keeps the whole grace when the edition is a backfill', async () => {
+    // 截止在 16:00Z、读数在 18:59Z：宽限整段都在过去，照给，不被"现在"截短。
+    const cutoff = '2026-11-05T16:00:00.000Z'
+    const asked = await capture(cutoff, readMoment)
+    expect(asked.knowledgeAt).toBe(new Date(Date.parse(cutoff) + briefingLateDataGraceMs).toISOString())
+  })
+
+  it('answers with an input the cross-asset port accepts, and the unclipped one it rejects', () => {
+    const asOf = new Date(readMoment).toISOString()
+    const clipped = briefingMarketKnowledgeAt(asOf, undefined, readMoment)!
+    expect(parseCrossAssetInput(crossAssetMethods.query, { range: '24h', asOf, knowledgeAt: clipped }, readMoment)).toBeDefined()
+    // 反证：宽限不夹的那一份被端口判为非法——这就是"整块行情读不到"的形状。
+    const unclipped = new Date(readMoment + briefingLateDataGraceMs).toISOString()
+    expect(parseCrossAssetInput(crossAssetMethods.query, { range: '24h', asOf, knowledgeAt: unclipped }, readMoment)).toBeUndefined()
   })
 })

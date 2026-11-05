@@ -12,8 +12,21 @@
  */
 export const briefingLateDataGraceMs = 30 * 60_000
 
-/** The version cutoff for an edition: its own cutoff plus the late-data grace. */
-export function briefingMarketKnowledgeAt(asOf: string, graceMs: number = briefingLateDataGraceMs): string | undefined {
+/**
+ * The version cutoff for an edition: its own cutoff plus the late-data grace.
+ *
+ * **Never later than "now"**: nobody knows the future. When the edition is generated as it starts
+ * (a manual run whose cutoff is the press), cutoff + grace lands half an hour ahead, the cross-asset
+ * port rejects the input (`threw:invalid-query`) and the whole market block reads as missing. Clipped,
+ * the grace still does its job for a backfill and simply cannot promise bars that have not arrived.
+ */
+export function briefingMarketKnowledgeAt(
+  asOf: string,
+  graceMs: number = briefingLateDataGraceMs,
+  nowMs: number = Date.now()
+): string | undefined {
   const cutoff = Date.parse(asOf)
-  return Number.isFinite(cutoff) ? new Date(cutoff + graceMs).toISOString() : undefined
+  if (!Number.isFinite(cutoff)) return undefined
+  const limit = Number.isFinite(nowMs) ? Math.min(cutoff + graceMs, nowMs) : cutoff + graceMs
+  return new Date(limit).toISOString()
 }

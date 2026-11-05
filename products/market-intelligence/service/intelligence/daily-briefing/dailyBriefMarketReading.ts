@@ -39,11 +39,12 @@ export type BriefingMarketReader = Readonly<{
  */
 export function readBriefingMarketSnapshot<T extends BriefingMarketSnapshot>(
   reader: Readonly<{ queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<T | undefined> }>,
-  asOf: string
+  asOf: string,
+  nowMs: number = Date.now()
 ): Promise<T | undefined> {
   // Required, never defaulted: an unreadable cutoff cannot produce a knowledge instant, and asking
   // without one silently falls back to the frozen as-of view.
-  const knowledgeAt = briefingMarketKnowledgeAt(asOf)
+  const knowledgeAt = briefingMarketKnowledgeAt(asOf, undefined, nowMs)
   if (!knowledgeAt) return Promise.reject(new Error('invalid-cutoff'))
   return reader.queryCrossAssetSnapshot({ range: '24h', asOf, knowledgeAt })
 }
