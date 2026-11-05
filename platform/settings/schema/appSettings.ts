@@ -36,6 +36,13 @@ export const supportedProxyModes = ['system', 'custom', 'none'] as const
  * 一律由 `resolveShellTimeZone` 解析本值后传入；已存的调度保留它们自己的时区，改设置不重算历史。
  * 在此之前，任何把这个值描述成「只影响显示」或「已经影响调度」的文档都是错的。
  *
+ * **2026-11-05 决定反转（上方口径作废，原文保留以便对照）**：用户定的是「改动尽量小——我改时区，
+ * 任务定义不变，只是触发的实际时刻跟着变」。所以**不再要求注册时必填 `trigger.timezone`**，改为：
+ * 注册时留空表示「跟随读者设置」，由**排程那一步**按当前设置解析，且**不写回**任务。
+ * 理由一句：把注册那一刻的设置物化进任务，等于让「建任务时我人在哪」变成了任务的一部分，
+ * 而那从来不是读者的决定（契约：`docs-private/10-development/task-timezone-scheduling-contract.md`）。
+ * 显式指定过时区的任务仍然用存的值、不跟随——那是用户明确表达过的承诺。
+ *
  * 校验不用固定枚举：历史/别名时区（`Asia/Chongqing`）也必须可用，因此以运行时能否格式化这段字符串为准。
  */
 export const systemTimeZoneSetting = 'system' as const
