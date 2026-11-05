@@ -14,7 +14,11 @@
    (40.69px selected), and every generated row must land on that same pitch. */
 .mi-daily-briefing__rail-row { display: block; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
-.mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; border-radius: 5px; background: #1c2418; box-shadow: inset 2px 0 var(--mi-dashboard-lime); color: var(--mi-dashboard-text); }
+/* Selection changes the surface, the edge and the 2px bar — never the ink. The prototype's
+   `[aria-current]` rule carries no colour for a reason: brightening the whole row makes a selected
+   row read as a different kind of row instead of the same row with a marker, and it pushes every
+   secondary word (faint facts, chips, title) up a step the drawing does not have. */
+.mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; border-radius: 5px; background: #1c2418; box-shadow: inset 2px 0 var(--mi-dashboard-lime); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
 .mi-daily-briefing__rail-date { font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-daily-briefing__rail-row i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--mi-dashboard-muted); }
@@ -292,9 +296,9 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    unstyled paragraph: no divider, no clamp, the summary running five lines. These are the missing
    rules; values follow the period list design (day head 11.5, summary one line, 1px divider between
    periods, one language chip per row). */
-/* 4px above and below each day, 1px between days: two days are 8px apart on the 4/1/8 rhythm, and
-   the first day keeps its 4px or the heading sits on top of the rail's own title. */
-.mi-daily-briefing__rail-day { display: block; padding: 4px 0; border-top: 1px solid var(--mi-dashboard-line); }
+/* 8px above and below each day, 1px between days: those are the drawing's numbers, and the first day
+   keeps its 8px or the heading sits on top of it. */
+.mi-daily-briefing__rail-day { display: block; padding: 8px 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__rail-day:first-child { border-top: 0; }
 .mi-daily-briefing__rail-day-head { display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 0 6px 6px; border: 0; background: none; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-day-head:hover { color: var(--mi-dashboard-text); }
