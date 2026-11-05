@@ -2114,9 +2114,11 @@ it('takes the current issue from the service, not from the wall clock', async ()
 
   await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
   const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')!
-  // 今天那档的副句带时间与"怎么手动补"；历史日那档不带。标题两档都由平台提供，不写句子。
-  expect(pane.textContent).toContain('本期没有简报')
-  expect(pane.textContent).toContain(text.history.emptyToday.split('{time}')[1]!.split('{zone}')[0]!.trim())
+  // 今天那档的副句说"这一期没有生成、可以手动补"；历史日那档说"这一天没有留下"。
+  // `02` v2.129 G6：夹具是 12:00、这一期 07:00 已过，所以不再承诺"到点会自动出"。
+  expect(pane.textContent).toContain('这一期没有生成')
+  expect(pane.textContent).toContain('可以现在手动生成')
+  expect(pane.textContent).not.toContain('到了时间会自动出')
   // Not the historical framing, and the action stays clickable.
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.disabled).toBe(false)
@@ -2263,7 +2265,8 @@ it('selects the current issue as soon as the page opens, with no button of its o
   const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
   expect(first.getAttribute('aria-current')).toBe('true')
   const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')!
-  expect(pane.textContent).toContain('本期没有简报')
+  // 今天这一期没有版次：空态说的是"没有生成、可以手动补"（`02` v2.129 G6）。
+  expect(pane.textContent).toContain('这一期没有生成')
   // The header owns the action for the current issue; the pane does not offer a second, disabled one.
   expect(pane.querySelector('button')).toBeNull()
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
@@ -2569,4 +2572,44 @@ describe('one body, one state (A9.15 / A9.16)', () => {
     expect(body.getAttribute('data-body-state')).toBe('failure')
   })
 
+})
+
+describe('a day whose generation time has passed with no edition', () => {
+  // `02` v2.129 G6：11/05 的 07:00 早过了，页面还写「每天 07:00 生成。到了时间会自动出」——
+  // 那天不会再出了，这句话是一个做不到的承诺。过了点只说「这一期没有生成」并给手动这条路。
+  const todayRowMissing = () => ({
+    state: 'available' as const,
+    result: {
+      editions: [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }],
+      dates: ['2026-10-30'], today: '2026-10-30'
+    }
+  })
+  const openToday = async (): Promise<HTMLDivElement> => {
+    const dom = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => todayRowMissing()),
+      get: vi.fn(async () => ({ state: 'missing' as const }))
+    }))
+    const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!
+    await act(async () => { row.click(); await Promise.resolve(); await Promise.resolve() })
+    return dom
+  }
+
+  it('says the edition was not generated, and stops promising it will appear by itself', async () => {
+    // 读者时区 Asia/Shanghai：12:00 已经过了 07:00。
+    const dom = await openToday()
+    const pane = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
+    expect(pane.textContent).toContain('这一期没有生成')
+    expect(pane.textContent).toContain('可以现在手动生成')
+    expect(pane.textContent).not.toContain('到了时间会自动出')
+  })
+
+  it('keeps the promise while the generation time has not arrived', async () => {
+    // 06:30，还没到 07:00：这时候"到点会自动出"是真话。
+    vi.setSystemTime(new Date('2026-10-29T22:30:00.000Z'))
+    const dom = await openToday()
+    const pane = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
+    expect(pane.textContent).toContain('到了时间会自动出')
+    expect(pane.textContent).not.toContain('这一期没有生成')
+  })
 })
