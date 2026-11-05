@@ -145,20 +145,6 @@ export function DailyBriefingHistoryRail({
   const menuRow = menu
     ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId && edition.locale === menu.locale)
     : undefined
-  const blocked = Boolean(menu && menu.date === todayDate && generatingStage)
-  const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
-  // 行菜单**恰一项**：删除这一版（正文 + 它的会话）。期级动作不在这张菜单里——重跑在工具栏与
-  // 行内「重试」，删排期在设置页，两件事不混。
-  // 0 项时**不渲染**：`ContextMenu` 只挡 `!open || anchor === null`，空数组会画出一块盖住列表的
-  // 空白浮层——读者看到的就是"右键出来什么都没有"。
-  const menuItems: readonly MenuItem[] = blocked
-    ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger', disabled: true }]
-    : hasEdition
-      ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' }]
-      : []
-  // 打开之前就问"这张菜单有没有东西"：生成中的行弹一项禁用的原因，没有版次的行干脆不弹。
-  const canOpenMenu = (edition: DailyBriefingEditionSummary): boolean =>
-    edition.state !== 'missing' || (edition.date === todayDate && generatingStage !== undefined)
   const closeMenu = (): void => {
     const open = menu
     setMenu(null)
@@ -191,6 +177,27 @@ export function DailyBriefingHistoryRail({
     const fallback = missingToday.find((row) => !row.attemptCount) ?? missingToday[0]
     return fallback ? `${fallback.date}:${fallback.periodId}:${fallback.locale}` : undefined
   }, [editions, generatingStage, todayDate])
+
+  const rowKey = (row: Readonly<{ date: string; periodId: string; locale: string }>): string =>
+    `${row.date}:${row.periodId}:${row.locale}`
+  /**
+   * 只有**右键的那一行自己**在跑才拦。以前写成"今天只要有一期在跑，今天每一行都不许删"——
+   * 别的期在写，读者对自己看完的那一版连删除都点不了。
+   */
+  const blocked = menu !== null && waitingKey !== undefined && rowKey(menu) === waitingKey
+  const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
+  // 行菜单**恰一项**：删除这一版（正文 + 它的会话）。期级动作不在这张菜单里——重跑在工具栏与
+  // 行内「重试」，删排期在设置页，两件事不混。
+  // 0 项时**不渲染**：`ContextMenu` 只挡 `!open || anchor === null`，空数组会画出一块盖住列表的
+  // 空白浮层——读者看到的就是"右键出来什么都没有"。
+  const menuItems: readonly MenuItem[] = blocked
+    ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger', disabled: true }]
+    : hasEdition
+      ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' }]
+      : []
+  // 打开之前就问"这张菜单有没有东西"：正在跑的那一行弹一项禁用的原因，没有版次的行干脆不弹。
+  const canOpenMenu = (edition: DailyBriefingEditionSummary): boolean =>
+    edition.state !== 'missing' || rowKey(edition) === waitingKey
 
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>

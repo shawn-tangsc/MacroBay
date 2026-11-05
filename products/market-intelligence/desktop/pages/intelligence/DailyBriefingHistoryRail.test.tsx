@@ -313,6 +313,31 @@ describe('a row is never a button inside a button', () => {
     expect(items[0]!.textContent).toContain(text.history.deletePeriodBlocked)
   })
 
+  it('does not block a finished row while another issue of the same day is generating', () => {
+    // 旧行为：今天只要有一期在跑，今天每一行右键都弹"生成中不能删除这一期"——读者看完的那一版
+    // 连删都点不了。拦的应该是**右键的那一行自己**在不在跑。
+    render({
+      editions: [
+        edition({ periodId: 'default', languages: [{ locale: 'zh-CN', state: 'published' }] }),
+        edition({ periodId: 'period_b', languages: [{ locale: 'zh-CN', state: 'generating' }] })
+      ],
+      resolveText: (key: string) => resolveProductTextKey('zh-CN', key)
+    })
+    const finished = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-period-id="default"]')!
+    act(() => { finished.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(items).toHaveLength(1)
+    expect(items[0]!.getAttribute('aria-disabled')).not.toBe('true')
+    expect(items[0]!.textContent).toContain(text.history.deleteEditionCurrent)
+
+    // 右键**正在跑**的那一行，仍然给禁用理由，不许变成"能删"。
+    const running = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-period-id="period_b"]')!
+    act(() => { running.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const blockedItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(blockedItems[0]!.getAttribute('aria-disabled')).toBe('true')
+    expect(blockedItems[0]!.textContent).toContain(text.history.deletePeriodBlocked)
+  })
+
   it('right-clicking the English row deletes the English edition, not the Chinese one', () => {
     // 同一天一期两种语言是两行，身份是 `(日期, 期号, 语言)`。行身份少了语言，右键英文那行会找到
     // 中文那行：删除删到另一版上、界面却说不清，读者只会反复点。这条用例就是那个根因的守卫。
