@@ -120,8 +120,11 @@ describe('a backfilled edition says which world it read', () => {
     const host = await render(backfilled())
     const note = host.querySelector('[data-backfill-note]')!
     expect(note).not.toBeNull()
-    expect(note.textContent).toContain(text.backfillNote.split('{time}')[0]!.trim())
+    // 有时刻时是完整长句，且时刻在里面；断言不写成「按 {time} 拆出的前半截」——那是照实现写，
+    // 会把截断钉死。
     expect(note.textContent).toContain('2026-10-30 12:20')
+    expect(note.textContent?.trimEnd().endsWith('as of')).toBe(false)
+    expect(note.textContent).toContain('data as of')
     // 它不是新起的一行、也不是新区域：仍在期次元信息那段 <p> 里，且在最后一个段之后。
     const meta = note.closest('.mi-brief-poster__meta')!
     expect(meta).not.toBeNull()
@@ -137,8 +140,9 @@ describe('a backfilled edition says which world it read', () => {
     const host = await render({ ...base, edition: { ...base.edition, isBackfill: true } })
     const note = host.querySelector('[data-backfill-note]')!
     expect(note).not.toBeNull()
-    expect(note.textContent).toContain(text.backfillNote.split('{time}')[0]!.trim())
-    expect(note.textContent).not.toContain('2026-10-30 12:20')
+    // 半句话（截到「数据截至 / data as of」为止）比不说更糟：读者会以为我们没取到时刻。
+    expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
+    expect(note.textContent).not.toContain('data as of')
   })
 
   it('says nothing on a punctual edition', async () => {

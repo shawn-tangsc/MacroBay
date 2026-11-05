@@ -84,13 +84,15 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
               准点版不渲染它，出现与消失只影响行尾；塞在中间会让后面几段整体左移、换行位置跟着变。
               分隔用的 `·` 也包在这一段里，否则窄窗下会出现一行只剩一个「·」。 */}
           {doc.edition.isBackfill === true
-            ? <span data-backfill-note="true"> · {backfillHead}
-              {/* 「数据截至 + 时刻 + 时区」是一个整体：拆开会读成两个数。前半句允许在逗号后换行。
-                  三个字段本该一起写；万一只有标记没有时刻，**只少说一句时刻，不让整段消失**——
-                  补跑这件事读者必须知道，沉默比缺一个数更糟。 */}
-              {doc.edition.dataAsOf === undefined
-                ? null
-                : <span style={{ whiteSpace: 'nowrap' }}>{formatTime(doc.edition.dataAsOf, 'minute')}{backfillTail}</span>}
+            ? <span data-backfill-note="true"> · {doc.edition.dataAsOf === undefined
+              /* 没有时刻时用**一条完整的短句**（`backfillNoteNoTime`），不把长句截到「数据截至」为止——
+                 半句话比不说更糟：读者会以为是我们没取到时刻。 */
+              ? text.backfillNoteNoTime
+              : <>
+                {backfillHead}
+                {/* 「数据截至 + 时刻 + 时区」是一个整体：拆开会读成两个数。前半句允许在逗号后换行。 */}
+                <span style={{ whiteSpace: 'nowrap' }}>{formatTime(doc.edition.dataAsOf, 'minute')}{backfillTail}</span>
+              </>}
             </span>
             : null}
         </p>
