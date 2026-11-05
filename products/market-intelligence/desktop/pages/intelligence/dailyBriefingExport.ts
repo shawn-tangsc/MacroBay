@@ -26,32 +26,61 @@ export function posterExportBackground(poster: Element | null): string | undefin
  * produced a `-zh-CN.png` file — the reader then has no way to tell which language the picture is in.
  */
 export function briefingExportFileName(document: Readonly<{
-  edition: Readonly<{ date: string; locale: string; periodId?: string; periodTime?: string }>
+  edition: Readonly<{
+    date: string
+    locale: string
+    periodId?: string
+    periodTime?: string
+    periodKind?: 'scheduled' | 'manual'
+    windowHours?: number
+    generatedAt?: string
+  }>
 }>): string {
   // A day can hold several periods in the same language, so date + language no longer identifies the
   // file: two downloads would overwrite each other and the reader would keep the second one believing
-  // it was the first. The period's own hour names it — an opaque id would be unique but unreadable,
-  // and the reader is naming a file, not addressing a record.
+  // it was the first. What goes in the name is whatever that edition needs to be told apart — the
+  // rule is "any two editions of one day get different names", not "the name must carry field X".
   const period = periodTag(document.edition)
   return `mi-daily-brief-${document.edition.date}${period}-${document.edition.locale}.png`
 }
 
 /**
- * `-0700` for a period that has its own time, `-<id>` when it only has an id, nothing for `default`.
+ * The suffix that tells this edition apart from the others of its day.
  *
- * An edition written before schema 13 has neither field and belongs to `default`; its file keeps the
- * name it always had, because renaming downloads the reader already made would only confuse them.
+ * Nothing at all for an edition written before schema 13: it belongs to `default`, and its file keeps
+ * the name it always had — renaming downloads the reader already made would only confuse them.
+ *
+ * Otherwise: the period's hour, its window, and — only for a manual run — the minute and second it
+ * finished at. Two manual runs can share hour, window and language (a deliberate re-run), and the
+ * finished instant is the only thing left that differs. Scheduled periods never need it: one per hour
+ * and window is what the uniqueness rule already allows.
  */
-function periodTag(edition: Readonly<{ periodId?: string; periodTime?: string }>): string {
-  if (edition.periodId === undefined && edition.periodTime === undefined) return ''
-  if (edition.periodTime !== undefined) {
-    const at = new Date(edition.periodTime)
-    if (Number.isFinite(at.getTime())) {
-      const hour = String(at.getUTCHours()).padStart(2, '0')
-      const minute = String(at.getUTCMinutes()).padStart(2, '0')
-      return `-${hour}${minute}`
-    }
+function periodTag(edition: Readonly<{
+  periodId?: string
+  periodTime?: string
+  periodKind?: 'scheduled' | 'manual'
+  windowHours?: number
+  generatedAt?: string
+}>): string {
+  const parts: string[] = []
+  const clock = (iso: string | undefined, seconds: boolean): string | undefined => {
+    if (iso === undefined) return undefined
+    const at = new Date(iso)
+    if (!Number.isFinite(at.getTime())) return undefined
+    const hhmm = `${String(at.getUTCHours()).padStart(2, '0')}${String(at.getUTCMinutes()).padStart(2, '0')}`
+    return seconds ? `${hhmm}${String(at.getUTCSeconds()).padStart(2, '0')}` : hhmm
   }
-  const id = (edition.periodId ?? '').replace(/[^a-zA-Z0-9-]/g, '')
-  return id === '' || id === 'default' ? '' : `-${id}`
+  const hour = clock(edition.periodTime, false)
+  if (hour !== undefined) parts.push(hour)
+  if (edition.windowHours !== undefined) parts.push(`${edition.windowHours}h`)
+  if (edition.periodKind === 'manual') {
+    const finished = clock(edition.generatedAt, true)
+    if (finished !== undefined) parts.push(finished)
+  }
+  if (parts.length === 0) {
+    const id = (edition.periodId ?? '').replace(/[^a-zA-Z0-9-]/g, '')
+    if (id === '' || id === 'default') return ''
+    return `-${id}`
+  }
+  return `-${parts.join('-')}`
 }
