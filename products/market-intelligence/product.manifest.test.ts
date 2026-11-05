@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { DAILY_BRIEFING_IPC_METHODS } from './service/intelligence/ipc/registerDailyBriefingIpc'
 import { marketIntelligenceProductManifest } from './product.manifest'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 
@@ -139,5 +140,30 @@ describe('market-intelligence publishable event topics', () => {
     for (const topic of consumers[0].topics) {
       expect(declared.has(topic)).toBe(true)
     }
+  })
+})
+
+/**
+ * 启动自检的那张表：**注册了什么，就必须在清单里登记什么**。
+ *
+ * 2026-11-05 的事故是这条链的反面：期配置的四个方法在代码里注册了，清单里没有，于是
+ * `seal()` 拒绝启动（`product-runtime-method-baseline-mismatch`）——而"启动即崩"只有用户会撞到，
+ * 我们不许自己起应用，所以这条必须由用例替用户撞。
+ */
+describe('market-intelligence product IPC baseline', () => {
+  it('lists every briefing method the runtime registers', () => {
+    const declared = new Set(marketIntelligenceProductManifest.serviceRoutes.map((entry) => entry.method))
+    for (const method of Object.values(DAILY_BRIEFING_IPC_METHODS)) {
+      expect(declared.has(method)).toBe(true)
+    }
+  })
+
+  it('declares no briefing method the runtime does not register', () => {
+    const registered = new Set<string>(Object.values(DAILY_BRIEFING_IPC_METHODS))
+    const declared = marketIntelligenceProductManifest.serviceRoutes
+      .map((entry) => entry.method)
+      .filter((method) => method.startsWith('intelligence.dailyBriefing.'))
+    // 两张表要么一样多，要么一定有一边多出来——多出来的那个方向就是"清单里挂着一个没人注册的名字"。
+    expect(declared.filter((method) => !registered.has(method))).toEqual([])
   })
 })

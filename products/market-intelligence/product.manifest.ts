@@ -154,6 +154,12 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dailyBriefing.getStorageState' },
     { method: 'intelligence.dailyBriefing.retryUpgrade' },
     { method: 'intelligence.dailyBriefing.deletePeriod' },
+    // 期配置自己的四个方法：读、加、改、删。启动自检按这张清单比注册结果，缺一条就拒绝启动——
+    // 这次漏登记的症状是"应用起不来"，而只有用户会撞到，所以顺序也排在一起便于下次核对。
+    { method: 'intelligence.dailyBriefing.listPeriods' },
+    { method: 'intelligence.dailyBriefing.createPeriod' },
+    { method: 'intelligence.dailyBriefing.updatePeriod' },
+    { method: 'intelligence.dailyBriefing.removePeriod' },
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },
