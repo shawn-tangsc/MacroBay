@@ -167,11 +167,12 @@ describe('day rhythm and the row menu trigger', () => {
     expect(selected).not.toMatch(/#[0-9a-f]{3,8}/i)
   })
 
-  it('hides the menu trigger until the row is hovered or focused', () => {
-    // The drawn list has no ⋯: a permanent slot would shorten every title against the reference.
-    expect(rule('.mi-daily-briefing__rail-item-menu {')).toContain('opacity: 0')
-    expect(css).toContain('.mi-daily-briefing__rail-item:focus-within .mi-daily-briefing__rail-item-menu')
+  it('has no hidden trailing-edge trigger left over', () => {
+    // The row's menu is the context menu; a hover-revealed icon at the trailing edge was deleted with
+    // it, and leaving its rules behind would tell the next reader the trigger is still there.
+    expect(css).not.toContain('.mi-daily-briefing__rail-item-menu')
   })
+
 })
 
 /**

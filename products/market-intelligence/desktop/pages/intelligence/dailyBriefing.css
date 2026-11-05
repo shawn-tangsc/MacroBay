@@ -391,14 +391,13 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-daily-briefing__rail-day-summary-text { margin-left: 4px; }
 .mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
 .mi-daily-briefing__rail-item + .mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
-/* The row's menu trigger lives in the item, never inside the row button: a button inside a button is
-   invalid markup, and every click on the trigger would select the row first. It is revealed on hover
-   or keyboard focus instead of occupying the row's trailing edge — the drawn list has no ⋯ there, so
-   a permanently reserved slot would shorten every title against the reference. */
+/* The item is a positioning context for the one control that is not the row itself: the retry button
+   of a failed edition, which sits at the row's lower right. The row keeps its own click target, so the
+   two never nest — a button inside a button is invalid markup, and every click on it would select the
+   row first.
+   There is no ⋯ trigger any more: the row's menu is the context menu, and its one item is explained
+   there. The rules for a hover-revealed icon at the row's trailing edge were deleted with it. */
 .mi-daily-briefing__rail-item { position: relative; }
-.mi-daily-briefing__rail-item-menu { position: absolute; top: 3px; right: 2px; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
-.mi-daily-briefing__rail-item:hover .mi-daily-briefing__rail-item-menu,
-.mi-daily-briefing__rail-item:focus-within .mi-daily-briefing__rail-item-menu { opacity: 1; pointer-events: auto; }
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
