@@ -58,10 +58,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       </div> : null}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
-      {/* 「未平仓合约」是**区块标题**的限定语，不是每张卡的：挂在标题上天然 1 处，挂两张卡就 2 处，
-          读者会以为两张卡各有一个说法（`02` `A0.11`，v2.80）。写法与 `__price-proxy` 同意图——
-          限定这个名字，不是第二个名字；不新造类名。 */}
-      <span className="mi-brief-poster__leverage-title">{text.sections.leverage}<span className="mi-brief-poster__price-proxy" data-open-interest-label="true"> · {text.positioningOpenInterestLabel}</span></span>
+      <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
       {(['btc', 'eth'] as const).map((asset) => {
         const entry = leverage[asset]
         const rate = entry.fundingRate

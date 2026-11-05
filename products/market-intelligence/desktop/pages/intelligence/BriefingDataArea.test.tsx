@@ -514,18 +514,14 @@ describe('the block headings and the positioning card say what they mean', () =>
     const titles = [...dom.querySelectorAll('.mi-brief-poster__block-title, .mi-brief-poster__leverage-title')]
       .map((node) => node.textContent ?? '')
     // Three headings, and "持仓与费率" rather than "杠杆": leverage names the instrument, not the numbers.
-    // 第三块的标题后接「未平仓合约」这一个限定语（`A0.11`），其余两块不带后缀。
-    expect(titles.map((text) => text.split(' · ')[0])).toEqual(['资金', '行情与情绪', '持仓与费率'])
-    expect(titles[2]!.split(' · ')[1]).toBe(text.positioningOpenInterestLabel)
-    expect(titles[0]).not.toContain(text.positioningOpenInterestLabel)
-    expect(titles[1]).not.toContain(text.positioningOpenInterestLabel)
+    expect(titles).toEqual(['资金', '行情与情绪', '持仓与费率'])
   })
 
   it('names the change and the rate inside each positioning card', async () => {
     const dom = await render()
     const btc = dom.querySelector('[data-briefing-leverage-card="btc"]')!
     // A bare "BTC" over a big percentage does not say whether it is open interest or a price move.
-    expect(btc.textContent).toContain('BTC · 持仓名义额')
+    expect(btc.textContent).toContain('BTC · 未平仓合约名义额')
     // The small line's numbers each carry their subject: a rate without "费率" reads as another move.
     expect(btc.textContent).toContain('费率 +0.0100%')
     // The amount is the card's level, printed once and never tinted; the change sits beside it.
@@ -914,16 +910,19 @@ describe('the index row reads the production shape, not a convenient one', () =>
 })
 
 describe('the positioning card says what its number is', () => {
-  it('names the open interest once, on the section title and never inside a card', async () => {
-    // `$…B` 不说明就是"有数字没有说明"。位置在**区块标题**上：挂标题天然 1 处，挂两张卡就 2 处。
+  it('每张卡各说一次「未平仓合约名义额」，标题里一次都不出现', async () => {
+    // 读者是看着 `$…B` 那个数在问"这是什么"，说明贴着那个数（`A0.11` v2.83：挂卡名）。
     // 夹具必须有 BTC 与 ETH 两张卡，否则"只渲染一张卡"会让错误实现照样绿。
     const host = await render()
     const cards = [...host.querySelectorAll<HTMLElement>('[data-briefing-leverage-card]')]
     expect(cards.length).toBeGreaterThanOrEqual(2)
-    for (const card of cards) expect(card.textContent).not.toContain(text.positioningOpenInterestLabel)
-    const marks = [...host.querySelectorAll<HTMLElement>('[data-open-interest-label="true"]')]
-    expect(marks).toHaveLength(1)
-    expect(marks[0]!.closest('.mi-brief-poster__leverage-title')?.textContent).toContain(text.positioningOpenInterestLabel)
+    for (const card of cards) {
+      const copy = card.querySelector('[data-briefing-leverage-copy]')!
+      expect(copy.textContent).toContain('未平仓合约名义额')
+      expect(copy.textContent?.split('未平仓合约名义额').length).toBe(2)
+    }
+    // 标题里 0 次：挂标题会把"费率"也一起说成未平仓合约。
+    expect(host.querySelector('.mi-brief-poster__leverage-title')?.textContent).not.toContain('未平仓合约')
   })
 })
 
