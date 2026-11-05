@@ -4,8 +4,9 @@ import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../
  * The two ways an edition is chosen: by its day, and by the exact badge on its row.
  *
  * Kept beside the reader hook rather than inline in the page, so the page stays under its size
- * ceiling; the behaviour is one call each — a row click takes the day's first issue, a badge takes
- * the date, period and language it names.
+ * ceiling; the behaviour is one call each — a row click names the date, period and language of that
+ * row (a day can hold several), and a badge does the same. `selectEdition` is the fallback for a host
+ * that cannot hand over a row's identity; it deliberately takes the day's first issue.
  */
 export function briefingEditionSelection(input: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]

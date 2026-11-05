@@ -426,6 +426,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     />
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
+        // 一行 = 一期 = 一种语言：点行要把**这一行**的三样身份交出去；只传日期的话，同一天两期
+        // 永远落到第一行，读者看到的是"切换了但内容不切"。
         onSelectLocale={selectLocale}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}

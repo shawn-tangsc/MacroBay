@@ -425,6 +425,37 @@ describe('daily briefing page', () => {
     expect(exportHost.querySelector('[data-action-group]')).toBeNull()
   })
 
+  it('opens the period the reader clicked, not the day’s first one', async () => {
+    // 同一天两期同语言：点第二期必须读第二期。这个 bug 有两个成因，缺一不可——
+    // ① 页面没传 `onSelectLocale`，永远落到 `selectEdition(date)`，只按日期找第一行；
+    // ② reader 的提前返回只比 `date + locale`，同日期同语言时直接 return，不读新的。
+    // 这一例按顺序覆盖两者：先开 A（建立"已打开同日期同语言"的状态），再点 B。
+    const today = '2026-10-30'
+    const twoPeriods = [
+      { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 },
+      { date: today, periodId: 'period_b', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T01:00:00.000Z`, windowEnd: `${today}T01:00:00.000Z`, readingsAvailable: 4 }
+    ]
+    const get = vi.fn(async ({ periodId }: { periodId?: string }) => ({
+      state: 'available' as const,
+      document: { ...briefingDocument(today), edition: { ...briefingDocument(today).edition, periodId: periodId ?? 'default' }, lede: { text: periodId === 'period_b' ? 'B 期正文' : 'A 期正文' } }
+    }))
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: twoPeriods } })),
+      get
+    })
+    const dom = await renderPage(client)
+    const rowA = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="default"]')!
+    const rowB = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_b"]')!
+    await act(async () => { rowA.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    await act(async () => { rowB.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    // 读到的是第二期：请求里带的是它的期号，正文也换成了它的。
+    expect(get.mock.calls.map((call) => (call as unknown as [{ periodId?: string }])[0].periodId)).toContain('period_b')
+    expect(dom.textContent).toContain('B 期正文')
+    expect(dom.querySelector('[data-period-id="period_b"]')?.getAttribute('aria-current')).toBe('true')
+  })
+
   it("keeps today's summary on the row after the document is read back", async () => {
     // 写回列表时按"同一行"合并，但新文档必须带上自己的摘要：整条替换且不带 summaryLine，今天那一
     // 行的第二行就空了（库里 lede 明明有这句话）。这条用例用真实数据形状钉住它。

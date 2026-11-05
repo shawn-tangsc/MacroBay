@@ -2,6 +2,7 @@ import type { MutableRefObject } from 'react'
 
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { briefingEditionPeriod } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 
 /**
@@ -48,7 +49,13 @@ export function useBriefingEditionReader(input: Readonly<{
 
   const openEdition = (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string): void => {
     const row = rowHint ?? editions.find((edition) => edition.date === date && (periodId === undefined || edition.periodId === periodId))
-    if (readyDocument && readyDocument.edition.date === date && readyDocument.edition.locale === target) return
+    // 一行 = 一期 = 一种语言：身份是三样。此前这里只比日期与语言，同一天两期同为中文时（07:00 与
+    // 08:00），点第二期日期和语言都相同 → 提前返回，右侧还是上一份。少一个维度的判断，和「点一个
+    // 选中两个」是同一个形状。
+    const wantedPeriod = row?.periodId ?? periodId ?? 'default'
+    const documentPeriod = readyDocument === undefined ? undefined : briefingEditionPeriod(readyDocument.edition).periodId
+    if (readyDocument && readyDocument.edition.date === date && readyDocument.edition.locale === target
+      && (periodId === undefined || documentPeriod === wantedPeriod)) return
     setPinnedDate(date)
     const request = ++requestRef.current
     setRegenerateFailure(null)
