@@ -10,12 +10,7 @@ import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
 import { resolveEffectiveAgentModel } from '../../ai/agent-platform/runtime/effectiveAgentModel'
 import { APP_ACCEPTANCE_NAME, APP_BUNDLE_ID, APP_INTERNAL_NAME } from '../appIdentity'
-import {
-  AgentTaskDispatchService,
-  AgentTaskExecutionCoordinator,
-  AgentTaskSchedulerRuntimeService,
-  TaskManagementToolRuntimeService
-} from '../../ai/agent-platform/runtime/tasks'
+import { TaskManagementToolRuntimeService } from '../../ai/agent-platform/runtime/tasks'
 import {
   registerChannelMaintenanceJobHandlers,
   scheduleChannelMaintenanceJobs
@@ -185,6 +180,7 @@ import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver }
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
 import { persistSkillRowChanges } from './skillRowPersistence'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
+import { composeAgentTaskRuntime } from './taskAutomationWiring'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
 import {
@@ -461,34 +457,22 @@ const {
   discordRuntimeMaintenance,
   wechatRuntimeMaintenance
 } = channelsAndJobs
-const agentTaskDispatchService = new AgentTaskDispatchService({
+const {
+  dispatchService: agentTaskDispatchService,
+  schedulerRuntimeService: agentTaskSchedulerRuntimeService
+} = composeAgentTaskRuntime({
   services: agentServices,
   runtime: agentRuntimeService,
   timeZone: () => shellTimeZone.get(),
   getJobBridge: () => agentTaskJobBridge,
   readHeartbeat: readHeartbeatFileFromWorkspace,
   deliverTaskResult: deliverTaskResultToChannels.deliver,
-  onStateChanged: async () => {
-    const nextState = await agentStore.getState()
-    agentTaskSchedulerRuntimeService.syncFromState(nextState)
-    agentBroadcasts.stateChanged(nextState)
-  }
-})
-const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
-  startupAt: new Date().toISOString(),
   getAgentState: () => agentStore.getState(),
-  // 排程按「当地钟点」解析：`trigger.timezone` 为空 = 跟随读者设置，改设置后下一轮 reconcile 生效。
-  // 与上面 `AgentTaskDispatchService` 的 `timeZone` 同形、同一个来源；调度器只有一个，切片不另起。
-  timeZone: () => shellTimeZone.get(),
-  enqueueDueTask: async (task) => {
-    await getAgentTaskExecutionCoordinatorOrNull()?.enqueueDueTask(task.taskId)
-  }
+  publishStateChanged: (state) => agentBroadcasts.stateChanged(state),
+  getExecutionCoordinator: getAgentTaskExecutionCoordinatorOrNull,
+  setExecutionCoordinator: setAgentTaskExecutionCoordinator,
+  startupAt: new Date().toISOString()
 })
-setAgentTaskExecutionCoordinator(new AgentTaskExecutionCoordinator({
-  services: agentServices,
-  timeZone: () => shellTimeZone.get(),
-  dispatchQueuedRun: (input) => agentTaskDispatchService.dispatchQueuedRun(input)
-}))
 agentStateCoordinator = createAgentStateCoordinator({
   getState: () => agentStore.getState(),
   replaceState: (state) => agentStore.replace(state),
