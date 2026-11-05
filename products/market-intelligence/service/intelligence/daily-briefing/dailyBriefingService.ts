@@ -39,6 +39,7 @@ import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { readBriefingHistory } from './dailyBriefingHistory'
+import { createDailyBriefingRegenerate } from './dailyBriefingRegenerate'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
@@ -406,33 +407,7 @@ export function createDailyBriefingService(deps: Readonly<{
     })
   }
 
-  async function regenerate(input: Readonly<{
-    locale: DailyBriefingLocale
-    timeZone: string
-    periodId?: string
-    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
-  }>): Promise<DailyBriefingTodayResult> {
-    // 手动那一刻选定的截止时刻就是这次运行的名义时刻；「现在」是它最常见的一个取值，不是开关。
-    const chosen = input.generation?.asOf
-    const window = chosen === undefined
-      ? briefingWindow(now(), input.timeZone, await generation())
-      : briefingWindow(chosen, input.timeZone, { ...(await generation()), ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours }) })
-    if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    // One run per edition, whichever path asked for it. The open path already coalesced, but a
-    // reader who presses 重新生成 three times started three concurrent runs, and each of them
-    // published its own agent session and its own edition. A second request now joins the run that
-    // is already working on that edition instead of starting another one.
-    const periodId = input.periodId ?? DEFAULT_PERIOD_ID
-    return runs.join(runs.key(window.date, periodId, input.locale), async () =>
-      withTimeZoneSource(await resolveToday({
-        asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
-        // A reader asking again is the only trigger this path has; the scheduled run is the other.
-        runTrigger: 'manual',
-        // 弹框选定的那一刻：这一期是**临时的一期**（`periodKind`），它的名义截止就是选定的时刻。
-        // 三个值缺一个，行上的「截止 · 实际」就成不了对，「本期」也判不出来。
-        ...(input.generation === undefined ? {} : { periodKind: 'manual' as const, periodTime: input.generation.asOf })
-      }, true), window.zoneSource))
-  }
+  const regenerate = createDailyBriefingRegenerate({ now, readGeneration: generation, runs, resolve: resolveToday, withZone: withTimeZoneSource })
 
   async function resolveToday(input: Readonly<{
     asOf: string

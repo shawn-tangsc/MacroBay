@@ -66,8 +66,9 @@ import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
-import { instantForWallClock } from '@platform/time/timeZoneClock'
 import { dailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
+import { useBriefingManualRun } from './useBriefingManualRun'
+import { briefingPageChrome } from './briefingPageChrome'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
 /**
@@ -339,6 +340,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setRegenerating, setRegenerateFailure, setEditions,
     setCurrentPeriodDate, onSettled: () => setReloadKey((key) => key + 1)
   })
+  const onManualRun = useBriefingManualRun({ timeZone, regenerate })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: readyDocument,
@@ -407,18 +409,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     hasEdition: hasTodayEdition,
     localeAvailable: modeRow ? modeRow.availableLocales.includes(effectiveLocale) : true
   })
-  // The one action that spends a run, and only after a click. It writes this issue, then the list is
-  // read again (a read) so the row shows what just landed.
-  // What an empty page can honestly say: the schedule it would run at, in the reader's own zone.
-  const openModelService = onOpenModelSettings ?? openModelSettings
-  // The grid never changes shape: the detail column keeps its width even with nothing to show, so the
-  // body does not jump sideways when an edition appears or disappears.
-  const bodyClass = 'mi-daily-briefing-page__body mi-daily-briefing-page__body--with-appendix'
-  // The exported image follows the edition it shows, not the interface (see dailyBriefingPoster).
-  const poster = posterProps({ document: readyDocument, editions, fallbackText: text })
-  // Content follows the edition, chrome follows the interface: the rail, buttons and counts stay.
-  const editionText = readyDocument ? briefingTextForLocale(readyDocument.edition.locale) : text
-  const editionLocale = readyDocument?.edition.locale ?? locale
+  const { openModelService, bodyClass, poster, editionText, editionLocale } = briefingPageChrome({
+    onOpenModelSettings, readyDocument, editions, text, locale
+  })
 
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
@@ -440,26 +433,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         exportable={readyDocument !== undefined && !contentBlocked}
         exportState={exportState}
         copyState={copyState}
-        onManualRun={(draft) => {
-          // 三种输入合成一个绝对时刻：「现在」是按下那一刻；整点按读者时区换算，跨日与夏令时交给
-          // `instantForWallClock`——手拼字符串会差一小时，或者落到昨天。
-          const asOf = draft.cutoff === 'now'
-            ? new Date().toISOString()
-            : (() => {
-              const [hour, minute] = draft.cutoff.split(':').map(Number)
-              const today = new Date()
-              return instantForWallClock({
-                timeZone, year: today.getFullYear(), month: today.getMonth() + 1, day: today.getDate(),
-                hour: hour ?? 0, ...(minute === undefined ? {} : { minute })
-              })?.toISOString()
-            })()
-          if (asOf === undefined) return
-          // **手动生成是临时期，不是"按某一期跑"**：自带一个不透明的一次性期号，永远不写 `default`，
-          // 也不碰同一天别的期、别的语言。期号不许由时间派生（`A11.3`），随机即可；"是否已生成过"
-          // 由（日期, 截止时刻, 窗口, 语言）判定，那是下一步。
-          const periodId = globalThis.crypto.randomUUID()
-          void regenerate({ periodId, locale: draft.language, generation: { asOf, windowHours: draft.windowHours as 12 | 24 | 48 } })
-        }}
+        onManualRun={onManualRun}
         push={pushToPhone}
         pushText={briefingPushText[locale]}
         onExport={() => void exportImage()}
