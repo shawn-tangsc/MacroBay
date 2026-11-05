@@ -128,6 +128,13 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.getStorageState': excluded('internal-view'),
   'intelligence.dailyBriefing.retryUpgrade': excluded('internal-view'),
   'intelligence.dailyBriefing.deletePeriod': excluded('user-private-data'),
+  // 期配置的四个写入口与"发到手机"：改的是读者自己的排期、发的是读者自己的渠道，
+  // 都属于用户私有数据，不交给智能体。补齐原先漏登记的五条（路由早已在 manifest 里注册）。
+  'intelligence.dailyBriefing.listPeriods': excluded('user-private-data'),
+  'intelligence.dailyBriefing.createPeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.updatePeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.removePeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.publishToPhone': excluded('user-private-data'),
   'intelligence.queryRelatedEvents': exposed('query_related_events'),
   'intelligence.querySentimentSeries': exposed('query_sentiment_series'),
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),
