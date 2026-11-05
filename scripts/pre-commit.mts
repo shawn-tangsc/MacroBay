@@ -2,18 +2,21 @@
  * 提交前预检：**只拦自己这一笔**（Chief 2026-11-03 批，六条约束见 AGENTS.md「提交前的预检钩子」）。
  *
  * 为什么不是普通钩子：这个仓库是**多人共用同一个工作区**。把全仓 `tsc` 直接做成「红就拦」，
- * 别人的在途文件会把所有人的提交卡死——今晚那两条 `Element.click` 里就有一半是别人手上没写完的。
- * 所以这里的判据是「**报错文件属于本次提交**」，不是「全仓有没有错」。
+ * 别人的在途文件会把所有人的提交卡死——那两条 `Element.click` 里就有一半是别人手上没写完的。
+ *
+ * 但「只查工作区里的本笔文件」又漏了另一半（2026-11-05 补）：`git commit -- <路径>` 提交的是一棵
+ * **与当时工作区不同的树**，编译器读工作区会看到还没进库的新模块，于是「调用方进这一笔、被调模块
+ * 留在工作区」这种半条链全绿进库。现在改成：**把这一笔的树落出来（`git checkout-index`）再查**，
+ * 报错一律拦——树里只有会进库的文件，不存在「别人的在途文件」这一说。
  *
  * 它补的是「单跑定向用例抓不到」的那一半（类型错、按目录扫的守卫）；**不替代** `pnpm typecheck`，
- * 也不替代 Chief 跑的全量。
+ * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
-import { filesOutsideProjectInclude, withAmbientDeclarations } from './pre-commit-scope.mts'
 
 const BUDGET_MS = Number(process.env.PRE_COMMIT_BUDGET_MS ?? 58_000)
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/
@@ -100,95 +103,57 @@ if (guard.status !== 0) {
   say('四条守卫有红，但都不在本次提交的文件里（别人的在途改动），本次不拦截。')
 }
 
-// ── 2. 全仓 typecheck，只有「报错文件属于本次提交」才判失败 ──────────────────────────────
+// ── 2. 查「将要提交的那棵树」，不查工作区 ────────────────────────────────────────────────
 //
-// 实测：这台机器上全仓 tsc 要 42–60s，负载高时 58s 也跑不完。跑不完就放行等于没钩子，
-// 所以超时后**退一步只查本次提交的那几个文件**：注释、依赖解析、自己文件里的类型错都在，
-// 抓不到的是「改了别人的类型签名」这类跨文件破坏——那本来也该由 runner 的全量来兜。
-function runTypecheck(args: readonly string[], timeoutMs: number) {
-  return spawnSync('node_modules/.bin/tsc', args, { cwd: root, encoding: 'utf8', timeout: timeoutMs })
+// `git commit -- <路径>` 提交的是一棵**和当时工作区不同的树**：临时索引里只有具名路径。原来的做法是在
+// 工作区里跑 tsc，于是「调用方进了这一笔、被调模块还留在工作区」这种半条链会全绿进库——编译器读到的是
+// 工作区那份新模块，而进库的是旧版本（或者根本没有）。2026-11-05 就出过：抽离时把别人的半成品带上，
+// 还丢了筛选条件。
+//
+// 改法：用 `git checkout-index -a --prefix=<tmp>/` 把**这一笔的完整树**落出来（临时索引由 git 通过
+// `GIT_INDEX_FILE` 交给钩子，这里直接继承），对它跑 tsc。`tsconfig.json` 里的 `baseUrl` 与 `paths`
+// 是相对声明它的配置解析的，所以把 tsc 指到树里的那份配置，`@platform/*` 等别名也一律落在树内，
+// 不会漏回工作区。node_modules 软链过去：依赖不在提交范围内，但类型定义要从那儿拿。
+const treeRoot = join(root, 'node_modules', '.cache', 'pre-commit-tree')
+rmSync(treeRoot, { recursive: true, force: true })
+mkdirSync(treeRoot, { recursive: true })
+execFileSync('git', ['checkout-index', '-a', `--prefix=${treeRoot}/`], { cwd: root })
+for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modules')]) {
+  const real = join(root, modules)
+  if (!existsSync(real)) continue
+  mkdirSync(dirname(join(treeRoot, modules)), { recursive: true })
+  symlinkSync(real, join(treeRoot, modules), 'dir')
 }
-
-const timedOut = (result: ReturnType<typeof runTypecheck>): boolean =>
+const treeConfig = join(treeRoot, 'tsconfig.pre-commit.json')
+writeFileSync(
+  treeConfig,
+  JSON.stringify({ extends: './tsconfig.json', include: [], files: codeStaged.map((path) => `./${path}`) })
+)
+const timedOut = (result: ReturnType<typeof spawnSync>): boolean =>
   result.error !== undefined && result.error !== null && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
 
-// 给「退一步只查本笔文件」留 12s：全仓那步最多用到「预算 - 已用时 - 12s」，绝不把总时长顶穿。
-const sinceStart = (): number => Math.round(performance.now() - started)
-let check = runTypecheck(['--noEmit', '-p', 'tsconfig.json'], Math.max(8_000, BUDGET_MS - sinceStart() - 12_000))
-if (timedOut(check)) {
-  // 只查本次这几个文件：临时 tsconfig 放 node_modules/.cache（git 忽略），不落到仓库里。
-  const cacheDir = join(root, 'node_modules', '.cache')
-  mkdirSync(cacheDir, { recursive: true })
-  const scopedConfig = join(cacheDir, 'pre-commit-tsconfig.json')
-  writeFileSync(
-    scopedConfig,
-    JSON.stringify({
-      extends: join(root, 'tsconfig.json'),
-      include: [],
-      files: withAmbientDeclarations(codeStaged).map((path) => join(root, path))
-    })
-  )
-  say('全仓 typecheck 超出预算，改为只查本次提交的文件（跨文件破坏留给 runner 的全量）。')
-  check = runTypecheck(['--noEmit', '-p', scopedConfig], Math.max(6_000, BUDGET_MS - sinceStart()))
-}
+// 树里只有这一笔会进库的文件，所以**任何**报错都是这棵快照的问题，不必再区分「自己的 / 别人的」。
+const check = spawnSync(join(root, 'node_modules', '.bin', 'tsc'), ['--noEmit', '-p', treeConfig], {
+  cwd: treeRoot,
+  encoding: 'utf8',
+  timeout: remaining(10_000)
+})
 
 if (timedOut(check)) {
-  say(`预检超时（typecheck 超过 ${Math.round(BUDGET_MS / 1000)}s），**未拦截**，请手动跑 pnpm typecheck。`)
+  say(`预检超时（提交树的 typecheck 超过 ${Math.round(BUDGET_MS / 1000)}s），**未拦截**，请手动跑 pnpm typecheck。`)
   process.exit(0)
 }
 
-// ── 2b. 主 include 覆盖不到的文件（`products/`、`tools/` 等）单独补查 ────────────────────
-//
-// `tsconfig.json` 的 `products/**/*.{ts,tsx}` 里 TypeScript 不支持花括号，整个 `products/` 从来没被
-// 检查过（tsconfig 修正排在 tag 之后）。主路径跑的就是这份配置，于是**提交一个 `products/` 下的文件，
-// 全仓 typecheck 通过、实际一个字节都没查**；而超预算退一步用 `files: [本次文件]` 反而查得到——
-// 覆盖范围取决于机器忙闲，这是最难被发现的一种。补查只查本次提交的那几个文件，与那一步同形。
-let uncoveredOutput = ''
-const outsideInclude = filesOutsideProjectInclude(staged)
-if (outsideInclude.length > 0) {
-  const cacheDir = join(root, 'node_modules', '.cache')
-  mkdirSync(cacheDir, { recursive: true })
-  const uncoveredConfig = join(cacheDir, 'pre-commit-outside-include-tsconfig.json')
-  writeFileSync(
-    uncoveredConfig,
-    JSON.stringify({
-      extends: join(root, 'tsconfig.json'),
-      include: [],
-      files: withAmbientDeclarations(outsideInclude).map((path) => join(root, path))
-    })
-  )
-  const uncovered = runTypecheck(['--noEmit', '-p', uncoveredConfig], remaining(8_000))
-  if (timedOut(uncovered)) {
-    say(
-      `本次有 ${outsideInclude.length} 个文件不在主 typecheck 覆盖内，补查超时——**未验证**，请手动跑 pnpm typecheck`
-    )
-  } else {
-    say(`补查了 ${outsideInclude.length} 个不在主 typecheck 覆盖内的文件（products/tools 等）`)
-    uncoveredOutput = `${uncovered.stdout ?? ''}${uncovered.stderr ?? ''}`
-  }
-}
+const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}`
+const errors = tscOutput
+  .split('\n')
+  .filter((line) => line.includes('error TS'))
+  .map((line) => line.trim())
 
-const tscOutput = `${check.stdout ?? ''}${check.stderr ?? ''}${uncoveredOutput}`
-const ownErrors: string[] = []
-const foreignErrors: string[] = []
-for (const line of tscOutput.split('\n')) {
-  if (!line.includes('error TS')) continue
-  const located = /^(.+?)\(\d+,\d+\): error TS\d+/.exec(line.trim())
-  if (located === null) continue
-  const file = normalize(located[1] ?? '')
-  if (owns(file)) ownErrors.push(line.trim())
-  else foreignErrors.push(line.trim())
-}
-
-if (foreignErrors.length > 0) {
-  // 别人的在途文件：只提示，不拦。共用工作区里拦它们等于替别人背锅。
-  say(`另有 ${foreignErrors.length} 条类型错在**别人的在途文件**里，本次不拦截（预览一条）：`)
-  say(`  ${foreignErrors[0]}`)
-}
-
-if (ownErrors.length > 0) {
-  console.error(`[pre-commit] ✗ 本次提交的文件里有 ${ownErrors.length} 条类型错，先修再提交：`)
-  for (const line of ownErrors) console.error(`  ${line}`)
+if (errors.length > 0) {
+  console.error(`[pre-commit] ✗ 这一笔提交的树里有 ${errors.length} 条类型错（含它依赖的、已进库的那一版）：`)
+  for (const line of errors.slice(0, 20)) console.error(`  ${line.replace(treeRoot + '/', '')}`)
+  console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
   process.exit(1)
 }
