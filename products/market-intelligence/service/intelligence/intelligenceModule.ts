@@ -69,6 +69,7 @@ import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
+import { createBriefingPeriodsSource } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
@@ -819,17 +820,15 @@ export function getIntelligenceModule(
       },
       applyAgentModel: applyDailyBriefAgentModel
     })
-    // The generation setting owns when the edition runs and what it covers. Saving it re-registers
-    // the same job id so the next run uses the new time; the service reads the stored value at
-    // generation time, so a change never rewrites an edition that already exists.
+    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
+    // settings surface, but it no longer decides when an edition runs.
+    const briefingPeriodsSource = createBriefingPeriodsSource({ filePath: join(dataDir, 'daily-briefing-periods.json'), locale: getAppLanguage })
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
-      onSaved: () => { void dailyBriefingGenerationSettings.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
+      onSaved: () => { void briefingPeriodsSource.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
     })
     const dailyBriefingLanguageSettings = createEditionLanguageSettingsService({
-      storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')),
-      uiLanguage: getAppLanguage
-    })
+      storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')), uiLanguage: getAppLanguage })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
       generation: dailyBriefingGenerationSettings,
@@ -944,7 +943,7 @@ export function getIntelligenceModule(
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       readiness: createDailyBriefReadinessFor(publicQueryService),
       marketBackfill: currentBriefMarketBackfill,
-      generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
+      generationSettings: async () => (await briefingPeriodsSource.getPeriods())[0]!,
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
         (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
@@ -979,7 +978,7 @@ export function getIntelligenceModule(
       service: dailyBriefingService,
       getLocale: getAppLanguage,
       timeZone: shellTimeZone,
-      periods: dailyBriefingGenerationSettings,
+      periods: briefingPeriodsSource,
       links: dailyBriefSessionLinks,
       ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}),
       ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}),
