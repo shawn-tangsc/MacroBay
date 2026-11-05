@@ -35,6 +35,8 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  // 删除失败要单独说：共用「没存上」会把"这次没删掉"读成"编辑没生效"，读者不知道还要不要重来。
+  const [deleteFailed, setDeleteFailed] = useState(false)
   const confirm = useConfirm()
   // 服务端要求带上语言：它要决定"一条期都没有时那条默认期用哪种语言"，不猜。界面语言就是答案，
   // 不带参数会被拒（`daily-briefing-locale-required`）——这一处曾经把整块显示成"没读出来"。
@@ -53,6 +55,7 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
   const save = (draft: BriefingPeriodDraft): void => {
     setSaving(true)
     setSaveFailed(false)
+    setDeleteFailed(false)
     const target = editing
     // 写入同样带语言：服务端靠它决定新期在旧设置语言下的显示，同一个理由，不猜。
     const write = target === undefined ? client.create(draft, locale) : client.update(target.id, draft, locale)
@@ -76,7 +79,8 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
     return failed
       ? <div className="mi-briefing-periods" data-briefing-periods="true">
         <p className="mi-daily-briefing__settings-error" role="alert">{copy.loadFailed}</p>
-        <Button onClick={load}>{copy.add}</Button>
+        {/* 读不出来时这颗按钮重新**读**，所以它不能写「添加一期」——文字说的事就是它做的事。 */}
+        <Button data-briefing-periods-retry-load="true" onClick={load}>{copy.retryLoad}</Button>
       </div>
       : <LoadingState label={copy.loading} minHeight={90} />
   }
@@ -131,9 +135,11 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
                 tone: 'danger',
                 onConfirm: () => {
                   // 界面语言必填：服务端每个方法都要它，漏传就是 `daily-briefing-locale-required`。
+                  setDeleteFailed(false)
+                  setSaveFailed(false)
                   void client.remove(period.id, locale)
-                    .then(() => { setSaveFailed(false); load() })
-                    .catch(() => setSaveFailed(true))
+                    .then(() => { load() })
+                    .catch(() => setDeleteFailed(true))
                 }
               })
             }}
@@ -144,6 +150,7 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
       {copy.add}
     </Button>
     {saveFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{copy.saveFailed}</p> : null}
+    {deleteFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{copy.removeFailed}</p> : null}
     <BriefingPeriodDialog
       // 加了 key 才换得住身份：弹框的草稿只在挂载时取一次，改一期时若不重挂，表单里还是上一次的值。
       key={editing?.id ?? 'new'}
@@ -153,7 +160,7 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
       {...(editing === undefined ? {} : { editing })}
       saving={saving}
       onSave={save}
-      onClose={() => { if (!saving) { setAdding(false); setEditing(undefined); setSaveFailed(false) } }}
+      onClose={() => { if (!saving) { setAdding(false); setEditing(undefined); setSaveFailed(false); setDeleteFailed(false) } }}
     />
   </div>
 }
