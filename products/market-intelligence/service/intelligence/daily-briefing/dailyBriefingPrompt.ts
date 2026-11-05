@@ -21,9 +21,30 @@ export function buildDailyBriefingPrompt(input: Readonly<{
 }>): StructuredModelMessage[] {
   const { document, locale } = input
   const rowFacts = dataFacts(document, locale)
+  /**
+   * 可引用集合（Chief 2026-11-06 批）：模型能看见候选（选择阶段的列表），但**只有落进这一版的
+   * 事实才允许被 `items` / `evidenceRefs` 引用**。以前两者混在一起，模型照着候选 id 写，校验回了
+   * 12 条 unknown-fact，白烧一轮修复。
+   */
+  const citableItems = document.news.items.map((item) => `news:${item.itemId}`)
+  const citableMacro = selectMacroAnalysisCandidates(document.news.macro).map((item) => `macro:${item.eventKey}`)
+  const citableData = rowFacts.map((item) => item.factId)
+  // 上一阶段的选择结果按原样带给写作段（读者要能解释"为什么没选"），但它的 hidden 只是理由，
+  // 不是这一版的事实：显式标 `citable: false`，别让 id 看起来像可写的。
+  const selection = input.selection as Readonly<{ hidden?: readonly Readonly<Record<string, unknown>>[] }> | undefined
   const facts = {
     locale,
-    ...(input.selection !== undefined ? { selection: input.selection } : {}),
+    citable: {
+      rule: 'items[].factId and evidenceRefs may only name ids listed here; a hidden candidate id is never citable.',
+      items: [...citableItems, ...citableMacro],
+      evidenceRefs: [...citableItems, ...citableMacro, ...citableData]
+    },
+    ...(selection !== undefined
+      ? { selection: {
+        ...selection,
+        ...(selection.hidden === undefined ? {} : { hidden: selection.hidden.map((entry) => ({ ...entry, citable: false })) })
+      } }
+      : {}),
     previousLedePattern: document.lede.previousPattern ?? null,
     edition: { date: document.edition.date, windowStart: document.edition.windowStart, windowEnd: document.edition.windowEnd },
     conclusion: document.conclusion ? {
@@ -179,6 +200,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
         '- items are shown facts with why; hidden contains every other candidate with a reason. items + hidden must cover every news and macro candidate exactly once.',
+        '- CITE ONLY ids listed in FACTS.citable: items[].factId and evidenceRefs must come from it. A candidate you hid is not a fact in this edition - its id is not citable, in items or in evidenceRefs; hidden exists to explain why you left it out, nothing else.',
+        '- If a validation reply names an id you cited that is not citable, drop that entry. Do not rewrite it to a different id to keep the sentence: the sentence is about a fact this edition does not carry.',
         '- Every shown macro needs a why. A macro without a why is not shown; do not list one in items and leave its explanation to be inferred.',
         '- A macro fact without consensus is not automatically shown and not automatically hidden: select it when its actual vs previous move matters, and hide it with a relevance, repetition or low-impact reason when it does not. Missing consensus is a data gap, never the reason an event is unimportant. When shown, its why must compare actual with previous by value.',
         '- The lede is event-first: lead with the dominant event/tension and its transmission, not with a direction or a data recital. Never enumerate the news headlines or the data rows. Avoid generic openers such as “market sentiment is cautious” or “mixed signals”.',

@@ -468,3 +468,46 @@ describe('the repair budget', () => {
     expect(checks).toHaveLength(maximumRepairRounds + 1)
   })
 })
+
+describe('the citable set (Chief 2026-11-06)', () => {
+  const selection = {
+    stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+    focus: 'US.FOMC',
+    focusWhy: 'The policy path sets the discount rate on BTC and ETH.'
+  }
+
+  it('marks which ids the writing pass may cite, and needs no repair when it stays inside them', async () => {
+    const { continues, runner } = scriptedRunner(selection, editorial('US.FOMC', selection.focusWhy))
+    const stages: { id: string; state: string }[] = []
+    const result = await runDailyBriefAgentTurn({
+      runner, document: withNextCandidates(), locale: 'en-US',
+      onStage: (event: { stage: string; state: string }) => { stages.push({ id: event.stage, state: event.state }) }
+    })
+
+    expect(result.state).toBe('accepted')
+    // 写作素材里明说"哪些 id 可以被引用"，候选（隐藏的）不在其中。
+    const writing = continues.find((text) => text.includes('Write this exact JSON shape')) ?? ''
+    expect(writing).toContain('"citable"')
+    expect(writing).toContain('"news:n1"')
+    expect(writing).toContain('"macro:US.CPI"')
+    // 一次过：一版正常产出不该多花一轮修复。
+    expect(stages.filter((stage) => stage.id === 'validation' && stage.state === 'begin')).toHaveLength(1)
+    expect(stages.filter((stage) => stage.id.startsWith('repair-'))).toHaveLength(0)
+  })
+
+  it('names the refused citation in the repair round, so the next try can drop it', async () => {
+    const bad = {
+      ...editorial('US.FOMC', selection.focusWhy),
+      items: [
+        { factId: 'news:n1', why: 'Stablecoin supply keeps shrinking and pulls bids away.' },
+        { factId: 'macro:US.CPI', why: 'The CPI beat keeps the discount rate higher for longer.' },
+        { factId: 'news:dropped-1', why: 'A headline the selection stage left out.' }
+      ]
+    }
+    const { continues, runner } = scriptedRunner(selection, bad)
+    await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    const repair = continues.find((text) => text.includes('failed validation')) ?? ''
+    expect(repair).toContain('news:dropped-1')
+  })
+})

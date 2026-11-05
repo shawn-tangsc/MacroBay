@@ -134,7 +134,7 @@ export function validateDailyBriefingEditorial(
       // wrongly, and one repair round must hear both or it fixes one and leaves the other.
       // Recorded, and then kept in place: the id is still an entry the reply wrote, so dropping it
       // would turn the refused citation into a different, unrelated shape complaint.
-      issues.push({ code: 'unknown-fact', detail: `${item.factId} is not a fact in this edition` })
+      issues.push({ code: 'unknown-fact', detail: unknownFactDetail(document, item.factId) })
     }
     if (items.some((existing) => existing.factId === item.factId)) return failShape('items.factId')
     items.push({ factId: item.factId, why: item.why })
@@ -154,7 +154,7 @@ export function validateDailyBriefingEditorial(
     if (!isText(entry.factId) || !isText(entry.reason)) return failShape('hidden[].factId')
     if (entry.reason.length > 200) return fail('too-long')
     if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) {
-      issues.push({ code: 'unknown-fact', detail: `${entry.factId} is not a fact in this edition` })
+      issues.push({ code: 'unknown-fact', detail: unknownFactDetail(document, entry.factId) })
     }
     if (items.some((shown) => shown.factId === entry.factId) || hidden.some((existing) => existing.factId === entry.factId)) return failShape('hidden[].factId')
     hidden.push({ factId: entry.factId, reason: entry.reason })
@@ -173,7 +173,7 @@ export function validateDailyBriefingEditorial(
       if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return failShape('webEvidence[]')
       if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return failShape('webEvidence[]')
       const macro = document.news.macro.find((item) => item.eventKey === entry.eventKey)
-      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact', `macro:${entry.eventKey} is not in this edition`)
+      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact', unknownFactDetail(document, `macro:${entry.eventKey}`))
       if (entry.field === 'actual' && macro?.actual) return failShape('webEvidence[].field')
       if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return failShape('webEvidence[].field')
       const result = results.get(entry.sourceUrl)
@@ -206,7 +206,7 @@ export function validateDailyBriefingEditorial(
   for (const entry of raw.importance) {
     if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return failShape('importance[]')
     if (!isText(entry.factId) || !isText(entry.tier)) return failShape('importance[]')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', unknownFactDetail(document, entry.factId))
     if (entry.tier !== 'must' && entry.tier !== 'support' && entry.tier !== 'reference') return failShape('importance[].tier')
     if (entry.reasonText !== undefined && (!isText(entry.reasonText) || entry.reasonText.length > 200)) return fail('too-long')
     if (importance.some((existing) => existing.factId === entry.factId)) return failShape('importance[].factId')
@@ -217,7 +217,7 @@ export function validateDailyBriefingEditorial(
     if (!isExact(entry, ['factId', 'reason'])) return failShape('hidden[]')
     if (!isText(entry.factId) || !isText(entry.reason)) return failShape('hiddenData[]')
     if (entry.reason.length > 200) return fail('too-long')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', unknownFactDetail(document, entry.factId))
     if (importance.some((shown) => shown.factId === entry.factId) || hiddenData.some((existing) => existing.factId === entry.factId)) return failShape('hiddenData[].factId')
     hiddenData.push({ factId: entry.factId, reason: entry.reason })
   }
@@ -507,3 +507,8 @@ function isText(value: unknown): value is string {
 
 import { collectToolResults, isLedePattern } from './dailyBriefingValidationGuards'
 export { hasBriefingNextTransmission } from './dailyBriefingValidationGuards'
+// 报错点名是哪个 id、它到底在哪（Chief 2026-11-06）：只说 unknown-fact，模型只能猜，猜错再烧一轮。
+function unknownFactDetail(document: DailyBriefingDocument, factId: string): string {
+  const hidden = document.provenance.selectionAudit?.hidden ?? []
+  return hidden.some((entry) => entry.factId === factId) ? `${factId} was hidden by selection, so it is not a fact in this edition; do not show or cite it` : `${factId} is not a fact in this edition`
+}

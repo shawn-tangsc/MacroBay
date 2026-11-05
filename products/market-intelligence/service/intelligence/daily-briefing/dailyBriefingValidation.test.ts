@@ -211,6 +211,31 @@ describe('daily briefing editorial validation and application', () => {
     expect(validateDailyBriefingEditorial(validOutput, document(), 'zh-CN').ok).toBe(true)
   })
 
+  // Chief 2026-11-06：报错要**点名是哪个 id、它到底在哪**。只说 unknown-fact，模型只能猜，
+  // 猜错就再烧一轮——那 12 条 unknown-fact 正是这么来的。
+  it('says a refused id was hidden by selection, instead of claiming it does not exist', () => {
+    const base = document()
+    const withHidden: DailyBriefingDocument = {
+      ...base,
+      provenance: {
+        ...base.provenance,
+        selectionAudit: {
+          shown: ['news:n1'],
+          hidden: [{ factId: 'news:dropped-1', reason: '与另一条标题重复' }]
+        }
+      } as DailyBriefingDocument['provenance']
+    }
+    const reply = validateDailyBriefingEditorial(
+      { ...validOutput, items: [{ factId: 'news:dropped-1', why: 'x' }] },
+      withHidden, 'zh-CN'
+    )
+    expect(reply).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
+    const detail = reply.ok ? '' : reply.detail ?? ''
+    // 点名这个 id，并说清它为什么不能用：它是被选择阶段隐藏的候选，不是"不存在"。
+    expect(detail).toContain('news:dropped-1')
+    expect(detail).toContain('hidden by selection')
+  })
+
   it('rejects an unknown fact, a news id in importance, an unknown number, a URL and an oversized lede', () => {
     expect(validateDailyBriefingEditorial({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }, document(), 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'unknown-fact' })
