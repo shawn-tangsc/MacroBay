@@ -37,7 +37,7 @@ import { resolveBriefingStateReason } from './dailyBriefingText'
  * nothing generated, a missing language, a failure, an edition. The page decides which state it is
  * in; this file decides how each one looks.
  */
-export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, forceGenerating, onGenerate, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
+export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, forceGenerating, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   /** The page's one answer; the generating pane reads it, and it must include service-side runs. */
@@ -71,7 +71,6 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   forceGenerating?: boolean
   /** 版次级工具栏：吸在正文滚动区顶部，只作用于当前这一版（三分区的中段）。 */
   editionBar?: React.ReactNode
-  onGenerate: () => void
   /** 重新读一次这一版（不是重新生成）：读不到时那颗「重试」走这里。 */
   onReread: () => void
   onRetry: () => void

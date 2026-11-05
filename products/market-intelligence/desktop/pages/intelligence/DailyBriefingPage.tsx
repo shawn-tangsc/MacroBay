@@ -328,7 +328,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { selectEdition, selectLocale } = briefingEditionSelection({
     editions, effectiveLocale: () => effectiveLocaleRef.current, openEdition, setPickedLocale, setPickedPeriodId
   })
-  const { regenerate, generateNow } = useBriefingRunActions({
+  /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
+  const onScreenPeriodId = readyDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
+  const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
     setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId, onRunIntent: setRunIntent,
@@ -336,7 +338,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   const runManual = useBriefingManualRun({
     timeZone,
-    regenerate,
+    // 手动那一版走**唯一入口**：意图是 `manual`，期号/语言/截止由这一份 draft 给出。
+    regenerate: (input) => runBriefing({ ...input, trigger: 'manual' }),
     running: generating,
     // A7.10 的查重键：同一 (日期, 截止时刻, 窗口, 语言) 已经有一版时，先问替换——再插一行就是两份
     // 说同一件事的版次。手动期才有这个键，排期期按它自己的期号走。
@@ -362,7 +365,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       .replace('{language}', text.history.languages[runIntent.locale])
     : undefined
   const onManualRun = (draft: Parameters<typeof runManual>[0]) =>
-    briefingManualRunReport({ result: runManual(draft), text, timeZone, regenerate })
+    briefingManualRunReport({
+      result: runManual(draft),
+      text,
+      timeZone,
+      // 撞期「替换」与第一次「生成」走**同一个入口**：意图是 manual，参数是当前 draft 的那三样。
+      regenerate: (input) => runBriefing({ ...input, trigger: 'manual' })
+    })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: readyDocument,
@@ -464,7 +473,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generatingElapsedMs={runningElapsedMs}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
-        onRegeneratePeriod={({ periodId, locale: target }) => { void regenerate({ periodId, locale: target }) }}
+        // 失败行行内重试：期号与语言来自那一行；截止由服务按那一期的配置取（#9 在批 2 补 generation）。
+        onRegeneratePeriod={({ periodId, locale: target }) => { void runBriefing({ periodId, locale: target, trigger: 'retry' }) }}
         // 行右键与工具栏第五颗共用同一个处理函数：两个入口，一套行为。
         onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale, ...(target.clock === undefined ? {} : { clock: target.clock }) })} />
       <DailyBriefingContent {...{
@@ -481,14 +491,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
           onExport={() => void exportImage()}
           onCopy={() => void copy()}
-          onRegenerate={() => void regenerate()}
+          onRegenerate={() => void runBriefing({ locale: effectiveLocale, trigger: 'regenerate' })}
           push={pushToPhone}
           pushText={briefingPushText[locale]}
         />,
         text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
-        settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
+        settingsOpen: settingsSection !== null,
+        // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
+        onRetry: () => void runBriefing({ locale: effectiveLocale, trigger: 'regenerate' }),
         // 读不到时的「重试」只重读：把读取重跑一遍，不起 run、不写版、不调模型。
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句

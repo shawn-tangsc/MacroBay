@@ -44,6 +44,8 @@ function withGeneratingRow(
  * not "regenerating the edition you are looking at", and saying so made the reader think his choice
  * was ignored. `asOf` travels because the toolbar names the moment it is writing.
  */
+export type BriefingRunTrigger = 'manual' | 'regenerate' | 'retry'
+
 export type BriefingRunIntent = Readonly<{
   kind: 'manual' | 'regenerate'
   periodId: string
@@ -71,14 +73,21 @@ export function useBriefingRunActions(input: Readonly<{
   /** Read the list again once the run settles: the row must show what just landed. */
   onSettled?: () => void
 }>): Readonly<{
-  /** Runs one issue now. An optional draft is the manual dialog's three fields. */
-  regenerate: (options?: Readonly<{
-    locale?: 'zh-CN' | 'en-US'
-    /** A one-off manual period's own id; without it the run lands on `default` and overwrites a slot. */
+  /**
+   * 生成一次的**唯一入口**。
+   *
+   * 五个调用点（弹框生成、撞期替换、工具栏重新生成、正文失败面板重试、失败行行内重试）都走这里，
+   * 每个入口只声明**意图**（`trigger`），期号/语言/截止由它按这一行自己的身份给出——以前每个入口
+   * 自带一套参数组合，读者从不同按钮点下去会跑到不同的期上。
+   */
+  runBriefing: (request: Readonly<{
+    /** 不传就是服务端的默认期：只留给"重跑当前版"这种本来就落默认期的入口。 */
     periodId?: string
+    locale: 'zh-CN' | 'en-US'
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+    /** 只决定文案与"这一次在做什么"，不决定跑哪一期——那是上面两样的职责。 */
+    trigger: BriefingRunTrigger
   }>) => Promise<void>
-  generateNow: () => void
 }> {
   const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
     client: input.client,
@@ -97,12 +106,17 @@ export function useBriefingRunActions(input: Readonly<{
    * 一次运行的**起点**：每个入口都走这里，否则"再加一个入口就再坏一次"。
    * 挂行 + 立 generating 标志 + 清上一次失败，三样在同一处发生。
    */
-  const begin = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): void => {
+  const begin = (options: Readonly<{
+    locale?: 'zh-CN' | 'en-US'
+    periodId?: string
+    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+    trigger?: BriefingRunTrigger
+  }> = {}): void => {
     input.setRegenerateFailure(null)
     input.setRegenerating(true)
     // 手动期带自己的期号与截止；没有这两样的就是"重跑当前版"。两个入口在这里分叉，别在下游判。
     input.onRunIntent?.({
-      kind: options.periodId === undefined && options.generation === undefined ? 'regenerate' : 'manual',
+      kind: options.trigger === 'manual' ? 'manual' : 'regenerate',
       periodId: options.periodId ?? 'default',
       locale: options.locale ?? input.locale,
       ...(options.generation?.asOf === undefined ? {} : { asOf: options.generation.asOf })
@@ -119,39 +133,25 @@ export function useBriefingRunActions(input: Readonly<{
   }
 
   return {
-    async regenerate(options) {
-      begin(options)
+    async runBriefing(request) {
+      begin(request)
       // 先挂一行"生成中"再开始跑：今天还没有任何版次/运行记录时，列表里连挂进度的那一行都没有，
       // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
       // 返回的结果替换；失败时下一轮重读会把这一行去掉。
-      const document = await run(options)
+      const document = await run(request)
       // 跑失败/超时也要把这行收回：它是"正在跑"的临时事实，不是一条版次。留着它会变成一行永远
       // "生成中"的幽灵（进程崩过的那次尤其明显）。判据只用"占位行 + 语言正在生成"这两个特征。
       if (!document) input.setEditions((current) => current.filter((row) => !isGeneratingPlaceholder(row)))
       if (document) {
         input.setView({ status: 'ready', document, kind: 'today' })
+        // 手动期可能落在另一天/另一期：切到它自己的日期，否则正文写的是新的一版、列表还停在旧那天。
+        input.setCurrentPeriodDate?.(document.edition.date)
         // 只替换读到的那一行（日期 + 期号 + 语言）：同一天另一语言的行必须原样留着，
         // 否则两行会变成同一版次，键相同、语言相同，看上去像"选中了两个"。
         input.setEditions((current) => mergeEditionSummary(current, document))
       }
       input.onRunIntent?.(null)
       input.setRegenerating(false)
-    },
-    generateNow() {
-      // 「生成中文版」这类入口也走同一条起点：以前它绕过了挂行，左侧就没有"生成中"那一行。
-      begin()
-      void run()
-        .then((document) => {
-          if (document) {
-            input.setView({ status: 'ready', document, kind: 'today' })
-            input.setCurrentPeriodDate?.(document.edition.date)
-          }
-        })
-        .finally(() => {
-          input.onRunIntent?.(null)
-          input.setRegenerating(false)
-          input.onSettled?.()
-        })
     }
   }
 }
