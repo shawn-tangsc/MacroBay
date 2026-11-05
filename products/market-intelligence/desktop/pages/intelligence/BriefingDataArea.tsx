@@ -314,8 +314,20 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
    * zero is a claim that the level was zero rather than unread.
    */
   const level = row.close === undefined ? text.noValue : formatBriefingValue({ number: row.close.value, format: 'level' }, text.noValue, locale)
-  /** The move beside it: arrow plus magnitude, coloured, and no window — the label already carries that. */
-  const move = copy ? copy.primary : row.change === null ? '' : changeCopy(row.change.value, changeArrows, text.noValue)
+  /**
+   * The move beside it: arrow plus magnitude, coloured, and no window — the label already carries that.
+   *
+   * Where the move lives depends on the row: a price row stores its 24h percentage in `value` and keeps
+   * `change` null by construction, so reading only `change` silently dropped the move from both price
+   * cards while the level and the amplitude stayed. The figure that exists must be printed.
+   */
+  const move = copy
+    ? copy.primary
+    : row.change !== null
+      ? changeCopy(row.change.value, changeArrows, text.noValue)
+      : row.value !== null && row.value.format === 'percent'
+        ? changeCopy(row.value.number, changeArrows, text.noValue)
+        : ''
   // The stored curve, drawn as stored: the segments are already rebased and thinned, so the renderer
   // neither resamples nor re-anchors. No curve is an empty column with its zero line and nothing else.
   const paths = priceCurvePaths(row.curve ?? [])

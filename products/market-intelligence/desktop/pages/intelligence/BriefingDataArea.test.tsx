@@ -908,3 +908,35 @@ describe('the index row reads the production shape, not a convenient one', () =>
     expect((cell.textContent?.match(/QQQ 永续代理/g) ?? [])).toHaveLength(1)
   })
 })
+
+describe('a price card keeps the move when change is null', () => {
+  it('prints level, move and amplitude together, because that is the shape the service writes', async () => {
+    const base = documentWithData()
+    // Production shape: the 24h percentage lives in `value`; `change` is null on price rows. A fixture
+    // that fills `change` in hides this — that is how the move disappeared from both cards while the
+    // level and the amplitude stayed on screen.
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((entry) => (entry.id === 'btc' || entry.id === 'eth'
+          ? { ...entry, change: null, close: { value: entry.id === 'btc' ? 80_682.1 : 2_435.34, at: `${today}T00:00:00.000Z` } }
+          : entry))
+      }
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(BriefingDataArea, {
+      groups: briefingDataGroups(doc), text, locale: 'zh-CN', formatTime: () => '07:00',
+      paymentDirectionsCompact: briefingPaymentDirections('zh-CN'), policyWords: briefingPolicyGaugeWords('zh-CN'),
+      changeArrows: briefingChangeArrows('zh-CN'), fearGreedBuckets: briefingFearGreedBuckets('zh-CN')
+    })))
+    const card = host.querySelector('[data-briefing-price-card="btc"]')!
+    expect(card.querySelector('[data-briefing-price-value="btc"]')?.textContent)
+      .toBe(formatBriefingValue({ number: 80_682.1, format: 'level' }, text.noValue, 'zh-CN'))
+    // The move is the figure that exists; dropping it leaves a level with no direction.
+    expect(card.querySelector('.mi-brief-poster__price-change')?.textContent).toContain('1.2%')
+    expect(card.querySelector('[data-briefing-amplitude="btc"]')).not.toBeNull()
+  })
+})
