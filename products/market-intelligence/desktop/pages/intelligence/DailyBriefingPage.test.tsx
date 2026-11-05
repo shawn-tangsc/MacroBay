@@ -850,7 +850,10 @@ describe('daily briefing page', () => {
     expect(reason).not.toContain('{moment}')
     const retry = state.querySelector<HTMLButtonElement>('.state-view__action')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
+    // 「重试」= 重新**读**一次：读被再问了一遍，但没有起 run、没有写版次、没有花模型调用。
+    // 这条以前接的是生成，点一下会真的跑一期——判据就钉在这里。
     expect(getToday).toHaveBeenCalledTimes(2)
+    expect(client.regenerate).not.toHaveBeenCalled()
     expect(dom.textContent).toContain(text.title)
   })
 
@@ -863,12 +866,10 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     const state = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"]')!
     expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.noBrief)
-    expect(state.querySelector('.state-view__action')?.textContent).toBe('创建')
-    await act(async () => {
-      state.querySelector<HTMLButtonElement>('.state-view__action')!.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    expect(getToday).toHaveBeenCalledTimes(2)
+    // 空态零按钮：还没有内容时，动作入口在顶部；这颗旧的「创建」是第五个生成入口，已删。
+    expect(state.querySelector('.state-view__action')).toBeNull()
+    // 也就没有再起一次读或一次跑。
+    expect(getToday).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to the platform sentence when the product sentence is blank', async () => {
@@ -2084,7 +2085,8 @@ it('shows one empty reason and no detail column when no edition exists', async (
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
   expect(dom.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
   expect(dom.querySelectorAll('.state-view')).toHaveLength(1)
-  expect(dom.querySelectorAll('.state-view__action')).toHaveLength(1)
+  // 空态零按钮（`02` v2.108）：以前这里有一颗「创建」，点下去真的会跑一期。
+  expect(dom.querySelectorAll('.state-view__action')).toHaveLength(0)
   expect(dom.querySelectorAll('[data-locale]')).toHaveLength(0)
 })
 

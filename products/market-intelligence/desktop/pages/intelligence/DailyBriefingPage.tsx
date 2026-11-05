@@ -489,6 +489,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
+        // 读不到时的「重试」只重读：把读取重跑一遍，不起 run、不写版、不调模型。
+        onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
         // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
         forceGenerating: runIntent?.kind === 'manual',
