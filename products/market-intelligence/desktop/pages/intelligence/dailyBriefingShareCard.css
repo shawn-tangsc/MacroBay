@@ -326,6 +326,12 @@
 .mi-brief-poster__figure-band[data-tone='up'] { color: #1f5b32; }
 .mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
 .mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
+/* The qualifier that follows the block title: it takes the title's size and ink, and deliberately not
+   its weight or tracking. Inheriting `.1em` would space 未平仓合约 out until it read as a second
+   title, and the phrase exists to say what the number is, not to name a second block. Same intent as
+   `__price-proxy` on the price card — it qualifies the name, it is not another name — at this block's
+   own size instead of the card's. Two declarations, no new colour and no new size. */
+.mi-brief-poster__leverage-note { font-weight: 400; letter-spacing: normal; }
 .mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
 /* The positioning card keeps its own warm shell whatever the tone says: its tone belongs to the printed
    change, not to the card's colour — the green/red shell is the price cards' vocabulary. */
