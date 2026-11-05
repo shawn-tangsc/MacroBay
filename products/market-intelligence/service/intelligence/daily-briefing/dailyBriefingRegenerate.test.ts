@@ -28,7 +28,8 @@ describe('a manual run uses the cutoff the reader chose', () => {
     const input = resolve.mock.calls[0]![0] as unknown as Record<string, unknown>
     expect(input.asOf).toBe(CHOSEN_0800)
     expect(input.periodTime).toBe(CHOSEN_0800)
-    expect(input.periodKind).toBe('manual')
+    // 期次类型不在这里传：由 runTrigger 一处推导（`02` v2.134 G9）。
+    expect(input.runTrigger).toBe('manual')
     expect(input.periodId).toBe('p-manual')
     expect(input.locale).toBe('en-US')
     expect(input.date).toBe('2026-11-05')
@@ -42,6 +43,8 @@ describe('a manual run uses the cutoff the reader chose', () => {
     const input = resolve.mock.calls[0]![0] as unknown as Record<string, unknown>
     // 排期口径：当天 07:00（Asia/Shanghai）= 前一天 23:00Z。
     expect(input.asOf).toBe('2026-11-04T23:00:00.000Z')
-    expect(input.periodKind).toBeUndefined()
+    // 没选截止时刻也是**手动发起**：点「手动生成」直接按生成的那条路，期次类型必须是手动期。
+    // 以前这里会是 scheduled + manual 并存，列表于是把一版手动生成的日报显示成「定时」。
+    expect(input.runTrigger).toBe('manual')
   })
 })

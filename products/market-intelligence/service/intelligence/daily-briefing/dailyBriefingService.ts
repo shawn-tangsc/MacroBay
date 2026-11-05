@@ -483,7 +483,9 @@ export function createDailyBriefingService(deps: Readonly<{
         ...(await deps.source.renderPacket(facts, input.locale, input.timeZone)),
         periodId: input.periodId,
         periodTime: input.asOf,
-        periodKind: input.periodKind ?? 'scheduled',
+        // 期次类型只有**一处推导**（`02` v2.134 G9）：手动发起 ⇒ 手动期，其余 ⇒ 定时期。
+        // 调用方不再各写一格；列表徽标也读这一格。
+        periodKind: input.periodKind ?? ((input.runTrigger ?? 'scheduled') === 'manual' ? 'manual' : 'scheduled'),
         runTrigger: input.runTrigger ?? 'scheduled'
       })
       recorder.end('source', 'success')

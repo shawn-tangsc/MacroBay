@@ -866,6 +866,21 @@ describe('period run', () => {
     expect(await store.get('2026-10-30', 'zh-CN', 'default')).toBeUndefined()
   })
 
+  it('files a manual regenerate as a manual period, even when no cutoff was chosen', async () => {
+    // 用户实测那版（11/06 02:59）：点「手动生成」没改时刻直接按生成，文档写成
+    // `periodKind=scheduled` + `runTrigger=manual`，列表于是显示成「定时」。
+    // `02` v2.134 G9：期次类型一处推导——手动发起就是手动期。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+    const result = await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    expect(result.document.edition).toMatchObject({ periodKind: 'manual', runTrigger: 'manual' })
+    // 两者不许再各说各的：这是同一件事的两种说法，只能同时成立。
+    expect(`${result.document.edition.periodKind}|${result.document.edition.runTrigger}`).toBe('manual|manual')
+  })
+
   it('records a failed run when the source cannot be read', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     const failing: DailyBriefingSource = {

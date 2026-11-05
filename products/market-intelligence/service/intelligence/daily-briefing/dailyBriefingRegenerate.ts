@@ -29,7 +29,6 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
     locale: DailyBriefingLocale
     timeZone: string
     windowHours: number
-    periodKind?: 'manual'
     periodTime?: string
     runTrigger?: DailyBriefingRunTrigger
   }>, force: boolean) => Promise<DailyBriefingTodayResult>
@@ -52,9 +51,12 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
     return deps.withZone(await deps.runs.join(deps.runs.key(window.date, periodId, input.locale), async () =>
       deps.resolve({
         asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
+        // **手动发起就是手动期**（`02` v2.134 G9）：期次类型不再单独传，由这一处（runTrigger）
+        // 推到一处推导，页面与列表徽标读的是同一个结论。以前两边各写一格，于是出现
+        // 「periodKind=scheduled + runTrigger=manual」这种一版两个身份。
         runTrigger: 'manual',
         // Three values or none: the row's "cutoff · actual" pair and "current" both need them.
-        ...(input.generation === undefined ? {} : { periodKind: 'manual' as const, periodTime: input.generation.asOf })
+        ...(input.generation === undefined ? {} : { periodTime: input.generation.asOf })
       }, true)), window.zoneSource)
   }
 }
