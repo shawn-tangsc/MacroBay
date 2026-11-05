@@ -264,24 +264,20 @@ describe('daily briefing history rail', () => {
   })
 })
 
-describe('a collapsed day is readable on its own, and only today is 本期', () => {
-  it('summarises the latest readable edition, and never marks yesterday as 本期', () => {
-    // 折叠行不能只是「共 N 期」加一片空白；而「本期」属于今天——`isCurrent` 是"那一天最晚的一条"，
-    // 每天各有一条，直接标就会把本期挂到昨天。
+describe('a collapsed day carries only day-level facts', () => {
+  it('shows the day, its count and the caret — never a period\'s clock or language', () => {
+    // 折叠行代表的是"那一天"，时刻与语言是**期级**属性：挂在"这一天"上就是维度错误。
     render({
       editions: [
-        edition({ date: '2026-11-04', periodId: 'p1', isCurrent: true, state: 'generated', summaryLine: '昨天的摘要', scheduledTime: '07:00' }),
-        edition({ date: '2026-11-03', periodId: 'p2', isCurrent: true, state: 'generated', summaryLine: '前天的摘要', scheduledTime: '07:00' })
+        edition({ date: '2026-11-04', periodId: 'p1', state: 'generated', scheduledTime: '07:00' }),
+        edition({ date: '2026-11-03', periodId: 'p2', state: 'generated', scheduledTime: '07:00' })
       ] as never
     })
-    // 折叠行只有三段：时刻 · 语言 · 方向。**标题不进侧栏**（反向断言：拿已知标题去搜，出现即红）。
-    const summaries = [...host.querySelectorAll<HTMLElement>('[data-day-summary]')]
-    expect(summaries.length).toBeGreaterThan(0)
-    const text_ = summaries.map((node) => node.textContent ?? '').join(' ')
-    expect(text_).toContain('07:00')
-    expect(text_).not.toContain('昨天的摘要')
-    expect(text_).not.toContain('前天的摘要')
-    expect(host.querySelectorAll('[data-is-current="true"]')).toHaveLength(0)
+    expect(host.querySelectorAll('[data-day-summary]')).toHaveLength(0)
+    expect(host.textContent).not.toContain('07:00 · 中文')
+    // 天头三要素仍在：日期、共 N 期、箭头。
+    expect(host.querySelectorAll('[data-day-count]').length).toBeGreaterThan(0)
+    expect(host.querySelectorAll('[data-day-caret="closed"]').length).toBeGreaterThan(0)
   })
 })
 

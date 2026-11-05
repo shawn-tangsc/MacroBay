@@ -148,9 +148,22 @@ export function DailyBriefingHistoryRail({
     return true
   }
 
-  /** One run, one row: only the row that has no body yet is the one currently being written. */
-  const isRunning = (edition: DailyBriefingEditionSummary): boolean =>
-    edition.date === todayDate && edition.state === 'missing' && generatingStage !== undefined
+  /**
+   * One run, one row. The projection says which edition is in flight (`languages` carries the
+   * generating state); without that, today's first row with no body is the one being written.
+   *
+   * Picking it once matters: a day can hold several periods, and painting every empty row of the day
+   * as "generating" would claim several runs at once — and would hide a failed row behind a spinner.
+   */
+  const waitingKey = useMemo(() => {
+    const explicit = editions.find((row) => (row.languages ?? []).some((language) => language.state === 'generating'))
+    if (explicit) return `${explicit.date}:${explicit.periodId}:${explicit.locale}`
+    if (generatingStage === undefined) return undefined
+    // 没有显式在跑的那一行时，取"今天还没跑过的那一期"——失败过的那一期此刻不是空的，它有自己的原因。
+    const missingToday = editions.filter((row) => row.date === todayDate && row.state === 'missing')
+    const fallback = missingToday.find((row) => !row.attemptCount) ?? missingToday[0]
+    return fallback ? `${fallback.date}:${fallback.periodId}:${fallback.locale}` : undefined
+  }, [editions, generatingStage, todayDate])
 
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
@@ -194,7 +207,7 @@ export function DailyBriefingHistoryRail({
           {day.rows.map((edition) => {
             const key = `${edition.date}:${edition.periodId}:${edition.locale}`
             const missing = edition.state === 'missing'
-            const running = isRunning(edition)
+            const running = key === waitingKey
             // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
             // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。
             const kind = running ? (edition.periodKind === 'manual' ? 'manual' : 'scheduled') : sourceKindOf(edition)

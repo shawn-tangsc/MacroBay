@@ -145,8 +145,19 @@ export async function briefingHistorySummaries(input: Readonly<{
       }
       return left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
     })
-    markCurrent(day)
-    editions.push(...day)
+    // 同一个 `(日期, 期号, 语言)` 只能有一行：版次行与"这一期还没生成"的占位行撞到同一个 key 时，
+    // **版次行优先**——占位是没有版次时的替代品，不是并列的另一条。不收敛的话，点一行会同时选中
+    // 两行（同一个 key 被渲染两次），看起来像"选中逻辑坏了"，其实是数据重复。
+    const byKey = new Map<string, DailyBriefingEditionSummary>()
+    for (const row of day) {
+      const key = `${row.date}:${row.periodId}:${row.locale}`
+      const existing = byKey.get(key)
+      if (existing === undefined || (existing.state === 'missing' && row.state !== 'missing')) byKey.set(key, row)
+    }
+    const unique = [...byKey.values()]
+    unique.sort((left, right) => day.indexOf(left) - day.indexOf(right))
+    markCurrent(unique)
+    editions.push(...unique)
   }
   return Object.freeze(editions)
 }
