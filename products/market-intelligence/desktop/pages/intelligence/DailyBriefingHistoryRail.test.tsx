@@ -63,48 +63,40 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   })
 
 describe('daily briefing history rail', () => {
-  it('prints one clock on a normal row, and both clocks only when the run was irregular', () => {
-    // 正常行由排期生成：计划与实际是同一个值，印两个词只是噪音，还会把 252px 顶爆。
-    render({ editions: [edition({ attemptCount: 2, periodTime: '2026-11-02T00:00:00.000Z' })] })
-    const meta = host.querySelector('.mi-daily-briefing__rail-meta')
-    expect(meta?.textContent).toContain('08:00')
-    expect(meta?.textContent).not.toContain(text.history.timePlanned)
-    expect(meta?.textContent).not.toContain(text.history.timeActual)
-    expect(meta?.textContent).not.toContain('/4')
-    expect(meta?.textContent).not.toContain('GMT')
-    // 补跑/手动那类才成对出现，两个时刻真的不同。
-    render({ editions: [edition({ attemptCount: 2, runTrigger: 'catch-up', periodTime: '2026-11-02T00:00:00.000Z' })] })
-    const irregular = host.querySelector('.mi-daily-briefing__rail-meta')
-    expect(irregular?.textContent).toContain(`${text.history.timePlanned} 08:00`)
-    expect(irregular?.textContent).toContain(`${text.history.timeActual} 08:00`)
+  it('prints one clock on a normal row, and keeps only the prefix a manual run needs', () => {
+    // 正常行由排期生成：计划和实际是同一个值，印两个词只是噪音，还会把 252px 顶爆。
+    render({ editions: [edition({ periodTime: '2026-11-02T00:00:00.000Z' })] })
+    const first = host.querySelector('.mi-daily-briefing__rail-line')!
+    expect(first.textContent).toContain('08:00')
+    expect(first.textContent).not.toContain(text.history.timePlanned)
+    // 实际完成时刻不在行内（A5.4b 按图改过）：这一行只有一个时刻。
+    expect(host.textContent).not.toContain(text.history.timeActual)
+    // 手动那期保留「截止」：它说的不是几点，而是"你按下那一刻"。
+    render({ editions: [edition({ periodKind: 'manual', periodTime: '2026-11-02T00:00:00.000Z' })] })
+    expect(host.querySelector('.mi-daily-briefing__rail-line')?.textContent).toContain(`${text.history.timeCutoff} 08:00`)
     // 项数是正文元数据，两行制之后不进行。
     expect(host.textContent).not.toMatch(/\d+\s*项/)
     expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
   })
 
-  it('says "not run" once, with the scheduled time only for today, and keeps the direction word for screen readers', () => {
+  it('says "not run" once, and keeps the direction word for screen readers only', () => {
     render({ editions: [
       edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
-      // A past day that did not run: repeating the same clock twelve times told the reader nothing.
-      edition({ date: '2026-10-28', state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: undefined }),
       edition({ date: '2026-11-01', direction: undefined })
     ] })
-    expect(host.textContent).toContain(`${text.history.missingRun} · 08:00`)
-    // Past days start collapsed: expand the day before reading its rows.
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    // 来源徽标说「未运行」，第二行说原因——同一件事不在一行里说两遍。
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-run')
+    expect(row.querySelector('[data-run-source]')?.textContent).toBe(text.history.missingRun)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railNotRun)
+    // 没有版次就没有语言标签，也不画方向点。
+    expect(row.querySelector('[data-edition-locale]')).toBeNull()
+    expect(row.querySelector('i[data-direction]')).toBeNull()
+    // 没结论的那一行画一个灰点，词只在可读名字里。
     const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
-      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-10-28')!
+      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!
     act(() => pastHead.click())
-    const past = host.querySelector('[data-date="2026-10-28"]')?.closest('.mi-daily-briefing__rail-item')
-    expect(past?.textContent).toContain(text.history.missingRun)
-    // A9.9: a day that did not run still names its time once — the row has no body to show instead.
-    expect(past?.textContent).toContain('08:00')
-    // The missing row no longer repeats "not generated" and "app was not running" together.
-    expect(host.textContent).not.toContain(`${text.history.missingRun}${text.history.generated}`)
-    // A row without a verdict shows a dot; the word is only in the accessible name.
-    const head = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
-      .find((node) => node.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!
-    act(() => head.click())
-    const dot = host.querySelector('.mi-daily-briefing__rail-direction--none')
+    const dot = host.querySelector('[data-date="2026-11-01"] i[data-direction]')
     expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)
     expect(host.textContent).not.toContain(text.history.noConclusion)
   })
@@ -135,28 +127,22 @@ describe('daily briefing history rail', () => {
     expect(row.textContent).not.toMatch(/\d+\s*项|\d+\s*缺口/)
   })
 
-  it('prints one badge per row — the row\'s own language, never a choice of two', () => {
-    // 一行 = 一期 = 一种语言：徽标是**标签**，不是可切换的开关。同一期即使带着两种语言的状态，
-    // 这一行也只印自己的那一枚——否则读者又会以为“可以切语言”。
+  it('prints one badge per row, and clicking a row selects that edition', () => {
+    // 一行 = 一期 = 一种语言：徽标是**标签**，不是可切换的开关；点整行才是选择。
     const onSelect = vi.fn()
     const onSelectLocale = vi.fn()
     render({
-      editions: [edition({ availableLocales: ['zh-CN', 'en-US'], languages: [
-        { locale: 'zh-CN', state: 'published' }, { locale: 'en-US', state: 'published' }
-      ], locale: 'zh-CN' })],
+      editions: [edition({ availableLocales: ['zh-CN', 'en-US'], locale: 'zh-CN' })],
       selectedDate: '2026-11-02', onSelect, onSelectLocale
     })
-    expect(host.querySelectorAll('.mi-daily-briefing__rail-item')).toHaveLength(1)
     const chips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')]
     expect(chips.map((chip) => chip.getAttribute('data-edition-locale'))).toEqual(['zh-CN'])
-    // 徽标不再是被按下的控件：没有 aria-pressed，点了也不会换语言。
+    expect(chips[0]?.tagName).toBe('SPAN')
     expect(chips[0]?.getAttribute('aria-pressed')).toBeNull()
-    act(() => {
-      const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(onSelect).toHaveBeenCalledWith('2026-11-02')
-    expect(onSelectLocale).not.toHaveBeenCalled()
+    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // 一行就是一版：选的是(日期, 期号, 语言)，不是「这一天」——只给日期，同期中英两行会开同一份。
+    expect(onSelectLocale).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it('deletes the edition on screen, after the shared confirmation', async () => {
@@ -220,34 +206,19 @@ describe('daily briefing history rail', () => {
     expect(host.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
   })
 
-  it('carries the acceptance anchor on the language tag, and only where a tag exists', () => {
-    // `02` finds this label by anchor: a tag without it fails the gate, and an anchor without a
-    // tag would let a machine "find" a label the reader cannot see.
-    render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })] })
-    const tag = host.querySelector('[data-briefing-locale-tag]')
-    expect(tag).not.toBeNull()
-    expect(tag?.getAttribute('data-briefing-locale-tag')).toBe('both')
-
+  it('marks the language on the row itself, and only where an edition exists', () => {
+    render({ editions: [edition()] })
+    expect(host.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('zh-CN')
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
-    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(0)
-
-    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })], resolveText: (key: string) => key })
-    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(0)
-
-    render({ editions: [edition()], generatingStage: 'AI 选择' })
-    expect(host.querySelectorAll('[data-briefing-locale-tag]')).toHaveLength(1)
+    expect(host.querySelectorAll('[data-edition-locale]')).toHaveLength(0)
   })
 
-  it('shows a gap count as its own segment, and only when there is one', () => {
-    // "4 items" beside three dashes is what misleads a reader: the gap count is separate and never
-    // merged with the item count.
-    render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 3, resolveText: (key: string) => key })
-    const withGaps = host.querySelector('[data-briefing-gap-count]')
-    expect(withGaps?.getAttribute('data-briefing-gap-count')).toBe('3')
-    expect(host.textContent).toContain(text.history.gapCount.replace('{count}', '3'))
-
-    render({ editions: [edition()], selectedDate: '2026-11-02', gapCount: 0, resolveText: (key: string) => key })
+  it('keeps readings and gaps off the row entirely', () => {
+    // 项数与缺口是正文派生量：读者扫列表时找的是"哪一份、讲什么"，这两样点开在正文区看。
+    render({ editions: [edition({ readingsAvailable: 4 })], selectedDate: '2026-11-02' })
     expect(host.querySelector('[data-briefing-gap-count]')).toBeNull()
+    expect(host.textContent).not.toMatch(/\d+\s*项/)
+    expect(host.textContent).not.toMatch(/\d+\s*缺口/)
   })
 
   it('describes an emptied issue as not run, never as a failed generation', () => {
@@ -286,10 +257,10 @@ describe('daily briefing history rail', () => {
     expect(items[0].textContent).toContain('这一期没有可删除的版本')
   })
 
-  it('marks an incomplete issue with the status pill, not a hand-made chip', () => {
-    render({ editions: [edition({ state: 'partial' })], resolveText: () => '未完整' })
-    expect(host.querySelector('.status-pill--warn')).not.toBeNull()
-    expect(host.textContent).toContain('未完整')
+  it('keeps a partial issue a data state, not a chip on the row', () => {
+    render({ editions: [edition({ state: 'partial' })] })
+    expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('data-state')).toBe('partial')
+    expect(host.querySelector('.status-pill')).toBeNull()
   })
 })
 
@@ -311,5 +282,86 @@ describe('a collapsed day is readable on its own, and only today is 本期', () 
     expect(text_).not.toContain('昨天的摘要')
     expect(text_).not.toContain('前天的摘要')
     expect(host.querySelectorAll('[data-is-current="true"]')).toHaveLength(0)
+  })
+})
+
+describe('a row is two lines: the facts, then what it says', () => {
+  it('prints exactly one source badge, out of the five, and never 本期', () => {
+    // 第一行最右那一格"这一份怎么来的"：五个值，恰一枚；「本期」这个词不进侧栏。
+    const kinds = [
+      { edition: edition(), expected: 'scheduled' },
+      { edition: edition({ periodKind: 'manual' }), expected: 'manual' },
+      { edition: edition({ runTrigger: 'catch-up' }), expected: 'catch-up' },
+      { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined }), expected: 'not-run' },
+      { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 }), expected: 'failed' }
+    ] as const
+    for (const { edition: row, expected } of kinds) {
+      render({ editions: [row], selectedDate: '2026-11-02' })
+      const badges = [...host.querySelectorAll<HTMLElement>('[data-run-source]')]
+      expect(badges, expected).toHaveLength(1)
+      expect(badges[0].getAttribute('data-run-source')).toBe(expected)
+      expect(host.textContent).not.toContain(text.history.currentPeriod)
+    }
+  })
+
+  it('puts the title on line two, and a deleted period keeps its mark there', () => {
+    render({ editions: [edition({ summaryLine: '一条足够长的标题，用来确认它落在第二行' })] })
+    const title = host.querySelector('[data-rail-title="summary"]')
+    expect(title?.textContent).toContain('一条足够长的标题')
+    expect(title?.getAttribute('title')).toContain('一条足够长的标题')
+    // 已删除的期仍然说得出"排期没了、版次还在"：标记进第二行标题前，不占第一行的格。
+    render({ editions: [edition({ periodDeleted: true, summaryLine: '删掉排期之后仍然能读的正文' })] })
+    expect(host.querySelector('[data-rail-title="summary"]')?.textContent)
+      .toBe(`${text.history.deletedPeriod} · 删掉排期之后仍然能读的正文`)
+  })
+
+  it('runs the period again from the failed row, without opening it first', () => {
+    const onRegeneratePeriod = vi.fn()
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })],
+      onRegeneratePeriod
+    })
+    const retry = host.querySelector<HTMLButtonElement>('[data-rail-retry]')!
+    expect(retry.textContent).toBe(text.history.retryOne)
+    act(() => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+  })
+
+  it('shows the waiting row with the spinner in the title slot, and it does not open', () => {
+    const onSelectLocale = vi.fn()
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      generatingStage: 'AI 选择', onSelectLocale
+    })
+    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+    expect(row.getAttribute('aria-busy')).toBe('true')
+    const waiting = row.querySelector('[data-rail-title="running"]')!
+    expect(waiting.textContent).toContain(text.generationProgress.railRunning)
+    expect(waiting.querySelector('.loading-spinner, [class*="spinner"], svg')).not.toBeNull()
+    act(() => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(onSelectLocale).not.toHaveBeenCalled()
+  })
+
+  it('offers 重新生成这一期 for today and disables it for a past day', () => {
+    const onRegeneratePeriod = vi.fn()
+    const resolveText = (key: string) => key
+    render({ resolveText, onRegeneratePeriod })
+    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const today = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(today.some((item) => item.textContent === 'pages.intelligence.portal.dashboard.dailyBriefing.history.regeneratePeriod')).toBe(true)
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+
+    // 历史那天：入口在、但禁用，理由就是"这一版还不支持补生成历史日报"。
+    render({ editions: [edition({ date: '2026-10-28' })], resolveText, onRegeneratePeriod })
+    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-10-28')!
+    act(() => pastHead.click())
+    act(() => { host.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const backfill = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === 'pages.intelligence.portal.dashboard.dailyBriefing.history.backfillBlocked')!
+    expect(backfill).not.toBeUndefined()
+    expect(backfill.getAttribute('aria-disabled')).toBe('true')
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(onRegeneratePeriod).not.toHaveBeenCalled()
   })
 })

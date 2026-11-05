@@ -548,7 +548,13 @@ describe('daily briefing page', () => {
     const run = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { run.click(); await Promise.resolve() })
     await confirmManualRun()
-    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), generation: expect.objectContaining({ asOf: expect.any(String) }) })
+    // 期号必须一路传到服务：没有它，这一跑会落到 `default` 那一期上，把别的期覆盖掉。
+    expect(client.regenerate).toHaveBeenCalledWith(expect.objectContaining({
+      locale: 'zh-CN',
+      timeZone: expect.any(String),
+      generation: expect.objectContaining({ asOf: expect.any(String) }),
+      periodId: expect.any(String)
+    }))
     expect(dom.textContent).toContain('重新生成版')
     expect(run.textContent).toContain(text.manualGenerate)
   })
@@ -1332,9 +1338,11 @@ it('says the progress could not be read without falling back to "not generated"'
   expect(notice?.textContent).toContain('生成还在进行')
   // The rail must not claim the edition was never made while the pipeline is still running.
   const today = dom.querySelector('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')
-  expect(today?.textContent).toContain('生成中')
-  expect(today?.textContent).toContain('进度未知')
+  // 行内第二行只说"在等内容"；阶段名与"读不到进度"由提示条说，252px 不背这两句。
+  expect(today?.querySelector('[data-rail-title="running"]')?.textContent).toContain('生成中')
   expect(today?.textContent).not.toContain('当天未运行')
+  // 来源徽标不是「未运行」：这一期正在跑，来源仍然是定时。
+  expect(today?.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
 it('shows only a loading state before the first read resolves', async () => {
@@ -1385,8 +1393,12 @@ it('shows the generating state as the same centred panel a failure uses', async 
   // Today already has an edition here, so the archive stays while the new run is in flight.
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
   expect(dom.textContent!.match(/正在生成今天的日报/g)).toHaveLength(1)
+  // 这一行本来就有版次：重跑时它继续显示那一份的标题，进度在正文区的面板里说，
+  // 行内不印阶段名（252px 里那是正文的东西）。跑完原地换标题，不新增一行。
   const todayRow = dom.querySelector<HTMLElement>('[data-date="2026-10-30"]')!.closest('.mi-daily-briefing__rail-item')!
-  expect(todayRow.textContent).toMatch(/生成中 · /)
+  expect(todayRow.querySelector('[data-rail-title="summary"]')).not.toBeNull()
+  expect(todayRow.querySelector('[data-rail-title="running"]')).toBeNull()
+  expect(todayRow.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
 it('keeps the edition readable and reports a run in the right column', async () => {

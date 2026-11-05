@@ -27,24 +27,6 @@ export type BriefingRailSelection = Readonly<{ date: string; periodId: string; l
 /** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
 type RailSourceKind = 'scheduled' | 'manual' | 'catch-up' | 'not-run' | 'failed'
 
-/**
- * 折叠的那一天要自己是一条可读的信息，而不是「共 N 期」加一片空白。
- *
- * 摘要取**最新一期可读的**，不是数组最后一条：最后一条可能是已删除或这次失败的，拿它当脸等于给
- * 折叠行挂一个没有正文的期。那天一期可读的都没有时返回 `undefined`——只显示「共 N 期」，不编。
- */
-function collapsedSummary(day: Readonly<{ rows: readonly DailyBriefingEditionSummary[] }>, languages: Readonly<Record<string, string>>, locale: DailyBriefingLocale): Readonly<{ time: string; language: string; direction?: string }> | undefined {
-  const readable = day.rows.filter((row) => row.periodDeleted !== true && row.state !== 'missing')
-  const latest = readable.at(-1)
-  if (!latest) return undefined
-  // 折叠行只有三段：时刻 · 语言 · 方向。**标题不进侧栏**——252px 放不下，它属于正文区；
-  // 方向缺失时就只出两段，不补一个破折号去凑第三个位置（那会被读成"方向是横线"）。
-  return {
-    time: latest.scheduledTime ?? '',
-    language: languages[latest.locale] ?? latest.locale,
-    ...(latest.direction ? { direction: localizedDirectionTerm(latest.direction, locale) } : {})
-  }
-}
 
 /**
  * Which of the five source words this row gets. `catch-up` is a scheduled run that came late, so it
@@ -206,21 +188,16 @@ export function DailyBriefingHistoryRail({
           {/* 折叠箭头：没有它读者不知道这一天能点开。纯文本字形，不占排版宽度，也不需要新样式。 */}
           <span className="mi-daily-briefing__rail-day-caret" aria-hidden="true" data-day-caret={isOpen(day.date) ? 'open' : 'closed'}>{isOpen(day.date) ? '▾' : '▸'}</span>
         </button>
-        {/* 折叠态：一行摘要，让这一天自己是可读的信息（不是"共 N 期"加一片空白）。 */}
-        {isOpen(day.date) ? null : (() => {
-          const summary = collapsedSummary(day, text.history.languages as Readonly<Record<string, string>>, locale)
-          if (summary === undefined) return null
-          const parts = [summary.time, summary.language, summary.direction].filter((part): part is string => part !== undefined && part !== '')
-          return <p className="mi-daily-briefing__rail-day-summary" data-day-summary={day.date}>
-            <span className="mi-daily-briefing__rail-day-summary-text">{parts.join(' · ')}</span>
-          </p>
-        })()}
+        {/* 折叠行代表的是**这一天**，不是某一期：所以只留 `11/03 周二 · 共 2 期 ▸`，
+            不带时刻、不带语言——那两样是期级别的属性，挂在"这一天"上就是维度错误。 */}
         {isOpen(day.date) ? <div role="list" className="mi-daily-briefing__rail-day-rows">
           {day.rows.map((edition) => {
             const key = `${edition.date}:${edition.periodId}:${edition.locale}`
             const missing = edition.state === 'missing'
             const running = isRunning(edition)
-            const kind = sourceKindOf(edition)
+            // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
+            // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。
+            const kind = running ? (edition.periodKind === 'manual' ? 'manual' : 'scheduled') : sourceKindOf(edition)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>

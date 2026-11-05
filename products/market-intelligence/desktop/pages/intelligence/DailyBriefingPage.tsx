@@ -448,7 +448,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         onSelectLocale={selectLocale}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
-        gapCount={issueCounts.warning + issueCounts.info}
+        // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
+        onRegeneratePeriod={({ periodId, locale: target }) => { void regenerate({ periodId, locale: target }) }}
         onRemovePeriod={({ periodId }) => {
           // 删排期，不删内容：`removePeriod` 是期配置自己的方法，删掉之后这一期不再到点跑，列表里那
           // 一行留成已删除态，已经生成的正文照旧能读。
