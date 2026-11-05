@@ -69,7 +69,9 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
         // funding rate beside it, or the colour and the arrow would belong to different facts.
         return <div className="mi-brief-poster__card mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
           <span className="mi-brief-poster__leverage-copy" data-briefing-leverage-copy="true">
-            <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())}</span>
+            {/* 卡名旁说明「$…B 是未平仓合约」：不说明的话读者会把规模读成别的量（`02` `A0.11`）。
+                在调用点拼后缀，不动共享函数；同字号同色、同一行。 */}
+            <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())} · {text.positioningOpenInterestLabel}</span>
             {/* The level is the trunk and the change sits beside it: a percentage without its base says
                 nothing about how much is open, and the change keeps the colour and the arrow. */}
             <span className="mi-brief-poster__leverage-figures">

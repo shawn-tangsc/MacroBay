@@ -38,7 +38,7 @@ export const dailyBriefingText = {
     // whether the percentage is open interest or a price move.
     positioningChange: '{asset} · 持仓名义额',
     positioningFee: '费率',
-    positioningOpenInterest: '持仓',
+    positioningOpenInterest: '持仓', positioningOpenInterestLabel: '未平仓合约',
     comparison: { label: '较上一版', sameDirection: '方向未变', directionChanged: '方向由 {from} 转为 {to}', funding: '资金费率 BTC {value}', stablecoin: '稳定币 {value}', etf: '美国比特币现货基金 {value}', newMacro: '新增 {count} 条宏观事件' },
     groups: { market: '行情', funds: '资金', sentiment: '情绪' },
     tiers: { must: '重点', support: '补充', reference: '参考' },
@@ -333,7 +333,7 @@ export const dailyBriefingText = {
     policyDaysAway: '{days} days',
     positioningChange: '{asset} · open interest',
     positioningFee: 'Fee',
-    positioningOpenInterest: 'OI',
+    positioningOpenInterest: 'OI', positioningOpenInterestLabel: 'Open interest',
     comparison: { label: 'vs previous edition', sameDirection: 'Direction unchanged', directionChanged: 'Direction turned from {from} to {to}', funding: 'BTC funding {value}', stablecoin: 'Stablecoins {value}', etf: 'US spot Bitcoin fund {value}', newMacro: '{count} new macro events' },
     groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
     tiers: { must: 'Must', support: 'Support', reference: 'Reference' },

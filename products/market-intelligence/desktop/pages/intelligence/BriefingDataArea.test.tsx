@@ -909,6 +909,17 @@ describe('the index row reads the production shape, not a convenient one', () =>
   })
 })
 
+describe('the positioning card says what its number is', () => {
+  it('names the open interest once, beside the card title', async () => {
+    // `$…B` 不说明就是"有数字没有说明"：读者不知道那是未平仓合约。只许加这一句、只出现一次。
+    const host = await render()
+    const card = host.querySelector('[data-briefing-leverage-card="btc"]')!
+    const copy = card.querySelector('[data-briefing-leverage-copy]')!
+    expect(copy.textContent).toContain(text.positioningOpenInterestLabel)
+    expect(card.textContent?.split(text.positioningOpenInterestLabel).length).toBe(2)
+  })
+})
+
 describe('the price cards say which market they price', () => {
   it('marks BTC and ETH as perpetual contracts, and never marks the index row', async () => {
     // 价格卡读的是币安 U 本位**永续合约**，同屏下面还有「美国比特币现货基金」讲现货 ETF 资金流；
