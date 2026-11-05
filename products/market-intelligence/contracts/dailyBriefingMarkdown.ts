@@ -1,5 +1,5 @@
 import { editionNewsTitle } from './dailyBriefing/readings'
-import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, BriefingRowChange, DailyBriefingDocument } from './dailyBriefing'
+import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
 import { briefingDataGroups, briefingDataRowsFromGroups } from './dailyBriefingDataGroups'
 
@@ -7,6 +7,14 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   title: string
   window: string
   edition: string
+  /** The period this edition belongs to, e.g. `期 {time}（定期）`; omitted for the `default` period. */
+  periodScheduled: string
+  periodManual: string
+  /**
+   * The edition language, so a copied brief says which version it is. Optional: a caller that has no
+   * name table prints the locale tag rather than a blank, and the screen's own copy is not affected.
+   */
+  languageNames?: Readonly<Record<string, string>>
   readingsAllMissing: string
   noValue: string
   sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string; leverage: string; policyPath: string }>
@@ -63,7 +71,14 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   // The header says when this edition covers, not how many items it holds: the body lists them, so a
   // count here repeated a fact the reader can already see (and named no unit).
   const allMissing = document.status.readingsAvailable === 0 ? ` · ${labels.readingsAllMissing}` : ''
-  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${allMissing}`)
+  // 一天多期之后，「日期 + 窗口」不足以说明这是哪一份：同一天可以是 07:00 的 24h 与 07:00 的 4h，
+  // 也可以同刻同窗口只是语言不同。头部因此把这一期自己的身份写全——截止时刻、窗口、期、语言。
+  const period = briefingEditionPeriod(document.edition)
+  const periodLabel = period.periodId === 'default'
+    ? ''
+    : ` · ${(period.periodKind === 'manual' ? labels.periodManual : labels.periodScheduled).replace('{time}', options.formatTime(period.periodTime))}`
+  const language = labels.languageNames?.[document.edition.locale] ?? document.edition.locale
+  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${periodLabel} · ${language}${allMissing}`)
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')

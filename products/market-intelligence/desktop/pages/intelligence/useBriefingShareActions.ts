@@ -80,7 +80,11 @@ export function useBriefingShareActions(deps: Readonly<{
     if (!briefing) return
     try {
       const markdown = dailyBriefingToMarkdown(briefing, {
-        labels: withWindowHours(briefing.edition.locale === locale ? text : briefingTextForLocale(briefing.edition.locale), briefing.edition.windowHours ?? 24),
+        labels: (() => {
+          const base = withWindowHours(briefing.edition.locale === locale ? text : briefingTextForLocale(briefing.edition.locale), briefing.edition.windowHours ?? 24)
+          // 语言名住在设置块里，而复制头部要的是"这一份是哪一语言"——搬上来一次，不另存一份词表。
+          return { ...base, languageNames: base.settings.languageNames as Readonly<Record<string, string>> }
+        })(),
         locale: briefing.edition.locale,
         direction: (term) => localizedDirectionTerm(term, briefing.edition.locale),
         ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),
