@@ -121,17 +121,18 @@ describe('the list projection decides the row, once', () => {
       periodRun: vi.fn(async (_date: string, periodId: string) => runs[periodId])
     })
 
-  it('sorts a day by nominal cutoff, and resolves the same moment by periodId', async () => {
+  it('sorts a day newest first, and resolves the same moment by periodId', async () => {
     const rows = [
       withPeriod('period_late', 'zh-CN', { periodTime: '2026-11-02T12:00:00.000Z' }),
       withPeriod('period_b', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' }),
       withPeriod('period_a', 'zh-CN', { periodTime: '2026-11-02T07:00:00.000Z' })
     ]
     const summaries = await two(rows, {})
-    expect(summaries.map((summary) => summary.periodId)).toEqual(['period_a', 'period_b', 'period_late'])
+    // 天内倒序：后来的在上；同刻（07:00 那两期）按 periodId 稳定序，方向同样反过来。
+    expect(summaries.map((summary) => summary.periodId)).toEqual(['period_late', 'period_b', 'period_a'])
     // Not generatedAt: the late run finishing first must not reorder the day.
     const reordered = await two([...rows].reverse(), {})
-    expect(reordered.map((summary) => summary.periodId)).toEqual(['period_a', 'period_b', 'period_late'])
+    expect(reordered.map((summary) => summary.periodId)).toEqual(['period_late', 'period_b', 'period_a'])
   })
 
   it('hands the whole title to the row: the two-line clamp is CSS, not a data-layer slice', async () => {
@@ -340,7 +341,8 @@ describe('the rail draws a head only where the day has a trace', () => {
       runDates: new Set(['2026-11-05']),
       today: '2026-11-05'
     })
-    expect(listed).toEqual(['2026-11-05', '2026-11-04'])
+    // 新到旧（用户 2026-11-05 定：天头倒序，今天在最上）。
+    expect(listed).toEqual(['2026-11-04', '2026-11-05'])
   })
 
   it('lets today in even with no edition and no run, and nothing else', () => {

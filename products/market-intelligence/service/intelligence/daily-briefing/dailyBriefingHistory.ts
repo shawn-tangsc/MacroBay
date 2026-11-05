@@ -33,8 +33,10 @@ export function briefingRailDates(input: Readonly<{
   runDates: ReadonlySet<string>
   today: string
 }>): readonly string[] {
-  return Object.freeze(input.dates.filter((date) =>
-    input.editionDates.has(date) || input.runDates.has(date) || date === input.today))
+  // 新到旧：读者第一眼要看的是今天（与列表按天倒序一致）。
+  return Object.freeze(input.dates
+    .filter((date) => input.editionDates.has(date) || input.runDates.has(date) || date === input.today)
+    .reverse())
 }
 
 export async function readBriefingHistory(input: Readonly<{
@@ -165,13 +167,14 @@ export async function briefingHistorySummaries(input: Readonly<{
     // Not by generatedAt and not by window, or the reader sees the list reshuffle between renders.
     // A row with no known cutoff (a run that never published) sorts last: it cannot claim to be the
     // earliest issue of the day just because its time is unknown.
+    // 天内倒序（用户 2026-11-05 定）：后来的在上；同刻仍按期号作稳定序，只是方向一并反过来。
     day.sort((left, right) => {
       if (left.periodTime === undefined || right.periodTime === undefined) {
         if (left.periodTime !== right.periodTime) return left.periodTime === undefined ? 1 : -1
       } else if (left.periodTime !== right.periodTime) {
-        return left.periodTime < right.periodTime ? -1 : 1
+        return left.periodTime < right.periodTime ? 1 : -1
       }
-      return left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
+      return left.periodId < right.periodId ? 1 : left.periodId > right.periodId ? -1 : 0
     })
     // 同一个 `(日期, 期号, 语言)` 只能有一行：版次行与"这一期还没生成"的占位行撞到同一个 key 时，
     // **版次行优先**——占位是没有版次时的替代品，不是并列的另一条。不收敛的话，点一行会同时选中

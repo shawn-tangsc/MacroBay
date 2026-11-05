@@ -319,6 +319,8 @@ export function DailyBriefingHistoryRail({
             ? <button type="button" className="mi-daily-briefing__rail-item mi-daily-briefing__rail-fallback" data-rail-fallback="true"
               onClick={() => onSelect(day.date)}>
               <span className="mi-daily-briefing__rail-fallback-text">{text.history.dayEmpty}</span>
+              {/* 单行 + `›`（`02` v2.89）：箭头说的是"点它会切到右边的空态"，不是"出错可重试"。 */}
+              <span className="mi-daily-briefing__rail-fallback-caret" aria-hidden="true" data-rail-fallback-caret="true">›</span>
             </button>
             : null}
         </div> : null}

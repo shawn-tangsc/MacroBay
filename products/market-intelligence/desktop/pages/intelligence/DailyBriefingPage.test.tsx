@@ -443,7 +443,9 @@ describe('daily briefing page', () => {
     expect(head.querySelector('[data-day-count]')?.textContent).toBe(text.history.periodCount.replace('{count}', '0'))
     const fallback = dom.querySelectorAll<HTMLElement>('[data-rail-fallback="true"]')
     expect(fallback).toHaveLength(1)
-    expect(fallback[0]!.textContent).toBe(text.history.dayEmpty)
+    // 单行 + `›`：文字是那句完整的话，箭头是装饰（aria-hidden）。
+    expect(fallback[0]!.querySelector('.mi-daily-briefing__rail-fallback-text')?.textContent).toBe(text.history.dayEmpty)
+    expect(fallback[0]!.querySelector('[data-rail-fallback-caret="true"]')).not.toBeNull()
   })
 
   it('opens the period the reader clicked, not the day’s first one', async () => {

@@ -357,7 +357,9 @@ describe('a day with nothing to show keeps its head and offers one fallback item
     expect(head().querySelector('[data-day-count]')?.textContent).toBe(text.history.periodCount.replace('{count}', '0'))
     const fallback = [...host.querySelectorAll<HTMLElement>('[data-rail-fallback="true"]')]
     expect(fallback).toHaveLength(1)
-    expect(fallback[0]!.textContent).toBe(text.history.dayEmpty)
+    // 单行 + `›`：文字是那句完整的话，箭头是装饰（aria-hidden）。
+    expect(fallback[0]!.querySelector('.mi-daily-briefing__rail-fallback-text')?.textContent).toBe(text.history.dayEmpty)
+    expect(fallback[0]!.querySelector('[data-rail-fallback-caret="true"]')).not.toBeNull()
     // 不是版次行：没有这些行内事实。
     expect(fallback[0]!.querySelector('[data-run-source]')).toBeNull()
     expect(fallback[0]!.querySelector('[data-window-hours]')).toBeNull()
