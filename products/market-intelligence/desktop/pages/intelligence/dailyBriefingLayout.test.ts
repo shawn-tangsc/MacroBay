@@ -126,6 +126,31 @@ describe('two-line rail row', () => {
   })
 })
 
+/**
+ * The day rhythm is 4 / 1 / 8 — 4px inside a row, 1px between rows, 8px between days — and the
+ * heading sits 10px above the first day. These are the numbers the reference is drawn on, so they
+ * are checked here rather than left to whoever reads the sheet next.
+ */
+describe('day rhythm and the row menu trigger', () => {
+  it('spaces a day 8px above and below, with one hairline between days', () => {
+    const day = rule('.mi-daily-briefing__rail-day {')
+    expect(day).toContain('padding: 8px 0;')
+    expect(day).toContain('border-top: 1px solid var(--mi-dashboard-line)')
+  })
+
+  it('keeps the heading 10px above the first day and the day head flush to its padding', () => {
+    expect(rule('.mi-daily-briefing__rail-title {')).toContain('margin: 0 0 10px')
+    expect(rule('.mi-daily-briefing__rail-day-head {')).toContain('padding: 0 6px 6px')
+    expect(rule('.mi-daily-briefing__rail-day-count {')).toContain('margin-left: auto')
+  })
+
+  it('hides the menu trigger until the row is hovered or focused', () => {
+    // The drawn list has no ⋯: a permanent slot would shorten every title against the reference.
+    expect(rule('.mi-daily-briefing__rail-item-menu {')).toContain('opacity: 0')
+    expect(css).toContain('.mi-daily-briefing__rail-item:focus-within .mi-daily-briefing__rail-item-menu')
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)
