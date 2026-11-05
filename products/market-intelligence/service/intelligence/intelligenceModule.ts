@@ -80,7 +80,7 @@ import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
-import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
+import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
 import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
@@ -228,6 +228,8 @@ export type IntelligenceModulePlatformHooks = {
   isWebSearchProviderReady?: () => Promise<boolean>
   /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
+  redeliverPush?: import('./daily-briefing/dailyBriefingPublishToPhone').BriefingRedeliver
 }
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
@@ -938,6 +940,10 @@ export function getIntelligenceModule(
         profiles: profileStore
       }),
       store: dailyBriefingStore,
+      // 通知端口在这里交给服务：没有它，日报完成/失败/时区三条只存在于代码里，从不落记录
+      // （2026-11-05 用户实测「按钮说这一版还没进通知」的根因就是这条装配从来没接上）。
+      ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
+      ...(hooks?.redeliverPush ? { redeliverPush: hooks.redeliverPush } : {}),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
@@ -947,18 +953,10 @@ export function getIntelligenceModule(
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
         (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
-      agentAllowedTools: async () => {
-        const view = await dailyBriefingAiSettings.getView()
-        const providerReady = hooks?.isWebSearchProviderReady
-          ? await hooks.isWebSearchProviderReady()
-          : true
-        return resolveDailyBriefAgentAllowedTools({
-          webSearchEnabled: view.settings.webSearchEnabled,
-          authorized: Boolean(view.settings.webSearchAuthorizedAt),
-          providerReady,
-          serverWebSearchSupported: view.webSearchSupported
-        })
-      }
+      agentAllowedTools: () => resolveBriefingRunAllowedTools({
+        getView: () => dailyBriefingAiSettings.getView(),
+        ...(hooks?.isWebSearchProviderReady ? { isWebSearchProviderReady: hooks.isWebSearchProviderReady } : {})
+      }),
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched

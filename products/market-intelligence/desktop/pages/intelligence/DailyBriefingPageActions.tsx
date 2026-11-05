@@ -1,8 +1,9 @@
 import { Button } from 'antd'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Settings2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
+import { useToast } from '@platform/ui/components/toast'
 import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
@@ -123,6 +124,28 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   pushText: BriefingPushText
 }>): React.ReactElement {
   const confirm = useConfirm()
+  // 发布回执与失败都走平台 toast（用户 2026-11-05：那行字丑、还常驻，别挂在工具栏里）。
+  // 每发生一次只提示一次：状态对象本身是"这一次"的身份，重渲染不重发。
+  const toast = useToast()
+  const toasted = useRef<typeof push.state | undefined>(undefined)
+  useEffect(() => {
+    const state = push.state
+    if (state.kind !== 'sent' && state.kind !== 'failed') return
+    if (toasted.current === state) return
+    toasted.current = state
+    if (state.kind === 'sent') {
+      const sentence = push.sentence ?? pushText.sentAccepted
+      toast.success({ titleKey: 'briefing.push.sent', resolveText: () => sentence })
+      return
+    }
+    const failure = `${pushText.failedTitle}：${pushText.failed[state.reason]}`
+    toast.danger({
+      titleKey: 'briefing.push.failed',
+      // 同一个解析器也解动作标签，所以按 key 分流：否则动作按钮上会印一遍整句失败话。
+      resolveText: (key) => (key === 'briefing.push.retry' ? pushText.retry : failure),
+      action: { labelKey: 'briefing.push.retry', onSelect: push.onRetry }
+    })
+  })
   // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
   // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
   const blocked = !exportable
@@ -155,10 +178,7 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       </Button>
       {/* 发布频道与这一组同源：读者刚生成完，下一件事就是发出去。状态在状态机里，这里只摆位置。 */}
       <span className="mi-daily-briefing__push-slot">
-        <BriefingPushToPhoneButton state={push.state} text={pushText} onPush={push.onPush} onRetry={push.onRetry} />
-        {/* The success sentence is the only thing that appears and leaves on its own. It states what we
-            know — handed to the channel — and its timer is its whole lifetime. */}
-        {push.sentence === undefined ? null : <span className="mi-daily-briefing__push-toast" role="status">{push.sentence}</span>}
+        <BriefingPushToPhoneButton state={push.state} text={pushText} onPush={push.onPush} />
       </span>
       <Button className="mi-briefing-tool__btn" data-toolbar-action="export" disabled={blocked || exportState === 'exporting'} onClick={onExport} aria-live="polite">
         {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}

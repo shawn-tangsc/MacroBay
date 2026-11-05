@@ -148,6 +148,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dailyBriefing.get' },
     { method: 'intelligence.dailyBriefing.listAttempts' },
     { method: 'intelligence.dailyBriefing.regenerate' },
+    { method: 'intelligence.dailyBriefing.publishToPhone' },
     { method: 'intelligence.dailyBriefing.getProgress' },
     { method: 'intelligence.dailyBriefing.getSettings' },
     { method: 'intelligence.dailyBriefing.saveSettings' },

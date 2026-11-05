@@ -182,6 +182,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     isWebSearchProviderReady: deps.isWebSearchProviderReady,
     // 通知运行时是平台单例，等用的时候再取：装配完成在注册产品服务之后。
     submitNotification: (request) => getNotificationRuntime().submit(request),
+    // 读者点「推送到手机」时走这条：平台只重投那一条已有记录，不新建、不改内容。
+    redeliverPush: (input) => getNotificationRuntime().redeliverPush(input),
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings

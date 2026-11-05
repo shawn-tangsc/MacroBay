@@ -28,6 +28,7 @@ const METHODS = Object.freeze({
   get: 'intelligence.dailyBriefing.get',
   listAttempts: 'intelligence.dailyBriefing.listAttempts',
   regenerate: 'intelligence.dailyBriefing.regenerate',
+  publishToPhone: 'intelligence.dailyBriefing.publishToPhone',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings',
@@ -156,6 +157,11 @@ export type DailyBriefingClient = Readonly<{
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
   listAttempts: (input: DailyBriefingClientGetInput & Readonly<{ periodId?: string }>) => Promise<DailyBriefingClientAttemptsResult>
   regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
+  /**
+   * 把这一版发布到手机（2026-11-05 口径）：主进程先写/更新当天的完成记录（只记不发，幂等合并），
+   * 再按同一个键重投。结果原样交回——翻成读者的话是发布按钮自己的事，不在这里编。
+   */
+  publishToPhone: (input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<unknown>
   getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
@@ -173,6 +179,9 @@ export type DailyBriefingClient = Readonly<{
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
+  async publishToPhone(input) {
+    return invoke(METHODS.publishToPhone, input)
+  },
   async getToday(input) {
     try {
       const value = await invoke(METHODS.getToday, input)

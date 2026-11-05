@@ -1,5 +1,7 @@
 import type { NotificationDeliveryState } from '@platform/notifications/contracts/notificationContracts'
 
+import { dailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+
 /**
  * The reader's own push: one existing record, delivered to the phone once more.
  *
@@ -12,7 +14,7 @@ import type { NotificationDeliveryState } from '@platform/notifications/contract
  * issue's push to the first issue's record.
  */
 
-export type BriefingPushEdition = Readonly<{ date: string; periodId: string; locale: string }>
+export type BriefingPushEdition = Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>
 
 /** The record one edition's completion notice lives in; the key must match the notifier's. */
 export function briefingPushDedupeKey(edition: Pick<BriefingPushEdition, 'date' | 'periodId' | 'locale'>): string {
@@ -62,21 +64,23 @@ export type BriefingPushFailure =
  */
 export type BriefingPushChannel = Readonly<{ wired: boolean | undefined; name: string | undefined }>
 
-/** The bridge, or nothing: a build without the notification runtime disables the button instead of throwing. */
-type PushBridge = Readonly<{
-  redeliverPush: (input: { dedupeKey: string; editionId: string; locale: string }) => Promise<unknown>
+/**
+ * 通道名从平台的投递设置里读（纯展示）；**发布本身走产品 IPC**——先写/更新记录再重投是主进程的事，
+ * 渲染层不该自己拼那两步。
+ */
+type ChannelBridge = Readonly<{
   getDeliverySettings?: () => Promise<{ pushWired?: boolean; channels?: readonly unknown[] }>
 }>
 
-function pushBridge(): PushBridge | undefined {
+function channelBridge(): ChannelBridge | undefined {
   const platform = (globalThis as { window?: { platform?: { notifications?: unknown } } }).window?.platform
-  const notifications = platform?.notifications as Partial<PushBridge> | undefined
-  return notifications && typeof notifications.redeliverPush === 'function' ? (notifications as PushBridge) : undefined
+  return platform?.notifications as ChannelBridge | undefined
 }
 
-/** Whether this build can push at all; the fourth disabled state reads it. */
+/** Whether this build can publish at all; the fourth disabled state reads it. */
 export function briefingPushAvailable(): boolean {
-  return pushBridge() !== undefined
+  const products = (globalThis as { window?: { platform?: { products?: { invoke?: unknown } } } }).window?.platform?.products
+  return typeof products?.invoke === 'function'
 }
 
 /**
@@ -87,7 +91,7 @@ export function briefingPushAvailable(): boolean {
  * switched to another. When several exist, the deliverable one is the one a send would reach.
  */
 export async function readBriefingPushChannel(): Promise<BriefingPushChannel> {
-  const bridge = pushBridge()
+  const bridge = channelBridge()
   if (!bridge) return { wired: false, name: undefined }
   if (typeof bridge.getDeliverySettings !== 'function') return { wired: undefined, name: undefined }
   try {
@@ -114,15 +118,12 @@ export async function readBriefingPushChannel(): Promise<BriefingPushChannel> {
  * no receipt came back, and calling that "sent" is what the copy forbids.
  */
 export async function redeliverBriefingPush(edition: BriefingPushEdition): Promise<BriefingPushOutcome> {
-  const bridge = pushBridge()
-  if (!bridge) return { state: 'failed', reason: 'runtime-unavailable' }
+  if (!briefingPushAvailable()) return { state: 'failed', reason: 'runtime-unavailable' }
   let result: unknown
   try {
-    result = await bridge.redeliverPush({
-      dedupeKey: briefingPushDedupeKey(edition),
-      editionId: briefingPushEditionId(edition),
-      locale: edition.locale
-    })
+    // 主进程的两步：先按这一版写/更新完成记录（只记不发），再重投那条记录。库里有记录时第一步
+    // 只是合并，不会多一行；库里没有时它就补上，读者不必先去别处「生成一条通知」。
+    result = await dailyBriefingClient.publishToPhone({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
   } catch {
     return { state: 'failed', reason: 'runtime-unavailable' }
   }
@@ -141,6 +142,8 @@ export async function redeliverBriefingPush(edition: BriefingPushEdition): Promi
 function rejectionReason(code: unknown): BriefingPushFailure {
   switch (code) {
     case 'redeliver-target-missing': return 'record-missing'
+    // 主进程先写后推之后，遇到的多半是「这一版根本还没生成」；读者要做的同一件事：先去生成。
+    case 'edition-missing': return 'record-missing'
     case 'redeliver-edition-mismatch': return 'edition-mismatch'
     case 'redeliver-surface-invalid': return 'surface-invalid'
     case 'push-paused': return 'push-paused'

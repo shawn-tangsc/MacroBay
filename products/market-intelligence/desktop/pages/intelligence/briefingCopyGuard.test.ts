@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { ToastHost } from '@platform/ui/components/toast'
 import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
@@ -170,7 +171,7 @@ describe('briefing copy guard', () => {
     // Effects have to run for the page to paint: a static render would assert on an empty shell,
     // which is the "forever green net" this case exists to avoid.
     await act(async () => {
-      root.render(createElement(ConfirmProvider, null,
+      root.render(createElement(ConfirmProvider, null, createElement(ToastHost, null,
         createElement('div', null,
         createElement(DailyBriefingPage, {
           locale: 'zh-CN',
@@ -180,7 +181,7 @@ describe('briefing copy guard', () => {
           client: client as never
         }),
         createElement(DailyBriefingGeneratedBanner, { locale: 'zh-CN', text: bannerText, client: client as never, now: () => new Date('2026-10-30T04:00:00.000Z') })
-        )))
+        ))))
     })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const text = host.textContent ?? ''

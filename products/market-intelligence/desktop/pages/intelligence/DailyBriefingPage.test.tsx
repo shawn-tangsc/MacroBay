@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { ToastHost } from '@platform/ui/components/toast'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
@@ -261,7 +262,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider><DailyBriefingPage
+    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider><ToastHost><DailyBriefingPage
       locale={locale}
       text={textOverride ?? (locale === 'zh-CN' ? text : englishText)}
       eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
@@ -269,7 +270,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
       client={client as never}
-    /></ConfirmProvider></ConfigProvider>)
+    /></ToastHost></ConfirmProvider></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   // The rail groups by day and opens only today (A5.3). These page cases read rows across the whole

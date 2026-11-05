@@ -5,6 +5,7 @@ import { ConfigProvider } from 'antd'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { ToastHost } from '@platform/ui/components/toast'
 import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { productText } from '../../shared/i18n/productText'
@@ -27,14 +28,14 @@ afterEach(() => {
 
 function render(): void {
   act(() => {
-    root.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider>
+    root.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider><ToastHost>
       <DailyBriefingEditionActions
         text={text} resolveText={(key) => key} exportable exportState="idle" copyState="idle" generating={false}
         onExport={() => undefined} onCopy={() => undefined} onRegenerate={() => undefined}
         push={{ state: { kind: 'idle' }, sentence: undefined, onPush: () => undefined, onRetry: () => undefined } as never}
         pushText={{ button: 'b', sending: 's', delivered: 'd', failedTitle: 'f', retry: 'r', disabled: {}, failed: {} } as never}
       />
-    </ConfirmProvider></ConfigProvider>)
+    </ToastHost></ConfirmProvider></ConfigProvider>)
   })
 }
 

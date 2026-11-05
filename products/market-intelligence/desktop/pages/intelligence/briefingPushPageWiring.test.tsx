@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfirmProvider } from '@platform/ui/components/confirm'
+import { ToastHost } from '@platform/ui/components/toast'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
@@ -13,10 +14,11 @@ import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
 /**
- * 「发布频道」接线：页面层点到平台的那一段。
+ * 「推送到手机」接线：页面层点到主进程的那一段。
  *
- * 判的都是渲染输出与调用次数，不扫源码：一个按钮能不能点、点三次发几次、失败留在哪、成功那句话
- * 是不是只在页面这一层出现，这些才是读者能看见的事实。
+ * 判的都是渲染输出与调用次数，不扫源码：一个按钮能不能点、点三次发几次、失败留在哪，这些才是
+ * 读者能看见的事实。2026-11-05 起失败与回执都走平台 toast（工具栏只留按钮），所以「有没有留痕」
+ * 判的是 toast，不是工具栏那一行字。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const zh = briefingPushText['zh-CN']
@@ -25,7 +27,7 @@ const document = (locale: 'zh-CN' | 'en-US' = 'zh-CN') => ({
   edition: { date: '2026-11-05', locale, generatedAt: '2026-11-05T00:30:00.000Z', windowStart: '2026-11-04T00:30:00.000Z', windowEnd: '2026-11-05T00:30:00.000Z', timeZone: 'Asia/Shanghai' }
 } as unknown as DailyBriefingDocument)
 
-const redeliver = vi.fn()
+const invoke = vi.fn()
 const getDeliverySettings = vi.fn()
 
 function Row(input: Readonly<{
@@ -53,18 +55,22 @@ let container: HTMLDivElement
 let root: Root
 
 const render = (element: React.ReactElement): void => {
-  act(() => { root.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider>{element}</ConfirmProvider></ConfigProvider>) })
+  act(() => {
+    root.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><ConfirmProvider><ToastHost>{element}</ToastHost></ConfirmProvider></ConfigProvider>)
+  })
 }
 const button = (): HTMLButtonElement => container.querySelector<HTMLButtonElement>('.mi-daily-briefing__push button') as HTMLButtonElement
+/** 工具栏这一行：回执与失败都不许出现在它里面（toast 是宿主里的另一块，不算）。 */
+const toolbarText = (): string => container.querySelector('.mi-daily-briefing-page__report-bar')?.textContent ?? ''
 const push = async (): Promise<void> => { await act(async () => { button().click() }) }
 
 beforeEach(() => {
   container = window.document.createElement('div')
   window.document.body.append(container)
   root = createRoot(container)
-  redeliver.mockReset().mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
+  invoke.mockReset().mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
   getDeliverySettings.mockReset().mockResolvedValue({ pushWired: true, channels: [{ id: 'c1', name: '贾维斯', deliverable: true }] })
-  ;(window as unknown as { platform: unknown }).platform = { notifications: { redeliverPush: redeliver, getDeliverySettings } }
+  ;(window as unknown as { platform: unknown }).platform = { products: { invoke }, notifications: { getDeliverySettings } }
   vi.useFakeTimers()
 })
 
@@ -76,58 +82,58 @@ afterEach(() => {
 })
 
 describe('the publish control on the page', () => {
-  it('asks for a channel name from the platform and publishes the edition on screen', async () => {
+  it('publishes the edition on screen through the product bridge', async () => {
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     expect(getDeliverySettings).toHaveBeenCalled()
-    expect(button().textContent).toContain(zh.button)
 
     await push()
-    expect(redeliver).toHaveBeenCalledTimes(1)
-    expect(redeliver.mock.calls[0]?.[0]).toMatchObject({ dedupeKey: 'briefing-ready:2026-11-05:default:zh-CN', editionId: '2026-11-05:zh-CN:default', locale: 'zh-CN' })
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.dailyBriefing.publishToPhone', {
+      date: '2026-11-05', periodId: 'default', locale: 'zh-CN'
+    })
   })
 
   it('sends once when a slow network invites three clicks', async () => {
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await act(async () => { button().click(); button().click(); button().click() })
-    expect(redeliver).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledTimes(1)
   })
 
-  it('says it was handed over, never that it was delivered, and drops the sentence by itself', async () => {
+  it('says it was handed over in a toast, never that it was delivered, and leaves the toolbar clean', async () => {
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(container.textContent).toContain('已交给 贾维斯')
-    expect(container.textContent).not.toMatch(/已送达|已推送|发送成功|Delivered/)
+    expect(window.document.body.textContent).toContain('已交给 贾维斯')
+    expect(window.document.body.textContent).not.toMatch(/已送达|已推送|发送成功|Delivered/)
+    // 工具栏里只有按钮：回执不许常驻在那一行。
+    expect(toolbarText()).not.toContain('已交给 贾维斯')
     await act(async () => { vi.advanceTimersByTime(3_000) })
-    expect(container.textContent).not.toContain('已交给 贾维斯')
+    expect(window.document.body.textContent).not.toContain('已交给 贾维斯')
   })
 
-  it('keeps the half-sentence when no receipt came back, and keeps it longer', async () => {
-    redeliver.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-unconfirmed' } })
+  it('keeps the half-sentence when no receipt came back', async () => {
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-unconfirmed' } })
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(container.textContent).toContain('已交给 贾维斯（未拿到回执）')
-    await act(async () => { vi.advanceTimersByTime(3_000) })
-    expect(container.textContent).toContain('未拿到回执')
-    await act(async () => { vi.advanceTimersByTime(3_000) })
-    expect(container.textContent).not.toContain('未拿到回执')
+    expect(window.document.body.textContent).toContain('已交给 贾维斯（未拿到回执）')
   })
 
-  it('leaves a failure on screen with its reason and a retry that really sends again', async () => {
-    redeliver.mockResolvedValue({ kind: 'rejected', reason: 'redeliver-edition-mismatch' })
+  it('reports a failure as a toast with a retry, and puts nothing in the toolbar', async () => {
+    invoke.mockResolvedValue({ kind: 'rejected', reason: 'redeliver-edition-mismatch' })
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(container.textContent).toContain(zh.failedTitle)
-    expect(container.textContent).toContain(zh.failed['edition-mismatch'])
-    await act(async () => { vi.advanceTimersByTime(60_000) })
-    expect(container.textContent).toContain(zh.failed['edition-mismatch'])
-    const retry = Array.from(container.querySelectorAll('button')).find((entry) => entry.textContent?.includes(zh.retry))
+    expect(window.document.body.textContent).toContain(`${zh.failedTitle}：${zh.failed['edition-mismatch']}`)
+    // 工具栏不许再挂那行「没发出去…重试」（用户原话：字丑、别一直显示在界面上）。
+    expect(toolbarText()).not.toContain(zh.failed['edition-mismatch'])
+    expect(toolbarText()).not.toContain(zh.failedTitle)
+
+    const retry = Array.from(window.document.body.querySelectorAll('button')).find((entry) => entry.textContent?.includes(zh.retry))
     await act(async () => { retry?.click() })
-    expect(redeliver).toHaveBeenCalledTimes(2)
+    expect(invoke).toHaveBeenCalledTimes(2)
   })
 
   it('explains each blocked situation in its own words and blocks the button', async () => {
@@ -160,10 +166,8 @@ describe('the publish control on the page', () => {
     await act(async () => { await Promise.resolve() })
     expect(button().disabled).toBe(false)
     await push()
-    expect(redeliver).toHaveBeenCalledWith({
-      dedupeKey: 'briefing-ready:2026-11-05:default:en-US',
-      editionId: '2026-11-05:en-US:default',
-      locale: 'en-US'
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.dailyBriefing.publishToPhone', {
+      date: '2026-11-05', periodId: 'default', locale: 'en-US'
     })
   })
 
@@ -182,14 +186,6 @@ describe('the publish control on the page', () => {
     expect(button().disabled).toBe(false)
 
     await push()
-    expect(container.textContent).toContain('已交给 贾维斯')
-  })
-
-  it('keeps the button pressable when the platform never says a channel is missing', async () => {
-    // 没有频道是点了才知道的事：它不属于五种禁用，不许提前把它判死。
-    getDeliverySettings.mockResolvedValue({ pushWired: true, channels: [] })
-    render(<Row edition={document()} />)
-    await act(async () => { await Promise.resolve() })
-    expect(button().disabled).toBe(false)
+    expect(window.document.body.textContent).toContain('已交给 贾维斯')
   })
 })

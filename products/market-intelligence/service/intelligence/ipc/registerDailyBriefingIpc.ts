@@ -17,6 +17,7 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   get: 'intelligence.dailyBriefing.get',
   listAttempts: 'intelligence.dailyBriefing.listAttempts',
   regenerate: 'intelligence.dailyBriefing.regenerate',
+  publishToPhone: 'intelligence.dailyBriefing.publishToPhone',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings',
@@ -50,6 +51,9 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     withRunDeadline(service.regenerate(readQuery(payload))))
   // Read-only and cheap: the answer is the live snapshot of the run in progress, never a new read
   // of the store, and it says `idle` as soon as that run settles.
+  // 读者按下「推送到手机」：先写/更新当天记录（只记不发），再按同一个键重投——见服务里那段说明。
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.publishToPhone, async (payload) =>
+    service.publishToPhone(readPushQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getProgress, async (payload) =>
     service.getProgress(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
@@ -72,6 +76,11 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     if (!deletePeriod) throw new Error('daily-briefing-delete-unavailable')
     return deletePeriod(readDeleteQuery(payload))
   })
+}
+
+/** 每条字段都必填且校验：缺一个就会去推别的版次或别的日子。 */
+function readPushQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> {
+  return readDeleteQuery(payload)
 }
 
 /** Every field is required and validated: a missing one would delete another issue's edition. */

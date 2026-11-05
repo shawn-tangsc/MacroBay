@@ -21,16 +21,15 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function mount(state: BriefingPushState): Promise<{ host: HTMLElement; onPush: ReturnType<typeof vi.fn>; onRetry: ReturnType<typeof vi.fn> }> {
+async function mount(state: BriefingPushState): Promise<{ host: HTMLElement; onPush: ReturnType<typeof vi.fn> }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const onPush = vi.fn()
-  const onRetry = vi.fn()
   await act(async () => {
-    root!.render(createElement(BriefingPushToPhoneButton, { state, text, onPush, onRetry }))
+    root!.render(createElement(BriefingPushToPhoneButton, { state, text, onPush }))
   })
-  return { host, onPush, onRetry }
+  return { host, onPush }
 }
 
 function button(host: HTMLElement): HTMLButtonElement {
@@ -60,24 +59,22 @@ describe('the push button speaks for every blocked reason', () => {
   })
 })
 
-describe('the push button states what failed, and stays retryable', () => {
-  it('names the reason and sends the retry through the caller', async () => {
-    const { host, onRetry, onPush } = await mount({ kind: 'failed', reason: 'channel-disconnected' })
-    const status = host.querySelector('[role="status"]')
-    expect(status?.textContent).toContain(text.failed['channel-disconnected'])
-    // Failure is not a dead end: the main button retries rather than pushing again.
+describe('the push button leaves the toolbar to the button alone', () => {
+  it('says nothing about a failure inline, and a click retries the send', async () => {
+    // 失败与回执都走平台 toast（用户 2026-11-05）：工具栏里不许再挂一行「没发出去…重试」。
+    const { host, onPush } = await mount({ kind: 'failed', reason: 'channel-disconnected' })
+    expect(host.textContent).not.toContain(text.failed['channel-disconnected'])
+    expect(host.textContent).not.toContain(text.failedTitle)
     await act(async () => button(host).click())
-    expect(onRetry).toHaveBeenCalledTimes(1)
-    expect(onPush).not.toHaveBeenCalled()
+    expect(onPush).toHaveBeenCalledTimes(1)
   })
 
   it('disables itself while sending, so a double click cannot send twice', async () => {
-    const { host, onPush, onRetry } = await mount({ kind: 'sending' })
+    const { host, onPush } = await mount({ kind: 'sending' })
     expect(button(host).disabled).toBe(true)
     expect(host.textContent).toContain(text.sending)
     await act(async () => button(host).click())
     expect(onPush).not.toHaveBeenCalled()
-    expect(onRetry).not.toHaveBeenCalled()
   })
 
   it('sends one push per click when the reader can act', async () => {

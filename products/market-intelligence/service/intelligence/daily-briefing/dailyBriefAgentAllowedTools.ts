@@ -22,3 +22,29 @@ export function resolveDailyBriefAgentAllowedTools(input: Readonly<{
     ? ['WebSearch', 'WebFetch']
     : [platformWebSearchSessionToolName]
 }
+
+/**
+ * The run-time wrapper: read the editor's settings once and answer what this session may auto-approve.
+ *
+ * Kept beside the pure resolver so the module that assembles the briefing service stays a list of
+ * ports instead of a closure body — the same reason the publisher has a factory.
+ */
+export type BriefingEditorSettingsView = Readonly<{
+  settings: Readonly<{ webSearchEnabled: boolean; webSearchAuthorizedAt?: string | null }>
+  /** Whether this build's provider can carry the built-in server tools at all. */
+  webSearchSupported: boolean
+}>
+
+export async function resolveBriefingRunAllowedTools(input: Readonly<{
+  getView: () => Promise<BriefingEditorSettingsView>
+  isWebSearchProviderReady?: () => Promise<boolean>
+}>): Promise<string[] | undefined> {
+  const view = await input.getView()
+  const providerReady = input.isWebSearchProviderReady ? await input.isWebSearchProviderReady() : true
+  return resolveDailyBriefAgentAllowedTools({
+    webSearchEnabled: view.settings.webSearchEnabled,
+    authorized: Boolean(view.settings.webSearchAuthorizedAt),
+    providerReady,
+    serverWebSearchSupported: view.webSearchSupported
+  })
+}

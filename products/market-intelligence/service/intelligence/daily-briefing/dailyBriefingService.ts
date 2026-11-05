@@ -20,6 +20,8 @@ import {
   isDailyBriefingWindowHours
 } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
+import { createPublishToPhone, type BriefingPublishOutcome, type BriefingRedeliver } from './dailyBriefingPublishToPhone'
+import { createBriefingProgressReader } from './dailyBriefingProgressReader'
 import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBriefingEditorialState'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
@@ -276,6 +278,7 @@ export type DailyBriefingService = Readonly<{
     periodId?: string
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
   }>) => Promise<DailyBriefingTodayResult>
+  publishToPhone: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
   listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>
@@ -339,6 +342,7 @@ export function createDailyBriefingService(deps: Readonly<{
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
   noticeSubmit?: DailyBriefingNoticeSubmit
+  redeliverPush?: BriefingRedeliver
   /** Waits for the market the brief reads; absent means generate at once, as before. */
   readiness?: DailyBriefReadiness
   /** Late-bound: the collector is built after this service in the composition root. */
@@ -637,8 +641,7 @@ export function createDailyBriefingService(deps: Readonly<{
       return fail('store-failed')
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-    // 完成类一天一期。自动运行投递；读者按「重新生成」照常写记录但不投递——记录是「发布频道」
-    // 要核对的那一版，投递与否由按钮决定，不再靠「不发」把它整个丢掉。
+    // 完成类一天一期：自动运行投递；手动重新生成照常写记录但不投递（见 `dailyBriefingNotifier`）。
     await notifyDailyBriefing(deps.noticeSubmit, {
       kind: 'ready', date: input.date, periodId: input.periodId, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
     }, now())
@@ -660,13 +663,11 @@ export function createDailyBriefingService(deps: Readonly<{
     return { state: 'available', result: { editions, today: window.date } }
   }
 
-  async function getProgress(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingProgressResult> {
-    const window = briefingWindow(now(), input.timeZone, await generation())
-    // A schedule the reader has not set a valid hour for cannot say which edition is running.
-    if (!window) return { state: 'idle' }
-    const running = runs.progress.get(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale))
-    return running ? { state: 'running', progress: running } : { state: 'idle' }
-  }
-
-  return { getToday, regenerate, list, ...reads, getProgress }
+  const getProgress = createBriefingProgressReader({
+    now,
+    readGeneration: generation,
+    progressOf: (date, locale) => runs.progress.get(runs.key(date, DEFAULT_PERIOD_ID, locale))
+  })
+  const publishToPhone = createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, now })
+  return { getToday, regenerate, publishToPhone, list, ...reads, getProgress }
 }
