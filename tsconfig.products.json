@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "products/**/*.ts",
+    "products/**/*.tsx",
+    "apps/desktop-shell/src/renderer/shared/types/platform-api.d.ts"
+  ]
+}

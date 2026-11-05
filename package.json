@@ -38,6 +38,7 @@
     "release:bump": "tsx scripts/release/bump-version.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
+    "typecheck:products": "tsc --noEmit -p tsconfig.products.json",
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts",
     "check:hex-color": "tsx scripts/check-hex-color.mts",
     "check:undefined-token": "tsx scripts/check-undefined-token.mts",
