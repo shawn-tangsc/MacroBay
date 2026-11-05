@@ -458,7 +458,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       }} /> : null}
     {screenDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-      <div ref={shareRef}><DailyBriefingShareCard document={screenDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
+      <div ref={shareRef}><DailyBriefingShareCard document={screenDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} timeZone={timeZone} /></div>
     </div> : null}
   </main>
 }

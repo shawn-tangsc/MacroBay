@@ -219,8 +219,11 @@ export type DailyBriefingDocument = Readonly<{
      * `macroEmptyHours` travels beside `macroEmpty` because the stale sentence names how old the
      * calendar was (`A0.8`): the code alone says "stale", the number says how stale, and the number
      * can only come from the reading this edition judged.
+     *
+     * `macroEmptyCount` 同理：「有 N 条高影响事件、但截至这一刻还没拿到实际值」要念出 N，而 N 只能
+     * 从这一版读到的窗口里数出来（`02` v2.120）。缺它就不许印那句话，而不是印一个没说清的 0。
      */
-    notes: Readonly<{ newsEmpty?: string; macroEmpty?: string; macroEmptyHours?: number }>
+    notes: Readonly<{ newsEmpty?: string; macroEmpty?: string; macroEmptyHours?: number; macroEmptyCount?: number }>
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]

@@ -191,7 +191,7 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       {showingEdition && bodyState === 'paper' ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
         <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
           <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
-            <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} fearGreedBuckets={briefingFearGreedBuckets(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+            <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} fearGreedBuckets={briefingFearGreedBuckets(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} timeZone={timeZone} />
           </div>
           </div>
         </div> : null}

@@ -14,6 +14,11 @@ export type BriefingMacroEmptyCopy = Readonly<{
   sentence: string
   /** `true` for every reason except "the data is fresh and the window really is empty". */
   unreadable: boolean
+  /**
+   * 第三种：数据是新的、窗口里**有**高影响事件，但截至这一刻还没拿到它们的实际值。
+   * 既不是「没有」（断事实），也不是「读不到」（读是成功的）——所以它自己一档，不借前两者的话。
+   */
+  pending?: boolean
 }>
 
 export type BriefingMacroEmptyCopyLabels = Readonly<{
@@ -21,10 +26,12 @@ export type BriefingMacroEmptyCopyLabels = Readonly<{
   emptyMacro: string
   /** The prefix that turns a reason into a sentence the reader understands, e.g. "暂时读不到：". */
   macroUnreadable: string
+  /** 把时刻与时区印进句子里：`{time}` / `{zone}` 由这一版自己的数据截止与读者时区决定。 */
+  clock?: Readonly<{ formatTime: (value: string) => string; zoneLabel: string }>
 }>
 
 export function briefingMacroEmptyCopy(
-  document: Pick<DailyBriefingDocument, 'news'>,
+  document: Pick<DailyBriefingDocument, 'news' | 'edition'>,
   labels: BriefingMacroEmptyCopyLabels
 ): BriefingMacroEmptyCopy | null {
   const code = document.news.notes.macroEmpty
@@ -33,6 +40,24 @@ export function briefingMacroEmptyCopy(
   if (!code) return null
   const reason = labels.macroEmptyCodes[code] ?? labels.emptyMacro
   if (code === 'past-24h-no-high-impact-release') return { sentence: reason, unreadable: false }
+  if (code === 'past-24h-high-impact-actuals-pending') {
+    const count = document.news.notes.macroEmptyCount
+    const clock = labels.clock
+    // 数或时刻缺一个就不印：那句话的每个空都是事实，编一个 0 或补一个当下时刻都是新的假话。
+    const at = document.edition.dataAsOf ?? document.edition.periodTime ?? document.edition.generatedAt
+    if (typeof count === 'number' && clock !== undefined && typeof at === 'string') {
+      return {
+        sentence: reason
+          .replace('{count}', String(count))
+          .replace('{time}', clock.formatTime(at))
+          .replace('{zone}', clock.zoneLabel),
+        unreadable: false,
+        pending: true
+      }
+    }
+    // 缺件时退回"读不到"的措辞：宁可说我们没读全，也不替这一版断言事实。
+    return { sentence: `${labels.macroUnreadable}${labels.emptyMacro}`, unreadable: true }
+  }
   const hours = document.news.notes.macroEmptyHours
   const filled = hours === undefined ? reason : reason.replace('{hours}', String(hours))
   return { sentence: `${labels.macroUnreadable}${filled}`, unreadable: true }

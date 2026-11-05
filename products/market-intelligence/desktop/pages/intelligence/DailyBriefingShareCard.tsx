@@ -7,6 +7,7 @@ import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
@@ -16,7 +17,7 @@ import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGr
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, paymentDirectionsCompact, policyWords, changeArrows, fearGreedBuckets, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, completenessNote, paymentDirectionsCompact, policyWords, changeArrows, fearGreedBuckets, formatTime, timeZone }: Readonly<{
   document: DailyBriefingDocument
   /** Already produced by the one place that decides completeness; the card only renders it. */
   completenessNote?: string
@@ -33,6 +34,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   fearGreedBuckets: FearGreedBuckets
   readOnly?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
+  /** 读者时区：空态那句要印「截至 08:00（GMT+8）」，时刻与时区必须来自同一处。 */
+  timeZone?: string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
   // The same rows the copied text prints, unmodified: one function, two exports, no second opinion.
@@ -51,7 +54,10 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const macroEmpty = briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: text.macroEmptyCodes,
     emptyMacro: text.empty.macro,
-    macroUnreadable: text.macroUnreadable
+    macroUnreadable: text.macroUnreadable,
+    ...(timeZone === undefined
+      ? {}
+      : { clock: { formatTime: (value: string) => formatTime(value, 'minute'), zoneLabel: formatShellTimeZoneLabel(timeZone) } })
   })
   const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
   const hasData = chosen.length > 0
@@ -139,7 +145,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           由同一个推导决定，正文与限制清单说的是同一句话。
           **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，
           把这句放成行的兄弟，`grid-column` 不会生效，「跨两列」就悄悄做不到。 */}
-      {macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
+      {macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.pending ? 'pending' : macroEmpty.unreadable ? 'unreadable' : 'empty'}>
         <span className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</span>
       </div> : null}
     </section> : null}

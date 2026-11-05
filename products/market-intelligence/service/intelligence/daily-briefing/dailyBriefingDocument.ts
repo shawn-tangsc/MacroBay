@@ -30,6 +30,20 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const news = selectNews(packet)
   const macroCandidates = selectMacroCandidates(packet)
   const macro = selectMacro(packet, macroCandidates)
+  // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
+  const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
+  const macroEmptyNotes = macroEmpty === undefined ? {} : {
+    macroEmpty,
+    // The stale sentence names the age; nothing else can fill it truthfully, and the number
+    // rides beside the code rather than inside it so the copy stays in the text table.
+    ...(macroEmpty === 'calendar-stale' && macroEmptyHours(packet) !== undefined
+      ? { macroEmptyHours: macroEmptyHours(packet)! }
+      : {}),
+    // 有事件、只是实际值还没到：条数也一起写，那句话要念出"有几条"。
+    ...(macroEmpty === 'past-24h-high-impact-actuals-pending'
+      ? { macroEmptyCount: highImpactEventsInWindow(packet).length }
+      : {})
+  }
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
@@ -75,14 +89,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
       ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
-        ...(macro.length > 0 ? {} : {
-          macroEmpty: macroEmptyCode(packet),
-          // The stale sentence names the age; nothing else can fill it truthfully, and the number
-          // rides beside the code rather than inside it so the copy stays in the text table.
-          ...(macroEmptyCode(packet) === 'calendar-stale' && macroEmptyHours(packet) !== undefined
-            ? { macroEmptyHours: macroEmptyHours(packet)! }
-            : {})
-        })
+        ...(macroEmpty === undefined ? {} : macroEmptyNotes)
       })
     }),
     data: Object.freeze({
@@ -556,7 +563,7 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
   // A catch-up that failed is a collection failure, which is also not "nothing".
   if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
-  return briefingMacroEmptyReason({
+  const reason = briefingMacroEmptyReason({
     state: packet.calendar.state === 'unavailable' ? 'unavailable'
       : freshness.state === 'source-disabled' ? 'source-disabled'
         : freshness.state === 'not-wired' || freshness.state === 'unavailable' ? 'unavailable'
@@ -565,6 +572,28 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
     ...(freshness.lastAttemptAt ? { lastAttemptAt: freshness.lastAttemptAt } : {}),
     ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
     dataAsOf: packet.asOf
+  })
+  // 「数据是新的 + 窗口一条都没有」才是「确实没有」。窗口里有高影响事件、只是截至这一刻还没拿到
+  // 它们的实际值，那是「我们没拿到」，不许写成「没有」（用户 2026-11-05 报的那一版）。
+  if (reason === 'past-24h-no-high-impact-release' && highImpactEventsInWindow(packet).length > 0) {
+    return 'past-24h-high-impact-actuals-pending'
+  }
+  return reason
+}
+
+/**
+ * 窗口内的高影响事件（按发生时刻算），不看有没有实际值。
+ *
+ * 只用来回答"窗口里到底有没有事件"：正文仍只列有实际值的那几条（无值事件会一起进 AI 分析快照，
+ * 那是另一笔要先把展示项与分析项分开的活）。
+ */
+function highImpactEventsInWindow(packet: DailyBriefingFactPacket): readonly DailyBriefingCalendarEvent[] {
+  const start = Date.parse(packet.windowStart)
+  const end = Date.parse(packet.windowEnd)
+  return packet.calendar.events.filter((event) => {
+    if (event.importance !== 'high') return false
+    const at = Date.parse(event.scheduledAt)
+    return Number.isFinite(at) && at >= start && at < end
   })
 }
 

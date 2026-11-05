@@ -92,6 +92,8 @@ const renderWith = async (
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
   await act(async () => root!.render(createElement(DailyBriefingShareCard, {
     document: doc, text: copy, locale, formatTime,
+    // 宏观空态那句要印「截至 {time}（{zone}）」：时区由页面给，卡片不自猜。
+    timeZone: 'UTC',
     // The card never owns these words; the page hands them in, so the test hands them in too.
     paymentDirectionsCompact: briefingPaymentDirections(locale),
     policyWords: briefingPolicyGaugeWords(locale), changeArrows: briefingChangeArrows(locale), fearGreedBuckets: briefingFearGreedBuckets(locale)
@@ -172,6 +174,33 @@ describe('an empty macro section says why (A0.8)', () => {
     expect(line?.textContent).toBe(text.empty.macro)
     // 「没有」这一档不许带「读不到」的前缀——那正是被修掉的那个假话。
     expect(line?.textContent).not.toContain(text.macroUnreadable)
+  })
+
+  it('counts the events whose actuals had not arrived, instead of claiming there were none', async () => {
+    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件、截至冻结时一条实际值都没拿到。
+    // 这一档既不是「没有」，也不是「未公布」——讲的是"截至那一刻我们手里没有"。
+    const doc = emptyMacro({ macroEmpty: 'past-24h-high-impact-actuals-pending', macroEmptyCount: 9 })
+    const rendered = await render({ ...doc, edition: { ...doc.edition, dataAsOf: '2026-10-30T00:30:00.000Z' } })
+    const line = rendered.querySelector<HTMLElement>('[data-macro-empty="pending"]')
+
+    expect(line).not.toBeNull()
+    expect(line!.textContent).toBe(text.macroEmptyCodes['past-24h-high-impact-actuals-pending']
+      .replace('{count}', '9')
+      .replace('{time}', '2026-10-30 00:30')
+      .replace('{zone}', 'GMT'))
+    // 两句假话都不许出现：既不许说"没有"，也不许说"未公布"（那是替数据源下结论）。
+    expect(rendered.textContent).not.toContain(text.macroEmptyCodes['past-24h-no-high-impact-release'])
+    expect(rendered.textContent).not.toContain('未公布')
+    // 正文不编数值：这一档列表是空的，值一个都不出现。
+    expect(line!.textContent).not.toContain('3.4%')
+  })
+
+  it('says "not readable" rather than guessing when the count is missing', async () => {
+    // 半套数据（旧文档或写坏了）：没有条数就不印那句话，更不许印 0。
+    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-high-impact-actuals-pending' }))
+    const line = rendered.querySelector<HTMLElement>('[data-macro-empty="unreadable"]')!
+    expect(line).not.toBeNull()
+    expect(line.textContent).not.toContain('0 ')
   })
 
   it('prints the timeout as its own sentence, not as a failed collection', async () => {

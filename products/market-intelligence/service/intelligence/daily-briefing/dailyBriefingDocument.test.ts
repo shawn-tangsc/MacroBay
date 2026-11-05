@@ -681,6 +681,52 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroEmptyHours).toBeUndefined()
   })
 
+  it('never calls it "nothing happened" when the window had releases whose actuals had not arrived', () => {
+    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都还没回补。
+    // 「没有」是断言事实，「还没拿到」说的是我们手里有什么——两者不能互相冒充。
+    const events = Array.from({ length: 9 }, (_, index) => ({
+      eventKey: `EV.${index}`,
+      title: `Event ${index}`,
+      scheduledAt: new Date(Date.parse(windowStart) + (index + 1) * 2 * 3_600_000).toISOString(),
+      importance: 'high' as const,
+      lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }))
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('past-24h-high-impact-actuals-pending')
+    expect(document.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
+    // 数要跟着写：句子念得出"有几条"。
+    expect(document.news.notes.macroEmptyCount).toBe(9)
+    // 正文不编数值：一条都没有进宏观列表。
+    expect(document.news.macro).toHaveLength(0)
+  })
+
+  it('keeps the plain "nothing" sentence when the window really had no high-impact event', () => {
+    // 反向：窗口里只有低影响事件时，仍然是"一条高影响都没有"，不许被上一档顶掉。
+    const events = [{
+      eventKey: 'EV.LOW', title: 'Low', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'medium' as const,
+      lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }]
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    expect(document.news.notes.macroEmptyCount).toBeUndefined()
+  })
+
   it('does not let stale or unavailable readings look available', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({
