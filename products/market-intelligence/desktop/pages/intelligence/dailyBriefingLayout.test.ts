@@ -206,13 +206,15 @@ describe('the report actions stick to the report', () => {
     expect(bar).toContain('background: transparent;')
     expect(bar).toContain('border-bottom: 1px solid transparent;')
     // The bleed cancels the container's padding in both states, so switching the paint cannot shift
-    // the report: the box is the same box when stuck and when not.
-    expect(bar).toContain('margin: -20px -22px 8px;')
-    expect(bar).toContain('padding: 12px 22px;')
+    // the report: the box is the same box when stuck and when not. No bottom margin either — the row
+    // sits on the document's top edge instead of hovering a gap above it.
+    expect(bar).toContain('margin: -20px -22px 0;')
+    expect(bar).toContain('padding: 8px 22px 0;')
 
     const stuck = rule('.mi-daily-briefing-page__report-bar[data-stuck="true"] {')
     expect(stuck).toContain('background: var(--mi-dashboard-surface);')
-    expect(stuck).toContain('border-bottom-color: var(--mi-dashboard-line);')
+    // A faint seam: it is inside the document, not the edge of a new section.
+    expect(stuck).toContain('border-bottom-color: color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent);')
     // Nothing about the box may change on stuck, or the report jumps when the bar pins.
     expect(stuck).not.toContain('margin')
     expect(stuck).not.toContain('padding')
