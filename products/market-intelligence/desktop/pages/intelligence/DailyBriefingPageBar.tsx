@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import { DailyBriefingPageActions } from './DailyBriefingPageActions'
 import type { BriefingManualRunDraft } from './BriefingManualRunDialog'
+import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 /**
@@ -37,7 +38,7 @@ export function DailyBriefingPageBar({
   targetDate: string
   zoneInvalid: boolean
   systemZone: boolean
-  onManualRun: (draft: BriefingManualRunDraft) => void
+  onManualRun: (draft: BriefingManualRunDraft) => BriefingManualRunOutcome
   onOpenSettings: () => void
   onBack: () => void
 }>): React.ReactElement {
