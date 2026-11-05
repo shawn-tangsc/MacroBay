@@ -315,6 +315,26 @@ describe('one refusal line, two tones', () => {
   })
 })
 
+/**
+ * Explanatory paragraphs are gone from the manual-run dialog: each one became a question beside the
+ * label it explains. The question comes first, 6px from the title, vertically centred — the settings
+ * form already does this, and two arrangements for the same idea is how a reader learns neither.
+ */
+describe('a dialog label and its question are one row', () => {
+  it('puts the question first, 6px from the title, on the same line', () => {
+    const label = rule('.mi-briefing-period-dialog__label {')
+    expect(label).toContain('display: inline-flex;')
+    expect(label).toContain('align-items: center;')
+    expect(label).toContain('gap: 6px;')
+  })
+
+  it('paints the question in muted ink, not the faint tone', () => {
+    // Faint measured 2.6:1 on this dialog: an unreadable trigger is not a trigger.
+    const trigger = rule('.mi-briefing-period-dialog__label .icon-button {')
+    expect(trigger).toContain('color: var(--mi-dashboard-muted);')
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

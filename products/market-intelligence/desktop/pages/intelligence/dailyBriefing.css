@@ -349,6 +349,16 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    wrong yet, they have picked values that collide with a row they already have. */
 .mi-briefing-period-dialog { display: flex; flex-direction: column; gap: 12px; }
 .mi-briefing-period-dialog__field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* A field's label and the question that explains it are one unit: the question comes first, 6px from
+   the title, vertically centred, and never wraps onto a line of its own — the same rule the settings
+   form already follows, so a reader does not have to learn two arrangements. Explanations that used to
+   sit under the field as a paragraph live in a hover popover now; the label is the whole row. */
+.mi-briefing-period-dialog__label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+/* The question is a real trigger, so it may not be painted faint: at the prototype's faint tone it
+   measured 2.6:1, and a control the reader cannot see is not a control. `muted` is the ink the rest of
+   this dialog's secondary text already uses. The 22px hit area and the focus ring are the platform
+   icon button's; nothing here overrides them. */
+.mi-briefing-period-dialog__label .icon-button { color: var(--mi-dashboard-muted); }
 .mi-briefing-period-dialog__field strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
 .mi-briefing-period-dialog__hint, .mi-briefing-period-dialog__note { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
 /* The refusal line, one class for both tiers. 10.5px is the dialog's own label size: a hint larger than
