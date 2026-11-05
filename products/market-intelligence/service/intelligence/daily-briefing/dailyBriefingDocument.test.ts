@@ -764,7 +764,7 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
     expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
-    // 窗口里连高影响事件都没有：总数与缺值数都不写，也没有「未拿到」那句。
+    // 窗口里连高影响事件都没有：总数不写，正文里也没有任何一句话。
     expect(document.news.notes.macroHighImpactCount).toBeUndefined()
   })
 

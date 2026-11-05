@@ -383,7 +383,7 @@ describe('daily brief agent turn copy', () => {
   })
 
   it('never hands the writing model an event whose actual is missing (A0.12)', async () => {
-    // 用户 2026-11-05 那类窗口：有事件、还没拿到值。它照常显示（值写「未拿到」），但两份写作素材
+    // 用户 2026-11-05 那类窗口：有事件、还没拿到值。它照常显示（值那一格不渲染），但两份写作素材
     // ——事实卡与选材提示词——都不许出现它，否则模型会把"我们没拿到"写成一句判断。
     const base = withNextCandidates()
     const waiting = {

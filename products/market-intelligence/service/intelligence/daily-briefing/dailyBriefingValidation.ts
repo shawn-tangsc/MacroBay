@@ -364,7 +364,7 @@ export function applyDailyBriefingEditorial(
         // why, so a macro the editorial did not explain stays hidden with its reason.
         if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
         // 没有实际值的事件不参加选材（`A0.12` ⑤），模型也就没有 why 可写；但它在版面上必须出现，
-        // 值那一格写「未拿到」——隐藏它等于把"我们没拿到"又写回"没有"。
+        // 值缺席时**那一格整块不渲染**（`02` v2.124）：正文里不写任何"没拿到"之类的话，事件照旧显示。
         if (item.actual === undefined) return Object.freeze({ ...item, visibility: 'shown' as const })
         return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
       }))

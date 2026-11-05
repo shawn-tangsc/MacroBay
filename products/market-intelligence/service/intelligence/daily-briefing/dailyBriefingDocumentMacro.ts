@@ -40,7 +40,7 @@ export function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly
 /**
  * 喂给写作模型的候选：**只含有实际值的事件**（`02` `A0.12` ⑤）。
  *
- * 展示与分析是两套：无值事件照常显示（值写「未拿到」），但不进模型读到的任何一份素材——
+ * 展示与分析是两套：无值事件照常显示（值那一格不渲染），但不进模型读到的任何一份素材——
  * 否则模型会把"我们没拿到"写成一个判断。这条边界只在这一点上实现，别在提示词里再筛一遍。
  */
 export function selectMacroAnalysisCandidates(items: readonly BriefingMacroItem[]): readonly BriefingMacroItem[] {
