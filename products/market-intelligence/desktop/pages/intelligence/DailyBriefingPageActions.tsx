@@ -7,7 +7,7 @@ import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
-import { BriefingManualRunDialog, type BriefingManualRunDraft } from './BriefingManualRunDialog'
+import { BriefingManualRunDialog, type BriefingManualRunDraft, type BriefingManualRunProblem } from './BriefingManualRunDialog'
 import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
 import type { BriefingPushText } from './dailyBriefingPushText'
@@ -40,13 +40,19 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   zoneInvalid: boolean
   systemZone: boolean
   /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
-  onManualRun: (draft: BriefingManualRunDraft) => BriefingManualRunOutcome
+  /** 一次按下的结果；撞上已有那一版时带一句话和"替换"这个动作，由弹框就地发问。 */
+  onManualRun: (draft: BriefingManualRunDraft) => Readonly<{
+    outcome: BriefingManualRunOutcome
+    duplicate?: Readonly<{ label: string; replace: () => void }>
+  }>
   onOpenSettings: () => void
 }>): React.ReactElement {
   // 弹框的开关住在这里：那颗按钮只开它，三个字段与提交都在弹框里。
   const [manualOpen, setManualOpen] = useState(false)
-  // 被拒的那次不关弹框：读者要能看见为什么没跑，并就地改那个时刻。
-  const [manualProblem, setManualProblem] = useState<'cutoff-in-future' | 'cutoff-unreadable' | undefined>(undefined)
+  // 被拒的那次不关弹框：读者要能看见为什么没跑，并就地改那个时刻或窗口。
+  const [manualProblem, setManualProblem] = useState<BriefingManualRunProblem | undefined>(undefined)
+  // 撞上已有那一版：在同一个弹框里问替换，不叠第二层。
+  const [manualDuplicate, setManualDuplicate] = useState<Readonly<{ label: string; replace: () => void }> | undefined>(undefined)
   return <div className="mi-daily-briefing-page__actions" data-action-group="page">
     {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
     {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
@@ -68,12 +74,18 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       text={text}
       running={generating}
       onRun={(draft) => {
-        const outcome = onManualRun(draft)
-        setManualProblem(outcome === 'started' ? undefined : outcome)
-        if (outcome === 'started') setManualOpen(false)
+        const result = onManualRun(draft)
+        if (result.outcome === 'duplicate') {
+          setManualProblem(undefined)
+          setManualDuplicate(result.duplicate)
+          return
+        }
+        setManualProblem(result.outcome === 'started' ? undefined : result.outcome)
+        if (result.outcome === 'started') setManualOpen(false)
       }}
+      onReplace={() => { manualDuplicate?.replace(); setManualOpen(false); setManualDuplicate(undefined) }}
       {...(manualProblem === undefined ? {} : { problem: manualProblem })}
-      onClose={() => { setManualOpen(false); setManualProblem(undefined) }}
+      onClose={() => { setManualOpen(false); setManualProblem(undefined); setManualDuplicate(undefined) }}
     />
     {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}

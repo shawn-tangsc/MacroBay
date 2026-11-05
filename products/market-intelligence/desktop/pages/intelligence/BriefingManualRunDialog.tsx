@@ -23,13 +23,22 @@ export type BriefingManualRunDraft = Readonly<{
  * for two runs, not for a duplicate form — so the form never refuses on that ground and says so in
  * its own words (A7.9). No period configuration is written by this dialog.
  */
-export function BriefingManualRunDialog({ open, text, running = false, problem, onRun, onClose }: Readonly<{
+export type BriefingManualRunProblem =
+  | 'cutoff-in-future'
+  | 'cutoff-unreadable'
+  /** 整期状态，不是字段错：提示放底部、确定键禁用并同屏说明原因。 */
+  | 'already-running'
+
+export function BriefingManualRunDialog({ open, text, running = false, problem, duplicate, onRun, onReplace, onClose }: Readonly<{
   open: boolean
   text: DailyBriefingText
   running?: boolean
   /** Why the last press did not start a run; the dialog stays open so the reader can fix it. */
-  problem?: 'cutoff-in-future' | 'cutoff-unreadable' | undefined
+  problem?: BriefingManualRunProblem | undefined
+  /** 同一 (日期, 截止, 窗口, 语言) 已经有一版：在**同一个弹框里**问替换，不叠第二层。 */
+  duplicate?: Readonly<{ label: string }> | undefined
   onRun: (draft: BriefingManualRunDraft) => void
+  onReplace: () => void
   onClose: () => void
 }>): React.ReactElement {
   const resolveProductText = useProductTextKey()
@@ -40,18 +49,30 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
     language: 'zh-CN'
   })
   const windowLabel = (hours: number): string => copy.windowValue.replace('{hours}', String(hours))
+  // 「正在生成」是整期状态，不是字段错：它放底部、让确定键禁用，并同屏写出原因。
+  const blockedReason = problem === 'already-running' ? copy.alreadyRunning : undefined
+  // 字段级的拒绝贴在该字段下面，作为它的兄弟节点；同一时刻只出现一处提示。
+  const cutoffProblem = problem === 'cutoff-in-future' || problem === 'cutoff-unreadable' ? problem : undefined
+  const cutoffProblemText = cutoffProblem === 'cutoff-in-future' ? copy.cutoffInFuture : cutoffProblem === 'cutoff-unreadable' ? copy.cutoffUnreadable : undefined
 
   return <Modal
-    footer={<>
-      <Button onClick={onClose}>{copy.cancel}</Button>
-      <Button disabled={running} loading={running} onClick={() => onRun(draft)} type="primary">
-        {running ? copy.running : copy.run}
-      </Button>
-    </>}
+    footer={<div className="mi-briefing-period-dialog__actions">
+      <Button autoFocus onClick={onClose}>{copy.cancel}</Button>
+      {duplicate === undefined
+        ? <Button
+          aria-describedby={blockedReason === undefined ? undefined : 'manual-run-blocked-reason'}
+          disabled={running || blockedReason !== undefined} loading={running}
+          onClick={() => onRun(draft)} type="primary">
+          {running ? copy.running : copy.run}
+        </Button>
+        : <Button onClick={onReplace} type="primary">{copy.duplicateReplace}</Button>}
+    </div>}
     onClose={onClose}
     open={open}
     resolveText={resolveProductText}
-    titleKey="pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.title"
+    titleKey={duplicate === undefined
+      ? 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.title'
+      : 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.duplicateTitle'}
     width="standard"
   >
     <div className="mi-briefing-period-dialog" data-manual-run-dialog="true">
@@ -70,6 +91,10 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
           style={{ width: 128 }}
         />
       </label>
+      {cutoffProblemText === undefined ? null : <p className="mi-briefing-period-dialog__conflict" role="alert"
+        data-tone={cutoffProblem === 'cutoff-in-future' ? 'invalid' : undefined} data-manual-problem={cutoffProblem}>
+        {cutoffProblemText}
+      </p>}
       {/* 指定时刻取自同一张表，所以档位说明也从那张表算——「现在」是第三种选择，不受档位约束。 */}
       <p className="mi-briefing-period-dialog__hint" data-time-grid="true">{briefingGenerationGridHint(text)}</p>
       {draft.cutoff === 'now' ? <p className="mi-briefing-period-dialog__hint">{copy.nowHint}</p> : null}
@@ -98,10 +123,14 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
       </label>
       {/* A7.9: the reader must be told that pressing again with the same choices is a new issue,
           not a mistake — otherwise the behavior looks like a bug and they delete the second one. */}
-      {problem === undefined ? null : <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-problem={problem}>
-        {problem === 'cutoff-in-future' ? copy.cutoffInFuture : copy.cutoffUnreadable}
+      {duplicate === undefined ? null : <>
+        <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-duplicate="true">{duplicate.label}</p>
+        <p className="mi-briefing-period-dialog__note">{copy.duplicateBody}</p>
+      </>}
+      {duplicate === undefined ? <p className="mi-briefing-period-dialog__note">{copy.repeatable}</p> : null}
+      {blockedReason === undefined ? null : <p className="mi-briefing-period-dialog__conflict" id="manual-run-blocked-reason" role="alert" data-manual-problem={problem}>
+        {blockedReason}
       </p>}
-      <p className="mi-briefing-period-dialog__note">{copy.repeatable}</p>
     </div>
   </Modal>
 }

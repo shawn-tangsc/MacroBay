@@ -351,7 +351,34 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setRegenerating, setRegenerateFailure, setEditions,
     setCurrentPeriodDate, onSettled: () => setReloadKey((key) => key + 1)
   })
-  const onManualRun = useBriefingManualRun({ timeZone, regenerate })
+  const runManual = useBriefingManualRun({
+    timeZone,
+    regenerate,
+    running: generating,
+    // A7.10 的查重键：同一 (日期, 截止时刻, 窗口, 语言) 已经有一版时，先问替换——再插一行就是两份
+    // 说同一件事的版次。手动期才有这个键，排期期按它自己的期号走。
+    findDuplicate: ({ asOf, windowHours, language }) => {
+      const existing = editions.find((edition) => edition.periodKind === 'manual'
+        && edition.periodTime === asOf
+        && edition.windowHours === windowHours
+        && edition.locale === language)
+      return existing === undefined ? undefined : { periodId: existing.periodId }
+    }
+  })
+  const onManualRun = (draft: Parameters<typeof runManual>[0]): Readonly<{
+    outcome: ReturnType<typeof runManual>['outcome']
+    duplicate?: Readonly<{ label: string; replace: () => void }>
+  }> => {
+    const result = runManual(draft)
+    if (result.outcome !== 'duplicate' || result.duplicate === undefined) return { outcome: result.outcome }
+    const { periodId, asOf, windowHours, language } = result.duplicate
+    const languageName = text.history.editionLanguages[language === 'en-US' ? 'en' : 'zh']
+    const label = [asOf.slice(0, 10), railClock(asOf, timeZone), text.history.windowHoursShort.replace('{hours}', String(windowHours)), languageName].join(' · ')
+    return {
+      outcome: 'duplicate',
+      duplicate: { label, replace: () => { void regenerate({ periodId, locale: language }) } }
+    }
+  }
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: readyDocument,

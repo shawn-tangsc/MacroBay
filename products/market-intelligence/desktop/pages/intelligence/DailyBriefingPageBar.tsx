@@ -38,7 +38,10 @@ export function DailyBriefingPageBar({
   targetDate: string
   zoneInvalid: boolean
   systemZone: boolean
-  onManualRun: (draft: BriefingManualRunDraft) => BriefingManualRunOutcome
+  onManualRun: (draft: BriefingManualRunDraft) => Readonly<{
+    outcome: BriefingManualRunOutcome
+    duplicate?: Readonly<{ label: string; replace: () => void }>
+  }>
   onOpenSettings: () => void
   onBack: () => void
 }>): React.ReactElement {
