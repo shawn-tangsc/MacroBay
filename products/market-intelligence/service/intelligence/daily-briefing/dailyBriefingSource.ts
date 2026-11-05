@@ -54,12 +54,15 @@ export type DailyBriefingSourceDeps = Readonly<{
  * stated gap in the document, never a failed generation. The source never triggers a collection.
  */
 export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyBriefingSource {
-  return {
-    async readFacts(input) {
+  // 一次采集 = 一个 (截止时刻, 统计窗口)。两份同刻同窗口的日报读的是同一条证据链；把语言或期号
+  // 放进这个键会各采一遍（同一批数读两次，还可能两次看到不一样的东西），把窗口拿出去则相反——
+  // 24h 与 4h 会复用同一份，4h 那份拿到的是 24h 的数。键里只放这两样，别的一样都不放。
+  const collected = new Map<string, Promise<DailyBriefingFactSnapshot>>()
+  const collect = async (asOf: string, windowHours: number): Promise<DailyBriefingFactSnapshot> => {
+      const input = { asOf, windowHours }
       const enabled = await readEnabled(deps)
       // The reader's statistical window decides the fact interval; every window-scoped read below
       // uses it instead of assuming 24 hours.
-      const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
       const windowStart = new Date(Date.parse(input.asOf) - windowHours * HOUR_MS).toISOString()
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       // One timeline read feeds both the fact-layer conclusion and the window's prior conclusions:
@@ -103,6 +106,22 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
           calendar: enabled.calendar
         })
       })
+  }
+  return {
+    async readFacts(input) {
+      const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
+      const key = `${input.asOf}|${windowHours}`
+      const cached = collected.get(key)
+      if (cached) return cached
+      // 失败不缓存：一次读挂了不该让同一时刻的重试也拿那次失败。
+      const promise = collect(input.asOf, windowHours).catch((error: unknown) => { collected.delete(key); throw error })
+      collected.set(key, promise)
+      // 有界：只留最近几次，长期运行不会把每次采集都攥在内存里。
+      if (collected.size > 8) {
+        const oldest = collected.keys().next().value
+        if (oldest !== undefined) collected.delete(oldest)
+      }
+      return promise
     },
     async renderPacket(facts, locale, timeZone) {
       // The localized layer: only text and the reader's own prior conclusions come from here. No

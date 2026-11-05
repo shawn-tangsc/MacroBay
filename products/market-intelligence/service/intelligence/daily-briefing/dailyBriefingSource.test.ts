@@ -5,6 +5,38 @@ import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './daily
 
 
 /** Tests keep calling one packet builder; the source itself now reads facts once, then renders. */
+/**
+ * A5.5 / A5.6：**采集单元是 (截止时刻, 统计窗口)**，与期号、语言无关。
+ *
+ * 两期同刻同窗口——哪怕语言不同——读的是同一条证据链，只该采一次；窗口不同则是两份不同的数，
+ * 各采一次（拿 24h 的读数去当 4h 的报告，数不算错，口径错了）。这两条用例数的是**真实查询调用次数**，
+ * 不是"看起来复用"。
+ */
+describe('one collection per (cutoff, window)', () => {
+  const counting = () => {
+    const d = deps()
+    let reads = 0
+    type Snapshot = (input: { asOf: string }) => unknown
+    const query = (d.publicQuery as unknown as { queryFearGreedSnapshot: Snapshot }).queryFearGreedSnapshot
+    ;(d.publicQuery as unknown as { queryFearGreedSnapshot: Snapshot }).queryFearGreedSnapshot = (input: { asOf: string }) => { reads += 1; return query(input) }
+    return { source: createDailyBriefingSource(d), reads: () => reads }
+  }
+
+  it('reads once for two editions of the same moment and window', async () => {
+    const { source, reads } = counting()
+    await source.readFacts({ asOf, windowHours: 24 })
+    await source.readFacts({ asOf, windowHours: 24 })
+    expect(reads()).toBe(1)
+  })
+
+  it('reads twice for the same moment at two windows, instead of reusing one number', async () => {
+    const { source, reads } = counting()
+    await source.readFacts({ asOf, windowHours: 24 })
+    await source.readFacts({ asOf, windowHours: 12 })
+    expect(reads()).toBe(2)
+  })
+})
+
 const makeSource = (deps: Parameters<typeof createDailyBriefingSource>[0]) => {
   const source = createDailyBriefingSource(deps)
   return {
@@ -84,7 +116,7 @@ function deps(overrides: {
         conclusion: 'partial'
       }),
       queryCrossAssetSnapshot: async () => undefined,
-      queryMacroHistoryAsOf: (input) => overrides.macroHistory?.(input),
+      queryMacroHistoryAsOf: (input: { series: 'dxy' | 'gold'; asOf: string }) => overrides.macroHistory?.(input),
       queryMacroRatesSnapshot: () => overrides.macroRates,
       queryMacroEconomicCalendarMonth: async () => overrides.failCalendar
         ? { state: 'unavailable', failureCode: 'calendar-query-unavailable' }
