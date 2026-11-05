@@ -37,6 +37,10 @@ export function liveProgressFor(
 /**
  * 进度查询的取数规则：**给了期号只认那一次跑**，没给才退回 (日期, 语言) 的最近一条。
  *
+ * 「给了期号还兜底」曾经让并行两期互相串：读者切到没在跑的那一期，查不到自己的键就退回
+ * 同一天同语言的另一跑，界面上显示的是别人的步骤。兜底只在**没给期号**时用——那时调用方
+ * 问的就是"这一天这一门语言最近一跑"。
+ *
  * 规则在这里只有一份：服务层只把运行记录与键拼法交进来，不自己写一遍「先精确后兜底」。
  */
 export function progressLookup(
@@ -45,7 +49,7 @@ export function progressLookup(
 ): (date: string, locale: DailyBriefingLocale, periodId?: string) => BriefingGenerationProgress | undefined {
   return (date, locale, periodId) => periodId === undefined
     ? liveProgressFor(progress, date, locale)
-    : progress.get(keyOf(date, periodId, locale)) ?? liveProgressFor(progress, date, locale)
+    : progress.get(keyOf(date, periodId, locale))
 }
 
 export function createBriefingProgressReader(deps: Readonly<{

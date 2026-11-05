@@ -187,9 +187,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (ready) lastReadyRef.current = ready
   }, [view])
   // Always polling: the run that matters may have been started by the schedule, not by this page.
-  // 这一次跑的期号：发起时记下，进度查询用它——并行跑两期时，按日期+语言取会显示另一次。
-  const [runningPeriodId, setRunningPeriodId] = useState<string | undefined>(undefined)
-  const progress = useDailyBriefingProgress({ client, running: true, locale, timeZone, ...(runningPeriodId === undefined ? {} : { periodId: runningPeriodId }), intervalMs: 1_500 })
+  // 进度按**选中那一版**的身份查（日期窗口 + 期号 + 语言），不是"本页最后一次发起的那一次"：
+  // 后者会让"切到另一期"之后正文显示的仍是上一跑的步骤（用户报的"切过去还在跑别人的步骤"）。
+  // 选中项没有期号时用默认期——服务按 `date:periodId:locale` 精确取，不再回退到同日同语言的另一跑。
+  const progress = useDailyBriefingProgress({
+    client, running: true, locale: effectiveLocale, timeZone,
+    periodId: pickedPeriodId ?? DEFAULT_PERIOD_ID, intervalMs: 1_500
+  })
   // One question, every source: what this page started, what it is loading for, and what the service
   // says is running right now (a scheduled run, or one started in another window).
   const generating = busyLocally || progress?.state === 'running'
@@ -240,7 +244,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId,
+    setCurrentPeriodDate, todayDate,
     // 发起即跳转 = 把选中项一次设全（日期 + 期号 + 语言）；正文是否跟着换由身份闸门决定。
     // 「我在读哪一版」只由读者的动作改。运行只交给 `running`：
     // 手动是**新建一期**，那一版本来没有正文，所以选中项跟着切过去（= 发起即跳转）；
@@ -252,10 +256,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setPickedPeriodId(intent.periodId)
       setPickedLocale(intent.locale)
     },
-    // #29：跑完**必须清掉这一次的期号**。不清，下一次定时/另一窗口的运行会拿它去查进度，
-    // 查不到 → 界面完全不显示"生成中"。这里**不顺手整页重读**：重读走的是 `getToday`（默认期），
-    // 会把刚跑出来的那一期正文顶掉——列表那一行已由 runBriefing 自己按新文档合并。
-    onSettled: () => setRunningPeriodId(undefined)
+    // 跑完不清任何"这一次的期号"了：进度只认选中那一版，没有"最后一次"这个概念可用。
+    // 这里**不顺手整页重读**：重读走的是 `getToday`（默认期），会把刚跑出来的那一期正文顶掉——
+    // 列表那一行已由 runBriefing 自己按新文档合并。
   })
   const runManual = useBriefingManualRun({
     timeZone,

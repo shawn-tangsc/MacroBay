@@ -1694,6 +1694,41 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(todayRow.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
+// 用户报的第一次：A 在跑、切到同样在跑的 B，正文显示的却是 A 的步骤。
+it('shows the steps of the issue being read, not the run this page started last', async () => {
+  const today = '2026-10-30'
+  const row = (periodId: string) => ({
+    date: today, periodId, locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const,
+    languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }]
+  })
+  const stages = (id: string, at: string) => ({
+    attemptId: `attempt-${id}`,
+    startedAt: `${today}T00:00:00.000Z`,
+    stages: [{ id, state: 'pending' as const, startedAt: `${today}T${at}.000Z` }]
+  })
+  const getProgress = vi.fn(async (input: Readonly<{ periodId?: string }>) => ({
+    state: 'running' as const,
+    // 两个期同时在跑：各自只能拿到自己的阶段。
+    progress: input.periodId === 'period_b' ? stages('writing', '05:11:07') : stages('source', '04:00:05')
+  }))
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [row('default'), row('period_b')] } })),
+    getProgress
+  })
+  const dom = await renderPage(client)
+  const rowB = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_b"]')!
+  await act(async () => { rowB.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 进度问的是**选中那一版**，不是本页最后一次发起的那一次。
+  expect(getProgress).toHaveBeenLastCalledWith(expect.objectContaining({ periodId: 'period_b' }))
+  const panel = dom.querySelector<HTMLElement>('[data-briefing-stage-panel][data-state="generating"]')!
+  const runningStep = panel.querySelector<HTMLElement>('[data-briefing-stage-row][data-stage-state="running"]')
+  expect(runningStep?.getAttribute('data-stage')).toBe('writing')
+  // A 那一步（取数）不许冒充成 B 正在走的阶段。
+  expect(panel.querySelector('[data-stage-state="running"]')?.getAttribute('data-stage')).not.toBe('source')
+})
+
 // 反向：选中的是 A、手上读到的文档身份却是 B —— 那份文档不是"A 的正文"，绝不许冒充。
 it('never lets another issue\u2019s document stand in for the selected one', async () => {
   const today = '2026-10-30'
