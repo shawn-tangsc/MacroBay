@@ -93,6 +93,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.crossAsset.query' },
     { method: marketCalendarPublicPolicy.methods.refresh },
     { method: marketCalendarPublicPolicy.methods.query },
+    { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
     { method: macroMarketSnapshotPublicPolicy.method },
     { method: dashboardFeedStatusPublicPolicy.method },
     { method: macroRatesSnapshotPublicPolicy.method },

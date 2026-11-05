@@ -50,6 +50,9 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
 
   'intelligence.macro.marketCalendar.refreshManual': excluded('destructive'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
+  // The freshness read is what the briefing consumes; an agent asking "how old is the
+  // calendar" is the same read, so it rides the existing calendar query capability.
+  'intelligence.macro.marketCalendar.getCollectionFreshness': exposed('query_macro_calendar'),
   'intelligence.macro.marketSnapshot.query': exposed('get_macro_market_snapshot'),
   'intelligence.macro.dashboardFeedStatus.query': exposed('get_dashboard_feed_status'),
   'intelligence.macro.ratesSnapshot.query': exposed('get_macro_rates_snapshot'),

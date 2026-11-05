@@ -65,7 +65,9 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(await h.runtime.refreshManual(scope)).toMatchObject({ state: 'completed' })
     expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({ state: 'succeeded', attemptedAt: time, trigger: 'manual' })
     await h.runtime.dispose()
-    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toBeUndefined()
+    // The verdict is durable now: an outage's reason must survive the restart that used to
+    // erase every attempt record, otherwise "why is the calendar old" is unanswerable again.
+    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({ state: 'succeeded', attemptedAt: time, trigger: 'manual' })
   })
 
   it('leaves a visible trace of a refused automatic refresh, with verdict, time and origin', async () => {

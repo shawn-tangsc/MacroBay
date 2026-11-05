@@ -17,7 +17,8 @@ export const marketCalendarPublicPolicy = Object.freeze({
     'archive-unavailable', 'parse-unavailable', 'storage-unavailable', 'storage-pressure'],
   attemptTriggers: ['manual', 'automatic'],
   descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'],
-  methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth' }
+  methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
+    getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness' }
 } as const)
 export type MarketCalendarScope = Readonly<{ month: string; locale: 'zh' | 'en' }>
 export type MarketCalendarQuery = MarketCalendarScope & Readonly<{ asOf: string; cursor?: string }>
@@ -66,6 +67,24 @@ export type MarketCalendarPage = Readonly<{ state: 'available'; month: string; l
   Readonly<{ state: 'unavailable'; failureCode: 'input-invalid' | 'query-unavailable' }>
 export type MarketCalendarRefreshResult = Readonly<{ state: 'completed' | 'partial' | 'unavailable';
   sources: readonly MarketCalendarSource[]; failureCode?: typeof marketCalendarPublicPolicy.refreshFailures[number] }>
+/**
+ * How old the calendar actually is, for a consumer that must tell "nothing happened" from
+ * "we could not see anything".
+ *
+ * `lastCollectedAt` is the **oldest** latest-success among the enabled sources, so one live
+ * source cannot hide a stopped one; `null` means no enabled source has ever collected, which
+ * is a fact, not a failure. `latestAttempt` says why the last try ended, including a failure
+ * that never moved `lastCollectedAt`.
+ */
+export type MarketCalendarCollectionFreshness = Readonly<{
+  descriptorId: string
+  lastCollectedAt: string | null
+  latestAttempt?: MarketCalendarRefreshAttempt
+}>
+export type MarketCalendarFreshness =
+  | Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
+    sources: readonly MarketCalendarCollectionFreshness[] }>
+  | Readonly<{ state: 'unavailable'; failureCode: 'query-unavailable' }>
 
 export function marketExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
   try {
@@ -167,4 +186,21 @@ export function isMarketCalendarRefreshResult(value: unknown): value is MarketCa
     safeArray(value.sources, source) && (value.sources.length === 0 && value.state === 'unavailable' ||
       value.sources.length === marketCalendarPublicPolicy.kinds.length && value.sources.every((item, i) => source(item) && item.eventType === marketCalendarPublicPolicy.kinds[i])) &&
     (!Object.hasOwn(value, 'failureCode') || marketCalendarPublicPolicy.refreshFailures.includes(value.failureCode as never))
+}
+
+export function isMarketCalendarFreshness(value: unknown): value is MarketCalendarFreshness {
+  if (marketExact(value, ['state', 'failureCode']) && value.state === 'unavailable') return value.failureCode === 'query-unavailable'
+  if (!marketExact(value, ['state', 'asOf', 'lastCollectedAt', 'sources']) || value.state !== 'available') return false
+  if (!marketInstant(value.asOf)) return false
+  if (value.lastCollectedAt !== null && !marketInstant(value.lastCollectedAt)) return false
+  if (!safeArray(value.sources, sourceFreshness)) return false
+  return value.sources.length === marketCalendarPublicPolicy.descriptors.length &&
+    value.sources.every((item, index) => item.descriptorId === marketCalendarPublicPolicy.descriptors[index]) &&
+    value.sources.every(item => item.lastCollectedAt === null || item.lastCollectedAt <= (value.asOf as string))
+}
+function sourceFreshness(value: unknown): value is MarketCalendarCollectionFreshness {
+  return marketExact(value, ['descriptorId', 'lastCollectedAt'], ['latestAttempt']) &&
+    marketCalendarPublicPolicy.descriptors.includes(value.descriptorId as never) &&
+    (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
+    (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
 }

@@ -11,8 +11,8 @@ import type { ManualBlsIcsImportService } from '../bls-ics-manual/blsManualIcsIm
 import type { BlsEmploymentMvpRefreshService } from '../bls-employment-refresh/blsEmploymentMvpRefreshService'
 import type { BlsScheduleAndValuesSyncWorkflow } from '../bls-schedule-catch-up/blsScheduleAndLatestValuesSyncWorkflow'
 import type { FedFomcManualRefreshService } from '../fed-statements/fedFomcManualRefreshService'
-import { isMarketCalendarPage, isMarketCalendarQuery, isMarketCalendarScope, isMarketCalendarRefreshResult,
-  marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { isMarketCalendarFreshness, isMarketCalendarPage, isMarketCalendarQuery, isMarketCalendarScope,
+  isMarketCalendarRefreshResult, marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { createMacroCalendarLinkedQueryService, type SafeMarketQuery } from '../macroCalendarLinkedQueryService'
 import { linkZeroXRouterEvent, zeroXRouterOfficialEventLinks } from '../0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry'
 import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
@@ -40,7 +40,7 @@ export function registerMacroEconomicCalendarIpc(
   blsEmploymentRefresh?: BlsEmploymentMvpRefreshService,
   blsEmploymentSchedule?: BlsScheduleAndValuesSyncWorkflow,
   fedFomcRefresh?: FedFomcManualRefreshService,
-  market?: SafeMarketQuery & { refresh: (input: unknown) => unknown }
+  market?: SafeMarketQuery & { refresh: (input: unknown) => unknown; readCollectionFreshness?: () => Promise<unknown> }
 ): void {
   const releaseTimeOverrides = connection?.releaseTimeOverrides
   // Seed the synchronous view before the first query; until it lands, a row falls back to its
@@ -88,6 +88,15 @@ export function registerMacroEconomicCalendarIpc(
         const value = await (linkedMarket?.queryMonth(payload) ?? market.queryMonth(payload))
         if (isMarketCalendarPage(value, payload)) return value
       }
+    } catch {}
+    return { state: 'unavailable', failureCode: 'query-unavailable' }
+  })
+  // One read method, no payload: the caller asks "how old is the calendar", never "how old
+  // is this source in this month". A read that fails answers `unavailable`, never "nothing".
+  register(productId, marketCalendarPublicPolicy.methods.getCollectionFreshness, async () => {
+    try {
+      const value = await market?.readCollectionFreshness?.()
+      if (isMarketCalendarFreshness(value)) return value
     } catch {}
     return { state: 'unavailable', failureCode: 'query-unavailable' }
   })
