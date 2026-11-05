@@ -189,11 +189,15 @@
 .mi-daily-briefing__rail-fact[data-window-hours],
 .mi-daily-briefing__rail-source { padding: 1px 4px; border-radius: 3px; white-space: nowrap; font-size: 9px; font-weight: 600; }
 .mi-daily-briefing__rail-fact[data-window-hours] { background: color-mix(in srgb, var(--mi-dashboard-lime) 10%, transparent); color: var(--mi-dashboard-muted); }
-/* The source badge answers "did the machine produce this, or did I?": one of
+/* Both badges are mixed at the same 10% for a measured reason: at 14% the muted word on a chip
+   sits at 4.26:1 against a selected row and misses the 4.5 small-text floor, while 10% clears it
+   (5.11 / 4.58 on a row, 5.32 / 4.79 for the failure tone). Geometry equal is not enough — tint
+   equal is what makes them one marker, and the tint is set by contrast, not by taste.
+   The source badge answers "did the machine produce this, or did I?": one of
    scheduled / manual / catch-up / not-run / failed, exactly one per row. Only a failure is red;
    the other four are neutral, because a source is not a verdict. */
-.mi-daily-briefing__rail-source { flex: none; background: color-mix(in srgb, var(--mi-dashboard-muted) 14%, transparent); color: var(--mi-dashboard-muted); }
-.mi-daily-briefing__rail-source[data-source-kind="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 14%, transparent); color: var(--mi-dashboard-negative); }
+.mi-daily-briefing__rail-source { flex: none; background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-source[data-source-kind="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-sep { opacity: .6; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
 /* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */

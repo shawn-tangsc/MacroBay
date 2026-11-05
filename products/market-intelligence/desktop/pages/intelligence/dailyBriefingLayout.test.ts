@@ -73,6 +73,15 @@ describe('one rail chip shape', () => {
     expect(shared.slice(0, shared.indexOf('}'))).toContain('.mi-daily-briefing__rail-source')
   })
 
+  it('tints both chips at the same strength, set by contrast rather than taste', () => {
+    // 14% measured 4.26:1 for a muted 9px word on a selected row — under the 4.5 small-text floor;
+    // 10% measures 5.11 / 4.58. Equal geometry over an unequal tint is two markers that only look
+    // alike, so the three chip backgrounds must carry one number.
+    const chipRules = css.split('}').filter((rule) => /data-window-hours|rail-source/.test(rule))
+    const tints = [...chipRules.join('}').matchAll(/\) (\d+)%, transparent\)/g)].map((match) => match[1])
+    expect(new Set(tints)).toEqual(new Set(['10']))
+  })
+
   it('turns only a failed source red, and keeps the rest neutral', () => {
     // lastIndexOf: the first `.rail-source {` in the sheet is the shared-geometry block above.
     const source = css.slice(css.lastIndexOf('.mi-daily-briefing__rail-source {'))
