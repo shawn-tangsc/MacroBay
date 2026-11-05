@@ -94,6 +94,22 @@ describe('briefing manual run dialog', () => {
     expect(trigger.closest('label')).toBeNull()
   })
 
+  // 界面设计定的三条里的第 1 条：悬停打开、移开即关——它不钉住、不抢焦点，
+  // 所以鼠标一移向下拉框它就没了；"一选就被顶掉"的根子是它**一直开着**。
+  it('opens the explanation on hover and closes it when the pointer leaves', async () => {
+    await render()
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.cutoffHintLabel}"]`)!
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); await Promise.resolve() })
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+
+    await act(async () => { trigger.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body })); await Promise.resolve() })
+    // 移开即关：不是"还在但看不见"，触发器的展开态必须已经回到 false。
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('does not put the initial focus on a question mark', async () => {
     await render()
     const active = document.activeElement as HTMLElement | null

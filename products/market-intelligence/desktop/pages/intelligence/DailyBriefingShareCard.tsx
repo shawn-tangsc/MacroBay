@@ -136,8 +136,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
       </div>)}
       {/* 一行，正文段落样式：不是错误、不给图标、不给重试。「确实没有」那一档用另一句，
-          由同一个推导决定，正文与限制清单说的是同一句话。 */}
-      {macroEmpty ? <p className="mi-brief-poster__macro-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>{macroEmpty.sentence}</p> : null}
+          由同一个推导决定，正文与限制清单说的是同一句话。
+          **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，
+          把这句放成行的兄弟，`grid-column` 不会生效，「跨两列」就悄悄做不到。 */}
+      {macroEmpty ? <div className="mi-brief-poster__macro" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
+        <span className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</span>
+      </div> : null}
     </section> : null}
 
     {hasData ? <section className="mi-brief-poster__data-section">
