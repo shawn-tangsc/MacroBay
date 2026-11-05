@@ -496,6 +496,47 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
+  // 用户报的那条：中断行写着「可以再试一次」，行上却没有那颗按钮。
+  it('puts the retry on an interrupted row of today, next to the sentence that promises it', () => {
+    const onRegeneratePeriod = vi.fn()
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
+      })],
+      onRegeneratePeriod
+    })
+    const item = host.querySelector<HTMLElement>('[data-period-id="default"]')!.closest('.mi-daily-briefing__rail-item') as HTMLElement
+    expect(item.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.runInterrupted)
+    const retry = item.querySelector<HTMLButtonElement>('[data-rail-retry]')!
+    // 文案承诺了"可以再试一次"，那颗按钮就必须在，而且用这一行自己的三样身份。
+    expect(retry.textContent).toBe(text.history.retryOne)
+    act(() => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+  })
+
+  it('withholds the retry from a past interrupted day and from a row that is running now', () => {
+    // 历史日不支持补生成：那句"可以再试一次"只对今天成立，按钮不能跟着过去。
+    render({
+      editions: [edition({
+        date: '2026-11-01', state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
+      })],
+      onRegeneratePeriod: vi.fn()
+    })
+    expect(host.querySelector('[data-rail-retry]')).toBeNull()
+    // 正在跑的那一行也不给：它已经在做了，再给一颗重试就是两个入口改同一件事。
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
+      })],
+      generatingStage: 'AI 选择',
+      onRegeneratePeriod: vi.fn()
+    })
+    expect(host.querySelector('[data-rail-retry]')).toBeNull()
+  })
+
   // 用户问的那一句：生成中的行不能只有一个「生成中」，得说清卡在哪、跑了多久。
   it('tells the running row its stage and how long it has been going', () => {
     render({

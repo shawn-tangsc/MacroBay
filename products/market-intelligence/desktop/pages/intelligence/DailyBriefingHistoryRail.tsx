@@ -267,7 +267,11 @@ export function DailyBriefingHistoryRail({
             const title = edition.summaryLine ?? ''
             // 「重试」不能放在行按钮里：`<button>` 里套 `<button>` 是无效 HTML，键盘用户在无障碍树里
             // 会遇到一行两个按钮、焦点顺序说不清。它放在行按钮**之外**、同一条目内，视觉上仍落在行内。
-            const retryable = kind === 'failed' && edition.date === todayDate && onRegeneratePeriod !== undefined
+            // 中断过的那一行也可以再试：它的第二行写的就是「上次没跑完，可以再试一次」。
+            // 文案承诺了动作，就必须有那颗按钮——只有"失败"给重试，等于让中断行说完话没有下一句。
+            // 与失败同一道门：只给今天（历史日不支持补生成），正在跑的那一行不给。
+            const interrupted = runReasonOf(edition) === 'run-interrupted'
+            const retryable = (kind === 'failed' || interrupted) && !running && edition.date === todayDate && onRegeneratePeriod !== undefined
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
                 {...(retryable ? { 'data-has-retry': 'true' } : {})}
