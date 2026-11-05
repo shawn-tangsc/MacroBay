@@ -262,6 +262,15 @@ export function DailyBriefingHistoryRail({
                       {edition.periodDeleted ? `${text.history.deletedPeriod} · ` : ''}{title}
                     </span>}
               </button>
+              {/* 行尾的 ⋯：右键是"知道的人才会用"的入口，这一颗是看得见的那一种。两者开同一个菜单、
+                  同一份菜单项——两种触发，一份实现。它与「重试」一样在行按钮之外，行里不套按钮。 */}
+              <button type="button" className="mi-daily-briefing__rail-item-menu" aria-label={text.history.rowMenu}
+                data-rail-menu={key}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  openMenu(edition, { x: rect.right, y: rect.bottom + 4 })
+                }}>⋯</button>
               {retryable
                 ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
                   onClick={() => { void onRegeneratePeriod?.({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>

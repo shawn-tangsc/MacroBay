@@ -237,6 +237,39 @@ describe('a collapsed day carries only day-level facts', () => {
   })
 })
 
+describe('a row is never a button inside a button', () => {
+  it('keeps 重试 and ⋯ outside the row button, and the row holds no nested control', () => {
+    // `<button>` 里套 `<button>` 是无效标记：键盘用户在无障碍树里会遇到一行两个按钮，回车到底
+    // 触发"选中这一版"还是"重试"说不清。这一条断言就是那条说明的守卫——测试不会因为它红，
+    // 只有用键盘的人会撞上。
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 })],
+      onRegeneratePeriod: vi.fn()
+    })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    expect(row.querySelectorAll('button')).toHaveLength(0)
+    // 两个控件都在，而且都在行按钮之外、同一条目之内。
+    const item = row.closest('.mi-daily-briefing__rail-item')!
+    expect(item.querySelector('[data-rail-retry]')).not.toBeNull()
+    expect(item.querySelector('[data-rail-menu]')).not.toBeNull()
+    expect(item.querySelector('[data-rail-retry]')?.closest('.mi-daily-briefing__rail-row')).toBeNull()
+    expect(item.querySelector('[data-rail-menu]')?.closest('.mi-daily-briefing__rail-row')).toBeNull()
+  })
+
+  it('opens the same menu from the ⋯ and from the right-click', () => {
+    const resolveText = (key: string) => key
+    render({ resolveText })
+    const trigger = host.querySelector<HTMLElement>('[data-rail-menu]')!
+    act(() => { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const fromTrigger = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((node) => node.textContent)
+    expect(fromTrigger.length).toBeGreaterThan(0)
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    act(() => { host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const fromRightClick = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((node) => node.textContent)
+    expect(fromRightClick).toEqual(fromTrigger)
+  })
+})
+
 describe('a row is two lines: the facts, then what it says', () => {
   it('prints exactly one source badge, out of the five, and never 本期', () => {
     // 第一行最右那一格"这一份怎么来的"：五个值，恰一枚；「本期」这个词不进侧栏。

@@ -226,8 +226,11 @@
 .mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
 /* The single separator before the language: a dot, not part of either chip's box. */
 .mi-daily-briefing__rail-sep { flex: none; font-size: 9.5px; opacity: .6; }
-/* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。 */
-.mi-daily-briefing__rail-retry { flex: none; padding: 0 2px; border: 0; background: none; color: var(--mi-dashboard-lime); font-size: 9.5px; line-height: 14px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+/* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。
+   它**不在行按钮内部**（`<button>` 里不能套 `<button>`），而是同一条目里的第二个控件，
+   绝对定位到第二行右侧；行按钮用 `data-has-retry` 在第二行右端让出这段宽度。 */
+.mi-daily-briefing__rail-retry { position: absolute; right: 6px; bottom: 4px; padding: 0 2px; border: 0; background: transparent; color: var(--mi-dashboard-lime); font-size: 9.5px; line-height: 14px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.mi-daily-briefing__rail-row[data-has-retry="true"] .mi-daily-briefing__rail-row-title { padding-right: 38px; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
 /* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
 
