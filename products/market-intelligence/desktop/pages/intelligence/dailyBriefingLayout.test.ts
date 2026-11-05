@@ -208,14 +208,14 @@ describe('the report actions stick to the report', () => {
     // The row sits inside the card's own inset — no bleed — so it belongs to the card's rounded
     // border rather than hanging over its edge.
     expect(bar).toContain('margin: 0;')
-    expect(bar).toContain('padding: 8px 0 12px;')
+    expect(bar).toContain('padding: 0 0 12px;')
 
     const stuck = rule('.mi-daily-briefing-page__report-bar[data-stuck="true"] {')
     expect(stuck).toContain('background: var(--mi-dashboard-surface);')
     // The card's padding band is inside the scrollport, so pinned the row paints it too — with offset
     // shadows, because a single spread would paint over the paper just below the row.
-    expect(stuck).toContain('0 -22px 0 var(--mi-dashboard-surface)')
-    expect(stuck).not.toContain('0 0 0 22px')
+    expect(stuck).toContain('0 -36px 0 var(--mi-dashboard-surface)')
+    expect(stuck).not.toMatch(/0 0 0 \d+px/)
     // A faint seam: it is inside the document, not the edge of a new section.
     expect(stuck).toContain('border-bottom-color: color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent);')
     // Nothing about the box may change on stuck, or the report jumps when the bar pins.
@@ -248,6 +248,30 @@ describe('the toolbar buttons keep their word visible', () => {
     const disabled = rule('.mi-daily-briefing-page__bar .mi-briefing-tool__btn:disabled,')
     expect(disabled).toContain('.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn:disabled')
     expect(disabled).toContain('color: var(--mi-dashboard-muted);')
+  })
+})
+
+/**
+ * Three boxes, three jobs: the content column scrolls, the card holds the actions and the sheet, the
+ * sheet is the document. Buttons inside the sheet would be exported onto the report; the sheet inside
+ * the action row's shape would move the export boundary. The card is what makes the difference
+ * visible, so its geometry is checked rather than left to whoever edits the sheet next.
+ */
+describe('card, actions and sheet stay three boxes', () => {
+  it('gives the card its own rounded border around the actions and the sheet', () => {
+    const card = rule('.mi-daily-briefing-page__report-card {')
+    expect(card).toContain('border: 1px solid var(--mi-dashboard-line);')
+    expect(card).toContain('border-radius: 14px;')
+    expect(card).toContain('padding: 12px;')
+  })
+
+  it('lets the sheet take the card inner width and keep its own radius', () => {
+    const paper = rule('.mi-daily-briefing-page__paper {')
+    // fit-content would shrink the sheet to the buttons and move the export boundary with it.
+    expect(paper).toContain('width: 100%;')
+    expect(paper).toContain('border-radius: 10px;')
+    // No second edge on the sheet: the cream already separates from the card.
+    expect(paper).toContain('border: 0;')
   })
 })
 
