@@ -19,7 +19,6 @@ export type EditionLocale = 'zh-CN' | 'en-US'
 export type GenerationSettingsDraft = Readonly<{
   generationTime: string
   windowHours: number
-  additionalLanguages: readonly EditionLocale[]
 }>
 
 export type DailyBriefingGenerationSettingsState = Readonly<{
@@ -99,10 +98,11 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
         requested: settings.view.language.plan.primary.requested,
         fallback: settings.view.language.plan.primary.fallbackReason === 'ui-language-unsupported'
       })
+      // The global "also generate English" control is gone; the old value stays in the settings file
+      // because a save that omits `language` does not rewrite it.
       const next = {
         generationTime: period.generationTime,
-        windowHours: period.windowHours,
-        additionalLanguages: settings.view.language.settings.additional
+        windowHours: period.windowHours
       } as const
       setLoaded(next)
       setDraft(next)
@@ -132,8 +132,7 @@ export function useDailyBriefingGenerationSettings(input: Readonly<{
       setSaving(true)
       try {
         const result = await input.client.saveSettings({
-          generation: { generationTime: draft.generationTime, windowHours: draft.windowHours },
-          language: { additional: draft.additionalLanguages }
+          generation: { generationTime: draft.generationTime, windowHours: draft.windowHours }
         })
         if (result.state === 'available') {
           // The saved values are the new baseline: without this, a successful save followed by a

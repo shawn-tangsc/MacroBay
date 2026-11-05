@@ -36,6 +36,7 @@ import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingPageActions } from './DailyBriefingPageActions'
+import { briefingEditionSelection } from './briefingEditionSelection'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
 import { posterProps } from './dailyBriefingPoster'
@@ -329,16 +330,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView, setPinnedDate, setRegenerateFailure
   })
   openEditionRef.current = openEdition
-  const selectEdition = (date: string): void => {
-    const row = editions.find((edition) => edition.date === date)
-    openEdition(date, effectiveLocaleRef.current, row, row?.periodId)
-  }
-  // A badge names the exact edition: date, period and language travel together.
-  const selectLocale = (next: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>): void => {
-    setPickedLocale(next.locale)
-    setPickedPeriodId(next.periodId)
-    openEdition(next.date, next.locale, undefined, next.periodId)
-  }
+  const { selectEdition, selectLocale } = briefingEditionSelection({
+    editions, effectiveLocale: () => effectiveLocaleRef.current, openEdition, setPickedLocale, setPickedPeriodId
+  })
   const { regenerate, generateNow } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
