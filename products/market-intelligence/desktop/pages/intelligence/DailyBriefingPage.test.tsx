@@ -1989,6 +1989,32 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
+it('names a calendar that could not be read in the audit column only, with a re-read on that row', async () => {
+  // v2.124：正文不画"读不到"，读不到只在右列「数据缺口与限制」里说，重试挂在那一条上且只重读。
+  const doc = briefingDocument()
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({
+      state: 'available' as const,
+      document: { ...doc, news: { ...doc.news, macro: [], notes: { macroEmpty: 'calendar-stale' as const, macroEmptyHours: 42 } } }
+    }))
+  })
+  const dom = await renderPage(client)
+  // 正文：该栏节点数 0，且没有一个"读不到"字样。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).toBeNull()
+  for (const word of ['没数据', '没拿到', '未拿到', '未公布']) {
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).not.toContain(word)
+  }
+  // 右列：恰好一条日历缺口，且带重试。
+  const retry = dom.querySelector<HTMLElement>('[data-issue-retry="true"]')
+  expect(retry).not.toBeNull()
+  expect(retry!.getAttribute('data-issue-retry-key')).toContain('calendar')
+  const before = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+  await act(async () => { retry!.click(); await Promise.resolve(); await Promise.resolve() })
+  // 只重新读：读被再问一次，没有起 run、没有写版次。
+  expect((client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBeGreaterThan(before)
+  expect(client.regenerate).not.toHaveBeenCalled()
+})
+
 it('takes the current issue from the service, not from the wall clock', async () => {
   // Before the generation hour the current issue is still the previous calendar day. The list says
   // so (today: 2026-10-29 while the wall clock is 10-30); the page must use that one value for the

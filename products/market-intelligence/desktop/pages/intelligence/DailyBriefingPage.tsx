@@ -443,7 +443,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingAppendix {...{
         text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime,
         editionLocale, issuesOpen, setIssuesOpen, openGroup,
-        setOpenGroup, listAttempts: client.listAttempts, generating, liveProgress
+        setOpenGroup, listAttempts: client.listAttempts, generating, liveProgress,
+        // 右列「读不到」那一条的重试：只重新读取这一版，不触发生成（`02` v2.124）。
+        onRetryRead: () => setReloadKey((key) => key + 1)
       }} />
     </div>
     {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} onClose={() => setOpenGroup(null)} /> : null}

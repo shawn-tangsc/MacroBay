@@ -1,4 +1,7 @@
 import { Button } from 'antd'
+import { RefreshCw } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
@@ -18,7 +21,7 @@ import { issueCountsText } from './dailyBriefingPageDerived'
  * render only when the issue has an edition. Kept out of the page for size and because it is one
  * surface with one job: tell the reader what this edition is missing.
  */
-export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, generating = false, liveProgress }: Readonly<{
+export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, generating = false, liveProgress, onRetryRead }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   contentBlocked: boolean
@@ -37,6 +40,11 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
   /** A run is in flight and this issue already has an edition: the steps report here, live. */
   generating?: boolean
   liveProgress?: BriefingGenerationProgress | undefined
+  /**
+   * 重新**读**一次这一版（不是重新生成）。只挂在"读不到"那一类缺口上（用户 2026-11-06：正文不画
+   * 读不到，读不到只在右列说，重试也挂在那一条上）。
+   */
+  onRetryRead?: () => void
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         {hasArchive ? <>
@@ -60,6 +68,19 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
                 <span data-issue-label={group.label} className="mi-daily-briefing-page__group-label" title={group.label}>{group.label}</span>
                 <span data-issue-count={group.count} className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
               </Button>
+              {/* 读不到的重试挂在这一条上：只重新读取，不触发生成（`02` v2.124）。
+                  不套进那颗 Button 里——按钮里套按钮，键盘与读屏都会碰到两个焦点。 */}
+              {onRetryRead !== undefined && group.category === 'data' && group.template.startsWith('calendar-')
+                ? <IconButton
+                  ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.limits.retryRead"
+                  dataAttributes={{ 'data-issue-retry': 'true', 'data-issue-retry-key': group.key }}
+                  icon={RefreshCw}
+                  resolveText={(key) => key.endsWith('limits.retryRead') ? text.limits.retryRead : key}
+                  size="sm"
+                  variant="plain"
+                  onSelect={onRetryRead}
+                />
+                : null}
             </li>)}
           </ol>
         </details> : null}</section>
