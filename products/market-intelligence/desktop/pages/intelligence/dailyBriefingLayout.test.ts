@@ -144,6 +144,18 @@ describe('day rhythm and the row menu trigger', () => {
     expect(rule('.mi-daily-briefing__rail-day-count {')).toContain('margin-left: auto')
   })
 
+  it('draws the selected row from tokens, at the measured tint', () => {
+    // 4% and 22% are measured, not chosen: 5% leaves the source chip at 4.46:1 on a selected row.
+    const selected = rule('.mi-daily-briefing__rail-row[aria-current="true"] {')
+    expect(selected).toContain('color-mix(in srgb, var(--mi-dashboard-lime) 4%, transparent)')
+    expect(selected).toContain('color-mix(in srgb, var(--mi-dashboard-lime) 22%, transparent)')
+    expect(selected).toContain('inset 2px 0 var(--mi-dashboard-lime)')
+    // The radius must not change with selection: a row that changes shape when picked reads as a
+    // different kind of row rather than the same row, marked.
+    expect(selected).toContain('border-radius: 6px;')
+    expect(selected).not.toMatch(/#[0-9a-f]{3,8}/i)
+  })
+
   it('hides the menu trigger until the row is hovered or focused', () => {
     // The drawn list has no ⋯: a permanent slot would shorten every title against the reference.
     expect(rule('.mi-daily-briefing__rail-item-menu {')).toContain('opacity: 0')
