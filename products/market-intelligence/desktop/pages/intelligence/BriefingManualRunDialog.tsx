@@ -6,6 +6,7 @@ import { Modal } from '@platform/ui/components/modal'
 import { dailyBriefingGenerationPolicy, dailyBriefingGenerationTimes, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { briefingGenerationGridHint } from './dailyBriefingText'
 
 /** What the manual run form asks for: a cutoff (`'now'` or a wall-clock hour), a window, a language. */
 export type BriefingManualRunDraft = Readonly<{
@@ -67,6 +68,8 @@ export function BriefingManualRunDialog({ open, text, running = false, onRun, on
           style={{ width: 128 }}
         />
       </label>
+      {/* 指定时刻取自同一张表，所以档位说明也从那张表算——「现在」是第三种选择，不受档位约束。 */}
+      <p className="mi-briefing-period-dialog__hint" data-time-grid="true">{briefingGenerationGridHint(text)}</p>
       {draft.cutoff === 'now' ? <p className="mi-briefing-period-dialog__hint">{copy.nowHint}</p> : null}
       <label className="mi-briefing-period-dialog__field">
         <strong>{copy.windowHours}</strong>

@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
+import { dailyBriefingGenerationGrid } from '../../../contracts/dailyBriefing'
 import { BriefingManualRunDialog } from './BriefingManualRunDialog'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -54,6 +55,19 @@ describe('briefing manual run dialog', () => {
     await render()
     const options = await openOptions(text.manualRunDialog.cutoff)
     expect(options.map((node) => node.textContent?.trim())).toContain(text.manualRunDialog.now)
+  })
+
+  it('names the same half-hour grid the cutoff list offers, from the policy table', async () => {
+    await render()
+    const hint = document.querySelector<HTMLElement>('[data-time-grid]')
+    expect(hint, 'the form never names its grid').not.toBeNull()
+    const grid = dailyBriefingGenerationGrid
+    expect(hint!.textContent).toContain(grid.first)
+    expect(hint!.textContent).toContain(grid.last)
+    expect(hint!.textContent).toContain(String(grid.count))
+    expect(hint!.textContent).toContain(String(grid.stepMinutes))
+    // "Now" is a third choice and is not one of the slots — it stays out of the grid sentence.
+    expect(hint!.textContent).not.toContain(text.manualRunDialog.now)
   })
 
   it('runs with the chosen cutoff, window and language', async () => {

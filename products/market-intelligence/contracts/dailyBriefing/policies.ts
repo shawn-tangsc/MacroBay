@@ -51,7 +51,7 @@ export const dailyBriefingGenerationPolicy = Object.freeze({
   windowHoursOptions: Object.freeze([12, 24, 48] as const)
 })
 
-/** Local generation times a reader may choose, in order: 06:00 … 10:00. */
+/** Local generation times a reader may choose, in order: 00:00 … 23:30, one per half hour. */
 export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
   Array.from(
     // Both ends of the last hour are usable (23:00 and 23:30), so the count covers whole hours.
@@ -66,6 +66,20 @@ export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
 export function isDailyBriefingGenerationTime(value: unknown): value is string {
   return typeof value === 'string' && dailyBriefingGenerationTimes.includes(value)
 }
+
+/**
+ * The choice grid as one fact, so the form's hint and the form's options cannot disagree.
+ *
+ * The dialog used to name the grid in prose ("06:00–10:00") while the list behind it had already
+ * moved to the whole day; a hint that is typed out separately always becomes a second source. These
+ * four numbers are read from the table itself.
+ */
+export const dailyBriefingGenerationGrid = Object.freeze({
+  first: dailyBriefingGenerationTimes[0]!,
+  last: dailyBriefingGenerationTimes.at(-1)!,
+  count: dailyBriefingGenerationTimes.length,
+  stepMinutes: dailyBriefingGenerationPolicy.generationMinuteStep
+})
 
 export type DailyBriefingWindowHours = (typeof dailyBriefingGenerationPolicy.windowHoursOptions)[number]
 

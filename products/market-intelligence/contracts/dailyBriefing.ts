@@ -15,6 +15,7 @@ export const DEFAULT_PERIOD_ID = 'default'
 
 export {
   dailyBriefingGenerationPolicy,
+  dailyBriefingGenerationGrid,
   dailyBriefingGenerationTimes,
   dailyBriefingPolicy,
   isDailyBriefingGenerationTime,

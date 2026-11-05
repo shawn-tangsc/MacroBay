@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
+import { dailyBriefingGenerationGrid } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { BriefingPeriodDialog } from './BriefingPeriodDialog'
 
@@ -68,6 +69,23 @@ describe('briefing period dialog', () => {
     await act(async () => { saveButton().click() })
 
     expect(onSave).toHaveBeenCalledWith({ generationTime: '09:00', windowHours: 12, language: 'zh-CN' })
+  })
+
+  it('states the grid the form actually offers, from the policy table rather than from prose', async () => {
+    const { onSave } = await render()
+    const hint = document.querySelector<HTMLElement>('[data-time-grid]')
+    expect(hint, 'the form never names its grid').not.toBeNull()
+    const grid = dailyBriefingGenerationGrid
+    // Every number in the sentence is the table's: first, last, count and step.
+    expect(hint!.textContent).toContain(grid.first)
+    expect(hint!.textContent).toContain(grid.last)
+    expect(hint!.textContent).toContain(String(grid.count))
+    expect(hint!.textContent).toContain(String(grid.stepMinutes))
+    // And the options really do cover the ends the sentence promises.
+    await pick(text.periodDialog.generationTime, '00:00')
+    await pick(text.periodDialog.generationTime, '23:30')
+    await act(async () => { saveButton().click() })
+    expect(onSave).toHaveBeenCalledWith({ generationTime: '23:30', windowHours: 24, language: 'zh-CN' })
   })
 
   it('names the row a duplicate collides with and disables Save before it is pressed', async () => {

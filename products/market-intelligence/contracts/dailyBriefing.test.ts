@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   briefingEditionPeriod,
+  dailyBriefingGenerationGrid,
   dailyBriefingGenerationPolicy,
   dailyBriefingGenerationTimes,
   isDailyBriefingGenerationTime,
@@ -228,5 +229,14 @@ describe('generation times a period may run at', () => {
     // Still a closed set: no odd minutes, nothing outside the day.
     expect(isDailyBriefingGenerationTime('12:15')).toBe(false)
     expect(isDailyBriefingGenerationTime('24:00')).toBe(false)
+  })
+
+  it('states the grid the forms print from those same numbers', () => {
+    // The dialog's hint and the dialog's options are one fact: first, last, count and step are read
+    // from the table, so a widened or narrowed grid cannot leave the sentence behind.
+    expect(dailyBriefingGenerationGrid).toEqual({ first: '00:00', last: '23:30', count: 48, stepMinutes: 30 })
+    expect(dailyBriefingGenerationGrid.first).toBe(dailyBriefingGenerationTimes[0])
+    expect(dailyBriefingGenerationGrid.last).toBe(dailyBriefingGenerationTimes.at(-1))
+    expect(dailyBriefingGenerationGrid.count).toBe(dailyBriefingGenerationTimes.length)
   })
 })

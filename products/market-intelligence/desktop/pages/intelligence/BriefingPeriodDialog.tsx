@@ -13,6 +13,7 @@ import {
   type BriefingPeriodDraft
 } from '../../../contracts/dailyBriefingPeriod'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { briefingGenerationGridHint } from './dailyBriefingText'
 
 /**
  * Adding (or editing) one scheduled period: the hour it runs, the window it reads, the language it
@@ -71,6 +72,9 @@ export function BriefingPeriodDialog({ open, text, periods, editing, saving = fa
           style={{ width: 108 }}
         />
       </label>
+      {/* 档位说明和它上面那份选项来自同一张表：`{first}`–`{last}`、`{count}`、`{step}` 都是算出来的，
+          改表就跟着改，不会像手写的那句 "06:00–10:00" 一样在表放宽后变成假话。 */}
+      <p className="mi-briefing-period-dialog__hint" data-time-grid="true">{briefingGenerationGridHint(text)}</p>
       <label className="mi-briefing-period-dialog__field">
         <strong>{copy.windowHours}</strong>
         <Select
