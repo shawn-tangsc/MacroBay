@@ -57,7 +57,7 @@ export const dailyBriefingText = {
     amplitude: '振幅 {value}',
     rowCurrent: '当前 {value}',
     rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC', eth: 'ETH', index: '纳指', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
-    empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
+    empty: { news: '今天没有方向明确的舆情', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
     newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',

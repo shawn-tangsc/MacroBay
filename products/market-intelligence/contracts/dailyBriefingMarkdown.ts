@@ -38,7 +38,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   rowTotal: string
   rowCurrent: string
   rows: Readonly<Record<string, string>>
-  empty: Readonly<{ news: string; macro: string; next: string; conclusion: string }>
+  empty: Readonly<{ news: string; next: string; conclusion: string }>
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
   nextEmptyCodes: Readonly<Record<string, string>>

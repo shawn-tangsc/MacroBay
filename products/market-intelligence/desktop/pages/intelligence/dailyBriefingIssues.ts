@@ -263,7 +263,6 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。
   const macroEmpty = briefingMacroEmptyCopy(document, {
     macroEmptyCodes: text.macroEmptyCodes,
-    emptyMacro: text.empty.macro,
     macroUnreadable: text.macroUnreadable
   })
   if (macroEmpty?.unreadable) {

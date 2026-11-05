@@ -18,7 +18,6 @@ export type BriefingMacroEmptyCopy = Readonly<{
 
 export type BriefingMacroEmptyCopyLabels = Readonly<{
   macroEmptyCodes: Readonly<Record<string, string>>
-  emptyMacro: string
   /** The prefix that turns a reason into a sentence the reader understands, e.g. "暂时读不到：". */
   macroUnreadable: string
 }>
@@ -34,7 +33,11 @@ export function briefingMacroEmptyCopy(
   // 「窗口里真的没有高影响事件」**不印任何话**（用户 2026-11-06）：正文里说"没有"会让人觉得这张
   // 简报不可信；那一栏干脆整块不出现。所以这里返回 `null`，版面据此不渲染该栏。
   if (code === 'past-24h-no-high-impact-release') return null
-  const reason = labels.macroEmptyCodes[code] ?? labels.emptyMacro
+  // 认不出的原因码：**一句话都不说**（产品 2026-11-06，v2.135）。以前这里回落到
+  // 「过去 24 小时没有已发布的高影响事件」——那是把一个"不知道为什么"说成"确实没有"，
+  // 而且那句话本身已被禁令删除。说不出来就不说，版面与留痕都不编。
+  const reason = labels.macroEmptyCodes[code]
+  if (reason === undefined) return null
   const hours = document.news.notes.macroEmptyHours
   const filled = hours === undefined ? reason : reason.replace('{hours}', String(hours))
   return { sentence: `${labels.macroUnreadable}${filled}`, unreadable: true }
