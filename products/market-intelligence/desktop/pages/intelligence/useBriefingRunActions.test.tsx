@@ -47,7 +47,9 @@ async function render(): Promise<(current: readonly DailyBriefingEditionSummary[
       setEditions: (next) => { captured = next }
     }))
   })
-  await act(async () => { actions!.generateNow() })
+  // 「生成这一语言」也走唯一入口：不带期号 = 服务端默认期，意图是手动。
+  // `runBriefing` 会等到运行结束，这里只关心它**起手**时挂的那一行，所以不 await。
+  await act(async () => { void actions!.runBriefing({ locale: 'zh-CN', trigger: 'manual' }) })
   return captured!
 }
 
