@@ -910,7 +910,15 @@ describe('daily briefing page', () => {
     // 「重试」= 重新**读**一次：读被再问了一遍，但没有起 run、没有写版次、没有花模型调用。
     // 这条以前接的是生成，点一下会真的跑一期——判据就钉在这里。
     expect(getToday).toHaveBeenCalledTimes(2)
+    // 也没有任何"跑"的副作用：不起 run、不写设置、不删版次。模型调用只发生在 run 里面，
+    // 所以 regenerate 为 0 就同时排掉了模型调用这一项。
     expect(client.regenerate).not.toHaveBeenCalled()
+    // 写入侧：这两个方法在这个夹具里未必装配，所以按"调用次数为 0"数，而不是要求它是 mock。
+    const calls = (fn: unknown): number => typeof fn === 'function' && fn !== null && 'mock' in fn
+      ? (fn as unknown as { mock: { calls: unknown[] } }).mock.calls.length
+      : 0
+    expect(calls((client as unknown as { saveSettings?: unknown }).saveSettings)).toBe(0)
+    expect(calls((client as unknown as { deletePeriod?: unknown }).deletePeriod)).toBe(0)
     expect(dom.textContent).toContain(text.title)
   })
 
