@@ -413,6 +413,11 @@ export type DailyBriefingListResult = Readonly<{
    * from the wall clock: two definitions make a past day look like today and vice versa.
    */
   today?: string
+  /**
+   * 天头要画哪些日子（`02` v2.91）：有版次 ∨ 有过运行记录（任何状态）∨ 这一天是今天；仅"被排期
+   * 覆盖"不算。可选：旧调用方不传时，列表退回"有天头的日子来自版次"的旧行为。
+   */
+  dates?: readonly string[]
 }>
 
 /** One writing attempt of an edition, as the history rail lists it. */

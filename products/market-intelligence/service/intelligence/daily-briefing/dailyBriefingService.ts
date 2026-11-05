@@ -651,7 +651,7 @@ export function createDailyBriefingService(deps: Readonly<{
     const schedule = await generation()
     const window = briefingWindow(now(), input.timeZone, schedule)
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const editions = await readBriefingHistory({
+    const listed = await readBriefingHistory({
       store: deps.store,
       locale: input.locale,
       today: window.date,
@@ -660,7 +660,7 @@ export function createDailyBriefingService(deps: Readonly<{
       // "Generating" is a live fact: the stored run row outlives the process that wrote it.
       isRunning: (date, periodId) => [...runs.progress.keys()].some((key) => key.startsWith(`${date}:${periodId}:`))
     })
-    return { state: 'available', result: { editions, today: window.date } }
+    return { state: 'available', result: { editions: listed.editions, dates: listed.dates, today: window.date } }
   }
 
   const getProgress = createBriefingProgressReader({

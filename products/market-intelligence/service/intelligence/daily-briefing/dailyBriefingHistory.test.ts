@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
-import { briefingHistorySummaries } from './dailyBriefingHistory'
+import { briefingHistorySummaries, briefingRailDates } from './dailyBriefingHistory'
 
 /**
  * Guard: "incomplete" comes from the run's intent, not from counting the rows that exist.
@@ -327,4 +327,37 @@ describe('a run that wrote no edition still gets a row', () => {
     expect(second?.periodId).toBe('period_crash')
   })
 })
+})
+
+describe('the rail draws a head only where the day has a trace', () => {
+  const dates = ['2026-11-05', '2026-11-04', '2026-11-03', '2026-11-02']
+
+  it('keeps a day with a run but no editions (the reader deleted that edition)', () => {
+    // 11/05 型：两条运行记录、版次已被删 → 天头在、共 0 期、展开后一个兜底项。
+    const listed = briefingRailDates({
+      dates,
+      editionDates: new Set(['2026-11-04']),
+      runDates: new Set(['2026-11-05']),
+      today: '2026-11-05'
+    })
+    expect(listed).toEqual(['2026-11-05', '2026-11-04'])
+  })
+
+  it('lets today in even with no edition and no run, and nothing else', () => {
+    // 成对断言：今天放行一天（否则 07:00 前打开列表从昨天开始，读者以为列表坏了）；
+    // 昨天及更早同样空的日子**不出现**——只写前一条等于给"14 天全铺"留口子。
+    const listed = briefingRailDates({
+      dates,
+      editionDates: new Set(),
+      runDates: new Set(),
+      today: '2026-11-05'
+    })
+    expect(listed).toEqual(['2026-11-05'])
+  })
+
+  it('never counts "the schedule covers this day" as a trace', () => {
+    // 排期每天都配（07:00 天天都有），按它算等于每天都成立。
+    const listed = briefingRailDates({ dates, editionDates: new Set(), runDates: new Set(), today: '2026-10-01' })
+    expect(listed).toEqual([])
+  })
 })

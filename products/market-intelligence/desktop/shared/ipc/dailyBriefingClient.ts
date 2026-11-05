@@ -218,7 +218,16 @@ export const dailyBriefingClient: DailyBriefingClient = {
       const editions = value.result.editions.map(parseSummary)
       if (editions.some((edition) => edition === undefined)) return unavailable()
       const today = typeof value.result.today === 'string' ? value.result.today : undefined
-      return { state: 'available', result: { editions: editions as readonly DailyBriefingEditionSummary[], ...(today ? { today } : {}) } }
+      // 日期集合是可选的：缺了就是旧服务端，页面退回"天头来自版次"的行为。
+      const dates = Array.isArray(value.result.dates) ? value.result.dates : undefined
+      return {
+        state: 'available',
+        result: {
+          editions: editions as readonly DailyBriefingEditionSummary[],
+          ...(today ? { today } : {}),
+          ...(Array.isArray(dates) ? { dates: dates.filter((entry): entry is string => typeof entry === 'string') } : {})
+        }
+      }
     } catch {
       return unavailable()
     }
