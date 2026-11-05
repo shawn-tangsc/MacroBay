@@ -32,12 +32,12 @@ export type BriefingIssueTemplate =
   | 'news-disabled' | 'news-unavailable' | 'calendar-disabled' | 'calendar-unavailable'
   | 'macro-consensus' | 'macro-actual' | 'macro-previous' | 'macro-value-conflict'
   | 'backfill-done' | 'backfill-generic'
-  | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure'
+  | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
   | 'timing-late'
 
 /** The stable code behind a template; two templates may share a code but never a group. */
-const templateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
+export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
   'row-disabled': 'source-disabled', 'row-unavailable': 'unavailable', 'row-stale': 'stale',
   'row-no-value': 'no-value', 'etf-no-history': 'etf-unavailable', 'capital-gate': 'capital-gate',
   'no-baseline': 'no-baseline', 'no-baseline-last-release': 'no-baseline', 'insufficient-window': 'insufficient-window',
@@ -48,7 +48,7 @@ const templateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
   'backfill-done': 'backfill', 'backfill-generic': 'backfill',
   'ai-fallback': 'model-fallback', 'ai-websearch': 'websearch-off', 'ai-failure': 'editorial-failure',
   'source-failure': 'source-failed',
-  'system-failure': 'generation-failure',
+  'system-failure': 'generation-failure', 'document-invalid': 'document-invalid',
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
   'timing-late': 'late-generation'
@@ -89,7 +89,7 @@ export function briefingIssues(input: BriefingIssueInput): readonly BriefingIssu
   const add = (issue: Omit<BriefingIssue, 'at' | 'code'> & Readonly<{ at?: string }>): void => {
     const complete = Object.freeze({
       ...issue,
-      code: templateCodes[issue.template],
+      code: briefingIssueTemplateCodes[issue.template],
       at: issue.at || fallbackAt
     })
     if (!issues.has(complete.id)) issues.set(complete.id, complete)

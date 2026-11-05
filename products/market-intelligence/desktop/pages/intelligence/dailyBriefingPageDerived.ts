@@ -2,6 +2,7 @@ import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../.
 import { briefingEditionPeriod } from '../../../contracts/dailyBriefing'
 
 import type { DailyBriefingClient, DailyBriefingClientTodayResult } from '../../shared/ipc/dailyBriefingClient'
+import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingFailureCodes'
 import type { BriefFailure } from './DailyBriefingFailurePanel'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -155,6 +156,12 @@ export function briefingFailure(input: Readonly<{
         ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
       }
     }
+  }
+  // 文档校验不过**不是一次生成失败**：它是"读到了、但内容不是本机能认的形状"（`02` v2.129 G5）。
+  // 所以它不落失败面板（那张面板叫「这次生成失败」，会让人以为再跑一次就能好），而是落右列一条
+  // 带原因的缺口；正文只留一句"这一版读不懂"和一颗重新读取。
+  if (view.status === 'unavailable' && view.failureCode === DAILY_BRIEFING_DOCUMENT_INVALID) {
+    return { failure: null, editorialBlocked }
   }
   if (view.status === 'unavailable' && view.failureCode) {
     return {

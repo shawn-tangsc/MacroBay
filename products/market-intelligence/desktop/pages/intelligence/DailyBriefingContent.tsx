@@ -38,7 +38,7 @@ import { resolveBriefingStateReason } from './dailyBriefingText'
  * nothing generated, a missing language, a failure, an edition. The page decides which state it is
  * in; this file decides how each one looks.
  */
-export function DailyBriefingContent({ text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
+export function DailyBriefingContent({ text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   /** The page's one answer; the generating pane reads it, and it must include service-side runs. */
@@ -58,6 +58,8 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
   eventTitles?: Record<string, string>
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   contentBlocked: boolean
+  /** 文档到了、但本机读不懂它：正文只写原因，不写"读不到"（`02` v2.129 G5）。 */
+  documentRejected?: boolean
   deleteOutcome: BriefingDeleteOutcome | null
   languageFallback: string | null
   webSearchEnabled: boolean | null
@@ -146,7 +148,8 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
         : null}
       {bodyState === 'unavailable'
         // 空态零按钮（还没有内容）；只有"读不到"那一档给一颗「重试」，它重新**读**，不重新生成。
-        ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onRetry={onReread} text={text} timeZone={timeZone} todayDate={todayDate} />
+        // 文档读不懂这一档也走这里，但**写原因**（版本/结构不符），不写成"读不到"。
+        ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onRetry={onReread} text={text} timeZone={timeZone} todayDate={todayDate} documentRejected={documentRejected === true} />
         : null}
       {/* Shown during a run too: the reader asked to read this language, and "this issue has no such
           version" is the answer to that, not a reason to replace the pane with the run's own screen. */}

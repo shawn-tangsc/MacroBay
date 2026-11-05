@@ -1,4 +1,5 @@
 import { isDocument, isExact, isRecord, isText } from './dailyBriefingDocument'
+import { DAILY_BRIEFING_DOCUMENT_INVALID, DAILY_BRIEFING_REQUEST_FAILED } from './dailyBriefingFailureCodes'
 import {
   dailyBriefingPolicy,
   isBriefingGenerationTrace,
@@ -189,7 +190,10 @@ export const dailyBriefingClient: DailyBriefingClient = {
     try {
       const value = await invoke(METHODS.getToday, input)
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
+      if (isRecord(value) && value.state === 'available') {
+        // 读到了、但读不懂：**校验失败**，不是"这一次没读到"（`02` v2.129 G5）。两者必须分开报，
+        // 否则页面只能报"失败"，右列也写不出原因。
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
         return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       return unavailable()
@@ -238,7 +242,8 @@ export const dailyBriefingClient: DailyBriefingClient = {
   async regenerate(input) {
     try {
       const value = await invoke(METHODS.regenerate, input)
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
+      if (isRecord(value) && value.state === 'available') {
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
         return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
@@ -284,7 +289,8 @@ export const dailyBriefingClient: DailyBriefingClient = {
     try {
       const value = await invoke(METHODS.get, input)
       if (isRecord(value) && value.state === 'missing') return { state: 'missing' }
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
+      if (isRecord(value) && value.state === 'available') {
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
         return { state: 'available', document: value.document }
       }
       return unavailable()
@@ -301,7 +307,7 @@ async function invoke(method: string, payload: unknown): Promise<unknown> {
 }
 
 function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> {
-  return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
+  return { state: 'unavailable', failureCode: DAILY_BRIEFING_REQUEST_FAILED }
 }
 
 /** A failed attempt keeps its readable code and, when the service stored it, its stage trace. */

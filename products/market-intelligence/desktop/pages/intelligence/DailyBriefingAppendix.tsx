@@ -46,10 +46,12 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
    */
   onRetryRead?: () => void
 }>): React.ReactElement {
-  return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(hasArchive && issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
-        {hasArchive ? <>
-        <section data-briefing-gaps="true">
-        {issues.length > 0 ? <details className="mi-briefing-gaps" open={issuesOpen}
+  return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+        {/* 缺口清单**不再要求"有版次"**：文档读不懂时没有可解析的文档，但"这一版没被渲染"本身
+            就是一条该留痕的事实（`02` v2.129 G5）。以前这块挂在 `hasArchive` 下面，于是那条缺口
+            无处可写，页面只能笼统报"失败"。没有缺口时这块仍然整块不渲染（不留空壳）。 */}
+        {issues.length > 0 ? <section data-briefing-gaps="true">
+        <details className="mi-briefing-gaps" open={issuesOpen}
           onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
           {/* The counts are the verdict, not the detail: they stay on the summary line even closed. */}
           <summary className="mi-briefing-gaps__head">
@@ -69,8 +71,11 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
                 <span data-issue-count={group.count} className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
               </Button>
               {/* 读不到的重试挂在这一条上：只重新读取，不触发生成（`02` v2.124）。
+                  文档读不懂也是同一种动作——再读一次，读不懂的形状不会因为重试而改变，所以那句
+                  建议里还写着"仍然是这个结果就重新生成这一版"。
                   不套进那颗 Button 里——按钮里套按钮，键盘与读屏都会碰到两个焦点。 */}
-              {onRetryRead !== undefined && group.category === 'data' && group.template.startsWith('calendar-')
+              {onRetryRead !== undefined && (group.template === 'document-invalid'
+                || (group.category === 'data' && group.template.startsWith('calendar-')))
                 ? <IconButton
                   ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.limits.retryRead"
                   dataAttributes={{ 'data-issue-retry': 'true', 'data-issue-retry-key': group.key }}
@@ -83,7 +88,9 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
                 : null}
             </li>)}
           </ol>
-        </details> : null}</section>
+        </details>
+        </section> : null}
+        {hasArchive ? <>
         {/* The column's first block reports the run when one is in flight: same stepper, live states.
             Otherwise it reports what the stored attempt recorded. */}
         <div data-briefing-stages="true">{generating

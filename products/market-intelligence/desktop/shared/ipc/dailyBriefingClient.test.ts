@@ -83,8 +83,16 @@ describe('daily briefing client', () => {
 
   it('rejects a malformed document and a failed bridge without throwing', async () => {
     stubInvoke(() => ({ state: 'available', document: { schemaVersion: 1 } }))
+    // 读到了、但读不懂：这是**校验失败**（`02` v2.129 G5），码必须与"这次没读到"分开，
+    // 否则页面只能说"失败"，右列写不出原因。
     expect(await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
-      state: 'unavailable', failureCode: 'daily-briefing-request-failed'
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
+    })
+    expect(await dailyBriefingClient.get({ date: '2026-10-30', locale: 'zh-CN' })).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
+    })
+    expect(await dailyBriefingClient.regenerate({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
     })
     vi.stubGlobal('window', {})
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')

@@ -892,6 +892,36 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-daily-briefing__clock-note')).toBeNull()
   })
 
+  // `02` v2.129 G5 ②：文档读不懂是**独立原因**，不是"读不到"。正文写原因，右列恰一条带原因的缺口，
+  // 校验没过不许折叠成一句"失败"，也不许让读者以为再点重试就会好（形状不会因重试改变）。
+  it('files a document it cannot read in the audit column with its reason, not as "unreadable"', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'daily-briefing-document-invalid' }))
+    })
+    const dom = await renderPage(client)
+    const content = dom.querySelector('.mi-daily-briefing-page__content')!
+    const reason = content.querySelector('.state-view[data-state="error"] [data-reason-source="product"]')?.textContent ?? ''
+    // 正文说的是"读不懂：版本或结构与本机不一致"，不是那句笼统的"这次读取没有完成"。
+    expect(reason).toBe(text.stateReasons.documentInvalid)
+    expect(content.textContent).not.toContain(text.stateReasons.unreadable)
+    // 失败面板（那张叫「这次生成失败」的面板）不许出现：这不是一次生成失败。
+    expect(content.querySelector('[data-daily-brief-failure]')).toBeNull()
+    // 右列：恰一条缺口，点名原因，并挂着"重新读取"那颗（只重读，不生成）。
+    const gaps = dom.querySelector('[data-briefing-detail] [data-briefing-gaps]')!
+    expect(gaps).not.toBeNull()
+    expect(gaps.querySelectorAll('[data-group-key]')).toHaveLength(1)
+    expect(gaps.textContent).toContain(text.limits.groupLabels['document-invalid'])
+    expect(gaps.textContent).toContain(text.limits.severity.blocking)
+    expect(dom.querySelector('[data-issue-retry]')).not.toBeNull()
+    // 右列说了原因，就不许再说一遍"读不到"：那一句在这份文档上从头到尾都不成立。
+    expect(dom.querySelector('[data-briefing-detail]')!.textContent).not.toContain(text.stateReasons.unreadable)
+    // 重试 = 重新读一次，不起 run。
+    const retry = content.querySelector<HTMLButtonElement>('.state-view__action')!
+    await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(client.getToday).toHaveBeenCalledTimes(2)
+    expect(client.regenerate).not.toHaveBeenCalled()
+  })
+
   it('renders an unreadable read as an error, not as "nothing was made", and retries', async () => {
     const getToday = vi.fn()
       .mockRejectedValueOnce(new Error('down'))

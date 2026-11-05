@@ -106,6 +106,7 @@ export const dailyBriefingText = {
       unreadable: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
       unreadableSince: '这次读取没有完成；上次成功生成于 {moment}。',
       nothingEnabled: '四块数据都没有接通。先检查情报源，再打开今天。',
+      documentInvalid: '这一版的文档读不懂：版本或结构与本机不一致，所以没有渲染。可以重新读取；仍然是这个结果，就重新生成这一版。',
       noEditions: '还没有历史版次。'
     },
     settings: {
@@ -167,6 +168,7 @@ export const dailyBriefingText = {
         'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
         'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
         'source-failure': '情报源采集失败', 'system-failure': '生成或存储未完成',
+        'document-invalid': '文档读不懂',
         'evidence-gap': '数据缺口', 'evidence-caveat': '数据限制', 'evidence-no-citation': '反证未附证据',
         'evidence-conflict': '来源冲突', 'evidence-none': '没有证据脚注', 'timing-late': '生成晚于截止'
       },
@@ -198,7 +200,7 @@ export const dailyBriefingText = {
       backfill: { done: '已回补 {count} 个核心数据行：{rows}', generic: '已执行一次核心数据回补' },
       ai: { fallback: '自选模型不可用，本期回落到默认模型', webSearchOff: 'WebSearch 未授权，缺失的宏观结论无法补查', failure: 'AI 编辑未完成：{reason}' },
       evidence: { gap: '数据缺口：{text}', caveat: '数据限制：{text}', noCitation: '反证未附证据：{text}', conflict: '来源冲突：{text}', none: '本期结论没有证据脚注' },
-      system: { failure: '生成或存储未完成：{reason}' },
+      system: { failure: '生成或存储未完成：{reason}', documentInvalid: '这一版的文档读不懂：版本或结构与本机不一致' },
       timing: { late: '本期在统计截止后 {interval}生成' },
       advice: {
         enableSource: '在「配置看板来源」里启用该来源，等一次采集完成后再生成。',
@@ -219,7 +221,8 @@ export const dailyBriefingText = {
         citeEvidence: '以带脚注的证据为主；可重新生成并要求反证引用证据。',
         officialSource: '以官方来源为准；冲突未消解前降低该条证据权重。',
         keepRunning: '保持应用在生成时间运行；错过时会在下次打开补生成。',
-        system: '重新生成；若反复失败，检查本地存储和运行状态。'
+        system: '重新生成；若反复失败，检查本地存储和运行状态。',
+        rereadEdition: '重新读取一次；仍然是这个结果，就重新生成这一版。'
       }
     },
     generationProgress: {
@@ -406,6 +409,7 @@ export const dailyBriefingText = {
       unreadable: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
       unreadableSince: 'This read did not finish; it last generated at {moment}.',
       nothingEnabled: 'All four data points are disconnected. Check the sources, then open today again.',
+      documentInvalid: 'This edition’s document cannot be read: its version or structure does not match this app, so nothing was rendered. Read it again; if the result is the same, regenerate this edition.',
       noEditions: 'No earlier editions yet.'
     },
     settings: {
@@ -468,6 +472,7 @@ export const dailyBriefingText = {
         'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
         'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
         'source-failure': 'Source collection failed', 'system-failure': 'Generation or storage incomplete',
+        'document-invalid': 'Document cannot be read',
         'evidence-gap': 'Data gap', 'evidence-caveat': 'Data limit', 'evidence-no-citation': 'Counter-evidence without citation',
         'evidence-conflict': 'Source conflict', 'evidence-none': 'No evidence footnotes', 'timing-late': 'Generated after cutoff'
       },
@@ -499,7 +504,7 @@ export const dailyBriefingText = {
       backfill: { done: 'Backfilled {count} core data rows: {rows}', generic: 'A core-data backfill ran for this edition' },
       ai: { fallback: 'The selected model was unavailable, so this edition fell back to the default model', webSearchOff: 'WebSearch is not authorized, so missing macro conclusions could not be researched', failure: 'AI editing did not finish: {reason}' },
       evidence: { gap: 'Data gap: {text}', caveat: 'Data limit: {text}', noCitation: 'Counter-evidence has no citation: {text}', conflict: 'Source conflict: {text}', none: 'This conclusion has no evidence footnotes' },
-      system: { failure: 'Generation or storage did not finish: {reason}' },
+      system: { failure: 'Generation or storage did not finish: {reason}', documentInvalid: 'This edition’s document cannot be read: its version or structure does not match this app' },
       timing: { late: 'Generated {interval} after the statistics cutoff' },
       advice: {
         enableSource: 'Enable the source in dashboard sources and wait for one collection, then generate again.',
@@ -520,7 +525,8 @@ export const dailyBriefingText = {
         citeEvidence: 'Rely on cited evidence first; regenerate and require counter-evidence to cite evidence.',
         officialSource: 'Prefer the official source; lower the weight of this evidence until the conflict is resolved.',
         keepRunning: 'Keep the app running at the generation time; a missed run is caught up on the next open.',
-        system: 'Regenerate; if it keeps failing, check local storage and runtime status.'
+        system: 'Regenerate; if it keeps failing, check local storage and runtime status.',
+        rereadEdition: 'Read it again; if the result is the same, regenerate this edition.'
       }
     },
     generationProgress: {

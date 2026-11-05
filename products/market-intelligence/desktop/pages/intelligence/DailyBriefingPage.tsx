@@ -13,6 +13,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { DEFAULT_PERIOD_ID, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingFailureCodes'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
@@ -24,6 +25,7 @@ import { useBriefingEditionDelete } from './useBriefingEditionDelete'
 import { DailyBriefingSettingsDrawer, type BriefingSettingsSection } from './DailyBriefingSettingsDrawer'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { briefingDocumentInvalidIssue } from './briefingDocumentInvalidIssue'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
@@ -326,6 +328,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
   // 选中的是哪一版，由**选中项**决定（状态直取，见页面开头那道闸门）。
+  // 文档到了、但本机读不懂它（版本/结构不符）：这是**校验失败**，不是"这次没读到"（`02` v2.129 G5）。
+  // 它与失败面板、与"读不到"空态都不同：正文写原因，右列留一条带原因的缺口。
+  const documentRejected = view.status === 'unavailable' && view.failureCode === DAILY_BRIEFING_DOCUMENT_INVALID
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
   const issues = screenDocument && !contentBlocked
@@ -336,7 +341,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         ...(eventTitles ? { eventTitles } : {}),
         webSearchEnabled
       })
-    : []
+    : documentRejected && !contentBlocked ? [briefingDocumentInvalidIssue(text)] : []
   const issueCounts = briefingIssueCounts(issues)
   const groups = groupBriefingIssues(issues, text)
   const activeGroup = openGroup ? groups.find((group) => group.key === openGroup.key) : undefined
@@ -429,7 +434,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         />,
         text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
-        eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
+        eventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null,
         // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
         onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: effectiveLocale, trigger: 'regenerate' }),
