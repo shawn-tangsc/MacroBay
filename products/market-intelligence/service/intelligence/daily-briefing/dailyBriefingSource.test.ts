@@ -155,6 +155,52 @@ function deps(overrides: {
   }
 }
 
+/**
+ * 全仓扫一遍“窗口读”（Chief 2026-11-06 要求）：每种窗口读到底该用哪个端点，写成一张表钉在这里，
+ * 出事时不用再靠翻代码猜。
+ *
+ * | 读                     | 端点                | 为什么                                                   |
+ * |------------------------|---------------------|----------------------------------------------------------|
+ * | 跨资产 24h 快照         | **windowEnd**       | 它的 `asOf` 就是窗口末端，版本截止还加迟到宽限；用运行时刻会把截止推到未来 |
+ * | 新闻                   | 运行时刻（可见性）  | 可见性照“现在”判（截止后回补的稿子重跑才看得见），但装进这一版的条目再按 [windowStart, windowEnd] 过滤 |
+ * | 宏观日历（月）          | 运行时刻（可见性）  | 同上：月视图照现在读，事件再按窗口过滤                    |
+ * | 持仓/资金序列           | 运行时刻            | 行展示的是“此刻的头寸与最近 24h 变化”（`A0.10`：读数用运行时刻），不是“截止那一刻的截面” |
+ * | 美元/黄金/利率的历史截面 | 运行时刻            | 同上，取最新已发布值                                       |
+ * | 政策路径 / 结论时间线    | 运行时刻            | 取最新已发布内容                                           |
+ */
+describe('every window read names which end of its window it is asked about', () => {
+  it('ends the cross-asset window at the cutoff, and reads visibility at the run moment elsewhere', async () => {
+    const readAt = '2026-11-05T15:30:00.000Z'
+    const cutoff = '2026-11-05T00:00:00.000Z'
+    const seen: Record<string, unknown> = {}
+    const base = deps()
+    const source = makeSource({
+      ...base,
+      publicQuery: {
+        ...(base.publicQuery as object),
+        queryCrossAssetSnapshot: async (input: unknown) => { seen.crossAsset = input; return undefined },
+        queryFundingRateHistory: async (input: unknown) => { seen.funding = input; return { state: 'available', asOf: readAt, btc: [], eth: [] } },
+        queryMacroEconomicCalendarMonth: async (input: unknown) => { seen.officialCalendar = input; return { state: 'available', asOf: readAt, events: [] } },
+        queryMacroHistoryAsOf: (input: unknown) => { seen.macroHistory = input; return undefined }
+      } as never,
+      news: {
+        query: async (input: unknown) => { seen.news = input; return { state: 'available', asOf: readAt, generatedAt: readAt, window: '24h', items: [], caveats: [] } }
+      } as never
+    })
+    await source.buildPacket({ asOf: readAt, windowEnd: cutoff, windowHours: 24, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    // 窗口读：末端是这一版的统计截止。
+    expect((seen.crossAsset as { asOf: string }).asOf).toBe(cutoff)
+    // 可见性按运行时刻判：重跑要能看到截止之后才发布的实际值与结论。
+    expect((seen.news as { asOf: string }).asOf).toBe(readAt)
+    expect((seen.officialCalendar as { asOf: string }).asOf).toBe(readAt)
+    expect((seen.funding as { asOf: string }).asOf).toBe(readAt)
+    expect((seen.macroHistory as { asOf: string }).asOf).toBe(readAt)
+    // 窗口边界本身没有变：新闻的 24h 窗口仍从截止前 24 小时起算。
+    expect((seen.news as { window: string }).window).toBe('24h')
+  })
+})
+
 describe('the market window ends at the cutoff, not at the read moment', () => {
   // 方向性用例（Chief 2026-11-06 要求）：下午生成一版"截止 08:00"的日报，
   // 任何窗口读的版本截止都不得落在未来——反例就是 11/06 那三版整块跨资产读不到。
