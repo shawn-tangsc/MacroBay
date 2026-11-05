@@ -50,6 +50,8 @@ export type BriefingRunTrigger = 'manual' | 'regenerate' | 'retry'
 
 export type BriefingRunIntent = Readonly<{
   kind: 'manual' | 'regenerate'
+  /** 这一版所在日期：与挂临时行同一个值，否则选中项凑不齐 (日期, 期号, 语言)。 */
+  date: string
   periodId: string
   locale: 'zh-CN' | 'en-US'
   asOf?: string
@@ -119,6 +121,7 @@ export function useBriefingRunActions(input: Readonly<{
     // 手动期带自己的期号与截止；没有这两样的就是"重跑当前版"。两个入口在这里分叉，别在下游判。
     input.onRunIntent?.({
       kind: options.trigger === 'manual' ? 'manual' : 'regenerate',
+      date: input.todayDate ?? '',
       periodId: options.periodId ?? 'default',
       locale: options.locale ?? input.locale,
       ...(options.generation?.asOf === undefined ? {} : { asOf: options.generation.asOf })

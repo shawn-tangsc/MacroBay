@@ -105,7 +105,9 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     return () => observer.disconnect()
   }, [view])
   // What the body is showing: one edition the reader can read, in this or an earlier version.
-  const showingEdition = view.status === 'ready' && !contentBlocked && forceGenerating !== true
+  // 纸只在"这一版确实有正文"时出现：`mode` 已经按选中身份推过，它是唯一判据；
+  // 只看 `view.status` 会让旧文档冒充选中版（用户报的"切过去还是旧正文"）。
+  const showingEdition = view.status === 'ready' && !contentBlocked && mode !== 'generating'
   return <section className="mi-daily-briefing-page__content">
     {/* 外层卡：工具栏属于这张卡，纸属于它自己。按钮进不了纸的圆角边框，导出图里就不会带
         「删除这一版」这类界面动作——看的边界与导出的边界是两条线。 */}

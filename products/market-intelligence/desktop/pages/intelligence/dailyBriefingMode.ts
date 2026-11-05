@@ -60,8 +60,16 @@ export function briefingViewStatus(view: DailyBriefingPageViewState): 'loading' 
 }
 
 /** The row's state as the mode function wants it: running wins, then a failure, then an edition. */
-export function briefingRowState(row: Readonly<{ availableLocales: readonly string[]; state: string; attemptCount?: number }> | undefined, generating: boolean): DailyBriefingRowState {
-  if (generating) return 'running'
+/**
+ * 这一行**自己**的状态：`running` 只看"这一行、这一门语言"的 `generating`，全局布尔不再是输入
+ * （它会把别处的运行算到这一版头上，正是"选中了别的版却显示在跑"的根）。
+ */
+export function briefingRowState(
+  row: Readonly<{ availableLocales: readonly string[]; state: string; attemptCount?: number
+    languages?: readonly Readonly<{ locale: string; state: string }>[] }> | undefined,
+  locale: string
+): DailyBriefingRowState {
+  if (row?.languages?.some((language) => language.locale === locale && language.state === 'generating')) return 'running'
   if (row && row.availableLocales.length > 0) return 'published'
   return row?.attemptCount ? 'failed' : 'idle'
 }

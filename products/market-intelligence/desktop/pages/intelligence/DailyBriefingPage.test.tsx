@@ -1663,9 +1663,8 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(todayRow.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
-it('switches the body to the running issue for a manual run, and never shows the old edition under it', async () => {
-  // The reader asked for this split: while a run replaces an issue that already has an edition, the
-  // edition stays readable and the nine steps report in the right column — not both in the body.
+it('jumps to the issue it started, then follows the reader when they switch away', async () => {
+  // 用户 11-05：点生成 → 跳到**这一期**正在生成的页面；随后切到别的已完成版 → 看那一版正文。
   let settle: (value: unknown) => void = () => undefined
   const client = fakeClient({
     regenerate: vi.fn(() => new Promise((resolve) => { settle = resolve }))
@@ -1678,7 +1677,12 @@ it('switches the body to the running issue for a manual run, and never shows the
   })
   await confirmManualRun()
 
-  // 1. 正文切到"这一期正在生成"：旧那一版的纸不在屏幕上了。
+  // 1. 选中项就是本次运行：期号与日期逐项相等。
+  const started = (client.regenerate.mock.calls as unknown as [[{ periodId: string }]])[0]![0]
+  const current = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[aria-current="true"]')!
+  expect(current.getAttribute('data-period-id')).toBe(started.periodId)
+  expect(current.getAttribute('data-date')).toBe('2026-10-30')
+  // 2. 选中的是正在跑的那一版：正文是它自己的进度，旧纸不在。
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
   expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
   // The run reports in the right column, where the steps already live.
@@ -1693,6 +1697,12 @@ it('switches the body to the running issue for a manual run, and never shows the
   // presence, not a half-cut template string.
   expect([...railStages.querySelectorAll<HTMLElement>('.mi-generation-trace__summary')]
     .some((node) => (node.textContent ?? '').includes(text.generationTrace.attempt))).toBe(false)
+  // 3. 切到已完成的那一版 → 正文回到那一版，不再显示进度。
+  const finished = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="default"]')!
+  await act(async () => { finished.click() })
+  for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).toBeNull()
   // 4. 工具栏说的是"这一次在写哪一期"（时刻 + 语言），不是"正在重新生成"。
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.className).toContain('ant-btn-loading')
@@ -1935,7 +1945,8 @@ const enSettings = vi.fn(async () => ({ state: 'available' as const, view: { ...
 it('shows the nine steps when the service is generating, even though this page never clicked', async () => {
   // 07:00 scheduled run: nothing local says "generating", the left rail says so, and the pane said
   // "not generated". One source of truth now includes the service's own answer.
-  const period = [{ date: '2026-11-04', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }]
+  const period = [{ date: '2026-11-04', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00',
+    languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }]
   const dom = await renderPage(fakeClient({
     getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
     list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-11-04' } })),

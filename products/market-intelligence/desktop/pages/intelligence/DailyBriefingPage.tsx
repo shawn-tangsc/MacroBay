@@ -337,7 +337,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId, onRunIntent: setRunIntent,
+    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId,
+    // 发起即跳转 = 把选中项一次设全（日期 + 期号 + 语言）；正文是否跟着换由身份闸门决定。
+    onRunIntent: (intent) => {
+      setRunIntent(intent)
+      if (intent === null) return
+      setPinnedDate(intent.date === '' ? todayDate : intent.date)
+      setPickedPeriodId(intent.periodId)
+      setPickedLocale(intent.locale)
+    },
     // #29：跑完**必须清掉这一次的期号**。不清，下一次定时/另一窗口的运行会拿它去查进度，
     // 查不到 → 界面完全不显示"生成中"。这里**不顺手整页重读**：重读走的是 `getToday`（默认期），
     // 会把刚跑出来的那一期正文顶掉——列表那一行已由 runBriefing 自己按新文档合并。
@@ -407,8 +415,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
-  const selectedDate = readyDocument ? readyDocument.edition.date : (pinnedDate ?? todayDate)
-  const selectedLocale = readyDocument?.edition.locale
+  // 选中的是哪一版，由**选中项**决定（状态直取），不再从 paperwork 反推：
+  // 反推会让"发起生成后 view 里还挂着旧文档"这件事继续冒充选中项。
+  const selectedDate = pinnedDate ?? todayDate
+  const selectedLocale = pickedLocale ?? locale
+  /** 那一版的身份：日期 + 期号 + 语言，一次取全，别处都从它取。 */
+  const selected = Object.freeze({ date: selectedDate, periodId: pickedPeriodId, locale: selectedLocale })
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
   const issues = readyDocument && !contentBlocked
@@ -440,14 +452,31 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { lastGeneratedAt, scheduledTime, todayMissing, hasTodayEdition } = briefingListFacts(editions, todayDate)
   // One answer for the whole page: the row says which issue state this is, the pane says what it
   // holds, and the mode combines them. Branches read this, not the pieces.
-  const modeRow = editions.find((edition) => edition.date === todayDate)
+  // 选中那一行：按 (日期, 期号, 语言) 精确取，不用"今天首行"。
+  const selectedRow = editions.find((edition) => edition.date === selected.date
+    && (selected.periodId === undefined || edition.periodId === selected.periodId)
+    && edition.locale === selected.locale)
+  /**
+   * **唯一一道身份闸门**：文档属于某一版，只有它的身份与选中项一致，它才算"选中版的正文"。
+   * 取代上一版那个页面级的 `viewStatusForSelection`（那一版多了一层判断，还是没拦住）。
+   */
+  const viewed = readyDocument === undefined ? undefined : {
+    date: readyDocument.edition.date,
+    locale: readyDocument.edition.locale,
+    periodId: briefingEditionPeriod(readyDocument.edition).periodId
+  }
+  const documentMatchesSelection = viewed !== undefined
+    && viewed.date === selected.date
+    && viewed.locale === selected.locale
+    && (selected.periodId === undefined || viewed.periodId === selected.periodId)
+  const viewStatus = readyDocument !== undefined && documentMatchesSelection
+    ? briefingViewStatus(view)
+    : (view.status === 'ready' ? 'no-edition' as const : briefingViewStatus(view))
   const mode = resolveBriefingMode({
-    rowState: briefingRowState(modeRow, generating),
-    viewStatus: briefingViewStatus(view),
-    hasEdition: hasTodayEdition,
-    localeAvailable: modeRow ? modeRow.availableLocales.includes(effectiveLocale) : true,
-    // 手动发起的那一期在写：正文让给运行，不留旧版在下面。
-    runOwnsPane: runIntent?.kind === 'manual'
+    rowState: briefingRowState(selectedRow, effectiveLocale),
+    viewStatus,
+    hasEdition: selectedRow !== undefined && selectedRow.availableLocales.length > 0,
+    localeAvailable: selectedRow ? selectedRow.availableLocales.includes(effectiveLocale) : true
   })
   const { openModelService, bodyClass, poster, editionText, editionLocale } = briefingPageChrome({
     onOpenModelSettings, readyDocument, editions, text, locale
@@ -516,7 +545,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
         // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
-        forceGenerating: runIntent?.kind === 'manual',
+        // 删掉 `forceGenerating`
         onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
         onDeleteRetry: retryDelete
       }} />
