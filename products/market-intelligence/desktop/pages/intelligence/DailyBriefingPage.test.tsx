@@ -425,6 +425,33 @@ describe('daily briefing page', () => {
     expect(exportHost.querySelector('[data-action-group]')).toBeNull()
   })
 
+  it('shows a generating row as soon as the reader presses generate on an empty day', async () => {
+    // 今天既无版次也无运行记录时点生成：列表里连挂进度的那一行都没有，读者只会看到标题在转。
+    // 所以按下就挂一行"生成中"——这一行是这一刻的事实，跑完由服务返回的结果替换。
+    const today = '2026-10-30'
+    let release: (() => void) | undefined
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [], dates: [today], today } })),
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' })),
+      regenerate: vi.fn(async () => {
+        await new Promise<void>((resolve) => { release = resolve })
+        return { state: 'available' as const, document: briefingDocument(today) }
+      })
+    })
+    const dom = await renderPage(client)
+    // 先点页面顶那颗「手动生成」开弹框，再在弹框里按「生成」——两者是两步。
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click() })
+    await act(async () => { await Promise.resolve() })
+    const run = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.manualRunDialog.run.replace(/\s/g, ''))
+    await act(async () => { run!.click(); await Promise.resolve(); await Promise.resolve() })
+    // 还没跑完（服务端仍挂着）时，列表里已经有一行「生成中」。
+    const waiting = dom.querySelector('[data-rail-title="running"]')
+    expect(waiting).not.toBeNull()
+    expect(dom.querySelector('[data-run-source]')?.getAttribute('data-run-source')).not.toBe('not-run')
+    await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve() })
+  })
+
   it('draws today’s head even when it has no edition, and keeps older empty days out', async () => {
     // `02` v2.91：天头 = 有版次 ∨ 有过运行记录 ∨ 今天是今天。服务侧把这份集合算好交下来，
     // 页面只传不用自己推——否则早上七点前打开，列表会从昨天开始，读者以为列表坏了。

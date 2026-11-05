@@ -12,6 +12,24 @@ import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
  * cannot end up describing the outcome differently. Kept out of the page because it is a
  * capability, not layout.
  */
+/** 正在跑的那一行：列表据此显示「生成中」，而不是等重读之后才出现。 */
+function withGeneratingRow(
+  rows: readonly DailyBriefingEditionSummary[],
+  input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; periodTime?: string }>
+): readonly DailyBriefingEditionSummary[] {
+  const exists = rows.some((row) => row.date === input.date && row.periodId === input.periodId && row.locale === input.locale)
+  if (exists) return rows
+  return [{
+    date: input.date,
+    periodId: input.periodId,
+    locale: input.locale,
+    availableLocales: [input.locale],
+    state: 'missing',
+    ...(input.periodTime === undefined ? {} : { periodTime: input.periodTime }),
+    languages: [{ locale: input.locale, state: 'generating' as const }]
+  }, ...rows]
+}
+
 export function useBriefingRunActions(input: Readonly<{
   client: Pick<DailyBriefingClient, 'regenerate'>
   locale: 'zh-CN' | 'en-US'
@@ -23,6 +41,8 @@ export function useBriefingRunActions(input: Readonly<{
   setRegenerateFailure: (failure: BriefingRegenerateFailure | null) => void
   setEditions: (next: (current: readonly DailyBriefingEditionSummary[]) => readonly DailyBriefingEditionSummary[]) => void
   setCurrentPeriodDate?: (date: string) => void
+  /** 今天（期次自己的日期定义）；给了才能先挂一行"生成中"。 */
+  todayDate?: string
   /** Read the list again once the run settles: the row must show what just landed. */
   onSettled?: () => void
 }>): Readonly<{
@@ -52,6 +72,15 @@ export function useBriefingRunActions(input: Readonly<{
     async regenerate(options) {
       input.setRegenerating(true)
       input.setRegenerateFailure(null)
+      // 先挂一行"生成中"再开始跑：今天还没有任何版次/运行记录时，列表里连挂进度的那一行都没有，
+      // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
+      // 返回的结果替换；失败时下一轮重读会把这一行去掉。
+      if (input.todayDate !== undefined) input.setEditions((current) => withGeneratingRow(current, {
+        date: input.todayDate!,
+        periodId: options?.periodId ?? 'default',
+        locale: options?.locale ?? input.locale,
+        ...(options?.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
+      }))
       const document = await run(options)
       if (document) {
         input.setView({ status: 'ready', document, kind: 'today' })

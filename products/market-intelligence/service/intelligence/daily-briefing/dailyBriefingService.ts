@@ -21,7 +21,7 @@ import {
 } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import { createPublishToPhone, type BriefingPublishOutcome, type BriefingRedeliver } from './dailyBriefingPublishToPhone'
-import { createBriefingProgressReader } from './dailyBriefingProgressReader'
+import { createBriefingProgressReader, liveProgressFor } from './dailyBriefingProgressReader'
 import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBriefingEditorialState'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
@@ -666,7 +666,8 @@ export function createDailyBriefingService(deps: Readonly<{
   const getProgress = createBriefingProgressReader({
     now,
     readGeneration: generation,
-    progressOf: (date, locale) => runs.progress.get(runs.key(date, DEFAULT_PERIOD_ID, locale))
+    // 按 (日期, 语言) 找在跑的那一份，不按默认期号：手动生成自带一次性期号。
+    progressOf: (date, locale) => liveProgressFor(runs.progress, date, locale)
   })
   const publishToPhone = createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, now })
   return { getToday, regenerate, publishToPhone, list, ...reads, getProgress }

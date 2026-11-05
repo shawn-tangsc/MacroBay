@@ -322,7 +322,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { regenerate, generateNow } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, onSettled: () => setReloadKey((key) => key + 1)
+    setCurrentPeriodDate, todayDate, onSettled: () => setReloadKey((key) => key + 1)
   })
   const runManual = useBriefingManualRun({
     timeZone,
