@@ -28,7 +28,7 @@ import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dail
 import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { DailyBriefingPageBar } from './DailyBriefingPageBar'
-import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps'
+import { DailyBriefingLiveSteps, runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { useBriefingSettingsFacts } from './useBriefingSettingsFacts'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
@@ -177,6 +177,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
   // must not pretend the run stopped either — the pipeline is still spending model calls.
   const progressUnreadable = generating && progress?.state === 'unavailable'
+  // The stage a run is actually in, when it can be told. The rail shows `stage · elapsed` only for a
+  // real stage: "生成中" and "进度未知" are the two fallback words, and pairing either of them with a
+  // duration would turn a guess into a measurement.
+  const runningStage = generating && !progressUnreadable && liveProgress ? runningRowName(liveProgress, text) : undefined
+  const runningElapsedMs = runningStage === undefined || liveProgress === undefined ? undefined : runningElapsedMsFor(liveProgress)
 
   useEffect(() => {
     let active = true
@@ -438,7 +443,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // 永远落到第一行，读者看到的是"切换了但内容不切"。
         onSelectLocale={selectLocale}
         {...(railDates === undefined ? {} : { dates: railDates })}
-        generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
+        generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : (runningStage ?? text.generationProgress.railRunning)) : undefined}
+        generatingElapsedMs={runningElapsedMs}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
         onRegeneratePeriod={({ periodId, locale: target }) => { void regenerate({ periodId, locale: target }) }}

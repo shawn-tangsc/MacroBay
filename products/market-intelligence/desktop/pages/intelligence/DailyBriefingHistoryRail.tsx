@@ -11,6 +11,7 @@ import type {
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { briefingEditionDeleteCopy } from './briefingEditionDeleteConfirm'
+import { formatDuration } from './DailyBriefingGenerationTimeline'
 
 /** Which edition is on screen: one identity, shared by the rail and the page. */
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
@@ -67,7 +68,7 @@ function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, 
 
 export function DailyBriefingHistoryRail({
   editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, onDeletePeriod,
+  todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod,
   onRegeneratePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
@@ -88,6 +89,13 @@ export function DailyBriefingHistoryRail({
   text: DailyBriefingText
   timeZone: string
   generatingStage?: string
+  /**
+   * How long this run has been going, when the progress poll can answer it.
+   *
+   * Absent means "cannot tell": the row then says only「生成中」— a stage name or a duration we do not
+   * have would be invented, and the reader would read it as fact.
+   */
+  generatingElapsedMs?: number
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
   /** Picking a row selects that edition: one row is one period in one language, so the row is the choice. */
@@ -286,7 +294,9 @@ export function DailyBriefingHistoryRail({
                     没有正文的那两行写**为什么没有**——空行会被读成"还在加载"。 */}
                 {running
                   ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="running">
-                    <LoadingSpinner size="sm" /><span>{text.generationProgress.railRunning}</span>
+                    {/* 第二行说"卡在哪、跑了多久"：阶段名 + 已用时（同一套时长格式化）。
+                        拿不到进度就只写「生成中」——不编阶段、不编秒数。整句替换，不做会跳的徽标。 */}
+                    <LoadingSpinner size="sm" /><span>{runningLine(generatingStage, generatingElapsedMs, text)}</span>
                   </span>
                   : missing
                     ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">
@@ -392,3 +402,17 @@ export function formatRailDate(date: string, locale: DailyBriefingLocale): strin
 }
 
 const formatDate = formatRailDate
+
+/**
+ * The running row's sentence: `{stage} · 已 {duration}`, or the plain word when either half is unknown.
+ *
+ * The stage arrives already resolved (the page maps the progress to a display name); this function
+ * only decides whether both halves exist. Composing a sentence with an unknown half is how a row
+ * starts claiming a duration it never measured.
+ */
+export function runningLine(stage: string | undefined, elapsedMs: number | undefined, text: DailyBriefingText): string {
+  if (stage === undefined || stage === '' || elapsedMs === undefined) return text.generationProgress.railRunning
+  return text.generationProgress.railStageWithElapsed
+    .replace('{stage}', stage)
+    .replace('{duration}', formatDuration(elapsedMs, text))
+}

@@ -438,6 +438,28 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(onRegeneratePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
+  // 用户问的那一句：生成中的行不能只有一个「生成中」，得说清卡在哪、跑了多久。
+  it('tells the running row its stage and how long it has been going', () => {
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      generatingStage: 'AI 选择', generatingElapsedMs: 41_000
+    })
+    const waiting = host.querySelector('[data-rail-title="running"]')!
+    // 阶段 + 时长，一个整句；阶段名来自现有 stage 文案，时长走同一套格式化。
+    expect(waiting.textContent).toBe('AI 选择 · 已 41 秒')
+  })
+
+  it('says only "generating" when the progress cannot answer, and invents neither stage nor seconds', () => {
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      generatingStage: 'AI 选择'
+    })
+    const waiting = host.querySelector('[data-rail-title="running"]')!
+    expect(waiting.textContent).toBe(text.generationProgress.railRunning)
+    // 拿不到进度时不许出现任何时长：编一个数字比不说更糟。
+    expect(waiting.textContent).not.toMatch(/\d/)
+  })
+
   it('shows the waiting row with the spinner in the title slot, and it does not open', () => {
     const onSelectLocale = vi.fn()
     render({

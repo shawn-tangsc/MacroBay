@@ -226,6 +226,8 @@ export const dailyBriefingText = {
       finished: '已完成',
       note: '写作和校验各是一次模型调用，会停一会儿；这一步会显示已用时间，说明它仍在运行。',
       railRunning: '生成中',
+      /** 「生成中」那行的第二句：阶段 · 已用时。拿不到进度时退回 railRunning，不许编。 */
+      railStageWithElapsed: '{stage} · 已 {duration}',
       unknown: '生成还在进行，只是这一步没取回来，会自动再试。',
       unknownStage: '进度未知'
     },
@@ -520,6 +522,8 @@ export const dailyBriefingText = {
       finished: 'Done',
       note: 'Writing and validation are one model call each, so they hold still for a while; the elapsed time keeps counting, which is how you know it is still running.',
       railRunning: 'Generating',
+      /** The running row's second sentence: stage · elapsed. Falls back to railRunning when unknown. */
+      railStageWithElapsed: '{stage} · {duration} elapsed',
       unknown: 'The generation is still running; this step just could not be read. It will be asked again.',
       unknownStage: 'progress unknown'
     },

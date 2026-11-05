@@ -194,7 +194,7 @@ function formatInstant(
   return second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? second : first ?? ''
 }
 
-function formatDuration(milliseconds: number, text: DailyBriefingText): string {
+export function formatDuration(milliseconds: number, text: DailyBriefingText): string {
   const units = text.generationTrace.durationUnits
   if (milliseconds < 1_000) return units.milliseconds.replace('{count}', String(Math.round(milliseconds)))
   const seconds = milliseconds / 1_000

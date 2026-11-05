@@ -64,6 +64,21 @@ export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: D
 }
 
 /** The name the rail uses for "generating now": the row that is actually running. */
+/**
+ * How long this run has been going, for the row that says where it is.
+ *
+ * While the run is still waiting for the market it has not opened an attempt, and the wait itself
+ * knows its own elapsed time; after that the attempt's start is the reference. `undefined` when
+ * neither can answer — the row then says only "generating" rather than inventing a number.
+ */
+export function runningElapsedMsFor(progress: BriefingGenerationProgress, now = Date.now()): number | undefined {
+  if (progress.waiting) return progress.waiting.waitedMs
+  const startedAt = Date.parse(progress.startedAt)
+  if (!Number.isFinite(startedAt)) return undefined
+  const elapsed = now - startedAt
+  return Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : undefined
+}
+
 export function runningRowName(progress: BriefingGenerationProgress, text: DailyBriefingText): string | undefined {
   const byId = new Map(progress.stages.map((stage) => [stage.id, stage]))
   for (const row of briefingGenerationDisplayRows) {
