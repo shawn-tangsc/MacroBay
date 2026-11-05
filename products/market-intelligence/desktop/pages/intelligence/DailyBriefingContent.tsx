@@ -115,6 +115,13 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
         : failure ? 'failure'
           : view.status === 'unavailable' ? 'unavailable'
             : 'no-edition'
+  // 两个"没有正文"的档（整期没有 / 缺这一种语言）落**同一个面板**：读者不需要分辨两者，
+  // 面板也不该有两种身份。缺语言那一档只把 `view` 折成面板认的形状。
+  const noEditionView = view.status === 'no-edition'
+    ? view
+    : view.status === 'locale-missing'
+      ? { status: 'no-edition' as const, date: view.date ?? todayDate, failed: false }
+      : undefined
   // 唯一有意叠加的一档：正文留着、失败提示挂在它下面（重跑失败不吞掉读者正在读的那一版）。
   const failureUnderPaper = bodyState === 'paper' && failure !== null
   return <section className="mi-daily-briefing-page__content" data-body-state={bodyState}>
@@ -144,8 +151,11 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       {/* Shown during a run too: the reader asked to read this language, and "this issue has no such
           version" is the answer to that, not a reason to replace the pane with the run's own screen. */}
       {/* 缺当前语言也走同一个空态（`02` v2.94）：读者不需要分辨"整期没有"和"缺这个语言"。 */}
-    {bodyState === 'no-edition' && view.status === 'locale-missing' ? <DailyBriefingNoEditionPanel view={{ status: 'no-edition', date: view.date ?? todayDate, failed: false }} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
-      {bodyState === 'no-edition' && view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
+      {/* 两个"没有正文"的档（整期没有 / 缺这一种语言）落**同一个面板**：读者不需要分辨两者，
+          面板也不该有两种身份。缺语言那一档只把 `view` 折成面板认的形状。 */}
+      {bodyState === 'no-edition' && noEditionView !== undefined ? <DailyBriefingNoEditionPanel
+        view={noEditionView}
+        text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
           所以那颗重试是禁用的，并且写明原因。 */}
       {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
