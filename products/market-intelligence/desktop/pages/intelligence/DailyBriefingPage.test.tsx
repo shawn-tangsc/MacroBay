@@ -291,24 +291,6 @@ describe('daily briefing page', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
-  it('reads the edition whose language badge was pressed, and marks that badge', async () => {
-    const chinese = briefingDocument('2026-10-30')
-    const english = { ...chinese, edition: { ...chinese.edition, locale: 'en-US' as const }, lede: { ...chinese.lede, text: 'Exchange risk dominates the day.' } }
-    const client = fakeClient({
-      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{
-        ...editions[0], availableLocales: ['zh-CN', 'en-US'],
-        languages: [{ locale: 'zh-CN', state: 'published' as const }, { locale: 'en-US', state: 'published' as const }]
-      }] } })),
-      get: vi.fn(async ({ locale }: { locale: string }) => ({ state: 'available' as const, document: locale === 'en-US' ? english : chinese }))
-    })
-    const dom = await renderPage(client)
-    expect(dom.querySelectorAll('[data-content-language-tabs]')).toHaveLength(0)
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-edition-locale="en-US"]')!.click(); await Promise.resolve(); await Promise.resolve() })
-    expect(client.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'en-US', periodId: 'default' })
-    expect(dom.querySelector('[data-edition-locale="en-US"]')?.getAttribute('aria-pressed')).toBe('true')
-    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('Exchange risk dominates the day.')
-  })
-
   it('separates the two nothing-states of a day the reader selects', async () => {
     // A day with no edition still has something to say: it either never ran or it failed. The rail
     // carries one word; the pane carries the difference, and selecting never spends a run.

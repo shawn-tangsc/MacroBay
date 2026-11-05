@@ -184,11 +184,10 @@ export function DailyBriefingHistoryRail({
                     ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
                     : null}
                 </span>
-                {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>{renderedLanguages(edition).map((language) => <LanguageBadge
-                  key={language.locale} language={language} text={text} locale={locale}
-                  selected={edition.date === selectedDate && language.locale === (selectedLocale ?? edition.locale)}
-                  {...(onSelectLocale ? { onSelect: () => onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: language.locale }) } : {})}
-                />)}</span> : null}
+                {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>
+                  {/* 一行只有这一枚：该行自己的语言。徽标是标签，不是可切换的开关——没有按钮、没有选中态。 */}
+                  <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
+                </span> : null}
                 <small className="mi-daily-briefing__rail-meta">
                   {edition.date === todayDate && generatingStage
                     ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
@@ -210,7 +209,6 @@ export function DailyBriefingHistoryRail({
                   {edition.direction
                     ? <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction}>{localizedDirectionTerm(edition.direction, locale)}</span>
                     : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
-                  {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
                   {edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
                     ? <small className="mi-daily-briefing__rail-run-trigger" data-run-trigger={edition.runTrigger}>{text.history.runCatchUp}</small>
                     : null}
@@ -269,8 +267,13 @@ export function DailyBriefingHistoryRail({
 
 /** The per-language chips, from the projection's three-state; absent falls back to published rows. */
 function renderedLanguages(edition: DailyBriefingEditionSummary): readonly DailyBriefingEditionLanguage[] {
-  // 一行只有一枚徽标：这一行自己的语言。一行一种语言之后，徽标是标签，不是可切换的开关。
-  return edition.languages ?? [Object.freeze({ locale: edition.locale, state: 'published' as const })]
+  // 一行只有一枚徽标：**这一行自己的语言**。`languages` 带着这一期所有语言的状态（那是"这一期有
+  // 几版"的旧说法），在这里必须按本行的语言过滤——否则两行会各自挂着两枚徽标，看起来又像"可以切"。
+  const own = edition.languages?.find((language) => language.locale === edition.locale)
+  if (own) return [own]
+  return edition.languages === undefined
+    ? [Object.freeze({ locale: edition.locale, state: 'published' as const })]
+    : []
 }
 
 function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {

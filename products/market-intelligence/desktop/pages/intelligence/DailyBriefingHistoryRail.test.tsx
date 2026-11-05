@@ -130,8 +130,9 @@ describe('daily briefing history rail', () => {
     expect(row.textContent).not.toContain(text.history.missingRun)
   })
 
-  it('keeps one row per issue and puts the language choice on the row', () => {
-    // The top tab is gone (A6.1); the row carries one chip per language, and a chip is the control.
+  it('prints one badge per row — the row\'s own language, never a choice of two', () => {
+    // 一行 = 一期 = 一种语言：徽标是**标签**，不是可切换的开关。同一期即使带着两种语言的状态，
+    // 这一行也只印自己的那一枚——否则读者又会以为“可以切语言”。
     const onSelect = vi.fn()
     const onSelectLocale = vi.fn()
     render({
@@ -141,15 +142,16 @@ describe('daily briefing history rail', () => {
       selectedDate: '2026-11-02', onSelect, onSelectLocale
     })
     expect(host.querySelectorAll('.mi-daily-briefing__rail-item')).toHaveLength(1)
-    expect(host.querySelectorAll('[data-locale]')).toHaveLength(0)
-    const chips = [...host.querySelectorAll<HTMLButtonElement>('[data-edition-locale]')]
-    expect(chips.map((chip) => chip.getAttribute('data-edition-locale'))).toEqual(['zh-CN', 'en-US'])
-    expect(chips[0].getAttribute('aria-pressed')).toBe('true')
-    act(() => chips[1].click())
-    expect(onSelectLocale).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'en-US' })
-
-    act(() => host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.click())
+    const chips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')]
+    expect(chips.map((chip) => chip.getAttribute('data-edition-locale'))).toEqual(['zh-CN'])
+    // 徽标不再是被按下的控件：没有 aria-pressed，点了也不会换语言。
+    expect(chips[0]?.getAttribute('aria-pressed')).toBeNull()
+    act(() => {
+      const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
     expect(onSelect).toHaveBeenCalledWith('2026-11-02')
+    expect(onSelectLocale).not.toHaveBeenCalled()
   })
 
   it('deletes the edition on screen, after the shared confirmation', async () => {
