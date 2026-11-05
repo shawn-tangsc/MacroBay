@@ -37,6 +37,7 @@ const catalog = createNotificationEventCatalog({
         titleKey: 'notification.test.title',
         reasonKey: 'notification.test.body',
         requiresUserAction: false,
+    category: 'reminder',
         requestedDisruptionLevels: [],
         dedupeKeyTemplate: `${id}:{date}`,
         dedupeUnit: 'occurrence' as const,

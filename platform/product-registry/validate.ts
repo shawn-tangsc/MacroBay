@@ -140,6 +140,12 @@ function assertNotificationEvents(manifest: ProductManifest, productId: string):
     if (typeof event.requiresUserAction !== 'boolean') {
       throw new ProductRegistryValidationError(`notification event "${id}" must declare requiresUserAction as a boolean`)
     }
+    // 类型标签：必填、只在四个值里取（契约 v2.37）。**不许实现时猜一个**。
+    if (!['failure', 'needs-action', 'completed', 'reminder'].includes(event.category)) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" must declare category as failure | needs-action | completed | reminder`
+      )
+    }
 
     const levels = event.requestedDisruptionLevels
     if (!Array.isArray(levels) || levels.some((level) => !NOTIFICATION_REQUESTED_LEVELS.has(level))) {

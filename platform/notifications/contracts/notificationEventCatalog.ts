@@ -16,6 +16,9 @@ export type NotificationRequestedLevel = NotificationDisruptionLevel | 'channel'
 export type NotificationApprovedLevel = NotificationRequestedLevel | 'center'
 
 /** 声明（产品 manifest 与平台事件表同形，只是声明者不同）。 */
+/** 类型标签的四值闭集（中文译法只认界面规范 §3：失败 / 要你处理 / 完成 / 提醒）。 */
+export type NotificationCategory = 'failure' | 'needs-action' | 'completed' | 'reminder'
+
 export type NotificationEventDeclaration = {
   /** 必须 `<productId>.` 前缀；id 的唯一出处是 `notification-event-ownership.md`。 */
   id: string
@@ -27,6 +30,17 @@ export type NotificationEventDeclaration = {
   reasonKey: string
   /** 读者要不要动手：决定提交期 `actions` 能不能是空数组，不是「一定有动作」。 */
   requiresUserAction: boolean
+  /**
+   * 读者面向的类型标签（契约 v2.37）：**只能声明、不许推导**。
+   *
+   * 判据只有一条：**一次性（failure）还是一直不对劲（needs-action）**；`completed` 是"好了/做完了"，
+   * `reminder` 是"发生了但你不用动手"。`failure` 另有一条**必要条件**：错误对读者可见、重试也许就好
+   * （它只挡方向、不改档）。
+   *
+   * 不许从 `severity`/`actions`/`requiresUserAction`/文案键反推：`severity` 在计划器里两处写死 `info`，
+   * 推出来所有事件同一个标签——比推错更难发现。
+   */
+  category: NotificationCategory
   requestedDisruptionLevels: readonly NotificationRequestedLevel[]
   dedupeKeyTemplate?: string
   dedupeKeyBuilder?: 'moduleSignal' | 'sourceIssue'

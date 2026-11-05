@@ -305,6 +305,7 @@ export const marketIntelligenceProductManifest = {
    */
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
+      category: 'failure',
       bodyVariants: ['not-generated', 'editorial-missing'],
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
@@ -314,6 +315,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.signal.triggered', {
+      category: 'reminder',
       body: true,
       requiresUserAction: false,
       // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
@@ -323,6 +325,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.macro.event-landed', {
+      category: 'reminder',
       body: true,
       requiresUserAction: false,
       // 同上：信息类不申请桌面档。
@@ -332,6 +335,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.source.consecutive-failed', {
+      category: 'needs-action',
       body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
@@ -341,6 +345,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.source.stale', {
+      category: 'needs-action',
       body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: ['desktop'],
@@ -350,6 +355,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.briefing.ready', {
+      category: 'completed',
       body: true,
       requiresUserAction: false,
       requestedDisruptionLevels: [],
@@ -360,6 +366,7 @@ export const marketIntelligenceProductManifest = {
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.timezone.invalid', {
+      category: 'needs-action',
       body: true,
       requiresUserAction: true,
       requestedDisruptionLevels: [],

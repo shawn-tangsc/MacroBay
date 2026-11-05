@@ -26,6 +26,7 @@ const catalog = createNotificationEventCatalog({
           bodyKey: 'notification.taskFailed.body',
           reasonKey: 'notification.taskFailed.body',
           requiresUserAction: false,
+    category: 'reminder',
           requestedDisruptionLevels: ['desktop', 'channel'],
           dedupeKeyTemplate: 'test:{id}',
           dedupeUnit: 'condition',
@@ -277,6 +278,7 @@ const catalogWithBlocked = createNotificationEventCatalog({
           bodyKey: 'notification.taskFailed.body',
           reasonKey: 'notification.taskFailed.body',
           requiresUserAction: false,
+    category: 'reminder',
           requestedDisruptionLevels: ['desktop', 'channel'],
           dedupeKeyTemplate: 'test:{id}',
           dedupeUnit: 'condition',
@@ -288,6 +290,7 @@ const catalogWithBlocked = createNotificationEventCatalog({
           bodyKey: 'notification.event.platform.desktop.blocked.body',
           reasonKey: 'notification.event.platform.desktop.blocked.reason',
           requiresUserAction: false,
+    category: 'reminder',
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'desktop-blocked:{recordId}',
           dedupeUnit: 'occurrence'

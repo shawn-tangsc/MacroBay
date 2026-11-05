@@ -15,6 +15,7 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
   titleKey: 'notification.jobFailed.title',
   reasonKey: 'notification.jobFailed.reason',
   requiresUserAction: true,
+    category: 'reminder',
   requestedDisruptionLevels: ['desktop'],
   dedupeUnit: 'occurrence',
   ...overrides

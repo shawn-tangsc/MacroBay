@@ -57,6 +57,7 @@ function declaration(
 export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration[] = Object.freeze([
   // P1 任务跑到终态仍失败：同一任务同一天一条、次数累加（`condition` + 24h 窗，跨天重算）。
   declaration('platform.job.failed-terminal', {
+    category: 'failure',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'job-failed:{definitionId}:{date}',
@@ -65,6 +66,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P2 同一任务连续 3 次终态失败：只通知、不暂停任务；同一天同一任务一条。
   declaration('platform.job.repeated-failed', {
+    category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['desktop'],
     dedupeKeyTemplate: 'job-repeated:{definitionId}:{date}',
@@ -72,6 +74,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P3 分析额度用尽：同一天只发一次，不随每次被拒重复。
   declaration('platform.analysis.quota-exhausted', {
+    category: 'needs-action',
     requiresUserAction: false,
     requestedDisruptionLevels: ['toast'],
     dedupeKeyTemplate: 'quota-exhausted:{date}',
@@ -79,6 +82,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P4a 供应商凭据失效：同一供应商 1 小时内合并；恢复是独立事件，不改这条的正文。
   declaration('platform.provider.credential-invalid', {
+    category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'credential-invalid:{providerId}',
@@ -87,6 +91,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P4b 凭据恢复：一天最多一条；独立 id、独立记录，不弹不叫醒。
   declaration('platform.provider.credential-recovered', {
+    category: 'completed',
     requiresUserAction: false,
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'credential-recovered:{providerId}:{day}',
@@ -94,6 +99,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P6a 通道连续失败、自动暂停推送：绝不发到通道本身（申请档位里没有 channel）。
   declaration('platform.channel.push-suspended', {
+    category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'push-suspended:{channelId}',
@@ -102,6 +108,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P6b 通道恢复：一天最多一条。
   declaration('platform.channel.push-resumed', {
+    category: 'completed',
     requiresUserAction: false,
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'push-resumed:{channelId}:{day}',
@@ -109,6 +116,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   }),
   // P7 桌面通知没弹出来：只说观测到的事实，不猜为什么；不合并，随事件本身。
   declaration('platform.desktop.blocked', {
+    category: 'reminder',
     requiresUserAction: false,
     requestedDisruptionLevels: [],
     dedupeKeyTemplate: 'desktop-blocked:{recordId}',
@@ -118,6 +126,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
   // 键带频道 id + 断开起始时刻，同一次断开只留一条；原因两档（网络连不上 / 代理这一跳没连上）
   // 就是正文变体名。**不含 channel**：这是本机状态，不该再推到手机。
   declaration('platform.channel.connection-lost', {
+    category: 'needs-action',
     requiresUserAction: true,
     requestedDisruptionLevels: ['toast', 'desktop'],
     dedupeKeyTemplate: 'channel-lost:{channelId}:{disconnectedAt}',

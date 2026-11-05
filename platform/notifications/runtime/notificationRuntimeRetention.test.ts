@@ -29,6 +29,7 @@ const catalog = createNotificationEventCatalog({
           bodyKey: 'notification.taskFailed.body',
           reasonKey: 'notification.taskFailed.body',
           requiresUserAction: false,
+    category: 'reminder',
           requestedDisruptionLevels: ['desktop'],
           dedupeKeyTemplate: 'test:{id}',
           dedupeUnit: 'condition',
