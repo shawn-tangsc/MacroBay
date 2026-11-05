@@ -645,16 +645,17 @@ describe('a level the document does not carry is a dash with a reason, never a m
     return host
   }
 
-  it('prints the dash and the reason when the close is missing, not the move', async () => {
+  it('keeps the dash and the move when the close is missing, and writes no explanation', async () => {
     const host = await render((doc) => {
       const btc = doc.data.market.find((entry) => entry.id === 'btc') as { close?: unknown }
       delete btc.close
     })
     const card = host.querySelector('[data-briefing-price-card="btc"]')!
-    // All three survive: the dash stands in the level's place, the reason explains it, and the move is
-    // still printed — a missing level does not make the move missing.
+    // 用户 2026-11-06 令：正文里不许出现"没拿到/没存"这类字样。缺收盘价时值位就是空的，
+    // 涨跌幅仍然照印（缺的是点位，不是涨跌幅），解释只进右列「数据缺口与限制」。
     expect(card.querySelector('[data-briefing-price-value="btc"]')?.textContent).toBe(text.noValue)
-    expect(card.textContent).toContain(text.closeMissing)
+    expect(card.querySelector('.mi-brief-poster__price-missing')).toBeNull()
+    expect(card.textContent).not.toMatch(/没存|没有存|没拿到|没取到|没数据|未拿到|未公布|没读到/)
     expect(card.querySelector('.mi-brief-poster__price-change')?.textContent).toBe('↑1.2%')
     // The move is not moved into the level's slot: one dash, one level position.
     expect(card.querySelectorAll('[data-briefing-price-value="btc"]')).toHaveLength(1)
@@ -786,23 +787,22 @@ describe('two kinds of missing, two rules', () => {
     return host
   }
 
-  it('says one short line when this run got nothing, and no more than that', async () => {
+  it('leaves the cell empty when this run got nothing, and writes nothing about it', async () => {
     const host = await renderRow((doc) => {
       const gold = doc.data.market.find((entry) => entry.id === 'gold') as { state: string; value: unknown }
       gold.state = 'unavailable'
       gold.value = null
     })
     const cell = host.querySelector('[data-reading="gold"]')!
-    expect(cell.textContent).toContain(text.notAvailableThisRun)
-    // The sentence is the whole cell: no dash (that reads as "the number is missing"), no amount, and no
-    // second explanation of what the product decided not to collect.
+    // 缺值整格不出：没有破折号（那像"数字丢了"），没有金额，也**没有一个字的解释**。
     expect(cell.textContent).not.toContain(text.noValue)
     expect(cell.querySelector('b')).toBeNull()
+    expect(cell.textContent).not.toMatch(/没拿到|没取到|没数据|未拿到|未公布|没存|没有存|没读到/)
   })
 
   it('stays silent when the reading arrived, stale or fresh', async () => {
     const fresh = await renderRow(() => undefined)
-    expect(fresh.querySelector('[data-reading="gold"]')!.textContent).not.toContain(text.notAvailableThisRun)
+    expect(fresh.querySelector('[data-reading="gold"]')!.textContent).not.toMatch(/没拿到|没取到|没数据|未拿到|未公布|没存|没有存|没读到/)
 
     await act(async () => root?.unmount())
     root = undefined
@@ -811,7 +811,7 @@ describe('two kinds of missing, two rules', () => {
       gold.state = 'stale'
       gold.valueBasis = 'last-close'
     })
-    expect(stale.querySelector('[data-reading="gold"]')!.textContent).not.toContain(text.notAvailableThisRun)
+    expect(stale.querySelector('[data-reading="gold"]')!.textContent).not.toMatch(/没拿到|没取到|没数据|未拿到|未公布|没存|没有存|没读到/)
   })
 })
 
@@ -969,5 +969,34 @@ describe('a price card keeps the move when change is null', () => {
     // The move is the figure that exists; dropping it leaves a level with no direction.
     expect(card.querySelector('.mi-brief-poster__price-change')?.textContent).toContain('1.2%')
     expect(card.querySelector('[data-briefing-amplitude="btc"]')).not.toBeNull()
+  })
+})
+
+/**
+ * 用户 2026-11-06 明令：日报正文（含导出图、复制文本）里**不许出现这类字样**。
+ *
+ * 这条守卫看的是渲染结果，不是文案表：以前那两句就是从文案表一步走到屏幕上，谁在别处把同样的
+ * 意思换个写法加回来，这里同样会红。
+ */
+describe('no wording about missing data reaches the page', () => {
+  const BANNED = /没拿到|没取到|没数据|未拿到|未公布|没存|没有存|没读到|Not available this run|stored no close|no data yet|not received/i
+
+  it('stays out of the data region in both languages, with every reading missing', async () => {
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const copy = productText[locale].pages.intelligence.portal.dashboard.dailyBriefing
+      const doc = documentWithData()
+      for (const entry of [...doc.data.market, ...doc.data.funds]) Object.assign(entry, { state: 'unavailable', value: null, change: null })
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => root!.render(createElement(BriefingDataArea, {
+        groups: briefingDataGroups(doc), text: copy, locale, formatTime: () => '07:00',
+        paymentDirectionsCompact: briefingPaymentDirections(locale), policyWords: briefingPolicyGaugeWords(locale),
+        changeArrows: briefingChangeArrows(locale), fearGreedBuckets: briefingFearGreedBuckets(locale)
+      })))
+      expect(host.textContent ?? '', locale).not.toMatch(BANNED)
+      await act(async () => root?.unmount())
+      root = undefined
+    }
   })
 })

@@ -103,10 +103,9 @@ type CellBand = Readonly<{ text: string; tone?: 'up' | 'down' }>
 type CellCopy = Readonly<{ primary: string; primaryTone?: 'up' | 'down'; band?: CellBand; change?: CellChange; note?: string }>
 
 function cellCopy(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', buckets: fearGreedBucketWords, arrows: changeArrowWords): CellCopy {
-  // Two kinds of missing, two rules: "this version does not do it" is permanent and needs no sentence
-  // (explaining it only invites the reader to guess what the dash stands for), while "not received this
-  // run" is temporary and worth one short line — the reader can wait for the next edition.
-  if (row.state === 'unavailable') return { primary: '', note: text.notAvailableThisRun }
+  // 缺值就**整格不出、一个字也不写**（用户 2026-11-06 令：「没拿到/没数据」这类话从正文里去掉）。
+  // 解释这件事只属于右列「数据缺口与限制」：正文里写一句"这次没取到"，读者读到的是"这张简报不可信"。
+  if (row.state === 'unavailable') return { primary: '' }
   const level = formatBriefingValue(row.value, text.noValue, locale)
   // The arrow carries the direction, so the number beside it must not repeat it: "↓+1.7B" is one fact
   // stated twice, and the plus is what a reader trips over.
@@ -344,7 +343,7 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
         {/* Three things, not one: the dash, the reason, and the move. A missing level does not mean the
             move is missing — taking `↑0.90%` off the screen because the close is absent hides a number we
             do have, and leaves the reader with a dash and no figures at all. */}
-        {row.close === undefined ? <small className="mi-brief-poster__price-missing">{text.closeMissing}</small> : null}
+        {/* 没有收盘价就**不写那句话**（用户 2026-11-06 令）：值位空着，缺口只在右列说。 */}
         {move === '' ? null : <small className="mi-brief-poster__price-change" data-tone={toneOf(row)}>{move}</small>}
       </span>
     </div>

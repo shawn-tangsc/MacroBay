@@ -13,10 +13,6 @@ export const dailyBriefingText = {
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', metaCutoff: '统计截止 {time}（{zone}）', metaReadAt: '本版读取 {time}（{zone}）', backfillNote: '本版为补跑生成，数据截至 {time}', backfillNoteNoTime: '本版为补跑生成',
     periodScheduled: '期 {time}（定期）', periodManual: '期 {time}（手动）', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     noValue: '—',
-    // 「这次没取到」是临时的：读者能做的是等下期、看缺口。与「我们本版不做」分开，两类不共用键。
-    notAvailableThisRun: '这次没取到',
-    // 数值位缺数时说清缺的是哪一样：把变化率印在绝对值的位置上，读者会把它当规模。
-    closeMissing: '这一期没有存收盘价',
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
     // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
     perpetualContract: '永续合约', indexProxy: '（QQQ 永续代理）',
@@ -335,8 +331,6 @@ export const dailyBriefingText = {
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', metaCutoff: 'Cutoff {time} ({zone})', metaReadAt: 'Read {time} ({zone})', backfillNote: 'This edition was generated late; data as of {time}', backfillNoteNoTime: 'This edition was generated late',
     periodScheduled: 'Period {time} (scheduled)', periodManual: 'Period {time} (manual)', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
-    notAvailableThisRun: 'Not available this run',
-    closeMissing: 'This edition stored no close',
     perpetualContract: 'Perpetual', indexProxy: ' (QQQ perpetual proxy)',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
