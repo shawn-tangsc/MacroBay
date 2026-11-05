@@ -152,6 +152,7 @@ export function NewsSentimentCard(props: {
         </div>
       ) : emptyState && !causeUnknown ? (
         <EmptyCause
+          failedSourceIds={view?.readiness?.failedSourceIds ?? []}
           neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
           onEnableSources={props.onEnableSources}
           onRefresh={props.onRefresh}
@@ -243,6 +244,7 @@ function EmptyCause(props: {
   onRunSources: (sourceIds: readonly string[]) => void
   onRefresh: () => void
   onWidenWindow: () => void
+  failedSourceIds: readonly string[]
   neverRanSourceIds: readonly string[]
   timeText: string
 }): React.ReactElement {
@@ -267,7 +269,9 @@ function EmptyCause(props: {
     case 'collection-failed':
       return wrap(
         <StateView
-          action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
+          // "Try again" here has to collect again: a plain re-read of the store would show the same
+          // empty window, so the button would name an action it cannot perform.
+          action={{ labelKey: 'ui.state.action.retry', onSelect: () => props.onRunSources(props.failedSourceIds) }}
           productReason={{ key: 'mi.newsSentiment.collection-failed', resolve: (key, params) => props.resolve(key, params) }}
           reasonCode="unreadable"
           resolveText={resolveStateText}

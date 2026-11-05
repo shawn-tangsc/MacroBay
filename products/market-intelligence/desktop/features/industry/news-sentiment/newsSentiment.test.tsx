@@ -38,7 +38,7 @@ const VIEW: NewsSentimentView = {
       sourceName: 'Binance Announcements', publishedAt: '2026-10-24T11:00:00.000Z',
       scoredAt: '2026-10-24T11:05:00.000Z', polarity: 'bearish', strength: 4, confidence: 75,
       symbols: [], reasonCode: 'news.delisting.v1', evidenceQuote: 'Delist XYZ', engine: 'rules',
-      ruleId: 'news.delisting.v1', caveats: []
+      caveats: []
     }
   ],
   caveats: []
@@ -53,7 +53,7 @@ const SETTINGS: NewsSentimentSettingsView = {
 function client(overrides: Partial<NewsSentimentClient> = {}): NewsSentimentClient {
   return {
     query: vi.fn(async () => VIEW),
-    getItem: vi.fn(async () => ({ ...VIEW.items[0]!, bodyExcerpt: 'The SEC approved options.' })),
+    getItem: vi.fn(async (input: { asOf: string }) => ({ ...VIEW.items[0]!, bodyExcerpt: 'The SEC approved options.', asOf: input.asOf })),
     getSettings: vi.fn(async () => SETTINGS),
     saveSettings: vi.fn(async () => SETTINGS),
     rescore: vi.fn(async () => ({ queued: true })),
@@ -243,6 +243,25 @@ describe('card empty states', () => {
     window: '1h', items: [], caveats: [], ...overrides
   })
 
+  // "Try again" on a failed collection has to collect again. A plain re-read of the same store
+  // shows the same empty window, so the button would name an action it cannot perform.
+  it('collects the failed sources again instead of only re-reading them', async () => {
+    const failedIds = ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']
+    const onRunSources = vi.fn()
+    const onRefresh = vi.fn()
+    const container = await mountCard(
+      emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: failedIds }) }),
+      { onRefresh, onRunSources }
+    )
+
+    const button = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="collection-failed"] button')
+    expect(button).not.toBeNull()
+    await act(async () => { button?.click() })
+
+    expect(onRunSources).toHaveBeenCalledWith(failedIds)
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
   it('tells the five no-rows situations apart, each with its own next step', async () => {
     const onEnableSources = vi.fn()
     const onRunSources = vi.fn()
@@ -251,7 +270,7 @@ describe('card empty states', () => {
     const sentences = productText['zh-CN'].mi.newsSentiment
 
     const disabled = await mountCard(emptyView({ readiness: readiness({ enabledCount: 0 }) }), { onEnableSources })
-    const failed = await mountCard(emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }), { onRefresh })
+    const failed = await mountCard(emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }), { onRunSources, onRefresh })
     const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRunSources })
     const stale = await mountCard(emptyView({ readiness: readiness(), latestKnownItemAt: '2026-10-24T09:00:00.000Z' }), { onWidenWindow })
     const quiet = await mountCard(emptyView({ readiness: readiness() }))
@@ -289,11 +308,13 @@ describe('card empty states', () => {
     await press(failed)
     await press(neverRan)
     await press(stale)
-    // Each action really does its own thing: open the settings drawer, re-read, run the missing
-    // sources, widen the window. None of them is aliased to another.
+    // Each action really does its own thing: open the settings, run the failed sources, run the
+    // missing ones, widen the window. None of them is aliased to another, and none is a plain
+    // re-read standing in for an action it cannot perform.
     expect(onEnableSources).toHaveBeenCalledTimes(1)
-    expect(onRefresh).toHaveBeenCalledTimes(1)
-    expect(onRunSources).toHaveBeenCalledWith(['sec-rss'])
+    expect(onRefresh).not.toHaveBeenCalled()
+    expect(onRunSources).toHaveBeenNthCalledWith(1, ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'])
+    expect(onRunSources).toHaveBeenNthCalledWith(2, ['sec-rss'])
     expect(onWidenWindow).toHaveBeenCalledTimes(1)
   })
 
@@ -332,9 +353,9 @@ describe('NewsSentimentFeature', () => {
   // The platform drawer keeps its content mounted between opens. Without a reset on close, opening
   // it again shows the article the reader read last time under a different row's heading.
   it('does not keep the last article after the drawer is closed and reopened', async () => {
-    const getItem = vi.fn(async (input: { itemId: string }) => {
+    const getItem = vi.fn(async (input: { itemId: string; asOf: string }) => {
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
-      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+      return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
@@ -419,9 +440,9 @@ describe('NewsSentimentFeature', () => {
   })
 
   it('switches the detail when another row is clicked', async () => {
-    const getItem = vi.fn(async (input: { itemId: string }) => {
+    const getItem = vi.fn(async (input: { itemId: string; asOf: string }) => {
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
-      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+      return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
@@ -436,9 +457,9 @@ describe('NewsSentimentFeature', () => {
 
 
   it('does not snap back to the card focus target after a row click', async () => {
-    const getItem = vi.fn(async (input: { itemId: string }) => {
+    const getItem = vi.fn(async (input: { itemId: string; asOf: string }) => {
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
-      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+      return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const cardItems = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__drivers button')]
@@ -454,10 +475,10 @@ describe('NewsSentimentFeature', () => {
   it('does not show the previous article body when the next detail read fails', async () => {
     // The detail panel kept the last successful read while the new one was in flight and after it
     // failed, so row B's heading sat above row A's body text.
-    const getItem = vi.fn(async (input: { itemId: string }) => {
+    const getItem = vi.fn(async (input: { itemId: string; asOf: string }) => {
       if (input.itemId === 'item-b') throw new Error('detail read failed')
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
-      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+      return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}` }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
@@ -481,13 +502,13 @@ describe('NewsSentimentFeature', () => {
     const options = [...(group?.querySelectorAll('button[aria-pressed]') ?? [])]
     expect(options).toHaveLength(2)
     expect(options.filter((option) => option.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-    expect(options.filter((option) => option.tabIndex === 0)).toHaveLength(1)
+    expect(options.filter((option) => (option as HTMLButtonElement).tabIndex === 0)).toHaveLength(1)
   })
 
   it('keeps the original/translated toggle on the shared segmented base', async () => {
-    const getItem = vi.fn(async (input: { itemId: string }) => {
+    const getItem = vi.fn(async (input: { itemId: string; asOf: string }) => {
       const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
-      return { ...item, bodyExcerpt: `body:${item.itemId}`, translatedBodyExcerpt: '译文正文' }
+      return { ...item, asOf: input.asOf, bodyExcerpt: `body:${item.itemId}`, translatedBodyExcerpt: '译文正文' }
     })
     const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
@@ -498,7 +519,7 @@ describe('NewsSentimentFeature', () => {
     const options = [...(toggle?.querySelectorAll('button[aria-pressed]') ?? [])]
     expect(options).toHaveLength(2)
     expect(options.filter((option) => option.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
-    expect(options.filter((option) => option.tabIndex === 0)).toHaveLength(1)
+    expect(options.filter((option) => (option as HTMLButtonElement).tabIndex === 0)).toHaveLength(1)
   })
 
   it('re-reads when the reader retries a failed read', async () => {
@@ -645,7 +666,8 @@ describe('NewsSentimentFeature', () => {
     // item and looked like a control that did nothing, so the card no longer shows it.
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} text={text} view={VIEW} />
+        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text} view={VIEW} />
     )
     expect(container.textContent).not.toContain(text.engine.rules)
     expect(container.querySelector('.mi-news-sentiment__footer')).toBeNull()
@@ -653,7 +675,8 @@ describe('NewsSentimentFeature', () => {
     // The caveat is still worth a line, and it is the only thing the footer carries now.
     const withCaveat = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
+        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text}
         view={{ ...VIEW, caveats: ['news-body-limited'] }} />
     )
     expect(withCaveat.querySelector('.mi-news-sentiment__footer')?.textContent).toBe(text.bodyLimited)
@@ -668,6 +691,7 @@ describe('NewsSentimentFeature', () => {
     const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, polarity: 'neutral' as const }] }
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onEnableSources={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={neutralOnly} includeNeutral={false} onIncludeNeutralChange={onIncludeNeutralChange} />
     )
@@ -737,6 +761,7 @@ describe('NewsSentimentFeature', () => {
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{
           ...VIEW, state: 'empty', summary: undefined, items: [],
@@ -753,6 +778,7 @@ describe('NewsSentimentFeature', () => {
     // the card cannot support — the same mistake as writing 0% for an empty denominator.
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined} onWidenWindow={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
     )
