@@ -9,6 +9,7 @@ import type { AgentEvidenceRef, AnalysisConclusionDirection, AnalysisSummary, Pr
 import type { BriefingPriorConclusion, DailyBriefingPeriodKind, DailyBriefingRunTrigger } from '../../../contracts/dailyBriefing'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
+import type { BriefingCalendarFreshnessReading } from './dailyBriefingCalendarCatchUp'
 
 /**
  * The frozen inputs of one edition, before selection and rendering.
@@ -82,6 +83,13 @@ export type DailyBriefingFactPacket = Readonly<{
     state: DailyBriefingCalendarState
     events: readonly DailyBriefingCalendarEvent[]
   }>
+  /**
+   * How old the calendar was when this run judged it, plus the catch-up it ran first (`A0.8`).
+   *
+   * Read once, before the month query, so the empty section's reason comes from the same reading the
+   * run used. Absent on older callers and fixtures: then the section may only say "not readable".
+   */
+  calendarFreshness?: BriefingCalendarFreshnessReading
   readings: Readonly<{
     fearGreed: FearGreedSnapshotResult
     funding: FundingRateHistoryResult

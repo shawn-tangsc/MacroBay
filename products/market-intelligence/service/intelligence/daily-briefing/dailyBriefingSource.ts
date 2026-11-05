@@ -16,6 +16,7 @@ import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
 import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
+import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
 import {
   collectAnalysisPriorConclusions,
   collectBriefingPriorConclusions,
@@ -73,6 +74,20 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       // The reader's statistical window decides the fact interval; every window-scoped read below
       // uses it instead of assuming 24 hours.
       const windowStart = new Date(Date.parse(input.asOf) - windowHours * HOUR_MS).toISOString()
+      // The calendar's catch-up runs here, before any calendar month is read: the section's reason
+      // must come from the reading this run judged, not from a second one taken later.
+      const calendarFreshness = await ensureCalendarFreshForRun({
+        dataAsOf: input.asOf,
+        enabled: enabled.calendar,
+        // Both ports stay optional at the type level: an unwired build lands on "not readable"
+        // instead of crashing, and that is a different branch from a port that fails when called.
+        ...(deps.publicQuery.queryMarketCalendarFreshness
+          ? { readFreshness: () => deps.publicQuery.queryMarketCalendarFreshness() }
+          : {}),
+        ...(deps.calendarCommands?.refreshNow
+          ? { refreshNow: deps.calendarCommands.refreshNow }
+          : {})
+      })
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       // One timeline read feeds both the fact-layer conclusion and the window's prior conclusions:
       // two reads could disagree about which nodes are visible at the cutoff.
@@ -107,6 +122,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
           ...(macroMarket ? { macroMarket } : {}),
           ...(macroRates ? { macroRates } : {})
         }),
+        calendarFreshness,
         enabled: Object.freeze({
           fearGreed: enabled.fearGreed,
           funding: enabled.funding,

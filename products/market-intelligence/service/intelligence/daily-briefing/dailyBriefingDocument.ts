@@ -16,6 +16,7 @@ import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
+import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
@@ -74,7 +75,14 @@ export function buildDailyBriefingDocument(input: Readonly<{
       ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
-        ...(macro.length > 0 ? {} : { macroEmpty: macroEmptyCode(packet) })
+        ...(macro.length > 0 ? {} : {
+          macroEmpty: macroEmptyCode(packet),
+          // The stale sentence names the age; nothing else can fill it truthfully, and the number
+          // rides beside the code rather than inside it so the copy stays in the text table.
+          ...(macroEmptyCode(packet) === 'calendar-stale' && macroEmptyHours(packet) !== undefined
+            ? { macroEmptyHours: macroEmptyHours(packet)! }
+            : {})
+        })
       })
     }),
     data: Object.freeze({
@@ -526,10 +534,46 @@ function newsEmptyCode(packet: DailyBriefingFactPacket): string {
   return 'no-directional-news'
 }
 
+/**
+ * Why the macro section is empty, in the six reason codes of `A0.8` — plus the catch-up timeout.
+ *
+ * The one rule this function exists to enforce: **only a fresh reading of an empty window may say
+ * "there was nothing"**. Everything else — switched off, unreadable, never collected, stale, the last
+ * collection failed, the catch-up ran out of time, or a packet that carries no freshness reading at
+ * all — says "not readable" with its own reason. Folding any of those into "nothing" is the exact
+ * defect the reader reported on 2026-11-05.
+ *
+ * The baseline is the packet's own `asOf`, which *is* `dataAsOf` (`A0.10`): on a backfill the two
+ * differ, and measuring against the period's nominal cutoff would make the section show events while
+ * claiming it could not read them.
+ */
 function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
-  if (packet.calendar.state === 'unavailable') return 'calendar-unavailable'
-  return 'past-24h-no-high-impact-release'
+  const freshness = packet.calendarFreshness
+  // No reading at all (an older caller or a fixture): the section must not claim "nothing happened".
+  if (!freshness) return 'calendar-unavailable'
+  // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
+  if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
+  // A catch-up that failed is a collection failure, which is also not "nothing".
+  if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
+  return briefingMacroEmptyReason({
+    state: packet.calendar.state === 'unavailable' ? 'unavailable'
+      : freshness.state === 'source-disabled' ? 'source-disabled'
+        : freshness.state === 'not-wired' || freshness.state === 'unavailable' ? 'unavailable'
+          : 'available',
+    ...(freshness.lastCollectedAt ? { lastCollectedAt: freshness.lastCollectedAt } : {}),
+    ...(freshness.lastAttemptAt ? { lastAttemptAt: freshness.lastAttemptAt } : {}),
+    ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
+    dataAsOf: packet.asOf
+  })
+}
+
+/** How many hours the calendar was behind this edition's own data cutoff, for the stale sentence. */
+function macroEmptyHours(packet: DailyBriefingFactPacket): number | undefined {
+  const last = packet.calendarFreshness?.lastCollectedAt
+  if (!last) return undefined
+  const hours = (Date.parse(packet.asOf) - Date.parse(last)) / 3_600_000
+  return Number.isFinite(hours) && hours > 0 ? Math.round(hours) : undefined
 }
 
 function nextEmptyCode(packet: DailyBriefingFactPacket): string {

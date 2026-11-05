@@ -97,6 +97,34 @@ describe('daily briefing issues', () => {
     expect(issue.advice).toContain('下一次发布')
   })
 
+  // `A0.8`：过期的那一档必须在问题清单里说出来，连「几小时没更新」一起说；
+  // 「确实没有」那一档则一条问题都不报——它本来就不是问题。
+  it('names each "not readable" reason for the calendar, and stays silent for "nothing happened"', () => {
+    const stale = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 } } }),
+      text: zhText,
+      formatTime
+    })
+    const staleIssue = stale.find((entry) => entry.id === 'data:calendar:calendar-stale')!
+    expect(staleIssue.severity).toBe('warning')
+    expect(staleIssue.title).toContain('42')
+    expect(staleIssue.title).not.toContain('没有已发布的高影响事件')
+
+    const timeout = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-catch-up-timeout' } } }),
+      text: zhText,
+      formatTime
+    })
+    expect(timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title).toContain('90')
+
+    const nothing = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } } }),
+      text: zhText,
+      formatTime
+    })
+    expect(nothing.some((entry) => entry.id.startsWith('data:calendar'))).toBe(false)
+  })
+
   it('explains the fear-and-greed baseline and how long ago it was last published', () => {
     const fearGreed = pulse({
       id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed',

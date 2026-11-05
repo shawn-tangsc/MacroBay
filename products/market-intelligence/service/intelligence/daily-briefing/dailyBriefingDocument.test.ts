@@ -636,6 +636,51 @@ describe('daily briefing document', () => {
     expect(document.data.sentiment.news).toMatchObject({ state: 'empty', itemCount: 0 })
   })
 
+  // `A0.8` 的核心判据：日历过期时写「读不到」，不许写「没有」。夹具照 11-05 那期的真实形状：
+  // 截止 07:00，最后一次成功采集在前天 13:27（差约 42 小时）。
+  it('says "not readable" — never "nothing" — when the calendar is stale', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T00:30:00.000Z',
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-28T06:27:00.000Z', catchUp: { state: 'timeout', timeoutMs: 90_000 } }
+      }),
+      date: '2026-10-30'
+    })
+    // 补采超时有自己的一句，不是「采集失败」、更不是「没有」。
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-timeout')
+
+    const stale = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-28T06:27:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+    expect(stale.news.notes.macroEmpty).toBe('calendar-stale')
+    expect(stale.news.notes.macroEmptyHours).toBe(42)
+    expect(stale.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
+
+    // 没有读数（旧调用方 / 夹具）：也只能说「读不到」。
+    const unread = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [] } }), date: '2026-10-30'
+    })
+    expect(unread.news.notes.macroEmpty).toBe('calendar-unavailable')
+  })
+
+  it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    expect(document.news.notes.macroEmptyHours).toBeUndefined()
+  })
+
   it('does not let stale or unavailable readings look available', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { BriefingCalendarFreshnessReading } from './dailyBriefingCalendarCatchUp'
 
 /**
  * The facts of one generation, before any language-specific text is attached.
@@ -32,6 +33,12 @@ export type DailyBriefingFactSnapshot = Readonly<{
   policyPath?: NonNullable<DailyBriefingFactPacket['policyPath']>
   market: DailyBriefingFactPacket['market']
   enabled: DailyBriefingFactPacket['enabled']
+  /**
+   * The calendar reading this run judged freshness from (`A0.8`). Not part of the digest: two
+   * editions of one period read the same facts, and the digest is about those facts, not about how
+   * old the calendar happened to be when either ran.
+   */
+  calendarFreshness?: BriefingCalendarFreshnessReading
 }>
 
 export type DailyBriefingSnapshot = Readonly<{ id: string; hash: string }>
@@ -54,7 +61,8 @@ export function factSnapshotFromPacket(packet: DailyBriefingFactPacket): DailyBr
     ...(packet.positioning ? { positioning: packet.positioning } : {}),
     ...(packet.policyPath ? { policyPath: packet.policyPath } : {}),
     market: packet.market,
-    enabled: packet.enabled
+    enabled: packet.enabled,
+    ...(packet.calendarFreshness ? { calendarFreshness: packet.calendarFreshness } : {})
   })
 }
 

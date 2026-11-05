@@ -213,7 +213,14 @@ export type DailyBriefingDocument = Readonly<{
     items: readonly BriefingNewsItem[]
     macro: readonly BriefingMacroItem[]
     macroCandidates?: readonly BriefingMacroItem[]
-    notes: Readonly<{ newsEmpty?: string; macroEmpty?: string }>
+    /**
+     * Why a section is empty, as a code the copy table resolves — never a sentence.
+     *
+     * `macroEmptyHours` travels beside `macroEmpty` because the stale sentence names how old the
+     * calendar was (`A0.8`): the code alone says "stale", the number says how stale, and the number
+     * can only come from the reading this edition judged.
+     */
+    notes: Readonly<{ newsEmpty?: string; macroEmpty?: string; macroEmptyHours?: number }>
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]

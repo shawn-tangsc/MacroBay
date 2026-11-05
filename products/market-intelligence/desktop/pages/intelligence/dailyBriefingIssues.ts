@@ -259,8 +259,20 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   const notes = [document.news.notes.macroEmpty, document.next.note]
   if (notes.includes('calendar-source-disabled')) {
     add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', template: 'calendar-disabled', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
-  } else if (notes.includes('calendar-unavailable')) {
-    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
+  } else {
+    // 读不到：每一档都有自己的句子，而且**只有**「确实没有」那一档不报问题。
+    // 这一栏以前把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉——读者只看到「没有」。
+    const macroEmpty = document.news.notes.macroEmpty
+    if (macroEmpty && macroEmpty !== 'past-24h-no-high-impact-release') {
+      const hours = document.news.notes.macroEmptyHours
+      // 文案表按字面键写死（不知道未来会出现哪个码），所以这里放宽成字符串索引再取。
+      const copyTable: Readonly<Record<string, string>> = text.macroEmptyCodes
+      const title = fill(
+        copyTable[macroEmpty] ?? text.limits.calendarUnavailable,
+        hours === undefined ? {} : { hours: String(hours) }
+      )
+      add({ id: `data:calendar:${macroEmpty}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title, advice: text.limits.advice.checkCalendar })
+    }
   }
 }
 
