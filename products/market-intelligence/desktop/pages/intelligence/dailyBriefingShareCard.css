@@ -177,7 +177,19 @@
    It sits beside the macro rows rather than inside their two-column grid, so it already spans the full
    width; the `grid-column` is stated anyway because the requirement is written that way, and it costs
    nothing when the parent is not a grid. */
-.mi-brief-poster__macro-empty { grid-column: 1 / -1; margin: 0; padding: 9px 0; border-top: 1px solid #c9bda3; color: #625f55; font-size: 12px; line-height: 1.5; }
+/* What the section says when it has nothing to list: it was read, and here is why it is empty — or that
+   there genuinely was nothing. Two boxes, split by what each one owns.
+   The row is the grid container's direct child and carries the spacing; it never draws its top line,
+   because it only exists when there are no event rows at all, so it is by definition the first thing
+   under the heading. Stated as a class rather than `:first-of-type`: the section's first div is not
+   necessarily this one, and a positional guess here would draw a line or drop one on the wrong row.
+   The cell inside spans both columns — a line confined to the 112px date column would read as a
+   missing date rather than as a section with nothing in it — and holds the text in the section's
+   secondary ink, the same tier as an event's annotation. No warning colour, no icon, no background,
+   no left rule: "not read" is not "failed", and both empty cases look alike because to the reader they
+   are the same answer to the same question. */
+.mi-brief-poster__macro-row-empty { padding: 9px 0; border-top: 0; }
+.mi-brief-poster__macro-empty { grid-column: 1 / -1; margin: 0; color: #625f55; font-size: 12px; line-height: 1.5; }
 
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 

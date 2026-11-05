@@ -22,15 +22,24 @@ const css = readFileSync(join(__dirname, 'dailyBriefingShareCard.css'), 'utf8')
  * no retry. It keeps a macro row's rhythm so the block does not collapse under its own heading.
  */
 describe('the macro section says why it is empty', () => {
-  it('takes a row\'s rhythm in the section\'s secondary ink', () => {
+  it('keeps the spacing on the row and never draws its top line', () => {
+    // The row is the grid's direct child, and it exists only when there are no event rows — so it is
+    // always the first thing under the heading and must not open with a divider.
+    const row = rule('.mi-brief-poster__macro-row-empty')
+    expect(declaration(row, 'padding')).toBe('9px 0')
+    expect(declaration(row, 'border-top')).toBe('0')
+  })
+
+  it('spans both columns in the section\'s secondary ink', () => {
     const empty = rule('.mi-brief-poster__macro-empty')
-    expect(declaration(empty, 'padding')).toBe('9px 0')
-    expect(declaration(empty, 'border-top')).toBe('1px solid #c9bda3')
+    // A line confined to the 112px date column reads as a missing date, not as an empty section.
+    expect(declaration(empty, 'grid-column')).toBe('1 / -1')
     expect(declaration(empty, 'color')).toBe('#625f55')
     expect(declaration(empty, 'font-size')).toBe('12px')
     expect(declaration(empty, 'line-height')).toBe('1.5')
-    // Spans the block rather than the 112px date column: a line confined there reads as a missing date.
-    expect(declaration(empty, 'grid-column')).toBe('1 / -1')
+    // The row owns the spacing: carrying it here too would double the gap.
+    expect(declaration(empty, 'padding')).toBeUndefined()
+    expect(declaration(empty, 'border-top')).toBeUndefined()
   })
 
   it('does not look like a failure', () => {
