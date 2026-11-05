@@ -251,9 +251,6 @@ export function DailyBriefingHistoryRail({
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
                   {/* 这一格永远有且只有一个：定时 / 手动 / 补跑 / 未运行 / 这次失败。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={kind}>{sourceLabelOf(kind, text)}</span>
-                  {/* 所属期已被删：这一版还在，但排期没了。标记**紧跟在来源徽标后**（`02` v2.76），
-                      行内的时刻与窗口仍是这一版生成时的快照，不改成当前配置值。 */}
-                  {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span> : null}
                   {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
                   {/* 语言标签贴行右端：它与来源徽标之间不再有 `·`——两者天各一方，中间那段弹性留白
                       就是右对齐本身（`02` v2.43）。 */}
@@ -267,10 +264,15 @@ export function DailyBriefingHistoryRail({
                     <LoadingSpinner size="sm" /><span>{text.generationProgress.railRunning}</span>
                   </span>
                   : missing
-                    ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">{reasonOf(edition, text)}</span>
+                    ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">
+                      {/* 所属期已删且这一版没有正文：第二行只有这枚标记（`02` v2.77），仍然非空。 */}
+                      {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span> : reasonOf(edition, text)}
+                    </span>
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
-                      {/* 第二行永远有字：标题缺了就明说"这一版没有摘要"，空着会被读成"还在加载"
-                          或"这一版没内容"。已删除的期在标题前加一句，但它自己不能变成空白。 */}
+                      {/* 「该期已删除」是**第二行开头的 chip**（`02` v2.77）：第一行放不下（中文最坏 250/252、
+                          英文约 376，行是 nowrap+hidden，先被裁的就是它），第二行单行省略时裁的是标题尾巴，
+                      标记永远可见。不加 `·`（行内 `·` 命中 0）。 */}
+                      {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span> : null}
                       {title
                         // 没有摘要时先给**方向词**（读者真正想知道的是这一版怎么判断），连方向都没有
                         // 才给一句操作提示。列表上不写"没有"——那是在陈述缺失，不是在说值不值得点开。

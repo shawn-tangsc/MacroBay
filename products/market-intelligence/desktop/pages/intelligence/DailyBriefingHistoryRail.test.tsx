@@ -334,12 +334,14 @@ describe('the second line is never blank', () => {
     }
   })
 
-  it('marks a deleted period beside the source badge, not inside the title line', () => {
-    // `02` v2.76：所属期已删 → 标「该期已删除」，**紧跟在来源徽标后**；第二行只讲这一版讲什么。
-    render({ editions: [edition({ periodDeleted: true, summaryLine: undefined })] })
-    const tag = host.querySelector('[data-period-deleted-tag="true"]')
+  it('puts a deleted period chip at the head of the second line', () => {
+    // `02` v2.77：第一行放不下（中文最坏 250/252、英文约 376，行是 nowrap+hidden，先被裁的就是它），
+    // 所以标记挪到**第二行开头**：单行省略时裁的是标题尾巴，标记永远可见。
+    render({ editions: [edition({ periodDeleted: true, summaryLine: '删掉排期之后仍然能读的正文' })] })
+    const tag = host.querySelector('[data-rail-title="summary"] [data-period-deleted-tag="true"]')
     expect(tag?.textContent).toBe(text.history.deletedPeriod)
-    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).not.toContain(text.history.deletedPeriod)
+    // 第一行不出现这五个字。
+    expect(host.querySelector('.mi-daily-briefing__rail-line')?.textContent).not.toContain(text.history.deletedPeriod)
   })
 })
 
@@ -367,10 +369,11 @@ describe('a row is two lines: the facts, then what it says', () => {
     const title = host.querySelector('[data-rail-title="summary"]')
     expect(title?.textContent).toContain('一条足够长的标题')
     expect(title?.getAttribute('title')).toContain('一条足够长的标题')
-    // 已删除的期：标记在第一行（来源徽标后），第二行仍是这一版的标题，两者不混。
+    // 已删除的期：标记是第二行开头的 chip，后面接这一版的标题，两者不混。
     render({ editions: [edition({ periodDeleted: true, summaryLine: '删掉排期之后仍然能读的正文' })] })
-    expect(host.querySelector('[data-period-deleted-tag="true"]')?.textContent).toBe(text.history.deletedPeriod)
-    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).toBe('删掉排期之后仍然能读的正文')
+    const deletedLine = host.querySelector('[data-rail-title="summary"]')!
+    expect(deletedLine.querySelector('[data-period-deleted-tag="true"]')?.textContent).toBe(text.history.deletedPeriod)
+    expect(deletedLine.textContent).toContain('删掉排期之后仍然能读的正文')
   })
 
   it('runs the period again from the failed row, without opening it first', () => {
