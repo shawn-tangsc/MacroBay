@@ -90,6 +90,11 @@ export type DailyBriefingFactPacket = Readonly<{
    * run used. Absent on older callers and fixtures: then the section may only say "not readable".
    */
   calendarFreshness?: BriefingCalendarFreshnessReading
+  /**
+   * 两级取值的计数（`A0.12`）：第一级回查了几条事件、第二级真的发了几次搜索。
+   * 留在 fact 层供用例与排查读，不进文档、不呈现给读者。
+   */
+  macroValueCounts?: Readonly<{ calendarCalls: number; webCalls: number }>
   readings: Readonly<{
     fearGreed: FearGreedSnapshotResult
     funding: FundingRateHistoryResult

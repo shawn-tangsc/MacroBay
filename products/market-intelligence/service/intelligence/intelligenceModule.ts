@@ -67,7 +67,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
-import type { WebSearchProductHooks } from './webSearchProductHooks'
+import { macroWebReadFromHooks, type WebSearchProductHooks } from './webSearchProductHooks'
 import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
@@ -936,12 +936,12 @@ export function getIntelligenceModule(
         repository: marketAnalysisRuntime.repository,
         publicQuery: publicQueryService,
         policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
-        // Read-only history: the morning brief synthesizes the window's earlier brief conclusions
-        // together with the analysis conclusions instead of copying one of them.
+        // 只读取历史版次：早报把窗口内更早的简报结论与分析结论一起综合，不复制其中任何一份。
         briefEditions: dailyBriefingStore,
         news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
         profiles: profileStore,
-        calendarCommands: briefingCalendar.commands
+        calendarCommands: briefingCalendar.commands,
+        macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),
       store: dailyBriefingStore,
       ...briefingNotificationPorts(hooks),

@@ -18,6 +18,8 @@ import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSna
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
 import { lookupMissingMacroValues, mergeMacroValues } from './dailyBriefingMacroValueLookup'
 import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
+import { backfillMacroValues } from './dailyBriefingMacroBackfill'
+import type { BriefingMacroWebRead } from './dailyBriefingMacroWebSource'
 import {
   collectAnalysisPriorConclusions,
   collectBriefingPriorConclusions,
@@ -58,6 +60,11 @@ export type DailyBriefingSourceDeps = Readonly<{
    * packet; the window then carries analysis conclusions only.
    */
   briefEditions?: Pick<DailyBriefingStore, 'list'>
+  /**
+   * 第二级取值：联网。由组装层注入（开关、授权、供应商就绪与平台搜索都在那里合成），
+   * 没注入 = 开关关掉/未授权——这时一次搜索都不发，事件照显示、值格不渲染。
+   */
+  macroWebRead?: BriefingMacroWebRead
 }>
 
 /**
@@ -163,12 +170,15 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readPriorConclusions(deps, facts.timeline, facts.asOf, facts.windowStart, locale),
         readCalendar(deps, facts.asOf, locale, facts.enabled.calendar)
       ])
+      const refreshed = await refreshMissingMacroValues(deps, facts, locale, calendar)
+      const counts = refreshed.counts
       return Object.freeze({
         ...facts,
         locale,
         timeZone,
         priorConclusions,
-        calendar: await refreshMissingMacroValues(deps, facts, locale, calendar)
+        calendar: refreshed.calendar,
+        ...(counts === undefined ? {} : { macroValueCounts: counts })
       })
     }
   }
@@ -185,28 +195,38 @@ async function refreshMissingMacroValues(
   facts: DailyBriefingFactSnapshot,
   locale: DailyBriefingLocale,
   calendar: DailyBriefingFactPacket['calendar']
-): Promise<DailyBriefingFactPacket['calendar']> {
-  if (calendar.state !== 'available' || calendar.events.length === 0) return calendar
+): Promise<Readonly<{ calendar: DailyBriefingFactPacket['calendar']; counts?: Readonly<{ calendarCalls: number; webCalls: number }> }>> {
+  if (calendar.state !== 'available' || calendar.events.length === 0) return { calendar }
   const start = Date.parse(facts.windowStart)
   const end = Date.parse(facts.windowEnd)
   const inWindow = calendar.events.filter((event) => {
     const at = Date.parse(event.scheduledAt)
     return Number.isFinite(at) && at >= start && at < end
   })
-  if (inWindow.length === 0) return calendar
-  const lookup = await lookupMissingMacroValues({
-    events: inWindow.map((event) => ({
-      eventKey: event.eventKey,
-      importance: event.importance,
-      scheduledAt: event.scheduledAt,
-      ...(event.actual === undefined ? {} : { actual: event.actual }),
-      lifecycleState: event.lifecycleState
-    })),
+  if (inWindow.length === 0) return { calendar }
+  const candidates = inWindow.map((event) => ({
+    eventKey: event.eventKey,
+    importance: event.importance,
+    scheduledAt: event.scheduledAt,
+    ...(event.actual === undefined ? {} : { actual: event.actual }),
+    ...(event.lifecycleState === undefined ? {} : { lifecycleState: event.lifecycleState })
+  }))
+  // 两级（`02` v2.127）：先回查日历源；**它答上的事件绝不再联网**；仍未拿到的才走第二级。
+  const backfill = await backfillMacroValues({
+    events: candidates,
     cutoff: facts.windowEnd,
-    read: () => readCalendar(deps, facts.asOf, locale, facts.enabled.calendar).then((section) => section.events)
+    readCalendar: () => readCalendar(deps, facts.asOf, locale, facts.enabled.calendar).then((section) => section.events),
+    ...(deps.macroWebRead === undefined ? {} : { readWeb: deps.macroWebRead })
   })
-  if (lookup.values.length === 0) return calendar
-  return Object.freeze({ ...calendar, events: mergeMacroValues(calendar.events, lookup.values) })
+  const counts = Object.freeze({ calendarCalls: backfill.calendarCalls, webCalls: backfill.webCalls })
+  if (backfill.resolved.length === 0) return { calendar, counts }
+  return {
+    calendar: Object.freeze({
+      ...calendar,
+      events: mergeMacroValues(calendar.events, backfill.resolved.map((entry) => ({ eventKey: entry.eventKey, actual: entry.actual })))
+    }),
+    counts
+  }
 }
 
 export async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string, windowEnd: string = asOf): Promise<DailyBriefingFactPacket['news']> {

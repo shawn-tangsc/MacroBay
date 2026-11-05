@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
@@ -272,6 +272,51 @@ describe('daily briefing source', () => {
     })
     const packet = await makeSource(base).buildPacket({ asOf: readAt, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(packet.news.items.map((item) => item.itemId)).toEqual(['in-window'])
+  })
+
+  it('sends no web search when the second level is not provided (switch off)', async () => {
+    // 开关关掉时组装层不给 reader：编排层数到的联网次数必须是 0，而不是"看起来会调"。
+    const packet = await makeSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(packet.macroValueCounts?.webCalls).toBe(0)
+  })
+
+  it('never searches for an event the calendar re-read answered', async () => {
+    const base = deps()
+    // 第二次读日历源时才带回实际值：第一级答上，第二级一次都不该发。
+    let reads = 0
+    ;(base.publicQuery as unknown as { queryMarketCalendarMonth: (input: unknown) => unknown }).queryMarketCalendarMonth = () => {
+      reads += 1
+      return {
+        state: 'available', month: asOf.slice(0, 7), locale: 'zh', asOf, sources: [],
+        events: [reads >= 4
+          ? { ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z', providerActual: { displayValue: '4.00%' } }
+          : { ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z' }]
+      }
+    }
+    const web = vi.fn(async () => ({ values: [], conflicts: [], calls: 1 }))
+    const packet = await makeSource({ ...base, macroWebRead: web })
+      .buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(packet.macroValueCounts?.calendarCalls).toBeGreaterThan(0)
+    expect(web).not.toHaveBeenCalled()
+    expect(packet.macroValueCounts?.webCalls).toBe(0)
+  })
+
+  it('falls to the web level only when the re-read could not answer', async () => {
+    const base = deps()
+    ;(base.publicQuery as unknown as { queryMarketCalendarMonth: (input: unknown) => unknown }).queryMarketCalendarMonth = () => ({
+      state: 'available', month: asOf.slice(0, 7), locale: 'zh', asOf, sources: [],
+      events: [{ ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z' }]
+    })
+    const web = vi.fn(async (events: readonly { eventKey: string }[]) => ({
+      values: events.map((event) => ({ eventKey: event.eventKey, actual: '4.00%', sourceUrl: 'https://example.gov/x', capturedAt: asOf, excerpt: 'actual 4.00%', kind: 'official' as const })),
+      conflicts: [],
+      calls: events.length
+    }))
+    const packet = await makeSource({ ...base, macroWebRead: web })
+      .buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(web).toHaveBeenCalledTimes(1)
+    expect(packet.macroValueCounts?.webCalls).toBe(1)
+    expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('4.00%')
   })
 
   it('degrades each read to a stated gap instead of failing the packet', async () => {
