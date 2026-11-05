@@ -138,6 +138,8 @@ export type MarketCalendarRefreshAttemptStore = ReturnType<typeof createMarketCa
 /**
  * The calendar's age is the age of its *worst* enabled source.
  *
+ * 每个源各自取 `max(recorded_at)`（它自己最近一次成功）；跨源取这些值里最小的那个（最坏的那条）。
+ *
  * Per source the answer is its own latest success (`max`); across the enabled sources it is
  * the oldest of those (`min`). Doing it the other way round — or taking one global `max` —
  * lets a source that is still collecting hide the one that stopped, which is exactly the
