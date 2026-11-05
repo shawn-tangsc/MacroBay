@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Settings2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
@@ -103,6 +103,21 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   pushText: BriefingPushText
 }>): React.ReactElement {
   const confirm = useConfirm()
+  // 静止时这条栏零绘制（它就是正文的一部分）；只有滚到它上面去了才浮起来——否则透明的按钮条
+  // 会让正文从底下穿过去。判定用哨兵 + IntersectionObserver，不在 `scroll` 里算 offset。
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [stuck, setStuck] = useState(false)
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return undefined
+    const scroller = sentinel.closest('.mi-daily-briefing-page__content')
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0]
+      if (entry) setStuck(!entry.isIntersecting)
+    }, scroller === null ? {} : { root: scroller })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [])
   // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
   // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
   const blocked = !exportable
@@ -123,7 +138,10 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
     }}>
     {text.history.deleteEditionConfirm}
   </Button>
-  return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
+  return <>
+    {/* 哨兵：紧贴在栏上方、零高度。它离开滚动区顶部，就是栏已经吸住了。 */}
+    <div ref={sentinelRef} className="mi-daily-briefing-page__report-sentinel" aria-hidden="true" />
+    <div className="mi-daily-briefing-page__report-bar" data-action-group="edition" data-stuck={stuck ? 'true' : undefined}>
       {/* 第一颗是"这一版重跑一次"：它作用于当前打开的期号 + 语言，与页面顶部那颗"今天出不出"不是
           同一件事——两颗都在页面上，但管的是不同的东西。 */}
       <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition" disabled={blocked || generating}
@@ -147,5 +165,6 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用，
           原因写在整组下面一句（组件级的 `DisabledHint` 会把它同时挂进 `aria-describedby`）。 */}
       {deleteButton}
-  </div>
+    </div>
+  </>
 }
