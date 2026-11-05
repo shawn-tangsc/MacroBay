@@ -14,7 +14,6 @@ import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
-import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
@@ -126,7 +125,8 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
         : null}
       {/* Shown during a run too: the reader asked to read this language, and "this issue has no such
           version" is the answer to that, not a reason to replace the pane with the run's own screen. */}
-      {view.status === 'locale-missing' ? <DailyBriefingLocaleMissing locale={view.locale} currentPeriod={view.historical !== true && view.date === todayDate} historical={view.historical === true} text={text} onGenerate={onGenerate} /> : null}
+      {/* 缺当前语言也走同一个空态（`02` v2.94）：读者不需要分辨"整期没有"和"缺这个语言"。 */}
+    {view.status === 'locale-missing' ? <DailyBriefingNoEditionPanel view={{ status: 'no-edition', date: view.date ?? todayDate, failed: false }} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating} onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
       {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the

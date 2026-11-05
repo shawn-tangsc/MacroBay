@@ -40,9 +40,11 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
   const currentIssue = view.date === currentPeriodDate && scheduledTime !== undefined
   return <div className="mi-daily-briefing-page__no-edition" data-briefing-no-edition={view.date}
     {...(currentIssue ? { 'data-current-period': 'true' } : {})} role="status">
-    <h2>{currentIssue ? labels.currentPeriod : labels.notRunTitle}</h2>
+    {/* 用户拍板的空态：**一句话说清有没有、什么时候有、想现在看怎么走**。整期没有版次与
+        缺当前语言共用这一处（`02` v2.94/v2.95），卡片里不放按钮——动作入口在页面顶部。 */}
+    <h2>{currentIssue ? labels.emptyTitle : labels.notRunTitle}</h2>
     <p>{currentIssue
-      ? labels.currentPeriodNotRun.replace('{date}', view.date).replace('{time}', scheduledTime ?? '').replace('{zone}', formatShellTimeZoneLabel(timeZone))
+      ? labels.emptyBody.replace('{time}', scheduledTime ?? '').replace('{zone}', formatShellTimeZoneLabel(timeZone))
       : scheduledTime
         ? labels.notRunPlanned.replace('{time}', scheduledTime).replace('{zone}', formatShellTimeZoneLabel(timeZone))
         : labels.notRunUnknownPlanned}</p>

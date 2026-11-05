@@ -1833,7 +1833,7 @@ it('takes the current issue from the service, not from the wall clock', async ()
   await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
   const pane = dom.querySelector('[data-briefing-no-edition="2026-10-29"]')!
   expect(pane.getAttribute('data-current-period')).toBe('true')
-  expect(pane.textContent).toContain('本期（2026-10-29）')
+  expect(pane.textContent).toContain(text.history.emptyTitle)
   // Not the historical framing, and the action stays clickable.
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.disabled).toBe(false)
@@ -1954,10 +1954,13 @@ it('describes the current issue as the issue, never as today, when a language is
   }))
   for (let round = 0; round < 20; round += 1) await act(async () => { await Promise.resolve() })
 
-  const pane = dom.querySelector('[data-briefing-locale-missing="zh-CN"]')
-  expect(pane).not.toBeNull()
-  expect(pane?.textContent).toContain(text.languageTabs.missingCurrentPeriod.replace('{language}', text.languageTabs['zh-CN']))
-  expect(pane?.textContent).not.toContain('今天还没有')
+  // 缺当前语言与整期无版次共用**一个**空态（`02` v2.94/v2.96，用户拍板）：不再有单独那句
+  // 「本期还没有中文版」，也没有「生成中文版」那颗按钮（动作入口在页面顶部的手动生成）。
+  // 判的是"那句话和那颗按钮都不存在"——这正是用户这次的原话转成的断言；这一例的页面可能已经把
+  // 英文那版读上来了，所以不强制出现空态，但**不许**再出现旧的那句与旧的那颗按钮。
+  expect(dom.textContent).not.toContain(text.languageTabs.missingCurrentPeriod.replace('{language}', text.languageTabs['zh-CN']))
+  expect(dom.textContent).not.toContain('生成中文版')
+  expect(dom.textContent).not.toContain('今天还没有')
 })
 
 it('selects the current issue as soon as the page opens, with no button of its own', async () => {
