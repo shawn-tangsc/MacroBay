@@ -93,6 +93,8 @@ export const dailyBriefingText = {
     },
     manualRunDialog: {
       title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。', cutoffHintLabel: '解释：截止时刻', repeatHintLabel: '解释：重复生成', windowHint: '统计窗口决定这一版覆盖多长时间；12 小时看半天，48 小时看两天。', windowHintLabel: '解释：统计窗口', languageHint: '这一版用哪种语言写。一期可以同时有中文版和英文版，各自一行。', languageHintLabel: '解释：语言',
+      date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；过去的任意一天都可以补，未来不行。',
+      generateTarget: '将生成到 {date} {time}（{zone}）', generateTargetNow: '将生成到 {date}，截止时刻取你按下那一刻（{zone}）',
       windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
       repeatable: '同一组合可以重复生成：选同样的时刻、窗口和语言再点一次，会再生成新的一期。',
       cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一窗口、同一语言已经生成过一版。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
@@ -396,6 +398,8 @@ export const dailyBriefingText = {
     },
     manualRunDialog: {
       title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.', cutoffHintLabel: 'Explain: cutoff', repeatHintLabel: 'Explain: repeating a run', windowHint: 'The window decides how much time this edition covers: 12 hours is half a day, 48 hours is two days.', windowHintLabel: 'Explain: window', languageHint: 'Which language this edition is written in. One period can have both a Chinese and an English edition, each its own row.', languageHintLabel: 'Explain: language',
+      date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; any past day can be filled in, but not a future one.',
+      generateTarget: 'Will generate into {date} {time} ({zone})', generateTargetNow: 'Will generate into {date}, cut off at the moment you press ({zone})',
       windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
       repeatable: 'The same combination can be generated again: choose the same time, window and language and press again, and it creates another issue.',
       cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'The same cutoff, window and language were generated already. Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',

@@ -265,7 +265,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const runManual = useBriefingManualRun({
     timeZone,
     // 手动那一版走**唯一入口**：意图是 `manual`，期号/语言/截止由这一份 draft 给出。
-    regenerate: (input) => runBriefing({ ...input, trigger: 'manual' }),
+    regenerate: (input) => runBriefing({ ...input, trigger: 'manual', date: input.date }),
     running: generating,
     // A7.10 的查重键：同一 (日期, 截止时刻, 窗口, 语言) 已经有一版时，先问替换——再插一行就是两份
     // 说同一件事的版次。手动期才有这个键，排期期按它自己的期号走。
@@ -389,6 +389,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       regenerating={regenerating}
       todayReady={screenDocument !== undefined && readyKind(view) === 'today'}
       targetDate={todayDate}
+      timeZone={timeZone}
+      defaultDate={selected.date}
+      latestDate={wallClockToday}
       zoneInvalid={zoneInvalid !== null}
       systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}

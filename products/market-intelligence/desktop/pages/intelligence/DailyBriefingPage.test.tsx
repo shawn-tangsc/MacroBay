@@ -1871,6 +1871,29 @@ it('sends the moment and language the reader picked in the dialog, all the way t
   expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
 })
 
+it('writes into the day the reader is on, and says that day before the press', async () => {
+  // `02` v2.129 G1：截止时刻必须带日期。默认是读者当前在的那一天（不是系统今天），
+  // 确认区把那一天写出来——否则凌晨选 00:00 会被理解成"次日 00:00"，整版跑到第二天去。
+  // 「改日期后请求跟着变」在 `useBriefingManualRun` 的用例里钉（那里是日期→绝对时刻的唯一实现）。
+  const regenerate = vi.fn(async () => new Promise(() => undefined))
+  const client = fakeClient({ regenerate })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve()
+  })
+  const dateInput = document.querySelector<HTMLInputElement>('#mi-briefing-manual-date')!
+  expect(dateInput.value).toBe('2026-10-30')
+  await pickSelectOption(text.manualRunDialog.cutoff, '08:00')
+  const target = document.querySelector('[data-manual-target]')!
+  expect(target.textContent).toContain('2026-10-30')
+  expect(target.textContent).toContain('08:00')
+  expect(target.textContent).toContain('GMT+8')
+  await confirmManualRun()
+  const request = (regenerate.mock.calls as unknown as [[{ generation: { asOf: string } }]])[0]![0]
+  expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
+})
+
 it('reports a run that is already in flight in the right column, step by step', async () => {
   // A scheduled run (not this window's click): the edition stays readable in the body and the steps
   // report in the column, following the progress the service publishes.

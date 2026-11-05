@@ -22,7 +22,11 @@ export type BriefingManualRunResult = Readonly<{
 
 export function useBriefingManualRun(deps: Readonly<{
   timeZone: string
-  regenerate: (input: Readonly<{ periodId: string; locale: DailyBriefingLocale; generation: { asOf: string; windowHours: DailyBriefingWindowHours } }>) => Promise<unknown>
+  /**
+   * 跑这一期。`date` 是读者选的那一天，只用于"生成中"那一行落在正确的日子上；
+   * 服务端按截止时刻自己归档，不看它。
+   */
+  regenerate: (input: Readonly<{ periodId: string; locale: DailyBriefingLocale; date?: string; generation: { asOf: string; windowHours: DailyBriefingWindowHours } }>) => Promise<unknown>
   /** The clock this check runs against; injectable so the rule can be tested without waiting for 9am. */
   now?: () => Date
   /** 一次跑正在跑的时候不许再起一次：读者会以为按了没反应，于是反复按。 */
@@ -32,7 +36,9 @@ export function useBriefingManualRun(deps: Readonly<{
   return (draft) => {
     if (deps.running === true) return { outcome: 'already-running' }
     const now = deps.now?.() ?? new Date()
-    const asOf = draft.cutoff === 'now' ? now.toISOString() : wallClockInstant(draft.cutoff, deps.timeZone, now)
+    // 截止按**读者选的那一天**换算：'now' 就是按下这一刻，某个钟点则是"那一天的钟点"。
+    // 以前用机器本地日期补年份月份，凌晨选 00:00 就落到第二天（`02` v2.129 G1）。
+    const asOf = draft.cutoff === 'now' ? now.toISOString() : wallClockInstant(draft.cutoff, draft.date, deps.timeZone)
     if (asOf === undefined) return { outcome: 'cutoff-unreadable' }
     // 未来时刻等于"生成一份还没发生的窗口"：那一刻根本没有数据，跑出来的是一份空报告，
     // 读者却以为它覆盖到了。拒绝并说明，比跑出一份假装完整的日报诚实。
@@ -44,15 +50,18 @@ export function useBriefingManualRun(deps: Readonly<{
     }
     // Opaque and not derived from the time (A11.3); two presses are two issues, not one rewritten.
     const periodId = globalThis.crypto.randomUUID()
-    void deps.regenerate({ periodId, locale: draft.language, generation: { asOf, windowHours: draft.windowHours as DailyBriefingWindowHours } })
+    void deps.regenerate({ periodId, locale: draft.language, date: draft.date, generation: { asOf, windowHours: draft.windowHours as DailyBriefingWindowHours } })
     return { outcome: 'started' }
   }
 }
 
-function wallClockInstant(cutoff: string, timeZone: string, today: Date): string | undefined {
+/** `YYYY-MM-DD` 加一个墙钟小时 → 绝对时刻；日期或时刻读不懂时返回 `undefined`（页面据此拒绝）。 */
+function wallClockInstant(cutoff: string, date: string, timeZone: string): string | undefined {
+  const [year, month, day] = date.split('-').map(Number)
   const [hour, minute] = cutoff.split(':').map(Number)
+  if (year === undefined || month === undefined || day === undefined || hour === undefined) return undefined
+  if (![year, month, day, hour].every((value) => Number.isFinite(value))) return undefined
   return instantForWallClock({
-    timeZone, year: today.getFullYear(), month: today.getMonth() + 1, day: today.getDate(),
-    hour: hour ?? 0, ...(minute === undefined ? {} : { minute })
+    timeZone, year, month, day, hour, ...(minute === undefined || !Number.isFinite(minute) ? {} : { minute })
   })?.toISOString()
 }

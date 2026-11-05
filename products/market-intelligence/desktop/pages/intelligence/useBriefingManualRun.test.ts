@@ -5,10 +5,10 @@ import { useBriefingManualRun } from './useBriefingManualRun'
 
 const now = new Date('2026-11-05T09:00:00.000Z')
 
-const run = (cutoff: string, windowHours = 24) => {
+const run = (cutoff: string, windowHours = 24, date = '2026-11-05') => {
   const regenerate = vi.fn(async () => undefined)
   const start = useBriefingManualRun({ timeZone: 'UTC', regenerate, now: () => now })
-  const outcome = start({ cutoff, windowHours: windowHours as 24, language: 'zh-CN' })
+  const outcome = start({ date, cutoff, windowHours: windowHours as 24, language: 'zh-CN' })
   return { outcome, regenerate }
 }
 
@@ -27,7 +27,7 @@ describe('a manual run refuses a cutoff that has not happened yet', () => {
       generation: { asOf: string; windowHours: number }
     }) => undefined)
     const start = useBriefingManualRun({ timeZone: 'UTC', regenerate, now: () => now })
-    start({ cutoff: '08:00', windowHours: 24, language: 'en-US' })
+    start({ date: '2026-11-05', cutoff: '08:00', windowHours: 24, language: 'en-US' })
 
     const request = regenerate.mock.calls[0]![0]
     expect(request.locale).toBe('en-US')
@@ -53,7 +53,7 @@ describe('a manual run refuses a cutoff that has not happened yet', () => {
     // 读者连按两次不是"两次意图"，是"第一次没反应"——起跑前就说清楚，而不是默默排队。
     const regenerate = vi.fn(async () => undefined)
     const start = useBriefingManualRun({ timeZone: 'UTC', regenerate, now: () => now, running: true })
-    expect(start({ cutoff: 'now', windowHours: 24, language: 'zh-CN' })).toEqual({ outcome: 'already-running' })
+    expect(start({ date: '2026-11-05', cutoff: 'now', windowHours: 24, language: 'zh-CN' })).toEqual({ outcome: 'already-running' })
     expect(regenerate).not.toHaveBeenCalled()
   })
 
@@ -64,9 +64,43 @@ describe('a manual run refuses a cutoff that has not happened yet', () => {
       timeZone: 'UTC', regenerate, now: () => now,
       findDuplicate: () => ({ periodId: 'period_manual_1' })
     })
-    const result = start({ cutoff: 'now', windowHours: 24, language: 'zh-CN' })
+    const result = start({ date: '2026-11-05', cutoff: 'now', windowHours: 24, language: 'zh-CN' })
     expect(result.outcome).toBe('duplicate')
     expect(result.duplicate?.periodId).toBe('period_manual_1')
+    expect(regenerate).not.toHaveBeenCalled()
+  })
+})
+
+// `02` v2.129 G1：选中的日期才是 00:00 那一天。机器本地日期（11/06）不再参与换算，
+// 否则凌晨选 00:00 会把整版归档到第二天——用户实测踩到的正是这一条。
+describe('a manual run uses the day the reader picked', () => {
+  const machineNow = new Date('2026-11-06T17:20:00.000Z') // 11/07 01:20 于 Asia/Shanghai
+  const start = (date: string, cutoff: string) => {
+    const regenerate = vi.fn(async (_input: { periodId: string; locale: string; date?: string; generation: { asOf: string; windowHours: number } }) => undefined)
+    const begin = useBriefingManualRun({ timeZone: 'Asia/Shanghai', regenerate, now: () => machineNow })
+    return { outcome: begin({ date, cutoff, windowHours: 24, language: 'zh-CN' }), regenerate }
+  }
+
+  it('lands 00:00 on the picked day, not on the machine’s calendar day', () => {
+    const { regenerate } = start('2026-11-05', '00:00')
+    expect(regenerate.mock.calls[0]![0].generation.asOf).toBe('2026-11-04T16:00:00.000Z')
+  })
+
+  it('carries the picked day with the request, so the running row sits on that day', () => {
+    const { regenerate } = start('2026-11-05', '07:00')
+    expect(regenerate.mock.calls[0]![0].date).toBe('2026-11-05')
+  })
+
+  it('refuses a future day outright, because that edition has not happened yet', () => {
+    // 未来一天等于凭空造一期：那一刻没有数据，跑出来是一份假装完整的空报告。
+    const { outcome, regenerate } = start('2026-11-08', '00:00')
+    expect(outcome).toEqual({ outcome: 'cutoff-in-future' })
+    expect(regenerate).not.toHaveBeenCalled()
+  })
+
+  it('refuses a date it cannot read instead of guessing today', () => {
+    const { outcome, regenerate } = start('not-a-date', '00:00')
+    expect(outcome).toEqual({ outcome: 'cutoff-unreadable' })
     expect(regenerate).not.toHaveBeenCalled()
   })
 })

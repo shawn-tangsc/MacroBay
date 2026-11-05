@@ -87,6 +87,11 @@ export function useBriefingRunActions(input: Readonly<{
   runBriefing: (request: Readonly<{
     /** 不传就是服务端的默认期：只留给"重跑当前版"这种本来就落默认期的入口。 */
     periodId?: string
+    /**
+     * 这一次写到**哪一天**（读者本地日历）。只用于"生成中"那一行与运行意图，
+     * 不发给服务——服务按截止时刻自己归档，日期由那一刻决定。
+     */
+    date?: string
     locale: 'zh-CN' | 'en-US'
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
     /** 只决定文案与"这一次在做什么"，不决定跑哪一期——那是上面两样的职责。 */
@@ -113,6 +118,7 @@ export function useBriefingRunActions(input: Readonly<{
   const begin = (options: Readonly<{
     locale?: 'zh-CN' | 'en-US'
     periodId?: string
+    date?: string
     generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
     trigger?: BriefingRunTrigger
   }> = {}): void => {
@@ -121,16 +127,17 @@ export function useBriefingRunActions(input: Readonly<{
     // 手动期带自己的期号与截止；没有这两样的就是"重跑当前版"。两个入口在这里分叉，别在下游判。
     input.onRunIntent?.({
       kind: options.trigger === 'manual' ? 'manual' : 'regenerate',
-      date: input.todayDate ?? '',
+      date: options.date ?? input.todayDate ?? '',
       periodId: options.periodId ?? 'default',
       locale: options.locale ?? input.locale,
       ...(options.generation?.asOf === undefined ? {} : { asOf: options.generation.asOf })
     })
-    if (input.todayDate === undefined) return
+    const placeholderDate = options.date ?? input.todayDate
+    if (placeholderDate === undefined) return
     const startedPeriodId = options.periodId ?? 'default'
     input.onRunStarted?.(startedPeriodId)
     input.setEditions((current) => withGeneratingRow(current, {
-      date: input.todayDate!,
+      date: placeholderDate,
       periodId: startedPeriodId,
       locale: options.locale ?? input.locale,
       manual: options.trigger === 'manual',
@@ -142,7 +149,7 @@ export function useBriefingRunActions(input: Readonly<{
     async runBriefing(request) {
       // 这一次运行的**身份**：临时行就是按它造的，跑完也按它收回（不靠合并碰巧覆盖）。
       const started = {
-        date: input.todayDate ?? '',
+        date: request.date ?? input.todayDate ?? '',
         periodId: request.periodId ?? 'default',
         locale: request.locale
       }

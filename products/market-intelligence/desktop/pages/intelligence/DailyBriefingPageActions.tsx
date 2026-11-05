@@ -27,7 +27,7 @@ import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './b
  * 分开放的后果不是"按钮多了"——读者会把"重新生成今天"当成"重新生成这一版"来点。两组各有自己的
  * 禁用条件，也各有自己的理由，混在一行就说不清是哪一组的。
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, timeZone, defaultDate, latestDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -38,6 +38,12 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   runningLabel?: string
   /** The issue day the action writes: its accessible name says it, so the target is never guessed. */
   targetDate: string
+  /** 读者时区：弹框里的日期与时刻按它落成绝对时刻，确认区也按它写时区名。 */
+  timeZone: string
+  /** 弹框的默认日期：读者当前在的那一天（首次进入即日历今天，`02` v2.131）。 */
+  defaultDate: string
+  /** 弹框可选的最晚日期：日历今天，未来不许选（`02` v2.129 G1）。 */
+  latestDate: string
   todayReady: boolean
   zoneInvalid: boolean
   systemZone: boolean
@@ -75,6 +81,9 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
     <BriefingManualRunDialog
       open={manualOpen}
       text={text}
+      timeZone={timeZone}
+      defaultDate={defaultDate}
+      latestDate={latestDate}
       running={generating}
       onRun={(draft) => {
         const result = onManualRun(draft)

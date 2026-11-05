@@ -23,7 +23,7 @@ const render = async (running = false) => {
   document.body.append(host)
   root = createRoot(host)
   const onRun = vi.fn()
-  await act(async () => { root.render(<BriefingManualRunDialog open text={text} running={running} onRun={onRun} onReplace={vi.fn()} onClose={vi.fn()} />) })
+  await act(async () => { root.render(<BriefingManualRunDialog open text={text} timeZone="Asia/Shanghai" defaultDate="2026-11-05" latestDate="2026-11-06" running={running} onRun={onRun} onReplace={vi.fn()} onClose={vi.fn()} />) })
   await act(async () => { await Promise.resolve() })
   return { onRun }
 }
@@ -128,7 +128,7 @@ describe('briefing manual run dialog', () => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
-    await act(async () => { root.render(<BriefingManualRunDialog open text={text} problem="cutoff-in-future" onRun={vi.fn()} onReplace={vi.fn()} onClose={vi.fn()} />) })
+    await act(async () => { root.render(<BriefingManualRunDialog open text={text} timeZone="Asia/Shanghai" defaultDate="2026-11-05" latestDate="2026-11-06" problem="cutoff-in-future" onRun={vi.fn()} onReplace={vi.fn()} onClose={vi.fn()} />) })
     await act(async () => { await Promise.resolve() })
     const problem = document.querySelector('[data-manual-problem="cutoff-in-future"]')
     expect(problem?.textContent).toBe(text.manualRunDialog.cutoffInFuture)
@@ -142,14 +142,14 @@ describe('briefing manual run dialog', () => {
     await pick(text.manualRunDialog.language, text.history.languages['en-US'])
     await act(async () => { runButton().click() })
 
-    expect(onRun).toHaveBeenCalledWith({ cutoff: '12:00', windowHours: 12, language: 'en-US' })
+    expect(onRun).toHaveBeenCalledWith({ date: '2026-11-05', cutoff: '12:00', windowHours: 12, language: 'en-US' })
   })
 
   it('offers an evening cutoff as a real option', async () => {
     const { onRun } = await render()
     await pick(text.manualRunDialog.cutoff, '21:30')
     await act(async () => { runButton().click() })
-    expect(onRun).toHaveBeenCalledWith({ cutoff: '21:30', windowHours: 24, language: 'zh-CN' })
+    expect(onRun).toHaveBeenCalledWith({ date: '2026-11-05', cutoff: '21:30', windowHours: 24, language: 'zh-CN' })
   })
 
   it('gives every field and the action row its own named question mark', async () => {
@@ -172,7 +172,7 @@ describe('briefing manual run dialog', () => {
     await act(async () => { runButton().click() })
     // A7.4: no uniqueness rule here — the reader asked twice, so two runs are requested.
     expect(onRun).toHaveBeenCalledTimes(2)
-    expect(onRun).toHaveBeenNthCalledWith(2, { cutoff: 'now', windowHours: 24, language: 'zh-CN' })
+    expect(onRun).toHaveBeenNthCalledWith(2, { date: '2026-11-05', cutoff: 'now', windowHours: 24, language: 'zh-CN' })
   })
 
   it('does not let a second press start while one run is in flight', async () => {
@@ -180,5 +180,27 @@ describe('briefing manual run dialog', () => {
     expect(runButton().disabled).toBe(true)
     await act(async () => { runButton().click() })
     expect(onRun).not.toHaveBeenCalled()
+  })
+
+  // `02` v2.129 G1：截止时刻没有日期时，选 00:00 只能由实现猜是哪天的 00:00，凌晨就落到第二天。
+  it('carries a date, defaults to the day the reader is on, and writes the landing day before the press', async () => {
+    await render()
+    // 默认是"读者当前在的那一天"（夹具 11/05），不是系统今天（latestDate 11/06）——两者不同的夹具。
+    expect(document.querySelector<HTMLInputElement>('#mi-briefing-manual-date')!.value).toBe('2026-11-05')
+    await pick(text.manualRunDialog.cutoff, '00:00')
+    const target = document.querySelector('[data-manual-target]')!
+    expect(target.textContent).toContain('2026-11-05')
+    expect(target.textContent).toContain('00:00')
+    expect(target.textContent).toContain('GMT+8')
+    // 确认区那句不是装饰：它写的就是提交出去的那一天那一刻。
+    await act(async () => { runButton().click() })
+    expect(document.querySelector('[data-manual-target]')).not.toBeNull()
+  })
+
+  it('moves the date explanation into its own question mark, like the other fields', async () => {
+    await render()
+    expect(document.body.textContent).not.toContain(text.manualRunDialog.dateHint)
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.dateHintLabel}"]`)
+    expect(trigger, 'the date has no question mark').not.toBeNull()
   })
 })

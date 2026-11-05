@@ -23,6 +23,9 @@ export function DailyBriefingPageBar({
   runningLabel,
   todayReady,
   targetDate,
+  timeZone,
+  defaultDate,
+  latestDate,
   zoneInvalid,
   systemZone,
   onManualRun,
@@ -39,6 +42,9 @@ export function DailyBriefingPageBar({
   runningLabel?: string
   todayReady: boolean
   targetDate: string
+  timeZone: string
+  defaultDate: string
+  latestDate: string
   zoneInvalid: boolean
   systemZone: boolean
   onManualRun: (draft: BriefingManualRunDraft) => Readonly<{
@@ -63,6 +69,9 @@ export function DailyBriefingPageBar({
       {...(runningLabel === undefined ? {} : { runningLabel })}
       todayReady={todayReady}
       targetDate={targetDate}
+      timeZone={timeZone}
+      defaultDate={defaultDate}
+      latestDate={latestDate}
       zoneInvalid={zoneInvalid}
       systemZone={systemZone}
       onManualRun={onManualRun}
