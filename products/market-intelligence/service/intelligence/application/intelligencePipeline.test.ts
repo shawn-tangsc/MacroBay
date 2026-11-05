@@ -39,7 +39,7 @@ describe('intelligencePipeline', () => {
       sourceId: 'defillama-stablecoins',
       runId: 'retired-source-run',
       fixtureText: '{"peggedAssets":[]}'
-    })).resolves.toEqual({ queuedJobs: [] })
+    })).resolves.toMatchObject({ queuedJobs: [], appended: 0, outcome: 'unchanged' })
 
     expect(rawRecordStore.inspectSnapshot().recordCount).toBe(0)
     expect(pipeline.getHealth('defillama-stablecoins')).toBeUndefined()
