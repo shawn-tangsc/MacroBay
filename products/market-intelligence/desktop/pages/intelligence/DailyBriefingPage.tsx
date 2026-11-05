@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from 'antd'
-import { ArrowLeft, CircleHelp } from 'lucide-react'
+import { CircleHelp } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -28,6 +27,7 @@ import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
+import { DailyBriefingPageBar } from './DailyBriefingPageBar'
 import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
@@ -35,7 +35,7 @@ import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFai
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
-import { DailyBriefingEditionActions, DailyBriefingPageActions } from './DailyBriefingPageActions'
+import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
 import { briefingEditionSelection } from './briefingEditionSelection'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
@@ -425,26 +425,21 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
 
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
-    <header className="mi-daily-briefing-page__bar">
-      <Button className="mi-daily-briefing-page__back" onClick={onBack}>
-        <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
-      </Button>
-      {/* 页面顶只留两颗：今天出不出（手动生成）、日报设置。版次级那五颗在正文区顶部。 */}
-      <DailyBriefingPageActions
-        text={text}
-        resolveText={resolveProductText}
-        progress={liveProgress}
-        loading={loading}
-        generating={generating}
-        regenerating={regenerating}
-        todayReady={readyDocument !== undefined && readyKind(view) === 'today'}
-        targetDate={todayDate}
-        zoneInvalid={zoneInvalid !== null}
-        systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
-        onManualRun={onManualRun}
-        onOpenSettings={() => setSettingsSection('generation')}
-      />
-    </header>
+    <DailyBriefingPageBar
+      text={text}
+      resolveText={resolveProductText}
+      progress={liveProgress}
+      loading={loading}
+      generating={generating}
+      regenerating={regenerating}
+      todayReady={readyDocument !== undefined && readyKind(view) === 'today'}
+      targetDate={todayDate}
+      zoneInvalid={zoneInvalid !== null}
+      systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
+      onManualRun={onManualRun}
+      onOpenSettings={() => setSettingsSection('generation')}
+      onBack={onBack}
+    />
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
         onSelectLocale={selectLocale}
