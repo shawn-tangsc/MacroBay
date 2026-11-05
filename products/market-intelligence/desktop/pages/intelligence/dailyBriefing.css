@@ -399,8 +399,12 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    empty. Its ink is the faint tier — quieter than a title — because "not yet" is not a warning: no red,
    no dot, no retry affordance. The caret is what says it can be clicked, and the hover brightening is
    the one the edition rows already use.
-   The faint ink has no token in this stylesheet (it is a literal the colour baseline counts), so it is
-   expressed here as a mix of the muted ink rather than opening a second literal for the same value. */
+   The faint ink has no token in this stylesheet: it is a literal that already went into the colour
+   baseline against several selectors. A second literal for the same value would be a second entry for
+   one colour, and the next reader would have to decide which of the two faint inks is the real one. So
+   this row derives it from the muted ink at the same strength instead — same rendered tone, no second
+   ledger line, and a value that follows the muted ink if that ever moves.
+   When the faint ink becomes a token of its own, this line reads that token and the derivation goes. */
 .mi-daily-briefing__rail-fallback { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 0; padding: 8px 6px; border: 0; border-radius: 6px; background: transparent; color: color-mix(in srgb, var(--mi-dashboard-muted) 62%, transparent); font-size: 11px; line-height: 1.45; text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-fallback:hover { background: rgba(255, 255, 255, .04); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-fallback-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
