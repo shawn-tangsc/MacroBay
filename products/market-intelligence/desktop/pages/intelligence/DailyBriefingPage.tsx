@@ -407,7 +407,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     document: contentBlocked ? undefined : readyDocument,
     generating,
     localeMissing: view.status === 'locale-missing',
-    periodId: editions.find((row) => row.date === readyDocument?.edition.date)?.periodId ?? DEFAULT_PERIOD_ID,
+    // 与正文同一口径：发的是**选中那一版**。按日期取首行会在一日多期时发错版（审计 #74 家族）。
+    periodId: pickedPeriodId ?? readyDocument?.edition.periodId ?? DEFAULT_PERIOD_ID,
     text: briefingPushText[locale],
     // The channel is configured somewhere else (that drawer, or the platform's own settings). Re-read
     // when it may have changed, or the button keeps the verdict it formed at mount.

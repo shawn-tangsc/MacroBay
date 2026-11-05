@@ -1663,6 +1663,30 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(todayRow.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
+// 反向：选中的是 A、手上读到的文档身份却是 B —— 那份文档不是"A 的正文"，绝不许冒充。
+it('never lets another issue\u2019s document stand in for the selected one', async () => {
+  const today = '2026-10-30'
+  const listed = [
+    { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'], state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 },
+    { date: today, periodId: 'period_b', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const,
+      languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }
+  ]
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } })),
+    // 读回来的是 A 那一版（default）的文档；屏幕上选中的是 B（period_b，正在跑）。
+    get: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument(today) })),
+    getProgress: vi.fn(async () => ({ state: 'running' as const, progress: { attemptId: 'a1', startedAt: `${today}T00:00:00.000Z`, stages: [] } }))
+  })
+  const dom = await renderPage(client)
+  const rowB = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_b"]')!
+  await act(async () => { rowB.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 选中 B：A 的正文不许出现；B 在自己跑，所以正文是它的进度。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
+  expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+})
+
 it('jumps to the issue it started, then follows the reader when they switch away', async () => {
   // 用户 11-05：点生成 → 跳到**这一期**正在生成的页面；随后切到别的已完成版 → 看那一版正文。
   let settle: (value: unknown) => void = () => undefined
