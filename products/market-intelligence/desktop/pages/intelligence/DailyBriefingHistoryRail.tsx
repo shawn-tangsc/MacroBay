@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
-import { ContextMenu, type MenuAnchor } from '@platform/ui/components/menu'
+import { ContextMenu, type MenuAnchor, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import type {
@@ -10,6 +10,7 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
+import { briefingEditionDeleteCopy } from './briefingEditionDeleteConfirm'
 
 /** Which edition is on screen: one identity, shared by the rail and the page. */
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
@@ -66,7 +67,7 @@ function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, 
 
 export function DailyBriefingHistoryRail({
   editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, onDeletePeriod, onRemovePeriod,
+  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, onDeletePeriod,
   onRegeneratePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
@@ -86,21 +87,16 @@ export function DailyBriefingHistoryRail({
   /** Picking a row selects that edition: one row is one period in one language, so the row is the choice. */
   onSelectLocale?: (selection: BriefingRailSelection) => void
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
-  /**
-   * 删掉这一期的**排期**，不删它的内容：行留着、标成已删除，正文照旧能读。
-   * 与 `onDeletePeriod`（删掉某一语言版的正文）是两层，别把这两件事合并。
-   */
-  onRemovePeriod?: (input: Readonly<{ date: string; periodId: string }>) => void | Promise<void>
   /** Run this period again. Absent when the host cannot spend a run (the menu item is then disabled). */
   onRegeneratePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
   const confirm = useConfirm()
-  // 两层菜单，一份实现：期级（这一期怎么跑、要不要继续排期）与版次级（这一版正文要不要删）不许混。
-  // 混在一张菜单里，读者分不清"删除"删的是排期还是正文——`02` 的动作分层就是因为这个分开的。
-  const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; layer: 'period' | 'edition'; anchor: MenuAnchor }> | null>(null)
+  // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
+  // 会找到同一行：右键点英文那行、删掉的却是中文那行。这不是"删错了"，是行身份写错。
+  const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; anchor: MenuAnchor }> | null>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
-  const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor, layer: 'period' | 'edition' = 'period'): void =>
-    setMenu({ date: edition.date, periodId: edition.periodId, layer, anchor })
+  const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void =>
+    setMenu({ date: edition.date, periodId: edition.periodId, locale: edition.locale, anchor })
   // Today opens by default; every other day starts collapsed. Collapsing today is remembered, and
   // opening a past day is remembered too — the reader's shape of the list is not reset by a reload.
   const [closedToday, setClosedToday] = useState(false)
@@ -117,34 +113,27 @@ export function DailyBriefingHistoryRail({
     return order.map((date) => ({ date, rows: rows.get(date)! }))
   }, [editions])
 
-  const menuRow = menu ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId) : undefined
+  const menuRow = menu
+    ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId && edition.locale === menu.locale)
+    : undefined
   const blocked = Boolean(menu && menu.date === todayDate && generatingStage)
   const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
-  // 期级两项：重新生成这一期 / 删除这一期（删排期，正文不动）。
-  // 重新生成只对本日成立——服务端按"今天"解析期号；历史那天入口在、但禁用并给理由，
-  // 比菜单里干脆没有这个动作诚实。
-  const regenerate = menu?.date === todayDate
-    ? onRegeneratePeriod
-      ? [{ key: 'regenerate-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.regeneratePeriod' }]
+  // 行菜单**恰一项**：删除这一版（正文 + 它的会话）。期级动作不在这张菜单里——重跑在工具栏与
+  // 行内「重试」，删排期在设置页，两件事不混。
+  // 0 项时**不渲染**：`ContextMenu` 只挡 `!open || anchor === null`，空数组会画出一块盖住列表的
+  // 空白浮层——读者看到的就是"右键出来什么都没有"。
+  const menuItems: readonly MenuItem[] = blocked
+    ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger', disabled: true }]
+    : hasEdition
+      ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' }]
       : []
-    : [{ key: 'regenerate-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.backfillBlocked', disabled: true }]
-  const deletePeriod = onRemovePeriod
-    ? [{ key: 'delete-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteWholePeriod', tone: 'danger' as const }]
-    : []
-  // 版次级：这一版的正文（和它的会话）。一期只有一种语言，所以这一层只有一条。
-  // 没有版次就没有那一枚语言徽标，也就没有版次级菜单——这一层不需要"没有可删的版本"这种占位项。
-  const editionItems = hasEdition
-    ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' as const }]
-    : []
-  const menuItems = menu?.layer === 'edition'
-    ? editionItems
-    : blocked
-      ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger' as const, disabled: true }]
-      : [...regenerate, ...deletePeriod]
+  // 打开之前就问"这张菜单有没有东西"：生成中的行弹一项禁用的原因，没有版次的行干脆不弹。
+  const canOpenMenu = (edition: DailyBriefingEditionSummary): boolean =>
+    edition.state !== 'missing' || (edition.date === todayDate && generatingStage !== undefined)
   const closeMenu = (): void => {
-    const key = menu ? `${menu.date}:${menu.periodId}` : undefined
+    const open = menu
     setMenu(null)
-    if (key) rowRefs.current.get(key)?.focus()
+    if (open) rowRefs.current.get(`${open.date}:${open.periodId}:${open.locale}`)?.focus()
   }
 
   const rowSelected = (edition: DailyBriefingEditionSummary): boolean => {
@@ -235,10 +224,11 @@ export function DailyBriefingHistoryRail({
                 {...(edition.periodDeleted ? { 'data-period-deleted': 'true' } : {})}
                 className="mi-daily-briefing__rail-row"
                 ref={(node) => { if (node) rowRefs.current.set(key, node) }}
-                onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
+                onContextMenu={(event) => { event.preventDefault(); if (canOpenMenu(edition)) openMenu(edition, { x: event.clientX, y: event.clientY }) }}
                 onKeyDown={(event) => {
                   if (!(event.shiftKey && event.key === 'F10') && event.key !== 'ContextMenu') return
                   event.preventDefault()
+                  if (!canOpenMenu(edition)) return
                   const rect = event.currentTarget.getBoundingClientRect()
                   openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
                 }}
@@ -264,11 +254,7 @@ export function DailyBriefingHistoryRail({
                   {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
                   {missing ? null : <>
                     <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
-                    <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}
-                      // 版次级菜单挂在这一枚上：它删的是这一版的正文，删的不是排期，两件事不混。
-                      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); openMenu(edition, { x: event.clientX, y: event.clientY }, 'edition') }}>
-                      {text.history.languages[edition.locale] ?? edition.locale}
-                    </span>
+                    <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                   </>}
                 </span>
                 {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
@@ -283,15 +269,6 @@ export function DailyBriefingHistoryRail({
                       {edition.periodDeleted ? `${text.history.deletedPeriod} · ` : ''}{title}
                     </span>}
               </button>
-              {/* 行尾的 ⋯：右键是"知道的人才会用"的入口，这一颗是看得见的那一种。两者开同一个菜单、
-                  同一份菜单项——两种触发，一份实现。它与「重试」一样在行按钮之外，行里不套按钮。 */}
-              <button type="button" className="mi-daily-briefing__rail-item-menu" aria-label={text.history.rowMenu}
-                data-rail-menu={key}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  openMenu(edition, { x: rect.right, y: rect.bottom + 4 })
-                }}>⋯</button>
               {retryable
                 ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
                   onClick={() => { void onRegeneratePeriod?.({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>
@@ -312,37 +289,23 @@ export function DailyBriefingHistoryRail({
         const target = menu
         const row = menuRow
         closeMenu()
-        if (key === 'regenerate-period' && target && onRegeneratePeriod && row) {
-          void onRegeneratePeriod({ date: target.date, periodId: target.periodId, locale: row.locale })
-          return
-        }
-        if (key === 'delete-period' && target && onRemovePeriod) {
-          // 删的是这一期的**排期**：明天起不再自动生成，正文照旧能读（A9.8 删期不删历史版次）。
-          confirm({
-            title: text.history.deleteWholeTitle.replace('{date}', target.date),
-            description: text.history.deleteWholeDescription,
-            confirmLabel: text.history.deleteConfirm,
-            cancelLabel: text.history.deleteCancel,
-            tone: 'danger',
-            onConfirm: () => onRemovePeriod({ date: target.date, periodId: target.periodId })
-          })
-          return
-        }
         if (key !== 'delete-edition' || !target || !row || !onDeletePeriod) return
-        // 确认框点名：日期 · 时刻 · 语言。读者要能从这一句看出删的是哪一版，而不是"某一份"。
-        const languageName = text.history.editionLanguages[row.locale === 'en-US' ? 'en' : 'zh']
+        // 与工具栏第五颗**同一个确认框、同一句话**：这条路径不另写一套文案。
         const clock = clockOf(row, text, timeZone)
-        const target_ = [target.date, clock, languageName].filter((part): part is string => part !== undefined && part !== '').join(' · ')
+        const copy = briefingEditionDeleteCopy(text, {
+          date: row.date, language: row.locale,
+          ...(clock === undefined ? {} : { clock })
+        })
         confirm({
-          title: text.history.deleteTitle.replace('{date}', target_).replace('{language}', languageName),
-          description: text.history.deleteDescription,
-          confirmLabel: text.history.deleteConfirm,
-          cancelLabel: text.history.deleteCancel,
+          title: copy.title,
+          description: copy.description,
+          confirmLabel: copy.confirmLabel,
+          cancelLabel: copy.cancelLabel,
           tone: 'danger',
-          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: row.locale })
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: target.locale })
         })
       }}
-      open={menu !== null}
+      open={menu !== null && menuItems.length > 0}
       resolveText={resolveText ?? (() => '')}
     />
   </aside>

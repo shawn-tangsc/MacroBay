@@ -218,6 +218,16 @@ async function confirmManualRun(): Promise<void> {
   await act(async () => { run?.click(); await Promise.resolve(); await Promise.resolve() })
 }
 
+
+/** 确认框里的那颗键：工具栏也有一颗同名的「删除这一版」，所以必须在弹窗里找。 */
+function dialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+  const button = [...(dialog ?? document).querySelectorAll<HTMLButtonElement>('button')]
+    .find((candidate) => candidate.textContent?.replace(/\s/g, '') === label.replace(/\s/g, ''))
+  if (button === undefined) throw new Error(`dialog button not found: ${label}`)
+  return button
+}
+
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
@@ -374,14 +384,12 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenCalledTimes(1)
 
     const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!
-    // 删版次是版次级动作：菜单挂在那一枚语言徽标上，不在行的期级菜单里（期级是重跑/删排期）。
-    const chip = row.closest('.mi-daily-briefing__rail-item')!.querySelector<HTMLElement>('[data-edition-locale]')!
-    act(() => { chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    // 行右键菜单恰一项「删除这一版」：右键的就是你点中的那一行（02 v2.40）。
+    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    const confirm = dialogButton(text.history.deleteEditionConfirm)
     await act(async () => { confirm.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
 
@@ -392,6 +400,73 @@ describe('daily briefing page', () => {
     // Deleting a past issue must not blank today's edition: the reload reads it from the list.
     expect(dom.textContent).toContain('CPI 超预期 · Ripple 获批')
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('deletes the edition the reader is looking at from the top toolbar, after the same confirmation', async () => {
+    // 工具栏第五颗是版次级动作：它删的必须是**当前打开的这一版**，不是"最后那一期"。两个入口
+    // （工具栏与行右键）共用同一个确认框，所以这里断言的是同一句话与同一个目标三元组。
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }))
+    const client = fakeClient({
+      deletePeriod,
+      get: vi.fn(async ({ date }: { date: string }) => date === '2026-10-29'
+        ? { state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+
+    const trigger = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!
+    expect(trigger.disabled).toBe(false)
+    await act(async () => { trigger.click() })
+    // 同一句话点名：日期 · 时刻 · 语言，与行右键弹的逐字一致（同一个 helper 生成）。
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(dialog.textContent).toContain('2026-10-29')
+    expect(dialog.textContent).toContain(text.history.editionLanguages.zh)
+    expect(dialog.textContent).toContain(text.history.deleteEditionConfirm)
+    await act(async () => { dialogButton(text.history.deleteEditionConfirm).click() })
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN' })
+  })
+
+  it('disables the delete action with a visible reason when no edition is open', async () => {
+    // 没有可读版次时五颗一起禁用；原因必须是读者看得到的，不是 title 那种禁用处不到的提示。
+    const client = fakeClient({
+      get: vi.fn(async () => ({ state: 'missing' as const })),
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    const trigger = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!
+    expect(trigger.disabled).toBe(true)
+    expect(trigger.getAttribute('aria-describedby')).not.toBeNull()
+    expect(dom.textContent).toContain(text.history.deleteNoEdition)
+  })
+
+  it('keeps both languages of one period as two rows after today\'s document lands', async () => {
+    // 根因守卫：新文档写回列表时按**日期**整片替换，会把同一天英文那行也写成中文版——两行同键同语言，
+    // 读者看到两个「中文」、一条英文标题；React 把它们当同一行复用，右键与删除落到另一行上。
+    const today = '2026-10-30'
+    const twoLanguages = [
+      { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 },
+      { date: today, periodId: 'default', locale: 'en-US' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 }
+    ]
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: twoLanguages } }))
+    })
+    const dom = await renderPage(client)
+    const rows = [...dom.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-row')]
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')))
+      .toEqual(['zh-CN', 'en-US'])
+    // 选中英文那行，只有那一行是 current：一次点击只落在一行上。
+    await act(async () => { rows[1]!.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    const current = [...dom.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-row')]
+      .filter((row) => row.getAttribute('aria-current') === 'true')
+    expect(current).toHaveLength(1)
+    expect(current[0]!.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('en-US')
   })
 
   it('shows a deleted day as empty, keeps the rail where the reader was, and still offers a generate', async () => {
@@ -425,14 +500,12 @@ describe('daily briefing page', () => {
     expect(railRow().getAttribute('aria-current')).toBe('true')
     expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
 
-    // 版次级菜单挂在语言徽标上：删的是这一版的正文，不是这一期的排期。
-    const chip = railRow().closest('.mi-daily-briefing__rail-item')!.querySelector<HTMLElement>('[data-edition-locale]')!
-    act(() => { chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    // 行右键菜单恰一项「删除这一版」：右键的就是你点中的那一行（02 v2.40）。
+    act(() => { railRow().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.replace(/\s/g, '') === text.history.deleteConfirm)!
+    const confirm = dialogButton(text.history.deleteEditionConfirm)
     await act(async () => { confirm.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
 
