@@ -113,6 +113,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const lastReadyRef = useRef<DailyBriefingDocument | null>(null)
   const [showingStale, setShowingStale] = useState(false)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
+  // 天头要画哪些日子：服务侧按「有版次 ∨ 有过运行记录 ∨ 今天是今天」算好一起交下来。
+  // 缺了就是旧服务端，rail 退回"天头来自版次"的旧行为——不要在这里自己推一份。
+  const [railDates, setRailDates] = useState<readonly string[] | undefined>(undefined)
   // The rail starts empty while the list is still being read. "Nothing yet" and "nothing at all"
   // look the same once the array is empty, so the rail has to be told which one it is.
   const [editionsLoading, setEditionsLoading] = useState(true)
@@ -178,6 +181,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     let active = true
     setView({ status: 'loading' })
     setEditions([])
+    setRailDates(undefined)
     setEditionsLoading(true)
     setEditionsFailed(false)
     setRegenerateFailure(null)
@@ -203,6 +207,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       periodDateRef.current = periodDate
       let rows: readonly DailyBriefingEditionSummary[] = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
+      setRailDates(listed?.state === 'available' ? listed.result.dates : undefined)
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
       setEditionsLoading(false)
       setEditionsFailed(listed?.state !== 'available')
@@ -290,6 +295,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         })
       }
       setEditions(rows.slice(0, 14))
+      setRailDates(listed?.state === 'available' ? listed.result.dates : undefined)
       setRegenerating(false)
     })()
     return () => { active = false }
@@ -429,6 +435,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // 一行 = 一期 = 一种语言：点行要把**这一行**的三样身份交出去；只传日期的话，同一天两期
         // 永远落到第一行，读者看到的是"切换了但内容不切"。
         onSelectLocale={selectLocale}
+        {...(railDates === undefined ? {} : { dates: railDates })}
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。

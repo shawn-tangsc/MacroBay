@@ -425,6 +425,27 @@ describe('daily briefing page', () => {
     expect(exportHost.querySelector('[data-action-group]')).toBeNull()
   })
 
+  it('draws today’s head even when it has no edition, and keeps older empty days out', async () => {
+    // `02` v2.91：天头 = 有版次 ∨ 有过运行记录 ∨ 今天是今天。服务侧把这份集合算好交下来，
+    // 页面只传不用自己推——否则早上七点前打开，列表会从昨天开始，读者以为列表坏了。
+    const today = '2026-10-30'
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: [], dates: [today], today }
+      })),
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' }))
+    })
+    const dom = await renderPage(client)
+    const heads = [...dom.querySelectorAll<HTMLElement>('[data-day]')].map((node) => node.getAttribute('data-day'))
+    expect(heads).toEqual([today])
+    const head = dom.querySelector<HTMLElement>('[data-day="' + today + '"] .mi-daily-briefing__rail-day-head')!
+    expect(head.querySelector('[data-day-count]')?.textContent).toBe(text.history.periodCount.replace('{count}', '0'))
+    const fallback = dom.querySelectorAll<HTMLElement>('[data-rail-fallback="true"]')
+    expect(fallback).toHaveLength(1)
+    expect(fallback[0]!.textContent).toBe(text.history.dayEmpty)
+  })
+
   it('opens the period the reader clicked, not the day’s first one', async () => {
     // 同一天两期同语言：点第二期必须读第二期。这个 bug 有两个成因，缺一不可——
     // ① 页面没传 `onSelectLocale`，永远落到 `selectEdition(date)`，只按日期找第一行；
