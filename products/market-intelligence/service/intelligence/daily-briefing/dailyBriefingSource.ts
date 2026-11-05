@@ -16,6 +16,7 @@ import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
 import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
+import { lookupMissingMacroValues, mergeMacroValues } from './dailyBriefingMacroValueLookup'
 import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
 import {
   collectAnalysisPriorConclusions,
@@ -167,10 +168,45 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         locale,
         timeZone,
         priorConclusions,
-        calendar
+        calendar: await refreshMissingMacroValues(deps, facts, locale, calendar)
       })
     }
   }
+}
+
+/**
+ * 缺值事件回查日历源（`02` `A0.12` v2.125）：确定性、不经模型、不发 WebSearch。
+ *
+ * 只在窗口里**确实有**缺值事件时才再读一次源；有值的行一条都不回查（判据是可数的次数，不是
+ * 代码意图）。回查失败、源没变，都等于"这一条没有值"——版面不写任何话，值那一格不渲染。
+ */
+async function refreshMissingMacroValues(
+  deps: DailyBriefingSourceDeps,
+  facts: DailyBriefingFactSnapshot,
+  locale: DailyBriefingLocale,
+  calendar: DailyBriefingFactPacket['calendar']
+): Promise<DailyBriefingFactPacket['calendar']> {
+  if (calendar.state !== 'available' || calendar.events.length === 0) return calendar
+  const start = Date.parse(facts.windowStart)
+  const end = Date.parse(facts.windowEnd)
+  const inWindow = calendar.events.filter((event) => {
+    const at = Date.parse(event.scheduledAt)
+    return Number.isFinite(at) && at >= start && at < end
+  })
+  if (inWindow.length === 0) return calendar
+  const lookup = await lookupMissingMacroValues({
+    events: inWindow.map((event) => ({
+      eventKey: event.eventKey,
+      importance: event.importance,
+      scheduledAt: event.scheduledAt,
+      ...(event.actual === undefined ? {} : { actual: event.actual }),
+      lifecycleState: event.lifecycleState
+    })),
+    cutoff: facts.windowEnd,
+    read: () => readCalendar(deps, facts.asOf, locale, facts.enabled.calendar).then((section) => section.events)
+  })
+  if (lookup.values.length === 0) return calendar
+  return Object.freeze({ ...calendar, events: mergeMacroValues(calendar.events, lookup.values) })
 }
 
 export async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string, windowEnd: string = asOf): Promise<DailyBriefingFactPacket['news']> {
