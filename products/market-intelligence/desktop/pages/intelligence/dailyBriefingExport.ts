@@ -26,7 +26,32 @@ export function posterExportBackground(poster: Element | null): string | undefin
  * produced a `-zh-CN.png` file — the reader then has no way to tell which language the picture is in.
  */
 export function briefingExportFileName(document: Readonly<{
-  edition: Readonly<{ date: string; locale: string }>
+  edition: Readonly<{ date: string; locale: string; periodId?: string; periodTime?: string }>
 }>): string {
-  return `mi-daily-brief-${document.edition.date}-${document.edition.locale}.png`
+  // A day can hold several periods in the same language, so date + language no longer identifies the
+  // file: two downloads would overwrite each other and the reader would keep the second one believing
+  // it was the first. The period's own hour names it — an opaque id would be unique but unreadable,
+  // and the reader is naming a file, not addressing a record.
+  const period = periodTag(document.edition)
+  return `mi-daily-brief-${document.edition.date}${period}-${document.edition.locale}.png`
+}
+
+/**
+ * `-0700` for a period that has its own time, `-<id>` when it only has an id, nothing for `default`.
+ *
+ * An edition written before schema 13 has neither field and belongs to `default`; its file keeps the
+ * name it always had, because renaming downloads the reader already made would only confuse them.
+ */
+function periodTag(edition: Readonly<{ periodId?: string; periodTime?: string }>): string {
+  if (edition.periodId === undefined && edition.periodTime === undefined) return ''
+  if (edition.periodTime !== undefined) {
+    const at = new Date(edition.periodTime)
+    if (Number.isFinite(at.getTime())) {
+      const hour = String(at.getUTCHours()).padStart(2, '0')
+      const minute = String(at.getUTCMinutes()).padStart(2, '0')
+      return `-${hour}${minute}`
+    }
+  }
+  const id = (edition.periodId ?? '').replace(/[^a-zA-Z0-9-]/g, '')
+  return id === '' || id === 'default' ? '' : `-${id}`
 }
