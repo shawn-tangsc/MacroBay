@@ -288,6 +288,33 @@ describe('card, actions and sheet stay three boxes', () => {
   })
 })
 
+/**
+ * The refusal line in the manual-run dialog: one class, two tiers. Shape is checked because the dialog
+ * already has a general 12px note — a refusal that renders at 12px is read before the field it is about,
+ * and the reader gets the explanation before the thing it explains.
+ */
+describe('one refusal line, two tones', () => {
+  it('matches the field label size instead of outranking it', () => {
+    const line = rule('.mi-briefing-period-dialog__conflict {')
+    expect(line).toContain('font-size: 10.5px;')
+    expect(line).toContain('color: var(--mi-dashboard-muted);')
+  })
+
+  it('marks itself with a 5px dot that cannot shrink', () => {
+    const dot = rule('.mi-briefing-period-dialog__conflict::before {')
+    expect(dot).toContain('width: 5px;')
+    expect(dot).toContain('flex: none;')
+    expect(dot).toContain('background: var(--mi-dashboard-caution);')
+  })
+
+  it('turns red only for a value that is actually invalid', () => {
+    const invalid = rule('.mi-briefing-period-dialog__conflict[data-tone="invalid"] {')
+    expect(invalid).toContain('var(--mi-dashboard-negative)')
+    // One class only: a second class for the red tier is how the two tiers drift apart.
+    expect(css).not.toContain('.mi-briefing-period-dialog__conflict--')
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

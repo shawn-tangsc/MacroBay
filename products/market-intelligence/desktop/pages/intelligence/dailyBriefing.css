@@ -351,7 +351,17 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-briefing-period-dialog__field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mi-briefing-period-dialog__field strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
 .mi-briefing-period-dialog__hint, .mi-briefing-period-dialog__note { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
-.mi-briefing-period-dialog__conflict { margin: 0; color: var(--mi-dashboard-caution); font-size: 12px; line-height: 1.6; }
+/* The refusal line, one class for both tiers. 10.5px is the dialog's own label size: a hint larger than
+   the label it explains is read before the field itself, and the reader gets the explanation first.
+   "Temporarily unavailable" (generating, deleted, replacing) is neutral text with a caution dot — it is
+   not a mistake, and a red sentence would tell the reader they did something wrong. Only a value that is
+   genuinely invalid (a moment in the future, a language this issue does not have) is red.
+   The dot is not decoration and not the only carrier: the sentence already states the reason, and the
+   dot is what separates a hint from a paragraph of explanation at a glance. */
+.mi-briefing-period-dialog__conflict { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
+.mi-briefing-period-dialog__conflict::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-caution); }
+.mi-briefing-period-dialog__conflict[data-tone="invalid"] { color: var(--mi-dashboard-negative); }
+.mi-briefing-period-dialog__conflict[data-tone="invalid"]::before { background: var(--mi-dashboard-negative); }
 
 /* The day grouping arrived in the multi-period list and shipped with no stylesheets at all — the
    markup used `__rail-day-*` while the CSS only knew `__rail-summary`, so every day rendered as one
