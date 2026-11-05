@@ -50,7 +50,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
         day it acts on. A disabled control with no reason the reader can see is not allowed. */}
     {/* 期模型之后，这颗按钮只说一件事：现在就按某一期跑一次。旧的「生成或重新生成今天的日报」是
         "整天一条"时代的说法——那时一天只有一份，现在一天可以有多期，重生成要指定是哪一期。 */}
-    <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
+    <Button className="mi-briefing-tool__btn mi-briefing-tool__btn--primary" data-toolbar-action="regenerate" disabled={generating}
       /* A run in flight is a wait, so the control shows it is working instead of looking broken. */
       loading={generating}
       {...(generating
@@ -75,15 +75,15 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
           them read the edition against the wrong one. */}
       {systemZone ? <small className="mi-daily-briefing__clock-note" role="status">{text.timeZoneFromSystem}</small> : null}
     </> : null}
-    {exportable ? <Button className="mi-daily-briefing__export" disabled={exportState === 'exporting'} onClick={onExport} aria-live="polite">
+    {exportable ? <Button className="mi-briefing-tool__btn" data-toolbar-action="export" disabled={exportState === 'exporting'} onClick={onExport} aria-live="polite">
       {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
     </Button> : null}
-    {exportable ? <Button className="mi-daily-briefing__copy" onClick={onCopy} aria-live="polite">
+    {exportable ? <Button className="mi-briefing-tool__btn" data-toolbar-action="copy" onClick={onCopy} aria-live="polite">
       {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
     </Button> : null}
     {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
         beside it opened a second dialog for half of the same form. */}
-    <Button className="mi-daily-briefing__settings-entry" data-briefing-settings-open="true" onClick={onOpenSettings}>
+    <Button className="mi-briefing-tool__btn mi-daily-briefing__settings-entry" data-toolbar-action="settings" data-briefing-settings-open="true" onClick={onOpenSettings}>
       <Settings2 aria-hidden="true" size={14} />{text.settingsDrawer.open}
     </Button>
   </div>

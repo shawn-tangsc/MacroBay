@@ -493,7 +493,7 @@ describe('daily briefing page', () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     const dom = await renderPage(fakeClient())
-    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    const copy = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="copy"]')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(writeText).toHaveBeenCalledTimes(1)
     const markdown = (writeText.mock.calls[0] as unknown[] | undefined)?.[0] as string
@@ -512,7 +512,7 @@ describe('daily briefing page', () => {
       }))
     })
     const dom = await renderPage(client, { locale: 'zh-CN' })
-    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    const copy = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="copy"]')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     const markdown = (writeText.mock.calls[0] as unknown[] | undefined)?.[0] as string
     // Same rule as the file name and the exported image: the edition decides its own language.
@@ -527,7 +527,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    const copy = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="copy"]')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(dom.textContent).toContain(text.copyFailed)
     // 这一句是夹具文档自己的正文（`briefingDocument(..., '历史版次')`），不是文案表里的句子。
@@ -555,7 +555,7 @@ describe('daily briefing page', () => {
     // 顶部那颗现在是「手动生成」：它走的是生成那一条路（`generateNow`），不是"重生成整天那一条"。
     const client = fakeClient()
     const dom = await renderPage(client)
-    const run = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    const run = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { run.click(); await Promise.resolve(); await Promise.resolve() })
     expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
     expect(dom.textContent).toContain('重新生成版')
@@ -573,9 +573,9 @@ describe('daily briefing page', () => {
       })
     })
     const dom = await renderPage(client)
-    const button = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    const button = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { button.click(); await Promise.resolve() })
-    const running = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    const running = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(running.textContent).toBe(text.regenerating)
     expect(running.disabled).toBe(true)
     await act(async () => { running.click(); await Promise.resolve() })
@@ -591,7 +591,7 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('Stablecoin contraction pulls bids away.')
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('DefiLlama Stablecoins')
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('稳定币 30 日净收缩')
-    expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
+    expect(dom.querySelector('[data-toolbar-action="export"]')).not.toBeNull()
   })
 
   it('says when the window was computed in the system zone because the setting was unreadable', async () => {

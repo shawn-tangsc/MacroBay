@@ -40,7 +40,7 @@ export function BriefingPushToPhoneButton({ state, text, onPush, onRetry }: Brie
     disabled={sending || blocked !== undefined}
     icon={sending ? <LoadingSpinner size="sm" /> : undefined}
     onClick={failed === undefined ? onPush : onRetry}
-    type="text">
+    className="mi-briefing-tool__btn">
     {sending ? text.sending : text.button}
   </Button>
 

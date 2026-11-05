@@ -21,8 +21,6 @@
 }
 
 
-.mi-daily-briefing__copy { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__copy:hover { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
 
 .mi-daily-briefing__settings-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__settings-row strong { display: block; color: var(--mi-dashboard-text); font-size: 12px; }
@@ -40,14 +38,21 @@
 .mi-daily-briefing__settings-note { margin: 12px 0 0; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
 
 
-.mi-daily-briefing__regenerate { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__regenerate:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__regenerate:disabled { opacity: .55; cursor: default; }
 
 .mi-daily-briefing-page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 16px 24px 22px; overflow: hidden; }
 .mi-daily-briefing-page__bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing-page__back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: var(--mi-dashboard-surface); color: var(--mi-dashboard-muted); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__back:hover { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
+/* Toolbar: one shape for every action, and exactly one primary in the row.
+   Before this, five actions grew in five separate changes and each copied its own 28px/10.5px —
+   the row ended up with two filled buttons (reader cannot tell which is the main path) and a fifth
+   that fell back to the plain button default. Values here are lifted from those copies, no new colour. */
+.mi-briefing-tool__btn { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
+.mi-briefing-tool__btn:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
+.mi-briefing-tool__btn:disabled { opacity: .55; cursor: default; }
+.mi-briefing-tool__btn--primary { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-lime); }
+.mi-briefing-tool__btn--primary:hover:not(:disabled) { background: #26301f; }
+
 .mi-daily-briefing-page__actions { display: flex; align-items: center; gap: 7px; }
 .mi-daily-briefing-page__body { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 20px; flex: 1; min-height: 0; padding-top: 14px; }
 .mi-daily-briefing-page__content { min-height: 0; overflow-y: auto; padding: 20px 22px; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
@@ -77,9 +82,6 @@
   .mi-daily-briefing-page__content { padding: 14px; }
 }
 
-.mi-daily-briefing__export { height: 28px; padding: 0 10px; border: 1px solid #3c4a2a; border-radius: 7px; background: #1c2418; color: var(--mi-dashboard-lime); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__export:hover:not(:disabled) { background: #26301f; }
-.mi-daily-briefing__export:disabled { opacity: .55; cursor: default; }
 
 .mi-daily-briefing-page__body { grid-template-columns: 248px minmax(0, 1040px); justify-content: center; }
 .mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }

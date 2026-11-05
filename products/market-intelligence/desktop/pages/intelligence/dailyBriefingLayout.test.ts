@@ -35,3 +35,28 @@ describe('daily briefing layout', () => {
     expect(narrow).toContain('.mi-daily-briefing-page__appendix { grid-column: 1 / -1;')
   })
 })
+
+/**
+ * The toolbar had five actions in five separate changes, and each change copied its own 28px/10.5px
+ * skeleton — so the row grew two filled buttons and a fifth that fell back to the plain default.
+ * These two counts are what that failure looks like from the stylesheet's side: one skeleton, one
+ * primary. A sixth button can be added without touching either, which is the point.
+ */
+describe('one toolbar shape, one primary', () => {
+  const pageActions = readFileSync('products/market-intelligence/desktop/pages/intelligence/DailyBriefingPageActions.tsx', 'utf8')
+
+  it('declares the button skeleton exactly once', () => {
+    const skeleton = css.match(/height: 28px; padding: 0 10px; border: 1px solid/g) ?? []
+    expect(skeleton).toHaveLength(1)
+  })
+
+  it('marks exactly one action in the row as primary', () => {
+    expect(pageActions.match(/mi-briefing-tool__btn--primary/g) ?? []).toHaveLength(1)
+  })
+
+  it('gives every toolbar button the shared class instead of a private one', () => {
+    for (const legacy of ['mi-daily-briefing__copy', 'mi-daily-briefing__regenerate', 'mi-daily-briefing__export']) {
+      expect(css).not.toContain(`.${legacy} {`)
+    }
+  })
+})
