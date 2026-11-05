@@ -12,6 +12,13 @@ import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
  * cannot end up describing the outcome differently. Kept out of the page because it is a
  * capability, not layout.
  */
+/** 临时挂上去的"生成中"行：没有正文、语言状态是 generating。 */
+function isGeneratingPlaceholder(row: DailyBriefingEditionSummary): boolean {
+  return row.state === 'missing'
+    && row.summaryLine === undefined
+    && (row.languages ?? []).some((language) => language.state === 'generating')
+}
+
 /** 正在跑的那一行：列表据此显示「生成中」，而不是等重读之后才出现。 */
 function withGeneratingRow(
   rows: readonly DailyBriefingEditionSummary[],
@@ -82,6 +89,9 @@ export function useBriefingRunActions(input: Readonly<{
         ...(options?.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
       }))
       const document = await run(options)
+      // 跑失败/超时也要把这行收回：它是"正在跑"的临时事实，不是一条版次。留着它会变成一行永远
+      // "生成中"的幽灵（进程崩过的那次尤其明显）。判据只用"占位行 + 语言正在生成"这两个特征。
+      if (!document) input.setEditions((current) => current.filter((row) => !isGeneratingPlaceholder(row)))
       if (document) {
         input.setView({ status: 'ready', document, kind: 'today' })
         // 只替换读到的那一行（日期 + 期号 + 语言）：同一天另一语言的行必须原样留着，

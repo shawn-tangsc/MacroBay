@@ -452,6 +452,26 @@ describe('daily briefing page', () => {
     await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve() })
   })
 
+  it('does not leave a generating row behind when the run never settles', async () => {
+    // 「生成中」那一行只活在这一页的状态里，从不写库：请求失败/超时后重读列表，它必须消失，
+    // 否则进程崩过的那次会永远挂着一行"生成中"。
+    const today = '2026-10-30'
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [], dates: [today], today } })),
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' })),
+      regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'model-unavailable' }))
+    })
+    const dom = await renderPage(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click() })
+    await act(async () => { await Promise.resolve() })
+    const run = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.manualRunDialog.run.replace(/\s/g, ''))
+    await act(async () => { run!.click(); for (let round = 0; round < 6; round += 1) await Promise.resolve() })
+    for (let round = 0; round < 12; round += 1) await act(async () => { await Promise.resolve() })
+    expect(dom.querySelector('[data-rail-title="running"]')).toBeNull()
+    expect(dom.querySelector('[data-rail-fallback="true"]')).not.toBeNull()
+  })
+
   it('draws today’s head even when it has no edition, and keeps older empty days out', async () => {
     // `02` v2.91：天头 = 有版次 ∨ 有过运行记录 ∨ 今天是今天。服务侧把这份集合算好交下来，
     // 页面只传不用自己推——否则早上七点前打开，列表会从昨天开始，读者以为列表坏了。
