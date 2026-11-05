@@ -147,11 +147,12 @@ describe('daily briefing history rail', () => {
 
   it('deletes the edition on screen, after the shared confirmation', async () => {
     const onDeletePeriod = vi.fn()
-    const resolveText = (key: string) => key.endsWith('history.deleteEdition.zh-CN') ? '删除中文版…' : key
+    const resolveText = (key: string) => key.endsWith('history.deleteEditionCurrent') ? '删除这一版…' : key
     render({ resolveText, onDeletePeriod })
-    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
+    // 版次级菜单挂在语言徽标上：它删的是这一版正文，不是这一期的排期。
+    const chip = host.querySelector<HTMLElement>('[data-edition-locale]')!
 
-    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    act(() => { chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     // 第一项是"删除这一期"（删排期），这里点的是删这一语言版的那一条。
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
     act(() => { items.at(-1)!.click() })
@@ -202,15 +203,10 @@ describe('daily briefing history rail', () => {
     expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('data-state')).toBe('missing')
   })
 
-  it('says there is nothing to delete when the issue has no edition', () => {
-    render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
-      resolveText: (key: string) => key.endsWith('history.deleteNoEdition') ? '这一期没有可删除的版本' : key
-    })
-    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(items).toHaveLength(1)
-    expect(items[0].textContent).toContain('这一期没有可删除的版本')
+  it('offers no edition menu on a row that has no edition to delete', () => {
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
+    // 没有版次就没有那一枚语言徽标，版次级菜单也就无从打开——不给读者一个"没有可删的版本"的空项。
+    expect(host.querySelector('[data-edition-locale]')).toBeNull()
   })
 
   it('keeps a partial issue a data state, not a chip on the row', () => {
@@ -258,7 +254,7 @@ describe('a row is never a button inside a button', () => {
 
   it('opens the same menu from the ⋯ and from the right-click', () => {
     const resolveText = (key: string) => key
-    render({ resolveText })
+    render({ resolveText, onRegeneratePeriod: vi.fn(), onRemovePeriod: vi.fn() })
     const trigger = host.querySelector<HTMLElement>('[data-rail-menu]')!
     act(() => { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     const fromTrigger = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((node) => node.textContent)
@@ -327,4 +323,36 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(onSelectLocale).not.toHaveBeenCalled()
   })
 
+})
+
+describe('two action layers, one menu implementation', () => {
+  it('offers the two period actions on ⋯, and keeps 删除这一版 on the edition level', () => {
+    // `02` 的动作分层：期级是「重新生成这一期 / 删除这一期」，版次级是这一版自己的动作。
+    // 混在一张菜单里，读者分不清"删除"删的是排期还是正文——所以两层的条目互不出现。
+    const resolveText = (key: string) => key
+    render({ resolveText, onRegeneratePeriod: vi.fn(), onRemovePeriod: vi.fn(), onDeletePeriod: vi.fn() })
+    act(() => { host.querySelector<HTMLElement>('[data-rail-menu]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const period = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((node) => node.textContent ?? '')
+    expect(period).toHaveLength(2)
+    expect(period[0]).toContain('regeneratePeriod')
+    expect(period[1]).toContain('deleteWholePeriod')
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+
+    act(() => { host.querySelector<HTMLElement>('[data-edition-locale]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const editionLayer = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((node) => node.textContent ?? '')
+    expect(editionLayer).toHaveLength(1)
+    expect(editionLayer[0]).toContain('deleteEditionCurrent')
+  })
+
+  it('keeps 重新生成这一期 disabled on a past day, with the sentence that explains why', () => {
+    render({ editions: [edition({ date: '2026-10-28' })], resolveText: (key: string) => key, onRegeneratePeriod: vi.fn() })
+    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-10-28')!
+    act(() => pastHead.click())
+    act(() => { host.querySelector<HTMLElement>('[data-date="2026-10-28"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    const blocked = items.find((node) => (node.textContent ?? '').includes('backfillBlocked'))!
+    expect(blocked).not.toBeUndefined()
+    expect(blocked.getAttribute('aria-disabled')).toBe('true')
+  })
 })

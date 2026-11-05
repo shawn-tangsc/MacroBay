@@ -374,10 +374,10 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenCalledTimes(1)
 
     const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!
-    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    // 菜单第一项现在是「删除这一期」（删排期），这里要的是删这一语言版，所以点最后一条。
-    const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    const item = menuItems.at(-1) ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    // 删版次是版次级动作：菜单挂在那一枚语言徽标上，不在行的期级菜单里（期级是重跑/删排期）。
+    const chip = row.closest('.mi-daily-briefing__rail-item')!.querySelector<HTMLElement>('[data-edition-locale]')!
+    act(() => { chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
@@ -425,10 +425,10 @@ describe('daily briefing page', () => {
     expect(railRow().getAttribute('aria-current')).toBe('true')
     expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
 
-    act(() => { railRow().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    // 菜单第一项现在是「删除这一期」（删排期），这里要的是删这一语言版，所以点最后一条。
-    const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    const item = menuItems.at(-1) ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    // 版次级菜单挂在语言徽标上：删的是这一版的正文，不是这一期的排期。
+    const chip = railRow().closest('.mi-daily-briefing__rail-item')!.querySelector<HTMLElement>('[data-edition-locale]')!
+    act(() => { chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
