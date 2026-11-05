@@ -163,12 +163,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // 当前这一版的身份，交给删除的确认框点名。时刻取这一版自己的名义截止（读者时区），不是"现在"。
   const deleteTarget = readyDocument === undefined ? undefined : (() => {
     const period = briefingEditionPeriod(readyDocument.edition)
-    return {
-      date: readyDocument.edition.date,
-      clock: railClock(period.periodTime, timeZone),
-      language: readyDocument.edition.locale,
-      periodId: period.periodId
-    }
+    return { date: readyDocument.edition.date, clock: railClock(period.periodTime, timeZone), language: readyDocument.edition.locale, periodId: period.periodId }
   })()
   const loading = isBriefingLoading(view)
   const busyLocally = loading || regenerating

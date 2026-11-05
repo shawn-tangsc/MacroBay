@@ -263,6 +263,21 @@ describe('daily briefing client', () => {
   })
 })
 
+describe('deleting one edition', () => {
+  it('sends the row identity — date, period and language — never a bare date', async () => {
+    // 服务端按语言删除（`readLanguage`）：少了 locale 就在运行时抛 `daily-briefing-locale-required`，
+    // 读者看到的是"点了删除没反应"。载荷里三者都要在，而且都来自被点中的那一行。
+    let seen: unknown
+    stubInvoke((method, payload) => {
+      expect(method).toBe('intelligence.dailyBriefing.deletePeriod')
+      seen = payload
+      return { editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }
+    })
+    await dailyBriefingClient.deletePeriod({ date: '2026-11-05', periodId: 'default', locale: 'en-US' })
+    expect(seen).toEqual({ date: '2026-11-05', periodId: 'default', locale: 'en-US' })
+  })
+})
+
 describe('generation progress', () => {
   it('reports the running attempt with its stages in pipeline order', async () => {
     stubInvoke((method) => method === 'intelligence.dailyBriefing.getProgress'

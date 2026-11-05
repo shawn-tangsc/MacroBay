@@ -250,13 +250,14 @@ describe('a row is never a button inside a button', () => {
 
   it('keeps the row free of a ⋯, and the right-click opens exactly one edition action', () => {
     // 02 v2.40：行尾不出现 ⋯；入口是右键 + 正文顶部工具栏第五颗，两者共用同一确认框。
-    render({ resolveText: (key: string) => key })
+    // 真文案解析：键不存在时菜单项会渲染成空标签，stub 会把这个病伪装成通过。
+    render({ resolveText: (key: string) => resolveProductTextKey('zh-CN', key) })
     expect(host.querySelector('[data-rail-menu]')).toBeNull()
     expect(host.textContent).not.toContain('⋯')
     act(() => { host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
     expect(items).toHaveLength(1)
-    expect(items[0]!.textContent).toBe('pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent')
+    expect(items[0]!.textContent).toBe(text.history.deleteEditionCurrent)
   })
 
   it('renders no menu at all for a row with no edition, instead of an empty floating panel', () => {

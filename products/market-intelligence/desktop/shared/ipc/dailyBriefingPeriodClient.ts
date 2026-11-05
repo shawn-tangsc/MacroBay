@@ -33,11 +33,15 @@ export type DailyBriefingPeriodRemoveResult =
   | Readonly<{ state: 'missing'; id: string }>
 
 export type DailyBriefingPeriodClient = Readonly<{
+  /**
+   * 界面语言是**必填**，不是可选：服务端每个方法都要求它（`readLanguage`），漏传会在运行时抛
+   * `daily-briefing-locale-required`，而界面上只会显示成"没读出来"。写成必填，漏传就编译不过。
+   */
   /** The saved period configuration; never the old generation settings. */
-  list: (locale?: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
-  create: (draft: BriefingPeriodDraft, locale?: DailyBriefingLocale) => Promise<DailyBriefingPeriodWriteResult>
-  update: (id: string, draft: BriefingPeriodDraft, locale?: DailyBriefingLocale) => Promise<DailyBriefingPeriodWriteResult>
-  remove: (id: string, locale?: DailyBriefingLocale) => Promise<DailyBriefingPeriodRemoveResult>
+  list: (locale: DailyBriefingLocale) => Promise<readonly BriefingPeriod[]>
+  create: (draft: BriefingPeriodDraft, locale: DailyBriefingLocale) => Promise<DailyBriefingPeriodWriteResult>
+  update: (id: string, draft: BriefingPeriodDraft, locale: DailyBriefingLocale) => Promise<DailyBriefingPeriodWriteResult>
+  remove: (id: string, locale: DailyBriefingLocale) => Promise<DailyBriefingPeriodRemoveResult>
 }>
 
 async function invoke(method: string, payload: unknown): Promise<unknown> {
@@ -48,7 +52,7 @@ async function invoke(method: string, payload: unknown): Promise<unknown> {
 
 export const dailyBriefingPeriodClient: DailyBriefingPeriodClient = {
   async list(locale) {
-    const value = await invoke(METHODS.listPeriods, locale ? { locale } : {})
+    const value = await invoke(METHODS.listPeriods, { locale })
     if (!Array.isArray(value)) throw new Error('daily-briefing-period-invalid-result')
     return Object.freeze(value.map((entry) => {
       const period = parseBriefingPeriod(entry)
@@ -57,13 +61,13 @@ export const dailyBriefingPeriodClient: DailyBriefingPeriodClient = {
     }))
   },
   async create(draft, locale) {
-    return parsePeriodWriteResult(await invoke(METHODS.createPeriod, { draft, ...(locale ? { locale } : {}) }))
+    return parsePeriodWriteResult(await invoke(METHODS.createPeriod, { draft, locale }))
   },
   async update(id, draft, locale) {
-    return parsePeriodWriteResult(await invoke(METHODS.updatePeriod, { id, draft, ...(locale ? { locale } : {}) }))
+    return parsePeriodWriteResult(await invoke(METHODS.updatePeriod, { id, draft, locale }))
   },
   async remove(id, locale) {
-    return parsePeriodRemoveResult(await invoke(METHODS.removePeriod, { id, ...(locale ? { locale } : {}) }))
+    return parsePeriodRemoveResult(await invoke(METHODS.removePeriod, { id, locale }))
   }
 }
 

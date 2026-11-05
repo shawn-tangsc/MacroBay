@@ -130,7 +130,8 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
                 cancelLabel: text.periodDialog.cancel,
                 tone: 'danger',
                 onConfirm: () => {
-                  void client.remove(period.id)
+                  // 界面语言必填：服务端每个方法都要它，漏传就是 `daily-briefing-locale-required`。
+                  void client.remove(period.id, locale)
                     .then(() => { setSaveFailed(false); load() })
                     .catch(() => setSaveFailed(true))
                 }
