@@ -493,7 +493,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
           onExport={() => void exportImage()}
           onCopy={() => void copy()}
-          onRegenerate={() => void runBriefing({ locale: effectiveLocale, trigger: 'regenerate' })}
+          // 重跑的是**屏幕上这一版**：期号与语言取自它，不是服务端的默认期。
+          // 以前这里不带期号，历史日点「重新生成」写的是今天那版（审计 #10/#23）。
+          onRegenerate={() => void runBriefing({ periodId: onScreenPeriodId, locale: effectiveLocale, trigger: 'regenerate' })}
           push={pushToPhone}
           pushText={briefingPushText[locale]}
         />,
@@ -502,7 +504,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null,
         // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
-        onRetry: () => void runBriefing({ locale: effectiveLocale, trigger: 'regenerate' }),
+        onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: effectiveLocale, trigger: 'regenerate' }),
         // 读不到时的「重试」只重读：把读取重跑一遍，不起 run、不写版、不调模型。
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句

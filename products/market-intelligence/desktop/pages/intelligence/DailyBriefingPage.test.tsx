@@ -518,6 +518,40 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-period-id="period_b"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  // #10/#23：历史日页面上点「重新生成」，写的必须是那一页，不是今天那版。
+  it('regenerates the page it is looking at, not today, when the page is a history day', async () => {
+    const today = '2026-10-30'
+    const past = '2026-10-29'
+    const listed = [
+      { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 },
+      { date: past, periodId: 'period_prev', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${past}T00:30:00.000Z`, windowEnd: `${past}T00:30:00.000Z`, readingsAvailable: 4 }
+    ]
+    const regenerate = vi.fn(async () => new Promise(() => undefined))
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } })),
+      get: vi.fn(async ({ periodId }: { periodId?: string }) => ({
+        state: 'available' as const,
+        document: {
+          ...briefingDocument(past),
+          edition: { ...briefingDocument(past).edition, date: past, periodId: periodId ?? 'default' }
+        }
+      })),
+      regenerate
+    })
+    const dom = await renderPage(client)
+
+    // 打开昨天那一版，再点版次级「重新生成」。
+    const pastRow = dom.querySelector<HTMLButtonElement>(`.mi-daily-briefing__rail-row[data-period-id="period_prev"]`)!
+    await act(async () => { pastRow.click() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+    await act(async () => { await Promise.resolve() })
+
+    const request = (regenerate.mock.calls as unknown as [[{ periodId?: string; locale?: string }]])[0]?.[0]
+    expect(request?.periodId).toBe('period_prev')
+    expect(request?.locale).toBe('zh-CN')
+  })
+
   it("keeps today's summary on the row after the document is read back", async () => {
     // 写回列表时按"同一行"合并，但新文档必须带上自己的摘要：整条替换且不带 summaryLine，今天那一
     // 行的第二行就空了（库里 lede 明明有这句话）。这条用例用真实数据形状钉住它。
@@ -927,7 +961,8 @@ describe('daily briefing page', () => {
       panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
       await Promise.resolve(); await Promise.resolve()
     })
-    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    // 重跑的是屏幕上这一版：期号必须跟着走，否则历史日一点就写今天那版（#10/#23）。
+    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), periodId: 'default' })
     expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
     expect(dom.textContent).toContain('重新生成版')
   })
