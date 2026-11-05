@@ -172,13 +172,17 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       ])
       const refreshed = await refreshMissingMacroValues(deps, facts, locale, calendar)
       const counts = refreshed.counts
+      const webKeys = refreshed.webKeys
+      const conflicts = refreshed.conflicts
       return Object.freeze({
         ...facts,
         locale,
         timeZone,
         priorConclusions,
         calendar: refreshed.calendar,
-        ...(counts === undefined ? {} : { macroValueCounts: counts })
+        ...(counts === undefined ? {} : { macroValueCounts: counts }),
+        ...(webKeys === undefined ? {} : { macroWebValueKeys: webKeys }),
+        ...(conflicts === undefined ? {} : { macroValueConflicts: conflicts })
       })
     }
   }
@@ -195,7 +199,12 @@ async function refreshMissingMacroValues(
   facts: DailyBriefingFactSnapshot,
   locale: DailyBriefingLocale,
   calendar: DailyBriefingFactPacket['calendar']
-): Promise<Readonly<{ calendar: DailyBriefingFactPacket['calendar']; counts?: Readonly<{ calendarCalls: number; webCalls: number }> }>> {
+): Promise<Readonly<{
+  calendar: DailyBriefingFactPacket['calendar']
+  counts?: Readonly<{ calendarCalls: number; webCalls: number }>
+  webKeys?: readonly string[]
+  conflicts?: readonly string[]
+}>> {
   if (calendar.state !== 'available' || calendar.events.length === 0) return { calendar }
   const start = Date.parse(facts.windowStart)
   const end = Date.parse(facts.windowEnd)
@@ -219,13 +228,19 @@ async function refreshMissingMacroValues(
     ...(deps.macroWebRead === undefined ? {} : { readWeb: deps.macroWebRead })
   })
   const counts = Object.freeze({ calendarCalls: backfill.calendarCalls, webCalls: backfill.webCalls })
-  if (backfill.resolved.length === 0) return { calendar, counts }
+  const webKeys = Object.freeze(backfill.resolved.filter((entry) => entry.via === 'web').map((entry) => entry.eventKey))
+  const conflicts = Object.freeze(backfill.conflicts.map((conflict) => conflict.eventKey))
+  if (backfill.resolved.length === 0) {
+    return conflicts.length === 0 ? { calendar, counts } : { calendar, counts, webKeys, ...(conflicts.length === 0 ? {} : { conflicts }) }
+  }
   return {
     calendar: Object.freeze({
       ...calendar,
       events: mergeMacroValues(calendar.events, backfill.resolved.map((entry) => ({ eventKey: entry.eventKey, actual: entry.actual })))
     }),
-    counts
+    counts,
+    ...(webKeys.length === 0 ? {} : { webKeys }),
+    ...(conflicts.length === 0 ? {} : { conflicts })
   }
 }
 

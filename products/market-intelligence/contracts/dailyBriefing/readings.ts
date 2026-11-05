@@ -7,7 +7,7 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
 export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24'
 
 /** The four readings, and whether each source could answer at generation time. */
@@ -311,6 +311,12 @@ export type BriefingMacroItem = Readonly<{
    * renderers treat absence as "not cancelled", never as a fourth state.
    */
   lifecycleState?: 'scheduled' | 'released' | 'cancelled'
+  /**
+   * 这个实际值是从哪儿来的（`02` v2.128）：日历源就是 `calendar`，联网取到的是 `web`。
+   * 只用于在值后面标「（网页）」——**来源标注不是可信度话术**，四个禁用词照旧命中 0。
+   * 老文档没有这个字段 = 全部来自日历，渲染不补任何后缀。
+   */
+  valueSource?: 'calendar' | 'web'
   surprise: Readonly<{
     direction: 'beat' | 'miss' | 'inline' | 'consensus-unavailable'
     value?: number

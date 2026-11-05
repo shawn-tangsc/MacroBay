@@ -65,6 +65,7 @@ export const dailyBriefingText = {
     newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
+    macroWebValue: '（网页）',
     macroEmptyCodes: { 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
@@ -162,7 +163,7 @@ export const dailyBriefingText = {
         'no-baseline': '变化基线缺失', 'no-baseline-last-release': '变化基线缺失', 'insufficient-window': '比较窗口不足',
         'news-disabled': '新闻来源未启用', 'news-unavailable': '新闻舆情不可用',
         'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
-        'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录',
+        'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录', 'macro-value-conflict': '来源数值冲突',
         'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
         'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
         'source-failure': '情报源采集失败', 'system-failure': '生成或存储未完成',
@@ -189,7 +190,7 @@ export const dailyBriefingText = {
         capitalGate: '{row}：随稳定币/资金面数据不可用'
       },
       interval: { minutes: '{count} 分钟', hours: '{count} 小时', days: '{count} 天' },
-      macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录' },
+      macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录', valueConflict: '同一事件两个来源数值冲突：这一格不显示数值' },
       calendarDisabled: '宏观日历来源未启用，事件与未来日程未显示',
       calendarUnavailable: '宏观日历暂不可用',
       newsDisabled: '新闻来源未启用，舆情未显示',
@@ -367,6 +368,7 @@ export const dailyBriefingText = {
     newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
+    macroWebValue: ' (web)',
     macroEmptyCodes: { 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
     macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', cancelled: 'Cancelled', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },
@@ -462,7 +464,7 @@ export const dailyBriefingText = {
         'no-baseline': 'Change baseline missing', 'no-baseline-last-release': 'Change baseline missing', 'insufficient-window': 'Comparison window too short',
         'news-disabled': 'News sources disabled', 'news-unavailable': 'News sentiment unavailable',
         'calendar-disabled': 'Calendar sources disabled', 'calendar-unavailable': 'Calendar unavailable',
-        'macro-consensus': 'Consensus not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected',
+        'macro-consensus': 'Consensus not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected', 'macro-value-conflict': 'Sources disagree',
         'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
         'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
         'source-failure': 'Source collection failed', 'system-failure': 'Generation or storage incomplete',
@@ -489,7 +491,7 @@ export const dailyBriefingText = {
         capitalGate: '{row}: unavailable with the stablecoin/capital snapshot'
       },
       interval: { minutes: '{count} min', hours: '{count} hours', days: '{count} days' },
-      macro: { consensusMissing: '{event}: consensus not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected' },
+      macro: { consensusMissing: '{event}: consensus not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected', valueConflict: 'Two sources disagree on this event, so its value is not shown' },
       calendarDisabled: 'Macro calendar sources are disabled, so events and the upcoming schedule are hidden',
       calendarUnavailable: 'The macro calendar is unavailable',
       newsDisabled: 'News sources are disabled, so sentiment is hidden',

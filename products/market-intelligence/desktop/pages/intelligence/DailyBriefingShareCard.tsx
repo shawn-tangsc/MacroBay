@@ -9,6 +9,7 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
 import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 
@@ -136,7 +137,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}{item.lifecycleState === 'cancelled' ? <span className="mi-brief-poster__macro-cancelled">{text.macro.cancelled}</span> : null}</p>
           {/* 没有实际值就**整格不渲染**（用户 2026-11-06）：不占位、不写破折号、不写「未拿到」——
               正文里出现"没数据/没拿到"会让读者觉得这张简报不可信。事件本身照旧显示（时刻、国家、名称）。 */}
-          {item.actual === undefined ? null : <small>{text.macro.actual} {item.actual}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>}
+          {(() => {
+            const value = briefingMacroValueLabel({ actual: text.macro.actual, webValue: text.macroWebValue }, item)
+            if (value === undefined) return null
+            return <small>{value}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>
+          })()}
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}

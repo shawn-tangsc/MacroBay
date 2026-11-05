@@ -54,7 +54,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const { packet, date } = input
   const readings = buildBriefingReadingRows(packet, previousFearGreedBaseline(packet, input.previous))
   const news = selectNews(packet)
-  const macroCandidates = selectMacroCandidates(packet)
+  const macroCandidates = selectMacroCandidates(packet, new Set(packet.macroWebValueKeys ?? []))
   const macro = selectMacro(packet, macroCandidates)
   // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
   const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
@@ -125,7 +125,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
         ...(macroEmpty === undefined ? {} : macroEmptyNotes),
-        ...macroTotals
+        ...macroTotals,
+        ...(packet.macroValueConflicts === undefined || packet.macroValueConflicts.length === 0
+          ? {}
+          : { macroValueConflicts: packet.macroValueConflicts })
       })
     }),
     data: Object.freeze({

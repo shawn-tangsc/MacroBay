@@ -200,6 +200,21 @@ describe('the macro section draws events, never a message about missing data (v2
     assertClean(rendered)
   })
 
+  it('marks a web-sourced value with the same suffix, and leaves a store value alone', async () => {
+    // `02` v2.128：只给网页取到的值加「（网页）」；库内值一个字都不加。
+    const base = briefing()
+    const web = await render({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'web' }], notes: {} }
+    })
+    expect(web.textContent!.split(text.macroWebValue).length - 1).toBe(1)
+    const store = await render({ ...base, news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'calendar' }], notes: {} } })
+    expect(store.textContent).not.toContain(text.macroWebValue)
+    // 值本身两处都在：加的全是后缀，不是换了一份文字。
+    expect(web.textContent).toContain('3.4%')
+    expect(store.textContent).toContain('3.4%')
+  })
+
   it('prints the value when there is one', async () => {
     const rendered = await render(briefing())
     expect(rendered.textContent).toContain('3.4%')

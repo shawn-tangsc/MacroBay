@@ -95,6 +95,10 @@ export type DailyBriefingFactPacket = Readonly<{
    * 留在 fact 层供用例与排查读，不进文档、不呈现给读者。
    */
   macroValueCounts?: Readonly<{ calendarCalls: number; webCalls: number }>
+  /** 这些事件的实际值是联网取到的（`02` v2.128）：文档据此在值后标「（网页）」。 */
+  macroWebValueKeys?: readonly string[]
+  /** 两个来源说两个数的事件键：值格整格不渲染，右列留一条冲突缺口。 */
+  macroValueConflicts?: readonly string[]
   readings: Readonly<{
     fearGreed: FearGreedSnapshotResult
     funding: FundingRateHistoryResult

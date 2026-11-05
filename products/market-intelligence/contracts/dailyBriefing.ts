@@ -237,6 +237,11 @@ export type DailyBriefingDocument = Readonly<{
       macroEmptyHours?: number
       /** 窗口内高影响事件总数（不看有没有实际值）——「事件优先」那一步的数（`A0.12`）。 */
       macroHighImpactCount?: number
+      /**
+       * 两个来源说两个数的事件键（`02` v2.128）：**值格整格不渲染**，右列「数据缺口与限制」里
+       * 恰一条冲突说明。冲突是数据质量问题，不进正文措辞。
+       */
+      macroValueConflicts?: readonly string[]
     }>
   }>
   data: Readonly<{

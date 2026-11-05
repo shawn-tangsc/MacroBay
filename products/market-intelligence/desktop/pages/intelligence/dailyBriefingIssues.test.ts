@@ -99,6 +99,18 @@ describe('daily briefing issues', () => {
 
   // `A0.8`：过期的那一档必须在问题清单里说出来，连「几小时没更新」一起说；
   // 「确实没有」那一档则一条问题都不报——它本来就不是问题。
+  it('reports a source disagreement as exactly one gap, and never as a value', () => {
+    // `02` v2.128：两个来源说两个数 → 值格整格不渲染，右列**恰一条**冲突说明。
+    const issues = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroValueConflicts: ['US.ADP'] } } }),
+      text: zhText,
+      formatTime
+    })
+    const conflicts = issues.filter((entry) => entry.template === 'macro-value-conflict')
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0]!.title).toBe(zhText.limits.macro.valueConflict)
+  })
+
   it('names each "not readable" reason for the calendar, and stays silent for "nothing happened"', () => {
     const stale = briefingIssues({
       document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 } } }),

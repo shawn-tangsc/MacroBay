@@ -31,10 +31,13 @@ export function highImpactEventsInWindow(packet: DailyBriefingFactPacket): reado
     }))
 }
 
-export function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
+export function selectMacroCandidates(
+  packet: DailyBriefingFactPacket,
+  webValueKeys: ReadonlySet<string> = new Set()
+): readonly BriefingMacroItem[] {
   return Object.freeze([...highImpactEventsInWindow(packet)]
     .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
-    .map((event) => toMacroItem(event)))
+    .map((event) => toMacroItem(event, webValueKeys.has(event.eventKey))))
 }
 
 /**
@@ -94,7 +97,7 @@ export function selectMacroFloorItem(items: readonly BriefingMacroItem[]): Brief
   return floor
 }
 
-function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
+function toMacroItem(event: DailyBriefingCalendarEvent, webSourced = false): BriefingMacroItem {
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.title,
@@ -104,6 +107,8 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
     ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     ...(event.countryName ? { countryName: event.countryName } : {}),
     ...(event.actual === undefined ? {} : { actual: event.actual }),
+    // 只有"值确实是联网取到的"才标来源；库里本来就有的值一个字都不加（`02` v2.128）。
+    ...(event.actual === undefined || !webSourced ? {} : { valueSource: 'web' as const }),
     ...(event.previous === undefined ? {} : { previous: event.previous }),
     ...(event.consensus === undefined ? {} : { consensus: event.consensus }),
     // 原样带下来（schema 14）：卡片靠它画「已取消」，快照靠它排除；不在这里判断，判断只有一处。

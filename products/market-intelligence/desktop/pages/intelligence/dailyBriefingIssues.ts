@@ -30,7 +30,7 @@ export type BriefingIssueTemplate =
   | 'row-disabled' | 'row-unavailable' | 'row-stale' | 'row-no-value' | 'etf-no-history' | 'capital-gate'
   | 'no-baseline' | 'no-baseline-last-release' | 'insufficient-window'
   | 'news-disabled' | 'news-unavailable' | 'calendar-disabled' | 'calendar-unavailable'
-  | 'macro-consensus' | 'macro-actual' | 'macro-previous'
+  | 'macro-consensus' | 'macro-actual' | 'macro-previous' | 'macro-value-conflict'
   | 'backfill-done' | 'backfill-generic'
   | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
@@ -44,6 +44,7 @@ const templateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
   'news-disabled': 'source-disabled', 'news-unavailable': 'unavailable',
   'calendar-disabled': 'source-disabled', 'calendar-unavailable': 'unavailable',
   'macro-consensus': 'consensus-missing', 'macro-actual': 'actual-missing', 'macro-previous': 'previous-missing',
+  'macro-value-conflict': 'value-conflict',
   'backfill-done': 'backfill', 'backfill-generic': 'backfill',
   'ai-fallback': 'model-fallback', 'ai-websearch': 'websearch-off', 'ai-failure': 'editorial-failure',
   'source-failure': 'source-failed',
@@ -280,6 +281,15 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
 
 function collectMacro(input: BriefingIssueInput, add: AddIssue): void {
   for (const item of input.document.news.macro) macroItemIssues(input, add, item)
+  // 两个来源说两个数（`02` v2.128）：值格整格不渲染，右列**恰一条**冲突说明（按事件数合并）。
+  const conflicts = input.document.news.notes.macroValueConflicts ?? []
+  if (conflicts.length > 0) {
+    add({
+      id: 'data:macro:value-conflict', severity: 'warning', category: 'data', template: 'macro-value-conflict',
+      source: input.text.limits.sources.calendar, at: input.document.edition.generatedAt,
+      title: input.text.limits.macro.valueConflict, advice: input.text.limits.advice.checkCalendar
+    })
+  }
   for (const item of [input.document.next.focus, ...input.document.next.items]) {
     if (item) nextItemIssues(input, add, item)
   }

@@ -1,4 +1,5 @@
 import { editionNewsTitle } from './dailyBriefing/readings'
+import { briefingMacroValueLabel } from './dailyBriefingMacroValueText'
 import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
 import { briefingDataGroups, briefingDataRowsFromGroups } from './dailyBriefingDataGroups'
@@ -42,6 +43,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   macroEmptyCodes: Readonly<Record<string, string>>
   nextEmptyCodes: Readonly<Record<string, string>>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>> }>
+  /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
+  macroWebValue: string
   conclusion: Readonly<{ invalidation: string; conditions: string; counter: string; gaps: string; caveats: string }>
   next: Readonly<{ category: Readonly<Record<string, string>> }>
   citations: string
@@ -249,7 +252,19 @@ function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions)
 function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOptions): string {
   const title = escapeMarkdown(options.eventTitle ? options.eventTitle(item) : item.title)
   const surprise = options.labels.macro.surprise[item.surprise.direction] ?? item.surprise.direction
-  return `- **${title}** — ${options.formatTime(item.scheduledAt)} · ${options.labels.macro.actual} ${item.actual ?? '—'} · ${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus} · ${options.labels.macro.previous} ${item.previous ?? '—'} · ${surprise}`
+  // 值那一段与正文同一份拼法（`02` v2.128）：没有值就**整段不出现**（不印破折号，也不说"没拿到"），
+  // 网页取到的值带同一个来源后缀——图上标的、复制出来的必须是同一句话。
+  const value = briefingMacroValueLabel(
+    { actual: options.labels.macro.actual, webValue: options.labels.macroWebValue },
+    item
+  )
+  return [
+    `- **${title}** — ${options.formatTime(item.scheduledAt)}`,
+    ...(value === undefined ? [] : [value]),
+    `${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus}`,
+    `${options.labels.macro.previous} ${item.previous ?? '—'}`,
+    surprise
+  ].join(' · ')
 }
 
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
