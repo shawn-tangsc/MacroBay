@@ -115,23 +115,15 @@ export function DailyBriefingHistoryRail({
   }, [editions])
 
   const menuRow = menu ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId) : undefined
-  const menuLanguages = [...(menuRow?.availableLocales ?? [])]
+  // 行菜单只有一个动作：**删除这一版**——删的就是这一行（正文 + 它的会话）。
+  // 删排期（明天起不再自动生成、正文不动）只在设置页那行的垃圾桶里，两件事不混。
   const blocked = Boolean(menu && menu.date === todayDate && generatingStage)
-  // 一期一行之后，菜单先说"这一期"再问"哪一个语言版"：整天一期时代的菜单只有语言，读者找不到
-  // "把这一期整个删掉"这个动作。
-  const deleteWhole = { key: 'delete-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteWholePeriod', tone: 'danger' as const }
-  // 重新生成只对本日成立：服务端按"今天"解析期号，历史那天不能补跑（`backfillBlocked` 就是那句话）。
-  // 有入口但被禁，比"菜单里根本没有这个动作"诚实——读者至少知道这一版能重跑。
-  const regenerate = menu?.date === todayDate
-    ? onRegeneratePeriod
-      ? [{ key: 'regenerate-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.regeneratePeriod' }]
-      : []
-    : [{ key: 'regenerate-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.backfillBlocked', disabled: true }]
+  const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
   const menuItems = blocked
-    ? [{ key: 'regenerate-blocked-running', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', disabled: true }]
-    : menuLanguages.length === 0
-      ? [...regenerate, { key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
-      : [...regenerate, deleteWhole, ...menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))]
+    ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger' as const, disabled: true }]
+    : hasEdition
+      ? [{ key: 'delete-edition', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent', tone: 'danger' as const }]
+      : [{ key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
   const closeMenu = (): void => {
     const key = menu ? `${menu.date}:${menu.periodId}` : undefined
     setMenu(null)
@@ -213,8 +205,12 @@ export function DailyBriefingHistoryRail({
             const kind = running ? (edition.periodKind === 'manual' ? 'manual' : 'scheduled') : sourceKindOf(edition)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
+            // 「重试」不能放在行按钮里：`<button>` 里套 `<button>` 是无效 HTML，键盘用户在无障碍树里
+            // 会遇到一行两个按钮、焦点顺序说不清。它放在行按钮**之外**、同一条目内，视觉上仍落在行内。
+            const retryable = kind === 'failed' && edition.date === todayDate && onRegeneratePeriod !== undefined
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
+                {...(retryable ? { 'data-has-retry': 'true' } : {})}
                 aria-current={rowSelected(edition) ? 'true' : undefined}
                 // 生成中的那一行不可点：它还没有内容可开。原因写在行内第二行，读屏顺着行拿得到。
                 {...(running ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : {})}
@@ -253,13 +249,6 @@ export function DailyBriefingHistoryRail({
                     <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
                     <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                   </>}
-                  {/* 失败那一行只有它：没有正文可开，行内直接给一条出路，不必先点开再看。 */}
-                  {kind === 'failed' && edition.date === todayDate && onRegeneratePeriod
-                    ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
-                      onClick={(event) => { event.stopPropagation(); void onRegeneratePeriod({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>
-                      {text.history.retryOne}
-                    </button>
-                    : null}
                 </span>
                 {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
                     没有正文的那两行写**为什么没有**——空行会被读成"还在加载"。 */}
@@ -273,6 +262,12 @@ export function DailyBriefingHistoryRail({
                       {edition.periodDeleted ? `${text.history.deletedPeriod} · ` : ''}{title}
                     </span>}
               </button>
+              {retryable
+                ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
+                  onClick={() => { void onRegeneratePeriod?.({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>
+                  {text.history.retryOne}
+                </button>
+                : null}
             </div>
           })}
         </div> : null}
@@ -285,35 +280,20 @@ export function DailyBriefingHistoryRail({
       onClose={closeMenu}
       onSelect={(key) => {
         const target = menu
-        const languages = menuLanguages
+        const row = menuRow
         closeMenu()
-        if (key === 'regenerate-period' && target && onRegeneratePeriod && menuRow) {
-          void onRegeneratePeriod({ date: target.date, periodId: target.periodId, locale: menuRow.locale })
-          return
-        }
-        if (key === 'delete-period' && target && onRemovePeriod) {
-          // 删的是这一期的**排期**：行留着、标成已删除，正文照旧能读（`A9.8` 删期不删历史版次）。
-          confirm({
-            title: text.history.deleteWholeTitle.replace('{date}', target.date),
-            description: text.history.deleteWholeDescription,
-            confirmLabel: text.history.deleteConfirm,
-            cancelLabel: text.history.deleteCancel,
-            tone: 'danger',
-            onConfirm: () => onRemovePeriod({ date: target.date, periodId: target.periodId })
-          })
-          return
-        }
-        if (!key.startsWith('delete:') || !target || !onDeletePeriod) return
-        const language = key.slice('delete:'.length)
-        if (language !== 'zh-CN' && language !== 'en-US') return
-        const languageName = text.history.editionLanguages[language === 'en-US' ? 'en' : 'zh']
+        if (key !== 'delete-edition' || !target || !row || !onDeletePeriod) return
+        // 确认框点名：日期 · 时刻 · 语言。读者要能从这一句看出删的是哪一版，而不是"某一份"。
+        const languageName = text.history.editionLanguages[row.locale === 'en-US' ? 'en' : 'zh']
+        const clock = clockOf(row, text, timeZone)
+        const target_ = [target.date, clock, languageName].filter((part): part is string => part !== undefined && part !== '').join(' · ')
         confirm({
-          title: text.history.deleteTitle.replace('{date}', target.date).replace('{language}', languageName),
+          title: text.history.deleteTitle.replace('{date}', target_).replace('{language}', languageName),
           description: text.history.deleteDescription,
           confirmLabel: text.history.deleteConfirm,
           cancelLabel: text.history.deleteCancel,
           tone: 'danger',
-          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: language })
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: row.locale })
         })
       }}
       open={menu !== null}

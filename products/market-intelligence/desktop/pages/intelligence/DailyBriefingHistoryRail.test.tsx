@@ -169,33 +169,6 @@ describe('daily briefing history rail', () => {
     expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
-  it('opens the row menu from right-click or the keyboard, and disables it while generating', () => {
-    const resolveText = (key: string) => key.endsWith('history.deleteEdition.zh-CN')
-      ? '删除中文版…'
-      : key.endsWith('history.deleteWholePeriod') ? '删除这一期…'
-        : key.endsWith('history.deletePeriodBlocked') ? '生成中不能删除这一期' : key
-    render({ resolveText })
-    const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
-
-    act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    // 一期一行之后，菜单先说"这一期"，再问"哪一个语言版"。
-    expect(items).toHaveLength(2)
-    expect(items[0].textContent).toContain('删除这一期…')
-    expect(items[1].textContent).toContain('删除中文版…')
-
-    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-    expect(document.querySelectorAll('.ant-dropdown-menu-item')).toHaveLength(0)
-
-    // Keyboard equivalent opens the same menu; while the day is generating it is disabled with a reason.
-    render({ resolveText, generatingStage: 'AI 选择' })
-    const running = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
-    act(() => { running.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true })) })
-    const blocked = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(blocked).toHaveLength(1)
-    expect(blocked[0].textContent).toContain('生成中不能删除这一期')
-  })
-
   it('prints no reading count when the row carries none, instead of a fabricated zero', () => {
     // "0 项" was shown for editions whose count the list does not carry: unknown is not zero.
     render({ editions: [{ ...edition(), readingsAvailable: undefined }] })
@@ -227,23 +200,6 @@ describe('daily briefing history rail', () => {
     expect(host.textContent).toContain(text.history.missingRun)
     expect(host.textContent).not.toContain(text.history.generationFailed)
     expect(host.querySelector('.mi-daily-briefing__rail-row')?.getAttribute('data-state')).toBe('missing')
-  })
-
-  it('offers only the languages this issue actually has', () => {
-    // A menu that names a language the issue does not have is how "deleted the Chinese edition"
-    // happened for an issue with only an English one.
-    const onlyEnglish = (key: string) => key.endsWith('history.deleteEdition.en-US') ? '删除英文版…' : key.endsWith('history.deleteEdition.zh-CN') ? '删除中文版…' : key
-    render({ editions: [edition({ availableLocales: ['en-US'] })], resolveText: onlyEnglish })
-    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    // 整期的动作 + 这一期真的有的语言版（英文一版），不出现中文那条。
-    expect(items).toHaveLength(2)
-    expect(items[1].textContent).toContain('删除英文版…')
-    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-
-    render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })], resolveText: onlyEnglish })
-    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(3)
   })
 
   it('says there is nothing to delete when the issue has no edition', () => {
@@ -338,26 +294,4 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(onSelectLocale).not.toHaveBeenCalled()
   })
 
-  it('offers 重新生成这一期 for today and disables it for a past day', () => {
-    const onRegeneratePeriod = vi.fn()
-    const resolveText = (key: string) => key
-    render({ resolveText, onRegeneratePeriod })
-    act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const today = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(today.some((item) => item.textContent === 'pages.intelligence.portal.dashboard.dailyBriefing.history.regeneratePeriod')).toBe(true)
-    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-
-    // 历史那天：入口在、但禁用，理由就是"这一版还不支持补生成历史日报"。
-    render({ editions: [edition({ date: '2026-10-28' })], resolveText, onRegeneratePeriod })
-    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
-      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-10-28')!
-    act(() => pastHead.click())
-    act(() => { host.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const backfill = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-      .find((item) => item.textContent === 'pages.intelligence.portal.dashboard.dailyBriefing.history.backfillBlocked')!
-    expect(backfill).not.toBeUndefined()
-    expect(backfill.getAttribute('aria-disabled')).toBe('true')
-    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-    expect(onRegeneratePeriod).not.toHaveBeenCalled()
-  })
 })
