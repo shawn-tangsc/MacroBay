@@ -38,9 +38,18 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryMacroRatesSnapshot'
     | 'queryMacroEconomicCalendarMonth'
     | 'queryMarketCalendarMonth'
+    | 'queryMarketCalendarFreshness'
     | 'getCrossAssetQueryFailure'>
   news: NewsQuery
   profiles: Pick<SourceProfileStore, 'listProfiles'>
+  /**
+   * The calendar's write commands, injected by the composition root. **Not** part of `publicQuery`:
+   * a catch-up opens network requests and writes attempt rows, and a command that sits next to the
+   * reads gets called as if it were free. The holder is mutable so a late binding stays visible;
+   * `refreshNow` absent means the build never wired it (a wiring gap), which is a different branch
+   * from a bound command that fails when called.
+   */
+  calendarCommands?: Readonly<{ refreshNow?: (input: { timeoutMs: number }) => Promise<unknown> }>
   policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
   /**
    * Stored brief editions, read-only. Optional so a build without a briefing store still produces a

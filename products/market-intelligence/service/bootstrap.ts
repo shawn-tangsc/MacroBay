@@ -338,7 +338,15 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...intelligenceModule.calendarManualDependencies })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
-  intelligenceModule.publicQueryService.setMarketCalendarQuery({ queryMonth: marketCalendar.queryMonth })
+  // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
+  intelligenceModule.publicQueryService.setMarketCalendarQuery({
+    queryMonth: marketCalendar.queryMonth,
+    readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
+  })
+  // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
+  // A command, not a query — it opens network requests and writes attempts — so it is injected
+  // separately from the read surface above, and the brief never constructs a client of its own.
+  intelligenceModule.bindBriefingCalendarRefresh((input) => marketCalendar.refreshNow(input))
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,
     repository: macroCalendarBackend.repository,

@@ -623,6 +623,37 @@ describe('publicQueryService hindsight regressions', () => {
     expect(service.queryMarketCalendarMonth({ month: '2026-09', locale: 'zh', asOf: AS_OF }))
       .toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
   })
+
+  it('answers "not readable" for the calendar freshness until a reader is wired', () => {
+    const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
+
+    // ① 构建期缺装配：连月份读取都没有绑定。读者看到的是「读不到」，不是「没有」。
+    return expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+  })
+
+  it('forwards the calendar freshness reader and degrades a failing one to unavailable', async () => {
+    const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
+    const freshness = { state: 'available' as const, asOf: AS_OF, lastCollectedAt: null, sources: [
+      { descriptorId: 'macro-calendar-0xrouter-economic-data', lastCollectedAt: null },
+      { descriptorId: 'macro-calendar-0xrouter-financial-events', lastCollectedAt: null },
+      { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', lastCollectedAt: null }
+    ] }
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }), readCollectionFreshness: async () => freshness })
+    await expect(service.queryMarketCalendarFreshness()).resolves.toBe(freshness)
+
+    // ② 接了线但读失败：抛错的读数口，同样只能是「读不到」。
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }),
+      readCollectionFreshness: async () => { throw new Error('calendar store closed') } })
+    await expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+
+    // ③ 接了线但回了个连契约都不满足的形状：不许转发半个读数。
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }),
+      readCollectionFreshness: async () => ({ lastCollectedAt: AS_OF }) })
+    await expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+  })
 })
 
 /** The canonical historical cross-asset snapshot, in the shape `parseCrossAssetSnapshot` accepts. */

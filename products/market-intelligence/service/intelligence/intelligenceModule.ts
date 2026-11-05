@@ -295,6 +295,15 @@ export type IntelligenceModule = {
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
+  /**
+   * Bind the one calendar write the brief may perform: the bounded catch-up before it judges
+   * freshness. Injected by the composition root once, because the calendar runtime is built after
+   * this module; the brief never builds a calendar client of its own.
+   *
+   * It is a command, not a query — network requests and attempt rows — so it deliberately does not
+   * live on the read-only public query surface.
+   */
+  bindBriefingCalendarRefresh: (refresh: (input: { timeoutMs: number }) => Promise<unknown>) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
@@ -928,6 +937,10 @@ export function getIntelligenceModule(
       isSourceEnabled,
       now: () => new Date().toISOString(),
     })
+    // The brief's calendar catch-up, bound once by the composition root after the calendar runtime
+    // exists. A holder rather than a plain function so "not bound yet" stays `undefined` and remains
+    // distinguishable from a bound command that fails when called.
+    const briefingCalendarCommands: { refreshNow?: (input: { timeoutMs: number }) => Promise<unknown> } = {}
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -937,7 +950,8 @@ export function getIntelligenceModule(
         // together with the analysis conclusions instead of copying one of them.
         briefEditions: dailyBriefingStore,
         news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
-        profiles: profileStore
+        profiles: profileStore,
+        calendarCommands: briefingCalendarCommands
       }),
       store: dailyBriefingStore,
       // 通知端口在这里交给服务：没有它，日报完成/失败/时区三条只存在于代码里，从不落记录
@@ -1049,6 +1063,9 @@ export function getIntelligenceModule(
             }
           }
         })
+      },
+      bindBriefingCalendarRefresh: (refresh) => {
+        briefingCalendarCommands.refreshNow = refresh
       }
     }
   }
