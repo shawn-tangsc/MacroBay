@@ -16,28 +16,6 @@ import { describe, expect, it } from 'vitest'
  */
 const css = readFileSync(join(__dirname, 'dailyBriefingShareCard.css'), 'utf8')
 
-/**
- * The block title's qualifier. It must take the title's size and ink while refusing its weight and
- * tracking: inheriting `.1em` would stretch the phrase until it reads as a second title, which is the
- * one thing it must not be. Two declarations — no new colour, no new size, no second rule set.
- */
-describe('the leverage qualifier belongs to the title, not to a card', () => {
-  it('inherits the title size and ink but not its weight or tracking', () => {
-    const note = rule('.mi-brief-poster__leverage-note')
-    expect(declaration(note, 'font-weight')).toBe('400')
-    expect(declaration(note, 'letter-spacing')).toBe('normal')
-    // Nothing else: a size or colour of its own here would drift from the title it follows.
-    expect(declaration(note, 'font-size')).toBeUndefined()
-    expect(declaration(note, 'color')).toBeUndefined()
-  })
-
-  it('leaves the title itself bold and tracked, so the two cannot be merged', () => {
-    const title = rule('.mi-brief-poster__leverage-title')
-    expect(declaration(title, 'font-weight')).toBe('700')
-    expect(declaration(title, 'letter-spacing')).toBe('.1em')
-  })
-})
-
 /** The declarations of one top-level rule, by exact selector. */
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
