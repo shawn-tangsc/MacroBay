@@ -285,3 +285,21 @@ describe('daily briefing history rail', () => {
     expect(host.textContent).toContain('未完整')
   })
 })
+
+describe('a collapsed day is readable on its own, and only today is 本期', () => {
+  it('summarises the latest readable edition, and never marks yesterday as 本期', () => {
+    // 折叠行不能只是「共 N 期」加一片空白；而「本期」属于今天——`isCurrent` 是"那一天最晚的一条"，
+    // 每天各有一条，直接标就会把本期挂到昨天。
+    render({
+      editions: [
+        edition({ date: '2026-11-04', periodId: 'p1', isCurrent: true, state: 'generated', summaryLine: '昨天的摘要', scheduledTime: '07:00' }),
+        edition({ date: '2026-11-03', periodId: 'p2', isCurrent: true, state: 'generated', summaryLine: '前天的摘要', scheduledTime: '07:00' })
+      ] as never
+    })
+    // 折叠态下没有行，但每天都有一行摘要；「本期」一个都不出现。
+    const summaries = [...host.querySelectorAll<HTMLElement>('[data-day-summary]')]
+    expect(summaries.length).toBeGreaterThan(0)
+    expect(summaries.map((node) => node.textContent).join(' ')).toContain('摘要')
+    expect(host.querySelectorAll('[data-is-current="true"]')).toHaveLength(0)
+  })
+})

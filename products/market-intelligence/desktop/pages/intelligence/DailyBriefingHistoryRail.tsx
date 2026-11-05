@@ -24,6 +24,20 @@ export type BriefingRailSelection = Readonly<{ date: string; periodId: string; l
  * date it was given and renders those conclusions; it does not re-sort, re-derive a language state,
  * or invent a missing one.
  */
+
+/**
+ * 折叠的那一天要自己是一条可读的信息，而不是「共 N 期」加一片空白。
+ *
+ * 摘要取**最新一期可读的**，不是数组最后一条：最后一条可能是已删除或这次失败的，拿它当脸等于给
+ * 折叠行挂一个没有正文的期。那天一期可读的都没有时返回 `undefined`——只显示「共 N 期」，不编。
+ */
+function collapsedSummary(day: Readonly<{ rows: readonly DailyBriefingEditionSummary[] }>, languages: Readonly<Record<string, string>>): Readonly<{ time: string; language: string; title: string }> | undefined {
+  const readable = day.rows.filter((row) => row.periodDeleted !== true && row.state !== 'missing' && (row.summaryLine ?? '') !== '')
+  const latest = readable.at(-1)
+  if (!latest) return undefined
+  return { time: latest.scheduledTime ?? '', language: languages[latest.locale] ?? latest.locale, title: latest.summaryLine ?? '' }
+}
+
 export function DailyBriefingHistoryRail({
   editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
   todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, gapCount, onDeletePeriod, onRemovePeriod
@@ -130,6 +144,17 @@ export function DailyBriefingHistoryRail({
             {text.history.periodCount.replace('{count}', String(day.rows.length))}
           </span>
         </button>
+        {/* 折叠态：一行摘要，让这一天自己是可读的信息（不是"共 N 期"加一片空白）。 */}
+        {isOpen(day.date) ? null : (() => {
+          const summary = collapsedSummary(day, text.history.languages as Readonly<Record<string, string>>)
+          return summary === undefined
+            ? null
+            : <p className="mi-daily-briefing__rail-day-summary" data-day-summary={day.date}>
+              {summary.time === '' ? null : <span>{summary.time} · </span>}
+              <span>{summary.language} · </span>
+              <span className="mi-daily-briefing__rail-day-summary-text">{summary.title}</span>
+            </p>
+        })()}
         {isOpen(day.date) ? <div role="list" className="mi-daily-briefing__rail-day-rows">
           {day.rows.map((edition) => {
             const missing = edition.state === 'missing'
@@ -151,7 +176,9 @@ export function DailyBriefingHistoryRail({
                 }}
                 onClick={() => onSelect(edition.date)}>
                 <span className="mi-daily-briefing__rail-line">
-                  {edition.isCurrent ? <em data-is-current="true">{text.history.currentPeriod}</em> : null}
+                  {/* 「本期」只属于今天：`isCurrent` 是"那一天完成最晚的一条"，每天各有一条，直接用它
+                      会把「本期」标到昨天去。今天没有版次时，今天的占位行才是本期。 */}
+                  {edition.isCurrent && edition.date === todayDate ? <em data-is-current="true">{text.history.currentPeriod}</em> : null}
                   {edition.periodDeleted ? <small className="mi-daily-briefing__rail-deleted" data-period-deleted="true">{text.history.deletedPeriod}</small> : null}
                   {edition.state === 'partial' && resolveText
                     ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
