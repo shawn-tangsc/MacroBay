@@ -2310,3 +2310,86 @@ describe('the edition language and the interface language are two different thin
     expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toMatch(cjk)
   })
 })
+
+describe('one body, one state (A9.15 / A9.16)', () => {
+  /** 正文区里的状态根：空态、生成中、失败、加载各算一个。 */
+  const bodyStateRoots = (dom: HTMLElement): HTMLElement[] => [...dom.querySelectorAll<HTMLElement>(
+    '.mi-daily-briefing-page__content [data-state], .mi-daily-briefing-page__content [data-daily-brief-failure], .mi-daily-briefing-page__content [data-briefing-stage-panel]'
+  )]
+
+  it('draws one empty state, with no button, and tells 「还没发生」 from 「那段时间没有」', async () => {
+    // ① 今天整期没有版次：`not-yet`。空态里零按钮（"现在手动生成一次"是文字，不是按钮）。
+    const todayEmpty = await renderPage(fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })) }))
+    const empty = bodyStateRoots(todayEmpty)
+    expect(empty).toHaveLength(1)
+    expect(empty[0]!.getAttribute('data-state')).toBe('empty')
+    // `StateView` 不把 reasonCode 写进 DOM（只有 `data-state` 与 `data-reason-source`），所以这一档
+    // 用产品句判断：今天的副句是"什么时候会出"，历史日是"那一段时间确实没有"。
+    expect(empty[0]!.getAttribute('data-state')).toBe('empty')
+    // 今天这一档的副句说的是"什么时候会出"；夹具没有固定时刻，走手动那一句。
+    expect(empty[0]!.querySelector('.state-view__reason')?.textContent).toBe(text.history.emptyTodayManual)
+    expect(empty[0]!.querySelectorAll('button')).toHaveLength(0)
+    const todayCopy = empty[0]!.textContent
+
+    // ② 有版次但缺当前选中的语言 → **同一个空态、同一句话**（读者不必分辨两种"没有"）。
+    const missingLanguage = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition) => edition.date === '2026-10-30' ? { ...edition, locale: 'en-US', availableLocales: ['en-US'] } : edition) }
+      })),
+      get: vi.fn(async () => ({ state: 'missing' as const }))
+    }))
+    const same = bodyStateRoots(missingLanguage)
+    expect(same).toHaveLength(1)
+    expect(same[0]!.getAttribute('data-state')).toBe('empty')
+    expect(same[0]!.textContent).toBe(todayCopy)
+  })
+
+  it('gives a historical empty day its own reason code, never the never-ran or error one', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })) })
+    const dom = await renderPage(client)
+    await expandDay(dom, '2026-10-27')
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-27"]')?.click(); await Promise.resolve(); await Promise.resolve() })
+    const roots = bodyStateRoots(dom)
+    expect(roots).toHaveLength(1)
+    // 「那段时间确实没有」用的是历史日那一句；`never-ran`（配"现在跑一次"）与 `error`（把"没有"和
+    // "读不到"合成一句）都不许出现在这里。
+    expect(roots[0]!.getAttribute('data-state')).toBe('empty')
+    expect(roots[0]!.querySelector('.state-view__reason')?.textContent).toBe(text.history.emptyBodyHistorical)
+    expect(roots[0]!.querySelectorAll('button')).toHaveLength(0)
+  })
+
+  it('shows exactly one state surface in the body, whichever state it is in', async () => {
+    // A9.16：五块是各自独立的 `&&`，没有 switch 兜底——两个分支同时成立就是"两态同屏"。
+    // 判据按"正文里能看见的那一层"数：纸面 / 状态根 / 失败面板 / 生成阶段面板，合计必须恰好 1。
+    const surfaces = (dom: HTMLElement): number => {
+      const body = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content')
+      if (body === null) return 0
+      return body.querySelectorAll('.mi-daily-briefing-page__paper, [data-state], [data-daily-brief-failure], [data-briefing-stage-panel]').length
+    }
+    // ① 正文
+    const body = await renderPage(fakeClient())
+    expect(surfaces(body)).toBe(1)
+    expect(body.querySelectorAll('.mi-daily-briefing-page__paper')).toHaveLength(1)
+    // ② 生成中：正文换成一块生成面板，全页只有一个阶段面板。
+    const generating = await renderPage(fakeClient({
+      getToday: vi.fn(() => new Promise(() => undefined)),
+      getProgress: vi.fn(async () => ({ state: 'idle' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: editions.map((edition) => edition.date === '2026-10-30' ? { ...edition, state: 'missing' as const } : edition) } }))
+    }))
+    expect(surfaces(generating)).toBe(1)
+    expect(surfaces(generating)).toBe(1)
+    expect(document.querySelectorAll('[data-briefing-stage-panel]')).toHaveLength(1)
+    // ③ 失败
+    expect(surfaces(await renderPage(fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'store-failed' as const })) })))).toBe(1)
+    // ④ 空态
+    expect(surfaces(await renderPage(fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })) })))).toBe(1)
+    // ⑤ 这一版已删除：行还在、正文换成空态，仍然只有一层。
+    expect(surfaces(await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: editions.map((edition) => edition.date === '2026-10-30' ? { ...edition, periodDeleted: true, state: 'missing' as const, availableLocales: [] } : edition) } }))
+    })))).toBe(1)
+  })
+
+})
