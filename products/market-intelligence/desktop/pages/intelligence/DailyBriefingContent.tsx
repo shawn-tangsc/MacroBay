@@ -103,7 +103,10 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
     {/* 外层卡：工具栏属于这张卡，纸属于它自己。按钮进不了纸的圆角边框，导出图里就不会带
         「删除这一版」这类界面动作——看的边界与导出的边界是两条线。 */}
     <div className="mi-daily-briefing-page__report-card">
+      {/* 工具栏固定在卡顶，不进滚动区——所以它不会被滚动条压住，也不会跟着纸一起走。 */}
       {editionBar}
+      {/* 卡内唯一的滚动层：只包纸（没有纸时包空态/生成中/失败）。滚动条只出现在这一层右侧。 */}
+      <div className="mi-daily-briefing-page__report-scroll">
       {deleteOutcome ? <DailyBriefingDeleteOutcomeNote outcome={deleteOutcome} text={text} onRetry={(outcome) => onDeleteRetry(outcome.target)} /> : null}
       <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
       <DailyBriefingStorageNotice text={text.migration} />
@@ -148,8 +151,9 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
           <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
             <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} fearGreedBuckets={briefingFearGreedBuckets(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
           </div>
-        </div>
-      </div> : null}
+          </div>
+        </div> : null}
+      </div>
     </div>
   </section>
 }

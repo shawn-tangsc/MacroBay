@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Settings2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import { BriefingManualRunDialog, type BriefingManualRunDraft } from './BriefingManualRunDialog'
+import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushToPhone } from './useBriefingPushToPhone'
@@ -39,11 +40,13 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   zoneInvalid: boolean
   systemZone: boolean
   /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
-  onManualRun: (draft: BriefingManualRunDraft) => void
+  onManualRun: (draft: BriefingManualRunDraft) => BriefingManualRunOutcome
   onOpenSettings: () => void
 }>): React.ReactElement {
   // 弹框的开关住在这里：那颗按钮只开它，三个字段与提交都在弹框里。
   const [manualOpen, setManualOpen] = useState(false)
+  // 被拒的那次不关弹框：读者要能看见为什么没跑，并就地改那个时刻。
+  const [manualProblem, setManualProblem] = useState<'cutoff-in-future' | 'cutoff-unreadable' | undefined>(undefined)
   return <div className="mi-daily-briefing-page__actions" data-action-group="page">
     {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
     {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
@@ -57,15 +60,20 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       {...(generating
         ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
         : { 'aria-label': text.manualGenerateTarget.replace('{date}', targetDate) })}
-      onClick={() => setManualOpen(true)}>
+      onClick={() => { setManualProblem(undefined); setManualOpen(true) }}>
       {regenerating ? text.regenerating : text.manualGenerate}
     </Button>
     <BriefingManualRunDialog
       open={manualOpen}
       text={text}
       running={generating}
-      onRun={(draft) => { setManualOpen(false); onManualRun(draft) }}
-      onClose={() => setManualOpen(false)}
+      onRun={(draft) => {
+        const outcome = onManualRun(draft)
+        setManualProblem(outcome === 'started' ? undefined : outcome)
+        if (outcome === 'started') setManualOpen(false)
+      }}
+      {...(manualProblem === undefined ? {} : { problem: manualProblem })}
+      onClose={() => { setManualOpen(false); setManualProblem(undefined) }}
     />
     {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
@@ -103,21 +111,6 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   pushText: BriefingPushText
 }>): React.ReactElement {
   const confirm = useConfirm()
-  // 静止时这条栏零绘制（它就是正文的一部分）；只有滚到它上面去了才浮起来——否则透明的按钮条
-  // 会让正文从底下穿过去。判定用哨兵 + IntersectionObserver，不在 `scroll` 里算 offset。
-  const sentinelRef = useRef<HTMLDivElement>(null)
-  const [stuck, setStuck] = useState(false)
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel || typeof IntersectionObserver === 'undefined') return undefined
-    const scroller = sentinel.closest('.mi-daily-briefing-page__content')
-    const observer = new IntersectionObserver((entries) => {
-      const entry = entries[0]
-      if (entry) setStuck(!entry.isIntersecting)
-    }, scroller === null ? {} : { root: scroller })
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [])
   // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
   // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
   const blocked = !exportable
@@ -138,10 +131,9 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
     }}>
     {text.history.deleteEditionConfirm}
   </Button>
-  return <>
-    {/* 哨兵：紧贴在栏上方、零高度。它离开滚动区顶部，就是栏已经吸住了。 */}
-    <div ref={sentinelRef} className="mi-daily-briefing-page__report-sentinel" aria-hidden="true" />
-    <div className="mi-daily-briefing-page__report-bar" data-action-group="edition" data-stuck={stuck ? 'true' : undefined}>
+  // 工具栏**不参与滚动**：它是卡的第一行，滚动的是卡里只包纸的那一层。既然它不动，就不需要
+  // `sticky`、不需要判定"是否吸住"，也不需要滚动时换一套外观——静止与滚动时它看起来一样。
+  return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
       {/* 第一颗是"这一版重跑一次"：它作用于当前打开的期号 + 语言，与页面顶部那颗"今天出不出"不是
           同一件事——两颗都在页面上，但管的是不同的东西。 */}
       <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition" disabled={blocked || generating}
@@ -165,6 +157,5 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用，
           原因写在整组下面一句（组件级的 `DisabledHint` 会把它同时挂进 `aria-describedby`）。 */}
       {deleteButton}
-    </div>
-  </>
+  </div>
 }

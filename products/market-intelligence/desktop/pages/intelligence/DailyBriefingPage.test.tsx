@@ -412,6 +412,11 @@ describe('daily briefing page', () => {
     expect(paper).not.toBeNull()
     expect(paper.contains(bar)).toBe(false)
     expect(paper.querySelector('[data-toolbar-action]')).toBeNull()
+    // 工具栏不进滚动层：滚动的是只包纸的那一层，按钮因此既不会跟着走，也不可能被滚动条压住。
+    const scroll = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__report-scroll')!
+    expect(scroll).not.toBeNull()
+    expect(scroll.contains(bar)).toBe(false)
+    expect(scroll.contains(paper)).toBe(true)
 
     const exportHost = dom.querySelector<HTMLElement>('.mi-daily-briefing-share-host')!
     expect(exportHost).not.toBeNull()
