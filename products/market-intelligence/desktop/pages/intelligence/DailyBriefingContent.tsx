@@ -37,12 +37,11 @@ import { resolveBriefingStateReason } from './dailyBriefingText'
  * nothing generated, a missing language, a failure, an edition. The page decides which state it is
  * in; this file decides how each one looks.
  */
-export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
+export function DailyBriefingContent({ text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, onReread, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   /** The page's one answer; the generating pane reads it, and it must include service-side runs. */
   mode: DailyBriefingMode
-  generating: boolean
   failure: BriefFailure | null
   regenerating: boolean
   liveProgress: BriefingGenerationProgress | undefined

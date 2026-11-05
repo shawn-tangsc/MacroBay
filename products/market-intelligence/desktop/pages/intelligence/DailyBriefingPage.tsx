@@ -427,7 +427,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           push={pushToPhone}
           pushText={briefingPushText[locale]}
         />,
-        text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
+        text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null,
