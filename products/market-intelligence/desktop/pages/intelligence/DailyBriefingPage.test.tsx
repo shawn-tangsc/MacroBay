@@ -402,6 +402,20 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  it("keeps today's summary on the row after the document is read back", async () => {
+    // 写回列表时按"同一行"合并，但新文档必须带上自己的摘要：整条替换且不带 summaryLine，今天那一
+    // 行的第二行就空了（库里 lede 明明有这句话）。这条用例用真实数据形状钉住它。
+    const today = '2026-10-30'
+    const listed = [{ date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4, summaryLine: '列表里的旧标题' }]
+    const client = fakeClient({
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } }))
+    })
+    const dom = await renderPage(client)
+    const rowTitle = dom.querySelector('[data-date="2026-10-30"] [data-rail-title="summary"]')
+    expect(rowTitle?.textContent?.trim()).not.toBe('')
+    expect(rowTitle?.textContent).toContain('CPI 超预期')
+  })
+
   it('deletes the edition the reader is looking at from the top toolbar, after the same confirmation', async () => {
     // 工具栏第五颗是版次级动作：它删的必须是**当前打开的这一版**，不是"最后那一期"。两个入口
     // （工具栏与行右键）共用同一个确认框，所以这里断言的是同一句话与同一个目标三元组。

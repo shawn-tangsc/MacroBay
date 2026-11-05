@@ -30,6 +30,9 @@ export function summaryFromDocument(document: DailyBriefingDocument): DailyBrief
     availableLocales: [document.edition.locale],
     state: 'generated',
     generatedAt: document.edition.generatedAt,
+    // 列表的第二行是这一份在讲什么：新读到的文档自带这句话，不带的话写回列表后那一行就没有摘要
+    // （今天那一行曾经因此空着，直到下一次整表刷新才恢复）。
+    ...(document.lede.text === '' ? {} : { summaryLine: document.lede.text }),
     ...(document.conclusion ? { direction: document.conclusion.direction } : {}),
     readingsAvailable: document.status.readingsAvailable,
     windowEnd: document.edition.windowEnd
@@ -52,6 +55,9 @@ export function mergeEditionSummary(
   if (index < 0) return [fresh, ...rows]
   return rows.map((row, position) => position === index
     ? {
+      // 列表那一行先摆：排期时刻、尝试次数、这一期发布过哪些语言都只在它身上。新文档只覆盖它
+      // 真正知道的东西——否则一次刷新会把这一行读成"另一条记录"，摘要那一格首当其冲。
+      ...row,
       ...fresh,
       // 新文档只知道它自己的语言；这一期还发布过哪些语言，列表那一行知道，别丢。
       availableLocales: [...new Set([...row.availableLocales, ...fresh.availableLocales])],

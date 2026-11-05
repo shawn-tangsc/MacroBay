@@ -308,6 +308,40 @@ describe('a row is never a button inside a button', () => {
   })
 })
 
+describe('the second line is never blank', () => {
+  it('names the missing summary instead of leaving the row empty', () => {
+    // 今天那一行曾经整条空着（列表行读不到 summaryLine），读者会以为"这一版没内容"。空着的行
+    // 和"还在加载"长得一样，所以没有摘要时明说没有。
+    render({ editions: [edition({ summaryLine: undefined })] })
+    const title = host.querySelector('[data-rail-title="summary"]')!
+    expect(title.textContent).toBe(text.history.railNoTitle)
+    expect(title.textContent?.trim()).not.toBe('')
+  })
+
+  it('gives every kind of row a non-empty second line', () => {
+    // 五种来源 + 生成中 + 已删除的期：第二行都必须有字。判据只认"渲染出来的第二行非空"。
+    const rows = [
+      edition({ summaryLine: '有标题的那一版' }),
+      edition({ summaryLine: undefined }),
+      edition({ state: 'missing', availableLocales: [], generatedAt: undefined }),
+      edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 }),
+      edition({ state: 'missing', availableLocales: [], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }] }),
+      edition({ periodDeleted: true, summaryLine: '删排期之后仍在的那一版' })
+    ]
+    for (const row of rows) {
+      render({ editions: [row], onRegeneratePeriod: vi.fn() })
+      const title = host.querySelector('.mi-daily-briefing__rail-row-title')
+      expect(title?.textContent?.trim(), row.summaryLine ?? row.state).not.toBe('')
+    }
+  })
+
+  it('keeps the deleted-period mark even when there is no summary', () => {
+    render({ editions: [edition({ periodDeleted: true, summaryLine: undefined })] })
+    // 已删除本身就把"为什么没有正文"说清楚了，不必再叠一句"没有摘要"。
+    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).toBe(text.history.deletedPeriod)
+  })
+})
+
 describe('a row is two lines: the facts, then what it says', () => {
   it('prints exactly one source badge, out of the five, and never 本期', () => {
     // 第一行最右那一格"这一份怎么来的"：五个值，恰一枚；「本期」这个词不进侧栏。

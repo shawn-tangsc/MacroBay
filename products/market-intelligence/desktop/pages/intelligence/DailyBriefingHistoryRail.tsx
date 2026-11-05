@@ -266,7 +266,9 @@ export function DailyBriefingHistoryRail({
                   : missing
                     ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">{reasonOf(edition, text)}</span>
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
-                      {edition.periodDeleted ? `${text.history.deletedPeriod} · ` : ''}{title}
+                      {/* 第二行永远有字：标题缺了就明说"这一版没有摘要"，空着会被读成"还在加载"
+                          或"这一版没内容"。已删除的期在标题前加一句，但它自己不能变成空白。 */}
+                      {[edition.periodDeleted ? text.history.deletedPeriod : '', title].filter((part) => part !== '').join(' · ') || text.history.railNoTitle}
                     </span>}
               </button>
               {retryable
