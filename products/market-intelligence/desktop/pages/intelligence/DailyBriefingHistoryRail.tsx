@@ -121,15 +121,10 @@ export function DailyBriefingHistoryRail({
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
   const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void =>
     setMenu({ date: edition.date, periodId: edition.periodId, locale: edition.locale, anchor })
-  /**
-   * 默认**只展开今天**，其余折叠（`02` A5.3 / `01` §124 / 原型 v6 三处一致）。
-   *
-   * 理由是长度：一天多期之后把 14 天全摊开就是好几屏，读者要滚很久才看得到今天。折叠不是藏起来
-   * ——天头写着「共 N 期」、点一下就开。这里记的是**读者明确表过态的那几天**，没表过态的一律
-   * 按默认（今天开、其余折），所以他折了今天、或开过某一天，都会一直记住。
-   */
-  const [openByDate, setOpenByDate] = useState<ReadonlyMap<string, boolean>>(new Map())
-  const isOpen = (date: string): boolean => openByDate.get(date) ?? date === todayDate
+  // 列表默认**全展开**（用户 2026-11-05）：读者要一眼看到这些天分别出了什么，而不是一串日期。
+  // 折叠是读者自己的动作，只记住这一次会话里他折了哪几天——默认状态不该由"是不是今天"决定。
+  const [closedDays, setClosedDays] = useState<ReadonlySet<string>>(new Set())
+  const isOpen = (date: string): boolean => !closedDays.has(date)
 
   const days = useMemo(() => {
     const rows = new Map<string, DailyBriefingEditionSummary[]>()
@@ -216,9 +211,9 @@ export function DailyBriefingHistoryRail({
             // 天头可点（`02` `A9.14`）：点开那天 **`periodTime` 最晚**的一版——与列表排序同一口径
             // （`A5.1`：名义时刻升序、同刻按期号稳定序）。选中态落在那一行，日期本身不变色。
             const opening = !isOpen(day.date)
-            setOpenByDate((current) => {
-              const next = new Map(current)
-              next.set(day.date, opening)
+            setClosedDays((current) => {
+              const next = new Set(current)
+              if (opening) next.delete(day.date); else next.add(day.date)
               return next
             })
             // 只在"展开这一天"时顺带打开最近一版；再点一次是收起来，不改变右边在看的哪一版。
