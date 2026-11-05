@@ -11,13 +11,13 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import { DEFAULT_PERIOD_ID, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
-import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
+import { DailyBriefingHistoryRail, railClock } from './DailyBriefingHistoryRail'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { useBriefingShareActions } from './useBriefingShareActions'
 import { runBriefingRegenerate } from './runBriefingRegenerate'
@@ -52,6 +52,7 @@ import {
   localDate,
   briefingFailure,
   briefingListFacts,
+  mergeEditionSummary,
   summaryFromDocument,
   withDeadline
 } from './dailyBriefingPageDerived'
@@ -66,10 +67,10 @@ import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
-import { dailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
 import { useBriefingManualRun } from './useBriefingManualRun'
 import { briefingPageChrome } from './briefingPageChrome'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
+import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -129,6 +130,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // Bumped when settings may have changed elsewhere (drawer closed, window focused) to read again.
   const [settingsReloadKey, setSettingsReloadKey] = useState(0)
   const { outcome: deleteOutcome, deletePeriod, takeSkipGenerate } = useDailyBriefingIssueDeletion({ client, onSettled: () => setReloadKey((key) => key + 1) })
+  // 删除一个入口、一套行为：工具栏第五颗与行右键都走这里。进行中是一个可见状态，不是"没反应"。
+  const [deleting, setDeleting] = useState(false)
+  const deleteEdition = (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string }>): void => {
+    // 删完之后读哪一版，删除开始前就定：这一期剩下的另一种语言，没有就是空。
+    const row = editions.find((edition) => edition.date === target.date && edition.periodId === target.periodId)
+    afterDeleteLocaleRef.current = (row?.availableLocales ?? []).find((language) => language !== target.language) ?? null
+    setDeleting(true)
+    void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language }).finally(() => setDeleting(false))
+  }
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
   const [languageFallback, setLanguageFallback] = useState<string | null>(null)
@@ -150,6 +160,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const todayDate = currentPeriodDate ?? wallClockToday
   // A run this page started, or one it is loading for. The service's own answer joins below.
   const readyDocument = briefingDocument(view)
+  // 当前这一版的身份，交给删除的确认框点名。时刻取这一版自己的名义截止（读者时区），不是"现在"。
+  const deleteTarget = readyDocument === undefined ? undefined : (() => {
+    const period = briefingEditionPeriod(readyDocument.edition)
+    return {
+      date: readyDocument.edition.date,
+      clock: railClock(period.periodTime, timeZone),
+      language: readyDocument.edition.locale,
+      periodId: period.periodId
+    }
+  })()
   const loading = isBriefingLoading(view)
   const busyLocally = loading || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
@@ -198,7 +218,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const periodDate = listed?.state === 'available' && typeof listed.result.today === 'string' ? listed.result.today : todayDate
       setCurrentPeriodDate(periodDate)
       periodDateRef.current = periodDate
-      let rows = listed?.state === 'available' ? [...listed.result.editions] : []
+      let rows: readonly DailyBriefingEditionSummary[] = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
       // The list has been read: from here an empty rail means "none" — unless the read itself failed.
       setEditionsLoading(false)
@@ -227,13 +247,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (today?.state === 'available') {
         const date = today.document.edition.date
         setCurrentPeriodDate(date)
-        rows = rows.some((row) => row.date === date)
-          ? rows.map((row) => row.date === date
-            // The fresh document knows the text; the list row knows which languages this period
-            // was meant to have. Dropping that would make an incomplete period look complete.
-            ? { ...row, ...summaryFromDocument(today.document), availableLocales: row.availableLocales, ...(row.expectedLocales ? { expectedLocales: row.expectedLocales } : {}) }
-            : row)
-          : [summaryFromDocument(today.document), ...rows]
+        // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
+        // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
+        rows = mergeEditionSummary(rows, today.document)
         setView({
           status: 'ready',
           document: today.document,
@@ -438,6 +454,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         pushText={briefingPushText[locale]}
         onExport={() => void exportImage()}
         onCopy={() => void copy()}
+        // 当前这一版的身份：日期 · 时刻 · 语言。工具栏的动作只作用于它，所以它是唯一的删除目标。
+        {...(deleteTarget === undefined ? {} : { deleteTarget })}
+        deleting={deleting}
+        onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
         onOpenSettings={() => setSettingsSection('generation')}
         onGenerate={generateNow}
         onRegenerate={regenerate}
@@ -450,20 +470,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
         onRegeneratePeriod={({ periodId, locale: target }) => { void regenerate({ periodId, locale: target }) }}
-        onRemovePeriod={({ periodId }) => {
-          // 删排期，不删内容：`removePeriod` 是期配置自己的方法，删掉之后这一期不再到点跑，列表里那
-          // 一行留成已删除态，已经生成的正文照旧能读。
-          void dailyBriefingPeriodClient.remove(periodId).then(() => setReloadKey((key) => key + 1)).catch(() => undefined)
-        }}
-        onDeletePeriod={(target) => {
-          // Decide what to show next before the delete runs: the other language of this issue, if
-          // there is one. The reload consumes it, so the switch and the pane move together.
-          const row = editions.find((edition) => edition.date === target.date)
-          const other = (row?.availableLocales ?? []).find((language) => language !== target.locale)
-          afterDeleteLocaleRef.current = other ?? null
-          // 删完再读一次：行还在就说明没删掉，比悄悄把它从列表里抹掉诚实。
-          void deletePeriod(target)
-        }} />
+        // 行右键与工具栏第五颗共用同一个处理函数：两个入口，一套行为。
+        onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale })} />
       <DailyBriefingContent {...{
         text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,

@@ -1,4 +1,5 @@
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { briefingEditionPeriod } from '../../../contracts/dailyBriefing'
 
 import type { DailyBriefingClient, DailyBriefingClientTodayResult } from '../../shared/ipc/dailyBriefingClient'
 import type { BriefFailure } from './DailyBriefingFailurePanel'
@@ -16,9 +17,15 @@ import { type GenerationTrace, readGenerationTrace } from './dailyBriefingGenera
  */
 
 export function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEditionSummary {
+  // 期号来自文档自己，不写死 `default`：手动期的那一版写进列表时若按默认期算，同一天就会出现
+  // 两条身份相同的行（键 = 日期 + 期号 + 语言），点一条会同时选中两条。
+  const period = briefingEditionPeriod(document.edition)
   return {
     date: document.edition.date,
-    periodId: 'default',
+    periodId: period.periodId,
+    periodTime: period.periodTime,
+    periodKind: period.periodKind,
+    runTrigger: period.runTrigger,
     locale: document.edition.locale,
     availableLocales: [document.edition.locale],
     state: 'generated',
@@ -27,6 +34,30 @@ export function summaryFromDocument(document: DailyBriefingDocument): DailyBrief
     readingsAvailable: document.status.readingsAvailable,
     windowEnd: document.edition.windowEnd
   }
+}
+
+/**
+ * 新读到的这一版写回列表：只替换**同一行**——日期 + 期号 + 语言三者都相同的那一行。
+ *
+ * 按日期整片替换是"一天一份"时代的写法：照着数据里真实的两行看，它会把英文那一行写成中文版
+ * （语言来自新文档），于是两行的语言、键都相同，列表里出现两个「中文」，一条英文标题。
+ * 版次是一行，写回也必须是一行。
+ */
+export function mergeEditionSummary(
+  rows: readonly DailyBriefingEditionSummary[],
+  document: DailyBriefingDocument
+): readonly DailyBriefingEditionSummary[] {
+  const fresh = summaryFromDocument(document)
+  const index = rows.findIndex((row) => row.date === fresh.date && row.periodId === fresh.periodId && row.locale === fresh.locale)
+  if (index < 0) return [fresh, ...rows]
+  return rows.map((row, position) => position === index
+    ? {
+      ...fresh,
+      // 新文档只知道它自己的语言；这一期还发布过哪些语言，列表那一行知道，别丢。
+      availableLocales: [...new Set([...row.availableLocales, ...fresh.availableLocales])],
+      ...(row.expectedLocales === undefined ? {} : { expectedLocales: row.expectedLocales })
+    }
+    : row)
 }
 
 export async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {

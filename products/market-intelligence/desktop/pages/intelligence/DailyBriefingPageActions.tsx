@@ -2,6 +2,10 @@ import { Button } from 'antd'
 import { useState } from 'react'
 import { Settings2 } from 'lucide-react'
 
+import { useConfirm } from '@platform/ui/components/confirm'
+import { DisabledHint } from '@platform/ui/components/disabled-hint'
+import { LoadingSpinner } from '@platform/ui/components/loading'
+
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import { BriefingManualRunDialog, type BriefingManualRunDraft } from './BriefingManualRunDialog'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
@@ -10,6 +14,7 @@ import type { BriefingPushToPhone } from './useBriefingPushToPhone'
 import { DailyBriefingGeneratingStatus } from './DailyBriefingGeneratingStates'
 import type { DailyBriefingText } from './dailyBriefingText'
 import type { BriefingCopyState, BriefingExportState } from './useBriefingShareActions'
+import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
  * The page's one action row.
@@ -19,7 +24,7 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
  * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
  * not layout, and the page is a layout.
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, onManualRun, push, pushText, onExport, onCopy, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, deleteTarget, deleting, onManualRun, push, pushText, onExport, onCopy, onDelete, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -41,6 +46,10 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   pushText: BriefingPushText
   onExport: () => void
   onCopy: () => void
+  /** 这一版的删除：与行右键共用 `briefingEditionDeleteCopy` 那一句话与同一个确认框。 */
+  deleteTarget?: BriefingEditionDeleteTarget
+  deleting?: boolean
+  onDelete?: (target: BriefingEditionDeleteTarget) => void
   onOpenSettings: () => void
   /** The issue day the action writes: its accessible name says it, so the target is never guessed. */
   targetDate: string
@@ -49,6 +58,24 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
 }>): React.ReactElement {
   // 弹框的开关住在这里：那颗按钮只开它，三个字段与提交都在弹框里。
   const [manualOpen, setManualOpen] = useState(false)
+  const confirm = useConfirm()
+  const deleteButton = <Button danger className="mi-briefing-tool__btn mi-briefing-tool__btn--danger" data-toolbar-action="delete-edition"
+    disabled={deleteTarget === undefined || onDelete === undefined || deleting === true}
+    icon={deleting === true ? <LoadingSpinner size="sm" /> : undefined}
+    onClick={() => {
+      if (deleteTarget === undefined || onDelete === undefined) return
+      const copy = briefingEditionDeleteCopy(text, deleteTarget)
+      confirm({
+        title: copy.title,
+        description: copy.description,
+        confirmLabel: copy.confirmLabel,
+        cancelLabel: copy.cancelLabel,
+        tone: 'danger',
+        onConfirm: () => onDelete(deleteTarget)
+      })
+    }}>
+    {text.history.deleteEditionConfirm}
+  </Button>
   return <div className="mi-daily-briefing-page__actions">
     {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
     {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
@@ -94,6 +121,15 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
     {exportable ? <Button className="mi-briefing-tool__btn" data-toolbar-action="copy" onClick={onCopy} aria-live="polite">
       {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
     </Button> : null}
+    {/* 第五颗：**删除这一版**。它属于"当前这一版"这一组（重新生成 / 发布 / 导出 / 复制），所以排在
+        这一组最后；危险色、不填充，与那四颗的间距一致。没有可读版次时与它们一起禁用，原因用
+        `DisabledHint` 挂成 `aria-describedby`——禁用的按钮接不到 hover 也接不到焦点。
+        点击弹的是与行右键**同一个**确认框（`briefingEditionDeleteCopy`），两个入口一套行为。 */}
+    {deleteTarget === undefined
+      ? <DisabledHint labelKey={'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition'} resolveText={resolveText}>
+        {deleteButton}
+      </DisabledHint>
+      : deleteButton}
     {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
         beside it opened a second dialog for half of the same form. */}
     <Button className="mi-briefing-tool__btn mi-daily-briefing__settings-entry" data-toolbar-action="settings" data-briefing-settings-open="true" onClick={onOpenSettings}>

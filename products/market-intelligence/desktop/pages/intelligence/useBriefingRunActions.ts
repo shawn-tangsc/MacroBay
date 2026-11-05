@@ -2,7 +2,7 @@ import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import type { BriefingRegenerateFailure } from './runBriefingRegenerate'
 import { runBriefingRegenerate } from './runBriefingRegenerate'
-import { summaryFromDocument } from './dailyBriefingPageDerived'
+import { mergeEditionSummary } from './dailyBriefingPageDerived'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
 
 /**
@@ -55,7 +55,9 @@ export function useBriefingRunActions(input: Readonly<{
       const document = await run(options)
       if (document) {
         input.setView({ status: 'ready', document, kind: 'today' })
-        input.setEditions((current) => current.map((edition) => edition.date === document.edition.date ? summaryFromDocument(document) : edition))
+        // 只替换读到的那一行（日期 + 期号 + 语言）：同一天另一语言的行必须原样留着，
+        // 否则两行会变成同一版次，键相同、语言相同，看上去像"选中了两个"。
+        input.setEditions((current) => mergeEditionSummary(current, document))
       }
       input.setRegenerating(false)
     },
