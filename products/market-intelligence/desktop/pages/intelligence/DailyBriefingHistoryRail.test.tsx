@@ -334,10 +334,12 @@ describe('the second line is never blank', () => {
     }
   })
 
-  it('keeps the deleted-period mark even when there is no summary', () => {
+  it('marks a deleted period beside the source badge, not inside the title line', () => {
+    // `02` v2.76：所属期已删 → 标「该期已删除」，**紧跟在来源徽标后**；第二行只讲这一版讲什么。
     render({ editions: [edition({ periodDeleted: true, summaryLine: undefined })] })
-    // 已删除本身就把"为什么没有正文"说清楚了，不必再叠一句"没有摘要"。
-    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).toBe(text.history.deletedPeriod)
+    const tag = host.querySelector('[data-period-deleted-tag="true"]')
+    expect(tag?.textContent).toBe(text.history.deletedPeriod)
+    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).not.toContain(text.history.deletedPeriod)
   })
 })
 
@@ -365,10 +367,10 @@ describe('a row is two lines: the facts, then what it says', () => {
     const title = host.querySelector('[data-rail-title="summary"]')
     expect(title?.textContent).toContain('一条足够长的标题')
     expect(title?.getAttribute('title')).toContain('一条足够长的标题')
-    // 已删除的期仍然说得出"排期没了、版次还在"：标记进第二行标题前，不占第一行的格。
+    // 已删除的期：标记在第一行（来源徽标后），第二行仍是这一版的标题，两者不混。
     render({ editions: [edition({ periodDeleted: true, summaryLine: '删掉排期之后仍然能读的正文' })] })
-    expect(host.querySelector('[data-rail-title="summary"]')?.textContent)
-      .toBe(`${text.history.deletedPeriod} · 删掉排期之后仍然能读的正文`)
+    expect(host.querySelector('[data-period-deleted-tag="true"]')?.textContent).toBe(text.history.deletedPeriod)
+    expect(host.querySelector('[data-rail-title="summary"]')?.textContent).toBe('删掉排期之后仍然能读的正文')
   })
 
   it('runs the period again from the failed row, without opening it first', () => {
