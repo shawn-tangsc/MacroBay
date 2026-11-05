@@ -199,14 +199,23 @@ describe('one danger action in the toolbar', () => {
  * through what is supposed to be a solid bar.
  */
 describe('the report actions stick to the report', () => {
-  it('parks flush at the top of the content column and covers what scrolls under it', () => {
+  it('becomes part of the report at rest and a surface only once pinned', () => {
     const bar = rule('.mi-daily-briefing-page__report-bar {')
     expect(bar).toContain('position: sticky;')
-    // The container pads 20/22, so the bar cancels both, or it sticks 20px below the top edge.
-    expect(bar).toContain('top: -20px;')
-    expect(bar).toContain('margin: -20px -22px 12px;')
-    expect(bar).toContain('background: var(--mi-dashboard-surface);')
-    expect(bar).toContain('border-bottom: 1px solid var(--mi-dashboard-line);')
+    // At rest: no fill, no hairline — a painted box reads as a second panel on the document.
+    expect(bar).toContain('background: transparent;')
+    expect(bar).toContain('border-bottom: 1px solid transparent;')
+    // The bleed cancels the container's padding in both states, so switching the paint cannot shift
+    // the report: the box is the same box when stuck and when not.
+    expect(bar).toContain('margin: -20px -22px 8px;')
+    expect(bar).toContain('padding: 12px 22px;')
+
+    const stuck = rule('.mi-daily-briefing-page__report-bar[data-stuck="true"] {')
+    expect(stuck).toContain('background: var(--mi-dashboard-surface);')
+    expect(stuck).toContain('border-bottom-color: var(--mi-dashboard-line);')
+    // Nothing about the box may change on stuck, or the report jumps when the bar pins.
+    expect(stuck).not.toContain('margin')
+    expect(stuck).not.toContain('padding')
   })
 
   it('sits above the content it scrolls over, and below every overlay', () => {
