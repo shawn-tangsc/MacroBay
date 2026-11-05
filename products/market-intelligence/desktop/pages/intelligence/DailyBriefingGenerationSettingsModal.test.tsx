@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 
@@ -65,7 +66,7 @@ async function render(settingsView: DailyBriefingSettingsView = view): Promise<v
     saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
   }
   await act(async () => {
-    root!.render(<ShellTimeZoneProvider timeZone="Asia/Shanghai"><DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={vi.fn()} /></ShellTimeZoneProvider>)
+    root!.render(<ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={vi.fn()} /></ShellTimeZoneProvider></ConfirmProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
@@ -91,7 +92,8 @@ describe('daily briefing generation settings', () => {
     expect(body().querySelectorAll('.mi-briefing-settings-form .mi-daily-briefing__settings-row:not(.mi-briefing-settings-form__group-heading)')).toHaveLength(0)
     expect(body().querySelectorAll('.mi-briefing-settings-form select')).toHaveLength(0)
     expect(body().querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
-    expect(body().textContent).not.toContain(text.settings.periods.additional)
+    // 文案键已经被删掉了，所以这里按旧说法本身断言它不再出现在渲染输出里。
+    expect(body().textContent).not.toContain('同时生成英语版')
     expect(body().textContent).not.toContain(text.settings.periods.languageFollow.replace('{language}', '中文'))
     expect(body().querySelector('[data-briefing-periods]')).not.toBeNull()
   })
@@ -171,6 +173,19 @@ describe('daily briefing generation settings', () => {
     expect(body().querySelector('[data-period-id]')).not.toBeNull()
   })
 
+  it('names both row actions, and only a button edits the row', async () => {
+    // 行本身不可点：编辑只从铅笔进。两个按钮都要有名字，不给没有名字的图标。
+    invoke.mockImplementation(async (_product: string, method: string) => {
+      if (method.endsWith('listPeriods')) return [{ id: 'p-1', generationTime: '08:00', windowHours: 24, language: 'zh-CN' }]
+      return undefined
+    })
+    await render()
+    const row = body().querySelector('[data-period-id="p-1"]')!
+    expect(row.querySelectorAll('button')).toHaveLength(2)
+    expect(body().querySelector('[aria-label="' + text.settings.periods.editRow.replace('{index}', '1') + '"]')).not.toBeNull()
+    expect(body().querySelector('[aria-label="' + text.settings.periods.deleteRow.replace('{index}', '1') + '"]')).not.toBeNull()
+  })
+
   it('shows a read failure as an error with a retry instead of a spinner that never stops', async () => {
     const getSettings = vi.fn()
       .mockResolvedValueOnce({ state: 'unavailable', failureCode: 'daily-briefing-request-failed' })
@@ -179,7 +194,7 @@ describe('daily briefing generation settings', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     await act(async () => {
-      root!.render(<DailyBriefingGenerationSettingsModal open text={text} client={{ getSettings, saveSettings: vi.fn(async () => ({ state: 'available' as const, view })) }} onClose={vi.fn()} />)
+      root!.render(<ConfirmProvider><DailyBriefingGenerationSettingsModal open text={text} client={{ getSettings, saveSettings: vi.fn(async () => ({ state: 'available' as const, view })) }} onClose={vi.fn()} /></ConfirmProvider>)
     })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 

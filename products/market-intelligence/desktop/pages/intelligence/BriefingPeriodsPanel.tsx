@@ -1,7 +1,10 @@
 import { Button } from 'antd'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import type { BriefingPeriod, BriefingPeriodDraft } from '../../../contracts/dailyBriefingPeriod'
@@ -23,7 +26,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
  */
 export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient }: Readonly<{
   text: DailyBriefingText
-  client?: Pick<DailyBriefingPeriodClient, 'list' | 'create' | 'update'>
+  client?: Pick<DailyBriefingPeriodClient, 'list' | 'create' | 'update' | 'remove'>
 }>): React.ReactElement {
   const [periods, setPeriods] = useState<readonly BriefingPeriod[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -32,6 +35,7 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  const confirm = useConfirm()
   // 服务端要求带上语言：它要决定"一条期都没有时那条默认期用哪种语言"，不猜。界面语言就是答案，
   // 不带参数会被拒（`daily-briefing-locale-required`）——这一处曾经把整块显示成"没读出来"。
   const locale = useShellLanguage()
@@ -87,12 +91,52 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
         {/* 一行就是一期，点它改这一期：期级动作只有"改"和"再加一期"，所以整行都是那个入口，
             不再套一层菜单——菜单要占一次点击，而这里只有一个动作。 */}
         {periods.map((period, index) => <li className="mi-briefing-periods__row" data-period-id={period.id} key={period.id}>
-          <button className="mi-briefing-periods__edit" type="button" onClick={() => { setEditing(period); setSaveFailed(false) }}>
+          {/* 行本身不可点：可点区域里再放两个按钮，读屏和键盘会抢焦点，容易把想编辑的人带到整行。
+              编辑只从铅笔进，入口一个、位置固定。 */}
+          <span className="mi-briefing-periods__text">
             <strong>{copy.label.replace('{index}', String(index + 1))}</strong>
             <span>{copy.timeValue.replace('{time}', period.generationTime)}</span>
             <span>{copy.windowValue.replace('{hours}', String(period.windowHours))}</span>
             <span>{languageName(period.language)}</span>
-          </button>
+          </span>
+          <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.editRow"
+            ariaLabelParams={{ index: String(index + 1) }}
+            data-period-edit={period.id}
+            icon={Pencil}
+            resolveText={(key) => key === 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.editRow'
+              ? copy.editRow.replace('{index}', String(index + 1))
+              : key}
+            size="sm"
+            variant="plain"
+            onSelect={() => { setEditing(period); setSaveFailed(false) }}
+          />
+          <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.deleteRow"
+            ariaLabelParams={{ index: String(index + 1) }}
+            icon={Trash2}
+            resolveText={(key) => key === 'pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.deleteRow'
+              ? copy.deleteRow.replace('{index}', String(index + 1))
+              : key}
+            size="sm"
+            variant="plain"
+            onSelect={() => {
+              // 删的是排期，不是正文：明天起不再自动生成，已经生成的报还能看——与列表行上的
+              // 「删除这一期」是同一个动作、同一个 `remove`。
+              confirm({
+                title: copy.deleteTitle.replace('{index}', String(index + 1)),
+                description: copy.deleteBody,
+                confirmLabel: copy.deleteConfirm,
+                cancelLabel: text.periodDialog.cancel,
+                tone: 'danger',
+                onConfirm: () => {
+                  void client.remove(period.id)
+                    .then(() => { setSaveFailed(false); load() })
+                    .catch(() => setSaveFailed(true))
+                }
+              })
+            }}
+          />
         </li>)}
       </ul>}
     <Button className="mi-briefing-periods__add" data-briefing-period-add="true" onClick={() => setAdding(true)} type={periods.length === 0 ? 'primary' : 'default'}>
