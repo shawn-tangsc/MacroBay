@@ -1961,7 +1961,7 @@ it('keeps the same three-column body whether or not the archive has content', as
   expect(withoutArchive.querySelector('[data-briefing-detail] [data-briefing-gaps]')).toBeNull()
 })
 
-it('keeps the stored edition under a failure notice when a retry fails after an earlier success', async () => {
+it('keeps the stored edition under a one-line failure mark when a retry fails after an earlier success', async () => {
   const client = fakeClient({
     getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
     regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'store-failed' as const }))
@@ -1973,8 +1973,17 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   })
   await confirmManualRun()
 
-  expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
+  // 已定口径：正文留着，失败只说成一条标记——开头「重新生成失败 · 原因」，末尾写明下面是上一次的版本。
+  // 以前挂的是整块失败面板 + 一颗正文里的重试，读者一屏两态、还多一个入口改同一件事。
+  const mark = dom.querySelector<HTMLElement>('[data-rerun-failed="true"]')!
+  expect(mark).not.toBeNull()
+  expect(mark.textContent).toContain(text.regenerateFailed)
+  expect(mark.textContent).toContain(text.staleUnderFailure)
+  expect(mark.textContent).toContain(text.aiSettings.failure['store-failed']!)
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  // 失败面板与它那颗重试都不进正文：重跑只有工具栏一个入口。
+  expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__content [data-failure-action="retry"]')).toBeNull()
   expect(dom.querySelectorAll('[data-briefing-detail]')).toHaveLength(1)
   // A failed retry with an older edition on screen is still not "busy": the header stays clickable.
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)

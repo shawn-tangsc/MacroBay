@@ -19,6 +19,7 @@ import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { BRIEFING_PAPER_WIDTH } from './dailyBriefingExport'
+import { briefFailureCodeLabel } from './dailyBriefingFailureDetail'
 import { editorialFailureText } from './dailyBriefingPageDerived'
 import { resolveBriefingStateReason } from './dailyBriefingText'
 
@@ -147,7 +148,7 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
       {bodyState === 'no-edition' && view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
           所以那颗重试是禁用的，并且写明原因。 */}
-      {failure !== null && (bodyState === 'failure' || failureUnderPaper) ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
+      {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
         {...('date' in view && typeof view.date === 'string' && view.date !== todayDate
           ? { retryBlockedReason: text.history.backfillBlocked } : {})}
         onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
@@ -163,6 +164,14 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
         }}
         action={{ labelKey: 'ui.state.action.open-settings', onSelect: onConfigureSources }}
       /> : null}
+      {/* 重跑失败但旧正文还在：正文留着，失败只说成**一条标记**——「重新生成失败 · 原因」开头，
+          末尾写明"下面是上一次生成的版本"。正文侧**不放重试**：重跑走工具栏，两个入口改同一件事
+          只会让读者不知道该按哪个。以前这里挂的是整块失败面板 + 一颗重试。 */}
+      {failureUnderPaper && failure !== null ? <p className="mi-daily-briefing-page__ai-failure" role="status" data-rerun-failed="true">
+        <strong>{text.regenerateFailed}</strong>
+        {failure.code ? <> · {briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })}</> : null}
+        {' '}{text.staleUnderFailure}
+      </p> : null}
       {/* A run replaces this edition only when it succeeds: until then the reader keeps the one that
           is already there, and the run reports in the right column. */}
       {/* The paper is a fixed sheet, never a fluid column: the poster keeps its 1080 px and the page
