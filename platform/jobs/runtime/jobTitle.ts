@@ -8,7 +8,16 @@ import type { LocalizedText } from '../../product-manifest'
  * `{ literal }` 之所以要有自己的一支，是为了让「这是读者自己的字」在类型上看得见——
  * 两个语言都填同一句能跑，但半年后一定有人给它补英译，而那种事编译器该从一开始就说不。
  */
-export type JobTitle = LocalizedText | { literal: string }
+export type JobTitle =
+  | LocalizedText
+  | { literal: string }
+  /**
+   * **临时支：代表「还没迁移」，不是「翻译好了」。**
+   *
+   * 存量 24 条内置作业名仍是英文句子；中文界面显示英文就是今天的行为，不是新债。
+   * 阶段 3 会删掉这一支——删掉之后缺一条翻译就编译不过（契约 §7）。
+   */
+  | string
 
 /** `titleParams` 的值必须是**读者能在界面上看到的东西**（产品名、通道名），不能是 `handlerId` 这类工程名。 */
 export type JobTitleParams = Record<string, string>
@@ -39,4 +48,16 @@ export function resolveJobTitle(
 
   if (params === undefined) return text
   return text.replace(PLACEHOLDER, (_match, key: string) => params[key] ?? '')
+}
+
+/**
+ * 给**只能放字符串**的地方用的单点转换：运行记录、名称过滤这类机器侧快照。
+ *
+ * 它**故意不按界面语言选**：运行记录是历史快照，存进去时用哪个语言，之后切语言也不会变；
+ * 按语言选会让「历史」跟着界面走。界面上的名字不从这里取——那里用 `resolveJobTitle`。
+ */
+export function jobTitleText(title: JobTitle): string {
+  if (typeof title === 'string') return title
+  if ('literal' in title) return title.literal
+  return title['en-US']
 }

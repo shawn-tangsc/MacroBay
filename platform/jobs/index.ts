@@ -36,4 +36,4 @@ export {
   type HttpClientResponse
 } from './transport/httpClient'
 export type { StreamTransport, StreamTransportEvent, StreamTransportFactory } from './transport/streamTransport'
-export { resolveJobTitle, type JobTitle, type JobTitleParams } from './runtime/jobTitle'
+export { jobTitleText, resolveJobTitle, type JobTitle, type JobTitleParams } from './runtime/jobTitle'

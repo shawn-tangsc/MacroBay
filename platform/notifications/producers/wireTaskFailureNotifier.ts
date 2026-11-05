@@ -1,3 +1,5 @@
+import type { JobTitle } from '../../jobs/runtime/jobTitle'
+import { jobTitleText } from '../../jobs/runtime/jobTitle'
 import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
@@ -14,7 +16,7 @@ import { createTaskFailureNotifier } from './taskFailureNotifier'
 export function wireTaskFailureNotifier(deps: {
   submit: (request: NotificationSubmitRequest) => Promise<unknown>
   /** 任务定义（只用来解析可读任务名）；`run.title` 是标识，绝不使用。 */
-  listDefinitions: () => readonly { id: string; title: string }[]
+  listDefinitions: () => readonly { id: string; title: JobTitle }[]
   /**
    * 同一个任务定义的终态运行，**新到旧**。P2 的「连续 3 次」从这里数，不从内存计数器数
    * （重启会清零，坏了两天的任务永远到不了阈值）。取不到就只发 P1：P2 宁可晚一条，
@@ -24,8 +26,13 @@ export function wireTaskFailureNotifier(deps: {
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
 }): (input: JobRunTerminalHookInput) => void {
-  const resolveTaskName = ({ definitionId }: { definitionId: string }): string | null =>
-    deps.listDefinitions().find((entry) => entry.id === definitionId)?.title ?? null
+  const resolveTaskName = ({ definitionId }: { definitionId: string }): string | null => {
+    const title = deps.listDefinitions().find((entry) => entry.id === definitionId)?.title
+    if (title === undefined) return null
+    // 通知正文是读者可读的：内置作业按语言取；这里是英文/原文的单点转文本，
+    // 等通知运行时能拿到读者语言再换成 `resolveJobTitle`（那不是本次范围）。
+    return jobTitleText(title)
+  }
   const notify = createTaskFailureNotifier({
     submit: deps.submit,
     resolveTaskName,

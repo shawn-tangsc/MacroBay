@@ -24,6 +24,8 @@ export type JobOwner = 'platform' | 'product'
  * `resource` = 用户能理解、能启用/停用的资源任务；`internal` = 平台自己维护的活（保留期清理、
  * 投递重试、状态巡检），用户既配置不了也停不了，出现在表里只会是一行需要解释的技术条目。
  */
+import type { JobTitle } from '../runtime/jobTitle'
+
 export type JobAudience = 'user' | 'internal'
 
 export type JobDefinition<TPayload = unknown> = {
@@ -31,7 +33,7 @@ export type JobDefinition<TPayload = unknown> = {
   owner: JobOwner
   productId?: string
   handlerId: string
-  title: string
+  title: JobTitle
   trigger: JobTrigger
   payload: TPayload
   concurrencyKey?: string
