@@ -33,6 +33,11 @@ beforeEach(() => {
   // 期配置走产品桥：读回空列表，创建返回那一条。
   invoke.mockImplementation(async (_product: string, method: string, payload: unknown) => {
     if (method.endsWith('listPeriods')) return []
+    if (method.endsWith('updatePeriod')) {
+      const body = payload as { id: string; draft: { generationTime: string; windowHours: number; language: string } }
+      const period = { id: body.id, ...body.draft }
+      return { state: 'saved', period, periods: [period] }
+    }
     if (method.endsWith('createPeriod')) {
       const draft = (payload as { draft: { generationTime: string; windowHours: number; language: string } }).draft
       const period = { id: 'p-1', ...draft }
@@ -125,6 +130,37 @@ describe('daily briefing generation settings', () => {
     expect(row?.textContent).toContain(text.settings.periods.label.replace('{index}', '1'))
     expect(row?.textContent).toMatch(/每天 \d{2}:00/)
     expect(row?.textContent).toContain(text.settings.languageNames['zh-CN'] as string)
+  })
+
+  it('opens that period when its row is pressed, and saves it back through the same client', async () => {
+    // 一行就是一期，点它改这一期：期级动作只有"改"和"再加一期"。
+    invoke.mockImplementation(async (_product: string, method: string, payload: unknown) => {
+      if (method.endsWith('listPeriods')) return [{ id: 'p-1', generationTime: '08:00', windowHours: 24, language: 'zh-CN' }]
+      if (method.endsWith('updatePeriod')) {
+        const body = payload as { id: string; draft: { generationTime: string; windowHours: number; language: string } }
+        const period = { id: body.id, ...body.draft }
+        return { state: 'saved', period, periods: [period] }
+      }
+      return undefined
+    })
+    await render()
+
+    const row = body().querySelector<HTMLButtonElement>('[data-period-id="p-1"] button')!
+    expect(row).not.toBeNull()
+    await act(async () => { row.click(); await Promise.resolve() })
+    const dialog = body().querySelector('[data-period-dialog]')
+    expect(dialog).not.toBeNull()
+    // 打开的是"改这一期"，不是"再加一期"：那一期的时间已经在表单里。
+    expect(dialog?.textContent).toContain('08:00')
+
+    const footers = [...body().querySelectorAll<HTMLElement>('.ant-modal-footer')]
+    const save = [...footers.at(-1)!.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.periodDialog.save)!
+    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+
+    const updated = invoke.mock.calls.find((call) => String(call[1]).endsWith('updatePeriod'))
+    expect(updated?.[2]).toMatchObject({ id: 'p-1' })
+    expect(body().querySelector('[data-period-id]')).not.toBeNull()
   })
 
   it('shows a read failure as an error with a retry instead of a spinner that never stops', async () => {

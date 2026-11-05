@@ -22,10 +22,12 @@ import type { DailyBriefingText } from './dailyBriefingText'
  */
 export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient }: Readonly<{
   text: DailyBriefingText
-  client?: Pick<DailyBriefingPeriodClient, 'list' | 'create'>
+  client?: Pick<DailyBriefingPeriodClient, 'list' | 'create' | 'update'>
 }>): React.ReactElement {
   const [periods, setPeriods] = useState<readonly BriefingPeriod[] | null>(null)
   const [failed, setFailed] = useState(false)
+  // 哪一期正在被编辑；`undefined` 就是"加一期"。同一张弹框，两种身份，靠这一个值区分。
+  const [editing, setEditing] = useState<BriefingPeriod | undefined>(undefined)
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
@@ -43,11 +45,14 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
   const save = (draft: BriefingPeriodDraft): void => {
     setSaving(true)
     setSaveFailed(false)
-    void client.create(draft)
+    const target = editing
+    const write = target === undefined ? client.create(draft) : client.update(target.id, draft)
+    void write
       .then((result) => {
         if (result.state === 'saved') {
           setPeriods(result.periods)
           setAdding(false)
+          setEditing(undefined)
           return
         }
         // The dialog already names the conflicting row from the same list, so a rejection here means
@@ -74,11 +79,15 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
         <p className="mi-briefing-periods__hint">{copy.emptyHint}</p>
       </div>
       : <ul className="mi-briefing-periods__list">
+        {/* 一行就是一期，点它改这一期：期级动作只有"改"和"再加一期"，所以整行都是那个入口，
+            不再套一层菜单——菜单要占一次点击，而这里只有一个动作。 */}
         {periods.map((period, index) => <li className="mi-briefing-periods__row" data-period-id={period.id} key={period.id}>
-          <strong>{copy.label.replace('{index}', String(index + 1))}</strong>
-          <span>{copy.timeValue.replace('{time}', period.generationTime)}</span>
-          <span>{copy.windowValue.replace('{hours}', String(period.windowHours))}</span>
-          <span>{languageName(period.language)}</span>
+          <button className="mi-briefing-periods__edit" type="button" onClick={() => { setEditing(period); setSaveFailed(false) }}>
+            <strong>{copy.label.replace('{index}', String(index + 1))}</strong>
+            <span>{copy.timeValue.replace('{time}', period.generationTime)}</span>
+            <span>{copy.windowValue.replace('{hours}', String(period.windowHours))}</span>
+            <span>{languageName(period.language)}</span>
+          </button>
         </li>)}
       </ul>}
     <Button className="mi-briefing-periods__add" data-briefing-period-add="true" onClick={() => setAdding(true)} type={periods.length === 0 ? 'primary' : 'default'}>
@@ -86,12 +95,15 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
     </Button>
     {saveFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{copy.saveFailed}</p> : null}
     <BriefingPeriodDialog
-      open={adding}
+      // 加了 key 才换得住身份：弹框的草稿只在挂载时取一次，改一期时若不重挂，表单里还是上一次的值。
+      key={editing?.id ?? 'new'}
+      open={adding || editing !== undefined}
       text={text}
       periods={periods}
+      {...(editing === undefined ? {} : { editing })}
       saving={saving}
       onSave={save}
-      onClose={() => { if (!saving) { setAdding(false); setSaveFailed(false) } }}
+      onClose={() => { if (!saving) { setAdding(false); setEditing(undefined); setSaveFailed(false) } }}
     />
   </div>
 }

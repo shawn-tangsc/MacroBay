@@ -62,3 +62,6 @@
 .mi-briefing-periods__empty p { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; line-height: 18px; }
 .mi-briefing-periods__hint { color: var(--mi-dashboard-muted); }
 .mi-briefing-periods__add { align-self: flex-start; }
+/* 整行就是"改这一期"的入口：一个动作不需要菜单，菜单要多一次点击。 */
+.mi-briefing-periods__edit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mi-briefing-periods__edit:hover strong, .mi-briefing-periods__edit:focus-visible strong { text-decoration: underline; }
