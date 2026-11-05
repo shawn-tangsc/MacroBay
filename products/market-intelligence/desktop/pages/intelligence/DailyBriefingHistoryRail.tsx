@@ -188,6 +188,8 @@ export function DailyBriefingHistoryRail({
                     ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
                     : null}
                 </span>
+                {/* 行末：来源词（永远有且只有一个）+ 语言标签（只在真有版次时出现）。 */}
+                <span className="mi-daily-briefing__rail-source" data-run-source={edition.state === 'missing' ? 'none' : edition.periodKind === 'manual' ? 'manual' : edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry' ? 'catch-up' : 'scheduled'}>{sourceWord(edition, text)}</span>
                 {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>
                   {/* 一行只有这一枚：该行自己的语言。徽标是标签，不是可切换的开关——没有按钮、没有选中态。 */}
                   <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
@@ -200,6 +202,7 @@ export function DailyBriefingHistoryRail({
                       {typeof edition.windowHours === 'number'
                         ? <span className="mi-daily-briefing__rail-fact" data-window-hours={edition.windowHours}>{text.history.windowHoursShort.replace('{hours}', String(edition.windowHours))}</span>
                         : null}
+
                     </>}
                 </small>
                 {missing ? <small className="mi-daily-briefing__rail-missing" data-run-reason={runReasonOf(edition) ?? 'not-run'}>{
@@ -311,11 +314,28 @@ function LanguageBadge({ language, text, locale, selected, onSelect }: Readonly<
 }
 
 /** `HH:mm` facts: two clocks are both labelled, one clock is not (A9.10). */
+/**
+ * 第一行最右那一格：这一份是**怎么来的**——一个词，永远有且只有一个。
+ *
+ * 定时 / 手动 / 补跑 / 未运行 / 这次失败。补跑属于定时那一类，不再重复写「定时」；未运行与失败
+ * 那两行没有语言标签（那一版根本不存在），所以这一格是它们唯一的状态词。
+ */
+function sourceWord(edition: DailyBriefingEditionSummary, text: DailyBriefingText): string {
+  if (edition.state === 'missing') return edition.attemptCount ? text.history.runFailed : text.history.missingRun
+  if (edition.periodKind === 'manual') return text.history.runManual
+  if (edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry') return text.history.runCatchUp
+  return text.history.runScheduled
+}
+
 function timeFacts(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): readonly string[] {
   if (edition.state === 'missing') return edition.scheduledTime ? [edition.scheduledTime] : []
   const nominal = edition.periodTime ? railClock(edition.periodTime, timeZone) : edition.scheduledTime
   const actual = edition.generatedAt ? railClock(edition.generatedAt, timeZone) : undefined
-  if (nominal && actual) return [
+  // 正常行只说一个时刻 —— 它按点生成的那一期，计划与实际是同一个值，印两个词只是噪音。
+  // 「计划/截止 + 实际」只在**非正常期**（补跑、手动、已删除）才成对出现，那时两个时刻真的不同。
+  const irregular = edition.periodDeleted === true || edition.periodKind === 'manual' ||
+    edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
+  if (irregular && nominal && actual) return [
     `${edition.periodKind === 'manual' ? text.history.timeCutoff : text.history.timePlanned} ${nominal}`,
     `${text.history.timeActual} ${actual}`
   ]

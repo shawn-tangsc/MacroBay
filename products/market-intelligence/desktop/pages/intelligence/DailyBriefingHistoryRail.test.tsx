@@ -63,14 +63,20 @@ const render = (props: Partial<React.ComponentProps<typeof DailyBriefingHistoryR
   })
 
 describe('daily briefing history rail', () => {
-  it('prints the two clocks with their labels, and the item count as its own fact', () => {
+  it('prints one clock on a normal row, and both clocks only when the run was irregular', () => {
+    // 正常行由排期生成：计划与实际是同一个值，印两个词只是噪音，还会把 252px 顶爆。
     render({ editions: [edition({ attemptCount: 2, periodTime: '2026-11-02T00:00:00.000Z' })] })
     const meta = host.querySelector('.mi-daily-briefing__rail-meta')
-    // A9.10: two clocks are both labelled, nominal first.
-    expect(meta?.textContent).toContain(`${text.history.timePlanned} 08:00`)
-    expect(meta?.textContent).toContain(`${text.history.timeActual} 08:00`)
+    expect(meta?.textContent).toContain('08:00')
+    expect(meta?.textContent).not.toContain(text.history.timePlanned)
+    expect(meta?.textContent).not.toContain(text.history.timeActual)
     expect(meta?.textContent).not.toContain('/4')
     expect(meta?.textContent).not.toContain('GMT')
+    // 补跑/手动那类才成对出现，两个时刻真的不同。
+    render({ editions: [edition({ attemptCount: 2, runTrigger: 'catch-up', periodTime: '2026-11-02T00:00:00.000Z' })] })
+    const irregular = host.querySelector('.mi-daily-briefing__rail-meta')
+    expect(irregular?.textContent).toContain(`${text.history.timePlanned} 08:00`)
+    expect(irregular?.textContent).toContain(`${text.history.timeActual} 08:00`)
     // The item count is a row fact, not part of the clock run.
     expect(host.textContent).toContain(`4 ${text.readingsUnit}`)
     expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
