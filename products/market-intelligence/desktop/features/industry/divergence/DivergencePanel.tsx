@@ -219,16 +219,7 @@ export function groupWithheld(entries: readonly DivergenceWithheldView[]): reado
 }
 
 /**
- * Which platform error code this failure belongs to.
- *
- * "Nothing arrived from any source" and "the answer was too large" are the read failing from the
- * outside; a rejected payload or an unreadable clock is the read failing inside. Both are retried
- * the same way, so the split is about the sentence the reader gets, not about the next step.
+ * The one line a reader gets on the row: what invalidates this reading.
  */
-/** The one line a reader gets on the row: what invalidates this reading. */
 const invalidationLine = (pairId: string, text: DivergencePanelText): string =>
   `${text.invalidationLabel}${text.labelSep}${text.pairs[pairId as keyof DivergencePanelText['pairs']].invalidation}`
-
-function unavailableReasonCode(reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'): 'unreadable' | 'unavailable' {
-  return reason === 'all-legs-missing' || reason === 'too-large' ? 'unavailable' : 'unreadable'
-}
