@@ -233,11 +233,12 @@
    the other four are neutral, because a source is not a verdict. */
 .mi-daily-briefing__rail-source { background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
-/* The single separator before the language: a dot, not part of either chip's box.
-   The two travel right together — `margin-left: auto` sits on the separator, not on the language,
-   because a dot left behind at the source's tail is a dot hanging in the middle of the row. Each row
-   therefore ends its language in the same column, and the eye stops travelling to find it. */
-.mi-daily-briefing__rail-sep { flex: none; margin-left: auto; font-size: 9.5px; opacity: .6; }
+/* The language is pushed to the row's trailing edge by its own auto margin: facts on the left, the
+   language on the right, flexible whitespace between them. That gap is the alignment, not a defect —
+   a separator bridging it would put the language back beside the source.
+   `__rail-sep` is hidden rather than deleted here because the element is still rendered by the row's
+   markup; once the span is gone, this rule goes with it. */
+.mi-daily-briefing__rail-sep { display: none; }
 /* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。
    它**不在行按钮内部**（`<button>` 里不能套 `<button>`），而是同一条目里的第二个控件，
    绝对定位到第二行右侧；行按钮用 `data-has-retry` 在第二行右端让出这段宽度。 */
@@ -340,4 +341,4 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
-.mi-daily-briefing__rail-lang { flex: 0 0 auto; margin-left: 0; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
+.mi-daily-briefing__rail-lang { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }

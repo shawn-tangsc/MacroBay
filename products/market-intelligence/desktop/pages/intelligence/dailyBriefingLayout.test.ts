@@ -118,13 +118,16 @@ describe('two-line rail row', () => {
   })
 
   it('ends every row with the language in the same column', () => {
-    // The separator carries the auto margin, not the language: a dot left behind at the source's tail
-    // would hang in the middle of the row. Both travel together, so the language column is straight.
-    expect(rule('.mi-daily-briefing__rail-sep {')).toContain('margin-left: auto;')
-    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('margin-left: 0;')
+    // The language pushes itself right: the whitespace between facts and language is the alignment.
+    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('margin-left: auto;')
     // Never compressed: the row gives up characters of its own tail first.
     expect(rule('.mi-daily-briefing__rail-lang {')).toContain('flex: 0 0 auto;')
     expect(rule('.mi-daily-briefing__rail-fact {')).toContain('min-width: 0;')
+  })
+
+  it('leaves no separator between the source and the language', () => {
+    // The dot only bridged two adjacent chips; with the language at the far edge it is a broken mark.
+    expect(rule('.mi-daily-briefing__rail-sep {')).toContain('display: none')
   })
 
   it('separates facts by space, not by a dot between every pair', () => {
