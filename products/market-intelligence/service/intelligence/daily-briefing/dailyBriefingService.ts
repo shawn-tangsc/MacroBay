@@ -426,11 +426,9 @@ export function createDailyBriefingService(deps: Readonly<{
   }>, force: boolean): Promise<DailyBriefingTodayResult> {
     const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
-    // **读数的那一刻**（运行时刻），与这一版的**统计截止**（`input.asOf`）是两件事：窗口仍按截止，
-    // 读的却是此刻最新的库。取一次时钟、整跑都用它，避免读和盖章各说一个时间。
+    // 读数的那一刻（运行时刻）≠ 统计截止（`input.asOf`）：窗口按截止，读的是此刻最新的库；取一次时钟整跑共用。
     const readAt = now()
-    // The attempt row is opened before any work: a run the process never finishes is still a
-    // record of an attempt that did not succeed, instead of an attempt that never happened.
+    // 先开 attempt 行：一个跑不完的进程也要留下"试过但没成"的记录，而不是"从未发生"。
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const market = await prepareMarketForRun({ backfill: deps.marketBackfill?.(), readiness: deps.readiness, asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
@@ -441,11 +439,9 @@ export function createDailyBriefingService(deps: Readonly<{
       now,
       onChange: () => runs.progress.set(progressKey, recorder.snapshot())
     })
-    // Publish the first snapshot before any work starts: a reader that polls between the request
-    // and the first stage would otherwise be told nothing is running.
+    // 开工前先发第一份快照：否则轮询的读者在请求与第一个阶段之间会被告知"什么都没在跑"。
     runs.progress.set(progressKey, recorder.snapshot())
-    // The facts of this period are frozen once, once they exist; every edition of the run is
-    // written from that document.
+    // 这一期的事实只冻一次；这一次跑的每一版都从那份文档写出来。
     const run = createDailyBriefingPeriodRunJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
     let activeStage: BriefingGenerationStageId | undefined
     let failedStage: BriefingGenerationStageId | undefined
