@@ -102,6 +102,33 @@ describe('the copied text reads the same figures as the card', () => {
   })
 })
 
+describe('a web-sourced value says so in the copy too (v2.128)', () => {
+  it('prints the same value label the card prints, suffix included', () => {
+    const base = document()
+    const web = dailyBriefingToMarkdown({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'web' }] }
+    }, options)
+    const store = dailyBriefingToMarkdown(base, options)
+    // 三处一致：这里用的就是分享卡同一份拼法（`briefingMacroValueLabel`）。
+    expect(web).toContain(`实际 3.4%${labels.macroWebValue}`)
+    // 库内值一个字都不加。
+    expect(store).toContain('实际 3.4%')
+    expect(store).not.toContain(labels.macroWebValue)
+  })
+
+  it('prints no value segment at all when the event has no value', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, actual: undefined }] }
+    }, options)
+    // 没有值就整段不出现：不印破折号、也不说"没拿到"（v2.124/v2.128）。
+    expect(markdown).not.toContain('实际 —')
+    expect(markdown).not.toContain('没拿到')
+  })
+})
+
 describe('daily briefing markdown', () => {
   it('leaves the readings count out of the copy header', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
