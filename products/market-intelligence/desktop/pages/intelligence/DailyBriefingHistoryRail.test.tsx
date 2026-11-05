@@ -460,6 +460,24 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(waiting.textContent).not.toMatch(/\d/)
   })
 
+  // 用户报的那条：右��是失败面板，左边列表却把那一行显示成「打开看正文」。
+  // 失败的行必须说「这次没生成出来」，并给重试入口——它不是"没有内容"。
+  it('shows a failed run as a failure with a retry, not as a row with nothing to read', () => {
+    const onRegeneratePeriod = vi.fn()
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 1,
+        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }]
+      })],
+      onRegeneratePeriod
+    })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('failed')
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railFailedReason)
+    expect(row.textContent).not.toContain(text.history.railNoTitle)
+    expect(host.querySelector('[data-rail-retry]')).not.toBeNull()
+  })
+
   // #9：行内「重试」以前只交期号与语言，手动期没有期配置可依据，重跑会落回排期时刻。
   it('retries a failed manual issue with its own cutoff and window', () => {
     const onRegeneratePeriod = vi.fn()
