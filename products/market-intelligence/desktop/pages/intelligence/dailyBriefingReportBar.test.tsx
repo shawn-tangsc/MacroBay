@@ -70,6 +70,20 @@ describe('the edition bar floats only while the report scrolls under it', () => 
     expect(bar.getAttribute('data-stuck')).toBeNull()
   })
 
+  it('gives every button in the bar a visible label', () => {
+    // 空框是"按钮有节点、没有字"：要么 label 键没传进来，要么字被吃掉。这条只判渲染出来的文字，
+    // 颜色/对比度归样式那条线——两件事分开判，才知道是哪种。
+    render()
+    const bar = host.querySelector<HTMLElement>('.mi-daily-briefing-page__report-bar')!
+    const buttons = [...bar.querySelectorAll<HTMLButtonElement>('button')]
+    expect(buttons.length).toBeGreaterThanOrEqual(5)
+    for (const button of buttons) expect(button.textContent?.trim() ?? '', button.getAttribute('data-toolbar-action') ?? 'push').not.toBe('')
+    expect(bar.textContent).toContain(text.regenerate)
+    expect(bar.textContent).toContain(text.exportImage)
+    expect(bar.textContent).toContain(text.copy)
+    expect(bar.textContent).toContain(text.history.deleteEditionConfirm)
+  })
+
   it('keeps the five edition actions and no page-level action in the bar', () => {
     render()
     const bar = host.querySelector<HTMLElement>('.mi-daily-briefing-page__report-bar')!

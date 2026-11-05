@@ -446,6 +446,26 @@ describe('daily briefing page', () => {
     expect(payload.clock).toMatch(/^[0-9]{2}:[0-9]{2}$/)
   })
 
+  it('right-click and the toolbar open the same confirmation, word for word', async () => {
+    // 两个入口、一套行为：句子不是"抄得一样"，而是同一个 helper 生成的。这条用例判的就是渲染出来
+    // 的那段字——两条路径各写一套的话，读者会看到两句都说"删除"，却只有一句说清了删哪一版。
+    const dom = await renderPage(fakeClient())
+    const dialogText = (): string => document.querySelector<HTMLElement>('[role="dialog"]')?.textContent ?? ''
+
+    act(() => { dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
+    act(() => { document.querySelector<HTMLElement>('[role="menuitem"]')!.click() })
+    const fromRightClick = dialogText()
+    await act(async () => { dialogButton(text.history.deleteCancel).click() })
+
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!.click() })
+    const fromToolbar = dialogText()
+
+    expect(fromRightClick).not.toBe('')
+    expect(fromToolbar).toBe(fromRightClick)
+    expect(fromRightClick).toContain(text.history.deleteEditionConfirm)
+    expect(fromRightClick).toContain('2026-10-30')
+  })
+
   it('disables the delete action with a visible reason when no edition is open', async () => {
     // 没有可读版次时五颗一起禁用；原因必须是读者看得到的，不是 title 那种禁用处不到的提示。
     const client = fakeClient({
