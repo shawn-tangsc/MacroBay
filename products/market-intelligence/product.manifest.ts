@@ -94,6 +94,7 @@ export const marketIntelligenceProductManifest = {
     { method: marketCalendarPublicPolicy.methods.refresh },
     { method: marketCalendarPublicPolicy.methods.query },
     { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
+    { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },
     { method: dashboardFeedStatusPublicPolicy.method },
     { method: macroRatesSnapshotPublicPolicy.method },

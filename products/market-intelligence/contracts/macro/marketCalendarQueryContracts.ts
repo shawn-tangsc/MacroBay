@@ -17,8 +17,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
     'archive-unavailable', 'parse-unavailable', 'storage-unavailable', 'storage-pressure'],
   attemptTriggers: ['manual', 'automatic'],
   descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'],
+  /** Bounded catch-up for the daily briefing: same three feeds, one shared deadline. */
+  refreshNow: { defaultTimeoutMs: 90_000, minimumTimeoutMs: 1_000, maximumTimeoutMs: 120_000 },
   methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
-    getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness' }
+    getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
+    refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)
 export type MarketCalendarScope = Readonly<{ month: string; locale: 'zh' | 'en' }>
 export type MarketCalendarQuery = MarketCalendarScope & Readonly<{ asOf: string; cursor?: string }>
@@ -81,6 +84,16 @@ export type MarketCalendarCollectionFreshness = Readonly<{
   lastCollectedAt: string | null
   latestAttempt?: MarketCalendarRefreshAttempt
 }>
+/**
+ * Four outcomes, and `timeout` is its own: the reader must be told "we did not finish in
+ * time", never "the collection failed" — the two sentences lead to different actions.
+ * `collected` means the batch stored; the caller may then read the same query the page uses.
+ */
+export type MarketCalendarRefreshNowResult =
+  | Readonly<{ state: 'collected'; sources: readonly string[] }>
+  | Readonly<{ state: 'unchanged' }>
+  | Readonly<{ state: 'failed'; failureCode: string }>
+  | Readonly<{ state: 'timeout'; timeoutMs: number }>
 export type MarketCalendarFreshness =
   | Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
     sources: readonly MarketCalendarCollectionFreshness[] }>
@@ -203,4 +216,20 @@ function sourceFreshness(value: unknown): value is MarketCalendarCollectionFresh
     marketCalendarPublicPolicy.descriptors.includes(value.descriptorId as never) &&
     (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
+}
+
+export function isMarketCalendarRefreshNowResult(value: unknown): value is MarketCalendarRefreshNowResult {
+  if (marketExact(value, ['state']) && value.state === 'unchanged') return true
+  if (marketExact(value, ['state', 'sources']) && value.state === 'collected') {
+    return Array.isArray(value.sources) && value.sources.length > 0 &&
+      value.sources.every(item => typeof item === 'string' && marketCalendarPublicPolicy.descriptors.includes(item as never))
+  }
+  if (marketExact(value, ['state', 'timeoutMs']) && value.state === 'timeout') {
+    return value.timeoutMs === marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs ||
+      (typeof value.timeoutMs === 'number' && Number.isSafeInteger(value.timeoutMs) &&
+        value.timeoutMs >= marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs &&
+        value.timeoutMs <= marketCalendarPublicPolicy.refreshNow.maximumTimeoutMs)
+  }
+  return marketExact(value, ['state', 'failureCode']) && value.state === 'failed' &&
+    typeof value.failureCode === 'string' && value.failureCode.length > 0 && value.failureCode.length <= 64
 }

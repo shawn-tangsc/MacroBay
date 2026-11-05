@@ -7,6 +7,7 @@ import { createRawRecordStore } from '../../application/rawRecordStore'
 import { createSourceRequestGovernanceQueue } from '../../application/sourceRequestGovernance'
 import { createMacroCalendarEvidenceArchive } from '../macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from '../macroCalendarEvidenceStore'
+import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
 const disposals: (() => void)[] = []
 afterEach(() => { disposals.splice(0).reverse().forEach(dispose => dispose()) })
@@ -68,6 +69,41 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     // The verdict is durable now: an outage's reason must survive the restart that used to
     // erase every attempt record, otherwise "why is the calendar old" is unanswerable again.
     expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({ state: 'succeeded', attemptedAt: time, trigger: 'manual' })
+  })
+
+  // The briefing's catch-up path. "Stored" is the only proof that matters: the same query the
+  // page reads must see the batch, not merely that the request returned.
+  it('collects the three feeds in one bounded call and stores what the page will read', async () => {
+    const h = await setup()
+    const result = await h.runtime.refreshNow({})
+    expect(result).toMatchObject({ state: 'collected' })
+    expect(result.state === 'collected' ? result.sources : []).toEqual([
+      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'
+    ])
+    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n).toBeGreaterThan(0)
+    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(6)
+  })
+
+  it('reports a deadline as timeout, never as a collection failure', async () => {
+    // The gate never opens, so the batch cannot finish inside the budget. `timeout` is its own
+    // answer: "not finished in time" and "the collection failed" lead to different sentences.
+    const h = await setup({ gate: new Promise<void>(() => undefined) })
+    const result = await h.runtime.refreshNow({ timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
+    expect(result).toEqual({ state: 'timeout', timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
+  })
+
+  it('names the refusal when every asked source failed', async () => {
+    const h = await setup({ failEndpoint: 'economic-data' })
+    const result = await h.runtime.refreshNow({ sourceIds: ['macro-calendar-0xrouter-economic-data'] })
+    expect(result).toEqual({ state: 'failed', failureCode: 'response-unavailable' })
+  })
+
+  it('refuses a source set or budget it does not own', async () => {
+    const h = await setup()
+    expect(await h.runtime.refreshNow({ sourceIds: ['macro-calendar-fed'] })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ sourceIds: [] })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ timeoutMs: 10 })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ unknown: true })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
   })
 
   it('leaves a visible trace of a refused automatic refresh, with verdict, time and origin', async () => {

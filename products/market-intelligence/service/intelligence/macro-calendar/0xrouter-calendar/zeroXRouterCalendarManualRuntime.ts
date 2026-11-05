@@ -12,8 +12,8 @@ import type { MacroCalendarSqlite } from '../macroCalendarSqlite'
 import { createMarketCalendarPublicQueryService } from './marketCalendarPublicQueryService'
 import { createMarketCalendarRefreshAttemptStore, latestAttemptFor, readWorstEnabledCollection } from './marketCalendarRefreshAttemptStore'
 import { notifyMacroEventLandings, selectLandedReleases, type MacroEventLandedSubmit } from '../../signals/macroEventLandedNotifier'
-import { marketCalendarPublicPolicy, type MarketCalendarFreshness, type MarketCalendarRefreshResult, type MarketCalendarSource,
-  type MarketCalendarRefreshAttempt, type MarketCalendarScope,
+import { marketCalendarPublicPolicy, type MarketCalendarFreshness, type MarketCalendarRefreshNowResult,
+  type MarketCalendarRefreshResult, type MarketCalendarSource, type MarketCalendarRefreshAttempt, type MarketCalendarScope,
   isMarketCalendarScope } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
 type CollectionDependencies = Parameters<typeof createZeroXRouterCalendarCollectionService>[0]
@@ -78,17 +78,44 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
           ...(item.failureCode ? { failureCode: item.failureCode } : {}) })
     }
   }
+  // The automatic path stays separate from the manual one on purpose: it must not write a
+  // manual refresh-attempt outcome, and it derives the months it covers itself (design
+  // 118:206, 164 §5.1). Its own record is what makes a refused automatic tick visible at all.
+  async function refreshAutomatic(enabledFeeds?: readonly string[]): Promise<RefreshResult> {
+    const result = await refresh.refreshAutomatic(enabledFeeds)
+    if (result.items.length) recordBatchAttempts(result, 'automatic')
+    return result
+  }
   return Object.freeze({
     repository,
-    // The automatic path stays separate from the manual one on purpose: it must
-    // not write a manual refresh-attempt outcome, and it derives the months it
-    // covers itself (design 118:206, 164 §5.1). Its own record is what makes a
-    // refused automatic tick visible at all. A tick can now carry the current month
-    // and the prefetched next month, so every attempted month gets its own record.
-    refreshAutomatic: async (enabledFeeds?: readonly string[]): Promise<RefreshResult> => {
-      const result = await refresh.refreshAutomatic(enabledFeeds)
-      if (result.items.length) recordBatchAttempts(result, 'automatic')
-      return result
+    refreshAutomatic,
+    /**
+     * Bounded catch-up for the daily briefing: the three feeds ask in parallel and share
+     * **one** deadline, so the worst case is the budget rather than three budgets in a row.
+     *
+     * Four outcomes, and `timeout` is its own: "we did not finish in time" and "the collection
+     * failed" lead to different sentences downstream. A `collected` batch has already been
+     * stored by the code the page reads, so the caller may read the page right after it returns.
+     */
+    async refreshNow(input: unknown): Promise<MarketCalendarRefreshNowResult> {
+      const parsed = parseRefreshNowInput(input)
+      if (!parsed) return { state: 'failed', failureCode: 'input-invalid' }
+      if (stopped || !deps.evidenceReady) return { state: 'failed', failureCode: 'readiness-unavailable' }
+      const timedOut = Symbol('timeout')
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const deadline = new Promise<typeof timedOut>((resolve) => {
+        timer = setTimeout(() => resolve(timedOut), parsed.timeoutMs)
+        timer.unref?.()
+      })
+      try {
+        const outcome = await Promise.race([refreshAutomatic(parsed.sourceIds), deadline])
+        if (outcome === timedOut) return { state: 'timeout', timeoutMs: parsed.timeoutMs }
+        return refreshNowOutcome(outcome)
+      } catch {
+        return { state: 'failed', failureCode: 'response-unavailable' }
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
     },
     /**
      * One durability read for the briefing: how old the calendar is, and why the last try
@@ -138,6 +165,44 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
       return disposal
     }
   })
+}
+
+/**
+ * `sourceIds` defaults to the three 0xRouter feeds (fed/bea have their own 6-hour official
+ * schedule and are never caught up here). Only those three are accepted: a caller cannot
+ * widen the set, and a bad shape fails closed.
+ */
+function parseRefreshNowInput(input: unknown): { sourceIds: readonly string[]; timeoutMs: number } | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
+  const value = input as Record<string, unknown>
+  if (Object.keys(value).some((key) => key !== 'sourceIds' && key !== 'timeoutMs')) return undefined
+  const timeoutMs = value.timeoutMs ?? marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs
+  if (typeof timeoutMs !== 'number' || !Number.isSafeInteger(timeoutMs) ||
+    timeoutMs < marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs ||
+    timeoutMs > marketCalendarPublicPolicy.refreshNow.maximumTimeoutMs) return undefined
+  const sourceIds = value.sourceIds ?? marketCalendarPublicPolicy.descriptors
+  if (!Array.isArray(sourceIds) || sourceIds.length === 0 || sourceIds.length > marketCalendarPublicPolicy.descriptors.length) return undefined
+  const seen = new Set<string>()
+  for (const sourceId of sourceIds) {
+    if (typeof sourceId !== 'string' || !(marketCalendarPublicPolicy.descriptors as readonly string[]).includes(sourceId)) return undefined
+    if (seen.has(sourceId)) return undefined
+    seen.add(sourceId)
+  }
+  return { sourceIds: [...seen], timeoutMs }
+}
+
+/** A batch that stored anything is `collected`; nothing stored is `unchanged`; a refusal keeps its code. */
+function refreshNowOutcome(result: RefreshResult): MarketCalendarRefreshNowResult {
+  if (result.failureCode) return { state: 'failed', failureCode: result.failureCode }
+  if (result.state === 'unavailable') {
+    const refusal = result.items.find((item) => item.state === 'unavailable' && item.failureCode !== undefined)
+    const failureCode = refusal?.state === 'unavailable' && refusal.failureCode ? refusal.failureCode : 'unavailable'
+    return { state: 'failed', failureCode }
+  }
+  const stored = result.items.filter((item) => item.state === 'succeeded')
+  return stored.length > 0
+    ? { state: 'collected', sources: [...new Set(stored.map((item) => item.descriptorId))] }
+    : { state: 'unchanged' }
 }
 
 // Main composition only. Conservative total logical allocation is charged as an
@@ -193,6 +258,8 @@ export function createStoredManualCalendar(deps: {
   }
   return Object.freeze({
     queryMonth: query.queryMonth,
+    /** Bounded catch-up, forwarded unchanged: the runtime already owns the verdicts. */
+    refreshNow: runtime.refreshNow,
     /**
      * Read-only freshness for consumers that must tell "nothing happened" from "we could not
      * see anything". The enabled set is resolved here because only the composition knows it;
