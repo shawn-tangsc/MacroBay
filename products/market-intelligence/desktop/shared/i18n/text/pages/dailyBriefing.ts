@@ -17,7 +17,7 @@ export const dailyBriefingText = {
     closeMissing: '这一期没有存收盘价',
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
     // 纳指走永续代理的那些天，点位不是纳指自己的——不标出来，读者会把 QQQ 的点位当纳指用。
-    indexProxy: '（QQQ 永续代理）',
+    perpetualContract: '永续合约', indexProxy: '（QQQ 永续代理）',
     sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '过去 24 小时数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '持仓与费率', policyPath: '利率路径',  policyRange: '政策区间', rangeUnavailable: '区间未收录',
       // The card says what the dial is, not which section it belongs to: the section is already titled.
       policyProbability: '利率概率',
@@ -321,7 +321,7 @@ export const dailyBriefingText = {
     noValue: '—',
     notAvailableThisRun: 'Not available this run',
     closeMissing: 'This edition stored no close',
-    indexProxy: ' (QQQ perpetual proxy)',
+    perpetualContract: 'Perpetual', indexProxy: ' (QQQ perpetual proxy)',
     sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'Past 24 hours in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Positioning & funding', policyPath: 'Rate path',  policyRange: 'Target range', rangeUnavailable: 'Range unavailable',
       policyProbability: 'Rate probability',
       markets: 'Markets & sentiment' },

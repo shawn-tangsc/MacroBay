@@ -909,6 +909,20 @@ describe('the index row reads the production shape, not a convenient one', () =>
   })
 })
 
+describe('the price cards say which market they price', () => {
+  it('marks BTC and ETH as perpetual contracts, and never marks the index row', async () => {
+    // 价格卡读的是币安 U 本位**永续合约**，同屏下面还有「美国比特币现货基金」讲现货 ETF 资金流；
+    // 不标出来读者会把两个市场当成一个。纳指那张走真指数或代币化永续、有自己的代理标记，加这句
+    // 在真指数那天就是假话——所以按行身份判，不按“是金额卡”一律加。
+    const host = await render()
+    const labelOf = (id: string): string =>
+      host.querySelector(`[data-briefing-price-card="${id}"] .mi-brief-poster__price-label`)?.textContent ?? ''
+    expect(labelOf('btc')).toContain(text.perpetualContract)
+    expect(labelOf('eth')).toContain(text.perpetualContract)
+    expect(labelOf('index')).not.toContain(text.perpetualContract)
+  })
+})
+
 describe('a price card keeps the move when change is null', () => {
   it('prints level, move and amplitude together, because that is the shape the service writes', async () => {
     const base = documentWithData()

@@ -334,7 +334,11 @@ function PriceCard({ row, text, locale, formatTime, changeArrows }: Readonly<{
   // 114px. Same attributes, wrong paper.
   return <div className="mi-brief-poster__card mi-brief-poster__price-card" data-tone={toneOf(row)} data-briefing-price-card={row.id}>
     <div className="mi-brief-poster__price-lead" data-briefing-price-lead="true">
-      <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}</span>
+      {/* 价格卡读的是币安 U 本位**永续合约**（`fapi.binance.com`、`PERPETUAL`），不是现货；同屏下面还有
+          「美国比特币现货基金」那一行讲现货 ETF 资金流，不标出来读者会把两个市场当成一个。
+          只有 BTC/ETH 两张卡加：纳指那张走真指数或代币化永续，它有自己的代理标记，加这句会在真指数
+          那天变成假话。 */}
+      <span className="mi-brief-poster__price-label">{rowLabel(text, row.labelKey)}{fallbackLabel(row, text)}{row.id === 'btc' || row.id === 'eth' ? ` · ${text.perpetualContract}` : ''}</span>
       <span className="mi-brief-poster__price-figures">
         <b className="mi-brief-poster__price-value" data-briefing-price-value={row.id}>{level}</b>
         {/* Three things, not one: the dash, the reason, and the move. A missing level does not mean the
