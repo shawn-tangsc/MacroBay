@@ -2,14 +2,14 @@
 
 
 
-.mi-daily-briefing__rail { min-height: 0; overflow-y: auto; padding-right: 12px; border-right: 1px solid var(--mi-dashboard-line); }
-.mi-daily-briefing__rail-title { margin: 0 0 8px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
-.mi-daily-briefing__rail-list { display: grid; gap: 2px; }
+.mi-daily-briefing__rail { min-height: 0; overflow-x: hidden; overflow-y: auto; padding-right: 12px; border-right: 1px solid var(--mi-dashboard-line); }
+.mi-daily-briefing__rail-title { font-size: 10px; font-weight: 600; letter-spacing: .14em; margin-bottom: 8px; margin: 0 0 8px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+.mi-daily-briefing__rail-list { display: grid; gap: 2px; min-width: 0; }
 /* One definition only: this row used to be declared twice (a horizontal one near the rail, and a
    column one further down), so "what shape is a rail row" had two answers in the same file. */
-.mi-daily-briefing__rail-row { display: flex; flex-direction: row; align-items: baseline; gap: 6px; width: 100%; min-height: 27px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-row { display: flex; flex-direction: row; align-items: baseline; gap: 6px; width: 100%; min-width: 0; height: 27px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
-.mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-text); }
+.mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; border-radius: 5px; background: #1c2418; box-shadow: inset 2px 0 var(--mi-dashboard-lime); color: var(--mi-dashboard-text); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
 .mi-daily-briefing__rail-date { font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-daily-briefing__rail-row i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--mi-dashboard-muted); }
@@ -67,14 +67,13 @@
 .mi-daily-briefing-page__failure-actions { display: flex; gap: 8px; margin-top: 16px; }
 .mi-daily-briefing-page__failure-actions button { height: 30px; padding: 0 12px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-text); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__failure-actions .mi-daily-briefing-page__primary { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; }
+.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
 .mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
 .mi-daily-briefing__rail-direction[data-direction="bullish"] { color: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-direction[data-direction="bearish"] { color: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-direction[data-direction="range"], .mi-daily-briefing__rail-direction[data-direction="mixed"] { color: var(--mi-dashboard-caution); }
-.mi-daily-briefing__rail-summary { display: -webkit-box; overflow: hidden; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
 .mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; white-space: nowrap; }
 @media (max-width: 980px) {
@@ -173,7 +172,7 @@
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
 
 /* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
-.mi-daily-briefing__rail-item { display: block; }
+.mi-daily-briefing__rail-item { display: block; min-width: 0; }
 .mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
 .mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
 .mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }
@@ -181,8 +180,12 @@
 /* 行内三段各不断行：宽度修好后，事实段只保证自己不被折断。 */
 /* One row per edition, one line of facts: the row is not a grid, because a second column would let a
    label push the facts into a column of their own — which is how a 27px row became five lines. */
-.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 4px; flex: 1 1 auto; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 9px; }
-.mi-daily-briefing__rail-fact { white-space: nowrap; }
+.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 10px; }
+.mi-daily-briefing__rail-fact { white-space: nowrap; font-size: 10px; color: #5f686e; }
+/* The moment leads: bold and in the body ink, because it is what the reader scans the rail for. */
+.mi-daily-briefing__rail-fact:first-child { font-size: 11px; font-weight: 600; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
+/* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
+.mi-daily-briefing__rail-fact[data-window-hours] { padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--mi-dashboard-lime) 10%, transparent); color: var(--mi-dashboard-muted); font-size: 9px; font-weight: 600; }
 .mi-daily-briefing__rail-sep { opacity: .6; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
 /* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
@@ -259,16 +262,16 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    periods, one language chip per row). */
 .mi-daily-briefing__rail-day { display: block; padding: 6px 0 6px; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__rail-day:first-child { border-top: 0; padding-top: 0; }
-.mi-daily-briefing__rail-day-head { display: block; width: 100%; padding: 2px 6px 4px; border: 0; background: none; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; width: 100%; padding: 2px 6px 3px; border: 0; background: none; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-day-head:hover { color: var(--mi-dashboard-text); }
-.mi-daily-briefing__rail-day-date { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; }
-.mi-daily-briefing__rail-day-count { margin-left: 6px; font-size: 11px; color: #5f686e; }
-.mi-daily-briefing__rail-day-summary { display: block; margin: 4px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 1.45; color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-day-date { font-size: 11.5px; font-weight: 600; letter-spacing: .03em; color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-day-count { font-size: 10.5px; color: #5f686e; white-space: nowrap; }
+.mi-daily-briefing__rail-day-summary { display: block; margin: 1px 0 4px; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10.5px; line-height: 1.45; color: #5f686e; }
 .mi-daily-briefing__rail-day-summary-text { margin-left: 4px; }
 .mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
 .mi-daily-briefing__rail-item + .mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
-.mi-daily-briefing__rail-lang { flex: 0 0 auto; font-size: 10px; line-height: 14px; padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 3px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
+.mi-daily-briefing__rail-lang { flex: none; margin-left: auto; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
 .mi-daily-briefing__rail-fact + .mi-daily-briefing__rail-fact::before { content: ' · '; color: #5f686e; }
