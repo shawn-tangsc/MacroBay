@@ -58,7 +58,10 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
       </div> : null}
     </div> : null}
     {leverage && leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage" data-briefing-leverage-block="true">
-      <span className="mi-brief-poster__leverage-title">{text.sections.leverage}</span>
+      {/* 「未平仓合约」是**区块标题**的限定语，不是每张卡的：挂在标题上天然 1 处，挂两张卡就 2 处，
+          读者会以为两张卡各有一个说法（`02` `A0.11`，v2.80）。写法与 `__price-proxy` 同意图——
+          限定这个名字，不是第二个名字；不新造类名。 */}
+      <span className="mi-brief-poster__leverage-title">{text.sections.leverage}<span className="mi-brief-poster__price-proxy" data-open-interest-label="true"> · {text.positioningOpenInterestLabel}</span></span>
       {(['btc', 'eth'] as const).map((asset) => {
         const entry = leverage[asset]
         const rate = entry.fundingRate
@@ -69,9 +72,7 @@ export function BriefingDataArea({ groups, text, locale, formatTime, paymentDire
         // funding rate beside it, or the colour and the arrow would belong to different facts.
         return <div className="mi-brief-poster__card mi-brief-poster__leverage-card" key={asset} data-briefing-leverage-card={asset} data-tone={change === undefined || change === 0 ? undefined : change > 0 ? 'up' : 'down'}>
           <span className="mi-brief-poster__leverage-copy" data-briefing-leverage-copy="true">
-            {/* 卡名旁说明「$…B 是未平仓合约」：不说明的话读者会把规模读成别的量（`02` `A0.11`）。
-                在调用点拼后缀，不动共享函数；同字号同色、同一行。 */}
-            <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())} · {text.positioningOpenInterestLabel}</span>
+            <span>{text.positioningChange.replace('{asset}', asset.toUpperCase())}</span>
             {/* The level is the trunk and the change sits beside it: a percentage without its base says
                 nothing about how much is open, and the change keeps the colour and the arrow. */}
             <span className="mi-brief-poster__leverage-figures">

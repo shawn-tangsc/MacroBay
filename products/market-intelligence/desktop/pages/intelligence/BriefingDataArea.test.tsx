@@ -512,9 +512,13 @@ describe('the block headings and the positioning card say what they mean', () =>
   it('gives every block heading the heading class, and names the positioning block for its contents', async () => {
     const dom = await render()
     const titles = [...dom.querySelectorAll('.mi-brief-poster__block-title, .mi-brief-poster__leverage-title')]
-      .map((node) => node.textContent)
+      .map((node) => node.textContent ?? '')
     // Three headings, and "持仓与费率" rather than "杠杆": leverage names the instrument, not the numbers.
-    expect(titles).toEqual(['资金', '行情与情绪', '持仓与费率'])
+    // 第三块的标题后接「未平仓合约」这一个限定语（`A0.11`），其余两块不带后缀。
+    expect(titles.map((text) => text.split(' · ')[0])).toEqual(['资金', '行情与情绪', '持仓与费率'])
+    expect(titles[2]!.split(' · ')[1]).toBe(text.positioningOpenInterestLabel)
+    expect(titles[0]).not.toContain(text.positioningOpenInterestLabel)
+    expect(titles[1]).not.toContain(text.positioningOpenInterestLabel)
   })
 
   it('names the change and the rate inside each positioning card', async () => {
@@ -910,13 +914,16 @@ describe('the index row reads the production shape, not a convenient one', () =>
 })
 
 describe('the positioning card says what its number is', () => {
-  it('names the open interest once, beside the card title', async () => {
-    // `$…B` 不说明就是"有数字没有说明"：读者不知道那是未平仓合约。只许加这一句、只出现一次。
+  it('names the open interest once, on the section title and never inside a card', async () => {
+    // `$…B` 不说明就是"有数字没有说明"。位置在**区块标题**上：挂标题天然 1 处，挂两张卡就 2 处。
+    // 夹具必须有 BTC 与 ETH 两张卡，否则"只渲染一张卡"会让错误实现照样绿。
     const host = await render()
-    const card = host.querySelector('[data-briefing-leverage-card="btc"]')!
-    const copy = card.querySelector('[data-briefing-leverage-copy]')!
-    expect(copy.textContent).toContain(text.positioningOpenInterestLabel)
-    expect(card.textContent?.split(text.positioningOpenInterestLabel).length).toBe(2)
+    const cards = [...host.querySelectorAll<HTMLElement>('[data-briefing-leverage-card]')]
+    expect(cards.length).toBeGreaterThanOrEqual(2)
+    for (const card of cards) expect(card.textContent).not.toContain(text.positioningOpenInterestLabel)
+    const marks = [...host.querySelectorAll<HTMLElement>('[data-open-interest-label="true"]')]
+    expect(marks).toHaveLength(1)
+    expect(marks[0]!.closest('.mi-brief-poster__leverage-title')?.textContent).toContain(text.positioningOpenInterestLabel)
   })
 })
 
