@@ -30,7 +30,9 @@ const period = (overrides: Partial<DailyBriefingPeriod> = {}): DailyBriefingPeri
   ...overrides
 })
 
-const available = { state: 'available' as const, document: { edition: { date: '2026-10-30' } } }
+// The handler only reports failure, so the fixture is the smallest available answer the service
+// can return; the cast keeps the mock typed against the real signature.
+const available = { state: 'available' as const, document: { edition: { date: '2026-10-30' } } } as never
 
 describe('daily briefing schedules', () => {
   it('registers one definition per period, each under its own id and payload', async () => {
@@ -117,10 +119,13 @@ describe('daily briefing job handler', () => {
 
     await run({ periodId: 'asia-open' })
 
+    // The scheduler fired this run, so the edition must record that trigger as well as the period.
     expect(getToday).toHaveBeenCalledWith({
       locale: 'zh-CN',
       timeZone: 'Asia/Shanghai',
       periodId: 'asia-open',
+      periodKind: 'scheduled',
+      runTrigger: 'scheduled',
       generation: { generationTime: '12:30', windowHours: 48 }
     })
   })
