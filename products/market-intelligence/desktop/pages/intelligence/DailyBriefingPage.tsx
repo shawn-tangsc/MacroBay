@@ -35,7 +35,7 @@ import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFai
 import { DailyBriefingAttempts } from './DailyBriefingAttempts'
 import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
 import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
-import { DailyBriefingPageActions } from './DailyBriefingPageActions'
+import { DailyBriefingEditionActions, DailyBriefingPageActions } from './DailyBriefingPageActions'
 import { briefingEditionSelection } from './briefingEditionSelection'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
@@ -137,7 +137,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     const row = editions.find((edition) => edition.date === target.date && edition.periodId === target.periodId)
     afterDeleteLocaleRef.current = (row?.availableLocales ?? []).find((language) => language !== target.language) ?? null
     setDeleting(true)
-    void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language }).finally(() => setDeleting(false))
+    void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language, ...(target.clock === undefined ? {} : { clock: target.clock }) }).finally(() => setDeleting(false))
   }
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   // The language this reader asked for but this version cannot write in; a state, not an explanation.
@@ -429,6 +429,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </Button>
+      {/* 页面顶只留两颗：今天出不出（手动生成）、日报设置。版次级那五颗在正文区顶部。 */}
       <DailyBriefingPageActions
         text={text}
         resolveText={resolveProductText}
@@ -437,25 +438,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generating={generating}
         regenerating={regenerating}
         todayReady={readyDocument !== undefined && readyKind(view) === 'today'}
-        hasTodayEdition={hasTodayEdition}
         targetDate={todayDate}
         zoneInvalid={zoneInvalid !== null}
         systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
-        exportable={readyDocument !== undefined && !contentBlocked}
-        exportState={exportState}
-        copyState={copyState}
         onManualRun={onManualRun}
-        push={pushToPhone}
-        pushText={briefingPushText[locale]}
-        onExport={() => void exportImage()}
-        onCopy={() => void copy()}
-        // 当前这一版的身份：日期 · 时刻 · 语言。工具栏的动作只作用于它，所以它是唯一的删除目标。
-        {...(deleteTarget === undefined ? {} : { deleteTarget })}
-        deleting={deleting}
-        onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
         onOpenSettings={() => setSettingsSection('generation')}
-        onGenerate={generateNow}
-        onRegenerate={regenerate}
       />
     </header>
     <div className={bodyClass}>
@@ -466,8 +453,25 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
         onRegeneratePeriod={({ periodId, locale: target }) => { void regenerate({ periodId, locale: target }) }}
         // 行右键与工具栏第五颗共用同一个处理函数：两个入口，一套行为。
-        onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale })} />
+        onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale, ...(target.clock === undefined ? {} : { clock: target.clock }) })} />
       <DailyBriefingContent {...{
+        // 版次级五颗：吸在正文滚动区顶部，只作用于当前这一版（重新生成 / 发布 / 导出 / 复制 / 删除）。
+        editionBar: <DailyBriefingEditionActions
+          text={text}
+          resolveText={resolveProductText}
+          exportable={readyDocument !== undefined && !contentBlocked}
+          exportState={exportState}
+          copyState={copyState}
+          generating={generating}
+          {...(deleteTarget === undefined ? {} : { deleteTarget })}
+          deleting={deleting}
+          onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
+          onExport={() => void exportImage()}
+          onCopy={() => void copy()}
+          onRegenerate={() => void regenerate()}
+          push={pushToPhone}
+          pushText={briefingPushText[locale]}
+        />,
         text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,

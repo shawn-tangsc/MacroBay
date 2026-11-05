@@ -440,7 +440,10 @@ describe('daily briefing page', () => {
     expect(dialog.textContent).toContain(text.history.deleteEditionConfirm)
     await act(async () => { dialogButton(text.history.deleteEditionConfirm).click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN' })
+    // 目标三元组来自当前打开的那一版；clock 一并带上，成功那句才点得全名。
+    expect(deletePeriod).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN' }))
+    const payload = (deletePeriod.mock.calls[0] as unknown[])[0] as { clock?: string }
+    expect(payload.clock).toMatch(/^[0-9]{2}:[0-9]{2}$/)
   })
 
   it('disables the delete action with a visible reason when no edition is open', async () => {
@@ -454,8 +457,8 @@ describe('daily briefing page', () => {
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
     const trigger = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!
     expect(trigger.disabled).toBe(true)
-    expect(trigger.getAttribute('aria-describedby')).not.toBeNull()
-    expect(dom.textContent).toContain(text.history.deleteNoEdition)
+    // 原因不在吸顶栏里另写一句（会把栏撑高），正文空态已经说明这一版为什么没有内容。
+    expect(dom.textContent).toContain(text.history.notRunTitle)
   })
 
   it('keeps both languages of one period as two rows after today\'s document lands', async () => {
@@ -535,7 +538,7 @@ describe('daily briefing page', () => {
     expect(dom.textContent).not.toContain(text.stateReasons.unreadableSince.split('{')[0]!)
     // What the reader did is said once, by the delete note, not by the empty state.
     expect(dom.querySelector('[data-delete-outcome="done"]')?.textContent).toBe(
-      text.history.deleteDone.replace('{date}', '2026-10-30').replace('{language}', text.history.editionLanguages.zh))
+      text.history.deleteDone.replace('{target}', `2026-10-30 · ${/[0-9]{2}:[0-9]{2}/.exec(dom.textContent ?? '')?.[0] ?? ''} · ${text.history.editionLanguages.zh}`))
     // 3. The generate control is still there and still usable.
     const regenerate = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(regenerate).not.toBeNull()

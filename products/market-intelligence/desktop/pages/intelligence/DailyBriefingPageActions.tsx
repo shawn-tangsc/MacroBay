@@ -17,66 +17,34 @@ import type { BriefingCopyState, BriefingExportState } from './useBriefingShareA
 import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
- * The page's one action row.
+ * 两排按钮，两组语义（用户 2026-11-05 定，`02` v2.44 之前的三分区）：
  *
- * The generate action is always here — an empty or failed page must not force the reader to hunt
- * for it somewhere else — and it is disabled only while a run is in flight or while the failure
- * panel below owns the retry. Kept out of the page: it is a row of controls with its own states,
- * not layout, and the page is a layout.
+ * - **页面级**（`DailyBriefingPageActions`，留在页面顶部）：今天出不出。手动生成、日报设置。
+ * - **版次级**（`DailyBriefingEditionActions`，正文区顶部、吸在正文滚动容器上）：这一版怎么处置。
+ *   重新生成、发布频道、导出图片、复制日报、删除这一版。
+ *
+ * 分开放的后果不是"按钮多了"——读者会把"重新生成今天"当成"重新生成这一版"来点。两组各有自己的
+ * 禁用条件，也各有自己的理由，混在一行就说不清是哪一组的。
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, todayReady, hasTodayEdition, targetDate, zoneInvalid, systemZone, exportable, exportState, copyState, deleteTarget, deleting, onManualRun, push, pushText, onExport, onCopy, onDelete, onOpenSettings, onGenerate, onRegenerate }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, targetDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
   loading: boolean
   generating: boolean
   regenerating: boolean
-  todayReady: boolean
-  /** Whether today already has an edition: the label says "generate" or "regenerate" accordingly. */
-  hasTodayEdition: boolean
-  zoneInvalid: boolean
-  systemZone: boolean
-  exportable: boolean
-  exportState: BriefingExportState
-  copyState: BriefingCopyState
-  /** The reader's own publication: same group as the generate action, its own words and its own state. */
-  /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
-  onManualRun: (draft: BriefingManualRunDraft) => void
-  push: BriefingPushToPhone
-  pushText: BriefingPushText
-  onExport: () => void
-  onCopy: () => void
-  /** 这一版的删除：与行右键共用 `briefingEditionDeleteCopy` 那一句话与同一个确认框。 */
-  deleteTarget?: BriefingEditionDeleteTarget
-  deleting?: boolean
-  onDelete?: (target: BriefingEditionDeleteTarget) => void
-  onOpenSettings: () => void
   /** The issue day the action writes: its accessible name says it, so the target is never guessed. */
   targetDate: string
-  onGenerate: () => void
-  onRegenerate: () => void | Promise<void>
+  todayReady: boolean
+  zoneInvalid: boolean
+  systemZone: boolean
+  /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
+  onManualRun: (draft: BriefingManualRunDraft) => void
+  onOpenSettings: () => void
 }>): React.ReactElement {
   // 弹框的开关住在这里：那颗按钮只开它，三个字段与提交都在弹框里。
   const [manualOpen, setManualOpen] = useState(false)
-  const confirm = useConfirm()
-  const deleteButton = <Button danger className="mi-briefing-tool__btn mi-briefing-tool__btn--danger" data-toolbar-action="delete-edition"
-    disabled={deleteTarget === undefined || onDelete === undefined || deleting === true}
-    icon={deleting === true ? <LoadingSpinner size="sm" /> : undefined}
-    onClick={() => {
-      if (deleteTarget === undefined || onDelete === undefined) return
-      const copy = briefingEditionDeleteCopy(text, deleteTarget)
-      confirm({
-        title: copy.title,
-        description: copy.description,
-        confirmLabel: copy.confirmLabel,
-        cancelLabel: copy.cancelLabel,
-        tone: 'danger',
-        onConfirm: () => onDelete(deleteTarget)
-      })
-    }}>
-    {text.history.deleteEditionConfirm}
-  </Button>
-  return <div className="mi-daily-briefing-page__actions">
+  return <div className="mi-daily-briefing-page__actions" data-action-group="page">
     {loading ? <DailyBriefingGeneratingStatus progress={progress} resolveText={resolveText} text={text} /> : null}
     {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
         showing a past day, no detail column — keeps it clickable, and its name always says whose
@@ -99,15 +67,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       onRun={(draft) => { setManualOpen(false); onManualRun(draft) }}
       onClose={() => setManualOpen(false)}
     />
-    {/* Beside the generate action, in the same group: both are about this issue, and a reader who just
-        generated is one click from publishing it. Its state lives in the machine, not here — this row
-        only places it. */}
-    <span className="mi-daily-briefing__push-slot">
-      <BriefingPushToPhoneButton state={push.state} text={pushText} onPush={push.onPush} onRetry={push.onRetry} />
-      {/* The success sentence is the only thing that appears and leaves on its own. It states what we
-          know — handed to the channel — and its timer is its whole lifetime. */}
-      {push.sentence === undefined ? null : <span className="mi-daily-briefing__push-toast" role="status">{push.sentence}</span>}
-    </span>
     {todayReady ? <>
       {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
       {/* The settings zone was unusable, so the window was computed in the machine's zone. The
@@ -115,25 +74,78 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
           them read the edition against the wrong one. */}
       {systemZone ? <small className="mi-daily-briefing__clock-note" role="status">{text.timeZoneFromSystem}</small> : null}
     </> : null}
-    {exportable ? <Button className="mi-briefing-tool__btn" data-toolbar-action="export" disabled={exportState === 'exporting'} onClick={onExport} aria-live="polite">
-      {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
-    </Button> : null}
-    {exportable ? <Button className="mi-briefing-tool__btn" data-toolbar-action="copy" onClick={onCopy} aria-live="polite">
-      {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
-    </Button> : null}
-    {/* 第五颗：**删除这一版**。它属于"当前这一版"这一组（重新生成 / 发布 / 导出 / 复制），所以排在
-        这一组最后；危险色、不填充，与那四颗的间距一致。没有可读版次时与它们一起禁用，原因用
-        `DisabledHint` 挂成 `aria-describedby`——禁用的按钮接不到 hover 也接不到焦点。
-        点击弹的是与行右键**同一个**确认框（`briefingEditionDeleteCopy`），两个入口一套行为。 */}
-    {deleteTarget === undefined
-      ? <DisabledHint labelKey={'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition'} resolveText={resolveText}>
-        {deleteButton}
-      </DisabledHint>
-      : deleteButton}
     {/* One entry for every brief setting. The icon-only AI-settings trigger that used to sit
         beside it opened a second dialog for half of the same form. */}
     <Button className="mi-briefing-tool__btn mi-daily-briefing__settings-entry" data-toolbar-action="settings" data-briefing-settings-open="true" onClick={onOpenSettings}>
       <Settings2 aria-hidden="true" size={14} />{text.settingsDrawer.open}
     </Button>
+  </div>
+}
+
+export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
+  text: DailyBriefingText
+  resolveText: (key: string) => string
+  /** 有可读版次：五颗一起亮；没有就一起禁用，原因写在整组下面一句。 */
+  exportable: boolean
+  exportState: BriefingExportState
+  copyState: BriefingCopyState
+  /** 当前这一版的身份，交给确认框点名：日期 · 时刻 · 语言。 */
+  deleteTarget?: BriefingEditionDeleteTarget
+  deleting?: boolean
+  generating: boolean
+  onExport: () => void
+  onCopy: () => void
+  /** 这一版的删除：与行右键共用 `briefingEditionDeleteCopy` 那一句话与同一个确认框。 */
+  onDelete?: (target: BriefingEditionDeleteTarget) => void
+  /** 重跑当前这一版（期号 + 语言来自它自己），不是"重跑今天"。 */
+  onRegenerate: () => void | Promise<void>
+  push: BriefingPushToPhone
+  pushText: BriefingPushText
+}>): React.ReactElement {
+  const confirm = useConfirm()
+  // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
+  // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
+  const blocked = !exportable
+  const deleteButton = <Button danger className="mi-briefing-tool__btn mi-briefing-tool__btn--danger" data-toolbar-action="delete-edition"
+    disabled={blocked || deleteTarget === undefined || onDelete === undefined || deleting === true}
+    icon={deleting === true ? <LoadingSpinner size="sm" /> : undefined}
+    onClick={() => {
+      if (deleteTarget === undefined || onDelete === undefined) return
+      const copy = briefingEditionDeleteCopy(text, deleteTarget)
+      confirm({
+        title: copy.title,
+        description: copy.description,
+        confirmLabel: copy.confirmLabel,
+        cancelLabel: copy.cancelLabel,
+        tone: 'danger',
+        onConfirm: () => onDelete(deleteTarget)
+      })
+    }}>
+    {text.history.deleteEditionConfirm}
+  </Button>
+  return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
+      {/* 第一颗是"这一版重跑一次"：它作用于当前打开的期号 + 语言，与页面顶部那颗"今天出不出"不是
+          同一件事——两颗都在页面上，但管的是不同的东西。 */}
+      <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition" disabled={blocked || generating}
+        loading={generating}
+        onClick={() => { void onRegenerate() }}>
+        {generating ? text.regenerating : text.regenerate}
+      </Button>
+      {/* 发布频道与这一组同源：读者刚生成完，下一件事就是发出去。状态在状态机里，这里只摆位置。 */}
+      <span className="mi-daily-briefing__push-slot">
+        <BriefingPushToPhoneButton state={push.state} text={pushText} onPush={push.onPush} onRetry={push.onRetry} />
+        {/* The success sentence is the only thing that appears and leaves on its own. It states what we
+            know — handed to the channel — and its timer is its whole lifetime. */}
+        {push.sentence === undefined ? null : <span className="mi-daily-briefing__push-toast" role="status">{push.sentence}</span>}
+      </span>
+      <Button className="mi-briefing-tool__btn" data-toolbar-action="export" disabled={blocked || exportState === 'exporting'} onClick={onExport} aria-live="polite">
+        {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
+      </Button>
+      <Button className="mi-briefing-tool__btn" data-toolbar-action="copy" disabled={blocked} onClick={onCopy} aria-live="polite">
+        {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
+      </Button>
+      {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用，
+          原因写在整组下面一句（组件级的 `DisabledHint` 会把它同时挂进 `aria-describedby`）。 */}
+      {deleteButton}
   </div>
 }

@@ -17,7 +17,13 @@ import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
  * Extracted from the page component: the state, the retry target and the sentence around them are
  * one capability, and keeping them inline pushed that file past its size baseline.
  */
-export type BriefingIssueTarget = Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>
+export type BriefingIssueTarget = Readonly<{
+  date: string
+  periodId: string
+  locale: 'zh-CN' | 'en-US'
+  /** The row's own clock in the reader's zone: the one-time sentence names 日期 · 时刻 · 语言. */
+  clock?: string
+}>
 
 export type BriefingDeleteOutcome = Readonly<{
   target: BriefingIssueTarget

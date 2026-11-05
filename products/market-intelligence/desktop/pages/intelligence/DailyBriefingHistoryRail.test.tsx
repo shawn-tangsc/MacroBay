@@ -93,10 +93,7 @@ describe('daily briefing history rail', () => {
     // 没有版次就没有语言标签，也不画方向点。
     expect(row.querySelector('[data-edition-locale]')).toBeNull()
     expect(row.querySelector('i[data-direction]')).toBeNull()
-    // 没结论的那一行画一个灰点，词只在可读名字里。
-    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
-      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!
-    act(() => pastHead.click())
+    // 没结论的那一行画一个灰点，词只在可读名字里。列表默认全展开，不必再点天线。
     const dot = host.querySelector('[data-date="2026-11-01"] i[data-direction]')
     expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)
     expect(host.textContent).not.toContain(text.history.noConclusion)
@@ -109,9 +106,9 @@ describe('daily briefing history rail', () => {
       edition({ date: '2026-10-28', availableLocales: ['zh-CN', 'en-US'] }),
       edition({ date: '2026-10-27', state: 'missing', availableLocales: [], generatedAt: undefined })
     ] })
-    // Only today is open by default; the other days are headings with their issue count.
-    const todayChips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')].map((chip) => chip.getAttribute('data-edition-locale'))
-    expect(todayChips).toEqual(['zh-CN'])
+    // 列表默认全展开：每一天的那一行各带上自己这一版的标签；没有版次的那一天没有标签。
+    const chips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')].map((chip) => chip.getAttribute('data-edition-locale'))
+    expect(chips).toEqual(['zh-CN', 'zh-CN', 'zh-CN'])
     const heads = [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-count')].map((node) => node.textContent)
     expect(heads).toEqual(['共 1 期', '共 1 期', '共 1 期', '共 1 期'])
     // A day without an edition has no language to name.
@@ -167,7 +164,7 @@ describe('daily briefing history rail', () => {
     expect(onDeletePeriod).not.toHaveBeenCalled()
     act(() => { confirmButton.click() })
     await flush()
-    expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
+    expect(onDeletePeriod).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' }))
   })
 
   it('prints no reading count when the row carries none, instead of a fabricated zero', () => {
@@ -225,6 +222,8 @@ describe('a collapsed day carries only day-level facts', () => {
         edition({ date: '2026-11-03', periodId: 'p2', state: 'generated', scheduledTime: '07:00' })
       ] as never
     })
+    // 列表默认全展开（用户 2026-11-05），所以先像读者一样把这一天折起来。
+    act(() => { host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-head')[0]!.click() })
     expect(host.querySelectorAll('[data-day-summary]')).toHaveLength(0)
     expect(host.textContent).not.toContain('07:00 · 中文')
     // 天头三要素仍在：日期、共 N 期、箭头。
@@ -304,7 +303,7 @@ describe('a row is never a button inside a button', () => {
     const confirmButton = [...document.querySelectorAll<HTMLElement>('button')]
       .find((button) => button.textContent?.trim() === text.history.deleteEditionConfirm)!
     act(() => { confirmButton.click() })
-    expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'en-US' })
+    expect(onDeletePeriod).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-11-02', periodId: 'default', locale: 'en-US' }))
   })
 })
 

@@ -23,9 +23,13 @@ export function DailyBriefingDeleteOutcomeNote({ outcome, text, onRetry }: Reado
     </p>
   }
   if (outcome.kind === 'done') {
+    // 成功那一句必须点名删的是哪一版：日期 · 时刻 · 语言。只说"已删除"读者不知道自己删掉了什么，
+    // 说错一行更糟——他会以为删的是另一版。
     const language = text.history.editionLanguages[outcome.target.locale === 'en-US' ? 'en' : 'zh']
+    const named = [outcome.target.date, outcome.target.clock, language]
+      .filter((part): part is string => part !== undefined && part !== '').join(' · ')
     return <p className="mi-daily-briefing-page__loading-hint" role="status" data-delete-outcome="done">
-      {text.history.deleteDone.replace('{date}', outcome.target.date).replace('{language}', language)}
+      {text.history.deleteDone.replace('{target}', named)}
     </p>
   }
   return <p className="mi-daily-briefing-page__loading-hint" role="alert" data-delete-outcome="partial">

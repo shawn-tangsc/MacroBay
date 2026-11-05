@@ -38,7 +38,7 @@ import { resolveBriefingStateReason } from './dailyBriefingText'
  * nothing generated, a missing language, a failure, an edition. The page decides which state it is
  * in; this file decides how each one looks.
  */
-export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, onGenerate, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
+export function DailyBriefingContent({ text, view, mode, generating, failure, regenerating, liveProgress, progressUnreadable, resolveProductText, editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale, eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled, settingsOpen, editionBar, onGenerate, onRetry, onOpenSettings, onConfigureSources, onDeleteRetry }: Readonly<{
   text: DailyBriefingText
   view: DailyBriefingPageViewState
   /** The page's one answer; the generating pane reads it, and it must include service-side runs. */
@@ -63,6 +63,8 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   languageFallback: string | null
   webSearchEnabled: boolean | null
   settingsOpen: boolean
+  /** 版次级工具栏：吸在正文滚动区顶部，只作用于当前这一版（三分区的中段）。 */
+  editionBar?: React.ReactNode
   onGenerate: () => void
   onRetry: () => void
   onOpenSettings: () => void
@@ -98,6 +100,7 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   // What the body is showing: one edition the reader can read, in this or an earlier version.
   const showingEdition = view.status === 'ready' && !contentBlocked
   return <section className="mi-daily-briefing-page__content">
+    {editionBar}
     {deleteOutcome ? <DailyBriefingDeleteOutcomeNote outcome={deleteOutcome} text={text} onRetry={(outcome) => onDeleteRetry(outcome.target)} /> : null}
     <DailyBriefingLanguageFallback requested={languageFallback} text={text} />
     <DailyBriefingStorageNotice text={text.migration} />

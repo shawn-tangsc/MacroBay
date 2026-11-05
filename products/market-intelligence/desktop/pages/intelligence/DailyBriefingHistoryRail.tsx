@@ -86,7 +86,8 @@ export function DailyBriefingHistoryRail({
   onSelect: (date: string) => void
   /** Picking a row selects that edition: one row is one period in one language, so the row is the choice. */
   onSelectLocale?: (selection: BriefingRailSelection) => void
-  onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
+  /** 删这一版。`clock` 跟着一起来：成功那句要点名 `日期 · 时刻 · 语言`。 */
+  onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void | Promise<void>
   /** Run this period again. Absent when the host cannot spend a run (the menu item is then disabled). */
   onRegeneratePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
@@ -97,11 +98,10 @@ export function DailyBriefingHistoryRail({
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
   const openMenu = (edition: DailyBriefingEditionSummary, anchor: MenuAnchor): void =>
     setMenu({ date: edition.date, periodId: edition.periodId, locale: edition.locale, anchor })
-  // Today opens by default; every other day starts collapsed. Collapsing today is remembered, and
-  // opening a past day is remembered too — the reader's shape of the list is not reset by a reload.
-  const [closedToday, setClosedToday] = useState(false)
-  const [openDays, setOpenDays] = useState<ReadonlySet<string>>(new Set())
-  const isOpen = (date: string): boolean => date === todayDate ? !closedToday : openDays.has(date)
+  // 列表默认**全展开**（用户 2026-11-05）：读者要一眼看到这些天分别出了什么，而不是一串日期。
+  // 折叠是读者自己的动作，只记住这一次会话里他折了哪几天——默认状态不该由"是不是今天"决定。
+  const [closedDays, setClosedDays] = useState<ReadonlySet<string>>(new Set())
+  const isOpen = (date: string): boolean => !closedDays.has(date)
 
   const days = useMemo(() => {
     const order: string[] = []
@@ -183,11 +183,11 @@ export function DailyBriefingHistoryRail({
     <div className="mi-daily-briefing__rail-list">
       {days.map((day) => <section className="mi-daily-briefing__rail-day" key={day.date} data-day={day.date}>
         <button type="button" className="mi-daily-briefing__rail-day-head" aria-expanded={isOpen(day.date)}
-          onClick={() => { day.date === todayDate ? setClosedToday((current) => !current) : setOpenDays((current) => {
+          onClick={() => setClosedDays((current) => {
             const next = new Set(current)
             if (next.has(day.date)) next.delete(day.date); else next.add(day.date)
             return next
-          }) }}>
+          })}>
           <span className="mi-daily-briefing__rail-day-date">{formatDate(day.date, locale)}</span>
           {/* 「今天」是副标签：和「共 N 期」同档同色（CSS 里是同一条规则），不许比日期更显眼。
               **没有「本期」这个词**：是不是今天由这个标签说，哪一份最新由排序说。 */}
@@ -252,10 +252,10 @@ export function DailyBriefingHistoryRail({
                   {/* 这一格永远有且只有一个：定时 / 手动 / 补跑 / 未运行 / 这次失败。 */}
                   <span className="mi-daily-briefing__rail-source" data-run-source={kind}>{sourceLabelOf(kind, text)}</span>
                   {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
-                  {missing ? null : <>
-                    <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
-                    <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
-                  </>}
+                  {/* 语言标签贴行右端：它与来源徽标之间不再有 `·`——两者天各一方，中间那段弹性留白
+                      就是右对齐本身（`02` v2.43）。 */}
+                  {missing ? null
+                    : <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>}
                 </span>
                 {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
                     没有正文的那两行写**为什么没有**——空行会被读成"还在加载"。 */}
@@ -268,7 +268,10 @@ export function DailyBriefingHistoryRail({
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
                       {/* 第二行永远有字：标题缺了就明说"这一版没有摘要"，空着会被读成"还在加载"
                           或"这一版没内容"。已删除的期在标题前加一句，但它自己不能变成空白。 */}
-                      {[edition.periodDeleted ? text.history.deletedPeriod : '', title].filter((part) => part !== '').join(' · ') || text.history.railNoTitle}
+                      {[edition.periodDeleted ? text.history.deletedPeriod : '', title].filter((part) => part !== '').join(' · ')
+                        // 没有摘要时先给**方向词**（读者真正想知道的是这一版怎么判断），连方向都没有
+                        // 才给一句操作提示。列表上不写"没有"——那是在陈述缺失，不是在说值不值得点开。
+                        || (edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.railNoTitle)}
                     </span>}
               </button>
               {retryable
@@ -304,7 +307,7 @@ export function DailyBriefingHistoryRail({
           confirmLabel: copy.confirmLabel,
           cancelLabel: copy.cancelLabel,
           tone: 'danger',
-          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: target.locale })
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: target.locale, ...(clock === undefined ? {} : { clock }) })
         })
       }}
       open={menu !== null && menuItems.length > 0}

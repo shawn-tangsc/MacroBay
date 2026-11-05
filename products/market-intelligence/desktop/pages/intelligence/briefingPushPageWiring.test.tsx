@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { DailyBriefingPageActions } from './DailyBriefingPageActions'
+import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
@@ -42,13 +42,11 @@ function Row(input: Readonly<{
     text: zh,
     ...(input.refreshKey === undefined ? {} : { refreshKey: input.refreshKey })
   })
-  return <DailyBriefingPageActions
-    text={text} resolveText={(key) => key} progress={undefined} loading={false}
-    generating={input.generating ?? false} regenerating={false} todayReady hasTodayEdition
-    targetDate="2026-11-05" zoneInvalid={false} systemZone={false} exportable={false}
+  return <DailyBriefingEditionActions
+    text={text} resolveText={(key) => key}
+    generating={input.generating ?? false} exportable={false}
     exportState="idle" copyState="idle" push={push} pushText={zh}
-    onExport={() => undefined} onCopy={() => undefined} onOpenSettings={() => undefined}
-    onGenerate={() => undefined} onRegenerate={() => undefined} />
+    onExport={() => undefined} onCopy={() => undefined} onRegenerate={() => undefined} />
 }
 
 let container: HTMLDivElement
