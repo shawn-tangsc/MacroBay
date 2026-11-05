@@ -161,7 +161,7 @@ export class AgentTaskDispatchService {
       if (mode === 'manual' && expectedRevision !== undefined && (persistedTask?.revision ?? 1) !== expectedRevision) {
         throw new AgentTaskNotRunnableError(taskId)
       }
-      const snapshot = buildAgentTaskSchedulerSnapshot(state, { now: this.timestamp() })
+      const snapshot = buildAgentTaskSchedulerSnapshot(state, { now: this.timestamp(), ...this.readerTimeZone() })
       const task = snapshot.tasksById[taskId]
       if (!task) {
         throw new Error(`Scheduled task "${taskId}" was not found.`)
@@ -217,6 +217,12 @@ export class AgentTaskDispatchService {
     }
     if (mode === 'due') return false
     throw new AgentTaskNotRunnableError(taskId)
+  }
+
+  /** 空 `trigger.timezone` 表示跟随读者设置：排程按它解析（本服务已有读者时区来源）。 */
+  private readerTimeZone(): { timeZone: string } | Record<string, never> {
+    const timeZone = this.deps.timeZone?.()
+    return timeZone ? { timeZone } : {}
   }
 
   private async dispatchTaskLike(

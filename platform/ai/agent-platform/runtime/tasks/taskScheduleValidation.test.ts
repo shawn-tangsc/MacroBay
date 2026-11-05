@@ -4,7 +4,7 @@ import type { Trigger } from '../../schemas/taskSchemas'
 import {
   MAX_TASK_INTERVAL_MS,
   MIN_TASK_INTERVAL_MS,
-  materializeTaskTriggerTimezone,
+  validateTaskTrigger,
   previewNextTaskRun,
   validateTaskSchedule,
   validateTaskTimezone
@@ -85,15 +85,17 @@ describe('taskScheduleValidation', () => {
     ).toEqual({ ok: true, nextRunAt: '2026-01-02T01:00:00.000Z' })
   })
 
-  it('uses the effective default timezone consistently for validation, preview, and persisted trigger materialization', () => {
+  it('validates and previews with the default timezone but leaves the trigger unstored-timezone untouched', () => {
     const trigger = cron('0 9 * * *')
     const options = { now: new Date(nowMs), defaultTimezone: 'Asia/Shanghai' }
 
     expect(validateTaskSchedule(trigger, options)).toEqual({ ok: true })
     expect(previewNextTaskRun({ trigger }, options)).toEqual({ ok: true, nextRunAt: '2026-01-02T01:00:00.000Z' })
-    expect(materializeTaskTriggerTimezone(trigger, options)).toEqual({
+    // 空时区 = 跟随读者设置（排程时解析）。**不再写回 trigger**：写回等于把「建任务那一刻的设置」
+    // 变成任务的一部分（2026-11-05 反转，契约 task-timezone-scheduling-contract.md）。
+    expect(validateTaskTrigger(trigger, options)).toEqual({
       ok: true,
-      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'Asia/Shanghai' }
+      trigger: { kind: 'cron', expr: '0 9 * * *' }
     })
   })
 

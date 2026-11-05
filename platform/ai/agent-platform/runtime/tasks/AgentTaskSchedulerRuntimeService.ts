@@ -10,6 +10,11 @@ type AgentTaskSchedulerRuntimeServiceDependencies = {
   enqueueDueTask?: (task: AgentTaskSchedulerRuntimeTask) => Promise<void>
   minimumDelayMs?: number
   maximumDelayMs?: number
+  /**
+   * 读者当前设置时区。排程按「当地钟点」解析（`trigger.timezone` 为空 = 跟随设置）；
+   * 改设置后下一轮 reconcile 就会用新值（最坏 60 秒），不需要额外订阅。
+   */
+  timeZone?: () => string
 }
 
 const defaultNow = (): string => new Date().toISOString()
@@ -54,7 +59,8 @@ export class AgentTaskSchedulerRuntimeService {
   syncFromState(state: AgentStoreState): AgentTaskSchedulerSnapshot {
     this.snapshot = buildAgentTaskSchedulerSnapshot(state, {
       now: (this.deps.now ?? defaultNow)(),
-      startupAt: this.startupRecoveryActive ? this.deps.startupAt : undefined
+      startupAt: this.startupRecoveryActive ? this.deps.startupAt : undefined,
+      ...(this.deps.timeZone === undefined ? {} : { timeZone: this.deps.timeZone() })
     })
     this.emitSnapshot()
     return this.getSnapshot()

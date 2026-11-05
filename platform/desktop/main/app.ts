@@ -477,12 +477,16 @@ const agentTaskDispatchService = new AgentTaskDispatchService({
 const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
   startupAt: new Date().toISOString(),
   getAgentState: () => agentStore.getState(),
+  // 排程按「当地钟点」解析：`trigger.timezone` 为空 = 跟随读者设置，改设置后下一轮 reconcile 生效。
+  // 与上面 `AgentTaskDispatchService` 的 `timeZone` 同形、同一个来源；调度器只有一个，切片不另起。
+  timeZone: () => shellTimeZone.get(),
   enqueueDueTask: async (task) => {
     await getAgentTaskExecutionCoordinatorOrNull()?.enqueueDueTask(task.taskId)
   }
 })
 setAgentTaskExecutionCoordinator(new AgentTaskExecutionCoordinator({
   services: agentServices,
+  timeZone: () => shellTimeZone.get(),
   dispatchQueuedRun: (input) => agentTaskDispatchService.dispatchQueuedRun(input)
 }))
 agentStateCoordinator = createAgentStateCoordinator({

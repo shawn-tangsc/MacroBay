@@ -19,6 +19,14 @@ import { countConsecutiveTerminalFailures } from './taskFailureCircuit'
 type BuildSchedulerSnapshotOptions = {
   now?: string
   startupAt?: string
+  /**
+   * 读者当前的设置时区。**排程时解析，不写回任务**（契约 `task-timezone-scheduling-contract.md`）：
+   * `trigger.timezone` 为空表示「跟随读者设置」，非空表示这条任务被显式指定过、不再跟随。
+   *
+   * 生产路径的四个调用方都必须传（`app.ts` 里由 `shellTimeZone.get()` 提供）。
+   * 不传时退回引擎行为（无时区＝按 UTC）——那只该出现在没有读者时区来源的测试里。
+   */
+  timeZone?: string
 }
 
 export function buildAgentTaskSchedulerSnapshot(
@@ -28,6 +36,7 @@ export function buildAgentTaskSchedulerSnapshot(
   const nowIso = options.now ?? new Date().toISOString()
   const nowMs = Date.parse(nowIso)
   const startupMs = options.startupAt ? Date.parse(options.startupAt) : null
+  const readerTimeZone = options.timeZone
   const channelsById = new Map(state.channels.map((channel) => [channel.id, channel]))
   const workspacesById = new Map(state.workspaces.map((workspace) => [workspace.id, workspace]))
   const lastRunLogByTaskId = buildLastRunLogByTaskId(state.taskRunLogs)
@@ -39,6 +48,7 @@ export function buildAgentTaskSchedulerSnapshot(
     .map((task) => toRuntimeTask(task, {
       nowMs,
       startupMs,
+      readerTimeZone,
       channelsById,
       agent: agentsById.get(task.agentId) ?? null,
       lastRunLog: lastRunLogByTaskId.get(task.id) ?? null,
@@ -51,6 +61,7 @@ export function buildAgentTaskSchedulerSnapshot(
       workspacesById,
       nowMs,
       startupMs,
+      readerTimeZone,
       channelsById,
       lastRunLogByTaskId,
       runLogsByTaskId
@@ -70,6 +81,8 @@ function toRuntimeTask(
   input: {
     nowMs: number
     startupMs: number | null
+    /** 空 `trigger.timezone` 用它解析；见 `BuildSchedulerSnapshotOptions.timeZone`。 */
+    readerTimeZone: string | undefined
     channelsById: Map<string, AgentChannelEntity>
     agent: AgentEntity | null
     lastRunLog: TaskRunLogEntity | null
@@ -79,15 +92,16 @@ function toRuntimeTask(
 ): AgentTaskSchedulerRuntimeTask {
   const lastRunAt = coalesceLastRunAt(task, input.lastRunLog)
   const lastRunInvalid = hasInvalidPersistedLastRun(task, input.lastRunLog)
-  const triggerValid = isLegacyTriggerValid(task.trigger, input.nowMs)
+  const triggerValid = isLegacyTriggerValid(task.trigger, input.nowMs, input.readerTimeZone)
   const persistedNextRunValid = task.nextRun === undefined || task.nextRun === null || Number.isFinite(Date.parse(task.nextRun))
-  const intrinsicNextRunAt = computeNextRunAt(task, lastRunAt)
+  const intrinsicNextRunAt = computeNextRunAt(task, lastRunAt, input.readerTimeZone)
   const recovery = resolveCatchUpState(task, {
     nextRunAt: intrinsicNextRunAt,
     lastRunAt,
     lastRunLog: input.lastRunLog,
     nowMs: input.nowMs,
-    startupMs: input.startupMs
+    startupMs: input.startupMs,
+    readerTimeZone: input.readerTimeZone
   })
   const nextRunAt = recovery.nextRunAt
   const exhausted = recovery.exhausted
@@ -168,6 +182,8 @@ function toHeartbeatRuntimeTasks(
     workspacesById: ReadonlyMap<string, AgentStoreState['workspaces'][number]>
     nowMs: number
     startupMs: number | null
+    /** 心跳任务只可能是 interval，时区不参与排程；传下来只是为了让跨任务复用的签名保持一致。 */
+    readerTimeZone: string | undefined
     channelsById: Map<string, AgentChannelEntity>
     lastRunLogByTaskId: ReadonlyMap<string, TaskRunLogEntity>
     runLogsByTaskId: ReadonlyMap<string, TaskRunLogEntity[]>
@@ -205,7 +221,9 @@ function toHeartbeatRuntimeTasks(
     lastRunAt,
     lastRunLog,
     nowMs: input.nowMs,
-    startupMs: input.startupMs
+    startupMs: input.startupMs,
+    // 心跳任务只可能是 interval（没有钟点），时区对它没有意义；传同一条来源保持签名一致。
+    readerTimeZone: input.readerTimeZone
   })
   const nextRunAt = recovery.nextRunAt
   if (!nextRunAt) return []
@@ -243,12 +261,16 @@ function toHeartbeatRuntimeTasks(
   ]
 }
 
-function computeNextRunAt(task: ScheduledTaskEntity, lastRunAt: string | null): string | null {
+function computeNextRunAt(
+  task: ScheduledTaskEntity,
+  lastRunAt: string | null,
+  readerTimeZone: string | undefined
+): string | null {
   if (!task.enabled || task.status !== 'active') {
-    return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt)
+    return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt, readerTimeZone)
   }
 
-  return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt)
+  return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt, readerTimeZone)
 }
 
 function resolveCatchUpState(
@@ -259,6 +281,7 @@ function resolveCatchUpState(
     lastRunLog: TaskRunLogEntity | null
     nowMs: number
     startupMs: number | null
+    readerTimeZone: string | undefined
   }
 ): { nextRunAt: string | null; exhausted: boolean } {
   if (task.trigger.kind === 'once' && input.lastRunAt !== null) {
@@ -296,12 +319,16 @@ function resolveCatchUpState(
   }
 
   return {
-    nextRunAt: advanceToFutureRun(task, nextRunMs, input.nowMs),
+    nextRunAt: advanceToFutureRun(task, nextRunMs, input.nowMs, input.readerTimeZone),
     exhausted: false
   }
 }
 
-function computeIntrinsicNextRunAt(task: ScheduledTaskEntity, lastRunAt: string | null): string | null {
+function computeIntrinsicNextRunAt(
+  task: ScheduledTaskEntity,
+  lastRunAt: string | null,
+  readerTimeZone: string | undefined
+): string | null {
   switch (task.trigger.kind) {
     case 'once':
       return lastRunAt ? null : toSafeIso(task.trigger.at)
@@ -311,7 +338,7 @@ function computeIntrinsicNextRunAt(task: ScheduledTaskEntity, lastRunAt: string 
       return toSafeIso(Date.parse(anchorIso) + task.trigger.ms)
     }
     case 'cron':
-      return computeCronRunAtOrBefore(task.trigger.expr, task.trigger.timezone, task.createdAt, lastRunAt)
+      return computeCronRunAtOrBefore(task.trigger.expr, cronTimeZone(task.trigger, readerTimeZone), task.createdAt, lastRunAt)
     default:
       return null
   }
@@ -323,10 +350,14 @@ function toSafeIso(value: number): string | null {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null
 }
 
-function isLegacyTriggerValid(trigger: ScheduledTaskEntity['trigger'], nowMs: number): boolean {
+function isLegacyTriggerValid(
+  trigger: ScheduledTaskEntity['trigger'],
+  nowMs: number,
+  readerTimeZone: string | undefined
+): boolean {
   if (trigger.kind === 'once') return Number.isSafeInteger(trigger.at) && Math.abs(trigger.at) <= 8_640_000_000_000_000
   if (trigger.kind === 'interval') return Number.isSafeInteger(trigger.ms) && trigger.ms > 0 && trigger.ms <= 31 * 24 * 60 * 60 * 1000
-  try { return computeNextCronRunAt(trigger.expr, trigger.timezone ?? 'UTC', nowMs) !== null } catch { return false }
+  try { return computeNextCronRunAt(trigger.expr, cronTimeZone(trigger, readerTimeZone), nowMs) !== null } catch { return false }
 }
 
 function computeCronRunAtOrBefore(
@@ -340,7 +371,12 @@ function computeCronRunAtOrBefore(
   return match ? new Date(match).toISOString() : null
 }
 
-function advanceToFutureRun(task: Pick<ScheduledTaskEntity, 'trigger' | 'createdAt'>, overdueRunMs: number, nowMs: number): string | null {
+function advanceToFutureRun(
+  task: Pick<ScheduledTaskEntity, 'trigger' | 'createdAt'>,
+  overdueRunMs: number,
+  nowMs: number,
+  readerTimeZone: string | undefined
+): string | null {
   switch (task.trigger.kind) {
     case 'interval': {
       if (!(task.trigger.ms > 0)) return toSafeIso(overdueRunMs)
@@ -351,7 +387,7 @@ function advanceToFutureRun(task: Pick<ScheduledTaskEntity, 'trigger' | 'created
       return toSafeIso(nextRunMs)
     }
     case 'cron': {
-      const match = computeNextCronRunAt(task.trigger.expr, task.trigger.timezone, nowMs + 1)
+      const match = computeNextCronRunAt(task.trigger.expr, cronTimeZone(task.trigger, readerTimeZone), nowMs + 1)
       return match ? new Date(match).toISOString() : null
     }
     case 'once':
@@ -453,4 +489,18 @@ function cloneTrigger(trigger: ScheduledTaskEntity['trigger']): ScheduledTaskEnt
     default:
       return trigger
   }
+}
+
+/**
+ * 排程时解析 cron 时区：显式指定过就用它，否则跟随读者当前设置。
+ *
+ * **不要在这里兜底成 `'UTC'`**：空 = 「跟随读者」，兜成 UTC 会让「每天 08:00」在没人看的时候
+ * 按格林威治时间跑，而且界面上看不出来（契约 `task-timezone-scheduling-contract.md` §2.1）。
+ * 引擎侧对 undefined 的处理是既有的（`jobCronSchedule.ts` 无时区按 UTC），那是另一处待收口的立项。
+ */
+function cronTimeZone(
+  trigger: Extract<ScheduledTaskEntity['trigger'], { kind: 'cron' }>,
+  readerTimeZone: string | undefined
+): string | undefined {
+  return trigger.timezone ?? readerTimeZone
 }

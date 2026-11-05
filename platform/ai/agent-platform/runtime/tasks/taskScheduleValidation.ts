@@ -74,17 +74,28 @@ export function previewNextTaskRun(
   return previewTaskSchedule(task.trigger, options)
 }
 
-export function materializeTaskTriggerTimezone(
+/**
+ * 校验触发器（含它此刻解析出的时区），**并把触发器原样返回**。
+ *
+ * 名字里不再有 `materialize`：它以前会把当时的读者时区写进 `trigger.timezone`，
+ * 于是「建任务那一刻的设置」变成了任务的一部分——而那从来不是读者的决定（2026-11-05 反转，
+ * 见 `docs-private/10-development/task-timezone-scheduling-contract.md`）。
+ *
+ * 现在 `trigger.timezone` 为空是**合法且有意义**的值：它表示「跟随读者当前的设置」，
+ * 由排程那一步解析（`taskSchedulerPlanner` 的 `timeZone` 入参）。这里仍要校验一次，
+ * 因为**非空**的时区必须当场上报无效（否则坏值会被存进任务，直到排程时才暴露）。
+ */
+export function validateTaskTrigger(
   trigger: Trigger,
   options: TaskScheduleValidationOptions
 ): { ok: true; trigger: Trigger } | { ok: false; code: 'task-schedule-invalid' | 'task-timezone-invalid' } {
   const validation = validateTaskSchedule(trigger, options)
   if (!validation.ok) return validation
-  if (trigger.kind !== 'cron') return { ok: true, trigger }
+  if (trigger.kind !== 'cron' || trigger.timezone === undefined) return { ok: true, trigger }
 
   const timezone = resolveEffectiveCronTimezone(trigger, options.defaultTimezone)
   if (!timezone.ok) return timezone
-  return { ok: true, trigger: { ...trigger, timezone: timezone.timezone } }
+  return { ok: true, trigger }
 }
 
 function resolveEffectiveCronTimezone(
