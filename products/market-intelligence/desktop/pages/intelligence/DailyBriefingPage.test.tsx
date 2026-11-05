@@ -402,6 +402,24 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
   })
 
+  it('keeps the edition bar out of the paper, so the exported image carries no buttons', async () => {
+    // 看的边界是卡，导出的边界是纸。判据只认一条：工具栏**不是纸的后代**（`paper.contains(bar) === false`），
+    // 同级只是实现之一；导出抓的那个节点里也不许出现任何版次动作。
+    const dom = await renderPage(fakeClient())
+    const bar = dom.querySelector<HTMLElement>('[data-action-group="edition"]')!
+    const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+    expect(bar).not.toBeNull()
+    expect(paper).not.toBeNull()
+    expect(paper.contains(bar)).toBe(false)
+    expect(paper.querySelector('[data-toolbar-action]')).toBeNull()
+
+    const exportHost = dom.querySelector<HTMLElement>('.mi-daily-briefing-share-host')!
+    expect(exportHost).not.toBeNull()
+    expect(exportHost.textContent).not.toContain(text.history.deleteEditionConfirm)
+    expect(exportHost.querySelector('[data-toolbar-action]')).toBeNull()
+    expect(exportHost.querySelector('[data-action-group]')).toBeNull()
+  })
+
   it("keeps today's summary on the row after the document is read back", async () => {
     // 写回列表时按"同一行"合并，但新文档必须带上自己的摘要：整条替换且不带 summaryLine，今天那一
     // 行的第二行就空了（库里 lede 明明有这句话）。这条用例用真实数据形状钉住它。
