@@ -93,7 +93,10 @@ describe('daily briefing history rail', () => {
     // 没有版次就没有语言标签，也不画方向点。
     expect(row.querySelector('[data-edition-locale]')).toBeNull()
     expect(row.querySelector('i[data-direction]')).toBeNull()
-    // 没结论的那一行画一个灰点，词只在可读名字里。列表默认全展开，不必再点天线。
+    // 没结论的那一行画一个灰点，词只在可读名字里。默认只展开今天，先点开那一天。
+    const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+      .find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!
+    act(() => pastHead.click())
     const dot = host.querySelector('[data-date="2026-11-01"] i[data-direction]')
     expect(dot?.getAttribute('aria-label')).toBe(text.history.noConclusion)
     expect(host.textContent).not.toContain(text.history.noConclusion)
@@ -106,9 +109,16 @@ describe('daily briefing history rail', () => {
       edition({ date: '2026-10-28', availableLocales: ['zh-CN', 'en-US'] }),
       edition({ date: '2026-10-27', state: 'missing', availableLocales: [], generatedAt: undefined })
     ] })
-    // 列表默认全展开：每一天的那一行各带上自己这一版的标签；没有版次的那一天没有标签。
-    const chips = [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')].map((chip) => chip.getAttribute('data-edition-locale'))
-    expect(chips).toEqual(['zh-CN', 'zh-CN', 'zh-CN'])
+    // 默认只开今天：今天那一行带自己这一版的标签，其余天先只有天头（`共 N 期`）。
+    const chips = (): string[] => [...host.querySelectorAll<HTMLElement>('[data-edition-locale]')].map((chip) => chip.getAttribute('data-edition-locale') ?? '')
+    expect(chips()).toEqual(['zh-CN'])
+    // 逐个展开，每一天的那一行各带上自己这一版的标签。
+    for (const date of ['2026-10-29', '2026-10-28', '2026-10-27']) {
+      const head = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
+        .find((node) => node.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === date)!
+      act(() => head.click())
+    }
+    expect(chips()).toHaveLength(3)
     const heads = [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-count')].map((node) => node.textContent)
     expect(heads).toEqual(['共 1 期', '共 1 期', '共 1 期', '共 1 期'])
     // A day without an edition has no language to name.
@@ -214,6 +224,29 @@ describe('daily briefing history rail', () => {
 })
 
 describe('a collapsed day carries only day-level facts', () => {
+  it('opens today and folds every other day by default, and remembers what the reader chose', () => {
+    // A5.3：默认今天 ▾、其余 ▸。这条以前**没有任何用例**，所以 1e80d4c 把默认改成全展开时没人红。
+    render({
+      editions: [
+        edition({ date: '2026-11-02', periodId: 'p1' }),
+        edition({ date: '2026-11-01', periodId: 'p2' }),
+        edition({ date: '2026-10-31', periodId: 'p3' })
+      ] as never
+    })
+    const heads = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-head')]
+    const expanded = (): string[] => heads().filter((head) => head.getAttribute('aria-expanded') === 'true')
+      .map((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') ?? '')
+    expect(expanded()).toEqual(['2026-11-02'])
+    // 展开的那天行数 = 它天头写的期数。
+    const todayHead = heads().find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-02')!
+    expect(todayHead.textContent).toContain(text.history.periodCount.replace('{count}', '1'))
+    expect(host.querySelectorAll('[data-day="2026-11-02"] .mi-daily-briefing__rail-row')).toHaveLength(1)
+    // 读者自己开一天、折今天：两样都记住。
+    act(() => { heads().find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-01')!.click() })
+    act(() => { heads().find((head) => head.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === '2026-11-02')!.click() })
+    expect(expanded()).toEqual(['2026-11-01'])
+  })
+
   it('shows the day, its count and the caret — never a period\'s clock or language', () => {
     // 折叠行代表的是"那一天"，时刻与语言是**期级**属性：挂在"这一天"上就是维度错误。
     render({
@@ -350,7 +383,7 @@ describe('a day with nothing to show keeps its head and offers one fallback item
     // 用户拍板（`02` v2.86）：天头永远在，0 条写「共 0 期」；展开后给**一个**兜底项，
     // 它不是版次行（无时刻/窗口/方向/来源/语言），点它才把右侧切到空态。
     const onSelect = vi.fn()
-    render({ editions: [], dates: ['2026-10-31'], selectedDate: undefined, onSelect })
+    render({ editions: [], dates: ['2026-10-31'], todayDate: '2026-10-31', selectedDate: undefined, onSelect })
     const head = (): HTMLElement => host.querySelector<HTMLElement>('.mi-daily-briefing__rail-day-head')!
     expect(head()).not.toBeNull()
     expect(head().getAttribute('aria-expanded')).toBe('true')
