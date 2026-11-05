@@ -2397,4 +2397,31 @@ describe('one body, one state (A9.15 / A9.16)', () => {
     })))).toBe(1)
   })
 
+  it('reports one thing for an issue that failed and has no edition', async () => {
+    // 曾经同一次失败在正文里说两遍：空态面板说「这一期没有简报」，紧跟着失败面板说「日报生成失败」。
+    // 两块各自独立渲染，谁也没问过另一块。现在正文只有**一个** `data-body-state`，这一档是 failure，
+    // 空态根根本不进 DOM。
+    const failedRow = { date: '2026-10-20', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, attemptCount: 2 }
+    const client = fakeClient({
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: { editions: editions.map((edition, index) => index === 10 ? failedRow : edition) }
+      })),
+      get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'store-failed' as const }))
+    })
+    const dom = await renderPage(client)
+    await clickRow(dom, '2026-10-20')
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+
+    const body = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content')!
+    // 空态一个字都不许出现：这一期不是"还没有"，是"这次没跑成"。这一条在旧代码上是红的
+    // （空态与失败面板同时画出来），所以它验的是行为，不是新加的那个属性。
+    expect(dom.querySelector('.mi-daily-briefing-page__no-edition')).toBeNull()
+    expect(body.querySelectorAll('[data-daily-brief-failure]')).toHaveLength(1)
+    // 正文里能看见的那一层，合计恰好 1。
+    expect(body.querySelectorAll('.mi-daily-briefing-page__paper, [data-state], [data-daily-brief-failure], [data-briefing-stage-panel]')).toHaveLength(1)
+    // 页面自己记下的是哪一档：一个值，不是四个各自成立的判断。
+    expect(body.getAttribute('data-body-state')).toBe('failure')
+  })
+
 })

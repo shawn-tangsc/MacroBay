@@ -101,7 +101,23 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
   // 纸只在"这一版确实有正文"时出现：`mode` 已经按选中身份推过，它是唯一判据；
   // 只看 `view.status` 会让旧文档冒充选中版（用户报的"切过去还是旧正文"）。
   const showingEdition = view.status === 'ready' && !contentBlocked && mode !== 'generating'
-  return <section className="mi-daily-briefing-page__content">
+  /**
+   * 正文这一刻报的是**哪一件事**——一个值，不是四个各自成立的判断。
+   *
+   * 以前这四块是四个独立的 `&&`：`no-edition + failed` 会同时画出"这一期没有简报"和"日报生成失败"，
+   * 同一次失败在正文里说了两遍（用户报的"一屏两个状态"）。现在按固定优先级取一个：
+   * 有正文就报正文；没有正文时先报"正在跑"（此刻发生的事），再报"这次失败"（要读者动手的事），
+   * 再报"读不到"，最后才是"没有这一期"。
+   */
+  const bodyState: 'paper' | 'generating' | 'failure' | 'unavailable' | 'no-edition'
+    = showingEdition ? 'paper'
+      : mode === 'generating' ? 'generating'
+        : failure ? 'failure'
+          : view.status === 'unavailable' ? 'unavailable'
+            : 'no-edition'
+  // 唯一有意叠加的一档：正文留着、失败提示挂在它下面（重跑失败不吞掉读者正在读的那一版）。
+  const failureUnderPaper = bodyState === 'paper' && failure !== null
+  return <section className="mi-daily-briefing-page__content" data-body-state={bodyState}>
     {/* 外层卡：工具栏属于这张卡，纸属于它自己。按钮进不了纸的圆角边框，导出图里就不会带
         「删除这一版」这类界面动作——看的边界与导出的边界是两条线。 */}
     <div className="mi-daily-briefing-page__report-card">
@@ -118,23 +134,21 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
       </div> : null}
       {/* With nothing to read, the body is where the run reports itself. When this issue already has
           an edition, that edition stays readable and the run reports in the right column instead. */}
-      {mode === 'generating' && showingEdition
-        ? null
-        : mode === 'generating'
-          ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
-          : null}
-      {view.status === 'unavailable' && !failure && !generating
+      {bodyState === 'generating'
+        ? <DailyBriefingGeneratingView formatTime={formatTime} progress={liveProgress} progressUnreadable={progressUnreadable} resolveText={resolveProductText} text={text} />
+        : null}
+      {bodyState === 'unavailable'
         // 空态零按钮（还没有内容）；只有"读不到"那一档给一颗「重试」，它重新**读**，不重新生成。
         ? <DailyBriefingEmptyState editions={editions} formatTime={formatTime} lastGeneratedAt={lastGeneratedAt} onRetry={onReread} text={text} timeZone={timeZone} todayDate={todayDate} />
         : null}
       {/* Shown during a run too: the reader asked to read this language, and "this issue has no such
           version" is the answer to that, not a reason to replace the pane with the run's own screen. */}
       {/* 缺当前语言也走同一个空态（`02` v2.94）：读者不需要分辨"整期没有"和"缺这个语言"。 */}
-    {view.status === 'locale-missing' ? <DailyBriefingNoEditionPanel view={{ status: 'no-edition', date: view.date ?? todayDate, failed: false }} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
-      {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
+    {bodyState === 'no-edition' && view.status === 'locale-missing' ? <DailyBriefingNoEditionPanel view={{ status: 'no-edition', date: view.date ?? todayDate, failed: false }} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
+      {bodyState === 'no-edition' && view.status === 'no-edition' ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
           所以那颗重试是禁用的，并且写明原因。 */}
-      {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
+      {failure !== null && (bodyState === 'failure' || failureUnderPaper) ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
         {...('date' in view && typeof view.date === 'string' && view.date !== todayDate
           ? { retryBlockedReason: text.history.backfillBlocked } : {})}
         onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
@@ -155,7 +169,8 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
       {/* The paper is a fixed sheet, never a fluid column: the poster keeps its 1080 px and the page
           scales the whole sheet down. Stretching it to the column width is what re-flowed the three cards
           and wrapped the rate card's number across its dial. */}
-      {showingEdition ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
+      {/* `showingEdition` 同时是类型收窄：纸里的 `view.document` 只有它成立时存在。 */}
+      {showingEdition && bodyState === 'paper' ? <div className="mi-daily-briefing-page__paper" ref={paperHostRef} style={paperHostHeight ? { height: paperHostHeight } : undefined}>
         <div className="mi-daily-briefing-page__paper-scale" style={{ left: paperOffsetX, transform: `scale(${paperScale})` }}>
           <div ref={paperSheetRef} style={{ width: BRIEFING_PAPER_WIDTH }}>
             <DailyBriefingShareCard document={view.document} text={editionText} locale={editionLocale} readOnly={view.kind === 'history'} paymentDirectionsCompact={briefingPaymentDirections(editionLocale)} policyWords={briefingPolicyGaugeWords(editionLocale)} changeArrows={briefingChangeArrows(editionLocale)} fearGreedBuckets={briefingFearGreedBuckets(editionLocale)} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
