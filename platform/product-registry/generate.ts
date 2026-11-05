@@ -273,6 +273,8 @@ export type ProductServiceDependencies = {
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
   isWebSearchProviderReady?: () => Promise<boolean>
+  /** 只读搜索入口（产品侧缺值时取一次）；宿主透传平台 WebSearchService，产品不自己发请求。 */
+  searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>
   invokeProductAgentTool?: (
     state: AgentStoreState,
     input: ProductAgentToolInvokeInput

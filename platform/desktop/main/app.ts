@@ -655,6 +655,11 @@ export type DesktopAppBootstrapOptions = {
     deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
     updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
     isWebSearchProviderReady?: () => Promise<boolean>
+    /**
+     * 只读搜索入口：产品侧缺实际值时按平台既定开关/授权/代理去搜一次。
+     * 只读、不写设置、不改变既有 IPC 面。
+     */
+    searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>
     invokeProductAgentTool?: (
       state: AgentStoreState,
       input: ProductAgentToolInvokeInput
@@ -1067,6 +1072,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
               updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
               isWebSearchProviderReady: isAgentWebSearchProviderReady,
+              // 只读透传：产品侧（日报）缺实际值时按同一套开关/授权/代理去搜一次。
+              // 不经过它做任何设置写入，也不改变既有 IPC 面。
+              searchWeb: (request) => webSearchService.searchKeywords(request),
               invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
               invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
             }),
