@@ -103,6 +103,18 @@ describe('briefing manual run dialog', () => {
     expect(onRun).toHaveBeenCalledWith({ cutoff: '21:30', windowHours: 24, language: 'zh-CN' })
   })
 
+  it('gives every field and the action row its own named question mark', async () => {
+    // 点开是空气泡比没有更糟：每枚问号都必须有 aria-label 指向它解释的对象，而且正文里不重复。
+    await render()
+    const labels = [text.manualRunDialog.cutoffHintLabel, text.manualRunDialog.windowHintLabel, text.manualRunDialog.languageHintLabel, text.manualRunDialog.repeatHintLabel]
+    for (const label of labels) {
+      const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+      expect(trigger, label).not.toBeNull()
+    }
+    expect(document.body.textContent).not.toContain(text.manualRunDialog.windowHint)
+    expect(document.body.textContent).not.toContain(text.manualRunDialog.languageHint)
+  })
+
   it('says the same combination may be generated again, and does not refuse the second press', async () => {
     const { onRun } = await render()
     // A7.9（v2.53）：这句说明已不在正文里（说明性正文命中 0），第二次按下仍然不拒绝。

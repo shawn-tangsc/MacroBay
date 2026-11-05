@@ -54,14 +54,40 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
   const windowLabel = (hours: number): string => copy.windowValue.replace('{hours}', String(hours))
   // 两句话合成一个问号：「可选时刻有档位」和「截止 = 按下那一刻」。正文里不再铺说明。
   const cutoffHelp = `${briefingGenerationGridHint(text)} ${copy.nowHint}`
+  // 每个字段都有自己的问号：说明放在它专属的浮层里，鼠标 hover 与键盘聚焦都能展开。
+  // `ariaLabelKey` 必须是**键的形状**（点分、无空白、无中文），句子由这里注入的解析器给出。
+  const helpTrigger = (labelKey: string, label: string, sentence: string): React.ReactElement =>
+    <Popover
+      labelKey={labelKey}
+      resolveText={(key) => (key === labelKey ? sentence : '')}
+      trigger={(triggerProps) => <IconButton
+        ariaLabelKey={labelKey}
+        icon={CircleHelp}
+        resolveText={(key) => (key === labelKey ? label : '')}
+        size="sm"
+        variant="plain"
+        {...triggerProps}
+      />}
+    />
   // 「正在生成」是整期状态，不是字段错：它放底部、让确定键禁用，并同屏写出原因。
   const blockedReason = problem === 'already-running' ? copy.alreadyRunning : undefined
   // 字段级的拒绝贴在该字段下面，作为它的兄弟节点；同一时刻只出现一处提示。
   const cutoffProblem = problem === 'cutoff-in-future' || problem === 'cutoff-unreadable' ? problem : undefined
   const cutoffProblemText = cutoffProblem === 'cutoff-in-future' ? copy.cutoffInFuture : cutoffProblem === 'cutoff-unreadable' ? copy.cutoffUnreadable : undefined
+  const keys = {
+    cutoff: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.cutoffHintLabel',
+    window: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.windowHintLabel',
+    language: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.languageHintLabel',
+    repeat: 'pages.intelligence.portal.dashboard.dailyBriefing.manualRunDialog.repeatHintLabel'
+  }
 
   return <Modal
     footer={<div className="mi-briefing-period-dialog__actions">
+      {/* 「同一组合可以重复生成」属于**整个动作**的说明：挂在按钮行左侧，不挤进标题。它回答的是
+          "点两次会不会出事"，所以位置就在"点"旁边。 */}
+      <span className="mi-briefing-period-dialog__actions-help">
+        {helpTrigger(keys.repeat, copy.repeatHintLabel, copy.repeatable)}
+      </span>
       <Button autoFocus onClick={onClose}>{copy.cancel}</Button>
       {duplicate === undefined
         ? <Button
@@ -85,18 +111,7 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
         {/* 说明不铺在正文里：三句描述收进问号，hover 与键盘聚焦都能展开（平台 `Popover`）。
             标题在前、问号在**标题前面**，`sm` 档随组件走，不写死像素。 */}
         <span className="mi-daily-briefing__field-label">
-          <Popover
-            labelKey="manual.cutoffHelp"
-            resolveText={(key) => (key === 'manual.cutoffHelp' ? cutoffHelp : '')}
-            trigger={(triggerProps) => <IconButton
-              ariaLabelKey="manual.cutoffHelpLabel"
-              icon={CircleHelp}
-              resolveText={(key) => (key === 'manual.cutoffHelpLabel' ? `${copy.cutoffHintLabel}` : '')}
-              size="sm"
-              variant="plain"
-              {...triggerProps}
-            />}
-          />
+          {helpTrigger(keys.cutoff, copy.cutoffHintLabel, cutoffHelp)}
           <strong>{copy.cutoff}</strong>
         </span>
         <Select
@@ -118,7 +133,10 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
       </p>}
 
       <label className="mi-briefing-period-dialog__field">
-        <strong>{copy.windowHours}</strong>
+        <span className="mi-daily-briefing__field-label">
+          {helpTrigger(keys.window, copy.windowHintLabel, copy.windowHint)}
+          <strong>{copy.windowHours}</strong>
+        </span>
         <Select
           aria-label={copy.windowHours}
           value={draft.windowHours}
@@ -128,7 +146,10 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
         />
       </label>
       <label className="mi-briefing-period-dialog__field">
-        <strong>{copy.language}</strong>
+        <span className="mi-daily-briefing__field-label">
+          {helpTrigger(keys.language, copy.languageHintLabel, copy.languageHint)}
+          <strong>{copy.language}</strong>
+        </span>
         <Select
           aria-label={copy.language}
           value={draft.language}
