@@ -175,17 +175,20 @@ describe('daily briefing history rail', () => {
     expect(onDeletePeriod).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
-  it('opens a one-item delete menu from right-click or the keyboard, and disables it while generating', () => {
+  it('opens the row menu from right-click or the keyboard, and disables it while generating', () => {
     const resolveText = (key: string) => key.endsWith('history.deleteEdition.zh-CN')
       ? '删除中文版…'
-      : key.endsWith('history.deletePeriodBlocked') ? '生成中不能删除这一期' : key
+      : key.endsWith('history.deleteWholePeriod') ? '删除这一期…'
+        : key.endsWith('history.deletePeriodBlocked') ? '生成中不能删除这一期' : key
     render({ resolveText })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
 
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(items).toHaveLength(1)
-    expect(items[0].textContent).toContain('删除中文版…')
+    // 一期一行之后，菜单先说"这一期"，再问"哪一个语言版"。
+    expect(items).toHaveLength(2)
+    expect(items[0].textContent).toContain('删除这一期…')
+    expect(items[1].textContent).toContain('删除中文版…')
 
     act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
     expect(document.querySelectorAll('.ant-dropdown-menu-item')).toHaveLength(0)
@@ -254,13 +257,14 @@ describe('daily briefing history rail', () => {
     render({ editions: [edition({ availableLocales: ['en-US'] })], resolveText: onlyEnglish })
     act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-    expect(items).toHaveLength(1)
-    expect(items[0].textContent).toContain('删除英文版…')
+    // 整期的动作 + 这一期真的有的语言版（英文一版），不出现中文那条。
+    expect(items).toHaveLength(2)
+    expect(items[1].textContent).toContain('删除英文版…')
     act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
 
     render({ editions: [edition({ availableLocales: ['zh-CN', 'en-US'] })], resolveText: onlyEnglish })
     act(() => { host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(3)
   })
 
   it('says there is nothing to delete when the issue has no edition', () => {

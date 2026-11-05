@@ -70,11 +70,14 @@ export function DailyBriefingHistoryRail({
   const menuRow = menu ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId) : undefined
   const menuLanguages = [...(menuRow?.availableLocales ?? [])]
   const blocked = Boolean(menu && menu.date === todayDate && generatingStage)
+  // 一期一行之后，菜单先说"这一期"再问"哪一个语言版"：整天一期时代的菜单只有语言，读者找不到
+  // "把这一期整个删掉"这个动作。
+  const deleteWhole = { key: 'delete-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteWholePeriod', tone: 'danger' as const }
   const menuItems = blocked
     ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger' as const, disabled: true }]
     : menuLanguages.length === 0
       ? [{ key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
-      : menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))
+      : [deleteWhole, ...menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))]
   const closeMenu = (): void => {
     const key = menu ? `${menu.date}:${menu.periodId}` : undefined
     setMenu(null)
@@ -199,7 +202,23 @@ export function DailyBriefingHistoryRail({
       onClose={closeMenu}
       onSelect={(key) => {
         const target = menu
+        const languages = menuLanguages
         closeMenu()
+        if (key === 'delete-period' && target && onDeletePeriod) {
+          // 整期删除 = 这一期每一个语言版各删一次：客户端的方法按（日, 期, 语言）走，没有"整期"这一
+          // 层——在这里展开，而不是让服务端接受一个含糊的"删这一期"。
+          confirm({
+            title: text.history.deleteWholeTitle.replace('{date}', target.date),
+            description: text.history.deleteWholeDescription,
+            confirmLabel: text.history.deleteConfirm,
+            cancelLabel: text.history.deleteCancel,
+            tone: 'danger',
+            onConfirm: () => {
+              for (const language of languages) onDeletePeriod({ date: target.date, periodId: target.periodId, locale: language })
+            }
+          })
+          return
+        }
         if (!key.startsWith('delete:') || !target || !onDeletePeriod) return
         const language = key.slice('delete:'.length)
         if (language !== 'zh-CN' && language !== 'en-US') return
