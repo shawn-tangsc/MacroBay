@@ -117,8 +117,14 @@ describe('two-line rail row', () => {
     expect(title).toContain('line-height: 1.4')
   })
 
-  it('sits the language right after the source instead of pushing it to the edge', () => {
+  it('ends every row with the language in the same column', () => {
+    // The separator carries the auto margin, not the language: a dot left behind at the source's tail
+    // would hang in the middle of the row. Both travel together, so the language column is straight.
+    expect(rule('.mi-daily-briefing__rail-sep {')).toContain('margin-left: auto;')
     expect(rule('.mi-daily-briefing__rail-lang {')).toContain('margin-left: 0;')
+    // Never compressed: the row gives up characters of its own tail first.
+    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('flex: 0 0 auto;')
+    expect(rule('.mi-daily-briefing__rail-fact {')).toContain('min-width: 0;')
   })
 
   it('separates facts by space, not by a dot between every pair', () => {
@@ -162,6 +168,24 @@ describe('day rhythm and the row menu trigger', () => {
     // The drawn list has no ⋯: a permanent slot would shorten every title against the reference.
     expect(rule('.mi-daily-briefing__rail-item-menu {')).toContain('opacity: 0')
     expect(css).toContain('.mi-daily-briefing__rail-item:focus-within .mi-daily-briefing__rail-item-menu')
+  })
+})
+
+/**
+ * The destructive action is the fifth button in the toolbar: it keeps the group's skeleton and takes
+ * only the danger ink. Coloured by the antd `danger` prop alone it drifts into antd's red, which is
+ * not the dashboard's, and it is the one button a reader should be able to recognise at a glance.
+ */
+describe('one danger action in the toolbar', () => {
+  it('takes the dashboard red, not a literal and not another palette', () => {
+    const danger = rule('.mi-briefing-tool__btn.mi-briefing-tool__btn--danger {')
+    expect(danger).toContain('var(--mi-dashboard-negative)')
+    expect(danger).not.toMatch(/#[0-9a-f]{3,8}/i)
+  })
+
+  it('fades with the row instead of inventing a second disabled look', () => {
+    const disabled = rule('.mi-briefing-tool__btn.mi-briefing-tool__btn--danger:disabled {')
+    expect(disabled).toContain('opacity: .55;')
   })
 })
 

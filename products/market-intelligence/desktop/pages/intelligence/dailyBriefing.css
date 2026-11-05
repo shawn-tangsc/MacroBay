@@ -66,6 +66,13 @@
 .mi-briefing-tool__btn:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
 .mi-briefing-tool__btn:disabled { opacity: .55; cursor: default; }
 .mi-briefing-tool__btn--primary { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-lime); }
+/* The destructive action keeps the group's 28px skeleton and takes only the danger ink: red word, red
+   edge, no fill. The antd `danger` prop alone would colour it from antd's own palette, which is not
+   the dashboard's red — a compound selector keeps the token in charge. Disabled, it fades with the
+   rest of the row of buttons instead of turning into a second, different disabled look. */
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger { border-color: color-mix(in srgb, var(--mi-dashboard-negative) 45%, var(--mi-dashboard-line)); color: var(--mi-dashboard-negative); }
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger:hover:not(:disabled) { border-color: var(--mi-dashboard-negative); color: var(--mi-dashboard-negative); }
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger:disabled { opacity: .55; color: var(--mi-dashboard-negative); }
 .mi-briefing-tool__btn--primary:hover:not(:disabled) { background: #26301f; }
 
 .mi-daily-briefing-page__actions { display: flex; align-items: center; gap: 7px; }
@@ -206,7 +213,9 @@
 .mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 10px; }
 /* Colour is inherited from the container on purpose: the rail keeps one faint ink, and repeating it
    here would make a second place to change it — and a second literal for the colour gate to count. */
-.mi-daily-briefing__rail-fact { white-space: nowrap; font-size: 10px; }
+/* Facts give way before the language does: `0 1 auto` lets the moment shorten with an ellipsis, so a
+   long row loses characters of its own tail instead of pushing the language column out of line. */
+.mi-daily-briefing__rail-fact { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 /* The moment leads: bold and in the body ink, because it is what the reader scans the rail for. */
 .mi-daily-briefing__rail-fact:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
 /* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
@@ -224,8 +233,11 @@
    the other four are neutral, because a source is not a verdict. */
 .mi-daily-briefing__rail-source { background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
-/* The single separator before the language: a dot, not part of either chip's box. */
-.mi-daily-briefing__rail-sep { flex: none; font-size: 9.5px; opacity: .6; }
+/* The single separator before the language: a dot, not part of either chip's box.
+   The two travel right together — `margin-left: auto` sits on the separator, not on the language,
+   because a dot left behind at the source's tail is a dot hanging in the middle of the row. Each row
+   therefore ends its language in the same column, and the eye stops travelling to find it. */
+.mi-daily-briefing__rail-sep { flex: none; margin-left: auto; font-size: 9.5px; opacity: .6; }
 /* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。
    它**不在行按钮内部**（`<button>` 里不能套 `<button>`），而是同一条目里的第二个控件，
    绝对定位到第二行右侧；行按钮用 `data-has-retry` 在第二行右端让出这段宽度。 */
@@ -328,4 +340,4 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
-.mi-daily-briefing__rail-lang { flex: none; margin-left: 0; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
+.mi-daily-briefing__rail-lang { flex: 0 0 auto; margin-left: 0; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
