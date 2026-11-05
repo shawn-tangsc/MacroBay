@@ -663,4 +663,25 @@ describe('taskSchedulerPlanner', () => {
       runtimeBlockReason: 'autonomy-disabled'
     })
   })
+  it('treats a blank stored timezone exactly like a missing one, not as UTC', () => {
+    const base = {
+      id: 'task-blank-zone',
+      name: 'Blank zone',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z'
+    }
+    const withBlank = createTask({ ...base, trigger: { kind: 'cron', expr: '0 9 * * *', timezone: '' } })
+    const withMissing = createTask({ ...base, id: 'task-blank-zone-2', trigger: { kind: 'cron', expr: '0 9 * * *' } })
+
+    const plan = (task: typeof withBlank) =>
+      buildAgentTaskSchedulerSnapshot(
+        createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [task] }),
+        { now: '2026-01-01T00:30:00.000Z', timeZone: 'Asia/Shanghai' }
+      ).tasksById[task.id]?.nextRunAt
+
+    // 当地 09:00，不是 UTC 09:00（后者会是 2026-01-01T09:00:00.000Z）。
+    expect(plan(withBlank)).toBe('2026-01-01T01:00:00.000Z')
+    expect(plan(withBlank)).toBe(plan(withMissing))
+  })
+
 })

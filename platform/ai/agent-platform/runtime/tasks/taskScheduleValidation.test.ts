@@ -111,4 +111,14 @@ describe('taskScheduleValidation', () => {
       )
     ).toEqual({ ok: true, nextRunAt: '2026-01-02T09:00:00.000Z' })
   })
+  it('normalizes a blank timezone to undefined instead of storing an empty string', () => {
+    const options = { now: new Date(nowMs), defaultTimezone: 'Asia/Shanghai' }
+    const blank = validateTaskTrigger({ kind: 'cron', expr: '0 9 * * *', timezone: '' }, options)
+    expect(blank).toEqual({ ok: true, trigger: { kind: 'cron', expr: '0 9 * * *' } })
+
+    const missing = validateTaskTrigger({ kind: 'cron', expr: '0 9 * * *' }, options)
+    // 两种写法归一之后必须逐字相同：`''` 不是「指定了一个空时区」，是「没填」。
+    expect(blank).toEqual(missing)
+  })
+
 })

@@ -1,3 +1,4 @@
+import { normalizeCronTimeZone } from './taskScheduleMath'
 import { isSoulModeEnabled, normalizePermissionMode } from '../../schemas/agentSchemas'
 import type { Trigger, CreateTaskDto, UpdateTaskDto } from '../../schemas/taskSchemas'
 import type { AgentSessionWorkspaceSource } from '../../schemas/workspaceSchemas'
@@ -340,7 +341,7 @@ function parseTrigger(value: unknown): Trigger {
     }
   }
   if (input.kind === 'once') return { kind: 'once', at: parsePositiveInteger(input.at, 8_640_000_000_000_000) }
-  if (input.kind === 'cron') return { kind: 'cron', expr: parseString(input.expr, 500), ...(input.timezone === undefined ? {} : { timezone: parseString(input.timezone, 120) }), ...(input.limit === undefined ? {} : { limit: parsePositiveInteger(input.limit, 1_000_000) }) }
+  if (input.kind === 'cron') return { kind: 'cron', expr: parseString(input.expr, 500), ...(normalizeCronTimeZone(input.timezone === undefined ? undefined : parseString(input.timezone, 120)) === undefined ? {} : { timezone: normalizeCronTimeZone(parseString(input.timezone, 120)) }), ...(input.limit === undefined ? {} : { limit: parsePositiveInteger(input.limit, 1_000_000) }) }
   return fail()
 }
 

@@ -106,5 +106,19 @@ export function cronTimeZone(
   trigger: Extract<ScheduledTaskEntity['trigger'], { kind: 'cron' }>,
   readerTimeZone: string | undefined
 ): string | undefined {
-  return trigger.timezone ?? readerTimeZone
+  // 用 `??` 会把 `''` 当成"显式指定过"，于是引擎按 UTC 跑，而界面照旧显示「每天 08:00」。
+  return normalizeCronTimeZone(trigger.timezone) ?? normalizeCronTimeZone(readerTimeZone)
+}
+
+/**
+ * 「空」在这个字段上有两种写法：`undefined`（从来没填）和 `''`（表单清空、工具传空串）。
+ * 它们必须是同一件事——**跟随读者设置**，不是「指定了一个叫空字符串的时区」。
+ *
+ * 所以归一放在一处：先掐空白，空即 `undefined`。别在各处写 `x || y` 或 `x ?? y` 反复判断，
+ * 那种写法对 `''` 的答案不同（`||` 当没写、`??` 当写了），而这个区别会一路走到引擎按 UTC 跑。
+ */
+export function normalizeCronTimeZone(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
 }

@@ -1,5 +1,6 @@
 import type { ScheduledTaskEntity, Trigger } from '../../schemas/taskSchemas'
 import { computeNextCronRunAt } from '../../../../jobs'
+import { normalizeCronTimeZone } from './taskScheduleMath'
 
 export const MIN_TASK_INTERVAL_MS = 5 * 60 * 1000
 export const MAX_TASK_INTERVAL_MS = 31 * 24 * 60 * 60 * 1000
@@ -91,11 +92,18 @@ export function validateTaskTrigger(
 ): { ok: true; trigger: Trigger } | { ok: false; code: 'task-schedule-invalid' | 'task-timezone-invalid' } {
   const validation = validateTaskSchedule(trigger, options)
   if (!validation.ok) return validation
-  if (trigger.kind !== 'cron' || trigger.timezone === undefined) return { ok: true, trigger }
+  if (trigger.kind !== 'cron') return { ok: true, trigger }
 
-  const timezone = resolveEffectiveCronTimezone(trigger, options.defaultTimezone)
+  // 空串与缺省是同一件事：都表示「跟随读者设置」。**归一后写回**，否则 `''` 会被当成
+  // 「显式指定过一个叫空字符串的时区」，planner 用 `??` 取到 `''`，引擎再按 UTC 跑——
+  // 界面上仍是「每天 08:00」，实际按世界标准时间跑。
+  const normalized = normalizeCronTimeZone(trigger.timezone)
+  const normalizedTrigger = normalized === trigger.timezone ? trigger : { ...trigger, timezone: normalized }
+  if (normalized === undefined) return { ok: true, trigger: normalizedTrigger }
+
+  const timezone = resolveEffectiveCronTimezone(normalizedTrigger as Extract<Trigger, { kind: 'cron' }>, options.defaultTimezone)
   if (!timezone.ok) return timezone
-  return { ok: true, trigger }
+  return { ok: true, trigger: normalizedTrigger }
 }
 
 function resolveEffectiveCronTimezone(
