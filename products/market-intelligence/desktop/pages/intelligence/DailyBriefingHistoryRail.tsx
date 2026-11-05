@@ -149,6 +149,8 @@ export function DailyBriefingHistoryRail({
           <span className="mi-daily-briefing__rail-day-count" data-day-count={day.rows.length}>
             {text.history.periodCount.replace('{count}', String(day.rows.length))}
           </span>
+          {/* 折叠箭头：没有它读者不知道这一天能点开。纯文本字形，不占排版宽度，也不需要新样式。 */}
+          <span className="mi-daily-briefing__rail-day-caret" aria-hidden="true" data-day-caret={isOpen(day.date) ? 'open' : 'closed'}>{isOpen(day.date) ? '▾' : '▸'}</span>
         </button>
         {/* 折叠态：一行摘要，让这一天自己是可读的信息（不是"共 N 期"加一片空白）。 */}
         {isOpen(day.date) ? null : (() => {
