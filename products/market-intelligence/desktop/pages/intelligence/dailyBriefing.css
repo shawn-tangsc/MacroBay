@@ -16,11 +16,10 @@
 .mi-daily-briefing__rail-row i[data-direction="bullish"] { background: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-row i[data-direction="bearish"] { background: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-row i[data-direction="range"], .mi-daily-briefing__rail-row i[data-direction="mixed"] { background: var(--mi-dashboard-caution); }
-@media (max-width: 980px) {
-  .mi-daily-briefing__rail { max-height: 112px; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--mi-dashboard-line); }
-  .mi-daily-briefing__rail-list { display: flex; gap: 3px; overflow-x: auto; }
-  .mi-daily-briefing__rail-row { width: auto; flex: none; }
-}
+/* Narrow windows keep the rail vertical. It used to lie down and scroll sideways — a shape from the
+   days when a row was one date and a horizontal strip still read as a list. Now a row is an edition and
+   the days are grouped, so sideways means scrolling half a screen to reach yesterday. Squeezing the
+   document instead is the lesser cost, and the rail never scrolls horizontally. */
 
 
 
