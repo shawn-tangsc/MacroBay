@@ -140,6 +140,12 @@ export function useBriefingRunActions(input: Readonly<{
 
   return {
     async runBriefing(request) {
+      // 这一次运行的**身份**：临时行就是按它造的，跑完也按它收回（不靠合并碰巧覆盖）。
+      const started = {
+        date: input.todayDate ?? '',
+        periodId: request.periodId ?? 'default',
+        locale: request.locale
+      }
       begin(request)
       // 先挂一行"生成中"再开始跑：今天还没有任何版次/运行记录时，列表里连挂进度的那一行都没有，
       // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
@@ -148,7 +154,11 @@ export function useBriefingRunActions(input: Readonly<{
       // 跑失败/超时也要把这行收回：它是"正在跑"的临时事实，不是一条版次。留着它会变成一行永远
       // "生成中"的幽灵（进程崩过的那次尤其明显）。判据只用"占位行 + 语言正在生成"这两个特征。
       if (!document) input.setEditions((current) => current.filter((row) => !isGeneratingPlaceholder(row)))
+      // 临时行是页面编出来表示"这次在跑"的：跑完先按**它自己的身份**删掉，再挂真实结果。
+      // 只靠"合并碰巧覆盖"会留两处幽灵：语言那格没被覆盖（一直显示生成中）、身份对不上时整行不走。
       if (document) {
+        input.setEditions((current) => current.filter((row) => !(row.date === started.date
+          && row.periodId === started.periodId && row.locale === started.locale)))
         input.setView({ status: 'ready', document, kind: 'today' })
         // 手动期可能落在另一天/另一期：切到它自己的日期，否则正文写的是新的一版、列表还停在旧那天。
         input.setCurrentPeriodDate?.(document.edition.date)

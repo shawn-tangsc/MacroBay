@@ -61,6 +61,10 @@ export function mergeEditionSummary(
       ...fresh,
       // 新文档只知道它自己的语言；这一期还发布过哪些语言，列表那一行知道，别丢。
       availableLocales: [...new Set([...row.availableLocales, ...fresh.availableLocales])],
+      // 「这一门语言正在生成」是临时行的标记，**必须被真实结果覆盖**：只覆盖标题/摘要/状态，
+      // 那一行就会同时是"已生成"和"生成中"，列表按后者渲染 → 跑完了还一直显示生成中。
+      ...(row.languages === undefined && fresh.languages === undefined ? {}
+        : { languages: mergeLanguages(row.languages, fresh.languages) }),
       ...(row.expectedLocales === undefined ? {} : { expectedLocales: row.expectedLocales })
     }
     : row)
@@ -181,4 +185,16 @@ export function briefingListFacts<T extends Readonly<{ date: string; state: stri
     todayMissing: editions.some((edition) => edition.date === todayDate && edition.state === 'missing'),
     hasTodayEdition: editions.some((edition) => edition.date === todayDate && edition.state !== 'missing')
   }
+}
+
+/** 按语言合并：新结果覆盖同一门语言的那一条，其余（别种语言）原样保留。 */
+function mergeLanguages<T extends Readonly<{ locale: string; state: string; reason?: string }>>(
+  previous: readonly T[] | undefined,
+  fresh: readonly T[] | undefined
+): readonly T[] | undefined {
+  if (fresh === undefined) return undefined
+  const byLocale = new Map<string, T>()
+  for (const language of previous ?? []) byLocale.set(language.locale, language)
+  for (const language of fresh) byLocale.set(language.locale, language)
+  return [...byLocale.values()]
 }
