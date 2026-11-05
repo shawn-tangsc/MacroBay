@@ -215,7 +215,7 @@ export function TaskAutomationResourceJobsSection(props: {
                   {visibleItems.map((job) => {
                     // 名字的解析只走 `resolveJobTitle` 一处：内置作业双语按当前语言取、占位符在这里替换，
                     // 读者自己建的任务（`{ literal }`）原样显示、永不翻译。
-                    const jobTitle = resolveJobTitle(job.title, undefined, language)
+                    const jobTitle = resolveJobTitle(job.title, job.titleParams, language)
                     return (
                     <tr
                       key={job.id}

@@ -23,6 +23,21 @@ describe('resolveJobTitle', () => {
     expect(resolveJobTitle(title, { name: '美元指数' }, 'en-US')).toBe('Collect 美元指数')
   })
 
+  it('resolves a bilingual parameter in the same language as the title', () => {
+    // 通道名在两种语言里不一样（飞书 / Lark）：参数跟着标题一起按语言取，不预解析。
+    const title = { 'zh-CN': '{channel} 运行时维护', 'en-US': '{channel} runtime maintenance' }
+    const params = { channel: { 'zh-CN': '飞书', 'en-US': 'Lark' } }
+
+    expect(resolveJobTitle(title, params, 'zh-CN')).toBe('飞书 运行时维护')
+    expect(resolveJobTitle(title, params, 'en-US')).toBe('Lark runtime maintenance')
+  })
+
+  it('picks a plain string parameter as-is in both languages', () => {
+    const title = { 'zh-CN': '采集 {name}', 'en-US': 'Collect {name}' }
+    expect(resolveJobTitle(title, { name: '美元指数' }, 'en-US')).toBe('Collect 美元指数')
+    expect(resolveJobTitle(title, { name: '美元指数' }, 'zh-CN')).toBe('采集 美元指数')
+  })
+
   it('leaves a missing parameter empty instead of printing the placeholder', () => {
     const title = { 'zh-CN': '采集 {name}', 'en-US': 'Collect {name}' }
     expect(resolveJobTitle(title, {}, 'zh-CN')).toBe('采集 ')

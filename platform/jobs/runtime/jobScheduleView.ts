@@ -25,13 +25,14 @@ export type JobScheduleTriggerView =
   | { kind: 'event'; topic: string }
 
 /** 最近一次运行的粗粒度结果；`never` 表示还没有终态结果（从未运行或仍在运行）。 */
-import type { JobTitle } from './jobTitle'
+import type { JobTitle, JobTitleParams } from './jobTitle'
 
 export type JobScheduleLastOutcome = 'success' | 'failed' | 'skipped' | 'never'
 
 export type JobScheduleView = {
   id: string
   title: JobTitle
+  titleParams?: JobTitleParams
   owner: JobOwner
   productId: string | null
   trigger: JobScheduleTriggerView
@@ -86,6 +87,7 @@ function projectJobSchedule(
   return {
     id: definition.id,
     title: definition.title,
+    ...(definition.titleParams === undefined ? {} : { titleParams: definition.titleParams }),
     owner: definition.owner,
     productId: definition.productId ?? null,
     trigger: projectTrigger(definition.trigger),

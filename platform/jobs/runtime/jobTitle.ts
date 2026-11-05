@@ -19,8 +19,13 @@ export type JobTitle =
    */
   | string
 
-/** `titleParams` 的值必须是**读者能在界面上看到的东西**（产品名、通道名），不能是 `handlerId` 这类工程名。 */
-export type JobTitleParams = Record<string, string>
+/**
+ * `titleParams` 的值必须是**读者能在界面上看到的东西**（产品名、通道名），不能是 `handlerId` 这类工程名。
+ *
+ * 值本身也可以是双语的（通道名在中文界面叫「飞书」、英文界面叫「Lark」）：**在渲染那一刻按语言取**，
+ * 不预解析、不冻结——否则切语言后参数还是旧语言，正是今晚修过的那类病。
+ */
+export type JobTitleParams = Record<string, string | LocalizedText>
 
 /** 词表里的占位符写法；只认这一处实现，消费点不许各自 `replace`。 */
 const PLACEHOLDER = /\{([a-zA-Z][a-zA-Z0-9_]*)\}/g
@@ -47,7 +52,11 @@ export function resolveJobTitle(
       : title[language]
 
   if (params === undefined) return text
-  return text.replace(PLACEHOLDER, (_match, key: string) => params[key] ?? '')
+  return text.replace(PLACEHOLDER, (_match, key: string) => {
+    const value = params[key]
+    if (value === undefined) return ''
+    return typeof value === 'string' ? value : value[language]
+  })
 }
 
 /**
