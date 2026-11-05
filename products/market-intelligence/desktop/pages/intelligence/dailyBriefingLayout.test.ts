@@ -334,7 +334,9 @@ describe('one refusal line, two tones', () => {
  */
 describe('a dialog label and its question are one row', () => {
   it('puts the question first, 6px from the title, on the same line', () => {
-    const label = rule('.mi-briefing-period-dialog__label {')
+    // The dialog reuses the settings form's label class, whose rule is scoped to that form — so the row
+    // has to be declared for this dialog too, or the question sits flush against the title.
+    const label = rule('.mi-briefing-period-dialog .mi-daily-briefing__field-label {')
     expect(label).toContain('display: inline-flex;')
     expect(label).toContain('align-items: center;')
     expect(label).toContain('gap: 6px;')
@@ -342,8 +344,20 @@ describe('a dialog label and its question are one row', () => {
 
   it('paints the question in muted ink, not the faint tone', () => {
     // Faint measured 2.6:1 on this dialog: an unreadable trigger is not a trigger.
-    const trigger = rule('.mi-briefing-period-dialog__label .icon-button {')
+    const trigger = rule('.mi-briefing-period-dialog .mi-daily-briefing__field-label .icon-button {')
     expect(trigger).toContain('color: var(--mi-dashboard-muted);')
+  })
+
+  it('keeps the hit area the platform button\'s size', () => {
+    // The trigger is one hover/click target of 22px. Anything that grows it turns a field's label into
+    // part of the control, and the reader opens an explanation while reaching for the select.
+    const label = rule('.mi-briefing-period-dialog .mi-daily-briefing__field-label {')
+    expect(label).not.toContain('padding')
+    const trigger = rule('.mi-briefing-period-dialog .mi-daily-briefing__field-label .icon-button {')
+    expect(trigger).not.toContain('padding')
+    // No `width` of its own on either: the 22px box is the platform button's, and `min-width: 0` is the
+    // only width-ish declaration this row is allowed.
+    expect(trigger).not.toContain(' width:')
   })
 })
 
