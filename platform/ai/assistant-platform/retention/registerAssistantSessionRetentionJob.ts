@@ -29,7 +29,8 @@ export function registerAssistantSessionRetentionJob(
     id: assistantSessionRetentionJobId,
     owner: 'platform',
     handlerId: assistantSessionRetentionJobId,
-    title: 'Assistant session retention',
+    // 中文名说清「在清理什么」：这条每天 03:20 清掉超期的助手会话与消息。
+    title: { 'zh-CN': '助手会话保留期清理', 'en-US': 'Assistant session retention' },
     audience: 'internal' as const,
     trigger: { kind: 'cron', expression: '20 3 * * *' },
     payload: {}
