@@ -223,8 +223,11 @@ describe('generation stage timeline', () => {
     expect(dom.textContent).toContain(text.generationTrace.notStartedYet)
     expect(dom.textContent).toContain(text.generationTrace.waitingElapsed.replace('{seconds}', '90').replace('{polls}', '3'))
     expect(dom.textContent).toContain(text.generationTrace.waitingHint)
-    // No invented attempt while it waits.
-    expect(dom.textContent).not.toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
+    // No invented attempt line while it waits: assert the line itself is absent, not that some
+    // half of a template string is missing — the latter is written against the implementation.
+    // 等待态自己也有 summary 段，但那是"还没开始"那句；要判的是**没有一条"这次尝试 · 开始于 …"**。
+    const summaries = [...dom.querySelectorAll<HTMLElement>('.mi-generation-trace__summary')]
+    expect(summaries.some((node) => (node.textContent ?? '').includes(text.generationTrace.attempt))).toBe(false)
     for (const id of allSucceeded) {
       expect(resultOf(dom, id).textContent, id).toContain(text.generationTrace.states.notStarted)
     }

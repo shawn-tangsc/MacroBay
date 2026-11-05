@@ -1592,8 +1592,10 @@ it('keeps the edition readable and reports a run in the right column', async () 
     expect(row.textContent).toContain(text.generationTrace.states.notStarted)
     expect(row.textContent).not.toContain(text.generationTrace.notRecorded)
   }
-  // The attempt line is not invented while the run has reported nothing yet.
-  expect(railStages.textContent).not.toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
+  // The attempt line is not invented while the run has reported nothing yet: judge the line's
+  // presence, not a half-cut template string.
+  expect([...railStages.querySelectorAll<HTMLElement>('.mi-generation-trace__summary')]
+    .some((node) => (node.textContent ?? '').includes(text.generationTrace.attempt))).toBe(false)
   // 4. The header action shows it is working, not merely that it is unavailable.
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.className).toContain('ant-btn-loading')
@@ -1649,8 +1651,12 @@ it('reports a run that is already in flight in the right column, step by step', 
   expect(row('candidates').textContent).toContain(text.generationProgress.running)
   expect(row('writing').getAttribute('data-stage-state')).toBe('waiting')
   expect(row('writing').textContent).toContain(text.generationTrace.states.notStarted)
-  // The attempt line names its instant as a start, in the column that shows it.
-  expect(rail.textContent).toContain(text.generationTrace.startedAt.split('{time}')[0]!.trim())
+  // The attempt line names its instant as a start, in the column that shows it: a readable
+  // sentence with a time in it, not a constant cut in half.
+  const startedLine = rail.querySelector('.mi-generation-trace__summary')
+  expect(startedLine).not.toBeNull()
+  expect(startedLine!.textContent).toContain(text.generationTrace.attempt)
+  expect(startedLine!.textContent).toMatch(/\d{1,2}:\d{2}/)
   // A run in flight shows the header action working, not merely disabled.
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.className).toContain('ant-btn-loading')
 })
