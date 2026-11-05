@@ -427,7 +427,10 @@ export function createDailyBriefingService(deps: Readonly<{
       withTimeZoneSource(await resolveToday({
         asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours,
         // A reader asking again is the only trigger this path has; the scheduled run is the other.
-        runTrigger: 'manual'
+        runTrigger: 'manual',
+        // 弹框选定的那一刻：这一期是**临时的一期**（`periodKind`），它的名义截止就是选定的时刻。
+        // 三个值缺一个，行上的「截止 · 实际」就成不了对，「本期」也判不出来。
+        ...(input.generation === undefined ? {} : { periodKind: 'manual' as const, periodTime: input.generation.asOf })
       }, true), window.zoneSource))
   }
 
