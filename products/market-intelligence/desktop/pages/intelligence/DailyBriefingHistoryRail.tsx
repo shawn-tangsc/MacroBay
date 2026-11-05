@@ -4,9 +4,7 @@ import { useConfirm } from '@platform/ui/components/confirm'
 import { ContextMenu, type MenuAnchor } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
-import { StatusPill } from '@platform/ui/components/status-pill'
 import type {
-  DailyBriefingEditionLanguage,
   DailyBriefingEditionSummary,
   DailyBriefingLocale
 } from '../../../contracts/dailyBriefing'
@@ -17,13 +15,17 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
 
 /**
- * The history rail: one section per day, one row per issue of that day.
+ * The history rail: one section per day, one row per edition of that day.
  *
- * The list projection decides everything the row draws — the day's issues, their order, the
- * per-language three-state, the current edition and the deleted mark. This component groups by the
- * date it was given and renders those conclusions; it does not re-sort, re-derive a language state,
- * or invent a missing one.
+ * A row is two lines, and the split is the design: line one answers "when, which window, which
+ * direction, who produced it, which language" and line two answers "what is it about". The numbers a
+ * reader does not scan for — readings, gaps, "this issue" — are not on the row at all; they belong to
+ * the edition that line two opens. The list projection decides every value here: this component
+ * groups by date and draws those conclusions, it never re-derives one.
  */
+
+/** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
+type RailSourceKind = 'scheduled' | 'manual' | 'catch-up' | 'not-run' | 'failed'
 
 /**
  * 折叠的那一天要自己是一条可读的信息，而不是「共 N 期」加一片空白。
@@ -44,9 +46,46 @@ function collapsedSummary(day: Readonly<{ rows: readonly DailyBriefingEditionSum
   }
 }
 
+/**
+ * Which of the five source words this row gets. `catch-up` is a scheduled run that came late, so it
+ * says 补跑 instead of a second 定时 — one word, never two.
+ */
+function sourceKindOf(edition: DailyBriefingEditionSummary): RailSourceKind {
+  if (edition.state === 'missing') {
+    // An interrupted run did start, so it is neither "failed" nor "never ran": line two says which.
+    return runReasonOf(edition) === 'run-interrupted' ? 'not-run' : edition.attemptCount ? 'failed' : 'not-run'
+  }
+  if (edition.periodKind === 'manual') return 'manual'
+  if (edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry') return 'catch-up'
+  return 'scheduled'
+}
+
+function sourceLabelOf(kind: RailSourceKind, text: DailyBriefingText): string {
+  if (kind === 'manual') return text.history.runManual
+  if (kind === 'catch-up') return text.history.runCatchUp
+  if (kind === 'failed') return text.history.runFailed
+  if (kind === 'not-run') return text.history.missingRun
+  return text.history.runScheduled
+}
+
+/**
+ * The one clock a row prints (`02` A5.4b: the twice-recorded time does not live on the row).
+ *
+ * A period that ran on time has the same nominal and actual minute, so the second clock was noise and
+ * its label pushed everything else out of a 252px row. Only a manual run keeps a prefix: 截止 carries
+ * something the time alone does not say.
+ */
+function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): string | undefined {
+  if (edition.state === 'missing') return edition.scheduledTime
+  const nominal = edition.periodTime ? railClock(edition.periodTime, timeZone) : edition.scheduledTime
+  if (!nominal) return undefined
+  return edition.periodKind === 'manual' ? `${text.history.timeCutoff} ${nominal}` : nominal
+}
+
 export function DailyBriefingHistoryRail({
   editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, gapCount, onDeletePeriod, onRemovePeriod
+  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, onDeletePeriod, onRemovePeriod,
+  onRegeneratePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   loading?: boolean
@@ -62,15 +101,16 @@ export function DailyBriefingHistoryRail({
   generatingStage?: string
   resolveText?: (key: string) => string
   onSelect: (date: string) => void
-  /** Picking a language badge selects that edition; absent keeps the badges read-only. */
+  /** Picking a row selects that edition: one row is one period in one language, so the row is the choice. */
   onSelectLocale?: (selection: BriefingRailSelection) => void
-  gapCount?: number
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
   /**
-   * 删掉这一期的**排期**，不删它的内容：行留着、标成已删除，计划与实际两个时刻都在，正文照旧能读。
+   * 删掉这一期的**排期**，不删它的内容：行留着、标成已删除，正文照旧能读。
    * 与 `onDeletePeriod`（删掉某一语言版的正文）是两层，别把这两件事合并。
    */
   onRemovePeriod?: (input: Readonly<{ date: string; periodId: string }>) => void | Promise<void>
+  /** Run this period again. Absent when the host cannot spend a run (the menu item is then disabled). */
+  onRegeneratePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
 }>): React.ReactElement {
   const confirm = useConfirm()
   const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; anchor: MenuAnchor }> | null>(null)
@@ -98,11 +138,18 @@ export function DailyBriefingHistoryRail({
   // 一期一行之后，菜单先说"这一期"再问"哪一个语言版"：整天一期时代的菜单只有语言，读者找不到
   // "把这一期整个删掉"这个动作。
   const deleteWhole = { key: 'delete-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteWholePeriod', tone: 'danger' as const }
+  // 重新生成只对本日成立：服务端按"今天"解析期号，历史那天不能补跑（`backfillBlocked` 就是那句话）。
+  // 有入口但被禁，比"菜单里根本没有这个动作"诚实——读者至少知道这一版能重跑。
+  const regenerate = menu?.date === todayDate
+    ? onRegeneratePeriod
+      ? [{ key: 'regenerate-period', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.regeneratePeriod' }]
+      : []
+    : [{ key: 'regenerate-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.backfillBlocked', disabled: true }]
   const menuItems = blocked
-    ? [{ key: 'delete-blocked', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', tone: 'danger' as const, disabled: true }]
+    ? [{ key: 'regenerate-blocked-running', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deletePeriodBlocked', disabled: true }]
     : menuLanguages.length === 0
-      ? [{ key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
-      : [deleteWhole, ...menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))]
+      ? [...regenerate, { key: 'delete-none', labelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.history.deleteNoEdition', tone: 'danger' as const, disabled: true }]
+      : [...regenerate, deleteWhole, ...menuLanguages.map((language) => ({ key: `delete:${language}`, labelKey: `pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEdition.${language}`, tone: 'danger' as const }))]
   const closeMenu = (): void => {
     const key = menu ? `${menu.date}:${menu.periodId}` : undefined
     setMenu(null)
@@ -112,10 +159,16 @@ export function DailyBriefingHistoryRail({
   const rowSelected = (edition: DailyBriefingEditionSummary): boolean => {
     if (selectedDate === undefined) return false
     if (edition.date !== selectedDate) return false
-    // The day alone used to be the selection; a period-aware selection is stricter when it is known.
-    if (selectedPeriodId === undefined) return true
-    return edition.periodId === selectedPeriodId
+    // One row is one (period, language): without both in the test, every edition of the same period
+    // would light up as "the one on screen".
+    if (selectedPeriodId !== undefined && edition.periodId !== selectedPeriodId) return false
+    if (selectedLocale !== undefined && edition.locale !== selectedLocale) return false
+    return true
   }
+
+  /** One run, one row: only the row that has no body yet is the one currently being written. */
+  const isRunning = (edition: DailyBriefingEditionSummary): boolean =>
+    edition.date === todayDate && edition.state === 'missing' && generatingStage !== undefined
 
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
@@ -143,8 +196,9 @@ export function DailyBriefingHistoryRail({
             return next
           }) }}>
           <span className="mi-daily-briefing__rail-day-date">{formatDate(day.date, locale)}</span>
-          {/* The day head says which day it is, never "本期": the current issue is marked on its row. */}
-          {day.date === todayDate ? <em data-today="true">{text.history.today}</em> : null}
+          {/* 「今天」是副标签：和「共 N 期」同档同色（CSS 里是同一条规则），不许比日期更显眼。
+              **没有「本期」这个词**：是不是今天由这个标签说，哪一份最新由排序说。 */}
+          {day.date === todayDate ? <em className="mi-daily-briefing__rail-day-today" data-today="true">{text.history.today}</em> : null}
           {/* The count stays on the head even when collapsed (A5.2). */}
           <span className="mi-daily-briefing__rail-day-count" data-day-count={day.rows.length}>
             {text.history.periodCount.replace('{count}', String(day.rows.length))}
@@ -163,14 +217,19 @@ export function DailyBriefingHistoryRail({
         })()}
         {isOpen(day.date) ? <div role="list" className="mi-daily-briefing__rail-day-rows">
           {day.rows.map((edition) => {
+            const key = `${edition.date}:${edition.periodId}:${edition.locale}`
             const missing = edition.state === 'missing'
-            const selected = rowSelected(edition)
-            const key = `${edition.date}:${edition.periodId}`
-            const active = renderedLanguages(edition).length > 0 || missing
+            const running = isRunning(edition)
+            const kind = sourceKindOf(edition)
+            const clock = clockOf(edition, text, timeZone)
+            const title = edition.summaryLine ?? ''
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
-                aria-current={selected ? 'true' : undefined}
+                aria-current={rowSelected(edition) ? 'true' : undefined}
+                // 生成中的那一行不可点：它还没有内容可开。原因写在行内第二行，读屏顺着行拿得到。
+                {...(running ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : {})}
                 data-date={edition.date} data-state={edition.state} data-period-id={edition.periodId}
+                {...(edition.periodDeleted ? { 'data-period-deleted': 'true' } : {})}
                 className="mi-daily-briefing__rail-row"
                 ref={(node) => { if (node) rowRefs.current.set(key, node) }}
                 onContextMenu={(event) => { event.preventDefault(); openMenu(edition, { x: event.clientX, y: event.clientY }) }}
@@ -180,55 +239,49 @@ export function DailyBriefingHistoryRail({
                   const rect = event.currentTarget.getBoundingClientRect()
                   openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
                 }}
-                onClick={() => onSelect(edition.date)}>
+                onClick={() => {
+                  if (running) return
+                  // 点一行 = 选那一版（日期 + 期号 + 语言）。只给日期的话，同期中英两行会开同一份。
+                  if (onSelectLocale) onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
+                  else onSelect(edition.date)
+                }}>
+                {/* 第一行：时刻 → 窗口 → 方向点 → 来源徽标 → · → 语言标签。从左往右读，语序就是扫视顺序。 */}
                 <span className="mi-daily-briefing__rail-line">
-                  {edition.periodDeleted ? <small className="mi-daily-briefing__rail-deleted" data-period-deleted="true">{text.history.deletedPeriod}</small> : null}
-                  {edition.state === 'partial' && resolveText
-                    ? <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.dailyBriefing.status.partial" resolveText={resolveText} />
+                  {clock ? <span className="mi-daily-briefing__rail-fact">{clock}</span> : null}
+                  {typeof edition.windowHours === 'number'
+                    ? <span className="mi-daily-briefing__rail-fact" data-window-hours={edition.windowHours}>{text.history.windowHoursShort.replace('{hours}', String(edition.windowHours))}</span>
+                    : null}
+                  {/* 方向只用颜色说：一行里只有它有颜色，扫一眼就够；词留给读屏。 */}
+                  {missing
+                    ? null
+                    : <i className="mi-daily-briefing__rail-dot" data-direction={edition.direction ?? 'none'} role="img"
+                      aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
+                  {/* 这一格永远有且只有一个：定时 / 手动 / 补跑 / 未运行 / 这次失败。 */}
+                  <span className="mi-daily-briefing__rail-source" data-run-source={kind}>{sourceLabelOf(kind, text)}</span>
+                  {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
+                  {missing ? null : <>
+                    <span className="mi-daily-briefing__rail-sep" aria-hidden="true">·</span>
+                    <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
+                  </>}
+                  {/* 失败那一行只有它：没有正文可开，行内直接给一条出路，不必先点开再看。 */}
+                  {kind === 'failed' && edition.date === todayDate && onRegeneratePeriod
+                    ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
+                      onClick={(event) => { event.stopPropagation(); void onRegeneratePeriod({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>
+                      {text.history.retryOne}
+                    </button>
                     : null}
                 </span>
-                {/* 第二行：这一份讲什么——**决定读者点不点开**，所以它在行内，单行省略。
-                    失败与未运行那两行没有正文，标题位写一句原因：留白会被读成"还在加载"。 */}
-                {edition.state === 'missing'
-                  ? <span className="mi-daily-briefing__rail-title" data-rail-title="reason" data-missing-reason="true">{runReasonOf(edition) === 'run-interrupted' ? text.history.runInterrupted : runReasonOf(edition) === 'run-failed' ? text.history.runFailed : text.history.missingRun}</span>
-                  : edition.summaryLine
-                    ? <span className="mi-daily-briefing__rail-title" data-rail-title="summary">{edition.summaryLine}</span>
-                    : null}
-                {/* 行末：来源词（永远有且只有一个）+ 语言标签（只在真有版次时出现）。 */}
-                <span className="mi-daily-briefing__rail-source" data-run-source={edition.state === 'missing' ? 'none' : edition.periodKind === 'manual' ? 'manual' : edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry' ? 'catch-up' : 'scheduled'}>{sourceWord(edition, text)}</span>
-                {active ? <span className="mi-daily-briefing__rail-langs" data-briefing-locale-tag={languageTag(edition.availableLocales)}>
-                  {/* 一行只有这一枚：该行自己的语言。徽标是标签，不是可切换的开关——没有按钮、没有选中态。 */}
-                  <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
-                </span> : null}
-                <small className="mi-daily-briefing__rail-meta">
-                  {edition.date === todayDate && generatingStage
-                    ? <span className="mi-daily-briefing__rail-fact">{text.generationProgress.railRunning} · {generatingStage}</span>
-                    : <>
-                      {timeFacts(edition, text, timeZone).map((fact, index) => <span key={`${fact}-${index}`} className="mi-daily-briefing__rail-fact">{fact}</span>)}
-                      {typeof edition.windowHours === 'number'
-                        ? <span className="mi-daily-briefing__rail-fact" data-window-hours={edition.windowHours}>{text.history.windowHoursShort.replace('{hours}', String(edition.windowHours))}</span>
-                        : null}
-
-                    </>}
-                </small>
-                {missing ? <small className="mi-daily-briefing__rail-missing" data-run-reason={runReasonOf(edition) ?? 'not-run'}>{
-                  edition.date === todayDate && generatingStage
-                    ? `${text.generationProgress.railRunning} · ${generatingStage}`
-                    : runReasonOf(edition) === 'run-interrupted' ? text.history.runInterrupted
-                      : runReasonOf(edition) === 'run-failed' ? text.history.runFailed
-                        : edition.attemptCount ? `${text.history.generationFailed}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
-                          : `${text.history.missingRun}${edition.scheduledTime ? ` · ${edition.scheduledTime}` : ''}`
-                }</small> : <>
-                  {edition.direction
-                    ? <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction}>{localizedDirectionTerm(edition.direction, locale)}</span>
-                    : <span className="mi-daily-briefing__rail-direction mi-daily-briefing__rail-direction--none" role="img" aria-label={text.history.noConclusion} />}
-                  {edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
-                    ? <small className="mi-daily-briefing__rail-run-trigger" data-run-trigger={edition.runTrigger}>{text.history.runCatchUp}</small>
-                    : null}
-                  {edition.date === selectedDate && (selectedPeriodId === undefined || selectedPeriodId === edition.periodId) && gapCount !== undefined && gapCount > 0
-                    ? <span className="mi-daily-briefing__rail-fact" data-briefing-gap-count={gapCount}>{text.history.gapCount.replace('{count}', String(gapCount))}</span>
-                    : null}
-                </>}
+                {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
+                    没有正文的那两行写**为什么没有**——空行会被读成"还在加载"。 */}
+                {running
+                  ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="running">
+                    <LoadingSpinner size="sm" /><span>{text.generationProgress.railRunning}</span>
+                  </span>
+                  : missing
+                    ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">{reasonOf(edition, text)}</span>
+                    : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
+                      {edition.periodDeleted ? `${text.history.deletedPeriod} · ` : ''}{title}
+                    </span>}
               </button>
             </div>
           })}
@@ -244,6 +297,10 @@ export function DailyBriefingHistoryRail({
         const target = menu
         const languages = menuLanguages
         closeMenu()
+        if (key === 'regenerate-period' && target && onRegeneratePeriod && menuRow) {
+          void onRegeneratePeriod({ date: target.date, periodId: target.periodId, locale: menuRow.locale })
+          return
+        }
         if (key === 'delete-period' && target && onRemovePeriod) {
           // 删的是这一期的**排期**：行留着、标成已删除，正文照旧能读（`A9.8` 删期不删历史版次）。
           confirm({
@@ -275,84 +332,20 @@ export function DailyBriefingHistoryRail({
   </aside>
 }
 
-/** The per-language chips, from the projection's three-state; absent falls back to published rows. */
-function renderedLanguages(edition: DailyBriefingEditionSummary): readonly DailyBriefingEditionLanguage[] {
-  // 一行只有一枚徽标：**这一行自己的语言**。`languages` 带着这一期所有语言的状态（那是"这一期有
-  // 几版"的旧说法），在这里必须按本行的语言过滤——否则两行会各自挂着两枚徽标，看起来又像"可以切"。
-  const own = edition.languages?.find((language) => language.locale === edition.locale)
-  if (own) return [own]
-  return edition.languages === undefined
-    ? [Object.freeze({ locale: edition.locale, state: 'published' as const })]
-    : []
-}
-
 function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
   return (edition.languages ?? []).find((language) => language.reason !== undefined)?.reason
 }
 
-function LanguageBadge({ language, text, locale, selected, onSelect }: Readonly<{
-  language: DailyBriefingEditionLanguage
-  text: DailyBriefingText
-  locale: DailyBriefingLocale
-  selected: boolean
-  onSelect?: () => void
-}>): React.ReactElement {
-  const name = text.history.languages[language.locale]
-  if (language.state === 'generating') {
-    return <span className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="generating">
-      <LoadingSpinner size="sm" />{name}
-    </span>
-  }
-  if (language.state === 'missing') {
-    const reason = language.reason === 'run-interrupted' ? text.history.runInterrupted
-      : language.reason === 'run-failed' ? text.history.runFailed
-        : text.history.languageNotPublished
-    // A grey chip without the reason is exactly what A9.2 forbids: the reader must know why it is grey.
-    return <span className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="missing" data-language-reason={language.reason}>
-      {name}<small className="mi-daily-briefing__rail-lang-reason">{reason}</small>
-    </span>
-  }
-  return <button type="button" className="mi-daily-briefing__rail-lang" data-edition-locale={language.locale} data-language-state="published"
-    aria-pressed={selected} disabled={!onSelect} onClick={onSelect}>{name}</button>
-}
-
-/** `HH:mm` facts: two clocks are both labelled, one clock is not (A9.10). */
 /**
- * 第一行最右那一格：这一份是**怎么来的**——一个词，永远有且只有一个。
+ * 没有正文的那一行，第二行写的是**为什么没有**——空行会被读成"还在加载"。
  *
- * 定时 / 手动 / 补跑 / 未运行 / 这次失败。补跑属于定时那一类，不再重复写「定时」；未运行与失败
- * 那两行没有语言标签（那一版根本不存在），所以这一格是它们唯一的状态词。
+ * 中断过的、失败过的、从没跑过的不是同一件事：一个还可以再试，一个这次没生成出来，一个是根本没开始。
  */
-function sourceWord(edition: DailyBriefingEditionSummary, text: DailyBriefingText): string {
-  if (edition.state === 'missing') return edition.attemptCount ? text.history.runFailed : text.history.missingRun
-  if (edition.periodKind === 'manual') return text.history.runManual
-  if (edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry') return text.history.runCatchUp
-  return text.history.runScheduled
-}
-
-function timeFacts(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): readonly string[] {
-  if (edition.state === 'missing') return edition.scheduledTime ? [edition.scheduledTime] : []
-  const nominal = edition.periodTime ? railClock(edition.periodTime, timeZone) : edition.scheduledTime
-  const actual = edition.generatedAt ? railClock(edition.generatedAt, timeZone) : undefined
-  // 正常行只说一个时刻 —— 它按点生成的那一期，计划与实际是同一个值，印两个词只是噪音。
-  // 「计划/截止 + 实际」只在**非正常期**（补跑、手动、已删除）才成对出现，那时两个时刻真的不同。
-  const irregular = edition.periodDeleted === true || edition.periodKind === 'manual' ||
-    edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry'
-  if (irregular && nominal && actual) return [
-    `${edition.periodKind === 'manual' ? text.history.timeCutoff : text.history.timePlanned} ${nominal}`,
-    `${text.history.timeActual} ${actual}`
-  ]
-  return nominal ? [nominal] : []
-}
-
-/** Which languages this issue has; absent when it has no edition at all. */
-export function languageTag(availableLocales: readonly DailyBriefingLocale[]): 'zh' | 'en' | 'both' | undefined {
-  const zh = availableLocales.includes('zh-CN')
-  const en = availableLocales.includes('en-US')
-  if (zh && en) return 'both'
-  if (en) return 'en'
-  if (zh) return 'zh'
-  return undefined
+function reasonOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText): string {
+  const reason = runReasonOf(edition)
+  if (reason === 'run-interrupted') return text.history.runInterrupted
+  if (reason === 'run-failed') return text.history.railFailedReason
+  return text.history.railNotRun
 }
 
 /** `HH:mm` in the reader's zone: the row's date is on the line above, the offset is the setting's. */
