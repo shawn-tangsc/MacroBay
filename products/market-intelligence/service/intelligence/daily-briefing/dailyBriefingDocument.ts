@@ -19,6 +19,7 @@ import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlo
 import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
+  highImpactEventsInWindow,
   maximumBriefingMacroItems,
   selectBriefingMacroItems,
   selectMacro,
@@ -28,7 +29,7 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
-import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
  * 这一版算不算「补跑」：运行时刻明显晚于它的统计截止。
@@ -57,13 +58,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const macro = selectMacro(packet, macroCandidates)
   // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
   const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
-  // 总数与缺值数：总数是"窗口里到底有多少高影响事件"（不看有没有值），缺值数是"其中多少条
-  // 我们没拿到实际值"。两句都挂在版面上——缺值是"我们没拿到"，不是"没有发生"（`A0.12`）。
+  // 窗口里到底有多少条高影响事件（不看有没有值）。版面不再印"几条没拿到"（用户 2026-11-06），
+  // 所以只留总数；缺值这件事由事实本身表达——事件行在、值格不渲染。
   const highImpact = highImpactEventsInWindow(packet)
-  const macroTotals = highImpact.length === 0 ? {} : {
-    macroHighImpactCount: highImpact.length,
-    macroHighImpactValuesMissing: highImpact.filter((event) => event.actual === undefined).length
-  }
+  const macroTotals = highImpact.length === 0 ? {} : { macroHighImpactCount: highImpact.length }
   const macroEmptyNotes = macroEmpty === undefined ? {} : {
     macroEmpty,
     // The stale sentence names the age; nothing else can fill it truthfully, and the number
@@ -537,23 +535,8 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   })
   // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
   // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
+  // 已取消的事件不算「有事件」：它们永远不会有实际值，见 `highImpactEventsInWindow`。
   return reason
-}
-
-/**
- * 窗口内的高影响事件（按发生时刻算），不看有没有实际值。
- *
- * 只用来回答"窗口里到底有没有事件"：正文仍只列有实际值的那几条（无值事件会一起进 AI 分析快照，
- * 那是另一笔要先把展示项与分析项分开的活）。
- */
-function highImpactEventsInWindow(packet: DailyBriefingFactPacket): readonly DailyBriefingCalendarEvent[] {
-  const start = Date.parse(packet.windowStart)
-  const end = Date.parse(packet.windowEnd)
-  return packet.calendar.events.filter((event) => {
-    if (event.importance !== 'high') return false
-    const at = Date.parse(event.scheduledAt)
-    return Number.isFinite(at) && at >= start && at < end
-  })
 }
 
 /** How many hours the calendar was behind this edition's own data cutoff, for the stale sentence. */

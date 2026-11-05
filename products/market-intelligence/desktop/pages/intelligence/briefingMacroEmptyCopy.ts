@@ -31,8 +31,10 @@ export function briefingMacroEmptyCopy(
   // No note: an edition written before reasons were recorded. Saying nothing is the only honest
   // answer — the sentence would have to invent which of the six reasons applied.
   if (!code) return null
+  // 「窗口里真的没有高影响事件」**不印任何话**（用户 2026-11-06）：正文里说"没有"会让人觉得这张
+  // 简报不可信；那一栏干脆整块不出现。所以这里返回 `null`，版面据此不渲染该栏。
+  if (code === 'past-24h-no-high-impact-release') return null
   const reason = labels.macroEmptyCodes[code] ?? labels.emptyMacro
-  if (code === 'past-24h-no-high-impact-release') return { sentence: reason, unreadable: false }
   const hours = document.news.notes.macroEmptyHours
   const filled = hours === undefined ? reason : reason.replace('{hours}', String(hours))
   return { sentence: `${labels.macroUnreadable}${filled}`, unreadable: true }

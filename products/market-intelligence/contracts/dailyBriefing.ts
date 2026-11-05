@@ -228,8 +228,8 @@ export type DailyBriefingDocument = Readonly<{
      * calendar was (`A0.8`): the code alone says "stale", the number says how stale, and the number
      * can only come from the reading this edition judged.
      *
-     * `macroEmptyCount` 同理：「有 N 条高影响事件、但截至这一刻还没拿到实际值」要念出 N，而 N 只能
-     * 从这一版读到的窗口里数出来（`02` v2.120）。缺它就不许印那句话，而不是印一个没说清的 0。
+     * 另外两个数是「事件优先」的计数（`02` `A0.12`）：窗口里一共几条高影响事件、其中几条的实际值
+     * 没拿到。它们与列表同时出现，不是空态专用；缺一个就不印那句话，而不是印一个没说清的 0。
      */
     notes: Readonly<{
       newsEmpty?: string
@@ -237,8 +237,6 @@ export type DailyBriefingDocument = Readonly<{
       macroEmptyHours?: number
       /** 窗口内高影响事件总数（不看有没有实际值）——「事件优先」那一步的数（`A0.12`）。 */
       macroHighImpactCount?: number
-      /** 其中**我们没拿到实际值**的条数：缺值不等于没发生，所以跟列表一起出现，不只在空态里说。 */
-      macroHighImpactValuesMissing?: number
     }>
   }>
   data: Readonly<{

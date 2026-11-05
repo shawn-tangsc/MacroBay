@@ -158,70 +158,56 @@ describe('a backfilled edition says which world it read', () => {
   })
 })
 
-describe('an empty macro section says why (A0.8)', () => {
+describe('the macro section draws events, never a message about missing data (v2.124)', () => {
   const emptyMacro = (notes: DailyBriefingDocument['news']['notes']): DailyBriefingDocument => {
     const doc = briefing()
     return { ...doc, news: { ...doc.news, macro: [], notes } }
   }
+  // 用户 2026-11-06：正文里「没数据」「没拿到」「未拿到」「未公布」一个都不许出现。
+  const forbidden = ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件', '暂时读不到']
+  const assertClean = (host: HTMLElement): void => {
+    for (const word of forbidden) expect(host.textContent).not.toContain(word)
+  }
 
-  it('keeps the section and prints "not readable" for a stale calendar', async () => {
-    const rendered = await render(emptyMacro({ macroEmpty: 'calendar-stale', macroEmptyHours: 42 }))
-    const line = rendered.querySelector('[data-macro-empty="unreadable"]')
-
-    expect(rendered.textContent).toContain(text.sections.macro)
-    expect(line?.textContent).toBe(`${text.macroUnreadable}${text.macroEmptyCodes['calendar-stale'].replace('{hours}', '42')}`)
-  })
-
-  it('prints the plain sentence only when the data is fresh and nothing happened', async () => {
+  it('draws nothing at all when the window held no high-impact event', async () => {
     const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-no-high-impact-release' }))
-    const line = rendered.querySelector('[data-macro-empty="empty"]')
-
-    expect(line?.textContent).toBe(text.empty.macro)
-    // 「没有」这一档不许带「读不到」的前缀——那正是被修掉的那个假话。
-    expect(line?.textContent).not.toContain(text.macroUnreadable)
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(rendered.querySelectorAll('.mi-brief-poster__macro')).toHaveLength(0)
+    assertClean(rendered)
   })
 
-  it('keeps an event with no actual and marks only its value as not captured', async () => {
-    // `A0.12` 反证：把值删掉，事件行必须还在，只多一个「未拿到」。事件是否存在不取决于有没有值。
+  it('draws nothing for a calendar that could not be read — the gap belongs to the audit column', async () => {
+    // 「读不到」不进正文：右列缺口负责说它（原因 + 重试），正文里一个字都不提。
+    for (const notes of [{ macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, { macroEmpty: 'calendar-catch-up-timeout' }, { macroEmpty: 'calendar-unavailable' }]) {
+      const rendered = await render(emptyMacro(notes))
+      expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+      assertClean(rendered)
+    }
+  })
+
+  it('keeps an event that has no actual, and renders no value cell for it', async () => {
+    // 反证：把值删掉，事件行仍在（时刻/国家/名称），值那一格**整块不渲染**——连破折号都没有。
     const doc = briefing()
-    const rendered = await render({
-      ...doc,
-      news: {
-        ...doc.news,
-        macro: [{ ...doc.news.macro[0]!, actual: undefined }],
-        notes: { macroHighImpactCount: 9, macroHighImpactValuesMissing: 9 }
-      }
-    })
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: [{ ...doc.news.macro[0]!, actual: undefined }], notes: {} } })
     const rows = rendered.querySelectorAll('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
     expect(rows).toHaveLength(1)
     expect(rendered.textContent).toContain(doc.news.macro[0]!.title)
-    expect(rendered.textContent).toContain(text.macroValueMissing)
-    expect(rendered.textContent).not.toContain('3.4%')
-    // 总数与缺值数一起说，不是只留一个空列表。
-    const note = rendered.querySelector<HTMLElement>('[data-macro-high-impact-note]')!
-    expect(note).not.toBeNull()
-    expect(note.textContent).toBe(text.macroHighImpactNote.replace('{count}', '9').replace('{missing}', '9'))
+    expect(rendered.textContent).not.toContain(text.macro.actual)
+    expect(rows[0]!.textContent).not.toContain('3.4%')
+    // 值格整块不渲染：破折号、占位符都不留（别处的分隔符不在这条判据里）。
+    expect(rows[0]!.textContent).not.toContain('—')
+    expect(rows[0]!.querySelector('small')).toBeNull()
+    assertClean(rendered)
   })
 
-  it('says nothing about missing values when every event has one', async () => {
-    // 没有缺值就不印那句：多一句"0 条没拿到"只是噪音。
+  it('prints the value when there is one', async () => {
     const rendered = await render(briefing())
-    expect(rendered.querySelector('[data-macro-high-impact-note]')).toBeNull()
-  })
-
-  it('prints the timeout as its own sentence, not as a failed collection', async () => {
-    const rendered = await render(emptyMacro({ macroEmpty: 'calendar-catch-up-timeout' }))
-    const line = rendered.querySelector('[data-macro-empty="unreadable"]')
-
-    expect(line?.textContent).toContain(text.macroEmptyCodes['calendar-catch-up-timeout'])
-    expect(line?.textContent).not.toContain(text.macroEmptyCodes['calendar-collect-failed'])
+    expect(rendered.textContent).toContain('3.4%')
   })
 
   it('stays silent for an edition written before reasons were recorded', async () => {
     const rendered = await render({ ...briefing(), news: { ...briefing().news, macro: [], notes: {} } })
-
-    // 没有原因码就不知道是哪一档，宁可不说，也不编一句。
-    expect(rendered.querySelector('[data-macro-empty]')).toBeNull()
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
   })
 })
 

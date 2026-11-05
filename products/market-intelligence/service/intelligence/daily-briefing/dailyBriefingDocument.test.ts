@@ -743,7 +743,6 @@ describe('daily briefing document', () => {
     expect(document.news.macro.length).toBeGreaterThan(0)
     // 总数与缺值数一起写：句子念得出"共几条、其中几条没拿到"。
     expect(document.news.notes.macroHighImpactCount).toBe(9)
-    expect(document.news.notes.macroHighImpactValuesMissing).toBe(9)
     // 正文不编数值。
     expect(document.news.macro.every((item) => item.actual === undefined)).toBe(true)
     // 也没有"没有事件"那句话——事件在。
@@ -767,6 +766,28 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
     // 窗口里连高影响事件都没有：总数与缺值数都不写，也没有「未拿到」那句。
     expect(document.news.notes.macroHighImpactCount).toBeUndefined()
+  })
+
+  it('does not turn a cancelled event into an event whose value never arrived (A0.12)', () => {
+    // 取消的事件永远不会有实际值：把它当成"还没拿到"是把"取消了"说成"数据没到"。
+    // 它既不进候选，也不计进「共几条」——总数与列表必须读同一个判断。
+    const events = [{
+      eventKey: 'EV.CANCELLED', title: 'Cancelled release', scheduledAt: '2026-10-29T12:30:00.000Z',
+      importance: 'high' as const, lifecycleState: 'cancelled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }]
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.macroCandidates).toBeUndefined()
+    expect(document.news.macro).toHaveLength(0)
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
   })
 
   it('does not let stale or unavailable readings look available', () => {

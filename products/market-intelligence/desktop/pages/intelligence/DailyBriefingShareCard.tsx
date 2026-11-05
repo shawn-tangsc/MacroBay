@@ -49,20 +49,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const conclusion = doc.conclusion
   const visibleNews = doc.news.items.filter((item) => item.visibility !== 'hidden')
   const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
-  // 宏观那一栏即使空也要留着并说一句（`A0.8`）：读者要能分辨「没读到」和「确实没有」，
-  // 而不是看着一块空白猜。句子与「数据缺口与限制」共用同一个推导。
-  const macroEmpty = briefingMacroEmptyCopy(doc, {
-    macroEmptyCodes: text.macroEmptyCodes,
-    emptyMacro: text.empty.macro,
-    macroUnreadable: text.macroUnreadable
-  })
-  // 总数与缺值数：写在文档里（`A0.12`），版面只照抄。缺这个数就不许编，句子整段不出现。
-  const macroCount = doc.news.notes.macroHighImpactCount
-  const macroMissing = doc.news.notes.macroHighImpactValuesMissing
-  const macroHighImpact = typeof macroCount === 'number' && typeof macroMissing === 'number' && macroMissing > 0
-    ? { count: macroCount, missing: macroMissing }
-    : undefined
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null || macroHighImpact !== undefined
+  // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
+  // 数量仍写在文档里，供分析快照与内部核查用，不在版面上露出来。
+  // 宏观那一栏：有事件才有这一栏；**读不到或确实没有都不在正文里画**（用户 2026-11-06）。
+  // 「读不到」进右列「数据缺口与限制」说（那里有原因与重试），正文里一个字都不提。
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -134,14 +125,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
-          {/* 值缺席不是「没有这条事件」（`A0.12`）：事件照旧显示，只在这一格写「未拿到」。
-              以前这里写的是破折号，读者读不出是"没发生"还是"没拿到"。 */}
-          <small>{text.macro.actual} {item.actual ?? text.macroValueMissing}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>
+          {/* 没有实际值就**整格不渲染**（用户 2026-11-06）：不占位、不写破折号、不写「未拿到」——
+              正文里出现"没数据/没拿到"会让读者觉得这张简报不可信。事件本身照旧显示（时刻、国家、名称）。 */}
+          {item.actual === undefined ? null : <small>{text.macro.actual} {item.actual}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>}
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
@@ -149,16 +140,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           由同一个推导决定，正文与限制清单说的是同一句话。
           **它是一个网格行**（`__macro` 那套两列），里面那格才跨两列：海报的网格是逐行的，
           把这句放成行的兄弟，`grid-column` 不会生效，「跨两列」就悄悄做不到。 */}
-      {/* 事件优先的总说明（`A0.12`）：窗口里到底有几条、其中几条我们没拿到值。它跟列表一起出现，
-          不是"空态"的一种——列表有内容时也要说得出这件事。 */}
-      {macroHighImpact ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-high-impact-note="true">
-        <span className="mi-brief-poster__macro-empty">{text.macroHighImpactNote
-          .replace('{count}', String(macroHighImpact.count))
-          .replace('{missing}', String(macroHighImpact.missing))}</span>
-      </div> : null}
-      {macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
-        <span className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</span>
-      </div> : null}
+
     </section> : null}
 
     {hasData ? <section className="mi-brief-poster__data-section">
