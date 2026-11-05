@@ -15,6 +15,7 @@ import {
   type TaskAutomationPolicyPreset,
   type UpdateTaskCommand
 } from './taskAutomationContracts'
+import { createCancelRunAudit, createCommandAudit, findAuditTask } from './taskCommandAudit'
 import { getTaskAutomationPolicy, taskMaxStartsPerAgentPerHour, validateTaskAutomationLimits } from './taskAutomationPolicy'
 import {
   validateTaskTrigger,
@@ -528,8 +529,7 @@ export class TaskAutomationCommandService {
   }
 
   private findAuditTask(state: AgentStoreState, command: TaskAutomationCommand): ScheduledTaskEntity | null {
-    if (command.type === 'create') return null
-    return state.tasks.find((item) => item.id === command.taskId && item.agentId === command.agentId) ?? null
+    return findAuditTask(state, command)
   }
 
   private createAudit(
@@ -538,19 +538,7 @@ export class TaskAutomationCommandService {
     outcome: TaskMutationAuditEntity['outcome'],
     errorCode: string | null
   ): TaskMutationAuditEntity {
-    return {
-      id: randomUUID(),
-      taskId: task?.id ?? (outcome === 'accepted' && command.type !== 'create' ? command.taskId : null),
-      agentId: command.agentId,
-      taskNameSnapshot: task?.name ?? (command.type === 'create' ? command.task.name : null),
-      action: command.type,
-      actor: command.actor,
-      requestHash: createHash('sha256').update(JSON.stringify(command)).digest('hex'),
-      resultRevision: outcome === 'accepted' ? task?.revision ?? null : null,
-      createdAt: this.now().toISOString(),
-      outcome,
-      errorCode
-    }
+    return createCommandAudit({ command, task, outcome, errorCode, createdAt: this.now().toISOString() })
   }
 
   private createCancelRunAudit(
@@ -559,19 +547,7 @@ export class TaskAutomationCommandService {
     outcome: TaskMutationAuditEntity['outcome'],
     errorCode: string | null
   ): TaskMutationAuditEntity {
-    return {
-      id: randomUUID(),
-      taskId: task?.id ?? null,
-      agentId: command.agentId,
-      taskNameSnapshot: task?.name ?? null,
-      action: 'cancel-run',
-      actor: command.actor,
-      requestHash: createHash('sha256').update(JSON.stringify(command)).digest('hex'),
-      resultRevision: outcome === 'accepted' ? task?.revision ?? null : null,
-      createdAt: this.now().toISOString(),
-      outcome,
-      errorCode
-    }
+    return createCancelRunAudit({ command, task, outcome, errorCode, createdAt: this.now().toISOString() })
   }
 
 }
