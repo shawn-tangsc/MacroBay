@@ -3,7 +3,11 @@ import type { AgentChannelEntity } from '../../schemas/channelSchemas'
 import type { AgentSessionEntity } from '../../schemas/sessionSchemas'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '../../schemas/taskSchemas'
 import type { AgentStoreState } from '../../store/agentStore'
-import { computeNextCronRunAt } from '../../../../jobs'
+import {
+  advanceToFutureRun,
+  computeNextRunAt,
+  isLegacyTriggerValid
+} from './taskScheduleMath'
 import type { AgentTaskRuntimeStatus, AgentTaskSchedulerRuntimeTask, AgentTaskSchedulerSnapshot } from '../runtimeTypes'
 import {
   getHeartbeatIntervalMs,
@@ -261,18 +265,6 @@ function toHeartbeatRuntimeTasks(
   ]
 }
 
-function computeNextRunAt(
-  task: ScheduledTaskEntity,
-  lastRunAt: string | null,
-  readerTimeZone: string | undefined
-): string | null {
-  if (!task.enabled || task.status !== 'active') {
-    return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt, readerTimeZone)
-  }
-
-  return task.nextRun ?? computeIntrinsicNextRunAt(task, lastRunAt, readerTimeZone)
-}
-
 function resolveCatchUpState(
   task: Pick<ScheduledTaskEntity, 'trigger' | 'catchUpPolicy' | 'createdAt'>,
   input: {
@@ -321,79 +313,6 @@ function resolveCatchUpState(
   return {
     nextRunAt: advanceToFutureRun(task, nextRunMs, input.nowMs, input.readerTimeZone),
     exhausted: false
-  }
-}
-
-function computeIntrinsicNextRunAt(
-  task: ScheduledTaskEntity,
-  lastRunAt: string | null,
-  readerTimeZone: string | undefined
-): string | null {
-  switch (task.trigger.kind) {
-    case 'once':
-      return lastRunAt ? null : toSafeIso(task.trigger.at)
-    case 'interval': {
-      const anchor = task.trigger.anchor ?? 'createdAt'
-      const anchorIso = anchor === 'lastRun' ? lastRunAt ?? task.createdAt : lastRunAt ?? task.createdAt
-      return toSafeIso(Date.parse(anchorIso) + task.trigger.ms)
-    }
-    case 'cron':
-      return computeCronRunAtOrBefore(task.trigger.expr, cronTimeZone(task.trigger, readerTimeZone), task.createdAt, lastRunAt)
-    default:
-      return null
-  }
-}
-
-function toSafeIso(value: number): string | null {
-  if (!Number.isFinite(value) || !Number.isSafeInteger(value) || Math.abs(value) > 8_640_000_000_000_000) return null
-  const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null
-}
-
-function isLegacyTriggerValid(
-  trigger: ScheduledTaskEntity['trigger'],
-  nowMs: number,
-  readerTimeZone: string | undefined
-): boolean {
-  if (trigger.kind === 'once') return Number.isSafeInteger(trigger.at) && Math.abs(trigger.at) <= 8_640_000_000_000_000
-  if (trigger.kind === 'interval') return Number.isSafeInteger(trigger.ms) && trigger.ms > 0 && trigger.ms <= 31 * 24 * 60 * 60 * 1000
-  try { return computeNextCronRunAt(trigger.expr, cronTimeZone(trigger, readerTimeZone), nowMs) !== null } catch { return false }
-}
-
-function computeCronRunAtOrBefore(
-  expr: string,
-  timezone: string | undefined,
-  createdAt: string,
-  lastRunAt: string | null
-): string | null {
-  const searchStart = lastRunAt ? Date.parse(lastRunAt) + 60_000 : Date.parse(createdAt)
-  const match = computeNextCronRunAt(expr, timezone, searchStart)
-  return match ? new Date(match).toISOString() : null
-}
-
-function advanceToFutureRun(
-  task: Pick<ScheduledTaskEntity, 'trigger' | 'createdAt'>,
-  overdueRunMs: number,
-  nowMs: number,
-  readerTimeZone: string | undefined
-): string | null {
-  switch (task.trigger.kind) {
-    case 'interval': {
-      if (!(task.trigger.ms > 0)) return toSafeIso(overdueRunMs)
-      let nextRunMs = overdueRunMs
-      while (nextRunMs <= nowMs) {
-        nextRunMs += task.trigger.ms
-      }
-      return toSafeIso(nextRunMs)
-    }
-    case 'cron': {
-      const match = computeNextCronRunAt(task.trigger.expr, cronTimeZone(task.trigger, readerTimeZone), nowMs + 1)
-      return match ? new Date(match).toISOString() : null
-    }
-    case 'once':
-      return null
-    default:
-      return null
   }
 }
 
@@ -489,18 +408,4 @@ function cloneTrigger(trigger: ScheduledTaskEntity['trigger']): ScheduledTaskEnt
     default:
       return trigger
   }
-}
-
-/**
- * 排程时解析 cron 时区：显式指定过就用它，否则跟随读者当前设置。
- *
- * **不要在这里兜底成 `'UTC'`**：空 = 「跟随读者」，兜成 UTC 会让「每天 08:00」在没人看的时候
- * 按格林威治时间跑，而且界面上看不出来（契约 `task-timezone-scheduling-contract.md` §2.1）。
- * 引擎侧对 undefined 的处理是既有的（`jobCronSchedule.ts` 无时区按 UTC），那是另一处待收口的立项。
- */
-function cronTimeZone(
-  trigger: Extract<ScheduledTaskEntity['trigger'], { kind: 'cron' }>,
-  readerTimeZone: string | undefined
-): string | undefined {
-  return trigger.timezone ?? readerTimeZone
 }
