@@ -48,7 +48,7 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   // its own budget, and this is the caller's — without it a promise that never settles leaves the
   // reader with a spinner and no answer at all.
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.regenerate, async (payload) =>
-    withRunDeadline(service.regenerate(readQuery(payload))))
+    withRunDeadline(service.regenerate(readRegenerateQuery(payload))))
   // Read-only and cheap: the answer is the live snapshot of the run in progress, never a new read
   // of the store, and it says `idle` as soon as that run settles.
   // 读者按下「推送到手机」：先写/更新当天记录（只记不发），再按同一个键重投——见服务里那段说明。
@@ -149,6 +149,50 @@ function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; time
   }
   // Only `false` is meaningful: a read-the-stored-edition open. Anything else keeps the old shape.
   return payload.generate === false ? { locale, timeZone, generate: false } : { locale, timeZone }
+}
+
+/**
+ * The regenerate payload: the run's identity, verbatim.
+ *
+ * `readQuery` answers "which edition am I reading" and deliberately returns only the locale and the
+ * zone. Reusing it here dropped the period and the chosen cutoff, so a manual run arrived at the
+ * service as `periodId: undefined` and the store filed it under `default` — overwriting the very
+ * edition the reader was looking at. A chosen cutoff or period that fails validation is refused
+ * loudly; silently discarding them is what made the reader's choice disappear.
+ */
+function readRegenerateQuery(payload: unknown): Readonly<{
+  locale: 'zh-CN' | 'en-US'
+  timeZone: string
+  periodId?: string
+  generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+}> {
+  const base = readQuery(payload)
+  if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
+  const periodId = payload.periodId
+  if (periodId !== undefined && (typeof periodId !== 'string' || periodId.length === 0 || periodId.length > 64)) {
+    throw new Error('daily-briefing-invalid-request')
+  }
+  const generation = payload.generation
+  let parsedGeneration: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> | undefined
+  if (generation !== undefined) {
+    if (!isRecord(generation)) throw new Error('daily-briefing-invalid-request')
+    const keys = Object.keys(generation)
+    if (keys.length === 0 || keys.some((key) => key !== 'asOf' && key !== 'windowHours')) throw new Error('daily-briefing-invalid-request')
+    const asOf = generation.asOf
+    if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf)) || new Date(asOf).toISOString() !== asOf) {
+      throw new Error('daily-briefing-invalid-request')
+    }
+    const windowHours = generation.windowHours
+    if (windowHours !== undefined && windowHours !== 12 && windowHours !== 24 && windowHours !== 48) {
+      throw new Error('daily-briefing-invalid-request')
+    }
+    parsedGeneration = Object.freeze({ asOf, ...(windowHours === undefined ? {} : { windowHours }) }) as Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  }
+  return {
+    ...base,
+    ...(typeof periodId === 'string' ? { periodId } : {}),
+    ...(parsedGeneration === undefined ? {} : { generation: parsedGeneration })
+  }
 }
 
 function readAttemptsQuery(payload: unknown): Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }> {

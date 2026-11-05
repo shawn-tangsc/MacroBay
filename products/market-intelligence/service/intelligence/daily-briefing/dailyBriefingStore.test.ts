@@ -42,6 +42,33 @@ const edition = (date: string, text?: string) => ({
 })
 
 describe('daily briefing store', () => {
+  // 手动那一版必须落在自己的期号下，**而且不许动 default 那一期**。
+  // 用户报的「选 8 点变成重跑 7 点」里，`periodId` 一路丢到 default，`put` 就把 07:00 那版覆盖了。
+  it('files a manual edition under its own period and leaves the default edition untouched', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const manualPeriodId = 'period_18ce8fe5-781d-490a-a5e4-689390f1e6cf'
+    await store.put({ ...edition('2026-11-05', '07:00 那版'), windowEnd: '2026-11-04T23:00:00.000Z' })
+    const before = await store.get('2026-11-05', 'zh-CN')
+
+    await store.put({
+      ...edition('2026-11-05', '08:00 那版'),
+      periodId: manualPeriodId,
+      windowEnd: '2026-11-05T00:00:00.000Z',
+      document: {
+        ...document('2026-11-05', '08:00 那版'),
+        edition: { ...document('2026-11-05', '08:00 那版').edition, periodId: manualPeriodId, windowEnd: '2026-11-05T00:00:00.000Z' }
+      }
+    })
+
+    const after = await store.get('2026-11-05', 'zh-CN')
+    expect(after?.document.edition.windowEnd).toBe(before?.document.edition.windowEnd)
+    expect(after?.document.lede.text).toBe('07:00 那版')
+
+    const manual = await store.get('2026-11-05', 'zh-CN', manualPeriodId)
+    expect(manual?.document.edition.windowEnd).toBe('2026-11-05T00:00:00.000Z')
+    expect(manual?.document.lede.text).toBe('08:00 那版')
+  })
+
   it('puts, gets and lists within a date range', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.put(edition('2026-10-30'))
