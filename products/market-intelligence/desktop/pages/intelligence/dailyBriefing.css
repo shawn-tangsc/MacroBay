@@ -5,7 +5,9 @@
 .mi-daily-briefing__rail { min-height: 0; overflow-y: auto; padding-right: 12px; border-right: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__rail-title { margin: 0 0 8px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
 .mi-daily-briefing__rail-list { display: grid; gap: 2px; }
-.mi-daily-briefing__rail-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; width: 100%; padding: 5px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+/* One definition only: this row used to be declared twice (a horizontal one near the rail, and a
+   column one further down), so "what shape is a rail row" had two answers in the same file. */
+.mi-daily-briefing__rail-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; padding: 8px 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
 .mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-text); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
@@ -65,7 +67,6 @@
 .mi-daily-briefing-page__failure-actions { display: flex; gap: 8px; margin-top: 16px; }
 .mi-daily-briefing-page__failure-actions button { height: 30px; padding: 0 12px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-text); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__failure-actions .mi-daily-briefing-page__primary { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__rail-row { flex-direction: column; align-items: stretch; gap: 2px; padding: 8px 7px; }
 .mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
@@ -248,3 +249,23 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-briefing-period-dialog__field strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
 .mi-briefing-period-dialog__hint, .mi-briefing-period-dialog__note { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
 .mi-briefing-period-dialog__conflict { margin: 0; color: var(--mi-dashboard-caution); font-size: 12px; line-height: 1.6; }
+
+/* The day grouping arrived in the multi-period list and shipped with no stylesheets at all — the
+   markup used `__rail-day-*` while the CSS only knew `__rail-summary`, so every day rendered as one
+   unstyled paragraph: no divider, no clamp, the summary running five lines. These are the missing
+   rules; values follow the period list design (day head 11.5, summary one line, 1px divider between
+   periods, one language chip per row). */
+.mi-daily-briefing__rail-day { display: block; padding: 6px 0 6px; border-top: 1px solid var(--mi-dashboard-line); }
+.mi-daily-briefing__rail-day:first-child { border-top: 0; padding-top: 0; }
+.mi-daily-briefing__rail-day-head { display: block; width: 100%; padding: 2px 6px 4px; border: 0; background: none; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-day-head:hover { color: var(--mi-dashboard-text); }
+.mi-daily-briefing__rail-day-date { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; }
+.mi-daily-briefing__rail-day-count { margin-left: 6px; font-size: 11px; color: #5f686e; }
+.mi-daily-briefing__rail-day-summary { display: block; margin: 4px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 1.45; color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-day-summary-text { margin-left: 4px; }
+.mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
+.mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
+.mi-daily-briefing__rail-item:first-child { border-top: 0; }
+.mi-daily-briefing__rail-langs { display: inline-flex; align-items: center; gap: 4px; }
+.mi-daily-briefing__rail-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi-daily-briefing__rail-fact + .mi-daily-briefing__rail-fact::before { content: ' · '; color: #5f686e; }
