@@ -15,7 +15,7 @@ import { createTaskFailureNotifier } from './taskFailureNotifier'
  */
 export function wireTaskFailureNotifier(deps: {
   submit: (request: NotificationSubmitRequest) => Promise<unknown>
-  /** 任务定义（只用来解析可读任务名）；`run.title` 是标识，绝不使用。 */
+  /** 任务定义（只用来判断有没有可读名字）；`run.title` 是标识，绝不使用。 */
   listDefinitions: () => readonly { id: string; title: JobTitle }[]
   /**
    * 同一个任务定义的终态运行，**新到旧**。P2 的「连续 3 次」从这里数，不从内存计数器数
@@ -26,21 +26,26 @@ export function wireTaskFailureNotifier(deps: {
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
 }): (input: JobRunTerminalHookInput) => void {
-  const resolveTaskName = ({ definitionId }: { definitionId: string }): string | null => {
+  /**
+   * 只判「这个名字存在吗」——**不再解析出句子塞进通知**。
+   *
+   * 名字在通知里以 `{ ref: { scope: 'job-title', definitionId } }` 提交，读的时候由解析端口按
+   * 读者语言取（契约 v2.40）。这里再用 `jobTitleText` 取一个英文句子当参数，就是把语言拍死在
+   * 提交那一刻——英文界面读出「Task failed: 市场日历 · 经济数据」正是这么来的。
+   */
+  const hasReadableTaskName = ({ definitionId }: { definitionId: string }): boolean => {
     const title = deps.listDefinitions().find((entry) => entry.id === definitionId)?.title
-    if (title === undefined) return null
-    // 通知正文是读者可读的：内置作业按语言取；这里是英文/原文的单点转文本，
-    // 等通知运行时能拿到读者语言再换成 `resolveJobTitle`（那不是本次范围）。
-    return jobTitleText(title)
+    if (title === undefined) return false
+    return jobTitleText(title).trim().length > 0
   }
   const notify = createTaskFailureNotifier({
     submit: deps.submit,
-    resolveTaskName,
+    hasReadableTaskName,
     dayToken: deps.dayToken
   })
   const notifyRepeated = createRepeatedTaskFailureNotifier({
     submit: deps.submit,
-    resolveTaskName,
+    hasReadableTaskName,
     listDefinitionRuns: deps.listDefinitionRuns,
     dayToken: deps.dayToken
   })
