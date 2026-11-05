@@ -164,9 +164,9 @@ describe('the price card leads with the level, and the move is the only tinted t
     expect(declaration(rule('.mi-brief-poster__price-label'), 'top')).toBe('10px')
     expect(declaration(rule('.mi-brief-poster__price-label'), 'left')).toBe('14px')
     expect(declaration(rule('.mi-brief-poster__price-card'), 'position')).toBe('relative')
-    // 16px label line + 2px gap, halved by the centring: taking the label out of the flow would move
-    // the figure down by 9px without it.
-    expect(declaration(rule('.mi-brief-poster__price-lead'), 'padding-bottom')).toBe('18px')
+    // The figure rises 9px with the label gone, and that is the accepted result — padding it back
+    // would reserve empty space to preserve a position the reader never memorised.
+    expect(declaration(rule('.mi-brief-poster__price-lead'), 'padding-bottom')).toBeUndefined()
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-size')).toBe('11px')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-weight')).toBe('400')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'color')).toBe('#6b695f')

@@ -206,10 +206,11 @@
 /* Two lines, centred: the label and the figure as one block, the plot beside them filling the row. */
 /* The label is out of the column and pinned to the card's top-left, the same place and the same size
    the rate card puts its title. It stays in the same DOM position — this is a position change, not a
-   rebuild. The lead column keeps 18px of bottom padding so the figure still centres where it centred
-   with the label in the flow: taking the label out must not move the number, because the number is what
-   the reader came for. */
-.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding-bottom: 18px; }
+   rebuild.
+   The figure rises by the 9px the label used to occupy, and that is the accepted result: padding it
+   back would reserve empty space to keep a position the reader has no memory of. Two price cards rise
+   by the same amount and the card stays 114px. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
 /* Same tier as the rate card's title: 11px, the sheet's warm label ink, one line with an ellipsis. The
    right bound stops it at the plot column so a long name can never run under the drawing. */
 .mi-brief-poster__price-label { position: absolute; top: 10px; left: 14px; right: 120px; font-size: 11px; line-height: 1.45; color: #8a5a12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
