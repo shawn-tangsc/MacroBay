@@ -192,6 +192,31 @@ describe('one danger action in the toolbar', () => {
   })
 })
 
+/**
+ * Two rows of actions answer two different questions: the page decides whether today happens, the
+ * report decides what to do with the issue on screen. The report's row sticks to the report's scroll
+ * container and must cover the text scrolling under it — a gap there shows two lines of body text
+ * through what is supposed to be a solid bar.
+ */
+describe('the report actions stick to the report', () => {
+  it('parks flush at the top of the content column and covers what scrolls under it', () => {
+    const bar = rule('.mi-daily-briefing-page__report-bar {')
+    expect(bar).toContain('position: sticky;')
+    // The container pads 20/22, so the bar cancels both, or it sticks 20px below the top edge.
+    expect(bar).toContain('top: -20px;')
+    expect(bar).toContain('margin: -20px -22px 12px;')
+    expect(bar).toContain('background: var(--mi-dashboard-surface);')
+    expect(bar).toContain('border-bottom: 1px solid var(--mi-dashboard-line);')
+  })
+
+  it('sits above the content it scrolls over, and below every overlay', () => {
+    const bar = rule('.mi-daily-briefing-page__report-bar {')
+    const zIndex = Number(bar.slice(bar.indexOf('z-index: ') + 'z-index: '.length).split(';')[0])
+    expect(zIndex).toBeGreaterThan(0)
+    expect(zIndex).toBeLessThan(10)
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

@@ -78,6 +78,13 @@
 .mi-daily-briefing-page__actions { display: flex; align-items: center; gap: 7px; }
 .mi-daily-briefing-page__body { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 20px; flex: 1; min-height: 0; padding-top: 14px; }
 .mi-daily-briefing-page__content { min-height: 0; overflow-y: auto; padding: 20px 22px; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
+/* The report's own actions stick to the report's scroll container — this one, not the page — so the
+   page keeps only what decides whether today happens at all (manual run, settings) and this row keeps
+   what disposes of the issue in front of the reader. The negative margins and the matching negative
+   `top` cancel the container's own padding, so the bar parks flush at the top edge and covers the text
+   scrolling underneath it instead of letting it show through a 20px gap. Its background is the
+   container's, and its bottom hairline is the same one the rail uses for a divider. */
+.mi-daily-briefing-page__report-bar { position: sticky; top: -20px; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: -20px -22px 12px; padding: 12px 22px; background: var(--mi-dashboard-surface); border-bottom: 1px solid var(--mi-dashboard-line); }
 /* The stage list starts at the same inset in the body panel and in the right column: both containers
    used to inset their own contents differently (24px vs 16px), which moved every row by 8px between
    the generating state and the finished one. The inset belongs to the list, not to each shell. */
