@@ -255,7 +255,7 @@ describe('a collapsed day carries only day-level facts', () => {
         edition({ date: '2026-11-03', periodId: 'p2', state: 'generated', scheduledTime: '07:00' })
       ] as never
     })
-    // 列表默认全展开（用户 2026-11-05），所以先像读者一样把这一天折起来。
+    // 默认只展开今天（`A5.3`），这两天是折叠的；折叠行代表"那一天"，所以不带时刻与语言。
     act(() => { host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-head')[0]!.click() })
     expect(host.querySelectorAll('[data-day-summary]')).toHaveLength(0)
     expect(host.textContent).not.toContain('07:00 · 中文')
@@ -552,3 +552,29 @@ describe('a row is two lines: the facts, then what it says', () => {
 
 })
 
+describe('a run that died is not the same sentence as a run that failed', () => {
+  it('renders 上次没跑完 for a crash leftover and 这次失败 for a real failure, never both', () => {
+    // `A9.11`：两种都是 `missing`，但读者要做的事不同——一个还能再试（上次没跑完），
+    // 一个这次就没成。文案键是两条，这里断言的是**渲染出来**的那一句，不是键存在。
+    const interrupted = edition({ periodId: 'p_int', state: 'missing', availableLocales: [], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }] })
+    const failed = edition({ periodId: 'p_fail', state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }] })
+    render({ editions: [interrupted, failed] })
+    const row = (periodId: string): HTMLElement => host.querySelector<HTMLElement>(`[data-period-id="${periodId}"]`)!
+    expect(row('p_int').textContent).toContain(text.history.runInterrupted)
+    expect(row('p_int').textContent).not.toContain(text.history.runFailed)
+    expect(row('p_fail').textContent).toContain(text.history.runFailed)
+    expect(row('p_fail').textContent).not.toContain(text.history.runInterrupted)
+  })
+
+  it('says the same two things in English, each on its own row', () => {
+    const english = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+    const interrupted = edition({ periodId: 'p_int', state: 'missing', availableLocales: [], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }] })
+    const failed = edition({ periodId: 'p_fail', state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2, languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-failed' }] })
+    render({ editions: [interrupted, failed], text: english as never })
+    const row = (periodId: string): HTMLElement => host.querySelector<HTMLElement>(`[data-period-id="${periodId}"]`)!
+    expect(row('p_int').textContent).toContain(english.history.runInterrupted)
+    expect(row('p_fail').textContent).toContain(english.history.runFailed)
+    expect(row('p_int').textContent).not.toContain(english.history.runFailed)
+    expect(row('p_fail').textContent).not.toContain(english.history.runInterrupted)
+  })
+})
