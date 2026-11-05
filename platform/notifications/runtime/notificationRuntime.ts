@@ -56,6 +56,7 @@ import {
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
+import { composeNotificationReadSurface } from './notificationRuntimeRead'
 import {
   compareNotifications,
   notificationCursorKey,
@@ -343,40 +344,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     },
 
     /**
-     * 分页列表。排序在这里做；游标是**键游标** `createdAt|id`。
-     * 数组下标游标在「边翻边进新通知」时会让第 2 页重复第 1 页的末条——而这正是回看 30 天的核心场景。
-     */
-    async list(query: NotificationListQuery = {}): Promise<NotificationListPage> {
-      const state = await load()
-      const now = nowIso()
-      const limit = Math.min(Math.max(query.limit ?? 50, 1), 200)
-      const allowedStates = query.state?.length ? new Set(query.state) : null
-      const unreadFirst = query.unreadFirst === true
-
-      const filtered = state.records.filter((record: NotificationRecord) => {
-        if (query.productId && record.productId !== query.productId) return false
-        if (allowedStates && !allowedStates.has(record.state)) return false
-        if (!allowedStates && !isActiveNotification(record, now) && record.state !== 'read' && record.state !== 'acknowledged') {
-          return false
-        }
-        return true
-      })
-
-      const sorted = [...filtered].sort((left, right) => compareNotifications(left, right, unreadFirst))
-      const start = query.cursor ? resumeIndex(sorted, query.cursor, unreadFirst) : 0
-      const end = Math.min(start + limit, sorted.length)
-      // 一整页只读一次语言：每条读一次设置，同屏就可能出现两种语言。
-      const language = await deps.getLanguage?.()
-      const page = await Promise.all(
-        sorted.slice(start, end).map(async (record) => centerItem(record, await delivery.resolveContent(record, language)))
-      )
-      const last = end > start ? sorted[end - 1] : undefined
-      const nextCursor = end < sorted.length && last ? notificationCursorKey(last) : undefined
-      return { items: page, nextCursor }
-    },
-
-    /** 角标状态：未读数 + 版本号。**不是**第二个函数：原来是单独一个 `getUnreadCount`，现在合成一个返回值。 */
-    /**
      * 用户手动自检专用：**不占当日写入额度**。绕过口只在这里，
      * 公开的 `submit()` 没有参数能让产品线传进来——不是“不该传”，是没有地方传。
      */
@@ -408,84 +375,20 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       })
     },
 
-    async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
-      const state = await load()
-      const now = nowIso()
-      return unreadStateOf(state.records, now, productId, version)
-    },
-
-    /**
-     * 「清空」= 全部未读标为已读，**不是删除**（用户 11-01 定的口径）。
-     *
-     * 一次落盘、一次广播：前端绝不能拿列表逐条 `markRead` —— 翻到第 120 条就是 120 次 IPC，
-     * 中间失败会留下「标了一半」的状态。范围是**全部未读**，不是「当前页」：
-     * 只清当前页会让角标残留，用户会以为没生效。幂等：没有未读时返回 0，不报错。
-     */
-    async markAllRead(productId?: string): Promise<NotificationUnreadState> {
-      return exclusive(async () => {
-      const state = await load()
-      const now = nowIso()
-      let changed = false
-      const records = state.records.map((record: NotificationRecord) => {
-        if (record.state !== 'unread') return record
-        if (productId && record.productId !== productId) return record
-        changed = true
-        return markNotificationRead(record, now)
-      })
-      if (changed) {
-        await persist({ ...state, records })
-        notifyChanged()
-      }
-      return unreadStateOf(records, now, productId, version)
-      })
-    },
-
-    /**
-     * 删除**已读**记录（不是清空、不是单条收起）。三件事必须分清：
-     * 清空 = 全部标已读（`markAllRead`），单条收起 = 状态迁移（`dismiss`），这里才是真删。
-     *
-     * 口径（架构师 2026-11-02 裁定）：只删 `state === 'read'`，未读一条不动；**不整批失败**——
-     * 部分能删就返回实际删掉的条数；删完必须走一次 `notifyChanged()`，否则角标不清零，
-     * 用户会看到「删了但数字还在」。计数桶与保留期剪枝都不受影响。
-     */
-    async deleteRead(): Promise<{ deleted: number }> {
-      return exclusive(async () => {
-      const state = await load()
-      const kept = state.records.filter((record: NotificationRecord) => record.state !== 'read')
-      const deleted = state.records.length - kept.length
-      if (deleted === 0) return { deleted: 0 }
-      await persist({ ...state, records: kept })
-      notifyChanged()
-      return { deleted }
-      })
-    },
-
-    async markRead(id: string): Promise<NotificationCenterItem> {
-      return transition(id, (record) => markNotificationRead(record))
-    },
-
-    async acknowledge(id: string): Promise<NotificationCenterItem> {
-      return transition(id, (record) => acknowledgeNotification(record))
-    },
-
-    async dismiss(id: string): Promise<NotificationCenterItem> {
-      return transition(id, (record) => dismissNotification(record))
-    },
-
-    async snooze(id: string, until: string): Promise<NotificationCenterItem> {
-      if (until <= nowIso()) {
-        throw new Error('Snooze time must be in the future.')
-      }
-      return transition(id, (record) => snoozeNotification(record, until))
-    },
-
-    async readDesktopPermission(): Promise<DesktopNotificationPermission> {
-      if (deps.readDesktopPermission) {
-        return deps.readDesktopPermission()
-      }
-      // 没有读法就是「不知道」，不是「被拒绝」，也不是「已授权」。
-      return 'unknown'
-    }
+    ...composeNotificationReadSurface({
+      load,
+      exclusive,
+      persist,
+      notifyChanged,
+      version: () => version,
+      nowIso,
+      centerItem,
+      resolveContent: (record, language) => delivery.resolveContent(record, language),
+      ...(deps.getLanguage === undefined ? {} : { getLanguage: () => deps.getLanguage!() }),
+      ...(deps.readDesktopPermission === undefined
+        ? {}
+        : { readDesktopPermission: () => deps.readDesktopPermission!() })
+    })
   }
 
   function notifyChanged(): void {
@@ -497,36 +400,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       // 广播失败不能回滚已经写入的记录：事件是提示，不是事实来源。
     }
   }
-
-  async function transition(
-    id: string,
-    transform: (record: NotificationRecord) => NotificationRecord
-  ): Promise<NotificationCenterItem> {
-    return exclusive(async () => {
-    const state = await load()
-    const index = state.records.findIndex((record: NotificationRecord) => record.id === id)
-    if (index < 0) throw new Error(`Notification "${id}" was not found.`)
-
-    const nextRecord = transform(state.records[index]!)
-    const nextRecords = [...state.records]
-    nextRecords[index] = nextRecord
-    await persist({ ...state, records: nextRecords })
-    notifyChanged()
-    return centerItem(nextRecord)
-    })
-  }
 }
 
 export type NotificationRuntime = ReturnType<typeof createNotificationRuntime>
-
-/**
- * 4a「中心必达」：只要这条通知会走任何一个打断式通道，`channels` 就必须含 `center`。
- * 归一化放在这里一处，**不靠四个生产者各自记得传**——靠调用点记得，等于有四个地方会忘。
- * 这条不为「要不要响」负责：免打扰和通道开关仍由路由决定，它只保证「响过的东西一定能回看」。
- */
-/** 未读优先时未读组在前；组内按 `createdAt` 倒序，同一毫秒用 `id` 兜底保证顺序稳定。 */
-/** 键游标 `createdAt|id`：同一毫秒的多条各有不同 id，因此不会丢；也是排序位置，插入不影响已翻过的页。 */
-/**
- * 从游标继续：找到那一条就从它之后开始；找不到（被删或被改状态移出本组）就按排序键
- * 取「排在游标之后」的第一条，**绝不退回数组下标**。
- */
