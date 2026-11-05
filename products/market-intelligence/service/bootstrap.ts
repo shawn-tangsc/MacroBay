@@ -31,6 +31,7 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
+import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
@@ -319,18 +320,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     repository: macroCalendarBackend.repository,
     now: () => new Date().toISOString()
   })
-  // A feed is registered with the automatic calendar job only while it is enabled;
-  // an absent profile defaults to enabled so a fresh install keeps collecting.
-  const readEnabledCalendarFeeds = async (): Promise<readonly string[]> => {
-    const ids = [
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
-    ]
-    const profiles = await intelligenceModule.sourceProfileStore.listProfiles()
-    const byId = new Map(profiles.map((profile) => [profile.sourceId, profile.enabled]))
-    return ids.filter((id) => byId.get(id) !== false)
-  }
+  // 只刷读者没关掉的 feed（没建过档案默认开）；规则在日历域的 `enabledCalendarFeeds`。
+  const readEnabledCalendarFeeds = createEnabledCalendarFeeds({
+    listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles()
+  })
   const marketCalendar = composeStoredManualCalendar({ storage: macroCalendarBackend.storage,
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,

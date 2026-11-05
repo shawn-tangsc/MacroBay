@@ -21,7 +21,7 @@ import {
 } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import { createPublishToPhone, type BriefingPublishOutcome, type BriefingRedeliver } from './dailyBriefingPublishToPhone'
-import { createBriefingProgressReader, liveProgressFor } from './dailyBriefingProgressReader'
+import { createBriefingProgressReader, progressLookup } from './dailyBriefingProgressReader'
 import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBriefingEditorialState'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
@@ -666,13 +666,7 @@ export function createDailyBriefingService(deps: Readonly<{
   const getProgress = createBriefingProgressReader({
     now,
     readGeneration: generation,
-    /**
-     * 先按**这一次跑的期号**精确取（调用方发起时就记下了这个值）；取不到才退回 (日期, 语言) 的最近一条。
-     * 退回只在调用方没给期号时发生——并行跑两期时，按日期+语言取"后写入"会显示另一次，那不是默认路径。
-     */
-    progressOf: (date, locale, periodId) => periodId === undefined
-      ? liveProgressFor(runs.progress, date, locale)
-      : runs.progress.get(runs.key(date, periodId, locale)) ?? liveProgressFor(runs.progress, date, locale)
+    progressOf: progressLookup(runs.progress, runs.key)
   })
   const publishToPhone = createPublishToPhone({ store: deps.store, submit: deps.noticeSubmit, redeliver: deps.redeliverPush, now })
   return { getToday, regenerate, publishToPhone, list, ...reads, getProgress }

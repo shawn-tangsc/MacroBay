@@ -34,6 +34,20 @@ export function liveProgressFor(
   return found
 }
 
+/**
+ * 进度查询的取数规则：**给了期号只认那一次跑**，没给才退回 (日期, 语言) 的最近一条。
+ *
+ * 规则在这里只有一份：服务层只把运行记录与键拼法交进来，不自己写一遍「先精确后兜底」。
+ */
+export function progressLookup(
+  progress: ReadonlyMap<string, BriefingGenerationProgress>,
+  keyOf: (date: string, periodId: string, locale: DailyBriefingLocale) => string
+): (date: string, locale: DailyBriefingLocale, periodId?: string) => BriefingGenerationProgress | undefined {
+  return (date, locale, periodId) => periodId === undefined
+    ? liveProgressFor(progress, date, locale)
+    : progress.get(keyOf(date, periodId, locale)) ?? liveProgressFor(progress, date, locale)
+}
+
 export function createBriefingProgressReader(deps: Readonly<{
   now: () => string
   readGeneration: () => Promise<DailyBriefingGeneration>

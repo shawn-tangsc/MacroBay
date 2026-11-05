@@ -8,6 +8,7 @@ import type {
 import type { DailyBriefingText } from './dailyBriefingText'
 import { formattedClock, unavailableRowCopy } from './dailyBriefingUnavailableRow'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+import { coreMetricLabel, eventTitle, rowLabel, rowSource } from './dailyBriefingIssueLabels'
 
 /**
  * What limited this edition, derived from the document that was actually generated.
@@ -457,45 +458,6 @@ function collectTiming(input: BriefingIssueInput, add: AddIssue): void {
     title: fill(text.limits.timing.late, { interval: intervalText(delay, text) }),
     advice: text.limits.advice.keepRunning
   })
-}
-
-const coreMetricRows: Readonly<Record<string, string>> = {
-  'core-stablecoin-supply-usd': 'stablecoin',
-  'etf-net-flow-btc': 'etfBtc',
-  'etf-net-flow-eth': 'etfEth',
-  'dxy-level': 'dxy',
-  'gold-level-usd': 'gold',
-  'us10y-yield-percent': 'us10y',
-  'us10y-real-yield-percent': 'us10yReal'
-}
-
-function coreMetricLabel(metric: string, text: DailyBriefingText): string {
-  const key = coreMetricRows[metric]
-  return key ? text.rows[key as keyof DailyBriefingText['rows']] ?? metric : ''
-}
-
-function rowLabel(text: DailyBriefingText, labelKey: string): string {
-  return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
-}
-
-function rowSource(id: BriefingMarketRow['id'] | BriefingPulseRow['id'], text: DailyBriefingText): string {
-  switch (id) {
-    case 'stablecoin': return text.limits.sources.stablecoin
-    case 'etf-btc':
-    case 'etf-eth': return text.limits.sources.etf
-    case 'fear-greed': return text.limits.sources.fearGreed
-    case 'funding-btc':
-    case 'funding-eth': return text.limits.sources.funding
-    case 'dxy':
-    case 'gold': return text.limits.sources.macro
-    case 'us10y':
-    case 'us10y-real': return text.limits.sources.rates
-    default: return text.limits.sources.market
-  }
-}
-
-function eventTitle(item: Readonly<{ title: string; titleKey?: string }>, eventTitles: Record<string, string> | undefined): string {
-  return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
 }
 
 function intervalText(elapsedMs: number, text: DailyBriefingText): string {
