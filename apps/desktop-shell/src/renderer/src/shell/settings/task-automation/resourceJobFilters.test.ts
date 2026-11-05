@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { JobScheduleView } from '@platform/jobs'
 
 import { buildResourceJobSourceOptions, buildResourceJobSourceSelectOptions, filterResourceJobs } from './resourceJobFilters'
+import { resolveResourceJobSourceName } from './resourceJobSourceLabel'
 
 describe('resourceJobFilters', () => {
   it('derives the source options from the projection instead of a hard-coded product list', () => {
@@ -66,20 +67,27 @@ describe('resourceJobFilters', () => {
     ])
   })
 
-  it('falls back to the product id instead of truncating a product without a display name', () => {
+  it('falls back to a human word, never to the internal product id, and agrees with the row column', () => {
+    // 契约 v2.41 第三档：系统内部标识任何情况下都不许当文案。
+    // 这一处与表格「来源」列共用 resolveResourceJobSourceName，两边同构造必须同结果。
     const options = buildResourceJobSourceOptions([
       job({ id: 'job-1', owner: 'product', productId: 'unregistered-product-module' })
     ])
 
-    expect(buildResourceJobSourceSelectOptions(
+    const selectOption = buildResourceJobSourceSelectOptions(
       options,
       { allSources: 'All sources', platform: 'Platform', product: 'Product' },
       {}
-    )[2]).toEqual({
+    )[2]
+    expect(selectOption).toEqual({
       value: 'product:unregistered-product-module',
-      label: 'unregistered-product-module',
-      title: 'unregistered-product-module'
+      label: 'Product',
+      title: 'Product'
     })
+    expect(selectOption.label).not.toContain('unregistered-product-module')
+    expect(selectOption.label).toBe(
+      resolveResourceJobSourceName({}, 'unregistered-product-module', 'Product')
+    )
   })
 })
 

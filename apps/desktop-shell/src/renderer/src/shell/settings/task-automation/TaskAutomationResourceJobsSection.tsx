@@ -19,6 +19,7 @@ import {
   type ResourceJobRegistrationFilter,
   type ResourceJobSourceFilter
 } from './resourceJobFilters'
+import { resolveResourceJobSourceName } from './resourceJobSourceLabel'
 import { REGISTRATION_PILL, RUN_OUTCOME_PILL, pillTextResolver } from './taskAutomationStatusPills'
 import {
   clampPage,
@@ -318,5 +319,5 @@ function sourceLabel(
   labels: TaskAutomationLabels
 ): string {
   if (job.owner === 'platform') return labels.platform
-  return productNames[job.productId ?? ''] ?? job.productId ?? labels.product
+  return resolveResourceJobSourceName(productNames, job.productId, labels.product)
 }

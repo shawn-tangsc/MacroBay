@@ -2,6 +2,8 @@ import type { JobScheduleView } from '@platform/jobs'
 // 深路径：jobs 的 barrel 会带进 sqlite，渲染层只要这一个小函数。
 import { jobTitleText } from '@platform/jobs/runtime/jobTitle'
 
+import { resolveResourceJobSourceName } from './resourceJobSourceLabel'
+
 export type ResourceJobSourceFilter = 'all' | 'platform' | `product:${string}`
 
 export type ResourceJobRegistrationFilter = 'all' | 'registered' | 'unregistered'
@@ -56,7 +58,7 @@ export function buildResourceJobSourceSelectOptions(
       ? labels.allSources
       : option.kind === 'platform'
         ? labels.platform
-        : productNames[option.productId ?? ''] ?? option.productId ?? labels.product
+        : resolveResourceJobSourceName(productNames, option.productId, labels.product)
     return { value: option.value, label, title: label }
   })
 }
