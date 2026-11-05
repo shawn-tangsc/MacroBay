@@ -74,6 +74,39 @@ describe('briefing manual run dialog', () => {
     expect(bubble).toContain(String(grid.stepMinutes))
   })
 
+  // 用户当场卡住的那一下：点时间那一行，说明浮层自己弹出来压住下拉。
+  // 根因是 `<label>` 里第一个可聚焦元素是问号，点 label 任何位置都会"点到"它。
+  it('keeps the question mark out of the field label, so clicking the row cannot open it', async () => {
+    await render()
+    const cutoffLabel = document.querySelector<HTMLLabelElement>('label[for="mi-briefing-manual-cutoff"]')
+    expect(cutoffLabel, 'the cutoff title is not a label bound to its control').not.toBeNull()
+    // 问号不在 label 里：label 内只剩标题文字。
+    expect(cutoffLabel!.querySelector('button')).toBeNull()
+    expect(document.querySelector('label .icon-button')).toBeNull()
+
+    // 点标题那一带（等价于点 label）：只把焦点给下拉，不许打开任何浮层。
+    await act(async () => { cutoffLabel!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await Promise.resolve() })
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
+
+    // 丢焦点后 hover 也不该残留：浮层只在指针真的在问号上时开着。
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.cutoffHintLabel}"]`)!
+    expect(trigger.closest('label')).toBeNull()
+  })
+
+  it('does not put the initial focus on a question mark', async () => {
+    await render()
+    const active = document.activeElement as HTMLElement | null
+    expect(active?.classList.contains('icon-button') ?? false).toBe(false)
+    // 键盘仍然能到：问号是真实按钮，排在标题里，Tab 顺序不被结构改动打乱。
+    const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${text.manualRunDialog.cutoffHintLabel}"]`)!
+    expect(trigger.tabIndex).toBeGreaterThanOrEqual(0)
+    await act(async () => { trigger.focus() })
+    await act(async () => { trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    await act(async () => { trigger.click(); await Promise.resolve() })
+    expect(document.body.textContent).toContain(dailyBriefingGenerationGrid.first)
+  })
+
   it('says why a future cutoff was refused, and stays open to fix it', async () => {
     // 反向用例的另一半：拒绝要说得出原因，而且弹框不关——读者当场改时刻，不用重新点开。
     host = document.createElement('div')

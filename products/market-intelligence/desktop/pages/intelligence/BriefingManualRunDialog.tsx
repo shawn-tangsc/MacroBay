@@ -107,14 +107,18 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
     width="standard"
   >
     <div className="mi-briefing-period-dialog" data-manual-run-dialog="true">
-      <label className="mi-briefing-period-dialog__field">
+      {/* 三个字段都是同一种结构，别只改一处：**`<label>` 只包标题文字并 `htmlFor` 指到控件**。
+          问号排在同一行的最左，但**不在 label 里**——浏览器点 label 会把焦点交给其中第一个可聚焦元素，
+          以前那个元素就是问号，于是点时间那一行会被当成"点了问号"，浮层弹出来压住下拉。 */}
+      <div className="mi-briefing-period-dialog__field">
         {/* 说明不铺在正文里：三句描述收进问号，hover 与键盘聚焦都能展开（平台 `Popover`）。
             标题在前、问号在**标题前面**，`sm` 档随组件走，不写死像素。 */}
         <span className="mi-daily-briefing__field-label">
           {helpTrigger(keys.cutoff, copy.cutoffHintLabel, cutoffHelp)}
-          <strong>{copy.cutoff}</strong>
+          <label htmlFor="mi-briefing-manual-cutoff"><strong>{copy.cutoff}</strong></label>
         </span>
         <Select
+          id="mi-briefing-manual-cutoff"
           aria-label={copy.cutoff}
           value={draft.cutoff}
           onChange={(cutoff: string) => setDraft((current) => ({ ...current, cutoff }))}
@@ -126,31 +130,33 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
           virtual={false}
           style={{ width: 128 }}
         />
-      </label>
+      </div>
       {cutoffProblemText === undefined ? null : <p className="mi-briefing-period-dialog__conflict" role="alert"
         data-tone={cutoffProblem === 'cutoff-in-future' ? 'invalid' : undefined} data-manual-problem={cutoffProblem}>
         {cutoffProblemText}
       </p>}
 
-      <label className="mi-briefing-period-dialog__field">
+      <div className="mi-briefing-period-dialog__field">
         <span className="mi-daily-briefing__field-label">
           {helpTrigger(keys.window, copy.windowHintLabel, copy.windowHint)}
-          <strong>{copy.windowHours}</strong>
+          <label htmlFor="mi-briefing-manual-window"><strong>{copy.windowHours}</strong></label>
         </span>
         <Select
+          id="mi-briefing-manual-window"
           aria-label={copy.windowHours}
           value={draft.windowHours}
           onChange={(windowHours: number) => setDraft((current) => ({ ...current, windowHours }))}
           options={dailyBriefingGenerationPolicy.windowHoursOptions.map((hours) => ({ value: hours, label: windowLabel(hours) }))}
           style={{ width: 128 }}
         />
-      </label>
-      <label className="mi-briefing-period-dialog__field">
+      </div>
+      <div className="mi-briefing-period-dialog__field">
         <span className="mi-daily-briefing__field-label">
           {helpTrigger(keys.language, copy.languageHintLabel, copy.languageHint)}
-          <strong>{copy.language}</strong>
+          <label htmlFor="mi-briefing-manual-language"><strong>{copy.language}</strong></label>
         </span>
         <Select
+          id="mi-briefing-manual-language"
           aria-label={copy.language}
           value={draft.language}
           onChange={(language: DailyBriefingLocale) => setDraft((current) => ({ ...current, language }))}
@@ -160,7 +166,7 @@ export function BriefingManualRunDialog({ open, text, running = false, problem, 
           ]}
           style={{ width: 128 }}
         />
-      </label>
+      </div>
       {/* A7.9: the reader must be told that pressing again with the same choices is a new issue,
           not a mistake — otherwise the behavior looks like a bug and they delete the second one. */}
       {duplicate === undefined ? null : <>
