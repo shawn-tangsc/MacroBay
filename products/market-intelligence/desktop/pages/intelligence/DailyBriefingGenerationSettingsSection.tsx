@@ -1,22 +1,17 @@
-import { Button, Checkbox, Select } from 'antd'
 import { CircleHelp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import {
-  dailyBriefingGenerationPolicy,
-  dailyBriefingGenerationTimes
-} from '../../../contracts/dailyBriefing'
+import { dailyBriefingGenerationPolicy } from '../../../contracts/dailyBriefing'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import './dailyBriefingSettingsForm.css'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { BriefingPeriodsPanel } from './BriefingPeriodsPanel'
 
 export type EditionLocale = 'zh-CN' | 'en-US'
 
@@ -170,7 +165,6 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
   text: DailyBriefingText
 }> & Omit<DailyBriefingGenerationSettingsState, 'saving' | 'save'>): React.ReactElement {
   const resolveProductText = useProductTextKey()
-  const { draft, plan, invalidZone, periodCount, update } = state
 
   if (state.state === 'load-failed') {
     return <StateView
@@ -180,28 +174,12 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
       state="error"
     />
   }
-  if (state.state === 'loading' || !draft) {
-    return <LoadingState label={text.generationSettings.loading} minHeight={90} />
-  }
 
-  const periodLabels = text.settings.periods
-  const languageName = (locale: EditionLocale): string => (text.settings.languageNames as Record<string, string>)[locale] ?? locale
-  // The extra list never offers the primary: ticking "also English" in an English interface would
-  // write the same edition twice.
-  const extraLanguages: readonly EditionLocale[] = plan && plan.used !== 'en-US' ? ['en-US'] : []
-  const extraChecked = extraLanguages.some((locale) => draft.additionalLanguages.includes(locale))
-  // The number in the cost sentence is the count the generation will use, not a hard-coded 2.
-  const writeCount = 1 + (extraChecked ? 1 : 0)
-  const costParams = { count: String(writeCount), extra: String(writeCount - 1) }
-  // A stored value we cannot read is named in the warning; it must not also produce a chip that
-  // looks like a working zone.
-  const zone = invalidZone ? null : (state.zone ?? state.displayZone)
-
-  // Every form control in this block belongs to the brief's own settings; the drawer's
-  // acceptance gate counts "form controls == controls under a declared scope" and flags the rest.
+  // The four fields that used to live here — generation time, window, edition language and "also
+  // English" — are period properties now, edited one period at a time in the list below. Leaving any
+  // of them here would be a second place to set the same thing, and the one that is not stored is the
+  // one the reader will believe.
   return <div className="mi-briefing-settings-form" data-setting-scope="brief">
-    {/* This sentence explains the whole form's save, not one group, so it heads the block: both
-        hosts — the generation dialog and the settings drawer — show it from here, once. */}
     <p className="mi-daily-briefing__settings-link">
       <span className="mi-daily-briefing__field-label">
         <Popover
@@ -219,125 +197,6 @@ export function DailyBriefingGenerationSettingsSection({ text, ...state }: Reado
         <span>{text.generationSettings.noteLabel}</span>
       </span>
     </p>
-    {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
-    <div className="mi-daily-briefing__settings-row">
-      <strong>{text.generationSettings.generationTime}</strong>
-      <div className="mi-daily-briefing__settings-time">
-        <Select
-          aria-label={text.generationSettings.generationTime}
-          value={draft.generationTime}
-          onChange={(generationTime: string) => update({ generationTime })}
-          options={dailyBriefingGenerationTimes.map((value) => ({ value, label: periodLabels.timeValue.replace('{time}', value) }))}
-          style={{ width: 108 }}
-        />
-        {/* The time is only half of the setting: 07:00 means 07:00 in this zone, and saying which
-            zone is what keeps one day from producing two editions. */}
-        {zone ? <span className="mi-daily-briefing__settings-zone" data-time-zone={zone}>{formatShellTimeZoneLabel(zone)}</span> : null}
-      </div>
-    </div>
-    {invalidZone ? <p className="mi-daily-briefing__settings-warning" role="status">{text.generationSettings.invalidTimeZone.replace('{zone}', invalidZone)}</p> : null}
-    <div className="mi-daily-briefing__settings-row">
-      <strong>{text.generationSettings.windowHours}</strong>
-      <Select
-        aria-label={text.generationSettings.windowHours}
-        value={draft.windowHours}
-        onChange={(windowHours: number) => update({ windowHours })}
-        options={dailyBriefingGenerationPolicy.windowHoursOptions.map((hours) => ({
-          value: hours,
-          label: periodLabels.windowValue.replace('{hours}', String(hours))
-        }))}
-        style={{ width: 128 }}
-      />
-    </div>
-
-    <div className="mi-daily-briefing__settings-row">
-        <span className="mi-daily-briefing__field-label">
-          {plan?.fallback
-            ? <Popover
-              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
-              labelParams={{ language: plan.requested }}
-              resolveText={resolveProductText}
-              trigger={(triggerProps) => <IconButton
-                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
-                ariaLabelParams={{ language: plan.requested }}
-                variant="plain"
-                icon={CircleHelp}
-                resolveText={resolveProductText}
-                size="sm"
-                {...triggerProps}
-              />}
-            />
-            : null}
-          <strong>{periodLabels.language}</strong>
-        </span>
-        <small>{plan?.fallback
-          ? periodLabels.languageFallback.replace('{language}', languageName(plan.used))
-          : periodLabels.languageFollow.replace('{language}', plan ? languageName(plan.used) : '')}</small>
-    </div>
-    {/* The extra edition sits on its own row, left-aligned: its cost question opens inside the
-        panel, not off its right edge. */}
-    {extraLanguages.length > 0
-      ? <div className="mi-daily-briefing__settings-row">
-        <span className="mi-daily-briefing__field-label">
-        {extraChecked
-          ? <Popover
-            labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.cost"
-            labelParams={costParams}
-            resolveText={resolveProductText}
-            trigger={(triggerProps) => <IconButton
-              ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
-              variant="plain"
-              icon={CircleHelp}
-              resolveText={resolveProductText}
-              size="sm"
-              {...triggerProps}
-            />}
-          />
-          : null}
-        <strong>{periodLabels.additional}</strong>
-        </span>
-        <Checkbox
-          aria-label={periodLabels.additional}
-          checked={extraChecked}
-          onChange={(event) => {
-            const checked = event.target.checked
-            update({
-              additionalLanguages: checked
-                ? [...new Set([...draft.additionalLanguages, ...extraLanguages])]
-                : draft.additionalLanguages.filter((locale) => !extraLanguages.includes(locale))
-            })
-          }}
-        />
-      </div>
-      : null}
-    {state.state === 'save-failed' ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
+    <BriefingPeriodsPanel text={text} />
   </div>
-}
-
-/**
- * The generation group's own action, for the host to place on its group heading row.
- *
- * It belongs to the group, not to a row: a row would only exist when a second period does, so the
- * control would jump between the two states — and the single-period view must not show a period
- * number to earn a row. The reason is the button's accessible name, and its question sits directly
- * beside it, so the pair never splits to opposite ends of the line.
- */
-export function DailyBriefingAddPeriodAction({ text }: Readonly<{ text: DailyBriefingText }>): React.ReactElement {
-  const resolveProductText = useProductTextKey()
-  const periodLabels = text.settings.periods
-  return <span className="mi-daily-briefing__settings-time">
-    <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
-    <Popover
-      labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
-      resolveText={resolveProductText}
-      trigger={(triggerProps) => <IconButton
-        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
-        variant="plain"
-        icon={CircleHelp}
-        resolveText={resolveProductText}
-        size="sm"
-        {...triggerProps}
-      />}
-    />
-  </span>
 }

@@ -942,6 +942,7 @@ describe('daily briefing page', () => {
   })
 
   it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: async () => [] } }
     const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
     const client = fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })),
@@ -988,12 +989,15 @@ describe('daily briefing page', () => {
     // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
     // the marker, so a control added outside them would show up as unscoped.
     expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
-    // Adding a period is a group-level action: it sits on the "Generation" heading row, not as a
-    // field of its own, so the drawer never looks like it lost the control.
+    // 加一期的入口现在长在期列表里，而不是一颗写着"这个版本还不支持"的灰按钮：它必须可点。
     const generationHead = document.querySelector('[data-settings-section="generation"] .mi-briefing-settings__group-head')!
     expect(generationHead.querySelector('h3')?.textContent).toBe(text.settingsDrawer.sections.generation)
-    expect(generationHead.textContent).toContain(text.settings.periods.add)
-    expect(generationHead.querySelector('button[disabled]')?.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
+    // 期列表走产品桥；这一条用例只关心入口在不在、可不可点，所以给它一个空列表。
+    const addPeriod = document.querySelector<HTMLButtonElement>('[data-briefing-period-add]')!
+    expect(addPeriod.disabled).toBe(false)
+    expect(addPeriod.textContent).toContain(text.settings.periods.add)
+    // 那句"这个版本还不支持一天多期"随禁用按钮一起消失，不许留在界面上。
+    expect(document.body.textContent).not.toContain(text.settings.periods.addReason)
     // The form-wide note lives in the block now, so the drawer shows it too — it used to exist only
     // in the dialog shell, which meant this surface silently lost it.
     expect(document.querySelector('[data-settings-section="generation"]')?.textContent)
@@ -1031,10 +1035,8 @@ describe('daily briefing page', () => {
       dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
       await Promise.resolve(); await Promise.resolve()
     })
-    // The disabled "add a period" button carries the same reason sentence as its own name; the
-    // question mark beside it is the enabled one.
-    const trigger = [...document.querySelectorAll<HTMLButtonElement>(`[aria-label="${text.settings.periods.addReason}"]`)]
-      .find((button) => !button.disabled)!
+    // 抽屉里还留着的问号：整块的生成说明（加一期的假按钮已经不存在了）。
+    const trigger = document.querySelector<HTMLButtonElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
     expect(trigger).not.toBeUndefined()
 
     await act(async () => {

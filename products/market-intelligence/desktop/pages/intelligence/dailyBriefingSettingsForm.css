@@ -49,3 +49,16 @@
   justify-self: start;
   white-space: normal;
 }
+
+/* 期列表：一期一行，时间是它的第一个事实。列表本身不滚动——面板会滚，第二个滚动条只会让人
+   以为自己漏看了几期。 */
+.mi-briefing-periods { display: flex; flex-direction: column; gap: 8px; }
+.mi-briefing-periods__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-briefing-periods__row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); font-size: 12px; line-height: 18px; }
+.mi-briefing-periods__row:last-child { border-bottom: 0; }
+.mi-briefing-periods__row strong { color: var(--mi-dashboard-text); font-weight: 600; }
+.mi-briefing-periods__row span { color: var(--mi-dashboard-muted); font-variant-numeric: tabular-nums; }
+.mi-briefing-periods__empty { display: flex; flex-direction: column; gap: 4px; }
+.mi-briefing-periods__empty p { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; line-height: 18px; }
+.mi-briefing-periods__hint { color: var(--mi-dashboard-muted); }
+.mi-briefing-periods__add { align-self: flex-start; }

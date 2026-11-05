@@ -1,21 +1,23 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
-import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
-import { DailyBriefingPage } from './DailyBriefingPage'
 
+/**
+ * 设置面板的生成这一块：**它只显示期列表，不再提供"改这一期的时间/窗口/语言"的入口**。
+ *
+ * 那四项已经是每期自己的字段，在列表里按一期编辑；面板上再留一份，就是同一个东西两个入口，
+ * 而读者会相信那个不被保存的。`02` A1.1 / A10y 也在这里：入口可点、0 条时自己说话。
+ */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const view: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-  // The generation block is the period list only: the dialog edits the first period, so the values
-  // it shows have to come from that entry — a flat copy at this level does not exist on the wire.
   generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
   language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
   webSearchSupported: false,
@@ -24,15 +26,32 @@ const view: DailyBriefingSettingsView = {
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
+const invoke = vi.fn()
+
+beforeEach(() => {
+  invoke.mockReset()
+  // 期配置走产品桥：读回空列表，创建返回那一条。
+  invoke.mockImplementation(async (_product: string, method: string, payload: unknown) => {
+    if (method.endsWith('listPeriods')) return []
+    if (method.endsWith('createPeriod')) {
+      const draft = (payload as { draft: { generationTime: string; windowHours: number; language: string } }).draft
+      const period = { id: 'p-1', ...draft }
+      return { state: 'saved', period, periods: [period] }
+    }
+    return undefined
+  })
+  ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+})
 
 afterEach(() => {
   if (root) act(() => root!.unmount())
   container?.remove()
   root = null
   container = null
+  delete (window as unknown as { platform?: unknown }).platform
 })
 
-async function render(settingsView: DailyBriefingSettingsView = view) {
+async function render(settingsView: DailyBriefingSettingsView = view): Promise<void> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -40,110 +59,72 @@ async function render(settingsView: DailyBriefingSettingsView = view) {
     getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
     saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
   }
-  const onClose = vi.fn()
   await act(async () => {
-    root!.render(<ShellTimeZoneProvider timeZone="Asia/Shanghai"><DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={onClose} /></ShellTimeZoneProvider>)
+    root!.render(<ShellTimeZoneProvider timeZone="Asia/Shanghai"><DailyBriefingGenerationSettingsModal open text={text} client={client} onClose={vi.fn()} /></ShellTimeZoneProvider>)
   })
-  await act(async () => { await Promise.resolve(); await Promise.resolve() })
-  return { client, onClose }
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
 
-describe('daily briefing generation settings modal', () => {
-  it('is named as generation settings, not AI settings, and saves the loaded values', async () => {
-    const { client, onClose } = await render()
-    expect(document.body.textContent).toContain(text.generationSettings.title)
-    expect(document.body.textContent).not.toContain(text.aiSettings.title)
-    // 标题现在由共用弹窗按键解析：键写错会渲染成空标题，所以这里断言渲染值，不只断言文本包含。
-    expect(document.querySelector('.modal__title')?.textContent).toBe(text.generationSettings.title)
-    // The explanation is a question mark now, not a standing sentence: its accessible name is
-    // short, and the sentence itself stays out of the panel.
-    expect(document.body.querySelector(`[aria-label="${text.generationSettings.noteLabel}"]`)).not.toBeNull()
-    expect(document.body.textContent).not.toContain(text.generationSettings.note)
+const body = (): HTMLElement => document.body
 
-    const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
-    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve() })
-
-    expect(client.saveSettings).toHaveBeenCalledWith({
-      generation: { generationTime: '08:00', windowHours: 24 },
-      language: { additional: [] }
-    })
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('says which zone the time belongs to, and which saved value is not a zone', async () => {
-    // The time alone is ambiguous: 08:00 means 08:00 in the zone beside it. When that zone cannot be
-    // read, the panel names it rather than letting the reader guess why nothing runs.
+describe('daily briefing generation settings', () => {
+  it('is named as generation settings, and keeps the form-wide note as a question mark', async () => {
     await render()
-    const capsule = document.body.querySelector('.mi-daily-briefing__settings-zone')
-    expect(capsule?.textContent).toBe('GMT+8')
-    expect(capsule?.getAttribute('data-time-zone')).toBe('Asia/Shanghai')
-    expect(document.body.querySelector('.mi-daily-briefing__settings-warning')).toBeNull()
+    expect(body().textContent).toContain(text.generationSettings.title)
+    expect(body().textContent).not.toContain(text.aiSettings.title)
+    expect(document.querySelector('.modal__title')?.textContent).toBe(text.generationSettings.title)
+    expect(body().querySelector(`[aria-label="${text.generationSettings.noteLabel}"]`)).not.toBeNull()
+    expect(body().textContent).not.toContain(text.generationSettings.note)
   })
 
-  it('names the saved value that is not a zone, read from the period it edits', async () => {
-    // The verdict lives only on the period entry. Reading it from a flat field left the warning
-    // silently dead: the dialog would run with a zone it never told the reader about.
-    await render({
-      ...view,
-      generation: { periods: [{ ...view.generation.periods[0]!, generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }] }
-    })
-    expect(document.body.querySelector('.mi-daily-briefing__settings-zone')).toBeNull()
-    expect(document.body.querySelector('.mi-daily-briefing__settings-warning')?.textContent)
-      .toBe(text.generationSettings.invalidTimeZone.replace('{zone}', 'Asia/Shangai'))
+  it('offers no place to set a period\'s time, window or language any more', async () => {
+    // 这四项在本版属于"每期自己的字段"，在列表里按一期编辑。面板上再出现一次，就是同一件事
+    // 两个入口，而且读者会相信那个不被保存的。
+    await render()
+    // 表单行一个都不剩：没有"生成时间/统计窗口/生成语言"的选择器，也没有"同时生成英语版"的勾选。
+    // 组标题那行不算表单行：它是这个分组的名字，不是可编辑的字段。
+    expect(body().querySelectorAll('.mi-briefing-settings-form .mi-daily-briefing__settings-row:not(.mi-briefing-settings-form__group-heading)')).toHaveLength(0)
+    expect(body().querySelectorAll('.mi-briefing-settings-form select')).toHaveLength(0)
+    expect(body().querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
+    expect(body().textContent).not.toContain(text.settings.periods.additional)
+    expect(body().textContent).not.toContain(text.settings.periods.languageFollow.replace('{language}', '中文'))
+    expect(body().querySelector('[data-briefing-periods]')).not.toBeNull()
   })
 
-  it('keeps the dialog open and reports a failed save', async () => {
-    const { client, onClose } = await render()
-    client.saveSettings.mockResolvedValueOnce({ state: 'unavailable', failureCode: 'daily-briefing-generation-time-invalid' })
+  it('explains an empty list and opens the add dialog from a pressable entry', async () => {
+    await render()
+    const empty = body().querySelector<HTMLElement>('[data-briefing-periods-empty]')!
+    expect(empty.textContent).toContain(text.settings.periods.empty)
+    // 空态里不许把人指去设置页改生成时间：那个入口本版已经拿掉了。
+    expect(empty.textContent).not.toContain('设置里改')
 
-    const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
-    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve() })
-
-    expect(document.body.textContent).toContain(text.generationSettings.failed)
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it('keeps the add-edition control disabled and gives the reason as its accessible name', async () => {
-    const { client } = await render()
-    const add = [...document.body.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
-    // Behaviour, not styling: a control that reads as disabled but still saves would pass a
-    // "the sentence is there" check and fail this one.
-    expect(add.disabled).toBe(true)
-    expect(add.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
+    const add = body().querySelector<HTMLButtonElement>('[data-briefing-period-add]')!
+    expect(add.disabled).toBe(false)
+    expect(add.textContent).toContain(text.settings.periods.add)
     await act(async () => { add.click(); await Promise.resolve() })
-    expect(client.saveSettings).not.toHaveBeenCalled()
+    expect(body().querySelector('[data-period-dialog]')).not.toBeNull()
   })
 
-  it('offers the second edition only when ticked and states the cost the plan reports', async () => {
-    const { client } = await render()
-    const costTrigger = (): HTMLElement | null => document.body.querySelector(`[aria-label="${text.settings.periods.costLabel}"]`)
-    expect(costTrigger()).toBeNull()
-    // The field values carry their meaning, and the default time is the policy's, not a literal here.
-    expect(document.body.textContent).toContain(text.settings.periods.timeValue.replace('{time}', '08:00'))
-    expect(document.body.textContent).toContain(text.settings.periods.windowValue.replace('{hours}', '24'))
+  it('adds the period through the period client and shows it in the list', async () => {
+    await render()
+    const add = body().querySelector<HTMLButtonElement>('[data-briefing-period-add]')!
+    await act(async () => { add.click(); await Promise.resolve() })
 
-    // The control must be a real, enabled checkbox in the value column — "the row shows the text"
-    // is not the same as "there is something to tick".
-    const tick = document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!
-    expect(tick.disabled).toBe(false)
-    expect(tick.getAttribute('aria-label')).toBe(text.settings.periods.additional)
-    await act(async () => { tick.click(); await Promise.resolve() })
-    const trigger = costTrigger()!
-    await act(async () => { trigger.click(); await Promise.resolve(); await Promise.resolve() })
-    // 这句话的数字来自生成计划（主语言 1 次 + 勾了 1 个附加语言），断言从文案表取，不写死句子。
-    expect(document.body.textContent).toContain(
-      text.settings.periods.cost.replace('{count}', '2').replace('{extra}', '1')
-    )
+    // 弹框里面还套着一个弹框：取最后一个 footer，才是"添加一期"那一张的保存键。
+    const footers = [...body().querySelectorAll<HTMLElement>('.ant-modal-footer')]
+    const save = [...footers.at(-1)!.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.periodDialog.save)!
+    expect(save.disabled).toBe(false)
+    await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 
-    await act(async () => { trigger.click(); await Promise.resolve() })
-    await act(async () => {
-      const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!
-      save.click(); await Promise.resolve(); await Promise.resolve()
-    })
-    expect(client.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: { additional: ['en-US'] } }))
-
-    await act(async () => { tick.click(); await Promise.resolve() })
-    expect(costTrigger()).toBeNull()
+    const created = invoke.mock.calls.find((call) => String(call[1]).endsWith('createPeriod'))
+    expect(created).toBeDefined()
+    expect(created?.[2]).toMatchObject({ draft: { generationTime: expect.any(String), windowHours: expect.any(Number), language: expect.any(String) } })
+    // 列表里立刻出现这一条：时间、窗口、语言都由这一期自己带着。
+    const row = body().querySelector('[data-period-id]')
+    expect(row?.textContent).toContain(text.settings.periods.label.replace('{index}', '1'))
+    expect(row?.textContent).toMatch(/每天 \d{2}:00/)
+    expect(row?.textContent).toContain(text.settings.languageNames['zh-CN'] as string)
   })
 
   it('shows a read failure as an error with a retry instead of a spinner that never stops', async () => {
@@ -158,118 +139,11 @@ describe('daily briefing generation settings modal', () => {
     })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
-    expect(document.body.textContent).not.toContain(text.generationSettings.loading)
-    expect(document.body.querySelector('[data-state="error"]')).not.toBeNull()
-    const retry = document.body.querySelector<HTMLButtonElement>('[data-state="error"] button')!
+    expect(body().textContent).not.toContain(text.generationSettings.loading)
+    expect(body().querySelector('[data-state="error"]')).not.toBeNull()
+    const retry = body().querySelector<HTMLButtonElement>('[data-state="error"] button')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getSettings).toHaveBeenCalledTimes(2)
-    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
-  })
-
-  it('keeps the unsupported-language sentence in a question mark and the short status on the row', async () => {
-    // The product cannot reach this state (the interface language is a closed set), so this fixture
-    // is the machine evidence for it: short status visible, long sentence only inside its question.
-    const sentence = text.settings.periods.languageUnsupported.replace('{language}', 'ja-JP')
-    const shortStatus = text.settings.periods.languageFallback.replace('{language}', (text.settings.languageNames as Record<string, string>)['en-US'])
-    await render({
-      ...view,
-      language: {
-        settings: { primary: 'follow-ui', additional: [] },
-        plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 }
-      }
-    })
-
-    expect(document.body.textContent).toContain(shortStatus)
-    expect(document.body.textContent).not.toContain(sentence)
-
-    const question = document.body.querySelector<HTMLElement>(`[aria-label="${sentence}"]`)
-    expect(question).not.toBeNull()
-    // A screen reader gets the whole sentence from the name, without opening anything.
-    await act(async () => { question!.click(); await Promise.resolve(); await Promise.resolve() })
-    expect(document.body.textContent).toContain(sentence)
-
-    // The page shows the same sentence in the open: same key, two positions. Comparing the two
-    // rendered strings (not just "each has a sentence") is what fails if someone copies the copy.
-    const pageHost = document.createElement('div')
-    document.body.append(pageHost)
-    const pageRoot = createRoot(pageHost)
-    const pageClient = {
-      getToday: async () => ({ state: 'available' as const, document: { edition: { date: '2026-10-30', locale: 'zh-CN' as const }, status: { readingsAvailable: 4 }, data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'empty' as const } } }, news: { items: [], macro: [], notes: {} }, next: { items: [] }, conclusion: null, citations: [], provenance: {}, schemaVersion: 1, policyVersion: 'v1', lede: { text: '', source: 'template' as const, generatedAt: '2026-10-30T00:00:00.000Z' } } }),
-      list: async () => ({ state: 'available' as const, result: { editions: [] } }),
-      get: async () => ({ state: 'available' as const, document: {} }),
-      regenerate: async () => ({ state: 'unavailable' as const, failureCode: 'x' }),
-      getSettings: async () => ({ state: 'available' as const, view }),
-      saveSettings: async () => ({ state: 'available' as const, view }),
-      getProgress: async () => ({ state: 'idle' as const })
-    }
-    await act(async () => {
-      pageRoot.render(createElement(ConfirmProvider, null, createElement(DailyBriefingPage, {
-        locale: 'zh-CN', text, onBack: () => undefined, onConfigureSources: () => undefined,
-        client: {
-          ...pageClient,
-          getSettings: async () => ({ state: 'available' as const, view: { ...view, language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } } } })
-        } as never
-      })))
-    })
-    await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    const pageLine = [...pageHost.querySelectorAll('[role="status"]')].find((node) => node.textContent === sentence)
-    expect(pageLine, 'the page renders the same sentence').toBeDefined()
-    act(() => pageRoot.unmount())
-    pageHost.remove()
-  })
-
-  it('names the reader zone when the period carries none, and prints the value only once', async () => {
-    // A fresh install stores no zone; the chip must still name the offset the reader is in, not a
-    // bare "GMT". And the value is stated once, as its sentence — not as "08:00" plus "每天 08:00".
-    await render({
-      ...view,
-      generation: { periods: [{ ...view.generation.periods[0]!, generationTimeZone: null }] }
-    })
-    const chip = document.body.querySelector('.mi-daily-briefing__settings-zone')
-    expect(chip?.textContent).toBe('GMT+8')
-    expect(chip?.getAttribute('data-time-zone')).toBe('Asia/Shanghai')
-
-    const occurrences = (document.body.textContent ?? '').split(text.settings.periods.timeValue.replace('{time}', '08:00')).length - 1
-    expect(occurrences).toBe(1)
-    expect(document.body.textContent).not.toContain(`\n08:00`)
-  })
-
-  it('attaches the question to the control it explains, and puts the form-wide note above the fields', async () => {
-    const { view: _ } = {} as { view?: unknown }
-    await render()
-
-    // D6 wires hover/focus; this DOM environment does not deliver React's synthetic mouseenter,
-    // so the open-on-hover proof belongs to the window-driving script (it hovers the real button).
-    // What is asserted here is the part this environment can see: the trigger is a real, focusable
-    // button, and the reason is still its accessible name.
-    const reason = document.body.querySelector<HTMLButtonElement>(`[aria-label="${text.settings.periods.addReason}"]`)!
-    expect(reason.tagName).toBe('BUTTON')
-    expect(reason.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
-
-    // D8: "add an edition" is the group's action on the heading row, with its reason question
-    // directly beside it — the pair never splits to opposite ends of the line.
-    const heading = document.body.querySelector('.mi-briefing-settings-form__group-heading')!
-    const add = [...heading.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
-    expect(add.parentElement?.querySelector(`[aria-label="${text.settings.periods.addReason}"]`)).not.toBeNull()
-
-    // D11: the note explains the whole form, so its question sits at the top, above the fields.
-    const note = document.body.querySelector<HTMLElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
-    const firstField = [...document.body.querySelectorAll('.mi-daily-briefing__settings-row')]
-      .find((row) => !row.classList.contains('mi-briefing-settings-form__group-heading'))!
-    expect(note.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it('puts the language question before the label it explains', async () => {
-    await render({
-      ...view,
-      language: {
-        settings: { primary: 'follow-ui', additional: [] },
-        plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 }
-      }
-    })
-    const label = [...document.body.querySelectorAll('.mi-daily-briefing__field-label')]
-      .find((node) => node.textContent?.includes(text.settings.periods.language))!
-    expect(label.firstElementChild?.querySelector('button')).not.toBeNull()
-    expect(label.textContent).toContain(text.settings.periods.language)
+    expect(body().querySelector('[data-state="error"]')).toBeNull()
   })
 })

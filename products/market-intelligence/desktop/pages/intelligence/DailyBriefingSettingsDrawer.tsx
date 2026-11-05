@@ -11,7 +11,6 @@ import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { DailyBriefingAiSettingsSection, useDailyBriefingAiSettings } from './DailyBriefingAiSettingsSection'
 import {
-  DailyBriefingAddPeriodAction,
   DailyBriefingGenerationSettingsSection,
   useDailyBriefingGenerationSettings
 } from './DailyBriefingGenerationSettingsSection'
@@ -140,7 +139,6 @@ export function DailyBriefingSettingsDrawer({ open, section, text, client, onClo
           group's heading row, right-aligned with the value column. */}
       <div className="mi-briefing-settings__group-head">
         <h3 className="mi-briefing-settings__heading" id={SECTION_IDS.generation}>{text.settingsDrawer.sections.generation}</h3>
-        <DailyBriefingAddPeriodAction text={text} />
       </div>
       <DailyBriefingGenerationSettingsSection {...generation} text={text} />
     </section>

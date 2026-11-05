@@ -100,6 +100,12 @@ export const dailyBriefingText = {
         meta: '每天 {time} 生成 · 截至 {time} 的最近 {hours} 小时 · 主语言 {language}',
         add: '添加一期',
         addReason: '这个版本还不支持一天多期，位置先留着。',
+        // 升级后第一屏就是这里：0 条时它要自己说明"为什么空"，而不是让人去找一个已经不在设置页里的入口。
+        empty: '还没有设置任何一期',
+        emptyHint: '每一期各有自己的生成时间、统计窗口和语言；加一期之后，它会在到点时自动生成。',
+        loading: '正在读期配置…',
+        loadFailed: '期配置没读出来，重试一次。',
+        saveFailed: '这一期没存上，再试一次。',
         language: '生成语言',
         languageFollow: '{language}（跟随界面语言）',
         languageFallback: '{language}（跟随界面语言，暂不支持你的语言）',
@@ -376,6 +382,13 @@ export const dailyBriefingText = {
         meta: 'Runs daily at {time} · last {hours} hours to {time} · primary language {language}',
         add: 'Add an edition',
         addReason: 'This version does not support more than one edition a day yet — the spot is reserved.',
+        // The first screen after an upgrade: with no period it must explain itself, not point at an
+        // entry that no longer exists in settings.
+        empty: 'No period is set up yet',
+        emptyHint: 'Each period has its own generation time, window and language. Once you add one, it generates on schedule.',
+        loading: 'Reading period configuration…',
+        loadFailed: 'Could not read the period configuration. Try again.',
+        saveFailed: 'That period was not saved. Try again.',
         language: 'Edition language',
         languageFollow: '{language} (follows the interface)',
         languageFallback: '{language} (follows the interface; your language is not supported yet)',
