@@ -7,7 +7,10 @@
 .mi-daily-briefing__rail-list { display: grid; gap: 2px; min-width: 0; }
 /* One definition only: this row used to be declared twice (a horizontal one near the rail, and a
    column one further down), so "what shape is a rail row" had two answers in the same file. */
-.mi-daily-briefing__rail-row { display: flex; flex-direction: row; align-items: baseline; gap: 6px; width: 100%; min-width: 0; height: 27px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+/* A row is two lines — facts, then the title — so its height comes from its content. The old
+   `height: 27px` is exactly what made a second line impossible; the measured row is 39.69px
+   (40.69px selected), and every generated row must land on that same pitch. */
+.mi-daily-briefing__rail-row { display: block; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
 .mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; border-radius: 5px; background: #1c2418; box-shadow: inset 2px 0 var(--mi-dashboard-lime); color: var(--mi-dashboard-text); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
@@ -66,7 +69,17 @@
 .mi-daily-briefing-page__failure-actions { display: flex; gap: 8px; margin-top: 16px; }
 .mi-daily-briefing-page__failure-actions button { height: 30px; padding: 0 12px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-text); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__failure-actions .mi-daily-briefing-page__primary { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+/* Line one, and its order is fixed: moment → window → direction → source → · → language. Nothing
+   else belongs on it: item count, gap count and "this issue" all left the row on purpose. */
+.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex-wrap: nowrap; white-space: nowrap; }
+/* The row's own title is `__rail-row-title`: `__rail-title` is already the rail's heading ("过去 14
+   天"), and one name for two elements is how a heading picks up a row's clipping and sizes.
+   Line two is the title, one line: it is what tells the reader whether to open the issue, so it may
+   shorten but never wrap — a wrapped title makes the pitch of the list uneven. The waiting row puts
+   the platform spinner in this same box (14px inside a 14.7px line box) so the height does not move
+   when the title arrives in place. */
+.mi-daily-briefing__rail-row-title { display: block; margin: 1px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.4; }
+.mi-daily-briefing__rail-row-title[data-rail-title="running"] { display: flex; align-items: center; gap: 6px; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
 .mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
@@ -180,14 +193,16 @@
 /* One row per edition, one line of facts: the row is not a grid, because a second column would let a
    label push the facts into a column of their own — which is how a 27px row became five lines. */
 .mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 10px; }
-.mi-daily-briefing__rail-fact { white-space: nowrap; font-size: 10px; color: #5f686e; }
+/* Colour is inherited from the container on purpose: the rail keeps one faint ink, and repeating it
+   here would make a second place to change it — and a second literal for the colour gate to count. */
+.mi-daily-briefing__rail-fact { white-space: nowrap; font-size: 10px; }
 /* The moment leads: bold and in the body ink, because it is what the reader scans the rail for. */
-.mi-daily-briefing__rail-fact:first-child { font-size: 11px; font-weight: 600; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
+.mi-daily-briefing__rail-fact:first-child { font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
 /* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
 /* The window badge and the source badge are one shape: geometry is declared once, here, and the two
    only differ in colour. Two sizes of the same small marker side by side read as an accident. */
 .mi-daily-briefing__rail-fact[data-window-hours],
-.mi-daily-briefing__rail-source { padding: 1px 4px; border-radius: 3px; white-space: nowrap; font-size: 9px; font-weight: 600; }
+.mi-daily-briefing__rail-source { flex: none; padding: 1px 4px; border-radius: 3px; white-space: nowrap; font-size: 9px; font-weight: 600; line-height: 13px; }
 .mi-daily-briefing__rail-fact[data-window-hours] { background: color-mix(in srgb, var(--mi-dashboard-lime) 10%, transparent); color: var(--mi-dashboard-muted); }
 /* Both badges are mixed at the same 10% for a measured reason: at 14% the muted word on a chip
    sits at 4.26:1 against a selected row and misses the 4.5 small-text floor, while 10% clears it
@@ -196,9 +211,10 @@
    The source badge answers "did the machine produce this, or did I?": one of
    scheduled / manual / catch-up / not-run / failed, exactly one per row. Only a failure is red;
    the other four are neutral, because a source is not a verdict. */
-.mi-daily-briefing__rail-source { flex: none; background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
-.mi-daily-briefing__rail-source[data-source-kind="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
-.mi-daily-briefing__rail-sep { opacity: .6; }
+.mi-daily-briefing__rail-source { background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
+/* The single separator before the language: a dot, not part of either chip's box. */
+.mi-daily-briefing__rail-sep { flex: none; font-size: 9.5px; opacity: .6; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
 /* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
 
@@ -285,5 +301,4 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
-.mi-daily-briefing__rail-lang { flex: none; margin-left: auto; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }
-.mi-daily-briefing__rail-fact + .mi-daily-briefing__rail-fact::before { content: ' · '; color: #5f686e; }
+.mi-daily-briefing__rail-lang { flex: none; margin-left: 0; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }

@@ -86,7 +86,7 @@ describe('one rail chip shape', () => {
     // lastIndexOf: the first `.rail-source {` in the sheet is the shared-geometry block above.
     const source = css.slice(css.lastIndexOf('.mi-daily-briefing__rail-source {'))
     expect(source.slice(0, source.indexOf('}'))).toContain('var(--mi-dashboard-muted)')
-    const failed = css.slice(css.indexOf('.mi-daily-briefing__rail-source[data-source-kind="failed"]'))
+    const failed = css.slice(css.indexOf('.mi-daily-briefing__rail-source[data-run-source="failed"]'))
     const failedRule = failed.slice(0, failed.indexOf('}'))
     expect(failedRule).toContain('var(--mi-dashboard-negative)')
     // Exactly one kind carries its own colour. A second coloured kind is a new verdict, not a style
@@ -95,8 +95,46 @@ describe('one rail chip shape', () => {
   })
 })
 
+/**
+ * The two-line row is a shape, and a shape is exactly what "restore it as drawn" has to be checked
+ * against: a fixed row height, a wrapping title or a language pushed to the far right each look
+ * plausible on their own and all three break the pitch of the list. These are the design numbers.
+ */
+describe('two-line rail row', () => {
+  it('lets the content set the row height instead of fixing it', () => {
+    const row = rule('.mi-daily-briefing__rail-row {')
+    expect(row).not.toContain('height:')
+    expect(row).toContain('padding: 4px 6px;')
+  })
+
+  it('keeps the title on one line under a name of its own', () => {
+    // `__rail-title` is the rail's heading; sharing it would give the heading a row's clipping.
+    expect(css).not.toContain('.mi-daily-briefing__rail-title { font-size: 10.5px')
+    const title = rule('.mi-daily-briefing__rail-row-title {')
+    expect(title).toContain('white-space: nowrap')
+    expect(title).toContain('text-overflow: ellipsis')
+    expect(title).toContain('font-size: 10.5px')
+    expect(title).toContain('line-height: 1.4')
+  })
+
+  it('sits the language right after the source instead of pushing it to the edge', () => {
+    expect(rule('.mi-daily-briefing__rail-lang {')).toContain('margin-left: 0;')
+  })
+
+  it('separates facts by space, not by a dot between every pair', () => {
+    expect(css).not.toContain('.mi-daily-briefing__rail-fact + .mi-daily-briefing__rail-fact::before')
+  })
+})
+
+/** The declarations of one rule, keyed by its selector. */
+function rule(selector: string): string {
+  const start = css.indexOf(selector)
+  expect(start).toBeGreaterThanOrEqual(0)
+  return css.slice(start, css.indexOf('}', start))
+}
+
 /** Which source kinds carry a colour of their own. */
 function tonedKinds(): string[] {
-  const kinds = [...css.matchAll(/\[data-source-kind="([a-z-]+)"\]/g)].map((match) => match[1] as string)
+  const kinds = [...css.matchAll(/\[data-run-source="([a-z-]+)"\]/g)].map((match) => match[1] as string)
   return [...new Set(kinds)].sort()
 }
