@@ -22,7 +22,7 @@ function isGeneratingPlaceholder(row: DailyBriefingEditionSummary): boolean {
 /** 正在跑的那一行：列表据此显示「生成中」，而不是等重读之后才出现。 */
 function withGeneratingRow(
   rows: readonly DailyBriefingEditionSummary[],
-  input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; periodTime?: string }>
+  input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US'; periodTime?: string; manual: boolean }>
 ): readonly DailyBriefingEditionSummary[] {
   const exists = rows.some((row) => row.date === input.date && row.periodId === input.periodId && row.locale === input.locale)
   if (exists) return rows
@@ -32,6 +32,8 @@ function withGeneratingRow(
     locale: input.locale,
     availableLocales: [input.locale],
     state: 'missing',
+    // 来源徽标跟**这一次的运行**走：手动发起的就写「手动」，不许回落到排期身份。
+    ...(input.manual ? { periodKind: 'manual' as const } : {}),
     ...(input.periodTime === undefined ? {} : { periodTime: input.periodTime }),
     languages: [{ locale: input.locale, state: 'generating' as const }]
   }, ...rows]
@@ -128,6 +130,7 @@ export function useBriefingRunActions(input: Readonly<{
       date: input.todayDate!,
       periodId: startedPeriodId,
       locale: options.locale ?? input.locale,
+      manual: options.trigger === 'manual',
       ...(options.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
     }))
   }

@@ -328,6 +328,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { selectEdition, selectLocale } = briefingEditionSelection({
     editions, effectiveLocale: () => effectiveLocaleRef.current, openEdition, setPickedLocale, setPickedPeriodId
   })
+  /** 选中的那一版是否正好是正在跑的那一期：只有它才把正文位让给进度。 */
+  const runningIssues: readonly BriefingRunIntent[] = runIntent === null ? [] : [runIntent]
+  const viewingRunningIssue = runningIssues.some((intent) =>
+    pickedPeriodId === intent.periodId && effectiveLocale === intent.locale)
   /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
   const onScreenPeriodId = readyDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
   const { runBriefing } = useBriefingRunActions({
