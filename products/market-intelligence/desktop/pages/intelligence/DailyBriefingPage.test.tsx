@@ -240,6 +240,26 @@ function dialogButton(label: string): HTMLButtonElement {
   return button
 }
 
+/**
+ * 像读者一样先展开那一天再读它的行（`A5.3`：默认只展开今天）。
+ * 展开天头会顺带把右侧切到那天最近的一版（`A9.14`）——那是产品行为，不是测试的副作用。
+ */
+const expandDay = async (dom: HTMLElement, date: string): Promise<void> => {
+  const head = dom.querySelector<HTMLButtonElement>(`.mi-daily-briefing__rail-day[data-day="${date}"] .mi-daily-briefing__rail-day-head`)
+  if (head !== null && head.getAttribute('aria-expanded') === 'false') {
+    await act(async () => { head.click(); await Promise.resolve() })
+    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+  }
+}
+
+/** 读者点开某一天里的一行：先展开那天，再点那一行。 */
+const clickRow = async (dom: HTMLElement, date: string): Promise<void> => {
+  await expandDay(dom, date)
+  const row = dom.querySelector<HTMLButtonElement>(`[data-date="${date}"]`)
+  if (row !== null) await act(async () => { row.click(); await Promise.resolve() })
+  for (let round = 0; round < 3; round += 1) await act(async () => { await Promise.resolve() })
+}
+
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
@@ -284,12 +304,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
     /></ToastHost></ConfirmProvider></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
-  // The rail groups by day and opens only today (A5.3). These page cases read rows across the whole
-  // window, so open every day once, the way a reader would.
-  await act(async () => {
-    for (const head of container!.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head[aria-expanded="false"]')) head.click()
-  })
-  await act(async () => { await Promise.resolve() })
+  // 列表默认只展开今天（A5.3）：渲染出来就是读者打开页面的样子。要读过去某天，用例自己点开那天。
   return container
 }
 
@@ -302,12 +317,16 @@ describe('daily briefing page', () => {
     const dom = await renderPage(fakeClient(), { onBack })
     expect(dom.textContent).toContain(text.title)
     expect(dom.textContent).toContain('CPI 超预期')
-    expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
+    // 默认只展开今天：14 个天头，行只有今天那一行（A5.3）。
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-day')).toHaveLength(14)
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
     expect(dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current')).toBe('true')
     // The day head says 今天; which issue is *current* is decided by the projection and marked on
     // its row (covered by the rail cases), not by the wall clock here.
     expect(dom.querySelector('[data-today]')?.textContent).toBe(text.history.today)
-    expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(false)
+    // 读者点开过去那天：那天展开，天头写它自己的期数。
+    await expandDay(dom, '2026-10-28')
+    expect(dom.querySelector('.mi-daily-briefing__rail-day[data-day="2026-10-28"] .mi-daily-briefing__rail-day-head')?.getAttribute('aria-expanded')).toBe('true')
 
     act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__back')!.click())
     expect(onBack).toHaveBeenCalledTimes(1)
@@ -327,7 +346,7 @@ describe('daily briefing page', () => {
     const getTodayCalls = (client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length
 
     // 1. A day that never ran: the pane names it, gives the schedule, and offers no false action.
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    await clickRow(dom, '2026-10-28')
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const never = dom.querySelector('.mi-daily-briefing-page__no-edition')
     // 历史日的空态与今天**同一个标题**（`02` v2.97），差异只在副句。
@@ -341,7 +360,7 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-28"]')?.getAttribute('aria-current')).toBe('true')
 
     // 2. A day that failed: the reason and the nine steps, not just one word in the rail.
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-20"]')!.click() })
+    await clickRow(dom, '2026-10-20')
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
     const panel = dom.querySelector('[data-daily-brief-failure]')!
     expect(panel.getAttribute('data-failure-code')).toBe('model-unavailable')
@@ -361,7 +380,7 @@ describe('daily briefing page', () => {
   it('loads a historical edition read-only and never re-reads a cached one', async () => {
     const client = fakeClient()
     const dom = await renderPage(client)
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
+    await clickRow(dom, '2026-10-29')
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     expect(client.get).toHaveBeenCalledWith({ date: '2026-10-29', locale: 'zh-CN', periodId: 'default' })
@@ -369,12 +388,12 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-29"]')?.getAttribute('aria-current')).toBe('true')
 
     // Back to the day already read: the cache answers, no second request for the same edition.
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
+    await clickRow(dom, '2026-10-29')
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     expect(client.get).toHaveBeenCalledTimes(1)
 
     // A day with no edition still reads nothing: the list already answered for it.
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    await clickRow(dom, '2026-10-28')
     expect(client.get).toHaveBeenCalledTimes(1)
   })
 
@@ -395,6 +414,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     expect(client.getToday).toHaveBeenCalledTimes(1)
 
+    await expandDay(dom, '2026-10-29')
     const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!
     // 行右键菜单恰一项「删除这一版」：右键的就是你点中的那一行（02 v2.40）。
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
@@ -540,7 +560,8 @@ describe('daily briefing page', () => {
     })
     const dom = await renderPage(client)
 
-    // 打开昨天那一版，再点版次级「重新生成」。
+    // 打开昨天那一版，再点版次级「重新生成」：先展开它所在那天（A5.3）。
+    await expandDay(dom, '2026-10-29')
     const pastRow = dom.querySelector<HTMLButtonElement>(`.mi-daily-briefing__rail-row[data-period-id="period_prev"]`)!
     await act(async () => { pastRow.click() })
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
@@ -577,6 +598,8 @@ describe('daily briefing page', () => {
         : { state: 'missing' as const })
     })
     const dom = await renderPage(client)
+    // 先展开那天（A5.3），再点它那一行。
+    await expandDay(dom, '2026-10-29')
     await act(async () => { dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!.click() })
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
 
@@ -623,7 +646,7 @@ describe('daily briefing page', () => {
       getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' }))
     })
     const dom = await renderPage(client)
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
+    await clickRow(dom, '2026-10-28')
     for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
     const trigger = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="delete-edition"]')!
     expect(trigger.disabled).toBe(true)
@@ -684,7 +707,7 @@ describe('daily briefing page', () => {
     const railRow = (): HTMLElement => dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-date="2026-10-30"]')!
 
     expect(railRow().getAttribute('aria-current')).toBe('true')
-    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
 
     // 行右键菜单恰一项「删除这一版」：右键的就是你点中的那一行（02 v2.40）。
     act(() => { railRow().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
@@ -698,7 +721,7 @@ describe('daily briefing page', () => {
     // 1. The rail stayed put: the same day is still selected, and it now reads "not run".
     expect(railRow().getAttribute('aria-current')).toBe('true')
     expect(railRow().hasAttribute('data-missing') || railRow().textContent).toBeTruthy()
-    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
+    expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
     // 2. The pane is the ordinary "not generated" state — one state, one name — and never the
     //    unreadable one: no read was attempted, so none can have failed.
     const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')
@@ -774,7 +797,7 @@ describe('daily briefing page', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     const client = fakeClient()
     const dom = await renderPage(client)
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
+    await clickRow(dom, '2026-10-29')
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const copy = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="copy"]')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
@@ -1870,6 +1893,7 @@ it('shows a past edition\'s archive while today has never been generated', async
     get: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }))
   })
   const dom = await renderPage(client)
+  await expandDay(dom, '2026-10-29')
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click()
     await Promise.resolve(); await Promise.resolve()
@@ -1949,6 +1973,7 @@ it('takes the current issue from the service, not from the wall clock', async ()
   expect(action.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-29'))
 
   // 历史日：同一个空态、同一个平台标题，副句换成"这一天没有留下简报"，并且**零按钮**。
+  await expandDay(dom, '2026-10-28')
   await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
   const historical = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
   expect(historical.textContent).toContain(text.history.emptyBodyHistorical)
