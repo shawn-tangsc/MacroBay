@@ -1,5 +1,4 @@
 import { readJsonFileRecovering, writeJsonFileAtomically } from '../../storage/jsonFileStorage'
-import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
 
 
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
@@ -104,11 +103,8 @@ export type NotificationRuntimeDependencies = {
   producerOwnership?: NotificationProducerOwnership
   /** 已登记的产品 productId；producerId 前缀对不上任何产品即视为平台自有。 */
   productIds?: readonly string[]
-  /**
-   * 读者语言。两处用途，**同一份事实只读一次**：投递前解析正文（四个钩子拿同一份 content），
-   * 以及给新记录盖一个语言标签（提交时定格，之后不随界面变——否则切换语言会改写历史）。
-   */
-  getLanguage?: () => Promise<NotificationCopyLanguage>
+  /** 读者语言：正文在投递前解析一次，四个钩子拿同一份 content。 */
+  getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 文案解析端口（契约 §3.3）：平台键/产品键都走它；缺省时退回平台闭集。 */
   copy?: NotificationCopyPort
   /** 写读者级设置（提示开关 / 通道选择）；由装配层接到设置 store，runtime 不自己写设置文件。 */
@@ -206,14 +202,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
     }
 
-    const language = await deps.getLanguage?.()
     const first = planNotificationSubmit({
       catalog: deps.catalog,
       settings,
       desktopSupported: deps.desktopSupported?.() ?? true,
       request,
-      now,
-      ...(language === undefined ? {} : { language })
+      now
     })
     if (first.kind === 'rejected') return first.outcome
 
@@ -225,7 +219,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
           desktopSupported: deps.desktopSupported?.() ?? true,
           request,
           now,
-          ...(language === undefined ? {} : { language }),
           duplicate
         })
       : first

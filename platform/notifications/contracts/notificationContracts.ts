@@ -1,4 +1,4 @@
-import type { NotificationCopyKey, NotificationCopyLanguage } from '../../i18n/notificationCopy'
+import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import type { NotificationApprovedLevel } from './notificationEventCatalog'
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
@@ -62,14 +62,6 @@ export type NotificationRecord = {
   /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
   titleKey: NotificationCopyKey
   titleParams?: Record<string, string>
-  /**
-   * 提交那一刻的界面语言。措辞按键解析（改文案，历史跟着变好），但**用哪一种语言是提交时定下的**：
-   * 让过去的通知跟着今天的界面语言变，等于改写历史，和运行记录同一条口径。
-   *
-   * **旧记录没有这一格**——它们提交时没人记语言，替它们编一个就是伪造历史。缺这一格时按读者当前
-   * 语言解析，这是历史遗留处理，不是设计（见 `resolveNotificationText`）。
-   */
-  language?: NotificationCopyLanguage
   bodyKey?: NotificationCopyKey
   bodyParams?: Record<string, string>
   /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
