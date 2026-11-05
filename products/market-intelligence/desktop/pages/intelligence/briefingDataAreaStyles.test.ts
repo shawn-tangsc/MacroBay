@@ -154,9 +154,19 @@ describe('the price card leads with the level, and the move is the only tinted t
     expect(declaration(rule('.mi-brief-poster__price-change'), 'font-weight')).toBe('600')
     expect(declaration(rule(".mi-brief-poster__price-change[data-tone='up']"), 'color')).toBe('#1f5b32')
     expect(declaration(rule(".mi-brief-poster__price-change[data-tone='down']"), 'color')).toBe('#8f2a1d')
-    // The label is a qualifier, and the proxy mark matches it rather than shouting.
+    // The asset name sits where the rate card puts its title — the same corner, the same size and the
+    // same warm ink — so the three cards read as one row of labelled readings rather than two different
+    // conventions. It is out of the flow, so the figure must not move with it: hence the lead column's
+    // compensating padding below.
     expect(declaration(rule('.mi-brief-poster__price-label'), 'font-size')).toBe('11px')
-    expect(declaration(rule('.mi-brief-poster__price-label'), 'color')).toBe('#6b695f')
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'color')).toBe('#8a5a12')
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'position')).toBe('absolute')
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'top')).toBe('10px')
+    expect(declaration(rule('.mi-brief-poster__price-label'), 'left')).toBe('14px')
+    expect(declaration(rule('.mi-brief-poster__price-card'), 'position')).toBe('relative')
+    // 16px label line + 2px gap, halved by the centring: taking the label out of the flow would move
+    // the figure down by 9px without it.
+    expect(declaration(rule('.mi-brief-poster__price-lead'), 'padding-bottom')).toBe('18px')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-size')).toBe('11px')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'font-weight')).toBe('400')
     expect(declaration(rule('.mi-brief-poster__price-proxy'), 'color')).toBe('#6b695f')

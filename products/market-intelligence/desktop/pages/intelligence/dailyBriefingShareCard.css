@@ -198,17 +198,26 @@
 /* Two columns, both placed: the reading on the left, the plot on the right. Leaving placement to the
    grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
    pushed the card past 114px — the DOM looked right and the paper did not. */
-.mi-brief-poster__price-card { height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+.mi-brief-poster__price-card { position: relative; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
 /* Two ends, not the middle: the label sits at the top and the time at the card's foot, matching the
    approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
 /* Three lines, top-aligned: label, the number, then the amplitude in the row the instant used to take.
    With two lines the column spread out and left the middle of the card empty. */
 /* Two lines, centred: the label and the figure as one block, the plot beside them filling the row. */
-.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
-.mi-brief-poster__price-label { font-size: 11px; line-height: 16px; color: #6b695f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The label is out of the column and pinned to the card's top-left, the same place and the same size
+   the rate card puts its title. It stays in the same DOM position — this is a position change, not a
+   rebuild. The lead column keeps 18px of bottom padding so the figure still centres where it centred
+   with the label in the flow: taking the label out must not move the number, because the number is what
+   the reader came for. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding-bottom: 18px; }
+/* Same tier as the rate card's title: 11px, the sheet's warm label ink, one line with an ellipsis. The
+   right bound stops it at the plot column so a long name can never run under the drawing. */
+.mi-brief-poster__price-label { position: absolute; top: 10px; left: 14px; right: 120px; font-size: 11px; line-height: 1.45; color: #8a5a12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Some editions read the index through a perpetual proxy. The mark sits on the label, in the label's own
    size and colour and without bold: it qualifies the name, it is not a second name. */
 .mi-brief-poster__price-proxy { font-size: 11px; font-weight: 400; color: #6b695f; }
+/* The proxy mark travels with the label, so it keeps the label's ink and weight and sits beside it in
+   the same corner. */
 /* The number and its amplitude on one baseline row: one reading, not two lines. */
 .mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 /* The level carries its own ink: it used to inherit the card's tone, so a reader saw the closing level
