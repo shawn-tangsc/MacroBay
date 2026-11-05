@@ -219,6 +219,23 @@ describe('daily briefing issues', () => {
     expect(issues.find((entry) => entry.id === 'data:next:previous:US.FOMC')?.severity).toBe('info')
   })
 
+  // `02` v2.133 B 案：讲话/声明类事件没有数值是设计如此，**不是缺口**。
+  // 记进右列会让读者和排查的人都以为坏了，而它本来就不会有数。
+  it('files no gap for a statement-only event, and still files one for a numeric release that is missing', () => {
+    const speech = macro({ eventKey: 'US.FED.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话', actual: undefined, previous: undefined, consensus: undefined })
+    // 正常发布行：有前值、有预期值，只是这次的实际值还没到——那是缺口。
+    const released = macro({ eventKey: 'US.CPI', actual: undefined, consensus: '3.2%', previous: '3.1%' })
+    const issues = briefingIssues({
+      document: document({ news: { items: [], macro: [speech, released], notes: {} } }),
+      text: zhText,
+      formatTime
+    })
+    // 讲话行：一条缺口都不该有（实际值 / 预期值 / 前值三项都不记）。
+    expect(issues.filter((entry) => entry.id.includes('US.FED.SPEECH'))).toHaveLength(0)
+    // 有预期值、缺实际值的正常发布行照旧记缺口——两种行在数据上可区分。
+    expect(issues.some((entry) => entry.id === 'data:macro:actual:US.CPI')).toBe(true)
+  })
+
   it('explains DXY, gold and the ten-year when they are unavailable or lack a comparison window', () => {
     const issues = briefingIssues({
       document: withMarket([

@@ -295,8 +295,20 @@ function collectMacro(input: BriefingIssueInput, add: AddIssue): void {
   }
 }
 
+/**
+ * 讲话/声明类事件：**没有数值是设计如此，不是缺口**（`02` v2.133 B 案）。
+ *
+ * 判据放在数据上，不靠事件名：一条既没有实际值、也没有预期值、还没有前值的事件，不是一次数值发布
+ * ——它是"某人在某时说了话"。这类行照常显示（时刻/国家/标题），不写解析，也**不进右列**：
+ * 记成缺口会让读者和排查的人都以为坏了，而它本来就不会有数。
+ */
+function isStatementOnly(item: BriefingMacroItem): boolean {
+  return !item.actual && !item.consensus && !item.previous
+}
+
 function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: BriefingMacroItem): void {
   const { text } = input
+  if (isStatementOnly(item)) return
   const name = eventTitle(item, input.eventTitles)
   if (!item.consensus) {
     add({

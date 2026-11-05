@@ -200,6 +200,30 @@ describe('the macro section draws events, never a message about missing data (v2
     assertClean(rendered)
   })
 
+  // `02` v2.133 B 案：讲话/声明类行**不写解析**，且结构上就看得出不同——不是少一句话。
+  it('draws a statement row as one segment, and an explained row as two', async () => {
+    const doc = briefing()
+    const speech = {
+      ...doc.news.macro[0]!, eventKey: 'US.FED.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话',
+      actual: undefined, previous: undefined, consensus: undefined, why: undefined,
+      surprise: { direction: 'consensus-unavailable' as const, reason: 'missing-actual' }
+    }
+    const explained = { ...doc.news.macro[0]!, why: '初请低于前值，劳动力市场仍紧，抬高贴现率压力。' }
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: [speech, explained], notes: {} } })
+
+    const absent = rendered.querySelector('[data-macro-parse="absent"]')!
+    const present = rendered.querySelector('[data-macro-parse="present"]')!
+    expect(absent).not.toBeNull()
+    expect(present).not.toBeNull()
+    // 结构判据：absent 行里**根本不生成**解析容器；present 行里恰一个。
+    expect(absent.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(0)
+    expect(present.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(1)
+    // 讲话行照常显示时刻与标题，但没有值、没有解析，也不出现任何缺失话术。
+    expect(absent.textContent).toContain('里奇蒙联储主席巴尔金发表讲话')
+    expect(absent.textContent).not.toContain('—')
+    assertClean(rendered)
+  })
+
   it('marks a web-sourced value with the same suffix, and leaves a store value alone', async () => {
     // `02` v2.128：只给网页取到的值加「（网页）」；库内值一个字都不加。
     const base = briefing()

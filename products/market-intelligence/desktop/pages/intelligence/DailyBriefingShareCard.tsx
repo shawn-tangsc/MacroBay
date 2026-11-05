@@ -131,7 +131,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
       {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
-      {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
+      {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
+          `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
+      {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}{item.lifecycleState === 'cancelled' ? <span className="mi-brief-poster__macro-cancelled">{text.macro.cancelled}</span> : null}</p>
