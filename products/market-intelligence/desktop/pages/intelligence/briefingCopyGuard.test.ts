@@ -28,6 +28,16 @@ import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirectio
  * 「放回去会变红」，而不是今晚演一次给验收人看。
  */
 
+/** Resolve a dotted product-text key, or `undefined` when the tree has no such leaf. */
+function resolveCopy(root: unknown, key: string): string | undefined {
+  let node: unknown = root
+  for (const part of key.split('.')) {
+    if (typeof node !== 'object' || node === null) return undefined
+    node = (node as Record<string, unknown>)[part]
+  }
+  return typeof node === 'string' ? node : undefined
+}
+
 const BANNED = [/读数/, /\d\/4/]
 
 /** 纯函数：给一批字符串，返回命中的那些。夹具直接调用它，不依赖文件系统。 */
@@ -190,6 +200,67 @@ describe('briefing copy guard', () => {
     for (const [id, name] of Object.entries(english)) {
       expect(name.length, `${id}: ${name}`).toBeLessThanOrEqual(14)
       expect(name, id).not.toMatch(/\s{2,}|^\s|\s$/)
+    }
+  })
+
+  it('resolves every copy key the product passes as a string — a missing key renders an empty label', () => {
+    // `history.deleteEditionCurrent` 那次：键不存在，菜单项渲染成空标签，而 rail 自己的用例用 stub
+    // 解析器把它盖住了。原来这条只扫 `DailyBriefingHistoryRail.tsx` 的 `labelKey`，别的文件、别的
+    // `*Key` 属性全在网外。这里改成扫**整个产品渲染层**：任何 `XxxKey: 'pages.…'` 都必须在中英两棵
+    // 文案树里取到非空句子。
+    //
+    // 覆盖面说明（写清边界，免得被当成「所有文案都查过了」）：只覆盖**以字符串传的键**。绝大多数
+    // 文案是 `text.xxx.yyy` 的对象访问，缺键在 `tsc` 阶段就红了，不需要这条守卫。改动文案传递方式
+    // （对象 → 字符串键）时，这条守卫才会开始管它。
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) files.push(full)
+      }
+    }
+    // 范围写死成「日报目录」是有意的：设置里的通知页有自己的本地文案表，键长得像 `pages.…` 却不在
+    // `productText` 里，扫进去只会得到假红（第一次就是这么撞上的）。
+    walk(__dirname)
+
+    const pattern = /([A-Za-z]+Key): '(pages\.[^']+)'/g
+    const found = new Map<string, string[]>()
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(pattern)) {
+        const key = match[2] as string
+        found.set(key, [...(found.get(key) ?? []), `${match[1]} in ${file.slice(__dirname.length + 4)}`])
+      }
+    }
+    // 空转即红：正则或写法变了会让它悄悄变成零个键，那样比没有守卫更糟。三个以上是当前实况（两个
+    // 删除入口的说明 + 生成阶段的问号），掉到 0–2 就说明扫描本身失效了。
+    expect(found.size).toBeGreaterThan(2)
+    // 这条键曾经不在库里、靠 stub 混过验收——把它钉死，删了就等于这次教训也删了。
+    expect(found.has('pages.intelligence.portal.dashboard.dailyBriefing.history.deleteEditionCurrent')).toBe(true)
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      for (const key of found.keys()) {
+        const sentence = resolveCopy(productText[locale], key)
+        expect(sentence, `${locale}: ${key}`).toBeTypeOf('string')
+        expect(sentence, `${locale}: ${key}`).not.toBe('')
+      }
+    }
+  })
+
+  it('resolves every menu label the rail references — a missing key renders an empty item', () => {
+    // `history.deleteEditionCurrent` 曾经不存在，菜单项因此**渲染成空标签**，而 rail 自己的用例用 stub
+    // 解析器把它盖住了。这条守卫按源码里出现过的 `labelKey` 逐个回文案树取句子：取不到就是红，
+    // 中英各查一次——只查中文，英文缺键时读者看到的仍是一个空项。
+    const source = readFileSync(join(__dirname, 'DailyBriefingHistoryRail.tsx'), 'utf8')
+    // 只查产品文案树里的键：`ui.*` 是平台的键，由平台自己的守卫管。
+    const keys = [...source.matchAll(/labelKey: '(pages\.[^']+)'/g)].map((match) => match[1] as string)
+    // 一个都没有就说明这条守卫已经空转（正则或写法变了），那本身就是红。
+    expect(keys.length).toBeGreaterThan(0)
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      for (const key of keys) {
+        expect(resolveCopy(productText[locale], key), `${locale}: ${key}`).toBeTypeOf('string')
+        expect(resolveCopy(productText[locale], key), `${locale}: ${key}`).not.toBe('')
+      }
     }
   })
 
