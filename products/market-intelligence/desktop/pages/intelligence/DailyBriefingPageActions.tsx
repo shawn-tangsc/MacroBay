@@ -4,7 +4,6 @@ import { Settings2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
 import { useToast } from '@platform/ui/components/toast'
-import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
@@ -186,8 +185,8 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       <Button className="mi-briefing-tool__btn" data-toolbar-action="copy" disabled={blocked} onClick={onCopy} aria-live="polite">
         {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
       </Button>
-      {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用，
-          原因写在整组下面一句（组件级的 `DisabledHint` 会把它同时挂进 `aria-describedby`）。 */}
+      {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用——
+          动作行不解释自己（界面规范 §5.1），原因由正文的空态说明。 */}
       {deleteButton}
   </div>
 }
