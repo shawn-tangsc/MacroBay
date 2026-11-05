@@ -27,7 +27,12 @@ export function useBriefingRunActions(input: Readonly<{
   onSettled?: () => void
 }>): Readonly<{
   /** Runs one issue now. An optional draft is the manual dialog's three fields. */
-  regenerate: (options?: Readonly<{ locale?: 'zh-CN' | 'en-US'; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }>) => Promise<void>
+  regenerate: (options?: Readonly<{
+    locale?: 'zh-CN' | 'en-US'
+    /** A one-off manual period's own id; without it the run lands on `default` and overwrites a slot. */
+    periodId?: string
+    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  }>) => Promise<void>
   generateNow: () => void
 }> {
   const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({

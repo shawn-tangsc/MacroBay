@@ -454,7 +454,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
               })?.toISOString()
             })()
           if (asOf === undefined) return
-          void regenerate({ locale: draft.language, generation: { asOf, windowHours: draft.windowHours as 12 | 24 | 48 } })
+          // **手动生成是临时期，不是"按某一期跑"**：自带一个不透明的一次性期号，永远不写 `default`，
+          // 也不碰同一天别的期、别的语言。期号不许由时间派生（`A11.3`），随机即可；"是否已生成过"
+          // 由（日期, 截止时刻, 窗口, 语言）判定，那是下一步。
+          const periodId = globalThis.crypto.randomUUID()
+          void regenerate({ periodId, locale: draft.language, generation: { asOf, windowHours: draft.windowHours as 12 | 24 | 48 } })
         }}
         push={pushToPhone}
         pushText={briefingPushText[locale]}
