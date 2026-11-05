@@ -356,6 +356,32 @@ function rowSources(): string {
     .join('\n')
 }
 
+/**
+ * The row a day shows when it has no edition yet. It is the one row in the rail that is not an edition,
+ * so it must not copy an edition's rhythm — and it must not borrow a warning's vocabulary either: "not
+ * yet" is a state of the day, not a failure of the run.
+ */
+describe('the fallback row for a day with no edition', () => {
+  it('is one line with a trailing caret, not an edition with its insides missing', () => {
+    const row = rule('.mi-daily-briefing__rail-fallback {')
+    expect(row).toContain('display: flex;')
+    // The caret is pushed to the end of the line, so the row reads as one clickable sentence.
+    expect(row).toContain('justify-content: space-between;')
+    expect(row).toContain('font-size: 11px;')
+    expect(rule('.mi-daily-briefing__rail-fallback-text {')).toContain('text-overflow: ellipsis;')
+    expect(rule('.mi-daily-briefing__rail-fallback-caret {')).toContain('flex: none;')
+  })
+
+  it('stays quiet: no warning ink, no edition pitch', () => {
+    const row = rule('.mi-daily-briefing__rail-fallback {')
+    expect(row).not.toContain('--mi-dashboard-negative')
+    expect(row).not.toContain('--mi-dashboard-caution')
+    // An edition row is `padding: 4px 6px` with a 27px pitch; this one must not inherit that shape.
+    expect(row).not.toContain('padding: 4px 6px;')
+    expect(rule('.mi-daily-briefing__rail-fallback:hover {')).toContain('rgba(255, 255, 255, .04)')
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

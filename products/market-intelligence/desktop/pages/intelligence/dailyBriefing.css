@@ -394,6 +394,17 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
    There is no ⋯ trigger any more: the row's menu is the context menu, and its one item is explained
    there. The rules for a hover-revealed icon at the row's trailing edge were deleted with it. */
 .mi-daily-briefing__rail-item { position: relative; }
+/* A day that has no edition yet. One line with a trailing ›, and deliberately none of the edition row's
+   rhythm: same insets and the same 27px pitch would make it read as an edition that happens to be
+   empty. Its ink is the faint tier — quieter than a title — because "not yet" is not a warning: no red,
+   no dot, no retry affordance. The caret is what says it can be clicked, and the hover brightening is
+   the one the edition rows already use.
+   The faint ink has no token in this stylesheet (it is a literal the colour baseline counts), so it is
+   expressed here as a mix of the muted ink rather than opening a second literal for the same value. */
+.mi-daily-briefing__rail-fallback { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 0; padding: 8px 6px; border: 0; border-radius: 6px; background: transparent; color: color-mix(in srgb, var(--mi-dashboard-muted) 62%, transparent); font-size: 11px; line-height: 1.45; text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-fallback:hover { background: rgba(255, 255, 255, .04); color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-fallback-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi-daily-briefing__rail-fallback-caret { flex: none; color: var(--mi-dashboard-muted); }
 /* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
    pressed state — a reader who could click it would expect it to change what the row shows, and it does
    not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
