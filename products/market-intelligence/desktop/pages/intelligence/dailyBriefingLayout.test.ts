@@ -194,40 +194,40 @@ describe('one danger action in the toolbar', () => {
 
 /**
  * Two rows of actions answer two different questions: the page decides whether today happens, the
- * report decides what to do with the issue on screen. The report's row sticks to the report's scroll
- * container and must cover the text scrolling under it — a gap there shows two lines of body text
- * through what is supposed to be a solid bar.
+ * report decides what to do with the issue on screen. The report's row is part of the card and lives
+ * outside the scroll area, so it cannot scroll away and a scrollbar cannot reach it.
  */
-describe('the report actions stick to the report', () => {
-  it('becomes part of the report at rest and a surface only once pinned', () => {
-    const bar = rule('.mi-daily-briefing-page__report-bar {')
-    expect(bar).toContain('position: sticky;')
-    // At rest: no fill, no hairline — a painted box reads as a second panel on the document.
-    expect(bar).toContain('background: transparent;')
-    expect(bar).toContain('border-bottom: 1px solid transparent;')
-    // The row sits inside the card's own inset — no bleed — so it belongs to the card's rounded
-    // border rather than hanging over its edge.
-    expect(bar).toContain('margin: 0;')
-    expect(bar).toContain('padding: 0 0 12px;')
+describe('the report actions do not scroll', () => {
+  it('lays the card out as a fixed row above a scrolling sheet area', () => {
+    const card = rule('.mi-daily-briefing-page__report-card {')
+    expect(card).toContain('display: flex;')
+    expect(card).toContain('flex-direction: column;')
+    expect(card).toContain('min-height: 0;')
+    // The sheet's corners are clipped by the card, not by its own overflow.
+    expect(card).toContain('overflow: hidden;')
 
-    const stuck = rule('.mi-daily-briefing-page__report-bar[data-stuck="true"] {')
-    expect(stuck).toContain('background: var(--mi-dashboard-surface);')
-    // The card's padding band is inside the scrollport, so pinned the row paints it too — with offset
-    // shadows, because a single spread would paint over the paper just below the row.
-    expect(stuck).toContain('0 -36px 0 var(--mi-dashboard-surface)')
-    expect(stuck).not.toMatch(/0 0 0 \d+px/)
-    // A faint seam: it is inside the document, not the edge of a new section.
-    expect(stuck).toContain('border-bottom-color: color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent);')
-    // Nothing about the box may change on stuck, or the report jumps when the bar pins.
-    expect(stuck).not.toContain('margin')
-    expect(stuck).not.toContain('padding')
+    const scroll = rule('.mi-daily-briefing-page__report-scroll {')
+    expect(scroll).toContain('overflow-y: auto;')
+    // Equal insets: the overlay scrollbar floats in the right-hand dark band, not on the cream sheet.
+    expect(scroll).toContain('padding: 12px;')
   })
 
-  it('sits above the content it scrolls over, and below every overlay', () => {
+  it('keeps the row out of every scroll container and stops being sticky', () => {
     const bar = rule('.mi-daily-briefing-page__report-bar {')
-    const zIndex = Number(bar.slice(bar.indexOf('z-index: ') + 'z-index: '.length).split(';')[0])
-    expect(zIndex).toBeGreaterThan(0)
-    expect(zIndex).toBeLessThan(10)
+    // A row that never moves needs no sticky offset — and `position: sticky` is exactly the shape this
+    // rule must not come back to.
+    expect(bar).not.toContain('position: sticky')
+    expect(bar).toContain('flex: none;')
+    // Painted in both states, because there is only one state now.
+    expect(bar).toContain('background: var(--mi-dashboard-surface);')
+    expect(bar).toContain('border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent);')
+  })
+
+  it('keeps no leftovers of the pinned state', () => {
+    // `data-stuck`, the zero-height sentinel and the observer were the previous design. Leaving their
+    // rules behind would be a second, contradictory answer to the same question.
+    expect(css).not.toContain('data-stuck')
+    expect(css).not.toContain('.mi-daily-briefing-page__report-sentinel')
   })
 })
 
@@ -262,7 +262,9 @@ describe('card, actions and sheet stay three boxes', () => {
     const card = rule('.mi-daily-briefing-page__report-card {')
     expect(card).toContain('border: 1px solid var(--mi-dashboard-line);')
     expect(card).toContain('border-radius: 14px;')
-    expect(card).toContain('padding: 12px;')
+    // The padding belongs to the two inner boxes, not to the card: the row and the sheet each carry
+    // their own 12px inset, and the scrollbar's band comes from the sheet's box.
+    expect(card).not.toContain('padding:')
   })
 
   it('lets the sheet take the card inner width and keep its own radius', () => {

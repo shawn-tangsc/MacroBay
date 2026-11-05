@@ -93,23 +93,18 @@
    interface, the paper is the document, and keeping them in two boxes is what keeps the difference
    visible. The paper takes the card's inner width: a fit-content sheet would shrink to the buttons and
    the export boundary would move with them. */
-.mi-daily-briefing-page__report-card { display: flex; flex-direction: column; min-width: 0; padding: 12px; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
-/* The report's own actions are the card's first row: they sit inside the card's rounded border, at its
-   own inset, above the paper rather than pressed onto the paper's edge. No fill and no hairline at rest,
-   because a painted box above the document is what makes it read as a second panel.
-   Pinned, it must become opaque or body text scrolls through the buttons, and only then does it take a
-   hairline — a faint one, since it is a seam inside the document rather than a new section.
-   The box itself never moves: the bleed is present in both states, so switching the paint cannot
-   shift the report. */
-.mi-daily-briefing-page__report-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; padding: 0 0 12px; background: transparent; border-bottom: 1px solid transparent; }
-/* `data-stuck` is set by the page when the report has scrolled under the bar (sentinel or
-   IntersectionObserver — never an offset calculated in a scroll handler: that runs for every pixel and
-   still misses a jump-scroll). Transparent to surface, nothing else changes. */
-/* Pinned, the row paints its own surface and, through three offset shadows, the card's padding band
-   around it — the scrollport includes that band, so body text otherwise shows at the top edge either
-   side of the buttons. Offset shadows rather than one spread: a spread would also paint over the paper
-   directly below the row. */
-.mi-daily-briefing-page__report-bar[data-stuck="true"] { background: var(--mi-dashboard-surface); box-shadow: 0 -36px 0 var(--mi-dashboard-surface), -36px 0 0 var(--mi-dashboard-surface), 36px 0 0 var(--mi-dashboard-surface); border-bottom-color: color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+/* Card = fixed action row + a scroll area that contains only the sheet. The row cannot scroll away and
+   the scrollbar cannot reach it, because they are not in the same scroll container. */
+.mi-daily-briefing-page__report-card { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
+/* The action row is part of the card and never moves: it is outside the scroll area, so it needs no
+   sticky offset and no stuck state to know when to paint itself. It looks the same before and during a
+   scroll — a surface with a faint seam under it, which is the edge of the sheet's area rather than a
+   second section. */
+.mi-daily-briefing-page__report-bar { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px; background: var(--mi-dashboard-surface); border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+/* The sheet's own scroll area. Equal 12px insets on both sides: the sheet is centred inside the card,
+   and an overlay scrollbar floats in the right-hand dark band instead of over the cream sheet — a dark
+   bar on the paper reads as the page having been cut. */
+.mi-daily-briefing-page__report-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
 /* The stage list starts at the same inset in the body panel and in the right column: both containers
    used to inset their own contents differently (24px vs 16px), which moved every row by 8px between
    the generating state and the finished one. The inset belongs to the list, not to each shell. */
@@ -149,7 +144,10 @@
 .mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }
 
 
-.mi-daily-briefing-page__content { padding: 0; border: 0; background: transparent; }
+/* The content column no longer scrolls: the card inside it does. Keeping one scroller on the sheet's
+   own box is what keeps the action row out of the scroll — and what keeps the scrollbar off the
+   buttons without measuring anything. */
+.mi-daily-briefing-page__content { display: flex; flex-direction: column; min-height: 0; padding: 0; border: 0; background: transparent; }
 /* The paper is the shell; the sheet inside keeps its printed width and is scaled to fit. The border,
    radius and shadow stay out here so they are not scaled down with the sheet. */
 /* The sheet keeps its own radius and shadow and takes the card's inner width; it carries no border of
