@@ -140,6 +140,18 @@ export function briefingFailure(input: Readonly<{
       }
     }
   }
+  // 历史日"这一期有失败、没有版次"：`view` 是 `no-edition + failed`，以前这个出口不存在，
+  // 失败面板靠空态组件自己再画一遍（同一件事两个出口）。现在统一从这里出。
+  if (view.status === 'no-edition' && view.failed === true) {
+    return {
+      editorialBlocked,
+      failure: {
+        kind: 'generation',
+        ...(view.failureCode ? { code: view.failureCode } : {}),
+        ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
+      }
+    }
+  }
   if (view.status === 'unavailable' && view.failureCode) {
     return {
       editorialBlocked,

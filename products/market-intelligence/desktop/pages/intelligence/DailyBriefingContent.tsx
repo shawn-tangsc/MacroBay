@@ -132,7 +132,12 @@ export function DailyBriefingContent({ text, view, mode, generating, failure, re
       {/* 缺当前语言也走同一个空态（`02` v2.94）：读者不需要分辨"整期没有"和"缺这个语言"。 */}
     {view.status === 'locale-missing' ? <DailyBriefingNoEditionPanel view={{ status: 'no-edition', date: view.date ?? todayDate, failed: false }} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {view.status === 'no-edition' && !generating ? <DailyBriefingNoEditionPanel view={view} text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
-      {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating} onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
+      {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
+          所以那颗重试是禁用的，并且写明原因。 */}
+      {failure ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}
+        {...('date' in view && typeof view.date === 'string' && view.date !== todayDate
+          ? { retryBlockedReason: text.history.backfillBlocked } : {})}
+        onRetry={onRetry} onOpenSettings={onOpenSettings} /> : null}
       {/* Any editorial failure, not just "AI is off": when the editor could not produce its half, the
           edition still ships and says so here. A reader must never be told "no brief today" instead. */}
       {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}

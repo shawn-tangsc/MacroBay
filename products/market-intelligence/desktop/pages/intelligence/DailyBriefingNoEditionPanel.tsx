@@ -24,18 +24,6 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
   onOpenSettings: () => void
 }>): React.ReactElement {
   const labels = text.history
-  if (view.failed) {
-    return <DailyBriefingFailurePanel
-      failure={{ kind: 'generation', ...(view.failureCode ? { code: view.failureCode } : {}), ...(view.generationTrace ? { generationTrace: view.generationTrace } : {}) }}
-      text={text}
-      formatTime={formatTime}
-      regenerating={false}
-      retryBlockedReason={labels.backfillBlocked}
-      onRetry={() => undefined}
-      onOpenSettings={onOpenSettings}
-    />
-  }
-
   // 今天与历史日**共用同一块平台空态**（`02` v2.98）：标题由 `ui.state.empty` 提供，两块自动逐字
   // 相同；差异只在副句，副句走 `productReason` 的 key（字面键，守卫要求可判断前缀）。
   const isCurrent = view.date === currentPeriodDate
