@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createJobScheduler } from '@platform/jobs/runtime/jobScheduler'
 import type { JobDefinition } from '@platform/jobs'
+import type { JobRuntime } from '@platform/jobs/runtime/jobRuntime'
 
-import { createZeroXRouterCalendarScheduler, zeroXRouterCalendarSchedulerPolicy } from './zeroXRouterCalendarScheduler'
+import { resolveJobTitle } from '@platform/jobs/runtime/jobTitle'
+import { createZeroXRouterCalendarScheduler, zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy } from './zeroXRouterCalendarScheduler'
 
 const firstJobId = `${zeroXRouterCalendarSchedulerPolicy.definitionId}.economic-data`
 const firstHandlerId = `${zeroXRouterCalendarSchedulerPolicy.handlerId}.economic-data`
@@ -22,13 +24,17 @@ function schedulerHarness() {
   const scheduler = createJobScheduler({ enqueue: async (definition) => { enqueued.push(definition) } })
   const handlers = new Map<string, () => Promise<void>>()
   const started: JobDefinition[] = []
+  const scheduled: JobDefinition[] = []
   const jobRuntime = {
     registerHandler: (handlerId: string, handler: () => Promise<void>) => { handlers.set(handlerId, handler) },
-    setSchedule: (definition: JobDefinition) => scheduler.setSchedule(definition),
+    setSchedule: (definition: JobDefinition) => { scheduled.push(definition); scheduler.setSchedule(definition) },
     removeSchedule: (definitionId: string) => scheduler.removeSchedule(definitionId),
     enqueueDefinition: async (definition: JobDefinition) => { started.push(definition); return {} }
   }
-  return { enqueued, handlers, started, jobRuntime }
+  // 平台端口把 handler 声明成 (payload, context) 两参，而这条作业的 handler 两个都不读；假的运行时
+  // 只需要一个能调用、能计数的最小实现，所以在这里一次性收窄。
+  const runtime = jobRuntime as unknown as Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition'>
+  return { enqueued, handlers, started, scheduled, jobRuntime: runtime }
 }
 
 describe('zeroXRouter calendar scheduler', () => {
@@ -175,5 +181,35 @@ describe('zeroXRouter calendar scheduler', () => {
     scheduler.dispose()
     await vi.advanceTimersByTimeAsync(zeroXRouterCalendarSchedulerPolicy.intervalMs * 3)
     expect(enqueued).toHaveLength(0)
+  })
+
+  // 读者在通知中心看到的是英文内部名（`Refresh 0xRouter market calendar: central-bank-activities`）。
+  // 根因是名字由「英文 base 标题 + 内部 key」拼出来：既然要拼 key，就一定会把 key 印给读者。
+  it('names every feed in both languages, without the vendor name or the internal key', async () => {
+    const { scheduled, jobRuntime } = schedulerHarness()
+    const scheduler = createZeroXRouterCalendarScheduler({
+      jobRuntime,
+      readReadiness: () => ({ enabled: true, hasCredential: true }),
+      readEnabledFeeds: () => zeroXRouterCalendarSchedulerFeeds.map(feed => feed.sourceId),
+      refreshAutomatic: async () => ({ state: 'completed', items: [] })
+    })
+    await scheduler.initialize()
+    const titles = scheduled.map(definition => definition.title)
+    expect(titles).toEqual([
+      { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' },
+      { 'zh-CN': '市场日历 · 金融事件', 'en-US': 'Market calendar · financial events' },
+      { 'zh-CN': '市场日历 · 央行活动', 'en-US': 'Market calendar · central bank activities' }
+    ])
+    for (const title of titles) {
+      const text = JSON.stringify(title)
+      expect(text).not.toContain('0xRouter')
+      // The internal feed key is the thing the reader must never see, so no title may carry it.
+      expect(text).not.toContain('central-bank-activities')
+      expect(text).not.toContain('economic-data')
+    }
+    // The live surface resolves by the reader's language; a fixed English string fails here.
+    expect(resolveJobTitle(titles[2]!, undefined, 'zh-CN')).toBe('市场日历 · 央行活动')
+    expect(resolveJobTitle(titles[2]!, undefined, 'en-US')).toBe('Market calendar · central bank activities')
+    scheduler.dispose()
   })
 })

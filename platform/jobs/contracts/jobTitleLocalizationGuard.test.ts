@@ -24,7 +24,6 @@ const REMAINING_BY_FILE: Record<string, number> = {
   'products/market-intelligence/service/intelligence/jobs/dailyBriefingSchedules.ts': 1,
   'products/market-intelligence/service/intelligence/jobs/registerDailyBriefSessionRetentionJob.ts': 1,
   'products/market-intelligence/service/intelligence/jobs/registerMarketAnalysisJobs.ts': 3,
-  'products/market-intelligence/service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler.ts': 2,
   'products/market-intelligence/service/intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime.ts': 1,
   'products/market-intelligence/service/intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndValuesScheduler.ts': 1,
   'products/market-intelligence/service/intelligence/macro-calendar/macroCalendarScheduleJobRuntime.ts': 1,
@@ -34,8 +33,8 @@ const REMAINING_BY_FILE: Record<string, number> = {
   'products/market-intelligence/service/intelligence/retention/marketHistoryRetentionJob.ts': 1
 }
 
-/** 前一版的总数（`b230cca` 的全局基线）：只用于「总和只许减」这一条，不参与逐文件判定。 */
-const PREVIOUS_TOTAL = 24
+/** 前一版的总数：只用于「总和只许减」这一条，不参与逐文件判定。已迁移的线把自己的数目减掉、把那一格删掉。 */
+const PREVIOUS_TOTAL = 22
 
 const ROOTS = ['platform', 'products']
 
