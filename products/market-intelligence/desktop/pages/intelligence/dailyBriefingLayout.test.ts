@@ -153,6 +153,8 @@ describe('day rhythm and the row menu trigger', () => {
     // The radius must not change with selection: a row that changes shape when picked reads as a
     // different kind of row rather than the same row, marked.
     expect(selected).toContain('border-radius: 6px;')
+    // No ink of its own: a selected row is the same row with a marker, not a brighter kind of row.
+    expect(selected).not.toContain('color: var(--mi-dashboard-text)')
     expect(selected).not.toMatch(/#[0-9a-f]{3,8}/i)
   })
 
