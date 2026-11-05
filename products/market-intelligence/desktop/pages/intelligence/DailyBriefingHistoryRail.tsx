@@ -103,7 +103,16 @@ export function DailyBriefingHistoryRail({
   /** 删这一版。`clock` 跟着一起来：成功那句要点名 `日期 · 时刻 · 语言`。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void | Promise<void>
   /** Run this period again. Absent when the host cannot spend a run (the menu item is then disabled). */
-  onRegeneratePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
+  /**
+   * 重跑这一行。**带上它自己的时刻与窗口**：手动期没有期配置可依据，只给期号语言的话，
+   * 服务会按排期时刻重跑——读者看到的就不是他当初选的那一期。
+   */
+  onRegeneratePeriod?: (input: Readonly<{
+    date: string
+    periodId: string
+    locale: DailyBriefingLocale
+    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  }>) => void | Promise<void>
 }>): React.ReactElement {
   const confirm = useConfirm()
   // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
@@ -251,8 +260,9 @@ export function DailyBriefingHistoryRail({
               <button type="button"
                 {...(retryable ? { 'data-has-retry': 'true' } : {})}
                 aria-current={rowSelected(edition) ? 'true' : undefined}
-                // 生成中的那一行不可点：它还没有内容可开。原因写在行内第二行，读屏顺着行拿得到。
-                {...(running ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : {})}
+                // 生成中那一行**可以点**：点它打开这一期的生成界面（进度按它自己的期号取）。
+                // 以前这里写死"不可点"，读者点了没反应，只能右键或等它跑完。
+                {...(running ? { 'aria-busy': 'true' } : {})}
                 data-date={edition.date} data-state={edition.state} data-period-id={edition.periodId}
                 {...(edition.periodDeleted ? { 'data-period-deleted': 'true' } : {})}
                 className="mi-daily-briefing__rail-row"
@@ -266,8 +276,8 @@ export function DailyBriefingHistoryRail({
                   openMenu(edition, { x: rect.left + 8, y: rect.top + 8 })
                 }}
                 onClick={() => {
-                  if (running) return
                   // 点一行 = 选那一版（日期 + 期号 + 语言）。只给日期的话，同期中英两行会开同一份。
+                  // 生成中的行同样走这里：屏幕上切到它自己的生成界面，而不是点了没反应。
                   if (onSelectLocale) onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
                   else onSelect(edition.date)
                 }}>
@@ -316,7 +326,24 @@ export function DailyBriefingHistoryRail({
               </button>
               {retryable
                 ? <button type="button" className="mi-daily-briefing__rail-retry" data-rail-retry="true"
-                  onClick={() => { void onRegeneratePeriod?.({ date: edition.date, periodId: edition.periodId, locale: edition.locale }) }}>
+                  onClick={() => {
+                    void onRegeneratePeriod?.({
+                      date: edition.date,
+                      periodId: edition.periodId,
+                      locale: edition.locale,
+                      // 这一行自己的截止与窗口：手动期的 periodTime 就是读者当初选的时刻。
+                      ...(edition.periodTime === undefined
+                        ? {}
+                        : {
+                          generation: {
+                            asOf: edition.periodTime,
+                            ...(typeof edition.windowHours === 'number'
+                              ? { windowHours: edition.windowHours as 12 | 24 | 48 }
+                              : {})
+                          }
+                        })
+                    })
+                  }}>
                   {text.history.retryOne}
                 </button>
                 : null}

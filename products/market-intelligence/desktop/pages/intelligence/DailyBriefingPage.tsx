@@ -474,7 +474,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         // 行菜单的「重新生成这一期」：期号来自那一行，不是当前选中的那一期。
         // 失败行行内重试：期号与语言来自那一行；截止由服务按那一期的配置取（#9 在批 2 补 generation）。
-        onRegeneratePeriod={({ periodId, locale: target }) => { void runBriefing({ periodId, locale: target, trigger: 'retry' }) }}
+        onRegeneratePeriod={({ periodId, locale: target, generation }) => {
+          void runBriefing({ periodId, locale: target, trigger: 'retry', ...(generation === undefined ? {} : { generation }) })
+        }}
         // 行右键与工具栏第五颗共用同一个处理函数：两个入口，一套行为。
         onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale, ...(target.clock === undefined ? {} : { clock: target.clock }) })} />
       <DailyBriefingContent {...{

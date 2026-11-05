@@ -460,7 +460,27 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(waiting.textContent).not.toMatch(/\d/)
   })
 
-  it('shows the waiting row with the spinner in the title slot, and it does not open', () => {
+  // #9：行内「重试」以前只交期号与语言，手动期没有期配置可依据，重跑会落回排期时刻。
+  it('retries a failed manual issue with its own cutoff and window', () => {
+    const onRegeneratePeriod = vi.fn()
+    render({
+      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 1,
+        periodKind: 'manual', periodTime: '2026-11-02T00:00:00.000Z', windowHours: 12 })],
+      onRegeneratePeriod
+    })
+    const retry = host.querySelector<HTMLButtonElement>('[data-rail-retry]')!
+    retry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(onRegeneratePeriod).toHaveBeenCalledWith({
+      date: '2026-11-02',
+      periodId: 'default',
+      locale: 'zh-CN',
+      generation: { asOf: '2026-11-02T00:00:00.000Z', windowHours: 12 }
+    })
+  })
+
+  // 用户报的那条：生成中的行点了没反应。现在它可点，点它打开**这一期**的生成界面。
+  it('opens the running issue when its row is clicked, instead of swallowing the click', () => {
     const onSelectLocale = vi.fn()
     render({
       editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
@@ -468,11 +488,15 @@ describe('a row is two lines: the facts, then what it says', () => {
     })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
     expect(row.getAttribute('aria-busy')).toBe('true')
+    // 不再是"禁用"：那一行讲的是正在发生的运行，读者有权打开它。
+    expect(row.getAttribute('aria-disabled')).toBeNull()
     const waiting = row.querySelector('[data-rail-title="running"]')!
     expect(waiting.textContent).toContain(text.generationProgress.railRunning)
     expect(waiting.querySelector('.loading-spinner, [class*="spinner"], svg')).not.toBeNull()
+
     act(() => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(onSelectLocale).not.toHaveBeenCalled()
+    // 点的收获必须是**这一行自己的**三样身份，而不是"当前选中那一期"。
+    expect(onSelectLocale).toHaveBeenCalledWith({ date: '2026-11-02', periodId: 'default', locale: 'zh-CN' })
   })
 
 })
