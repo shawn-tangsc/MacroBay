@@ -130,6 +130,17 @@ describe('a backfilled edition says which world it read', () => {
     expect(note.textContent?.trimStart().startsWith('·')).toBe(true)
   })
 
+  it('still says it was a backfill when the cutoff is missing, and only drops the time', async () => {
+    // 正常路径三件齐（契约注释与生成流程保证）；真有残骸时**不许整段消失**——补跑这件事读者
+    // 必须知道，沉默比缺一个时刻更糟。
+    const base = briefing()
+    const host = await render({ ...base, edition: { ...base.edition, isBackfill: true } })
+    const note = host.querySelector('[data-backfill-note]')!
+    expect(note).not.toBeNull()
+    expect(note.textContent).toContain(text.backfillNote.split('{time}')[0]!.trim())
+    expect(note.textContent).not.toContain('2026-10-30 12:20')
+  })
+
   it('says nothing on a punctual edition', async () => {
     const host = await render(briefing())
     expect(host.querySelector('[data-backfill-note]')).toBeNull()
