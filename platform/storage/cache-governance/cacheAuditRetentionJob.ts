@@ -32,7 +32,8 @@ export function registerCacheAuditRetentionJob(
     id: cacheAuditRetentionJobId,
     owner: 'platform',
     handlerId: cacheAuditRetentionJobId,
-    title: 'Cache audit retention',
+    // 读者看得懂它在干什么：把超期和超量的缓存审计记录清掉，不是「保留期」这个抽象词。
+    title: { 'zh-CN': '清理缓存审计记录', 'en-US': 'Cache audit retention' },
     audience: 'internal' as const,
     // 凌晨跑，避开用户活跃时段；时区取读者时区，和「运行语义跟设置时区」一致。
     trigger: { kind: 'cron', expression: '50 3 * * *', timezone: deps.timeZone() },

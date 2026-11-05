@@ -19,11 +19,11 @@ import { describe, expect, it } from 'vitest'
  * 刻意**不把 `product.manifest.ts` 算进来**：那里的 `title` 是导航名/工具名，不是 `JobDefinition`。
  */
 const REMAINING_BY_FILE: Record<string, number> = {
-  'platform/ai/agent-platform/channels/channelMaintenanceJobs.ts': 4,
-  'platform/ai/assistant-platform/retention/registerAssistantSessionRetentionJob.ts': 1,
-  'platform/ai/providers/registerInUseModelPatrolJob.ts': 1,
-  'platform/notifications/jobs/notificationRetentionJob.ts': 1,
-  'platform/storage/cache-governance/cacheAuditRetentionJob.ts': 1,
+  // 4 → 1：三条固定名的作业已本地化。剩下那条 `adapterMaintenance` 的名字是拼出来的，
+  // 参数是适配器 id（telegram / slack / lark …），而读者能看懂的通道名只在渲染层词表里，
+  // 平台侧取不到（分层），且 `lark` 在那张词表里没有条目（词表用的是 `feishu`）。
+  // 先不硬拼 id，等 id 归一与词表落位。
+  'platform/ai/agent-platform/channels/channelMaintenanceJobs.ts': 1,
   'products/market-intelligence/service/intelligence/application/sourceRuntimeOrchestrator.ts': 1,
   'products/market-intelligence/service/intelligence/cross-asset/crossAssetIndexJob.ts': 1,
   'products/market-intelligence/service/intelligence/jobs/dailyBriefingSchedules.ts': 1,
