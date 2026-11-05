@@ -13,8 +13,9 @@ import type { BriefingPushState } from './dailyBriefingPushWiring'
  * 文件里一条 IPC/传输 import 都没有。「页面接线归简报线」不靠自觉，靠这里没有东西可调。
  *
  * 三条写进结构、不靠评审：
- * - **禁用必须说理由**：原因用 `DisabledHint` 挂成 `aria-describedby`——禁用的按钮接不到 hover 也接不到
- *   焦点，`title` 那条路是死的；四种处境四句话，不合并成「暂不可用」。
+ * - **禁用必须说理由，但工具栏里不说给眼睛看**：原因仍由 `DisabledHint` 挂成 `aria-describedby`——
+ *   禁用的按钮接不到 hover 也接不到焦点，`title` 那条路是死的；四种处境四句话，不合并成「暂不可用」。
+ *   位置规则见界面规范 §5.1：动作行/工具栏不常驻原因文字（`reasonDisplay="sr-only"`），读屏与悬停照常。
  * - **失败与回执都走平台 toast**（用户 2026-11-05 定）：工具栏里只留按钮，不再挂一行「没发出去…重试」；
  *   那句字又丑又常驻，读者要的是点一下、看一条提示、几秒后消失。重试就是再点一次按钮。
  * - **成功也不在这里报**：「已交给 {channel}（未拿到回执）」需要通道名与回执状态，那是页面的 toast。
@@ -44,6 +45,11 @@ export function BriefingPushToPhoneButton({ state, text, onPush }: BriefingPushT
   return <span className="mi-daily-briefing__push">
     {blocked === undefined
       ? button
-      : <DisabledHint labelKey={`dailyBriefing.push.blocked.${blocked}`} resolveText={(key: string) => (key === `dailyBriefing.push.blocked.${blocked}` ? text.disabled[blocked] : '')}>{button}</DisabledHint>}
+      : <DisabledHint
+        labelKey={`dailyBriefing.push.blocked.${blocked}`}
+        // 工具栏是一排按钮，不是说明区（用户 2026-11-05：「把按钮禁用就行了」）。
+        reasonDisplay="sr-only"
+        resolveText={(key: string) => (key === `dailyBriefing.push.blocked.${blocked}` ? text.disabled[blocked] : '')}
+      >{button}</DisabledHint>}
   </span>
 }

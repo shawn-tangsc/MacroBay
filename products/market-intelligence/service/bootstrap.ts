@@ -30,6 +30,7 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
+import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
@@ -133,14 +134,6 @@ function sampleModeRecorderDirectory(): string | undefined {
   if (process.env.MB_SAMPLE_RECORD !== '1') return undefined
   if (typeof app?.getAppPath !== 'function' || app.isPackaged) return undefined
   return join(app.getAppPath(), 'products/market-intelligence/demo/raw')
-}
-
-/**
- * The cached volume as the cache page measures it: the JSON payload the store writes on disk.
- * One implementation, so inspect, clear and compact cannot disagree about what a byte is.
- */
-function translationRecordsBytes(records: readonly unknown[]): number {
-  return Buffer.byteLength(JSON.stringify(records), 'utf8')
 }
 
 export function registerServices(deps: ProductBootstrapDependencies): void {

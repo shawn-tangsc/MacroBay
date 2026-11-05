@@ -59,6 +59,24 @@ describe('the push button speaks for every blocked reason', () => {
   })
 })
 
+describe('the toolbar shows no standing reason, and the screen reader still hears one', () => {
+  it('renders every blocked reason in screen-reader mode, wired to the control', async () => {
+    for (const reason of ['generating', 'no-edition', 'missing-locale', 'capability'] as const) {
+      const { host } = await mount({ kind: 'disabled', reason })
+      const control = button(host)
+      // 按钮照旧禁用；原因仍在 DOM、仍是 aria-describedby 的落点——只是不给眼睛看（界面规范 §5.1）。
+      expect(control.disabled).toBe(true)
+      const describedBy = control.getAttribute('aria-describedby')
+      const reasonNode = host.querySelector(`#${CSS.escape(describedBy!)}`)
+      expect(reasonNode?.textContent).toBe(text.disabled[reason])
+      expect(reasonNode?.getAttribute('data-reason-display')).toBe('sr-only')
+      expect(reasonNode?.className).toContain('disabled-hint__reason--sr-only')
+      await act(async () => root?.unmount())
+      root = undefined
+    }
+  })
+})
+
 describe('the push button leaves the toolbar to the button alone', () => {
   it('says nothing about a failure inline, and a click retries the send', async () => {
     // 失败与回执都走平台 toast（用户 2026-11-05）：工具栏里不许再挂一行「没发出去…重试」。

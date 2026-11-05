@@ -158,6 +158,29 @@ describe('the publish control on the page', () => {
     expect(container.textContent).toContain(zh.disabled.capability)
   })
 
+  it('keeps every disabled reason out of the toolbar surface, structurally', async () => {
+    // 用户 2026-11-05：「把按钮禁用就行了，别说废话」。按结构判——工具栏里每条原因都必须是
+    // sr-only（仍在 DOM、仍被 aria-describedby 指着），不是把这四句硬编码成黑名单。
+    const cases = [
+      { props: { generating: true } },
+      { props: { localeMissing: true } },
+      { props: { document: undefined } }
+    ]
+    for (const entry of cases) {
+      render(<Row edition={entry.props.document} generating={entry.props.generating} localeMissing={entry.props.localeMissing} />)
+      await act(async () => { await Promise.resolve() })
+      const bar = container.querySelector('.mi-daily-briefing-page__report-bar')!
+      const reasons = Array.from(bar.querySelectorAll('.disabled-hint__reason'))
+      expect(reasons.length).toBeGreaterThan(0)
+      for (const node of reasons) expect(node.getAttribute('data-reason-display')).toBe('sr-only')
+      const describedBy = button().getAttribute('aria-describedby')
+      expect(describedBy).toBeTruthy()
+      expect(reasons.some((node) => describedBy!.includes(node.id))).toBe(true)
+      act(() => { root.unmount() })
+      root = createRoot(container)
+    }
+  })
+
   it('pushes the English edition the reader is looking at, not the master-language one', async () => {
     // 读者切成英文、点推送，收到的必须是英文版：只要这一版真在通知里（editionId+locale 对得上）就推，
     // 不为「非主语言」另设禁用分支——那会把「去重新生成」的出路堵掉。

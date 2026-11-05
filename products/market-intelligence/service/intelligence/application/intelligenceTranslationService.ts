@@ -1,3 +1,4 @@
+import { buildTranslationCompactionPlan } from './intelligenceTranslationCache'
 import type { JobRuntime } from '@platform/jobs'
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
@@ -108,33 +109,14 @@ export function createIntelligenceTranslationService(deps: {
     }
   }
 
-  function buildCompactionPlan(
-    records: IntelligenceTranslationRecord[],
-    retentionMode: 'compact' | 'balanced' | 'extended'
-  ): {
-    next: IntelligenceTranslationRecord[]
-    removedCount: number
-  } {
-    const keepDays = retentionMode === 'compact' ? 7 : retentionMode === 'extended' ? 90 : 30
-    const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000
-    const hotItemIds = new Set(deps.pipeline.listItems().map((item) => item.itemId))
-
-    const next = records.filter((record) => {
-      const timestamp = record.translatedAt ? new Date(record.translatedAt).getTime() : 0
-      if (record.status === 'stale' || record.status === 'failed') {
-        return timestamp >= cutoff
-      }
-      if (record.status === 'not-required') return false
-      if (record.status === 'translated' && !hotItemIds.has(record.sourceId)) {
-        return timestamp >= cutoff
-      }
-      return true
+  /** 保留期与字节口径都在 `intelligenceTranslationCache`：预览与真正清理读同一份。 */
+  function planCompaction(records: IntelligenceTranslationRecord[], retentionMode: 'compact' | 'balanced' | 'extended') {
+    return buildTranslationCompactionPlan({
+      records,
+      retentionMode,
+      hotItemIds: new Set(deps.pipeline.listItems().map((item) => item.itemId)),
+      now: Date.now()
     })
-
-    return {
-      next,
-      removedCount: records.length - next.length
-    }
   }
 
   return {
@@ -434,14 +416,14 @@ export function createIntelligenceTranslationService(deps: {
 
     async compactDerivedRecords(input: { retentionMode: 'compact' | 'balanced' | 'extended' }) {
       const records = await readRecords()
-      const { next, removedCount } = buildCompactionPlan(records, input.retentionMode)
+      const { next, removedCount } = planCompaction(records, input.retentionMode)
       await writeRecords(next)
       return { removedCount }
     },
 
     async previewCompaction(input: { retentionMode: 'compact' | 'balanced' | 'extended' }) {
       const records = await readRecords()
-      return buildCompactionPlan(records, input.retentionMode)
+      return planCompaction(records, input.retentionMode)
     }
   }
 }
