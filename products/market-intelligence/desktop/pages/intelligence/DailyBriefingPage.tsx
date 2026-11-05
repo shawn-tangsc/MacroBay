@@ -546,7 +546,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         onReread: () => setReloadKey((key) => key + 1),
         // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
         // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
-        // 删掉 `forceGenerating`
         onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
         onDeleteRetry: retryDelete
       }} />
