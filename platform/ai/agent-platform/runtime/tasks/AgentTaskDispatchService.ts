@@ -1,8 +1,7 @@
-import { getAgentTextParts } from '../../schemas/messageDataHelpers'
-import { createHash } from 'node:crypto'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '../../schemas/taskSchemas'
 import type { AgentSessionWorkspaceSource } from '../../schemas/workspaceSchemas'
 import type { JobCancelReason } from '../../../../jobs'
+import { summarizeTaskResult } from './taskRunResultSummary'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../agentChatRuntime'
 import type { AgentPlatformServices } from '../../services'
 import type {
@@ -92,7 +91,6 @@ type AgentTaskDispatchServiceDependencies = {
 }
 
 const defaultNow = (): string => new Date().toISOString()
-const taskResultPreviewMaxChars = 200
 
 export class AgentTaskNotRunnableError extends Error {
   readonly code = 'task-not-runnable' as const
@@ -570,37 +568,3 @@ function readAbortMessage(signal: AbortSignal | null | undefined): string | null
   return readAbortReason(signal)?.message ?? null
 }
 
-function summarizeTaskResult(result: AgentChatRuntimeResult): {
-  fullText: string
-  preview: string
-  hash: string
-  charCount: number
-  usage: TaskRunLogEntity['usage']
-} {
-  const assistantText = getAgentTextParts(result.assistantMessage.data).join('\n').trim()
-  const fullText = assistantText || 'Completed.'
-  const usage = normalizeTaskRunUsage(result.assistantMessage.stats)
-  const preview = fullText.length <= taskResultPreviewMaxChars
-    ? fullText
-    : `${fullText.slice(0, taskResultPreviewMaxChars - 3)}...`
-  return {
-    fullText,
-    preview,
-    hash: createHash('sha256').update(fullText).digest('hex'),
-    charCount: fullText.length,
-    usage
-  }
-}
-
-function normalizeTaskRunUsage(stats: AgentChatRuntimeResult['assistantMessage']['stats']): TaskRunLogEntity['usage'] {
-  if (!stats) return null
-  const inputTokens = safeTokenCount(stats.promptTokens)
-  const outputTokens = safeTokenCount(stats.completionTokens)
-  const totalTokens = safeTokenCount(stats.totalTokens)
-  if (inputTokens === undefined && outputTokens === undefined && totalTokens === undefined) return null
-  return { inputTokens, outputTokens, totalTokens }
-}
-
-function safeTokenCount(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
-}
