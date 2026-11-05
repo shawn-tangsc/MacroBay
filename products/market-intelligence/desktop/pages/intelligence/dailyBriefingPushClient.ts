@@ -3,28 +3,18 @@ import type { NotificationDeliveryState } from '@platform/notifications/contract
 import { dailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 
 /**
- * The reader's own push: one existing record, delivered to the phone once more.
+ * The reader's own push: publish the edition on screen, then push that record.
  *
  * The platform does the work (`redeliverPush` never creates a record, never rewrites its content and
- * never touches its count); this module only turns "what is on screen" into the three values the
- * platform checks, and the answer back into something a card can show.
+ * never touches its count); this module only says *which edition* the reader is looking at, and turns
+ * the answer back into something a card can show.
  *
- * The dedupe key names the edition — date, period and language — because a day may now hold several
- * issues, and each writes its own completion record. Addressing the day alone would send the second
- * issue's push to the first issue's record.
+ * No key is built here (契约 v2.32): the main process writes/locates the record and pushes it by its
+ * `recordId`. A hand-built key is how a product ends up addressing another issue's record while the
+ * reader sees an error about "this edition".
  */
 
 export type BriefingPushEdition = Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>
-
-/** The record one edition's completion notice lives in; the key must match the notifier's. */
-export function briefingPushDedupeKey(edition: Pick<BriefingPushEdition, 'date' | 'periodId' | 'locale'>): string {
-  return `briefing-ready:${edition.date}:${edition.periodId}:${edition.locale}`
-}
-
-/** Which edition the reader is looking at: the platform refuses to push a different one. */
-export function briefingPushEditionId(edition: BriefingPushEdition): string {
-  return `${edition.date}:${edition.locale}:${edition.periodId}`
-}
 
 /**
  * Why the button cannot be pressed, or `null` when it can.

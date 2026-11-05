@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  briefingPushAvailable,
-  briefingPushDedupeKey,
-  briefingPushEditionId,
-  redeliverBriefingPush
-} from './dailyBriefingPushClient'
+import { briefingPushAvailable, redeliverBriefingPush } from './dailyBriefingPushClient'
 
 /**
  * The reader's push, from the click to the sentence.
@@ -28,14 +23,6 @@ function stubBridge(result: unknown): ReturnType<typeof vi.fn> {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the push client', () => {
-  it('addresses the edition, so two issues of a day do not share one record', () => {
-    expect(briefingPushDedupeKey(edition)).toBe('briefing-ready:2026-11-04:default:en-US')
-    // Same day, another period or language: a different record, not the first issue's.
-    expect(briefingPushDedupeKey({ ...edition, periodId: 'period_x' })).toBe('briefing-ready:2026-11-04:period_x:en-US')
-    expect(briefingPushDedupeKey({ ...edition, locale: 'zh-CN' })).toBe('briefing-ready:2026-11-04:default:zh-CN')
-    expect(briefingPushEditionId(edition)).toBe('2026-11-04:en-US:default')
-  })
-
   it('asks for the edition on screen, in its own language, through the product bridge', async () => {
     const invoke = stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
     await redeliverBriefingPush(edition)

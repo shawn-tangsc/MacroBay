@@ -61,7 +61,7 @@ function runtimeWithPush() {
   })
   return {
     submit: (request: Parameters<typeof runtime.submit>[0]) => runtime.submit(request),
-    redeliver: (payload: { dedupeKey: string; editionId: string; locale: string }) => runtime.redeliverPush(payload),
+    redeliver: (payload: { recordId: string; editionId: string; locale: string }) => runtime.redeliverPush(payload),
     records: () => state.records,
     pushes: () => pushes
   }
@@ -121,5 +121,16 @@ describe('publish to phone: write the record first, then push it', () => {
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })
     expect(runtime.records()).toHaveLength(0)
+  })
+
+  it('does not claim a push when the submit gave back no record', async () => {
+    // 没有回执就没有可推的东西：这一档必须落「没推出去」，不许假装推了（用户 11-05 的原症状）。
+    const runtime = runtimeWithPush()
+    const outcome = await publishBriefingToPhone({
+      hasEdition: async () => true, submit: undefined, redeliver: runtime.redeliver, now: () => NOW
+    }, input)
+
+    expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })
+    expect(runtime.pushes()).toBe(0)
   })
 })

@@ -6,15 +6,18 @@ import type { DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { notifyDailyBriefing } from './dailyBriefingNotifier'
 
 /**
- * 「把眼前这一版发布到手机」：**先把这一版写进通知记录，再推那一条**。
+ * 「把眼前这一版发布到手机」：**先把这一版写进通知记录，再用回执里的记录身份推那一条**。
  *
  * 顺序不是实现细节，是读者语义（2026-11-05）：按钮说的是「发布这一版」，不是「去库里找一条
- * 已经存在的记录」。所以库里没有当天记录时，先提交一次只记不发的完成事件（`deliver: false`，
- * 幂等合并），再按同一个键重投。这样 `redeliver-target-missing` 这一类就不该再出现；
- * 剩下的 `redeliver-edition-mismatch` 只可能是真实竞态（别人先跑了另一版）。
+ * 已经存在的记录」。所以库里没有记录时，先提交一次只记不发的完成事件（`deliver: false`，
+ * 幂等合并），再拿**提交回执里的 `recordId`** 重投（契约 v2.32）。
+ *
+ * 键不在这里出现：模板串、产品前缀、分隔符、展开时机全归平台的声明与落库一处。产品手拼过一次，
+ * 就是「看着英文版推成中文版」那类事故的来源（前缀拼错时平台只会说「记录不存在」）。
  *
  * 记录不存在时**不提交、不推**：给一份不存在的版次写「已完成」是假话，按钮该落
- * 「这一版还没生成」。
+ * 「这一版还没生成」。提交拿不到回执（端口未装配、被拒、被折叠）时也不推——否则又是一次
+ * 「以为推了」。
  */
 
 export type BriefingPublishOutcome =
@@ -27,22 +30,12 @@ export type BriefingPublishDeps = Readonly<{
   /** 通知提交端口；未装配时无法先写记录。 */
   submit: DailyBriefingNoticeSubmit | undefined
   /** 平台「把这条已有记录再推一次手机」的入口；未装配时按钮落 runtime-unavailable。 */
-  redeliver: ((input: Readonly<{ dedupeKey: string; editionId: string; locale: string }>) => Promise<
+  redeliver: ((input: Readonly<{ recordId: string; editionId: string; locale: string }>) => Promise<
     | Readonly<{ kind: 'accepted'; recordId: string; delivery: NotificationDeliveryState }>
     | Readonly<{ kind: 'rejected'; reason: RedeliverReasonCode }>
   >) | undefined
   now: () => string
 }>
-
-/**
- * 完成记录的键：日期 + 期号 + 语言（与声明、与页面同一个公式），三种身份缺一不可。
- *
- * 注意：`redeliverPush` 比对的是**落库后的键**，平台在落库时加上了 `产品id|` 前缀
- * （`notificationSubmitPlan` 里那一处）。所以这里传的是带前缀的完整键——不是模板里的原始串。
- */
-export function briefingPushDedupeKey(input: Readonly<{ date: string; periodId: string; locale: string }>): string {
-  return `briefing-ready:${input.date}:${input.periodId}:${input.locale}`
-}
 
 /** 记录里存的那一版身份；与页面上的 `editionId` 同一公式，平台拿它核对。 */
 export function briefingPushEditionId(input: Readonly<{ date: string; locale: string; periodId: string }>): string {
@@ -78,10 +71,13 @@ export async function publishBriefingToPhone(
   if (!exists) return { kind: 'rejected', reason: 'edition-missing' }
   if (deps.redeliver === undefined) return { kind: 'rejected', reason: 'runtime-unavailable' }
   const editionId = briefingPushEditionId(input)
-  // 先写/更新记录（deliver: false）：库里已有当天记录时这一步是合并，不会多一行。
-  await notifyDailyBriefing(deps.submit, {
+  // 先写/更新记录（deliver: false）：库里已有这一版的记录时这一步是合并，不会多一行。
+  const receipt = await notifyDailyBriefing(deps.submit, {
     kind: 'ready', date: input.date, periodId: input.periodId, editionId, locale: input.locale, deliver: false
   }, deps.now())
-  // `redeliverPush` 找的是**记录上那个键**：平台落库时加了 `market-intelligence|` 前缀，原样比对。
-  return deps.redeliver({ dedupeKey: `market-intelligence|${briefingPushDedupeKey(input)}`, editionId, locale: input.locale })
+  // 推的是**回执里那条记录**，不是自己拼出来的键：没有回执就没有可推的东西，不许假装推了。
+  if (receipt === null || receipt.kind === 'rejected' || receipt.kind === 'delegated' || receipt.kind === 'collapsed') {
+    return { kind: 'rejected', reason: 'runtime-unavailable' }
+  }
+  return deps.redeliver({ recordId: receipt.recordId, editionId, locale: input.locale })
 }
