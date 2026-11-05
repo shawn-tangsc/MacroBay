@@ -210,6 +210,14 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
   }
 }
 
+
+/** 工具条那颗现在只开弹框：点完还要在弹框里按「生成」才算真的跑。 */
+async function confirmManualRun(): Promise<void> {
+  const run = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.textContent?.replace(/\s/g, '') === text.manualRunDialog.run.replace(/\s/g, ''))
+  await act(async () => { run?.click(); await Promise.resolve(); await Promise.resolve() })
+}
+
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
@@ -556,8 +564,9 @@ describe('daily briefing page', () => {
     const client = fakeClient()
     const dom = await renderPage(client)
     const run = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
-    await act(async () => { run.click(); await Promise.resolve(); await Promise.resolve() })
-    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    await act(async () => { run.click(); await Promise.resolve() })
+    await confirmManualRun()
+    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), generation: expect.objectContaining({ asOf: expect.any(String) }) })
     expect(dom.textContent).toContain('重新生成版')
     expect(run.textContent).toContain(text.manualGenerate)
   })
@@ -575,6 +584,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     const button = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { button.click(); await Promise.resolve() })
+    await confirmManualRun()
     const running = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(running.textContent).toBe(text.regenerating)
     expect(running.disabled).toBe(true)
@@ -1407,8 +1417,9 @@ it('keeps the edition readable and reports a run in the right column', async () 
   const before = dom.querySelector('.mi-daily-briefing-page__paper')?.textContent
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
-    await Promise.resolve(); await Promise.resolve()
+    await Promise.resolve()
   })
+  await confirmManualRun()
 
   // 1. No nine-step panel in the body.
   expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel]')).toBeNull()
@@ -1571,8 +1582,9 @@ it('keeps the stored edition under a failure notice when a retry fails after an 
   const dom = await renderPage(client)
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    await Promise.resolve()
   })
+  await confirmManualRun()
 
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="failed"]')).not.toBeNull()
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
@@ -1661,8 +1673,9 @@ it('shows the steps while the reader’s own run is in flight, before any editio
   }
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
-    await Promise.resolve(); await Promise.resolve()
+    await Promise.resolve()
   })
+  await confirmManualRun()
 
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
   expect(dom.querySelector('[data-briefing-no-edition]')).toBeNull()
@@ -1762,11 +1775,13 @@ it('never starts a run just because the page was opened', async () => {
   expect(client.getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String), generate: false })
   expect(client.regenerate).not.toHaveBeenCalled()
 
-  // The click is what runs it, once.
+  // The click opens the form; the run starts when the reader confirms it, once.
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    await Promise.resolve()
   })
+  expect(client.regenerate).not.toHaveBeenCalled()
+  await confirmManualRun()
   expect(client.regenerate).toHaveBeenCalledTimes(1)
 })
 

@@ -66,6 +66,7 @@ import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
+import { instantForWallClock } from '@platform/time/timeZoneClock'
 import { dailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
@@ -439,6 +440,22 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         exportable={readyDocument !== undefined && !contentBlocked}
         exportState={exportState}
         copyState={copyState}
+        onManualRun={(draft) => {
+          // 三种输入合成一个绝对时刻：「现在」是按下那一刻；整点按读者时区换算，跨日与夏令时交给
+          // `instantForWallClock`——手拼字符串会差一小时，或者落到昨天。
+          const asOf = draft.cutoff === 'now'
+            ? new Date().toISOString()
+            : (() => {
+              const [hour, minute] = draft.cutoff.split(':').map(Number)
+              const today = new Date()
+              return instantForWallClock({
+                timeZone, year: today.getFullYear(), month: today.getMonth() + 1, day: today.getDate(),
+                hour: hour ?? 0, ...(minute === undefined ? {} : { minute })
+              })?.toISOString()
+            })()
+          if (asOf === undefined) return
+          void regenerate({ locale: draft.language, generation: { asOf, windowHours: draft.windowHours as 12 | 24 | 48 } })
+        }}
         push={pushToPhone}
         pushText={briefingPushText[locale]}
         onExport={() => void exportImage()}

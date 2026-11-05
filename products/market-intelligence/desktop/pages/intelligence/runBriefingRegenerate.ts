@@ -17,9 +17,15 @@ export async function runBriefingRegenerate(deps: Readonly<{
   locale: DailyBriefingDocument['edition']['locale']
   /** Which period of today to run; absent means the page's only one. */
   periodId?: string
+  /** A one-off cutoff and window from the manual dialog; absent runs the period as scheduled. */
+  generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
 }>): Promise<Readonly<{ kind: 'available'; document: DailyBriefingDocument } | { kind: 'failed'; failure: BriefingRegenerateFailure }>> {
   try {
-    const result = await deps.client.regenerate({ locale: deps.locale, timeZone: deps.timeZone, ...(deps.periodId === undefined ? {} : { periodId: deps.periodId }) })
+    const result = await deps.client.regenerate({
+      locale: deps.locale, timeZone: deps.timeZone,
+      ...(deps.periodId === undefined ? {} : { periodId: deps.periodId }),
+      ...(deps.generation === undefined ? {} : { generation: deps.generation })
+    })
     if (result.state === 'available') return { kind: 'available', document: result.document }
     const generationTrace = readGenerationTrace((result as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     return { kind: 'failed', failure: { code: result.failureCode, ...(generationTrace ? { generationTrace } : {}) } }

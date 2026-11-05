@@ -43,6 +43,8 @@ export type DailyBriefingClientInput = Readonly<{
   generate?: boolean
   /** Which period of today to run. Absent keeps the first/only one, which is what the old call meant. */
   periodId?: string
+  /** A manual run's own cutoff and window; never written back into a period. */
+  generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
 }>
 export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }>
 

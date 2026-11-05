@@ -25,11 +25,16 @@ export function useBriefingRunActions(input: Readonly<{
   setCurrentPeriodDate?: (date: string) => void
   /** Read the list again once the run settles: the row must show what just landed. */
   onSettled?: () => void
-}>): Readonly<{ regenerate: () => Promise<void>; generateNow: () => void }> {
-  const run = (): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
+}>): Readonly<{
+  /** Runs one issue now. An optional draft is the manual dialog's three fields. */
+  regenerate: (options?: Readonly<{ locale?: 'zh-CN' | 'en-US'; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }>) => Promise<void>
+  generateNow: () => void
+}> {
+  const run = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): Promise<DailyBriefingDocument | undefined> => runBriefingRegenerate({
     client: input.client,
-    locale: input.locale,
-    timeZone: input.zoneInvalid ? 'UTC' : input.timeZone
+    locale: options.locale ?? input.locale,
+    timeZone: input.zoneInvalid ? 'UTC' : input.timeZone,
+    ...(options.generation === undefined ? {} : { generation: options.generation })
   }).then((outcome) => {
     if (outcome.kind === 'available') return outcome.document
     input.setRegenerateFailure(outcome.failure)
@@ -37,10 +42,10 @@ export function useBriefingRunActions(input: Readonly<{
   })
 
   return {
-    async regenerate() {
+    async regenerate(options) {
       input.setRegenerating(true)
       input.setRegenerateFailure(null)
-      const document = await run()
+      const document = await run(options)
       if (document) {
         input.setView({ status: 'ready', document, kind: 'today' })
         input.setEditions((current) => current.map((edition) => edition.date === document.edition.date ? summaryFromDocument(document) : edition))
