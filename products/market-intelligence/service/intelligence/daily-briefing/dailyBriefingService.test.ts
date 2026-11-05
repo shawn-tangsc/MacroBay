@@ -633,18 +633,19 @@ describe('daily briefing service', () => {
     })
   })
 
-  it('reports a gap for the current locale but names the other locale', async () => {
+  it('lists the languages that exist, one row each, whatever the interface language is', async () => {
     const store = memoryStore()
     const source = fakeSource()
     const service = createDailyBriefingService({ source, store, now: () => asOf })
-    // Generate only zh-CN, then list from en-US: the day is a gap for the current locale but
-    // `availableLocales` still names the edition that exists.
+    // Generate only zh-CN, then list from en-US. 一行 = 一期 = 一种语言：这一天只有中文那一行，
+    // 不会因为界面是英文就凭空多出一条英文行，也不会把两种语言合进一行。
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     const listed = await service.list({ locale: 'en-US', timeZone: 'Asia/Shanghai' })
     expect(listed.state).toBe('available')
     if (listed.state !== 'available') return
-    expect(listed.result.editions[0]).toMatchObject({ date: '2026-10-30', locale: 'en-US', state: 'missing' })
-    expect(listed.result.editions[0]?.availableLocales).toEqual(['zh-CN'])
+    const thatDay = listed.result.editions.filter((edition) => edition.date === '2026-10-30')
+    expect(thatDay).toHaveLength(1)
+    expect(thatDay[0]).toMatchObject({ locale: 'zh-CN', state: 'generated' })
     expect((await service.get({ date: '2026-10-30', locale: 'en-US' })).state).toBe('missing')
     expect((await service.get({ date: '2026-10-30', locale: 'zh-CN' as DailyBriefingLocale })).state).toBe('available')
   })

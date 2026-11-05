@@ -130,7 +130,8 @@ export async function briefingHistorySummaries(input: Readonly<{
 
     const day: DailyBriefingEditionSummary[] = []
     for (const period of periods) {
-      day.push(await summaryOfPeriod(period, input, runsToday.get(period.periodId)))
+      // 一个 (日期, 期号, 语言) 一行：同一期的中英两版是两行，各有自己的时刻与窗口。
+      day.push(...await summariesOfPeriod(period, input, runsToday.get(period.periodId)))
     }
     // A5.1, the one definition: nominal cutoff ascending, same moment resolved by the period id.
     // Not by generatedAt and not by window, or the reader sees the list reshuffle between renders.
@@ -150,7 +151,24 @@ export async function briefingHistorySummaries(input: Readonly<{
   return Object.freeze(editions)
 }
 
-async function summaryOfPeriod(period: PeriodRows, input: Readonly<{
+/**
+ * 一期的每一份版次各出一行。
+ *
+ * 一行 = 一期 = 一种语言。期里有几种语言就出几行；一行都没有（这一期还没生成）时，按界面语言出
+ * 一条占位行，"没生成"才是这一天的真实状态。
+ */
+async function summariesOfPeriod(
+  period: PeriodRows,
+  input: Parameters<typeof summaryOfLocale>[1],
+  knownRun?: DailyBriefingPeriodRun
+): Promise<readonly DailyBriefingEditionSummary[]> {
+  const locales = period.rows.size === 0 ? [input.primary] : [...period.rows.keys()]
+  const rows: DailyBriefingEditionSummary[] = []
+  for (const locale of locales) rows.push(await summaryOfLocale(period, { ...input, primary: locale }, knownRun))
+  return rows
+}
+
+async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   primary: DailyBriefingLocale
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>

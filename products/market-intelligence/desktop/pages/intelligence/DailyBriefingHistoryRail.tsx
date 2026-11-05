@@ -269,7 +269,8 @@ export function DailyBriefingHistoryRail({
 
 /** The per-language chips, from the projection's three-state; absent falls back to published rows. */
 function renderedLanguages(edition: DailyBriefingEditionSummary): readonly DailyBriefingEditionLanguage[] {
-  return edition.languages ?? edition.availableLocales.map((locale) => Object.freeze({ locale, state: 'published' as const }))
+  // 一行只有一枚徽标：这一行自己的语言。一行一种语言之后，徽标是标签，不是可切换的开关。
+  return edition.languages ?? [Object.freeze({ locale: edition.locale, state: 'published' as const })]
 }
 
 function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
