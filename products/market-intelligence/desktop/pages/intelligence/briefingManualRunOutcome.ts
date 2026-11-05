@@ -21,16 +21,29 @@ export type BriefingManualRunReport = Readonly<{
 export function briefingManualRunReport(input: Readonly<{
   result: Readonly<{
     outcome: BriefingManualRunOutcome | 'duplicate'
-    duplicate?: Readonly<{ periodId: string; asOf: string; windowHours: number; language: DailyBriefingLocale }>
+    duplicate?: Readonly<{ periodId: string; asOf: string; windowHours: 12 | 24 | 48; language: DailyBriefingLocale }>
   }>
   text: DailyBriefingText
   timeZone: string
-  regenerate: (input: Readonly<{ periodId: string; locale: DailyBriefingLocale }>) => Promise<unknown>
+  /**
+   * 替换这一版要的输入：期号 + 语言 + **这一次的截止与窗口**。
+   *
+   * 少了 `generation`，服务就按当前设置跑一遍——读者选了 08:00，替换出来的却是"当前那一版"，
+   * 正是被报成「怎么变成重新生成当前版本」的那条错。
+   */
+  regenerate: (input: Readonly<{
+    periodId: string
+    locale: DailyBriefingLocale
+    generation: Readonly<{ asOf: string; windowHours: 12 | 24 | 48 }>
+  }>) => Promise<unknown>
 }>): BriefingManualRunReport {
   const { result, text, timeZone, regenerate } = input
   if (result.outcome !== 'duplicate' || result.duplicate === undefined) return { outcome: result.outcome }
   const { periodId, asOf, windowHours, language } = result.duplicate
   const languageName = text.history.editionLanguages[language === 'en-US' ? 'en' : 'zh']
   const label = [asOf.slice(0, 10), railClock(asOf, timeZone), text.history.windowHoursShort.replace('{hours}', String(windowHours)), languageName].join(' · ')
-  return { outcome: 'duplicate', duplicate: { label, replace: () => { void regenerate({ periodId, locale: language }) } } }
+  return {
+    outcome: 'duplicate',
+    duplicate: { label, replace: () => { void regenerate({ periodId, locale: language, generation: { asOf, windowHours } }) } }
+  }
 }

@@ -1,6 +1,6 @@
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale, type DailyBriefingRunTrigger, type DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
-import { briefingWindow, type DailyBriefingZoneSource } from './dailyBriefingWindow'
+import { briefingWindow, briefingWindowAtCutoff, type DailyBriefingZoneSource } from './dailyBriefingWindow'
 import type { DailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import type { DailyBriefingTodayResult } from './dailyBriefingService'
 
@@ -36,11 +36,17 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
   withZone: (result: DailyBriefingTodayResult, zoneSource: DailyBriefingZoneSource) => DailyBriefingTodayResult
 }>): (input: DailyBriefingRegenerateInput) => Promise<DailyBriefingTodayResult> {
   return async function regenerate(input) {
-    // The moment chosen in the dialog is this run's nominal cutoff; "now" is one of its values.
+    // The moment chosen in the dialog **is** this run's cutoff, not "which scheduled edition it falls
+    // into": `briefingWindow` would snap an 08:00 choice back to the schedule's 07:00 and publish the
+    // 07:00 edition — the defect the reader reported as "我选 8 点，生成的是 7 点".
     const chosen = input.generation?.asOf
+    const settings = await deps.readGeneration()
     const window = chosen === undefined
-      ? briefingWindow(deps.now(), input.timeZone, await deps.readGeneration())
-      : briefingWindow(chosen, input.timeZone, { ...(await deps.readGeneration()), ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours }) })
+      ? briefingWindow(deps.now(), input.timeZone, settings)
+      : briefingWindowAtCutoff(chosen, input.timeZone, {
+        ...settings,
+        ...(input.generation?.windowHours === undefined ? {} : { windowHours: input.generation.windowHours })
+      })
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     return deps.withZone(await deps.runs.join(deps.runs.key(window.date, periodId, input.locale), async () =>

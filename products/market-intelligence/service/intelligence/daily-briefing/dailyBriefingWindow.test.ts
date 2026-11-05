@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { briefingWindow } from './dailyBriefingWindow'
+import { briefingWindow, briefingWindowAtCutoff } from './dailyBriefingWindow'
 
 /**
  * The window's zone, when the reader's setting is unusable.
@@ -59,5 +59,40 @@ describe('briefing window zone source', () => {
     expect(fallback?.windowStart).toBe(settings?.windowStart)
     expect(fallback?.windowEnd).toBe(settings?.windowEnd)
     expect(fallback?.windowHours).toBe(settings?.windowHours)
+  })
+})
+
+/**
+ * A cutoff the reader picked is the cutoff — not "which scheduled edition it belongs to".
+ *
+ * The reported defect: choosing 08:00 in the manual dialog published the 07:00 edition, because the
+ * schedule's own generation time was used as the window end and the chosen instant was ignored.
+ */
+describe('a chosen cutoff is the cutoff', () => {
+  const CHOSEN = '2026-11-05T00:00:00.000Z' // 08:00 Asia/Shanghai on the 5th
+  const SHANGHAI = 'Asia/Shanghai'
+
+  it('uses the chosen instant as the window end, not the schedule time', () => {
+    const scheduled = briefingWindow(CHOSEN, SHANGHAI, { generationTime: '07:00', windowHours: 24 })
+    const chosen = briefingWindowAtCutoff(CHOSEN, SHANGHAI, { generationTime: '07:00', windowHours: 24 })
+
+    // 这就是那个 bug 的形状：同一个瞬间走排期口径，窗口落在了 07:00。
+    expect(scheduled?.windowEnd).toBe('2026-11-04T23:00:00.000Z')
+    expect(chosen?.windowEnd).toBe('2026-11-05T00:00:00.000Z')
+    expect(chosen?.date).toBe('2026-11-05')
+    expect(chosen?.windowStart).toBe('2026-11-04T00:00:00.000Z')
+    expect(chosen?.windowHours).toBe(24)
+  })
+
+  it('keeps the window length the dialog chose, and files the edition under the chosen local day', () => {
+    const window = briefingWindowAtCutoff(CHOSEN, SHANGHAI, { generationTime: '07:00', windowHours: 12 })
+
+    expect(window?.windowHours).toBe(12)
+    expect(window?.windowStart).toBe('2026-11-04T12:00:00.000Z')
+    expect(window?.date).toBe('2026-11-05')
+  })
+
+  it('refuses an unreadable cutoff instead of inventing one', () => {
+    expect(briefingWindowAtCutoff('not-a-time', SHANGHAI)).toBeUndefined()
   })
 })

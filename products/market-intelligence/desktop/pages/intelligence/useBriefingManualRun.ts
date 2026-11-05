@@ -17,7 +17,7 @@ export type BriefingManualDuplicate = Readonly<{ periodId: string }>
 /** 一次按下的结果：跑了 / 为什么没跑 / 或者撞上哪一版要读者决定。 */
 export type BriefingManualRunResult = Readonly<{
   outcome: BriefingManualRunOutcome
-  duplicate?: Readonly<{ periodId: string; asOf: string; windowHours: number; language: DailyBriefingLocale }>
+  duplicate?: Readonly<{ periodId: string; asOf: string; windowHours: DailyBriefingWindowHours; language: DailyBriefingLocale }>
 }>
 
 export function useBriefingManualRun(deps: Readonly<{
@@ -40,7 +40,7 @@ export function useBriefingManualRun(deps: Readonly<{
     const existing = deps.findDuplicate?.({ asOf, windowHours: draft.windowHours, language: draft.language })
     if (existing) {
       // 替换写在**已有那一版**身上：再插一行同 (日期, 截止, 窗口, 语言) 的版次，列表就出现两份说同一件事的。
-      return { outcome: 'duplicate', duplicate: { periodId: existing.periodId, asOf, windowHours: draft.windowHours, language: draft.language } }
+      return { outcome: 'duplicate', duplicate: { periodId: existing.periodId, asOf, windowHours: draft.windowHours as DailyBriefingWindowHours, language: draft.language } }
     }
     // Opaque and not derived from the time (A11.3); two presses are two issues, not one rewritten.
     const periodId = globalThis.crypto.randomUUID()

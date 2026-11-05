@@ -81,6 +81,41 @@ export function briefingWindow(
   })
 }
 
+/**
+ * The window for a cutoff the reader picked by hand.
+ *
+ * `briefingWindow` answers "which scheduled edition does this instant belong to": it keeps the
+ * schedule's own wall-clock (07:00), so passing 08:00 still returns a 07:00 cutoff. That is why a
+ * manual run for 08:00 produced the 07:00 edition. When a cutoff is chosen explicitly, the chosen
+ * instant **is** the cutoff — the schedule only supplies the window length and the zone.
+ *
+ * The edition date is the local date of that instant, so a 08:00 run on the 5th files under the 5th.
+ */
+export function briefingWindowAtCutoff(
+  cutoff: string,
+  timeZone: string,
+  settings: DailyBriefingWindowSettings = {},
+  fallbackTimeZone: string = systemTimeZone()
+): DailyBriefingWindow | undefined {
+  const parsed = Date.parse(cutoff)
+  if (!Number.isFinite(parsed)) return undefined
+  const zoneSource: DailyBriefingZoneSource = isValidTimeZone(timeZone) ? 'settings' : 'system'
+  const zone = zoneSource === 'settings' ? timeZone : (isValidTimeZone(fallbackTimeZone) ? fallbackTimeZone : 'UTC')
+  const date = localDate(cutoff, zone)
+  if (date === undefined) return undefined
+  const windowHours = isDailyBriefingWindowHours(settings.windowHours)
+    ? settings.windowHours
+    : dailyBriefingGenerationPolicy.defaultWindowHours
+  const windowEnd = new Date(parsed).toISOString()
+  return Object.freeze({
+    date,
+    windowEnd,
+    windowStart: new Date(parsed - windowHours * 60 * 60 * 1000).toISOString(),
+    windowHours,
+    zoneSource
+  })
+}
+
 function localParts(value: number, timeZone: string): { date: string; hour: number; minute: number } | undefined {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {

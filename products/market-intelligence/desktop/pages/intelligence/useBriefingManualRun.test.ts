@@ -19,6 +19,23 @@ describe('a manual run refuses a cutoff that has not happened yet', () => {
     expect(regenerate).toHaveBeenCalledTimes(1)
   })
 
+  // 读者选了「8 点 + 英文」，请求里必须带这三样；少任何一样，跑出来的就不是他要的那一期。
+  it('sends the chosen hour, the chosen language and a one-off period id', () => {
+    const regenerate = vi.fn(async (_input: {
+      periodId: string
+      locale: string
+      generation: { asOf: string; windowHours: number }
+    }) => undefined)
+    const start = useBriefingManualRun({ timeZone: 'UTC', regenerate, now: () => now })
+    start({ cutoff: '08:00', windowHours: 24, language: 'en-US' })
+
+    const request = regenerate.mock.calls[0]![0]
+    expect(request.locale).toBe('en-US')
+    expect(request.generation).toEqual({ asOf: '2026-11-05T08:00:00.000Z', windowHours: 24 })
+    // 一次性期号：不是 `default`，也不是刚才那一版的期号。
+    expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+  })
+
   it('refuses a later hour today, and does not write anything', () => {
     // 未来时刻等于"生成一份还没发生的窗口"：那一刻没有数据，跑出来的是一份空报告。
     const { outcome, regenerate } = run('23:30')
