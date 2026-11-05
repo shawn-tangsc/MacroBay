@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
@@ -127,7 +127,18 @@ describe('two-line rail row', () => {
 
   it('leaves no separator between the source and the language', () => {
     // The dot only bridged two adjacent chips; with the language at the far edge it is a broken mark.
-    expect(rule('.mi-daily-briefing__rail-sep {')).toContain('display: none')
+    // Two assertions, because one alone guards half: the stylesheet must not carry the class, and no
+    // component may render the element again. The old rule merely hid it, which is how a comment ended
+    // up describing a span that no longer existed.
+    expect(css).not.toContain('mi-daily-briefing__rail-sep')
+    expect(rowSources()).not.toContain('rail-sep')
+  })
+
+  it('keeps no rules for the withdrawn day summary', () => {
+    // The folded day says only what belongs to the day; its one-line summary left the design, and its
+    // rules and markup left with it rather than staying behind as a shape nothing renders.
+    expect(css).not.toContain('mi-daily-briefing__rail-day-summary')
+    expect(rowSources()).not.toContain('rail-day-summary')
   })
 
   it('separates facts by space, not by a dot between every pair', () => {
@@ -335,6 +346,15 @@ describe('a dialog label and its question are one row', () => {
     expect(trigger).toContain('color: var(--mi-dashboard-muted);')
   })
 })
+
+/** Every rail component's source, so a class can be checked against markup and sheet alike. */
+function rowSources(): string {
+  const dir = 'products/market-intelligence/desktop/pages/intelligence'
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.tsx') && name.startsWith('DailyBriefing'))
+    .map((name) => readFileSync(`${dir}/${name}`, 'utf8'))
+    .join('\n')
+}
 
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {

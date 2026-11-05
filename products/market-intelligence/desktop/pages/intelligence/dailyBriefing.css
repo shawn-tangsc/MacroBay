@@ -275,11 +275,9 @@
 .mi-daily-briefing__rail-source { background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
 /* The language is pushed to the row's trailing edge by its own auto margin: facts on the left, the
-   language on the right, flexible whitespace between them. That gap is the alignment, not a defect —
-   a separator bridging it would put the language back beside the source.
-   `__rail-sep` is hidden rather than deleted here because the element is still rendered by the row's
-   markup; once the span is gone, this rule goes with it. */
-.mi-daily-briefing__rail-sep { display: none; }
+   language on the right, and the gap between them is the alignment rather than a defect to bridge.
+   There is no separator element in the row at all — the span that used to hold a dot was removed, and
+   the rule that merely hid it went with it. */
 /* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。
    它**不在行按钮内部**（`<button>` 里不能套 `<button>`），而是同一条目里的第二个控件，
    绝对定位到第二行右侧；行按钮用 `data-has-retry` 在第二行右端让出这段宽度。 */
@@ -387,8 +385,6 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-daily-briefing__rail-day-date { font-size: 11.5px; font-weight: 600; letter-spacing: .03em; color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-day-today { font-style: normal; font-size: 10.5px; line-height: 14px; color: var(--mi-dashboard-muted); letter-spacing: .02em; }
 .mi-daily-briefing__rail-day-count { margin-left: auto; font-size: 10.5px; color: #5f686e; white-space: nowrap; }
-.mi-daily-briefing__rail-day-summary { display: block; margin: 1px 0 4px; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10.5px; line-height: 1.45; color: #5f686e; }
-.mi-daily-briefing__rail-day-summary-text { margin-left: 4px; }
 .mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
 .mi-daily-briefing__rail-item + .mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
 /* The item is a positioning context for the one control that is not the row itself: the retry button
