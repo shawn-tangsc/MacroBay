@@ -44,7 +44,8 @@ export function briefingMacroEmptyCopy(
     const count = document.news.notes.macroEmptyCount
     const clock = labels.clock
     // 数或时刻缺一个就不印：那句话的每个空都是事实，编一个 0 或补一个当下时刻都是新的假话。
-    const at = document.edition.dataAsOf ?? document.edition.periodTime ?? document.edition.generatedAt
+    // 句里的时刻是**统计截止**（这一版统计到哪一刻），不是我们什么时候读的库（`A0.10`）。
+    const at = document.edition.periodTime ?? document.edition.windowEnd
     if (typeof count === 'number' && clock !== undefined && typeof at === 'string') {
       return {
         sentence: reason

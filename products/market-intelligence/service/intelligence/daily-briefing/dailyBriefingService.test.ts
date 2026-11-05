@@ -22,12 +22,12 @@ import {
 
 const asOf = '2026-10-30T00:30:00.000Z'
 
-type PacketInput = Readonly<{ asOf: string; windowHours: number }>
+type PacketInput = Readonly<{ asOf: string; windowEnd: string; windowHours: number }>
 
-const emptyPacket = (input: PacketInput = { asOf, windowHours: 24 }): DailyBriefingFactPacket => ({
+const emptyPacket = (input: PacketInput = { asOf, windowEnd: asOf, windowHours: 24 }): DailyBriefingFactPacket => ({
   asOf: input.asOf,
-  windowStart: new Date(Date.parse(input.asOf) - input.windowHours * 60 * 60 * 1_000).toISOString(),
-  windowEnd: input.asOf,
+  windowStart: new Date(Date.parse(input.windowEnd) - input.windowHours * 60 * 60 * 1_000).toISOString(),
+  windowEnd: input.windowEnd,
   windowHours: input.windowHours,
   locale: 'zh-CN', timeZone: 'Asia/Shanghai',
   conclusion: null,
@@ -121,13 +121,13 @@ function fakeSource(
   const source = {
     calls: 0,
     lastInput: undefined as PacketInput | undefined,
-    async readFacts(input: Readonly<{ asOf: string; windowHours?: number }>) {
+    async readFacts(input: Readonly<{ asOf: string; windowEnd?: string; windowHours?: number }>) {
       source.calls += 1
-      source.lastInput = { asOf: input.asOf, windowHours: input.windowHours ?? 24 }
+      source.lastInput = { asOf: input.asOf, windowEnd: input.windowEnd ?? input.asOf, windowHours: input.windowHours ?? 24 }
       lastPacket = packet(source.lastInput)
       return factSnapshotFromPacket(lastPacket)
     },
-    async renderPacket(_facts: { asOf: string; windowHours: number }, locale: DailyBriefingLocale, timeZone: string) {
+    async renderPacket(_facts: { asOf: string; windowEnd: string; windowHours: number }, locale: DailyBriefingLocale, timeZone: string) {
       return Object.freeze({ ...lastPacket!, locale, timeZone })
     }
   }
@@ -241,7 +241,8 @@ describe('daily briefing service', () => {
 
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(source.lastInput).toEqual({ asOf: '2026-10-30T01:30:00.000Z', windowHours: 48 })
+    // 读数用运行时刻（02:00），窗口仍卡在截止（01:30）。
+    expect(source.lastInput).toEqual({ asOf: '2026-10-30T02:00:00.000Z', windowEnd: '2026-10-30T01:30:00.000Z', windowHours: 48 })
     expect(result.state).toBe('available')
     if (result.state === 'available') {
       expect(result.document.edition).toMatchObject({
@@ -293,7 +294,7 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('available')
     // The fallback schedule is the policy default, 07:00 local: 23:00Z the evening before.
-    expect(source.lastInput).toEqual({ asOf: '2026-10-29T23:00:00.000Z', windowHours: 24 })
+    expect(source.lastInput).toEqual({ asOf, windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24 })
   })
 
   it('reports only the attempt that is running, and forgets it once the run settles', async () => {
@@ -305,7 +306,7 @@ describe('daily briefing service', () => {
         await gate
         // The service consumes a frozen snapshot, not the raw packet: the same conversion the other
         // fakes use, so this fake cannot drift into returning the wrong shape unnoticed.
-        return factSnapshotFromPacket(emptyPacket({ asOf: input.asOf, windowHours: input.windowHours ?? 24 }))
+        return factSnapshotFromPacket(emptyPacket({ asOf: input.asOf, windowEnd: input.windowEnd ?? input.asOf, windowHours: input.windowHours ?? 24 }))
       },
       // Required by the source contract even though this run is held at `readFacts`: a fake that
       // omits a required member only compiles while the file is outside the typecheck's scope.

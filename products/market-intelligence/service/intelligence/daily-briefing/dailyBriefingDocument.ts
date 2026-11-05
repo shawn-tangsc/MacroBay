@@ -20,6 +20,21 @@ import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
+/**
+ * 这一版算不算「补跑」：运行时刻明显晚于它的统计截止。
+ *
+ * 留 5 分钟容差：定时触发在整点后几秒到几分钟内起跑，那是准点，不是补跑；把准点写成补跑会让每一版
+ * 都多一句"数据截至"的说明，读者会以为所有版次都是事后补的。
+ */
+export const BRIEFING_BACKFILL_TOLERANCE_MS = 5 * 60 * 1_000
+
+export function briefingRunIsBackfill(input: Readonly<{ readAt: string; cutoff: string }>): boolean {
+  const read = Date.parse(input.readAt)
+  const cutoff = Date.parse(input.cutoff)
+  if (!Number.isFinite(read) || !Number.isFinite(cutoff)) return false
+  return read - cutoff > BRIEFING_BACKFILL_TOLERANCE_MS
+}
+
 export function buildDailyBriefingDocument(input: Readonly<{
   packet: DailyBriefingFactPacket
   date: string
@@ -67,7 +82,16 @@ export function buildDailyBriefingDocument(input: Readonly<{
       periodTime: packet.periodTime ?? packet.windowEnd,
       periodKind: packet.periodKind ?? 'scheduled',
       runTrigger: packet.runTrigger ?? 'scheduled',
+      // `generatedAt` 是"这一版真的什么时候跑出来的"：`packet.asOf` 现在是运行时刻，不是截止。
       generatedAt: packet.asOf,
+      // 三个字段一起写（`A0.10`）：哪一刻读的世界（`readAt`）、什么时候跑出来的（`generatedAs`）、
+      // 这次是不是补跑。两个时刻取同一瞬间——一次跑只有一个时钟，分两个会互相对不上。
+      // 不写 `dataAsOf`：那是旧名，旧义是"统计截止"，重名会让旧版次被误读。
+      readAt: packet.asOf,
+      generatedAs: packet.asOf,
+      ...(briefingRunIsBackfill({ readAt: packet.asOf, cutoff: packet.periodTime ?? packet.windowEnd })
+        ? { isBackfill: true }
+        : {}),
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,
       // Written from the packet, never recomputed from the current setting: a later settings change

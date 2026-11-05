@@ -681,6 +681,43 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroEmptyHours).toBeUndefined()
   })
 
+  it('records when the run read the world, and that the window did not move with it', () => {
+    // 用户 2026-11-05 定：读数用运行时刻，窗口仍按截止。文档必须同时记住这两个时刻，
+    // 否则"这一版读到哪一刻"和"统计到哪一刻"又会被混成一句。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T04:20:00.000Z',
+        windowStart: '2026-10-29T00:00:00.000Z',
+        windowEnd: '2026-10-30T00:00:00.000Z'
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.edition.generatedAt).toBe('2026-10-30T04:20:00.000Z')
+    // 读数时刻叫 `readAt`，不叫 `dataAsOf`：后者在本仓的旧口径里指统计截止，不许一名两义。
+    expect(document.edition.readAt).toBe('2026-10-30T04:20:00.000Z')
+    expect(document.edition.dataAsOf).toBeUndefined()
+    expect(document.edition.generatedAs).toBe('2026-10-30T04:20:00.000Z')
+    // 运行时刻晚于截止 → 这一版是补跑。
+    expect(document.edition.isBackfill).toBe(true)
+    // 窗口与名义截止都不动。
+    expect(document.edition.windowEnd).toBe('2026-10-30T00:00:00.000Z')
+    expect(document.edition.periodTime).toBe('2026-10-30T00:00:00.000Z')
+  })
+
+  it('does not stamp a punctual run as a backfill', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T00:00:20.000Z',
+        windowStart: '2026-10-29T00:00:00.000Z',
+        windowEnd: '2026-10-30T00:00:00.000Z'
+      }),
+      date: '2026-10-30'
+    })
+    // 准点是"截止后几秒起跑"，不是补跑：多写一个补跑标记会让每一版都多一句说明。
+    expect(document.edition.isBackfill).toBeUndefined()
+    expect(document.edition.readAt).toBe('2026-10-30T00:00:20.000Z')
+  })
+
   it('never calls it "nothing happened" when the window had releases whose actuals had not arrived', () => {
     // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都还没回补。
     // 「没有」是断言事实，「还没拿到」说的是我们手里有什么——两者不能互相冒充。

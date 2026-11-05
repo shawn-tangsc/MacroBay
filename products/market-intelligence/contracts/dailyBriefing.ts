@@ -178,14 +178,22 @@ export type DailyBriefingDocument = Readonly<{
      */
     periodTime?: string
     /**
-     * 补跑标记与它实际采用的数据截止。`dataAsOf` 是本版"能看见哪一刻的世界"：准点生成时等于
-     * `periodTime`，补跑或手动重新生成时等于本次运行时刻（`02` `A0.10`）。窗口不跟着移动。
+     * 这一版是**哪一刻读的数据**（`02` `A0.10`，用户 2026-11-05 定）。
      *
-     * **三个字段一起写、一起读**：`isBackfill` 为真就必须同时写 `dataAsOf` 与 `generatedAs`，
-     * 写入方（生成流程）负责保证；缺任何一个都是半套数据，不该被构造出来。旧文档没有这三个
-     * 字段 = 准点生成。渲染层对"只有标记没有时刻"的残骸**只少说一句时刻、不整段消失**。
+     * **规则：读数据永远用运行时刻，窗口仍按 `periodTime` 往前算。** 名字刻意不叫 `dataAsOf`：
+     * 那个名字在本仓的旧口径里指"统计截止"，同一个名字两种含义会让旧版次被读成"它在截止那一刻读的"。
+     * 一个名字只留一种含义——统计截止用 `periodTime` / `windowEnd`，读数时刻用 `readAt`。
+     *
+     * `generatedAs` 是这一版实际跑出来的时刻（与 `readAt` 同一个时钟，一次跑只取一次）；`isBackfill`
+     * 说"这次跑明显晚于截止"（容差见 `BRIEFING_BACKFILL_TOLERANCE_MS`），准点生成不写它。
+     * 旧文档没有这三个字段 = 当时按截止读的、且没说自己是补跑；渲染层对残骸**只少说一句时刻**。
      */
+    readAt?: string
     isBackfill?: boolean
+    /**
+     * 旧名，**不再有写入方**：曾经被读作"这一版能看见哪一刻的世界"（往往就是统计截止）。留着是为了
+     * 让旧文档按旧义读，绝不再写新值——读数时刻见 `readAt`。
+     */
     dataAsOf?: string
     generatedAs?: string
     /** What kind of period produced this edition; absent before schema 13 reads as `scheduled`. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
+import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './dailyBriefingSource'
 
 
@@ -41,8 +42,12 @@ const makeSource = (deps: Parameters<typeof createDailyBriefingSource>[0]) => {
   const source = createDailyBriefingSource(deps)
   return {
     ...source,
-    async buildPacket(input: Readonly<{ asOf: string; windowHours?: number; locale: Parameters<typeof source.renderPacket>[1]; timeZone: string }>) {
-      const facts = await source.readFacts({ asOf: input.asOf, ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours }) })
+    async buildPacket(input: Readonly<{ asOf: string; windowEnd?: string; windowHours?: number; locale: Parameters<typeof source.renderPacket>[1]; timeZone: string }>) {
+      const facts = await source.readFacts({
+        asOf: input.asOf,
+        ...(input.windowEnd === undefined ? {} : { windowEnd: input.windowEnd }),
+        ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours })
+      })
       return source.renderPacket(facts, input.locale, input.timeZone)
     }
   }
@@ -198,20 +203,75 @@ describe('daily briefing source', () => {
     expect(packet.news.items.map((item) => item.itemId)).toEqual(['fresh'])
   })
 
-  it('re-reads the release instant when the latest collection omitted actuals', async () => {
+  it('reads the world at the run instant, so an actual that arrived after the cutoff is visible', async () => {
+    // 用户 2026-11-05 定：读数用运行时刻，窗口仍按截止。这里截止是 08:00（00:00Z），运行是 12:20（04:20Z），
+    // 库里 12:20 才回补的实际值必须被这一次读看见。
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const readAt = '2026-10-31T04:20:00.000Z'
     const base = deps()
     const publicQuery = base.publicQuery as unknown as { queryMarketCalendarMonth: (input: { month: string; locale: string; asOf: string }) => unknown }
-    let calls = 0
+    const askedAsOf: string[] = []
     publicQuery.queryMarketCalendarMonth = (input) => {
-      calls += 1
+      askedAsOf.push(input.asOf)
       return {
         state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
-        events: [{ ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z', providerActual: calls >= 3 ? { displayValue: '3.4%' } : null }]
+        // 这个源按 as-of 给出它那一刻知道的实际值：读到运行时刻才有值。
+        events: [{ ...marketEvent, scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: input.asOf >= readAt ? { displayValue: '86.0' } : null }]
       }
     }
-    const packet = await makeSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('3.4%')
-    expect(calls).toBeGreaterThanOrEqual(3)
+    const packet = await makeSource(base).buildPacket({ asOf: readAt, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('86.0')
+    // 值到了，就要真的进正文（这是用户点重跑期待看到的那一栏）。
+    const document = buildDailyBriefingDocument({ packet, date: '2026-10-31' })
+    expect(document.news.macro.map((item) => item.eventKey)).toContain('MC.FOMC')
+    expect(document.news.macro.find((item) => item.eventKey === 'MC.FOMC')?.actual).toBe('86.0')
+    // 窗口仍然是截止前 24 小时，没有跟着读数时刻走。
+    expect(packet.windowEnd).toBe(cutoff)
+    expect(packet.windowStart).toBe('2026-10-30T00:00:00.000Z')
+    // 一次读就够：不再有"按事件时刻 +1 小时"的第二问，那条路补不进晚到的回补。
+    expect(new Set(askedAsOf)).toEqual(new Set([readAt]))
+  })
+
+  it('stops the window at the cutoff even though the read is later', async () => {
+    // 边界用例：一条在窗口内、一条在截止之后但在读数时刻之前。后者不属于这一期的"过去 24 小时"。
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const readAt = '2026-10-31T04:20:00.000Z'
+    const base = deps()
+    const publicQuery = base.publicQuery as unknown as { queryMarketCalendarMonth: (input: { month: string; locale: string; asOf: string }) => unknown }
+    publicQuery.queryMarketCalendarMonth = (input) => ({
+      state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
+      events: [
+        { ...marketEvent, eventKey: 'IN.WINDOW', scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: { displayValue: '1' } },
+        { ...marketEvent, eventKey: 'AFTER.CUTOFF', scheduledAt: '2026-10-31T02:00:00.000Z', providerActual: { displayValue: '2' } }
+      ]
+    })
+    const facts = await makeSource(base).readFacts({ asOf: readAt, windowEnd: cutoff, windowHours: 24 })
+    expect(facts.windowStart).toBe('2026-10-30T00:00:00.000Z')
+    expect(facts.windowEnd).toBe(cutoff)
+    const packet = await makeSource(base).buildPacket({ asOf: readAt, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const keys = packet.calendar.events.map((event) => event.eventKey)
+    // 事件本身读得到（读的是最新库），但窗口筛选在文档层按截止切。
+    expect(keys).toContain('AFTER.CUTOFF')
+    const document = buildDailyBriefingDocument({ packet, date: '2026-10-31' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['IN.WINDOW'])
+  })
+
+  it('drops news published after the cutoff even when the read is later', async () => {
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const readAt = '2026-10-31T04:20:00.000Z'
+    const base = deps()
+    const news = base.news as unknown as { query: (input: unknown) => Promise<unknown> }
+    news.query = async () => ({
+      state: 'available', asOf: readAt, generatedAt: readAt, window: '24h',
+      items: [
+        { itemId: 'in-window', title: 'In', sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T20:00:00.000Z', scoredAt: readAt, polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'x', engine: 'rules', caveats: [] },
+        { itemId: 'after-cutoff', title: 'After', sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt: '2026-10-31T02:00:00.000Z', scoredAt: readAt, polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'x', engine: 'rules', caveats: [] }
+      ],
+      caveats: []
+    })
+    const packet = await makeSource(base).buildPacket({ asOf: readAt, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(packet.news.items.map((item) => item.itemId)).toEqual(['in-window'])
   })
 
   it('degrades each read to a stated gap instead of failing the packet', async () => {

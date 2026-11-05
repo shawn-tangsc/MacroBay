@@ -57,8 +57,7 @@ export async function readCalendar(
   deps: DailyBriefingSourceDeps,
   asOf: string,
   locale: DailyBriefingLocale,
-  enabled: boolean,
-  windowStart: string
+  enabled: boolean
 ): Promise<DailyBriefingFactPacket['calendar']> {
   if (!enabled) return Object.freeze({ state: 'source-disabled' as const, events: Object.freeze([]) })
   const months = calendarMonths(asOf)
@@ -97,28 +96,10 @@ export async function readCalendar(
       }
     }
   }
-  // A later collection can omit the actual value even though an earlier collection in the same
-  // release batch stored it. Ask again at the latest release instant in the window and merge the
-  // actual/previous/consensus fields; no extra month is read.
-  const start = Date.parse(windowStart)
-  const missing = [...events.values()]
-    .filter((event) => event.importance === 'high' && event.actual === undefined)
-    .filter((event) => {
-      const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at >= start && at < Date.parse(asOf)
-    })
-    .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
-  const latest = missing.at(-1)
-  if (latest) {
-    const fallbackAsOf = new Date(Date.parse(latest.scheduledAt) + 60 * 60 * 1000).toISOString()
-    const refreshed = readMarketCalendar(deps, latest.scheduledAt.slice(0, 7), locale, fallbackAsOf)
-    if (refreshed?.state === 'available') {
-      for (const event of refreshed.events) {
-        const existing = events.get(event.eventKey)
-        if (existing && !existing.actual && event.providerActual) events.set(event.eventKey, marketEvent(event, asOf))
-      }
-    }
-  }
+  // 这里曾经有一条"补问"：对窗口内没拿到实际值的高影响事件，再按 `事件时刻 + 1 小时` 那个快照读一次。
+  // 那条路注定补不进来——晚到的小时级、天级回补都落在那个快照之后，永远查不到（2026-11-05 的 9 条
+  // 事件就是这么"消失"的）。现在读数那一刻就是运行时刻、读的是最新库，一次读已经覆盖"此刻库里
+  // 有什么"；再按旧时刻问一遍只会拿回更旧的世界。删掉它，不留一条永远走不通的路。
   return Object.freeze({
     state: available ? 'available' as const : 'unavailable' as const,
     events: Object.freeze([...events.values()])

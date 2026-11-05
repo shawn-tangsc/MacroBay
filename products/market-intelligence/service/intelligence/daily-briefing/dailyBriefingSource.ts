@@ -68,12 +68,18 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   // 放进这个键会各采一遍（同一批数读两次，还可能两次看到不一样的东西），把窗口拿出去则相反——
   // 24h 与 4h 会复用同一份，4h 那份拿到的是 24h 的数。键里只放这两样，别的一样都不放。
   const collected = new Map<string, Promise<DailyBriefingFactSnapshot>>()
-  const collect = async (asOf: string, windowHours: number): Promise<DailyBriefingFactSnapshot> => {
-      const input = { asOf, windowHours }
+  /**
+   * 读一次数据：`asOf` 是**读数的那一刻**（运行时刻），`windowEnd` 是这一版的**统计截止**。
+   *
+   * 两者不是一回事，而且现在必须分开（用户 2026-11-05 定）：窗口仍卡在截止前 N 小时，但读的是
+   * 跑起来这一刻最新的库——这样"截止后才回补的实际值"重跑就能用上，而不是把时间倒回截止那一刻。
+   */
+  const collect = async (asOf: string, windowEnd: string, windowHours: number): Promise<DailyBriefingFactSnapshot> => {
+      const input = { asOf, windowEnd, windowHours }
       const enabled = await readEnabled(deps)
       // The reader's statistical window decides the fact interval; every window-scoped read below
-      // uses it instead of assuming 24 hours.
-      const windowStart = new Date(Date.parse(input.asOf) - windowHours * HOUR_MS).toISOString()
+      // uses it instead of assuming 24 hours. The window ends at the cutoff, never at the read.
+      const windowStart = new Date(Date.parse(input.windowEnd) - windowHours * HOUR_MS).toISOString()
       // The calendar's catch-up runs here, before any calendar month is read: the section's reason
       // must come from the reading this run judged, not from a second one taken later.
       const calendarFreshness = await ensureCalendarFreshForRun({
@@ -94,7 +100,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       const timeline = readTimeline(deps)
       const [conclusion, news, fearGreed, funding, capital, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf, timeline),
-        readNews(deps, input.asOf, windowStart),
+        readNews(deps, input.asOf, windowStart, input.windowEnd),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
@@ -106,7 +112,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       return Object.freeze({
         asOf: input.asOf,
         windowStart,
-        windowEnd: input.asOf,
+        windowEnd: input.windowEnd,
         windowHours,
         timeline,
         conclusion,
@@ -135,11 +141,12 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   return {
     async readFacts(input) {
       const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
-      const key = `${input.asOf}|${windowHours}`
+      const windowEnd = input.windowEnd ?? input.asOf
+      const key = `${input.asOf}|${windowEnd}|${windowHours}`
       const cached = collected.get(key)
       if (cached) return cached
       // 失败不缓存：一次读挂了不该让同一时刻的重试也拿那次失败。
-      const promise = collect(input.asOf, windowHours).catch((error: unknown) => { collected.delete(key); throw error })
+      const promise = collect(input.asOf, windowEnd, windowHours).catch((error: unknown) => { collected.delete(key); throw error })
       collected.set(key, promise)
       // 有界：只留最近几次，长期运行不会把每次采集都攥在内存里。
       if (collected.size > 8) {
@@ -153,7 +160,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       // number, row order or cutoff is read a second time.
       const [priorConclusions, calendar] = await Promise.all([
         readPriorConclusions(deps, facts.timeline, facts.asOf, facts.windowStart, locale),
-        readCalendar(deps, facts.asOf, locale, facts.enabled.calendar, facts.windowStart)
+        readCalendar(deps, facts.asOf, locale, facts.enabled.calendar)
       ])
       return Object.freeze({
         ...facts,
@@ -166,16 +173,18 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   }
 }
 
-export async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string): Promise<DailyBriefingFactPacket['news']> {
+export async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string, windowEnd: string = asOf): Promise<DailyBriefingFactPacket['news']> {
   try {
     // The query only supports fixed horizons, so ask for the smallest one that covers the window
     // and keep the configured interval: a 12h brief must not carry yesterday's headlines, and a 48h
     // brief must not silently shrink back to 24h.
-    const window = Date.parse(asOf) - Date.parse(windowStart) > 24 * HOUR_MS ? '7d' as const : '24h' as const
+    const window = Date.parse(windowEnd) - Date.parse(windowStart) > 24 * HOUR_MS ? '7d' as const : '24h' as const
+    // 读出时刻可以晚于截止（重跑读最新库），但**版面上装的是截至那一刻的窗口**：截止之后发的新闻
+    // 不属于这一期的"过去 24 小时"。
     const view = await deps.news.query({ asOf, window, limit: 100 })
     return Object.freeze({
       state: view.state,
-      items: view.items.filter((item) => item.publishedAt >= windowStart && item.publishedAt <= asOf)
+      items: view.items.filter((item) => item.publishedAt >= windowStart && item.publishedAt <= windowEnd)
     })
   } catch {
     return Object.freeze({ state: 'unavailable' as const, items: Object.freeze([]) })

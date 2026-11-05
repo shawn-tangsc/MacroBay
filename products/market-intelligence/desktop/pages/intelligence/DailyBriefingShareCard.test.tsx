@@ -113,38 +113,43 @@ describe('a backfilled edition says which world it read', () => {
     const base = briefing()
     return {
       ...base,
-      edition: { ...base.edition, isBackfill: true, dataAsOf: '2026-10-30T12:20:00.000Z', generatedAs: '2026-10-30T07:02:00.000Z' }
+      edition: { ...base.edition, isBackfill: true, readAt: '2026-10-30T12:20:00.000Z', generatedAs: '2026-10-30T12:20:00.000Z' }
     }
   }
 
-  it('puts the sentence at the end of the meta line, in the paper’s own words', async () => {
-    // 补跑那版的数据不是截止那一刻的世界，必须自己说出来；位置在末段之后，准点版不渲染它。
+  it('prints the cutoff and the read instant as two separate segments, each with its zone', async () => {
+    // `A0.10`：统计到哪一刻（截止）与哪一刻读的库（读取）是两个事实，并排两段、各带时区。
+    // 合并成一句就会让人以为数据只到读取那一刻。
+    const host = await render(backfilled())
+    const cutoff = host.querySelector<HTMLElement>('[data-meta-cutoff]')!
+    const read = host.querySelector<HTMLElement>('[data-meta-read-at]')!
+    expect(cutoff.textContent).toBe(text.metaCutoff.replace('{time}', '2026-10-30 00:30').replace('{zone}', 'GMT'))
+    expect(read.textContent).toBe(text.metaReadAt.replace('{time}', '2026-10-30 12:20').replace('{zone}', 'GMT'))
+    // 不是一个值说两遍：两个时刻确实不同。
+    expect(cutoff.textContent).not.toBe(read.textContent)
+  })
+
+  it('puts the backfill sentence last on the meta line, without repeating a third time', async () => {
+    // 两个时刻已经在上面两段里；补跑那一句只解释"为什么读得晚"，不再印第三个时间。
     const host = await render(backfilled())
     const note = host.querySelector('[data-backfill-note]')!
     expect(note).not.toBeNull()
-    // 有时刻时是完整长句，且时刻在里面；断言不写成「按 {time} 拆出的前半截」——那是照实现写，
-    // 会把截断钉死。
-    expect(note.textContent).toContain('2026-10-30 12:20')
-    expect(note.textContent?.trimEnd().endsWith('as of')).toBe(false)
-    expect(note.textContent).toContain('data as of')
-    // 它不是新起的一行、也不是新区域：仍在期次元信息那段 <p> 里，且在最后一个段之后。
+    expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
     const meta = note.closest('.mi-brief-poster__meta')!
-    expect(meta).not.toBeNull()
     expect(meta.lastElementChild).toBe(note)
-    // 分隔符跟着这一段一起走，否则窄窗会剩一行只有「·」。
     expect(note.textContent?.trimStart().startsWith('·')).toBe(true)
   })
 
-  it('still says it was a backfill when the cutoff is missing, and only drops the time', async () => {
-    // 正常路径三件齐（契约注释与生成流程保证）；真有残骸时**不许整段消失**——补跑这件事读者
-    // 必须知道，沉默比缺一个时刻更糟。
+  it('still says it was a backfill when no read instant was stamped', async () => {
+    // 残骸（只有标记、没有读取时刻）**不许整段消失**：补跑这件事读者必须知道；读取那一段退回
+    // 生成时刻，不编一个"现在"。
     const base = briefing()
     const host = await render({ ...base, edition: { ...base.edition, isBackfill: true } })
     const note = host.querySelector('[data-backfill-note]')!
     expect(note).not.toBeNull()
-    // 半句话（截到「数据截至 / data as of」为止）比不说更糟：读者会以为我们没取到时刻。
     expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
-    expect(note.textContent).not.toContain('data as of')
+    const read = host.querySelector<HTMLElement>('[data-meta-read-at]')
+    expect(read?.textContent).toContain('2026-10-30 00:30')
   })
 
   it('says nothing on a punctual edition', async () => {
@@ -179,8 +184,9 @@ describe('an empty macro section says why (A0.8)', () => {
   it('counts the events whose actuals had not arrived, instead of claiming there were none', async () => {
     // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件、截至冻结时一条实际值都没拿到。
     // 这一档既不是「没有」，也不是「未公布」——讲的是"截至那一刻我们手里没有"。
+    // 句里的时刻是**统计截止**，与读取时刻无关：夹具的时间来自 `windowEnd`。
     const doc = emptyMacro({ macroEmpty: 'past-24h-high-impact-actuals-pending', macroEmptyCount: 9 })
-    const rendered = await render({ ...doc, edition: { ...doc.edition, dataAsOf: '2026-10-30T00:30:00.000Z' } })
+    const rendered = await render({ ...doc, edition: { ...doc.edition, readAt: '2026-10-30T12:20:00.000Z' } })
     const line = rendered.querySelector<HTMLElement>('[data-macro-empty="pending"]')
 
     expect(line).not.toBeNull()

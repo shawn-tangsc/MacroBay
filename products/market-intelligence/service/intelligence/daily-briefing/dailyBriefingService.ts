@@ -194,7 +194,8 @@ export type DailyBriefingStore = Readonly<{
  * different numbers, which is the thing this release exists to prevent.
  */
 export type DailyBriefingSource = Readonly<{
-  readFacts: (input: Readonly<{ asOf: string; windowHours?: number }>) => Promise<DailyBriefingFactSnapshot>
+  /** `asOf` = 读数那一刻（运行时刻）；`windowEnd` = 这一版的统计截止。缺省时两者相同。 */
+  readFacts: (input: Readonly<{ asOf: string; windowEnd?: string; windowHours?: number }>) => Promise<DailyBriefingFactSnapshot>
   renderPacket: (facts: DailyBriefingFactSnapshot, locale: DailyBriefingLocale, timeZone: string) => Promise<DailyBriefingFactPacket>
 }>
 
@@ -425,6 +426,9 @@ export function createDailyBriefingService(deps: Readonly<{
   }>, force: boolean): Promise<DailyBriefingTodayResult> {
     const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
+    // **读数的那一刻**（运行时刻），与这一版的**统计截止**（`input.asOf`）是两件事：窗口仍按截止，
+    // 读的却是此刻最新的库。取一次时钟、整跑都用它，避免读和盖章各说一个时间。
+    const readAt = now()
     // The attempt row is opened before any work: a run the process never finishes is still a
     // record of an attempt that did not succeed, instead of an attempt that never happened.
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
@@ -474,7 +478,7 @@ export function createDailyBriefingService(deps: Readonly<{
     let packet: DailyBriefingFactPacket
     let facts: DailyBriefingFactSnapshot
     try {
-      facts = await withDeadline(deps.source.readFacts({ asOf: input.asOf, windowHours: input.windowHours }), 15_000)
+      facts = await withDeadline(deps.source.readFacts({ asOf: readAt, windowEnd: input.asOf, windowHours: input.windowHours }), 15_000)
       // Rendering is text-only work over the frozen facts; it is not a second read.
       // The facts are period-independent; the identity is this run's, so it is attached here rather
       // than inside the source (which never sees a period). Every edition this run writes then
