@@ -1,4 +1,4 @@
-import { editionNewsTitle, type BriefingConclusionSynthesis, type BriefingMarketRow, type BriefingPulseRow, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { editionNewsTitle, type BriefingConclusionSynthesis, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -267,18 +267,6 @@ function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>
   if (entry.refId.startsWith('macro-calendar')) return text.citationSources.macroCalendar
   if (entry.refId.startsWith('news')) return text.citationSources.news
   return text.citationSources.analysis
-}
-
-function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
-  if (entry.observedAt) return formatTime(entry.observedAt, 'minute')
-  const match = entry.refId.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/)
-  return match ? formatTime(match[0], 'minute') : ''
-}
-
-function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {
-  if (row.state === 'source-disabled') return text.states['source-disabled']
-  if (row.state === 'unavailable') return text.states.unavailable
-  return row.observedAt ? text.states[row.state] : ''
 }
 
 type WatchKind = 'lower' | 'inline' | 'higher' | 'other'

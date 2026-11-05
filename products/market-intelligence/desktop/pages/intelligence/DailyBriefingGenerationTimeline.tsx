@@ -1,8 +1,3 @@
-import { CircleHelp } from 'lucide-react'
-
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
-
 import type { BriefingGenerationWaiting } from '../../../contracts/dailyBriefing'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
@@ -153,35 +148,6 @@ const STAGE_HELP_KEYS: Record<GenerationStageId, string> = {
   'repair-1': 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.repair-1',
   'repair-2': 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.repair-2',
   store: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.store'
-}
-
-/**
- * The fixed logic of one stage, behind the question mark: it is a paragraph, so it opens as a
- * popover — hover and focus preview it, a click pins it, Escape closes it and returns the focus.
- * The sentence is the stage's own copy, taken by key; a stage the locale has no line for renders no
- * icon, so an empty bubble cannot appear.
- */
-function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBriefingText }>): React.ReactElement | null {
-  const resolveText = useProductTextKey()
-  const labels = text.generationTrace
-  const resolveProductText = useProductTextKey()
-  if (!labels.stageHelp[id]?.trim()) return null
-  return <Popover
-    labelKey={STAGE_HELP_KEYS[id]}
-    resolveText={resolveProductText}
-    trigger={(triggerProps) => (
-      <IconButton
-        {...triggerProps}
-        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel"
-        ariaLabelParams={{ stage: labels.stages[id] }}
-        dataAttributes={{ 'data-stage-help': id }}
-        icon={CircleHelp}
-        resolveText={resolveProductText}
-        size="sm"
-        variant="plain"
-      />
-    )}
-  />
 }
 
 function stageResult(

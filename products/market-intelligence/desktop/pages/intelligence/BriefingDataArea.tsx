@@ -399,19 +399,6 @@ function changeCopy(change: number | undefined, arrows: changeArrowWords, noValu
   return `${change < 0 ? '' : '+'}${magnitude}`
 }
 
-/**
- * Whether two instants fall in the same minute.
- *
- * Compared as instants, never as formatted text: a formatter that rounds or is stubbed would make every
- * pair look equal and silently hide a stamp that really does differ.
- */
-function sameMinute(left: string | undefined, right: string | undefined): boolean {
-  if (!left || !right) return false
-  const a = Date.parse(left)
-  const b = Date.parse(right)
-  return Number.isFinite(a) && Number.isFinite(b) && Math.floor(a / 60_000) === Math.floor(b / 60_000)
-}
-
 /** The last plotted point, for the "now" dot: one dot, at the end of the line, never a marker per point. */
 function sparkEnd(points: string): Readonly<{ x: number; y: number }> | undefined {
   const last = points.split(' ').at(-1)
