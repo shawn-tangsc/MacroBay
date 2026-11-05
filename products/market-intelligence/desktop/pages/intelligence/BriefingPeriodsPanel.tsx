@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import type { BriefingPeriod, BriefingPeriodDraft } from '../../../contracts/dailyBriefingPeriod'
 import { dailyBriefingPeriodClient, type DailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
@@ -31,22 +32,26 @@ export function BriefingPeriodsPanel({ text, client = dailyBriefingPeriodClient 
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  // 服务端要求带上语言：它要决定"一条期都没有时那条默认期用哪种语言"，不猜。界面语言就是答案，
+  // 不带参数会被拒（`daily-briefing-locale-required`）——这一处曾经把整块显示成"没读出来"。
+  const locale = useShellLanguage()
   const copy = text.settings.periods
   const languageName = (locale: string): string => (text.settings.languageNames as Record<string, string>)[locale] ?? locale
 
   const load = (): void => {
     setFailed(false)
-    void client.list()
+    void client.list(locale)
       .then((saved) => { setPeriods(saved) })
       .catch(() => { setFailed(true); setPeriods(null) })
   }
-  useEffect(load, [client])
+  useEffect(load, [client, locale])
 
   const save = (draft: BriefingPeriodDraft): void => {
     setSaving(true)
     setSaveFailed(false)
     const target = editing
-    const write = target === undefined ? client.create(draft) : client.update(target.id, draft)
+    // 写入同样带语言：服务端靠它决定新期在旧设置语言下的显示，同一个理由，不猜。
+    const write = target === undefined ? client.create(draft, locale) : client.update(target.id, draft, locale)
     void write
       .then((result) => {
         if (result.state === 'saved') {

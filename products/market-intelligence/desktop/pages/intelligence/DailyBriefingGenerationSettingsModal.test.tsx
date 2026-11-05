@@ -96,6 +96,14 @@ describe('daily briefing generation settings', () => {
     expect(body().querySelector('[data-briefing-periods]')).not.toBeNull()
   })
 
+  it('asks for the periods with the interface language, never with no argument', async () => {
+    // 服务端要语言来决定"没有期时那条默认期用什么语言"，它不猜；少传一个参数整块就变成"没读出来"。
+    await render()
+    const list = invoke.mock.calls.find((call) => String(call[1]).endsWith('listPeriods'))
+    expect(list).toBeDefined()
+    expect((list?.[2] as { locale?: string }).locale).toBe('zh-CN')
+  })
+
   it('explains an empty list and opens the add dialog from a pressable entry', async () => {
     await render()
     const empty = body().querySelector<HTMLElement>('[data-briefing-periods-empty]')!
