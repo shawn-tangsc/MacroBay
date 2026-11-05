@@ -15,9 +15,11 @@ export async function runBriefingRegenerate(deps: Readonly<{
   /** The zone the run's day boundary uses; an unreadable stored zone falls back to UTC. */
   timeZone: string
   locale: DailyBriefingDocument['edition']['locale']
+  /** Which period of today to run; absent means the page's only one. */
+  periodId?: string
 }>): Promise<Readonly<{ kind: 'available'; document: DailyBriefingDocument } | { kind: 'failed'; failure: BriefingRegenerateFailure }>> {
   try {
-    const result = await deps.client.regenerate({ locale: deps.locale, timeZone: deps.timeZone })
+    const result = await deps.client.regenerate({ locale: deps.locale, timeZone: deps.timeZone, ...(deps.periodId === undefined ? {} : { periodId: deps.periodId }) })
     if (result.state === 'available') return { kind: 'available', document: result.document }
     const generationTrace = readGenerationTrace((result as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     return { kind: 'failed', failure: { code: result.failureCode, ...(generationTrace ? { generationTrace } : {}) } }

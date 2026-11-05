@@ -65,6 +65,7 @@ import { useBriefingRunActions } from './useBriefingRunActions'
 import { DailyBriefingLocaleMissing } from './DailyBriefingLocaleMissing'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
+import { dailyBriefingPeriodClient } from '../../shared/ipc/dailyBriefingPeriodClient'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
 /**
@@ -459,6 +460,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         generatingStage={generating ? (progressUnreadable ? text.generationProgress.unknownStage : ((liveProgress ? runningRowName(liveProgress, text) : undefined) ?? text.generationProgress.railRunning)) : undefined}
         locale={locale} text={text} timeZone={timeZone} resolveText={resolveProductText} onSelect={selectEdition}
         gapCount={issueCounts.warning + issueCounts.info}
+        onRemovePeriod={({ periodId }) => {
+          // 删排期，不删内容：`removePeriod` 是期配置自己的方法，删掉之后这一期不再到点跑，列表里那
+          // 一行留成已删除态，已经生成的正文照旧能读。
+          void dailyBriefingPeriodClient.remove(periodId).then(() => setReloadKey((key) => key + 1)).catch(() => undefined)
+        }}
         onDeletePeriod={(target) => {
           // Decide what to show next before the delete runs: the other language of this issue, if
           // there is one. The reload consumes it, so the switch and the pane move together.

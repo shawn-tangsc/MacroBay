@@ -130,7 +130,7 @@ function readGenerationPatch(value: unknown): Readonly<{ generationTime?: string
   }
 }
 
-function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string; generate?: boolean }> {
+function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string; generate?: boolean; periodId?: string }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
   const locale = payload.locale
   const timeZone = payload.timeZone

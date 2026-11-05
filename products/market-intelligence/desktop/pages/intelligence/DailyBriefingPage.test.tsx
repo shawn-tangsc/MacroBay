@@ -385,7 +385,9 @@ describe('daily briefing page', () => {
 
     const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')!
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    // 菜单第一项现在是「删除这一期」（删排期），这里要的是删这一语言版，所以点最后一条。
+    const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    const item = menuItems.at(-1) ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]
@@ -434,7 +436,9 @@ describe('daily briefing page', () => {
     expect(dom.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(14)
 
     act(() => { railRow().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const item = document.querySelector<HTMLElement>('[role="menuitem"]') ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
+    // 菜单第一项现在是「删除这一期」（删排期），这里要的是删这一语言版，所以点最后一条。
+    const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    const item = menuItems.at(-1) ?? document.querySelector<HTMLElement>('.ant-dropdown-menu-item')!
     act(() => { item.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('button')]

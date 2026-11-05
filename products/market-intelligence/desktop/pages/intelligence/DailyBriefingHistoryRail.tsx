@@ -26,7 +26,7 @@ export type BriefingRailSelection = Readonly<{ date: string; periodId: string; l
  */
 export function DailyBriefingHistoryRail({
   editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, gapCount, onDeletePeriod
+  todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, gapCount, onDeletePeriod, onRemovePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   loading?: boolean
@@ -46,6 +46,11 @@ export function DailyBriefingHistoryRail({
   onSelectLocale?: (selection: BriefingRailSelection) => void
   gapCount?: number
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>) => void | Promise<void>
+  /**
+   * 删掉这一期的**排期**，不删它的内容：行留着、标成已删除，计划与实际两个时刻都在，正文照旧能读。
+   * 与 `onDeletePeriod`（删掉某一语言版的正文）是两层，别把这两件事合并。
+   */
+  onRemovePeriod?: (input: Readonly<{ date: string; periodId: string }>) => void | Promise<void>
 }>): React.ReactElement {
   const confirm = useConfirm()
   const [menu, setMenu] = useState<Readonly<{ date: string; periodId: string; anchor: MenuAnchor }> | null>(null)
@@ -204,18 +209,15 @@ export function DailyBriefingHistoryRail({
         const target = menu
         const languages = menuLanguages
         closeMenu()
-        if (key === 'delete-period' && target && onDeletePeriod) {
-          // 整期删除 = 这一期每一个语言版各删一次：客户端的方法按（日, 期, 语言）走，没有"整期"这一
-          // 层——在这里展开，而不是让服务端接受一个含糊的"删这一期"。
+        if (key === 'delete-period' && target && onRemovePeriod) {
+          // 删的是这一期的**排期**：行留着、标成已删除，正文照旧能读（`A9.8` 删期不删历史版次）。
           confirm({
             title: text.history.deleteWholeTitle.replace('{date}', target.date),
             description: text.history.deleteWholeDescription,
             confirmLabel: text.history.deleteConfirm,
             cancelLabel: text.history.deleteCancel,
             tone: 'danger',
-            onConfirm: () => {
-              for (const language of languages) onDeletePeriod({ date: target.date, periodId: target.periodId, locale: language })
-            }
+            onConfirm: () => onRemovePeriod({ date: target.date, periodId: target.periodId })
           })
           return
         }

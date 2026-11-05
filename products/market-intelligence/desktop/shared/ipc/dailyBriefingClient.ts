@@ -41,6 +41,8 @@ export type DailyBriefingClientInput = Readonly<{
   timeZone: string
   /** `false` opens the page as a read: the stored edition, or "nothing written yet". No run. */
   generate?: boolean
+  /** Which period of today to run. Absent keeps the first/only one, which is what the old call meant. */
+  periodId?: string
 }>
 export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }>
 

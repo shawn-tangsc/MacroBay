@@ -159,8 +159,9 @@ describe('daily briefing history rail', () => {
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
 
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
-    const item = document.querySelector<HTMLElement>('.ant-dropdown-menu-item') ?? document.querySelector<HTMLElement>('[role="menuitem"]')!
-    act(() => { item.click() })
+    // 第一项是"删除这一期"（删排期），这里点的是删这一语言版的那一条。
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    act(() => { items.at(-1)!.click() })
     for (let round = 0; round < 6; round += 1) await flush()
 
     // 删除是一个不可撤销的动作：先弹共用确认框，点「删除」才真的调宿主。
