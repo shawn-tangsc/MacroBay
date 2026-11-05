@@ -66,11 +66,17 @@ function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, 
 }
 
 export function DailyBriefingHistoryRail({
-  editions, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
+  editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
   todayDate, locale, text, timeZone, generatingStage, resolveText, onSelect, onSelectLocale, onDeletePeriod,
   onRegeneratePeriod
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
+  /**
+   * 天头要画哪些日子。**有版次、或有过运行记录（任何状态）、或是今天**才算一天；仅仅"被排期覆盖"
+   * 不算——排期每天都配，按它算等于 14 天全铺出来（`02` v2.87）。
+   * 省略时退回"有天头的日子来自版次"，即旧行为。
+   */
+  dates?: readonly string[]
   loading?: boolean
   failed?: boolean
   onRetry?: () => void
@@ -104,14 +110,15 @@ export function DailyBriefingHistoryRail({
   const isOpen = (date: string): boolean => !closedDays.has(date)
 
   const days = useMemo(() => {
-    const order: string[] = []
     const rows = new Map<string, DailyBriefingEditionSummary[]>()
     for (const edition of editions) {
-      if (!rows.has(edition.date)) { rows.set(edition.date, []); order.push(edition.date) }
-      rows.get(edition.date)!.push(edition)
+      const list = rows.get(edition.date) ?? []
+      list.push(edition)
+      rows.set(edition.date, list)
     }
-    return order.map((date) => ({ date, rows: rows.get(date)! }))
-  }, [editions])
+    const order = dates === undefined ? [...rows.keys()] : [...dates]
+    return order.map((date) => ({ date, rows: rows.get(date) ?? [] }))
+  }, [editions, dates])
 
   const menuRow = menu
     ? editions.find((edition) => edition.date === menu.date && edition.periodId === menu.periodId && edition.locale === menu.locale)
@@ -305,6 +312,15 @@ export function DailyBriefingHistoryRail({
                 : null}
             </div>
           })}
+          {/* 这一天没有任何可显示的行时给**一个**兜底项（`02` v2.86）：它不是版次行（无时刻/窗口/
+              方向/来源/语言），点它才把右侧切到空态。有失败行或生成中行时不出——那两类本身就是
+              "发生过的事"，同屏两套说法只会让人困惑。 */}
+          {day.rows.length === 0
+            ? <button type="button" className="mi-daily-briefing__rail-item mi-daily-briefing__rail-fallback" data-rail-fallback="true"
+              onClick={() => onSelect(day.date)}>
+              <span className="mi-daily-briefing__rail-fallback-text">{text.history.dayEmpty}</span>
+            </button>
+            : null}
         </div> : null}
       </section>)}
     </div>

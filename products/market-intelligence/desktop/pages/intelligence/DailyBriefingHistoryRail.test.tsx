@@ -345,6 +345,34 @@ describe('the second line is never blank', () => {
   })
 })
 
+describe('a day with nothing to show keeps its head and offers one fallback item', () => {
+  it('draws the head with 共 0 期 and exactly one fallback row, which opens the empty state', () => {
+    // 用户拍板（`02` v2.86）：天头永远在，0 条写「共 0 期」；展开后给**一个**兜底项，
+    // 它不是版次行（无时刻/窗口/方向/来源/语言），点它才把右侧切到空态。
+    const onSelect = vi.fn()
+    render({ editions: [], dates: ['2026-10-31'], selectedDate: undefined, onSelect })
+    const head = (): HTMLElement => host.querySelector<HTMLElement>('.mi-daily-briefing__rail-day-head')!
+    expect(head()).not.toBeNull()
+    expect(head().getAttribute('aria-expanded')).toBe('true')
+    expect(head().querySelector('[data-day-count]')?.textContent).toBe(text.history.periodCount.replace('{count}', '0'))
+    const fallback = [...host.querySelectorAll<HTMLElement>('[data-rail-fallback="true"]')]
+    expect(fallback).toHaveLength(1)
+    expect(fallback[0]!.textContent).toBe(text.history.dayEmpty)
+    // 不是版次行：没有这些行内事实。
+    expect(fallback[0]!.querySelector('[data-run-source]')).toBeNull()
+    expect(fallback[0]!.querySelector('[data-window-hours]')).toBeNull()
+    expect(fallback[0]!.querySelector('[data-edition-locale]')).toBeNull()
+    expect(fallback[0]!.querySelector('[data-direction]')).toBeNull()
+    act(() => { fallback[0]!.click() })
+    expect(onSelect).toHaveBeenCalledWith('2026-10-31')
+  })
+
+  it('offers no fallback item once the day has a real row', () => {
+    render({ editions: [edition({ date: '2026-10-31' })], dates: ['2026-10-31'] })
+    expect(host.querySelector('[data-rail-fallback="true"]')).toBeNull()
+  })
+})
+
 describe('the day head opens the latest edition of that day', () => {
   it('picks the row with the latest nominal cutoff, and marks only that row', () => {
     // 同一天两期：点日期打开 `periodTime` 最晚的那一版（与列表排序同一口径 `A5.1`），
