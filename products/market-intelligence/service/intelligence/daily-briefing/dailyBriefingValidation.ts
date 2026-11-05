@@ -28,6 +28,7 @@ import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBri
 import { failAll, type DailyBriefingValidationFailureEntry, type DailyBriefingValidationFailureResult } from './dailyBriefingValidationFailures'
 import { editorialProse } from './dailyBriefingValidationProse'
 import { validatedNextFocus } from './dailyBriefingNextFocusValidation'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -114,7 +115,9 @@ export function validateDailyBriefingEditorial(
   if (raw.hiddenData !== undefined && !Array.isArray(raw.hiddenData)) return failShape('hiddenData')
   const issues: DailyBriefingValidationFailureEntry[] = []
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
-  const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
+  // 覆盖判定只看模型见过的那些（有实际值的）：无值事件不在写作素材里，不能要求编辑替它写
+  // why 或隐藏理由（`A0.12` ⑤）。
+  const macroIds = new Set(selectMacroAnalysisCandidates(document.news.macro).map((item) => `macro:${item.eventKey}`))
   const dataIds = new Set(briefingDataFactIds(document))
   const items: Array<{ factId: string; why: string }> = []
   for (const item of raw.items) {
@@ -360,6 +363,9 @@ export function applyDailyBriefingEditorial(
         // Visibility is the editor's decision. The system never injects a shown release without a
         // why, so a macro the editorial did not explain stays hidden with its reason.
         if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
+        // 没有实际值的事件不参加选材（`A0.12` ⑤），模型也就没有 why 可写；但它在版面上必须出现，
+        // 值那一格写「未拿到」——隐藏它等于把"我们没拿到"又写回"没有"。
+        if (item.actual === undefined) return Object.freeze({ ...item, visibility: 'shown' as const })
         return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
       }))
     }),

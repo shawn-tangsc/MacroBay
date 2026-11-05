@@ -9,8 +9,9 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
  * an edition whose candidate pool is larger than the document can carry. News candidates are the
  * directional rows the builder would select; title duplicates are collapsed during selection but
  * still count against the input budget, so a duplicate flood fails instead of shrinking silently.
- * Macro candidates are the builder's own released/high/actual list, which the document keeps whole
- * in `macroCandidates` so the count here reads the same implementation the writer saw.
+ * Macro candidates are the builder's own in-window high-impact list (not filtered by whether an
+ * actual arrived, cancelled events excluded), which the document keeps whole in `macroCandidates`
+ * so the count here reads the same implementation the writer saw.
  */
 export function candidateOverflow(packet: DailyBriefingFactPacket, document: DailyBriefingDocument): boolean {
   const newsCandidates = packet.news.items.filter((item) =>

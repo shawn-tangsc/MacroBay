@@ -7,6 +7,7 @@ import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dai
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
@@ -361,7 +362,10 @@ function factSummary(document: DailyBriefingDocument, locale: DailyBriefingLocal
   const copy = dailyBriefSessionCopy(locale)
   const fill = dailyBriefSessionCopyText
   const short = (title: string) => title.length > 54 ? `${title.slice(0, 54)}…` : title
-  const macro = (document.news.macroCandidates ?? document.news.macro).slice(0, 8).map((item) => short(item.title))
+  // 这一份是模型读到的候选：无值事件不在里面（`A0.12` ⑤）——它们由版面按确定性规则显示，
+  // 不需要模型挑，也不该让模型读到"没拿到"再写成判断。
+  const macro = selectMacroAnalysisCandidates(document.news.macroCandidates ?? document.news.macro)
+    .slice(0, 8).map((item) => short(item.title))
   const news = document.news.items.slice(0, 8).map((item) => short(item.translatedTitle ?? item.title))
   const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 6).map((item) => short(item.title))
   const details = [
@@ -397,7 +401,11 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; focusWhy?: unknown; data?: unknown; hiddenData?: unknown }
   const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
   const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
-  const macroCandidates = document.news.macroCandidates ?? document.news.macro
+  const allMacroCandidates = document.news.macroCandidates ?? document.news.macro
+  // 候选集合这一层就分开（`02` `A0.12` ⑤）：写作模型只拿有实际值的事件；没有值的事件照常显示，
+  // 由下方按确定性顺序补回版面——它们不参与选材，也不进模型读到的任何一份素材。
+  const macroCandidates = selectMacroAnalysisCandidates(allMacroCandidates)
+  const displayOnlyMacro = document.news.macro.filter((item) => item.actual === undefined)
   const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
   const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
   // The editor may move the focus off the default relevance leader, but only by naming a BTC/ETH
@@ -421,7 +429,11 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   // missing consensus only removes "no consensus" as a hiding reason, it does not make the event
   // shown. The cap keeps the section at four candidates; when a selection is missing altogether the
   // single most surprising release is the deterministic floor instead of every high-impact print.
-  const macro = selectBriefingMacroItems(selectedMacro, macroIds ? undefined : selectMacroFloorItem(selectedMacro))
+  // 无值事件不参与选材，但**不因此消失**（`A0.12`）：按确定性顺序接在选中的那几条后面，同受四条上限。
+  const macro = selectBriefingMacroItems(
+    [...selectedMacro, ...displayOnlyMacro],
+    macroIds ? undefined : selectMacroFloorItem(allMacroCandidates)
+  )
   const macroCapOmitted = new Set(selectedMacro
     .filter((item) => !macro.some((chosen) => chosen.eventKey === item.eventKey))
     .map((item) => `macro:${item.eventKey}`))
@@ -488,7 +500,7 @@ function unknownSelection(selection: unknown, document: DailyBriefingDocument): 
   const value = selection as { news?: unknown; macro?: unknown; next?: unknown; data?: unknown; hiddenData?: unknown }
   const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
-  const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
+  const macroIds = new Set(selectMacroAnalysisCandidates(document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
   const dataIds = new Set(briefingDataFactIds(document))
   for (const key of ['news', 'macro', 'next', 'data'] as const) {
     const list = value[key]

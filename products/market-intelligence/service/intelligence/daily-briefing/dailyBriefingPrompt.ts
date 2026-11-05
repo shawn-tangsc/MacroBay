@@ -6,6 +6,7 @@ import {
   formatBriefingValueDisplay,
   formatPercentDisplay
 } from './dailyBriefingFactDisplay'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 
 /**
  * The editorial prompt is bounded to the frozen document: the model may add prose and a visibility
@@ -53,7 +54,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       strength: item.strength,
       confidence: item.confidence
     })),
-    macro: document.news.macro.map((item) => ({
+    // 无值事件不进写作素材（`A0.12` ⑤）：版面照样显示它们，但没有可写的事实——模型看到只会
+    // 把"我们没拿到"写成一句判断。
+    macro: selectMacroAnalysisCandidates(document.news.macro).map((item) => ({
       factId: `macro:${item.eventKey}`,
       title: item.title,
       actual: item.actual ?? null,
@@ -256,7 +259,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
   const { document, locale } = input
   const candidates = {
     news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
-    macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
+    macro: selectMacroAnalysisCandidates(document.news.macro).map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
     data: dataFacts(document, locale).map((item) => ({
       factId: item.factId,
       labelKey: item.labelKey,

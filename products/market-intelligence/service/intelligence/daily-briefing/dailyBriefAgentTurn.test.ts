@@ -382,6 +382,40 @@ describe('daily brief agent turn copy', () => {
     })
   })
 
+  it('never hands the writing model an event whose actual is missing (A0.12)', async () => {
+    // 用户 2026-11-05 那类窗口：有事件、还没拿到值。它照常显示（值写「未拿到」），但两份写作素材
+    // ——事实卡与选材提示词——都不许出现它，否则模型会把"我们没拿到"写成一句判断。
+    const base = withNextCandidates()
+    const waiting = {
+      eventKey: 'US.EIA', title: 'EIA crude stocks', scheduledAt: '2026-10-29T15:00:00.000Z',
+      importance: 'high' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const source = {
+      ...base,
+      news: { ...base.news, macro: [...base.news.macro, waiting], macroCandidates: [...base.news.macro, waiting] },
+      notes: { macroHighImpactCount: 2 }
+    }
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      focus: 'US.FOMC',
+      focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
+    }
+    const { starts, continues, runner } = scriptedRunner(selection, editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: source, locale: 'en-US' })
+
+    expect(starts[0]?.displayText).toContain('Macro candidates 1')
+    expect(starts[0]?.displayText).not.toContain('EIA crude stocks')
+    expect(JSON.stringify(starts[0]?.prompt)).not.toContain('EIA crude stocks')
+    expect(continues.join('\n')).not.toContain('EIA crude stocks')
+    // 版面不能因为"模型没写过它"就把它藏掉：没有值不等于没有这件事。
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    const waitingItem = result.document.news.macro.find((item) => item.eventKey === 'US.EIA')
+    expect(waitingItem).toMatchObject({ visibility: 'shown' })
+    expect(waitingItem?.why).toBeUndefined()
+  })
+
   it('caps the 24h macro section at four releases and audits the omitted ones with a reason', async () => {
     const source = withManyMacro()
     const candidates = source.news.macroCandidates!
