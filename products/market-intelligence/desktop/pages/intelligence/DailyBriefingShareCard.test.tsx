@@ -106,6 +106,36 @@ const withFocus = (overrides: Partial<NonNullable<DailyBriefingDocument['next'][
   return { ...base, next: { ...base.next, focus: { ...base.next.focus!, ...overrides } } }
 }
 
+describe('a backfilled edition says which world it read', () => {
+  const backfilled = (): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      edition: { ...base.edition, isBackfill: true, dataAsOf: '2026-10-30T12:20:00.000Z', generatedAs: '2026-10-30T07:02:00.000Z' }
+    }
+  }
+
+  it('puts the sentence at the end of the meta line, in the paper’s own words', async () => {
+    // 补跑那版的数据不是截止那一刻的世界，必须自己说出来；位置在末段之后，准点版不渲染它。
+    const host = await render(backfilled())
+    const note = host.querySelector('[data-backfill-note]')!
+    expect(note).not.toBeNull()
+    expect(note.textContent).toContain(text.backfillNote.split('{time}')[0]!.trim())
+    expect(note.textContent).toContain('2026-10-30 12:20')
+    // 它不是新起的一行、也不是新区域：仍在期次元信息那段 <p> 里，且在最后一个段之后。
+    const meta = note.closest('.mi-brief-poster__meta')!
+    expect(meta).not.toBeNull()
+    expect(meta.lastElementChild).toBe(note)
+    // 分隔符跟着这一段一起走，否则窄窗会剩一行只有「·」。
+    expect(note.textContent?.trimStart().startsWith('·')).toBe(true)
+  })
+
+  it('says nothing on a punctual edition', async () => {
+    const host = await render(briefing())
+    expect(host.querySelector('[data-backfill-note]')).toBeNull()
+  })
+})
+
 describe('daily brief share card in English', () => {
   it('names the leverage, rate path and news count in English', async () => {
     const rendered = await render()

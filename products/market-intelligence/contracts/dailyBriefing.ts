@@ -177,6 +177,16 @@ export type DailyBriefingDocument = Readonly<{
      * Absent before schema 13; it then reads as `generatedAt`.
      */
     periodTime?: string
+    /**
+     * 补跑标记与它实际采用的数据截止。`dataAsOf` 是本版"能看见哪一刻的世界"：准点生成时等于
+     * `periodTime`，补跑或手动重新生成时等于本次运行时刻（`02` `A0.10`）。窗口不跟着移动。
+     *
+     * 三个字段一起写、一起读：`isBackfill` 为真却没有 `dataAsOf` 就是半套，期头那句会说不出
+     * "数据截至几点"。旧文档没有这三个字段 = 准点生成。
+     */
+    isBackfill?: boolean
+    dataAsOf?: string
+    generatedAs?: string
     /** What kind of period produced this edition; absent before schema 13 reads as `scheduled`. */
     periodKind?: DailyBriefingPeriodKind
     /**

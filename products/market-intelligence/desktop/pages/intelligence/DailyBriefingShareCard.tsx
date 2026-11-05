@@ -72,12 +72,24 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const focusWatch = orderWatch(focusEvent?.watch ?? [], text)
   const watchScenarios = focusWatch.filter((entry) => entry.kind === 'lower' || entry.kind === 'higher')
   const watchBaseline = focusWatch.find((entry) => entry.kind === 'inline' && entry.implication.trim().length > 0)
+  // 补跑那句文案是一个整体（含 `{time}`），渲染时拆成「前半句 + 不换行的时间段 + 句尾」。
+  const [backfillHead, backfillTail] = text.backfillNote.split('{time}')
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
         <p className="mi-brief-poster__kicker">MI · DAILY BRIEF</p>
         <h1>{text.title}</h1>
-        <p className="mi-brief-poster__meta">{doc.edition.date} · {text.window.replace('{time}', formatTime(doc.edition.windowEnd, 'minute'))} · {text.edition.replace('{time}', formatTime(doc.edition.generatedAt, 'minute'))}</p>
+        <p className="mi-brief-poster__meta">{doc.edition.date} · {text.window.replace('{time}', formatTime(doc.edition.windowEnd, 'minute'))} · {text.edition.replace('{time}', formatTime(doc.edition.generatedAt, 'minute'))}
+          {/* 补跑那版必须说出来：它的数据不是截止那一刻的世界（`02` `A0.10`）。**放在末段之后**——
+              准点版不渲染它，出现与消失只影响行尾；塞在中间会让后面几段整体左移、换行位置跟着变。
+              分隔用的 `·` 也包在这一段里，否则窄窗下会出现一行只剩一个「·」。 */}
+          {doc.edition.isBackfill === true && doc.edition.dataAsOf !== undefined
+            ? <span data-backfill-note="true"> · {backfillHead}
+              {/* 「数据截至 + 时刻 + 时区」是一个整体：拆开会读成两个数。前半句允许在逗号后换行。 */}
+              <span style={{ whiteSpace: 'nowrap' }}>{formatTime(doc.edition.dataAsOf, 'minute')}{backfillTail}</span>
+            </span>
+            : null}
+        </p>
         {/* The exported image carries this only when the edition is short; a complete edition says nothing. */}
         {completenessNote ? <p className="mi-brief-poster__completeness" data-completeness-note="true">{completenessNote}</p> : null}
       </div>
