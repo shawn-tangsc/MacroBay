@@ -17,6 +17,16 @@ import { formatDuration } from './DailyBriefingGenerationTimeline'
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
 
 /**
+ * 一行一版的身份键：日期 + 期号 + 语言。
+ *
+ * 只有这一个拼法：行自己的 key、正在跑那一行的 key、"右键的那一行是不是它"的比较，全从它来。
+ * 以前同一个拼法在手写三遍，改一处漏一处就等于两行被当成同一版。
+ */
+export function briefingRailKey(row: Readonly<{ date: string; periodId: string; locale: string }>): string {
+  return `${row.date}:${row.periodId}:${row.locale}`
+}
+
+/**
  * The history rail: one section per day, one row per edition of that day.
  *
  * A row is two lines, and the split is the design: line one answers "when, which window, which
@@ -170,21 +180,19 @@ export function DailyBriefingHistoryRail({
    */
   const waitingKey = useMemo(() => {
     const explicit = editions.find((row) => (row.languages ?? []).some((language) => language.state === 'generating'))
-    if (explicit) return `${explicit.date}:${explicit.periodId}:${explicit.locale}`
+    if (explicit) return briefingRailKey(explicit)
     if (generatingStage === undefined) return undefined
     // 没有显式在跑的那一行时，取"今天还没跑过的那一期"——失败过的那一期此刻不是空的，它有自己的原因。
     const missingToday = editions.filter((row) => row.date === todayDate && row.state === 'missing')
     const fallback = missingToday.find((row) => !row.attemptCount) ?? missingToday[0]
-    return fallback ? `${fallback.date}:${fallback.periodId}:${fallback.locale}` : undefined
+    return fallback ? briefingRailKey(fallback) : undefined
   }, [editions, generatingStage, todayDate])
 
-  const rowKey = (row: Readonly<{ date: string; periodId: string; locale: string }>): string =>
-    `${row.date}:${row.periodId}:${row.locale}`
   /**
    * 只有**右键的那一行自己**在跑才拦。以前写成"今天只要有一期在跑，今天每一行都不许删"——
    * 别的期在写，读者对自己看完的那一版连删除都点不了。
    */
-  const blocked = menu !== null && waitingKey !== undefined && rowKey(menu) === waitingKey
+  const blocked = menu !== null && waitingKey !== undefined && briefingRailKey(menu) === waitingKey
   const hasEdition = menuRow !== undefined && menuRow.state !== 'missing'
   // 行菜单**恰一项**：删除这一版（正文 + 它的会话）。期级动作不在这张菜单里——重跑在工具栏与
   // 行内「重试」，删排期在设置页，两件事不混。
@@ -197,7 +205,7 @@ export function DailyBriefingHistoryRail({
       : []
   // 打开之前就问"这张菜单有没有东西"：正在跑的那一行弹一项禁用的原因，没有版次的行干脆不弹。
   const canOpenMenu = (edition: DailyBriefingEditionSummary): boolean =>
-    edition.state !== 'missing' || rowKey(edition) === waitingKey
+    edition.state !== 'missing' || briefingRailKey(edition) === waitingKey
 
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
@@ -257,7 +265,7 @@ export function DailyBriefingHistoryRail({
             不带时刻、不带语言——那两样是期级别的属性，挂在"这一天"上就是维度错误。 */}
         {isOpen(day.date) ? <div role="list" className="mi-daily-briefing__rail-day-rows">
           {day.rows.map((edition) => {
-            const key = `${edition.date}:${edition.periodId}:${edition.locale}`
+            const key = briefingRailKey(edition)
             const missing = edition.state === 'missing'
             const running = key === waitingKey
             // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
