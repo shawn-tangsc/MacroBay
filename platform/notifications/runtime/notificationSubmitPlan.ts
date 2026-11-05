@@ -8,7 +8,7 @@
  * 现在的边界：目录、批准表、订阅表、键构造函数都从注入进来；`productId` 由目录给，
  * 不从请求读——请求改不了自己的归属（§16.2b）。
  */
-import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationCopyKey, NotificationCopyLanguage } from '../../i18n/notificationCopy'
 import {
   type NotificationApprovedLevel,
   type NotificationEventCatalog,
@@ -55,6 +55,13 @@ export type NotificationSubmitPlanInput = {
   request: NotificationSubmitRequest
   duplicate?: NotificationRecord
   now: string
+  /**
+   * 提交那一刻的界面语言，由运行时用注入的 `getLanguage()` 端口盖上。
+   *
+   * 生产者不传：每个调用点各读一次设置，就会出现一条通知按 A 语言、另一条按 B 语言落库，
+   * 而读者只会觉得「有时中有时英」。缺省表示不知道（旧调用点、旧记录），渲染时跟随当前语言。
+   */
+  language?: NotificationCopyLanguage
 }
 
 /**
@@ -122,7 +129,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const record = createRecord(entry, input.request, dedupeKey, levels, surfaces, bodyKey, input.now)
+  const record = createRecord(entry, input.request, dedupeKey, levels, surfaces, bodyKey, input.now, input.language)
   return {
     kind: 'new',
     record,
@@ -241,7 +248,8 @@ function createRecord(
   levels: readonly NotificationApprovedLevel[],
   surfaces: NotificationSurfacePlan,
   bodyKey: string | undefined,
-  now: string
+  now: string,
+  language?: NotificationCopyLanguage
 ): NotificationRecord {
   // `deliver: false`：只落记录、不排任何投递面；记录内容与 `occurrenceCount` 照常。
   const deliver = request.deliver !== false
@@ -274,6 +282,7 @@ function createRecord(
     state: 'unread',
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),
     actions: [...request.actions],
+    ...(language === undefined ? {} : { language }),
     dedupeKey,
     ...(request.correlationId === undefined ? {} : { correlationId: request.correlationId }),
     ...(request.edition === undefined ? {} : { edition: request.edition }),

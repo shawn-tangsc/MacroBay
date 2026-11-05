@@ -108,6 +108,8 @@ function createRuntime(
   extra: {
     producerOwnership?: Record<string, 'platform' | { productId: string }>
     productIds?: readonly string[]
+    /** 提交这一刻的界面语言；没给等于没接线（旧行为）。 */
+    language?: 'zh-CN' | 'en-US'
   } = {}
 ) {
   let state: any = initial ?? { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
@@ -125,7 +127,8 @@ function createRuntime(
     ...(extra.producerOwnership === undefined ? {} : { producerOwnership: extra.producerOwnership }),
     ...(extra.productIds === undefined ? {} : { productIds: extra.productIds }),
     getSettings: async () => settings,
-    clock
+    clock,
+    ...(extra.language === undefined ? {} : { getLanguage: async () => extra.language as 'zh-CN' | 'en-US' })
   })
   return { runtime, state: () => state, diagnostics }
 }
@@ -141,6 +144,22 @@ function request(overrides: Partial<NotificationSubmitRequest> = {}): Notificati
 }
 
 describe('notification runtime submit', () => {
+  it('stamps the submit-time language on the row, so the wording is frozen with it', async () => {
+    const { runtime, state } = createRuntime(undefined, { language: 'en-US' })
+    await runtime.submit(request())
+
+    // 记录里存的是键 + 参数（句子不落库），语言也只是**标签**：措辞仍来自文案表，
+    // 所以以后改句子，历史跟着变好；但用哪种语言在提交这一刻就定了。
+    expect(state().records[0]?.language).toBe('en-US')
+  })
+
+  it('leaves the language undefined when the port is not wired (old behaviour, not a default guess)', async () => {
+    const { runtime, state } = createRuntime()
+    await runtime.submit(request())
+
+    expect(state().records[0]?.language).toBeUndefined()
+  })
+
   it('rejects an unregistered event type without writing a row', async () => {
     const { runtime, state } = createRuntime()
     await expect(runtime.submit(request({ eventTypeId: 'platform.nope' }))).resolves.toMatchObject({

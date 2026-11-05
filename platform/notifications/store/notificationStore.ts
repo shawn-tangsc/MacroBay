@@ -1,4 +1,4 @@
-import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationCopyKey, NotificationCopyLanguage } from '../../i18n/notificationCopy'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
@@ -75,6 +75,8 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     // 而不是把键名当句子显示。
     titleKey: String(candidate.titleKey) as NotificationCopyKey,
     titleParams: normalizeTextParams(candidate.titleParams),
+    // 旧记录没有这一格：别补一个默认语言，那就是替历史编一句话。
+    language: normalizeLanguage(candidate.language),
     bodyKey: candidate.bodyKey ? String(candidate.bodyKey) as NotificationCopyKey : undefined,
     bodyParams: normalizeTextParams(candidate.bodyParams),
     reasonKey: candidate.reasonKey ? String(candidate.reasonKey) as NotificationCopyKey : undefined,
@@ -188,6 +190,10 @@ function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
 }
 
 /** 文案参数只收短字符串：这里进的是任务名之类的实体名，不是日志正文。 */
+function normalizeLanguage(value: unknown): NotificationCopyLanguage | undefined {
+  return value === 'zh-CN' || value === 'en-US' ? value : undefined
+}
+
 function normalizeTextParams(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const params: Record<string, string> = {}
