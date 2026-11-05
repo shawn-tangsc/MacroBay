@@ -42,7 +42,10 @@ export type DailyBriefingClientInput = Readonly<{
   timeZone: string
   /** `false` opens the page as a read: the stored edition, or "nothing written yet". No run. */
   generate?: boolean
-  /** Which period of today to run. Absent keeps the first/only one, which is what the old call meant. */
+  /**
+   * Which period of today to run. Absent keeps the first/only one, which is what the old call meant.
+   * 进度查询读的也是这个期号——**发起这一次跑时记下的那个**，不是界面上当前选中的期。
+   */
   periodId?: string
   /** A manual run's own cutoff and window; never written back into a period. */
   generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
