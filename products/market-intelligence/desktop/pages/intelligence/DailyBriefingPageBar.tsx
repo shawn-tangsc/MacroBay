@@ -20,6 +20,7 @@ export function DailyBriefingPageBar({
   loading,
   generating,
   regenerating,
+  runningLabel,
   todayReady,
   targetDate,
   zoneInvalid,
@@ -34,6 +35,8 @@ export function DailyBriefingPageBar({
   loading: boolean
   generating: boolean
   regenerating: boolean
+  /** 手动那一期在写时的按钮文案（含时刻与语言）；缺省沿用「正在重新生成…」。 */
+  runningLabel?: string
   todayReady: boolean
   targetDate: string
   zoneInvalid: boolean
@@ -57,6 +60,7 @@ export function DailyBriefingPageBar({
       loading={loading}
       generating={generating}
       regenerating={regenerating}
+      {...(runningLabel === undefined ? {} : { runningLabel })}
       todayReady={todayReady}
       targetDate={targetDate}
       zoneInvalid={zoneInvalid}

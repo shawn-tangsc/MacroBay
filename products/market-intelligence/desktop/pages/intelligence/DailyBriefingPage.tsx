@@ -64,7 +64,8 @@ import { DailyBriefingAppendix } from './DailyBriefingAppendix'
 import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
 import { DailyBriefingContent } from './DailyBriefingContent'
-import { useBriefingRunActions } from './useBriefingRunActions'
+import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
+import { formattedClock } from './dailyBriefingUnavailableRow'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
@@ -136,6 +137,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     client, editions, afterDeleteLocaleRef, onSettled: () => setReloadKey((key) => key + 1)
   })
   const [regenerating, setRegenerating] = useState(false)
+  // 这一次在做什么：手动的一期，还是重跑当前那一版。工具栏与正文都读它，不各判一遍。
+  const [runIntent, setRunIntent] = useState<BriefingRunIntent | null>(null)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   // Open by default: the reader asked to see the groups without a click; the counts stay on the
   // summary line either way.
@@ -328,7 +331,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { regenerate, generateNow } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
-    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId,
+    setCurrentPeriodDate, todayDate, onRunStarted: setRunningPeriodId, onRunIntent: setRunIntent,
     onSettled: () => { setRunningPeriodId(undefined); setReloadKey((key) => key + 1) }
   })
   const runManual = useBriefingManualRun({
@@ -347,6 +350,17 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // 说什么（重复时点名哪一版、点下去替换哪一版）与"能不能跑"分开：文案和替换动作在同一个模块里，
   // 页面只把结果交给工具栏。
+  /**
+   * 手动那次跑起来时，按钮要说清"在写哪一期"：时刻与语言都来自这一次的输入。
+   *
+   * 缺任何一样就退回「正在重新生成…」的旧说法——宁可不说，也不留一个 `{time}` 空洞。
+   */
+  const runningClock = runIntent?.kind === 'manual' && runIntent.asOf ? formattedClock(formatTime(runIntent.asOf, 'minute')) : undefined
+  const manualRunningLabel = runIntent?.kind === 'manual' && runningClock !== undefined
+    ? text.manualRunning
+      .replace('{time}', runningClock)
+      .replace('{language}', text.history.languages[runIntent.locale])
+    : undefined
   const onManualRun = (draft: Parameters<typeof runManual>[0]) =>
     briefingManualRunReport({ result: runManual(draft), text, timeZone, regenerate })
 
@@ -415,7 +429,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     rowState: briefingRowState(modeRow, generating),
     viewStatus: briefingViewStatus(view),
     hasEdition: hasTodayEdition,
-    localeAvailable: modeRow ? modeRow.availableLocales.includes(effectiveLocale) : true
+    localeAvailable: modeRow ? modeRow.availableLocales.includes(effectiveLocale) : true,
+    // 手动发起的那一期在写：正文让给运行，不留旧版在下面。
+    runOwnsPane: runIntent?.kind === 'manual'
   })
   const { openModelService, bodyClass, poster, editionText, editionLocale } = briefingPageChrome({
     onOpenModelSettings, readyDocument, editions, text, locale
@@ -434,6 +450,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       zoneInvalid={zoneInvalid !== null}
       systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}
+      {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
       onOpenSettings={() => setSettingsSection('generation')}
       onBack={onBack}
     />
@@ -472,6 +489,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
         eventTitles, formatTime, contentBlocked, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null, onGenerate: generateNow, onRetry: () => void regenerate(),
+        // 手动那一期在写的时候，右边切到"这一期正在生成"，不继续挂着旧正文：旧正文 + 一句
+        // 「正在重新生成」=读者认定在重跑当前版。重跑当前版仍保留旧正文可读。
+        forceGenerating: runIntent?.kind === 'manual',
         onOpenSettings: () => setSettingsSection('ai'), onConfigureSources,
         onDeleteRetry: retryDelete
       }} />

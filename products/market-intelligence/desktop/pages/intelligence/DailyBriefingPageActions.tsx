@@ -27,13 +27,15 @@ import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './b
  * 分开放的后果不是"按钮多了"——读者会把"重新生成今天"当成"重新生成这一版"来点。两组各有自己的
  * 禁用条件，也各有自己的理由，混在一行就说不清是哪一组的。
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, targetDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
   loading: boolean
   generating: boolean
   regenerating: boolean
+  /** 手动那一期在写时的按钮文案（含时刻与语言）；缺省时沿用「正在重新生成…」。 */
+  runningLabel?: string
   /** The issue day the action writes: its accessible name says it, so the target is never guessed. */
   targetDate: string
   todayReady: boolean
@@ -64,10 +66,11 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       /* A run in flight is a wait, so the control shows it is working instead of looking broken. */
       loading={generating}
       {...(generating
-        ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
+        ? { 'aria-label': runningLabel ?? text.generationProgress.workingHint, title: runningLabel ?? text.generationProgress.workingHint }
         : { 'aria-label': text.manualGenerateTarget.replace('{date}', targetDate) })}
       onClick={() => { setManualProblem(undefined); setManualOpen(true) }}>
-      {regenerating ? text.regenerating : text.manualGenerate}
+      {/* 手动那一期在写时说"哪一期、哪种语言"；「重新生成」这个词只留给重跑当前版。 */}
+      {regenerating ? (runningLabel ?? text.regenerating) : text.manualGenerate}
     </Button>
     <BriefingManualRunDialog
       open={manualOpen}

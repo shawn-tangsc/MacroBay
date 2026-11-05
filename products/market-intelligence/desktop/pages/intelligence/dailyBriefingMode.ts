@@ -23,11 +23,19 @@ export function resolveBriefingMode(input: Readonly<{
   hasEdition: boolean
   /** Whether the language the reader asked for exists in this issue. */
   localeAvailable: boolean
+  /**
+   * 这一次运行讲的是**另一期**（手动发起、带自己的时刻与语言），屏幕上的旧版不是它。
+   *
+   * 只有这时运行才拿走正文：读者会拿"停在旧正文 + 正在重新生成"读成"在重跑当前版"——他指定的
+   * 时刻与语言就这么被读丢了。重跑当前版不用这个开关（屏幕上的正是被重写的那一版）。
+   */
+  runOwnsPane?: boolean
 }>): DailyBriefingMode {
   // An edition on screen is content, and **a run does not take it away**: the run reports in the rail
   // and in the right column, while the pane keeps whatever edition the reader asked for. That is the
   // whole point of switching language during a generation — the two facts ("an issue is running" and
   // "which version am I reading") must not lock each other out.
+  if (input.runOwnsPane === true && input.rowState === 'running') return 'generating'
   if (input.viewStatus === 'ready') return input.rowState === 'failed' ? 'ready-with-failure' : 'ready'
   // The reader asked for a version this issue does not have. That answer is about what they asked for,
   // so it survives a run in flight too: the pane says it, the steps keep reporting beside it. A failed

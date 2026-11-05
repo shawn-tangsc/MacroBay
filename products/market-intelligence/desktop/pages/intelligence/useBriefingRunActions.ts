@@ -37,6 +37,20 @@ function withGeneratingRow(
   }, ...rows]
 }
 
+/**
+ * What the run currently in flight is doing.
+ *
+ * The pane and the toolbar both read this one value: a manual run for one moment and one language is
+ * not "regenerating the edition you are looking at", and saying so made the reader think his choice
+ * was ignored. `asOf` travels because the toolbar names the moment it is writing.
+ */
+export type BriefingRunIntent = Readonly<{
+  kind: 'manual' | 'regenerate'
+  periodId: string
+  locale: 'zh-CN' | 'en-US'
+  asOf?: string
+}>
+
 export function useBriefingRunActions(input: Readonly<{
   client: Pick<DailyBriefingClient, 'regenerate'>
   locale: 'zh-CN' | 'en-US'
@@ -52,6 +66,8 @@ export function useBriefingRunActions(input: Readonly<{
   todayDate?: string
   /** 这一次跑用了哪个期号——进度查询要用它，不是"当前选中的那一期"。 */
   onRunStarted?: (periodId: string) => void
+  /** 这一次**在做什么**（手动的一期 / 重跑当前版），跑完置空。 */
+  onRunIntent?: (intent: BriefingRunIntent | null) => void
   /** Read the list again once the run settles: the row must show what just landed. */
   onSettled?: () => void
 }>): Readonly<{
@@ -84,6 +100,13 @@ export function useBriefingRunActions(input: Readonly<{
   const begin = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): void => {
     input.setRegenerateFailure(null)
     input.setRegenerating(true)
+    // 手动期带自己的期号与截止；没有这两样的就是"重跑当前版"。两个入口在这里分叉，别在下游判。
+    input.onRunIntent?.({
+      kind: options.periodId === undefined && options.generation === undefined ? 'regenerate' : 'manual',
+      periodId: options.periodId ?? 'default',
+      locale: options.locale ?? input.locale,
+      ...(options.generation?.asOf === undefined ? {} : { asOf: options.generation.asOf })
+    })
     if (input.todayDate === undefined) return
     const startedPeriodId = options.periodId ?? 'default'
     input.onRunStarted?.(startedPeriodId)
@@ -111,6 +134,7 @@ export function useBriefingRunActions(input: Readonly<{
         // 否则两行会变成同一版次，键相同、语言相同，看上去像"选中了两个"。
         input.setEditions((current) => mergeEditionSummary(current, document))
       }
+      input.onRunIntent?.(null)
       input.setRegenerating(false)
     },
     generateNow() {
@@ -124,6 +148,7 @@ export function useBriefingRunActions(input: Readonly<{
           }
         })
         .finally(() => {
+          input.onRunIntent?.(null)
           input.setRegenerating(false)
           input.onSettled?.()
         })

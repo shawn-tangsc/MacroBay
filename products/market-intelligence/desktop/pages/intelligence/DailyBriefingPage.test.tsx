@@ -212,6 +212,18 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
 
 
 /** 工具条那颗现在只开弹框：点完还要在弹框里按「生成」才算真的跑。 */
+/** 打开一个 antd Select 并选中某一项：弹框里三个字段都是它。 */
+async function pickSelectOption(label: string, option: string): Promise<void> {
+  const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+  const selector = input.closest('.ant-select')!.querySelector<HTMLElement>('.ant-select-selector')!
+  await act(async () => { selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); await Promise.resolve() })
+  const item = [...document.querySelectorAll<HTMLElement>('.ant-select-item-option')]
+    .find((node) => node.textContent?.trim() === option)
+  if (item === undefined) throw new Error(`option not found: ${option}`)
+  await act(async () => { item.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve() })
+  await act(async () => { await Promise.resolve() })
+}
+
 async function confirmManualRun(): Promise<void> {
   const run = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
     .find((button) => button.textContent?.replace(/\s/g, '') === text.manualRunDialog.run.replace(/\s/g, ''))
@@ -787,7 +799,8 @@ describe('daily briefing page', () => {
     await act(async () => { button.click(); await Promise.resolve() })
     await confirmManualRun()
     const running = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
-    expect(running.textContent).toBe(text.regenerating)
+    // 手动发起的那一次，按钮说的是"在写哪一期"（时刻 + 语言），不再沿用「正在重新生成…」。
+    expect(running.textContent).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
     expect(running.disabled).toBe(true)
     await act(async () => { running.click(); await Promise.resolve() })
     expect(client.regenerate).toHaveBeenCalledTimes(1)
@@ -1614,7 +1627,7 @@ it('shows the generating state as the same centred panel a failure uses', async 
   expect(todayRow.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('scheduled')
 })
 
-it('keeps the edition readable and reports a run in the right column', async () => {
+it('switches the body to the running issue for a manual run, and never shows the old edition under it', async () => {
   // The reader asked for this split: while a run replaces an issue that already has an edition, the
   // edition stays readable and the nine steps report in the right column — not both in the body.
   let settle: (value: unknown) => void = () => undefined
@@ -1622,17 +1635,16 @@ it('keeps the edition readable and reports a run in the right column', async () 
     regenerate: vi.fn(() => new Promise((resolve) => { settle = resolve }))
   })
   const dom = await renderPage(client)
-  const before = dom.querySelector('.mi-daily-briefing-page__paper')?.textContent
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
   await act(async () => {
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
     await Promise.resolve()
   })
   await confirmManualRun()
 
-  // 1. No nine-step panel in the body.
-  expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel]')).toBeNull()
-  // 2. The edition on screen is the one that was there before the click, unchanged.
-  expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toBe(before)
+  // 1. 正文切到"这一期正在生成"：旧那一版的纸不在屏幕上了。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
   // The run reports in the right column, where the steps already live.
   const rail = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
   const railStages = rail.querySelector<HTMLElement>('[data-briefing-stages]')!
@@ -1645,10 +1657,12 @@ it('keeps the edition readable and reports a run in the right column', async () 
   // presence, not a half-cut template string.
   expect([...railStages.querySelectorAll<HTMLElement>('.mi-generation-trace__summary')]
     .some((node) => (node.textContent ?? '').includes(text.generationTrace.attempt))).toBe(false)
-  // 4. The header action shows it is working, not merely that it is unavailable.
+  // 4. 工具栏说的是"这一次在写哪一期"（时刻 + 语言），不是"正在重新生成"。
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.className).toContain('ant-btn-loading')
-  expect(action.getAttribute('aria-label')).toBe(text.generationProgress.workingHint)
+  expect(action.textContent).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
+  expect(action.textContent).not.toContain(text.regenerating)
+  expect(action.getAttribute('aria-label')).toMatch(/^正在生成 \d{2}:\d{2} 中文$/)
 
   const replaced = briefingDocument('2026-10-30', '重新生成版')
   await act(async () => {
@@ -1667,6 +1681,31 @@ it('keeps the edition readable and reports a run in the right column', async () 
   const settledRows = [...dom.querySelectorAll<HTMLElement>('[data-briefing-detail] [data-briefing-stage-row]')]
   expect(settledRows).toHaveLength(9)
   expect(settledRows.every((row) => row.getAttribute('data-stage-state') === 'done')).toBe(true)
+})
+
+it('sends the moment and language the reader picked in the dialog, all the way to the service', async () => {
+  // 用户报的那条：选 08:00 + 英文，请求里必须就是这三样；少一样，跑出来的就不是他要的那一期。
+  // 这条从页面开始按：点按钮开弹框 → 选时刻与语言 → 生成。
+  const regenerate = vi.fn(async () => new Promise(() => undefined))
+  const client = fakeClient({ regenerate })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve()
+  })
+  await pickSelectOption(text.manualRunDialog.cutoff, '08:00')
+  await pickSelectOption(text.manualRunDialog.language, text.history.languages['en-US'])
+  await confirmManualRun()
+
+  const request = (regenerate.mock.calls as unknown as [[{
+    locale: string
+    generation: { asOf: string; windowHours: number }
+    periodId: string
+  }]])[0]![0]
+  expect(request.locale).toBe('en-US')
+  // 读者时区是 Asia/Shanghai：他选的 08:00 就是这一刻，不是排期里的 07:00。
+  expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
+  expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
 })
 
 it('reports a run that is already in flight in the right column, step by step', async () => {
