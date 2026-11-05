@@ -7,7 +7,7 @@
 .mi-daily-briefing__rail-list { display: grid; gap: 2px; }
 /* One definition only: this row used to be declared twice (a horizontal one near the rail, and a
    column one further down), so "what shape is a rail row" had two answers in the same file. */
-.mi-daily-briefing__rail-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; padding: 8px 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-row { display: flex; flex-direction: row; align-items: baseline; gap: 6px; width: 100%; min-height: 27px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
 .mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-text); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
@@ -70,13 +70,13 @@
 .mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
-.mi-daily-briefing__rail-direction { font-size: 9.5px; }
+.mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
 .mi-daily-briefing__rail-direction[data-direction="bullish"] { color: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-direction[data-direction="bearish"] { color: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-direction[data-direction="range"], .mi-daily-briefing__rail-direction[data-direction="mixed"] { color: var(--mi-dashboard-caution); }
 .mi-daily-briefing__rail-summary { display: -webkit-box; overflow: hidden; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.mi-daily-briefing__rail-meta { color: #5f686e; font-size: 9px; }
-.mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; }
+
+.mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; white-space: nowrap; }
 @media (max-width: 980px) {
   .mi-daily-briefing-page { padding: 10px; }
   .mi-daily-briefing-page__body { grid-template-columns: 1fr; gap: 10px; }
@@ -173,13 +173,15 @@
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
 
 /* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
-.mi-daily-briefing__rail-item { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; align-items: start; }
+.mi-daily-briefing__rail-item { display: block; }
 .mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
 .mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
 .mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }
 
 /* 行内三段各不断行：宽度修好后，事实段只保证自己不被折断。 */
-.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
+/* One row per edition, one line of facts: the row is not a grid, because a second column would let a
+   label push the facts into a column of their own — which is how a 27px row became five lines. */
+.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 4px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 9px; }
 .mi-daily-briefing__rail-fact { white-space: nowrap; }
 .mi-daily-briefing__rail-sep { opacity: .6; }
 .mi-daily-briefing__rail-direction--none { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
@@ -264,8 +266,6 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-daily-briefing__rail-day-summary { display: block; margin: 4px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 1.45; color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-day-summary-text { margin-left: 4px; }
 .mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
-.mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
-.mi-daily-briefing__rail-item:first-child { border-top: 0; }
+.mi-daily-briefing__rail-item + .mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__rail-langs { display: inline-flex; align-items: center; gap: 4px; }
-.mi-daily-briefing__rail-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mi-daily-briefing__rail-fact + .mi-daily-briefing__rail-fact::before { content: ' · '; color: #5f686e; }
