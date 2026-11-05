@@ -1003,11 +1003,8 @@ export function getIntelligenceModule(
       },
       sourcesService,
       publicQueryService,
-      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({
-        store: dailyBriefingStore,
-        links: dailyBriefSessionLinks,
-        ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {})
-      }),
+      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
+        ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}) }),
       dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
