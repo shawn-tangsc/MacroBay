@@ -25,6 +25,7 @@ function edition(
 ): DailyBriefingEditionSummary {
   return {
     date,
+    periodId: 'default',
     locale,
     availableLocales: [locale],
     state,
@@ -97,6 +98,23 @@ async function dismiss(): Promise<void> {
 }
 
 describe('daily briefing banner', () => {
+  it('announces the newest issue of today when one day has two of the same language', async () => {
+    // 一天多期之后，"今天这一行"不能按日期取第一条：那会把早上那版当成刚出的这版。
+    await renderBanner({
+      editions: [
+        { date: '2026-10-30', periodId: 'period-0700', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: '2026-10-29T23:00:00.000Z' },
+        { date: '2026-10-30', periodId: 'period-0800', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: '2026-10-30T00:00:00.000Z' }
+      ],
+      now: '2026-10-30T12:00:00.000Z'
+    })
+    const banner = document.querySelector('[data-daily-brief-generated-banner]')
+    expect(banner).not.toBeNull()
+    // 取到的是 08:00 那版（00:00Z），不是 07:00 那版（23:00Z 前一天）。
+    expect(banner?.textContent).toContain(formatShellInstant('2026-10-30T00:00:00.000Z', {
+      timeZone: 'UTC', locale: 'zh-CN', precision: 'minute'
+    }))
+  })
+
   it('shows today’s generated briefing in the reader’s language, with its generation time', async () => {
     await renderBanner({ editions: [edition('2026-10-30')], now: '2026-10-30T12:00:00.000Z' })
 

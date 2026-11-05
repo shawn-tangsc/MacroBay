@@ -1,4 +1,4 @@
-import { briefingCompleteness, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { briefingCompleteness, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { buildEditionCompletenessNote } from './dailyBriefingCompletenessNote'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -19,7 +19,11 @@ export function posterProps(input: Readonly<{
   if (!document) return Object.freeze({ text: input.fallbackText, locale: 'zh-CN' })
   const locale = document.edition.locale
   const text = productText[locale].pages.intelligence.portal.dashboard.dailyBriefing
-  const summary = input.editions.find((edition) => edition.date === document.edition.date)
+  // 期号也参与匹配（`02` `A0.12` 之后一天可以多期）：只按日期找，会把同一天另一期/另一种语言的
+  // 行当成这一版的完整性依据，导出的说明句就指错版了。
+  const periodId = briefingEditionPeriod(document.edition).periodId
+  const summary = input.editions.find((edition) =>
+    edition.date === document.edition.date && edition.periodId === periodId && edition.locale === locale)
   const completenessNote = buildEditionCompletenessNote(
     briefingCompleteness({
       ...(summary?.expectedLocales ? { expectedLocales: summary.expectedLocales } : {}),
