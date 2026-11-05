@@ -42,17 +42,29 @@ export function nextEditionAfterDelete(
   deletedDate: string,
   deleted?: Readonly<{ periodId: string; locale: 'zh-CN' | 'en-US' }>
 ): Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }> | undefined {
-  const byOrder = (left: { periodId: string }, right: { periodId: string }) => left.periodId < right.periodId ? -1 : left.periodId > right.periodId ? 1 : 0
+  const byOrder = (left: Readonly<{ periodId: string; locale: string }>, right: Readonly<{ periodId: string; locale: string }>) =>
+    left.periodId !== right.periodId
+      ? (left.periodId < right.periodId ? -1 : 1)
+      : (left.locale < right.locale ? -1 : left.locale > right.locale ? 1 : 0)
   // 列表可能把刚删掉的那一行仍旧列出来（`state: 'missing'`，或列表还没刷新），它没有版次可读，
   // 不能当自己的邻居；`state === 'missing'` 的整行也不参与。
-  const sameDay = rows
-    .filter((row) => row.date === deletedDate && row.state !== 'missing')
-    .filter((row) => deleted === undefined || row.periodId !== deleted.periodId || row.locale !== deleted.locale)
-    .sort(byOrder)
-  const index = deleted === undefined
-    ? -1
-    : sameDay.findIndex((row) => row.periodId === deleted.periodId && row.locale === deleted.locale)
-  const neighbour = sameDay[index + 1] ?? sameDay[index - 1] ?? sameDay[0]
-  if (neighbour !== undefined) return { date: neighbour.date, periodId: neighbour.periodId, locale: neighbour.locale }
-  return undefined
+  const sameDay = rows.filter((row) => row.date === deletedDate && row.state !== 'missing').sort(byOrder)
+  const isDeleted = (row: Readonly<{ periodId: string; locale: string }>): boolean =>
+    deleted !== undefined && row.periodId === deleted.periodId && row.locale === deleted.locale
+  // 先在**被删行原来的位置**上找下一个（没有就上一个）。不能在"排除掉被删行之后"的列表里从头数——
+  // 那样删掉第二期会又选回第一期。
+  const index = deleted === undefined ? -1 : sameDay.findIndex(isDeleted)
+  if (index >= 0) {
+    for (let after = index + 1; after < sameDay.length; after += 1) {
+      const candidate = sameDay[after]!
+      if (!isDeleted(candidate)) return { date: candidate.date, periodId: candidate.periodId, locale: candidate.locale }
+    }
+    for (let before = index - 1; before >= 0; before -= 1) {
+      const candidate = sameDay[before]!
+      if (!isDeleted(candidate)) return { date: candidate.date, periodId: candidate.periodId, locale: candidate.locale }
+    }
+    return undefined
+  }
+  const first = sameDay.find((row) => !isDeleted(row))
+  return first === undefined ? undefined : { date: first.date, periodId: first.periodId, locale: first.locale }
 }
