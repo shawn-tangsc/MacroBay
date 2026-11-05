@@ -1732,18 +1732,15 @@ it('jumps to the issue it started, then follows the reader when they switch away
   // 2. 选中的是正在跑的那一版：正文是它自己的进度，旧纸不在。
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
   expect(dom.querySelector('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
-  // The run reports in the right column, where the steps already live.
-  const rail = dom.querySelector<HTMLElement>('[data-briefing-detail]')!
-  const railStages = rail.querySelector<HTMLElement>('[data-briefing-stages]')!
-  expect(railStages.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
-  for (const row of [...railStages.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
+  // 全页只有**一处**进度面板（`A9.16`）：这一跑归正文，右列不再画第二份同样的九步。
+  expect(dom.querySelectorAll('[data-briefing-stage-panel]')).toHaveLength(1)
+  const paneStages = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__content [data-briefing-stage-panel][data-state="generating"]')!
+  expect(paneStages.querySelectorAll('[data-briefing-stage-row]')).toHaveLength(9)
+  // 这一跑还没有报回任何阶段：面板写"未开始"，不编造一个"未记录"。
+  for (const row of [...paneStages.querySelectorAll<HTMLElement>('[data-briefing-stage-row]')]) {
     expect(row.textContent).toContain(text.generationTrace.states.notStarted)
     expect(row.textContent).not.toContain(text.generationTrace.notRecorded)
   }
-  // The attempt line is not invented while the run has reported nothing yet: judge the line's
-  // presence, not a half-cut template string.
-  expect([...railStages.querySelectorAll<HTMLElement>('.mi-generation-trace__summary')]
-    .some((node) => (node.textContent ?? '').includes(text.generationTrace.attempt))).toBe(false)
   // 3. 切到已完成的那一版 → 正文回到那一版，不再显示进度。
   const finished = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="default"]')!
   await act(async () => { finished.click() })

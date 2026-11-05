@@ -157,10 +157,23 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const todayDate = currentPeriodDate ?? wallClockToday
   // A run this page started, or one it is loading for. The service's own answer joins below.
   const readyDocument = briefingDocument(view)
+  /**
+   * **唯一一道身份闸门**：文档属于某一版，只有它的身份与选中项一致，它才算"屏幕上这一版"。
+   * 正文、右列留痕、删除目标、推送、导出、复制、分享卡全部只读 `screenDocument`——以前它们各读
+   * 裸的 `readyDocument`，于是停在 A 上手动生成时，右列还挂着 A 的留痕、导出导出的是 A。
+   *
+   * **语言不参与比对**：界面要英文而这一期只有中文（语言回退）仍然是同一版，照常显示。
+   */
+  const selected = Object.freeze({ date: pinnedDate ?? todayDate, periodId: pickedPeriodId, locale: pickedLocale ?? locale })
+  const selectedPeriodIdOnScreen = readyDocument === undefined ? undefined : briefingEditionPeriod(readyDocument.edition).periodId
+  const documentMatchesSelection = readyDocument !== undefined
+    && readyDocument.edition.date === selected.date
+    && (selected.periodId === undefined || selectedPeriodIdOnScreen === selected.periodId)
+  const screenDocument = documentMatchesSelection ? readyDocument : undefined
   // 当前这一版的身份，交给删除的确认框点名。时刻取这一版自己的名义截止（读者时区），不是"现在"。
-  const deleteTarget = readyDocument === undefined ? undefined : (() => {
-    const period = briefingEditionPeriod(readyDocument.edition)
-    return { date: readyDocument.edition.date, clock: railClock(period.periodTime, timeZone), language: readyDocument.edition.locale, periodId: period.periodId }
+  const deleteTarget = screenDocument === undefined ? undefined : (() => {
+    const period = briefingEditionPeriod(screenDocument.edition)
+    return { date: screenDocument.edition.date, clock: railClock(period.periodTime, timeZone), language: screenDocument.edition.locale, periodId: period.periodId }
   })()
   const loading = isBriefingLoading(view)
   const busyLocally = loading || regenerating
@@ -223,7 +236,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const viewingRunningIssue = runningIssues.some((intent) =>
     pickedPeriodId === intent.periodId && effectiveLocale === intent.locale)
   /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
-  const onScreenPeriodId = readyDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
+  const onScreenPeriodId = screenDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
   const { runBriefing } = useBriefingRunActions({
     client, locale, zoneInvalid, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions,
@@ -282,7 +295,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     })
 
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
-    document: readyDocument,
+    document: screenDocument,
     locale, text, ...(eventTitles ? { eventTitles } : {}), shareRef
   })
 
@@ -297,11 +310,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * one. The words are interface chrome, so they follow the interface language, not the edition's.
    */
   const pushToPhone = useBriefingPushToPhone({
-    document: contentBlocked ? undefined : readyDocument,
+    document: contentBlocked ? undefined : screenDocument,
     generating,
     localeMissing: view.status === 'locale-missing',
     // 与正文同一口径：发的是**选中那一版**。按日期取首行会在一日多期时发错版（审计 #74 家族）。
-    periodId: pickedPeriodId ?? readyDocument?.edition.periodId ?? DEFAULT_PERIOD_ID,
+    periodId: pickedPeriodId ?? screenDocument?.edition.periodId ?? DEFAULT_PERIOD_ID,
     text: briefingPushText[locale],
     // The channel is configured somewhere else (that drawer, or the platform's own settings). Re-read
     // when it may have changed, or the button keeps the verdict it formed at mount.
@@ -309,17 +322,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
-  // 选中的是哪一版，由**选中项**决定（状态直取），不再从 paperwork 反推：
-  // 反推会让"发起生成后 view 里还挂着旧文档"这件事继续冒充选中项。
-  const selectedDate = pinnedDate ?? todayDate
-  const selectedLocale = pickedLocale ?? locale
-  /** 那一版的身份：日期 + 期号 + 语言，一次取全，别处都从它取。 */
-  const selected = Object.freeze({ date: selectedDate, periodId: pickedPeriodId, locale: selectedLocale })
+  // 选中的是哪一版，由**选中项**决定（状态直取，见页面开头那道闸门）。
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
-  const issues = readyDocument && !contentBlocked
+  const issues = screenDocument && !contentBlocked
     ? briefingIssues({
-        document: readyDocument,
+        document: screenDocument,
         text,
         formatTime,
         ...(eventTitles ? { eventTitles } : {}),
@@ -331,8 +339,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const activeGroup = openGroup ? groups.find((group) => group.key === openGroup.key) : undefined
   // A successful edition keeps its stage trace for auditing; a failed attempt carries the same
   // shape in the result, so the timeline survives a refresh once the service returns it.
-  const generationTrace = readyDocument
-    ? readGenerationTrace((readyDocument.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
+  const generationTrace = screenDocument
+    ? readGenerationTrace((screenDocument.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     : undefined
   // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
   // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
@@ -340,7 +348,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // its trace and gaps even when today has never been generated.
   // The column is always there, and the language switch lives at its top: the two must not be
   // able to take each other away. Its audit blocks render only when the issue has an edition.
-  const hasArchive = !contentBlocked && readyDocument !== undefined
+  const hasArchive = !contentBlocked && screenDocument !== undefined
   // The newest edition the list still holds is the last one that actually generated: an unreadable
   // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
   const { lastGeneratedAt, scheduledTime, todayMissing, hasTodayEdition } = briefingListFacts(editions, todayDate)
@@ -350,20 +358,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const selectedRow = editions.find((edition) => edition.date === selected.date
     && (selected.periodId === undefined || edition.periodId === selected.periodId)
     && edition.locale === selected.locale)
-  /**
-   * **唯一一道身份闸门**：文档属于某一版，只有它的身份与选中项一致，它才算"选中版的正文"。
-   * 取代上一版那个页面级的 `viewStatusForSelection`（那一版多了一层判断，还是没拦住）。
-   */
-  const viewed = readyDocument === undefined ? undefined : {
-    date: readyDocument.edition.date,
-    locale: readyDocument.edition.locale,
-    periodId: briefingEditionPeriod(readyDocument.edition).periodId
-  }
-  const documentMatchesSelection = viewed !== undefined
-    && viewed.date === selected.date
-    && viewed.locale === selected.locale
-    && (selected.periodId === undefined || viewed.periodId === selected.periodId)
-  const viewStatus = readyDocument !== undefined && documentMatchesSelection
+  const viewStatus = screenDocument !== undefined
     ? briefingViewStatus(view)
     : (view.status === 'ready' ? 'no-edition' as const : briefingViewStatus(view))
   const mode = resolveBriefingMode({
@@ -373,7 +368,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     localeAvailable: selectedRow ? selectedRow.availableLocales.includes(effectiveLocale) : true
   })
   const { openModelService, bodyClass, poster, editionText, editionLocale } = briefingPageChrome({
-    onOpenModelSettings, readyDocument, editions, text, locale
+    onOpenModelSettings, readyDocument: screenDocument, editions, text, locale
   })
 
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
@@ -384,17 +379,17 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       loading={loading}
       generating={generating}
       regenerating={regenerating}
-      todayReady={readyDocument !== undefined && readyKind(view) === 'today'}
+      todayReady={screenDocument !== undefined && readyKind(view) === 'today'}
       targetDate={todayDate}
       zoneInvalid={zoneInvalid !== null}
-      systemZone={readyDocument !== undefined && readyZone(view) === 'system'}
+      systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}
       {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
       onOpenSettings={() => setSettingsSection('generation')}
       onBack={onBack}
     />
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selected.date} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
         // 一行 = 一期 = 一种语言：点行要把**这一行**的三样身份交出去；只传日期的话，同一天两期
         // 永远落到第一行，读者看到的是"切换了但内容不切"。
         onSelectLocale={selectLocale}
@@ -414,7 +409,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         editionBar: <DailyBriefingEditionActions
           text={text}
           resolveText={resolveProductText}
-          exportable={readyDocument !== undefined && !contentBlocked}
+          exportable={screenDocument !== undefined && !contentBlocked}
           exportState={exportState}
           copyState={copyState}
           generating={generating}
@@ -458,9 +453,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         // Saving may have added or removed the English edition: read the settings again.
         reloadSettings()
       }} /> : null}
-    {readyDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
+    {screenDocument && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-      <div ref={shareRef}><DailyBriefingShareCard document={readyDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
+      <div ref={shareRef}><DailyBriefingShareCard document={screenDocument} text={poster.text} locale={poster.locale} readOnly={readyKind(view) === 'history'} paymentDirectionsCompact={briefingPaymentDirections(poster.locale)} policyWords={briefingPolicyGaugeWords(poster.locale)} changeArrows={briefingChangeArrows(poster.locale)} fearGreedBuckets={briefingFearGreedBuckets(poster.locale)} {...(poster.completenessNote ? { completenessNote: poster.completenessNote } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} /></div>
     </div> : null}
   </main>
 }
