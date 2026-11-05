@@ -64,7 +64,7 @@ describe('daily briefing document guard at schema 13', () => {
     }
   })
 
-  it('refuses a 13 document that is missing any of the three fields', () => {
+  it('refuses a 13 document that is missing any of the four fields', () => {
     for (const field of ['periodId', 'periodTime', 'periodKind', 'runTrigger'] as const) {
       const value = document()
       const edition = { ...value.edition }

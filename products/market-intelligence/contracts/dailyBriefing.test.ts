@@ -229,6 +229,10 @@ describe('generation times a period may run at', () => {
     // Still a closed set: no odd minutes, nothing outside the day.
     expect(isDailyBriefingGenerationTime('12:15')).toBe(false)
     expect(isDailyBriefingGenerationTime('24:00')).toBe(false)
+    // Named directly, not inferred from "48 slots + half-hour step": a table that later collapses to
+    // whole hours keeps that count-derived reasoning alive while the behaviour is already wrong.
+    expect(isDailyBriefingGenerationTime('12:30')).toBe(true)
+    expect(isDailyBriefingGenerationTime('12:45')).toBe(false)
   })
 
   it('states the grid the forms print from those same numbers', () => {
