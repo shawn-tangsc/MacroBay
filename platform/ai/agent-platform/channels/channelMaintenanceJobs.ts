@@ -68,7 +68,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.deliveryCleanup,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryCleanup,
-      title: 'Channel delivery cleanup',
+      title: { 'zh-CN': '清理通道投递记录', 'en-US': 'Channel delivery cleanup' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
@@ -77,7 +77,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.deliveryRetry,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryRetry,
-      title: 'Channel delivery retry',
+      title: { 'zh-CN': '重试失败的通道投递', 'en-US': 'Channel delivery retry' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelDeliveryRetryIntervalMs, anchor: 'lastComplete' },
       payload: {}
@@ -86,7 +86,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.inboundRecovery,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.inboundRecovery,
-      title: 'Channel inbound recovery',
+      title: { 'zh-CN': '恢复通道入站消息', 'en-US': 'Channel inbound recovery' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
