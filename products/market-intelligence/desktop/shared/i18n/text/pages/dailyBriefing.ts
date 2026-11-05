@@ -88,6 +88,8 @@ export const dailyBriefingText = {
       title: '手动生成一期', cutoff: '截止时刻', now: '现在', nowHint: '截止时刻取你按下生成的那一刻。',
       windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
       repeatable: '同一组合可以重复生成：选同样的时刻、窗口和语言再点一次，会再生成新的一期。',
+      cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。',
+      cutoffUnreadable: '这个时刻换算不出来，换一个再试。',
       cancel: '取消', run: '生成', running: '生成中…'
     },
     stateReasons: {
@@ -379,6 +381,8 @@ export const dailyBriefingText = {
       title: 'Generate an issue now', cutoff: 'Cutoff', now: 'Now', nowHint: 'The cutoff is the moment you press Generate.',
       windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
       repeatable: 'The same combination can be generated again: choose the same time, window and language and press again, and it creates another issue.',
+      cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.',
+      cutoffUnreadable: 'That time could not be resolved here; pick another one.',
       cancel: 'Cancel', run: 'Generate', running: 'Generating…'
     },
     stateReasons: {

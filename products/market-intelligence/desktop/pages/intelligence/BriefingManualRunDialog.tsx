@@ -23,10 +23,12 @@ export type BriefingManualRunDraft = Readonly<{
  * for two runs, not for a duplicate form — so the form never refuses on that ground and says so in
  * its own words (A7.9). No period configuration is written by this dialog.
  */
-export function BriefingManualRunDialog({ open, text, running = false, onRun, onClose }: Readonly<{
+export function BriefingManualRunDialog({ open, text, running = false, problem, onRun, onClose }: Readonly<{
   open: boolean
   text: DailyBriefingText
   running?: boolean
+  /** Why the last press did not start a run; the dialog stays open so the reader can fix it. */
+  problem?: 'cutoff-in-future' | 'cutoff-unreadable' | undefined
   onRun: (draft: BriefingManualRunDraft) => void
   onClose: () => void
 }>): React.ReactElement {
@@ -96,6 +98,9 @@ export function BriefingManualRunDialog({ open, text, running = false, onRun, on
       </label>
       {/* A7.9: the reader must be told that pressing again with the same choices is a new issue,
           not a mistake — otherwise the behavior looks like a bug and they delete the second one. */}
+      {problem === undefined ? null : <p className="mi-briefing-period-dialog__conflict" role="alert" data-manual-problem={problem}>
+        {problem === 'cutoff-in-future' ? copy.cutoffInFuture : copy.cutoffUnreadable}
+      </p>}
       <p className="mi-briefing-period-dialog__note">{copy.repeatable}</p>
     </div>
   </Modal>

@@ -70,6 +70,17 @@ describe('briefing manual run dialog', () => {
     expect(hint!.textContent).not.toContain(text.manualRunDialog.now)
   })
 
+  it('says why a future cutoff was refused, and stays open to fix it', async () => {
+    // 反向用例的另一半：拒绝要说得出原因，而且弹框不关——读者当场改时刻，不用重新点开。
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => { root.render(<BriefingManualRunDialog open text={text} problem="cutoff-in-future" onRun={vi.fn()} onClose={vi.fn()} />) })
+    await act(async () => { await Promise.resolve() })
+    const problem = document.querySelector('[data-manual-problem="cutoff-in-future"]')
+    expect(problem?.textContent).toBe(text.manualRunDialog.cutoffInFuture)
+  })
+
   it('runs with the chosen cutoff, window and language', async () => {
     const { onRun } = await render()
     // An evening-free slot that the old morning-only table could not offer.
