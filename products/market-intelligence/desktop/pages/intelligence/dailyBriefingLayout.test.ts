@@ -60,3 +60,34 @@ describe('one toolbar shape, one primary', () => {
     }
   })
 })
+
+/**
+ * The row carries two small markers side by side — the window and the source. Two markers of the
+ * same kind at two sizes read as an accident, so they share one geometry declaration and differ
+ * only in colour. A second copy of the skeleton is how they drift apart again.
+ */
+describe('one rail chip shape', () => {
+  it('declares the window and source geometry exactly once', () => {
+    expect(css.match(/padding: 1px 4px; border-radius: 3px;/g) ?? []).toHaveLength(1)
+    const shared = css.slice(css.indexOf('.mi-daily-briefing__rail-fact[data-window-hours],'))
+    expect(shared.slice(0, shared.indexOf('}'))).toContain('.mi-daily-briefing__rail-source')
+  })
+
+  it('turns only a failed source red, and keeps the rest neutral', () => {
+    // lastIndexOf: the first `.rail-source {` in the sheet is the shared-geometry block above.
+    const source = css.slice(css.lastIndexOf('.mi-daily-briefing__rail-source {'))
+    expect(source.slice(0, source.indexOf('}'))).toContain('var(--mi-dashboard-muted)')
+    const failed = css.slice(css.indexOf('.mi-daily-briefing__rail-source[data-source-kind="failed"]'))
+    const failedRule = failed.slice(0, failed.indexOf('}'))
+    expect(failedRule).toContain('var(--mi-dashboard-negative)')
+    // Exactly one kind carries its own colour. A second coloured kind is a new verdict, not a style
+    // tweak, and a row of coloured badges turns scanning into reading — so it has to be deliberate.
+    expect(tonedKinds()).toEqual(['failed'])
+  })
+})
+
+/** Which source kinds carry a colour of their own. */
+function tonedKinds(): string[] {
+  const kinds = [...css.matchAll(/\[data-source-kind="([a-z-]+)"\]/g)].map((match) => match[1] as string)
+  return [...new Set(kinds)].sort()
+}
