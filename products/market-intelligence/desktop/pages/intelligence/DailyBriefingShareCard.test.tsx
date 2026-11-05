@@ -151,6 +151,45 @@ describe('a backfilled edition says which world it read', () => {
   })
 })
 
+describe('an empty macro section says why (A0.8)', () => {
+  const emptyMacro = (notes: DailyBriefingDocument['news']['notes']): DailyBriefingDocument => {
+    const doc = briefing()
+    return { ...doc, news: { ...doc.news, macro: [], notes } }
+  }
+
+  it('keeps the section and prints "not readable" for a stale calendar', async () => {
+    const rendered = await render(emptyMacro({ macroEmpty: 'calendar-stale', macroEmptyHours: 42 }))
+    const line = rendered.querySelector('[data-macro-empty="unreadable"]')
+
+    expect(rendered.textContent).toContain(text.sections.macro)
+    expect(line?.textContent).toBe(`${text.macroUnreadable}${text.macroEmptyCodes['calendar-stale'].replace('{hours}', '42')}`)
+  })
+
+  it('prints the plain sentence only when the data is fresh and nothing happened', async () => {
+    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-no-high-impact-release' }))
+    const line = rendered.querySelector('[data-macro-empty="empty"]')
+
+    expect(line?.textContent).toBe(text.empty.macro)
+    // 「没有」这一档不许带「读不到」的前缀——那正是被修掉的那个假话。
+    expect(line?.textContent).not.toContain(text.macroUnreadable)
+  })
+
+  it('prints the timeout as its own sentence, not as a failed collection', async () => {
+    const rendered = await render(emptyMacro({ macroEmpty: 'calendar-catch-up-timeout' }))
+    const line = rendered.querySelector('[data-macro-empty="unreadable"]')
+
+    expect(line?.textContent).toContain(text.macroEmptyCodes['calendar-catch-up-timeout'])
+    expect(line?.textContent).not.toContain(text.macroEmptyCodes['calendar-collect-failed'])
+  })
+
+  it('stays silent for an edition written before reasons were recorded', async () => {
+    const rendered = await render({ ...briefing(), news: { ...briefing().news, macro: [], notes: {} } })
+
+    // 没有原因码就不知道是哪一档，宁可不说，也不编一句。
+    expect(rendered.querySelector('[data-macro-empty]')).toBeNull()
+  })
+})
+
 describe('daily brief share card in English', () => {
   it('names the leverage, rate path and news count in English', async () => {
     const rendered = await render()

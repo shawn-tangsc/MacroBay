@@ -61,6 +61,8 @@ export const dailyBriefingText = {
     rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC', eth: 'ETH', index: '纳指', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
     empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
     newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
+    /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
+    macroUnreadable: '暂时读不到：',
     macroEmptyCodes: { 'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
@@ -354,6 +356,8 @@ export const dailyBriefingText = {
     rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC', eth: 'ETH', index: 'Nasdaq', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
     empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
     newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
+    /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
+    macroUnreadable: 'Not readable right now: ',
     macroEmptyCodes: { 'past-24h-no-high-impact-release': 'No high-impact release in the past 24 hours', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
     macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },

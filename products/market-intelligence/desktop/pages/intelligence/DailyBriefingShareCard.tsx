@@ -7,6 +7,7 @@ import { briefingDataGroups } from '../../../contracts/dailyBriefingDataGroups'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
+import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 import { BriefingDataArea } from './BriefingDataArea'
 import { paymentDirectionFor, type changeArrowWords as ChangeArrows, type fearGreedBucketWords as FearGreedBuckets, type paymentDirectionWords as PayDirectionWords, type policyGaugeWords } from './dailyBriefingPaymentDirections'
 
@@ -45,7 +46,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const conclusion = doc.conclusion
   const visibleNews = doc.news.items.filter((item) => item.visibility !== 'hidden')
   const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
+  // 宏观那一栏即使空也要留着并说一句（`A0.8`）：读者要能分辨「没读到」和「确实没有」，
+  // 而不是看着一块空白猜。句子与「数据缺口与限制」共用同一个推导。
+  const macroEmpty = briefingMacroEmptyCopy(doc, {
+    macroEmptyCodes: text.macroEmptyCodes,
+    emptyMacro: text.empty.macro,
+    macroUnreadable: text.macroUnreadable
+  })
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -109,7 +117,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 
     {hasNews ? <section className="mi-brief-poster__news-section">
-      <h2>{text.sections.news}</h2>
+      {visibleNews.length > 0 ? <h2>{text.sections.news}</h2> : null}
       {visibleNews.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
         <span data-polarity={item.polarity}>{clockWithZone(item.publishedAt, formatTime)}</span>
         <div>
@@ -118,7 +126,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
@@ -127,6 +135,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
+      {/* 一行，正文段落样式：不是错误、不给图标、不给重试。「确实没有」那一档用另一句，
+          由同一个推导决定，正文与限制清单说的是同一句话。 */}
+      {macroEmpty ? <p className="mi-brief-poster__macro-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>{macroEmpty.sentence}</p> : null}
     </section> : null}
 
     {hasData ? <section className="mi-brief-poster__data-section">
