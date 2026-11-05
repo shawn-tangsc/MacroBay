@@ -94,7 +94,7 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     expect(created.edition).toEqual({ editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
 
     const result = await runtime.redeliverPush({
-      dedupeKey: created.dedupeKey,
+      recordId: created.id,
       editionId: 'brief-2026-11-04-v2',
       locale: 'zh-CN'
     })
@@ -109,7 +109,7 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     expect(after.delivery.push).toMatchObject({ state: 'sent-accepted', pushCount: 1, messageId: 'm-1' })
 
     // 再点一次仍然真推一次（平台不做时间窗去重）
-    await runtime.redeliverPush({ dedupeKey: created.dedupeKey, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
+    await runtime.redeliverPush({ recordId: created.id, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
     expect(pushes).toBe(2)
     expect(state().records[0].delivery.push).toMatchObject({ pushCount: 2 })
   })
@@ -118,14 +118,14 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     const { runtime, state } = createRuntime({ push: async () => ({ ok: true }) })
     await runtime.submit({ ...submitRequest, deliver: false })
     const record = state().records[0]
-    await runtime.redeliverPush({ dedupeKey: record.dedupeKey, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
+    await runtime.redeliverPush({ recordId: record.id, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
     expect(state().records[0].delivery.push).toMatchObject({ state: 'sent-unconfirmed', pushCount: 1 })
   })
 
   it('rejects a missing target without creating a row', async () => {
     const { runtime, state } = createRuntime({ push: async () => ({ ok: true }) })
     const result = await runtime.redeliverPush({
-      dedupeKey: 'platform|done:1999-01-01',
+      recordId: 'notification-does-not-exist',
       editionId: 'x',
       locale: 'zh-CN'
     })
@@ -138,10 +138,10 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     await runtime.submit({ ...submitRequest, deliver: false })
     const record = state().records[0]
     await expect(
-      runtime.redeliverPush({ dedupeKey: record.dedupeKey, editionId: 'brief-2026-11-04-v1', locale: 'zh-CN' })
+      runtime.redeliverPush({ recordId: record.id, editionId: 'brief-2026-11-04-v1', locale: 'zh-CN' })
     ).resolves.toEqual({ kind: 'rejected', reason: 'redeliver-edition-mismatch' })
     await expect(
-      runtime.redeliverPush({ dedupeKey: record.dedupeKey, editionId: 'brief-2026-11-04-v2', locale: 'en-US' })
+      runtime.redeliverPush({ recordId: record.id, editionId: 'brief-2026-11-04-v2', locale: 'en-US' })
     ).resolves.toEqual({ kind: 'rejected', reason: 'redeliver-edition-mismatch' })
   })
 
@@ -151,7 +151,7 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     const record = state().records[0]
     await expect(
       runtime.redeliverPush({
-        dedupeKey: record.dedupeKey,
+        recordId: record.id,
         editionId: 'brief-2026-11-04-v2',
         locale: 'zh-CN',
         surface: 'desktop'
@@ -168,7 +168,7 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     const noChannelRecord = noChannel.state().records[0]
     await expect(
       noChannel.runtime.redeliverPush({
-        dedupeKey: noChannelRecord.dedupeKey,
+        recordId: noChannelRecord.id,
         editionId: 'brief-2026-11-04-v2',
         locale: 'zh-CN'
       })
@@ -179,7 +179,7 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     const pausedRecord = paused.state().records[0]
     await expect(
       paused.runtime.redeliverPush({
-        dedupeKey: pausedRecord.dedupeKey,
+        recordId: pausedRecord.id,
         editionId: 'brief-2026-11-04-v2',
         locale: 'zh-CN'
       })

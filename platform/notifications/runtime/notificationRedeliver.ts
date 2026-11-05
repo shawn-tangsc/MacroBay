@@ -5,7 +5,7 @@
  * `occurrenceCount`/`createdAt`，只写 `delivery.push` 与 `updatedAt`。
  *
  * 五码闭集（都不静默）：
- * - `redeliver-target-missing`：同键记录不存在——**绝不允许因此新建一行**；
+ * - `redeliver-target-missing`：**`recordId` 找不到**——绝不允许因此新建一行；
  * - `redeliver-edition-mismatch`：版次对不上（含历史记录没有 edition，**不猜不补**）；
  * - `redeliver-surface-invalid`：只开手机这一个表面；
  * - `push-paused`：通道熔断窗口内；
@@ -14,7 +14,6 @@
  * **平台侧不做时间窗去重**：读者点一次就再推一次，防连点归界面的「发送中」禁用。
  */
 import type { NotificationDeliveryState, NotificationRecord } from '../contracts/notificationContracts'
-import { isActiveNotification } from '../store/notificationStore'
 import type { NotificationDeliveryContent } from './notificationRouting'
 
 export type RedeliverReasonCode =
@@ -29,7 +28,7 @@ export type RedeliverResult =
   | { kind: 'rejected'; reason: RedeliverReasonCode }
 
 export async function redeliverPushToChannel(
-  input: { dedupeKey: string; editionId: string; locale: string; surface?: string },
+  input: { recordId: string; editionId: string; locale: string; surface?: string },
   deps: {
     records: readonly NotificationRecord[]
     now: string
@@ -50,7 +49,8 @@ export async function redeliverPushToChannel(
   if (input.surface !== undefined && input.surface !== 'channel') {
     return { kind: 'rejected', reason: 'redeliver-surface-invalid' }
   }
-  const record = findRedeliverTarget(deps.records, input.dedupeKey, deps.now)
+  // 契约 v2.32 判定顺序：**先判存在性**，找不到就到此结束，不再往下判版次。
+  const record = findRedeliverTarget(deps.records, input.recordId)
   if (record === undefined) return { kind: 'rejected', reason: 'redeliver-target-missing' }
   // 历史记录没有 edition：一律判不匹配，**不猜、不补默认值**。
   if (
@@ -86,16 +86,15 @@ export async function redeliverPushToChannel(
   return { kind: 'accepted', recordId: record.id, delivery }
 }
 
-/** 同键、仍在保留期内的**最近一条**记录；没有就是不匹配，绝不新建。 */
+/**
+ * 按 `recordId` 找那条记录；没有就是不匹配，绝不新建。
+ *
+ * 为什么不再按去重键找：键的形态（模板串、产品前缀、分隔符、展开时机）是一整类陷阱，
+ * `recordId` 是提交回执里现成的身份，换成它之后这类问题从根上消失（契约 v2.32）。
+ */
 export function findRedeliverTarget(
   records: readonly NotificationRecord[],
-  dedupeKey: string,
-  now: string
+  recordId: string
 ): NotificationRecord | undefined {
-  let newest: NotificationRecord | undefined
-  for (const record of records) {
-    if (record.dedupeKey !== dedupeKey || !isActiveNotification(record, now)) continue
-    if (newest === undefined || record.createdAt > newest.createdAt) newest = record
-  }
-  return newest
+  return records.find((record) => record.id === recordId)
 }

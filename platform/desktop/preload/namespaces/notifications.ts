@@ -67,7 +67,8 @@ export function createNotificationsNamespace(ipcRenderer: IpcRenderer) {
         Awaited<ReturnType<NotificationRuntime['setChannelEvent']>>
       >,
     /** 读者点「推送到手机」才调：不新建记录、不改内容，只重投这一条的手机一面。 */
-    redeliverPush: (input: { dedupeKey: string; editionId: string; locale: string; surface?: string }) =>
+    /** 只认 `recordId`（提交回执里那个）；键形态在这条路上不再存在（契约 v2.32）。 */
+    redeliverPush: (input: { recordId: string; editionId: string; locale: string; surface?: string }) =>
       ipcRenderer.invoke(IpcChannels.notificationsRedeliverPush, input) as Promise<
         Awaited<ReturnType<NotificationRuntime['redeliverPush']>>
       >,

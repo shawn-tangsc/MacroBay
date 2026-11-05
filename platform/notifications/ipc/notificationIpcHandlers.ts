@@ -51,12 +51,12 @@ export function registerNotificationIpcHandlers(): void {
     return getNotificationRuntime().setChannelEvent(payload.eventId, payload.enabled === true)
   })
   ipcMain.handle(IpcChannels.notificationsRedeliverPush, (_event, input) => {
-    const payload = (input ?? {}) as { dedupeKey?: string; editionId?: string; locale?: string; surface?: string }
-    if (!payload.dedupeKey || !payload.editionId || !payload.locale) {
-      throw new Error('dedupeKey, editionId and locale are required.')
+    const payload = (input ?? {}) as { recordId?: string; editionId?: string; locale?: string; surface?: string }
+    if (!payload.recordId || !payload.editionId || !payload.locale) {
+      throw new Error('recordId, editionId and locale are required.')
     }
     return getNotificationRuntime().redeliverPush({
-      dedupeKey: payload.dedupeKey,
+      recordId: payload.recordId,
       editionId: payload.editionId,
       locale: payload.locale,
       ...(payload.surface === undefined ? {} : { surface: payload.surface })

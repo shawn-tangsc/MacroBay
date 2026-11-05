@@ -14,7 +14,8 @@ import type { NotificationDeliveryContent } from './notificationRouting'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 
 export type RedeliverPushInput = {
-  dedupeKey: string
+  /** 提交回执里的记录 id（契约 v2.32：入口只认 recordId，不再收键）。 */
+  recordId: string
   editionId: string
   locale: string
   surface?: string
