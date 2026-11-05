@@ -151,12 +151,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [issuesOpen, setIssuesOpen] = useState(true)
   const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
-  // The issue day ("current period") is the service's, not the wall clock's: before the generation
-  // hour the current period is still the previous calendar day, and two definitions make a past day
-  // look like today. The wall clock is only the fallback before the list answers.
-  const wallClockToday = useMemo(() => localDate(timeZone), [timeZone])
-  const [currentPeriodDate, setCurrentPeriodDate] = useState<string | undefined>(undefined)
-  const todayDate = currentPeriodDate ?? wallClockToday
+  // **日期只有一个来源：读者本地日历的今天**（过 00:00 就换天，用户 2026-11-06 拍板）。
+  // 以前这里还有一层"按排期时刻倒推当前属于哪一期"，于是凌晨 01:25 还把 11/05 当今天。
+  const todayDate = useMemo(() => localDate(timeZone), [timeZone])
   // A run this page started, or one it is loading for. The service's own answer joins below.
   const readyDocument = briefingDocument(view)
   /**
@@ -231,7 +228,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   useBriefingReload({
     client, reloadKey, todayDate, pinnedDate, readEdition, takeSkipGenerate,
     setView, setEditions, setRailDates, setEditionsLoading, setEditionsFailed, setRegenerateFailure, setRegenerating, setShowingStale,
-    setPickedLocale, setPickedPeriodId, setPinnedDate, setCurrentPeriodDate,
+    setPickedLocale, setPickedPeriodId, setPinnedDate,
     afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef, lastReadyRef, openEditionRef, periodDateRef, timeZoneRef
   })
   const { selectEdition, selectLocale } = briefingEditionSelection({
@@ -401,7 +398,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       targetDate={todayDate}
       timeZone={timeZone}
       defaultDate={selected.date}
-      latestDate={wallClockToday}
+      latestDate={todayDate}
       zoneInvalid={zoneInvalid !== null}
       systemZone={screenDocument !== undefined && readyZone(view) === 'system'}
       onManualRun={onManualRun}

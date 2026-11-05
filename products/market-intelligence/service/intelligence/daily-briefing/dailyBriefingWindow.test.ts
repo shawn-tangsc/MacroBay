@@ -23,14 +23,14 @@ describe('briefing window zone source', () => {
     expect(window?.windowStart).toBe('2026-10-28T23:00:00.000Z')
   })
 
-  it('keeps the current issue on the previous day before the generation hour', () => {
-    // 03:21 local on 11-04, cutoff 07:00: the reader is still inside the 11-03 issue — the one the
-    // list shows first and the one a generate lands on. Both paths read this function, so the two
-    // dates cannot diverge.
+  it('keeps the date on the reader’s calendar day, before the generation hour too', () => {
+    // 03:21 本地 11-04、截止 07:00：日期就是 **11-04**（用户 2026-11-06 拍板：没有"当前期"这回事，
+    // 没过点就是"今天还没有"）。窗口右端截到"现在"，不覆盖还没到的那一段。
     const window = briefingWindow('2026-11-03T19:21:25.083Z', SHANGHAI, { generationTime: '07:00', windowHours: 24 })
 
-    expect(window?.date).toBe('2026-11-03')
-    expect(window?.windowEnd).toBe('2026-11-02T23:00:00.000Z')
+    expect(window?.date).toBe('2026-11-04')
+    expect(window?.windowEnd).toBe('2026-11-03T19:21:25.083Z')
+    expect(window?.windowStart).toBe('2026-11-02T19:21:25.083Z')
   })
 
   it('falls back to the machine zone, not UTC, when the setting is empty', () => {

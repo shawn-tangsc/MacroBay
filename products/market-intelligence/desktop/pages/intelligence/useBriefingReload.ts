@@ -35,7 +35,6 @@ export function useBriefingReload(deps: Readonly<{
   setPickedLocale: (next: 'zh-CN' | 'en-US') => void
   setPickedPeriodId: (next: string | undefined) => void
   setPinnedDate: (next: string | undefined) => void
-  setCurrentPeriodDate: (next: string) => void
   afterDeleteLocaleRef: { current: 'zh-CN' | 'en-US' | null }
   afterDeleteRef: { current: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }> | null }
   effectiveLocaleRef: { current: 'zh-CN' | 'en-US' }
@@ -47,7 +46,7 @@ export function useBriefingReload(deps: Readonly<{
 }>): void {
   const { client, reloadKey, todayDate, pinnedDate, readEdition, takeSkipGenerate } = deps
   const { setView, setEditions, setRailDates, setEditionsLoading, setEditionsFailed, setRegenerateFailure, setRegenerating, setShowingStale } = deps
-  const { setPickedLocale, setPickedPeriodId, setPinnedDate, setCurrentPeriodDate } = deps
+  const { setPickedLocale, setPickedPeriodId, setPinnedDate } = deps
   const { afterDeleteLocaleRef, afterDeleteRef, effectiveLocaleRef, loadedLocaleRef } = deps
   const { lastReadyRef, openEditionRef, periodDateRef, timeZoneRef } = deps
 
@@ -77,9 +76,10 @@ export function useBriefingReload(deps: Readonly<{
       : withDeadline(client.getToday({ locale: localeForLoad, timeZone: timeZoneRef.current, generate: false }), 15_000).catch(() => undefined)
     const listed = await withDeadline(client.list({ locale: localeForLoad, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
     if (!active) return
-    // The issue day this load is about: the service's, when the list answered.
-    const periodDate = listed?.state === 'available' && typeof listed.result.today === 'string' ? listed.result.today : todayDate
-    setCurrentPeriodDate(periodDate)
+    // 这一读是关于**哪一天**的：只有一处来源——读者本地日历的今天（`02` v2.132）。
+    // 以前这里用的是服务按排期倒推的"当前期"，于是凌晨还停在昨天：天头、默认定位、空态
+    // 三处各说各的。现在不用再问服务"今天是哪一期"，日期只有日历。
+    const periodDate = todayDate
     periodDateRef.current = periodDate
     let rows: readonly DailyBriefingEditionSummary[] = listed?.state === 'available' ? [...listed.result.editions] : []
     setEditions(rows.slice(0, 14))
@@ -129,8 +129,6 @@ export function useBriefingReload(deps: Readonly<{
     const today = await todayPromise
     if (!active) return
     if (today?.state === 'available') {
-      const date = today.document.edition.date
-      setCurrentPeriodDate(date)
       // 只回写**读到的那一行**（日期 + 期号 + 语言）：按日期整片替换会把同一天另一种语言的行
       // 也写成这一版，两行于是同键同语言，React 会把它们当同一行复用，右键与删除落到另一行上。
       rows = mergeEditionSummary(rows, today.document)

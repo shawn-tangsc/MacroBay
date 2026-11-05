@@ -212,9 +212,10 @@ describe('daily briefing service', () => {
   })
 
   it('moves the cutoff with the configured generation time', () => {
-    // 08:30 local is before a 09:30 cutoff, so the open belongs to the previous edition.
+    // 08:30 本地、截止 09:30：**日期仍是今天**（没有"当前期"这回事，`02` v2.132），
+    // 但窗口右端不许伸进未来——还没到那一刻，就截止到"现在"。
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
-      date: '2026-10-29', windowStart: '2026-10-28T01:30:00.000Z', windowEnd: '2026-10-29T01:30:00.000Z', windowHours: 24, zoneSource: 'settings'
+      date: '2026-10-30', windowStart: '2026-10-29T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z', windowHours: 24, zoneSource: 'settings'
     })
     expect(briefingWindow('2026-10-30T02:00:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
       date: '2026-10-30', windowStart: '2026-10-29T01:30:00.000Z', windowEnd: '2026-10-30T01:30:00.000Z', windowHours: 24, zoneSource: 'settings'

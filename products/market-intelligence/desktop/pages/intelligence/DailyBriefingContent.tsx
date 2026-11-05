@@ -158,7 +158,7 @@ export function DailyBriefingContent({ text, view, mode, failure, regenerating, 
           面板也不该有两种身份。缺语言那一档只把 `view` 折成面板认的形状。 */}
       {bodyState === 'no-edition' && noEditionView !== undefined ? <DailyBriefingNoEditionPanel
         view={noEditionView}
-        text={text} timeZone={timeZone} scheduledTime={scheduledTime} currentPeriodDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
+        text={text} timeZone={timeZone} scheduledTime={scheduledTime} todayDate={todayDate} formatTime={formatTime} onOpenSettings={onOpenSettings} /> : null}
       {/* 失败面板现在只有这一个出口（空态组件不再自己画一遍）。历史日不支持补生成，
           所以那颗重试是禁用的，并且写明原因。 */}
       {failure !== null && bodyState === 'failure' ? <DailyBriefingFailurePanel failure={failure} text={text} formatTime={formatTime} regenerating={regenerating}

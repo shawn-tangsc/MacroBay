@@ -2090,46 +2090,36 @@ it('names a calendar that could not be read in the audit column only, with a re-
   expect(client.regenerate).not.toHaveBeenCalled()
 })
 
-it('takes the current issue from the service, not from the wall clock', async () => {
-  // Before the generation hour the current issue is still the previous calendar day. The list says
-  // so (today: 2026-10-29 while the wall clock is 10-30); the page must use that one value for the
-  // marker, the empty-state framing and the header target — two definitions is what made "generate
-  // today" land on a day the reader thought was history.
+it('takes today from the reader’s calendar, not from the schedule or the list', async () => {
+  vi.setSystemTime(new Date('2026-10-29T22:00:00.000Z')) // 06:00 于 Asia/Shanghai，还没到 07:00
+  // 用户 2026-11-06 拍板：**没有"当前期"这回事**。日期只有一个来源——读者本地日历的今天。
+  // 凌晨 06:00（本地）已经是 10/30，页面就该在 10/30；服务按排期倒推给的旧 today（这里是 10/29）
+  // 不许再把天头、默认定位和空态拽回前一天。还没到 07:00，所以今天那档写的是计划时刻。
   const period = [0, 1, 2, 3].map((back) => {
     const date = new Date(Date.parse('2026-10-29T00:00:00.000Z') - back * 86_400_000).toISOString().slice(0, 10)
     return { date, periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00' }
   })
   const client = fakeClient({
-    getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
-    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-10-29' } })),
+    getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+    // 服务还按旧口径答"今天是 10/29"：页面不认这个答案，只认日历。
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, dates: [...period.map((row) => row.date), '2026-10-30'], today: '2026-10-29' } })),
     get: vi.fn(async () => ({ state: 'missing' as const }))
   })
   const dom = await renderPage(client)
 
-  // The current issue is the first row, marked as the issue — not "today", which it is not.
-  const first = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-  expect(first.getAttribute('data-date')).toBe('2026-10-29')
-  expect(first.getAttribute('aria-current')).toBe('true')
-  expect(first.hasAttribute('disabled')).toBe(false)
-
-  await act(async () => { first.click(); await Promise.resolve(); await Promise.resolve() })
-  const pane = dom.querySelector('.mi-daily-briefing-page__no-edition')!
-  // 今天那档的副句说"这一期没有生成、可以手动补"；历史日那档说"这一天没有留下"。
-  // `02` v2.129 G6：夹具是 12:00、这一期 07:00 已过，所以不再承诺"到点会自动出"。
-  expect(pane.textContent).toContain('这一期没有生成')
-  expect(pane.textContent).toContain('可以现在手动生成')
-  expect(pane.textContent).not.toContain('到了时间会自动出')
-  // Not the historical framing, and the action stays clickable.
-  const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
-  expect(action.disabled).toBe(false)
-  expect(action.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-29'))
-
-  // 历史日：同一个空态、同一个平台标题，副句换成"这一天没有留下简报"，并且**零按钮**。
-  await expandDay(dom, '2026-10-28')
-  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
-  const historical = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
-  expect(historical.textContent).toContain(text.history.emptyBodyHistorical)
-  expect(historical.querySelectorAll('button')).toHaveLength(0)
+  // 天头的"今天"是 10/30（日历今天），不是列表说的 10/29。
+  const todayLabel = dom.querySelector<HTMLElement>('[data-today]')
+  expect(todayLabel?.closest('[data-day]')?.getAttribute('data-day')).toBe('2026-10-30')
+  // 默认定位也落在今天：正文是今天这一期的空态，不是"读者没点过"的历史版次。
+  const pane = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
+  expect(pane.textContent).toContain('计划 07:00')
+  expect(pane.textContent).not.toContain('这一期没有生成')
+  // 手动生成那颗按钮点的是今天，不是列表给的旧日子。
+  expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.getAttribute('aria-label'))
+    .toBe(text.manualGenerateTarget.replace('{date}', '2026-10-30'))
+  // 历史照旧可以点开：10/29 那一天在列表里，只是不带"今天"。
+  const historyRow = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-date="2026-10-29"]')
+  expect(historyRow?.getAttribute('aria-current')).not.toBe('true')
 })
 
 // Three minimal inputs, each asserting the view state directly. The delete chain went two rounds
@@ -2146,12 +2136,12 @@ const enSettings = vi.fn(async () => ({ state: 'available' as const, view: { ...
 it('shows the nine steps when the service is generating, even though this page never clicked', async () => {
   // 07:00 scheduled run: nothing local says "generating", the left rail says so, and the pane said
   // "not generated". One source of truth now includes the service's own answer.
-  const period = [{ date: '2026-11-04', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00',
+  const period = [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: [], state: 'missing' as const, scheduledTime: '07:00',
     languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] }]
   const dom = await renderPage(fakeClient({
     getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
-    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-11-04' } })),
-    getProgress: vi.fn(async () => ({ state: 'running' as const, progress: { attemptId: 'a1', startedAt: '2026-11-04T00:00:00.000Z', stages: [] } }))
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: period, today: '2026-10-30' } })),
+    getProgress: vi.fn(async () => ({ state: 'running' as const, progress: { attemptId: 'a1', startedAt: '2026-10-30T00:00:00.000Z', stages: [] } }))
   }))
   for (let round = 0; round < 40; round += 1) {
     await act(async () => { await Promise.resolve() })
@@ -2203,12 +2193,12 @@ it('never lets the first read contradict the list about which languages exist', 
   // Walkthrough: the list said two editions (and the menu offered to delete the Chinese one) while
   // the pane claimed the Chinese edition did not exist, until a tab click fixed it. The list is the
   // authority: if it says the language is there, the pane reads it before saying anything.
-  const chinese = briefingDocument('2026-11-03')
+  const chinese = briefingDocument('2026-10-30')
   const client = fakeClient({
     getSettings: vi.fn(async () => ({ state: 'available' as const, view: { ...settingsView, language: { ...settingsView.language, settings: { primary: 'follow-ui' as const, additional: ['en-US'] as const } } } })),
     // The open misses it — a stale read, a race, whatever: the page must not repeat that as fact.
     getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
-    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-11-03', periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: '2026-11-03T00:30:00.000Z', windowEnd: '2026-11-03T00:30:00.000Z', readingsAvailable: 4 }], today: '2026-11-03' } })),
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [{ date: '2026-10-30', periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN', 'en-US'] as const, state: 'generated' as const, generatedAt: '2026-10-30T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z', readingsAvailable: 4 }], today: '2026-10-30' } })),
     get: vi.fn(async ({ locale }: { locale: string }) => locale === 'zh-CN'
       ? { state: 'available' as const, document: chinese }
       : { state: 'missing' as const })
@@ -2609,7 +2599,9 @@ describe('a day whose generation time has passed with no edition', () => {
     vi.setSystemTime(new Date('2026-10-29T22:30:00.000Z'))
     const dom = await openToday()
     const pane = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__no-edition')!
-    expect(pane.textContent).toContain('到了时间会自动出')
+    // 没到点就说计划时刻（`02` v2.132），绝不说"这一期没有生成"——那是过了点才成立的话。
+    expect(pane.textContent).toContain('计划 07:00')
     expect(pane.textContent).not.toContain('这一期没有生成')
+    expect(pane.textContent).not.toContain('这一天还没有简报')
   })
 })

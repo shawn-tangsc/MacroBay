@@ -12,9 +12,15 @@ import { createDailyBriefingService, type DailyBriefingStore, type DailyBriefing
  * edition and the page is only refreshing.
  */
 const SHANGHAI = 'Asia/Shanghai'
-/** 03:47 on 11-04 in Shanghai: still inside the 11-03 issue (cutoff 07:00). */
+/**
+ * 03:47 on 11-04 in Shanghai —— 读者的日历上已经是 **11/04**。
+ *
+ * 没有"当前期"这回事了（用户 2026-11-06 拍板）：日期只有一个来源，就是读者本地日历的今天。
+ * 以前这里是"还在 11-03 那一期里"，于是凌晨打开会看到昨天的版次冒充今天。
+ */
 const AS_OF = '2026-11-03T19:47:00.000Z'
-const ISSUE_DATE = '2026-11-03'
+const ISSUE_DATE = '2026-11-04'
+const YESTERDAY = '2026-11-03'
 
 const document = (date: string, locale: 'zh-CN' | 'en-US'): DailyBriefingDocument => ({
   schemaVersion: dailyBriefingPolicy.schemaVersion,
@@ -48,7 +54,7 @@ const stored = (locale: 'zh-CN' | 'en-US'): DailyBriefingStoredEdition => ({
 })
 
 describe('daily briefing read-only open', () => {
-  it('answers with the stored edition of the current issue, without generating', async () => {
+  it('answers with the stored edition of today, without generating', async () => {
     const readFacts = vi.fn()
     const service = createDailyBriefingService({
       source: { readFacts } as never,
@@ -63,6 +69,19 @@ describe('daily briefing read-only open', () => {
     expect(today.document.edition.date).toBe(ISSUE_DATE)
     expect(today.document.edition.locale).toBe('zh-CN')
     expect(readFacts).not.toHaveBeenCalled()
+  })
+
+  it('does not hand the reader yesterday’s edition as today’s', async () => {
+    // 昨天那一版是**历史**：今天的读取不许拿它顶上，只许说"今天还没写"。
+    const service = createDailyBriefingService({
+      source: { readFacts: vi.fn() } as never,
+      store: storeWith([{ ...stored('zh-CN'), date: YESTERDAY, windowEnd: `${YESTERDAY}T00:30:00.000Z` }]),
+      now: () => AS_OF
+    })
+
+    const today = await service.getToday({ locale: 'zh-CN', timeZone: SHANGHAI, generate: false })
+
+    expect(today).toMatchObject({ state: 'unavailable', failureCode: 'not-generated' })
   })
 
   it('says nothing was written in this language, rather than failing', async () => {

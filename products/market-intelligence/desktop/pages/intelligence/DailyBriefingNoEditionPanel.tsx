@@ -20,22 +20,22 @@ function noEditionToday(text: DailyBriefingText, timeZone: string, scheduledTime
 }
 
 /** What the pane says for one day the reader selected that has nothing to read. */
-export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, currentPeriodDate, formatTime, now, onOpenSettings }: Readonly<{
+export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, todayDate, formatTime, now, onOpenSettings }: Readonly<{
   view: Extract<DailyBriefingPageViewState, { status: 'no-edition' }>
   text: DailyBriefingText
   timeZone: string
   scheduledTime?: string
   /** 判断"到点了没有"用的钟；用例注入一个固定时刻，生产不传就是现在。 */
   now?: Date
-  /** The issue day the page is on: the same value the list and the generate action use. */
-  currentPeriodDate?: string
+  /** 读者本地日历的今天：空态据此决定说"计划时刻"还是"这一期没有生成"。 */
+  todayDate?: string
   formatTime: (value: string, precision?: 'minute' | 'second') => string
   onOpenSettings: () => void
 }>): React.ReactElement {
   const labels = text.history
   // 今天与历史日**共用同一块平台空态**（`02` v2.98）：标题由 `ui.state.empty` 提供，两块自动逐字
   // 相同；差异只在副句，副句走 `productReason` 的 key（字面键，守卫要求可判断前缀）。
-  const isCurrent = view.date === currentPeriodDate
+  const isCurrent = view.date === todayDate
   if (isCurrent) {
     const cutoffPassed = scheduledTime === undefined ? undefined : briefingCutoffPassed({
       date: view.date, time: scheduledTime, timeZone, now: now ?? new Date()

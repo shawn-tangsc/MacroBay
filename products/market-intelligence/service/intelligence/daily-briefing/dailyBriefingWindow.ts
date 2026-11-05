@@ -69,13 +69,20 @@ export function briefingWindow(
     ? settings.windowHours
     : dailyBriefingGenerationPolicy.defaultWindowHours
   const cutoff = dailyBriefingCutoffMinutes(generationTime)
-  const date = parts.hour * 60 + parts.minute < cutoff ? addDays(parts.date, -1) : parts.date
-  const windowEnd = zonedIso(date, Math.floor(cutoff / 60), cutoff % 60, zone)
-  if (!windowEnd) return undefined
+  // **日期只有一处来源：读者本地日历的今天**（用户 2026-11-06 拍板，`02` v2.132）。
+  // 以前这里是"没过生成时刻就还算前一天那一期"，于是凌晨 01:25 的页面把 11/05 当今天、
+  // 生成的新版也往昨天归档。没有"当前期"这回事了：没过点就是今天还没有，过了点由定时任务出今天这一期。
+  const date = parts.date
+  const scheduledEnd = zonedIso(date, Math.floor(cutoff / 60), cutoff % 60, zone)
+  if (!scheduledEnd) return undefined
+  // 窗口右端 = 今天配置的生成时刻；**还没到那一刻就用"现在"**——窗口绝不伸进未来
+  // （一份覆盖着尚未发生的时段的日报，读者会以为它读过那些数据）。
+  const endMs = Math.min(Date.parse(scheduledEnd), parsed)
+  const windowEnd = new Date(endMs).toISOString()
   return Object.freeze({
     date,
     windowEnd,
-    windowStart: new Date(Date.parse(windowEnd) - windowHours * 60 * 60 * 1000).toISOString(),
+    windowStart: new Date(endMs - windowHours * 60 * 60 * 1000).toISOString(),
     windowHours,
     zoneSource
   })
@@ -146,11 +153,6 @@ function zonedIso(date: string, hour: number, minute: number, timeZone: string):
     }
     return new Date(guess).toISOString()
   } catch { return undefined }
-}
-
-function addDays(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number)
-  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
 }
 
 export function localDate(asOf: string, timeZone: string): string | undefined {
