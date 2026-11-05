@@ -48,14 +48,16 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
     {/* The one rule: only a run in flight disables this. Every other state — empty, failed, ready,
         showing a past day, no detail column — keeps it clickable, and its name always says whose
         day it acts on. A disabled control with no reason the reader can see is not allowed. */}
+    {/* 期模型之后，这颗按钮只说一件事：现在就按某一期跑一次。旧的「生成或重新生成今天的日报」是
+        "整天一条"时代的说法——那时一天只有一份，现在一天可以有多期，重生成要指定是哪一期。 */}
     <Button className="mi-daily-briefing__regenerate" data-toolbar-action="regenerate" disabled={generating}
       /* A run in flight is a wait, so the control shows it is working instead of looking broken. */
       loading={generating}
       {...(generating
         ? { 'aria-label': text.generationProgress.workingHint, title: text.generationProgress.workingHint }
-        : { 'aria-label': text.headerGenerateTarget.replace('{date}', targetDate) })}
+        : { 'aria-label': text.manualGenerateTarget.replace('{date}', targetDate) })}
       onClick={() => { if (todayReady) void onRegenerate(); else onGenerate() }}>
-      {regenerating ? text.regenerating : hasTodayEdition ? text.regenerateToday : text.generateToday}
+      {regenerating ? text.regenerating : text.manualGenerate}
     </Button>
     {/* Beside the generate action, in the same group: both are about this issue, and a reader who just
         generated is one click from publishing it. Its state lives in the machine, not here — this row

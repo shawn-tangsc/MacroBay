@@ -343,7 +343,7 @@ describe('daily briefing page', () => {
     expect(client.getToday).toHaveBeenCalledTimes(getTodayCalls)
     expect(client.regenerate).not.toHaveBeenCalled()
     // 4. The header keeps today as its target, so the two entries cannot be confused.
-    expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
+    expect(dom.querySelector('[data-toolbar-action="regenerate"]')?.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-30'))
   })
 
   it('loads a historical edition read-only and never re-reads a cached one', async () => {
@@ -551,13 +551,15 @@ describe('daily briefing page', () => {
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
 
-  it('regenerates today in place', async () => {
+  it('runs the issue now from the toolbar', async () => {
+    // 顶部那颗现在是「手动生成」：它走的是生成那一条路（`generateNow`），不是"重生成整天那一条"。
     const client = fakeClient()
     const dom = await renderPage(client)
-    const regenerate = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
-    await act(async () => { regenerate.click(); await Promise.resolve(); await Promise.resolve() })
+    const run = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    await act(async () => { run.click(); await Promise.resolve(); await Promise.resolve() })
     expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
     expect(dom.textContent).toContain('重新生成版')
+    expect(run.textContent).toContain(text.manualGenerate)
   })
 
   it('says the brief is being generated and refuses a second click while it runs', async () => {
@@ -693,7 +695,7 @@ describe('daily briefing page', () => {
     const headerAction = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     expect(headerAction).not.toBeNull()
     expect(headerAction.disabled).toBe(false)
-    expect(headerAction.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-30'))
+    expect(headerAction.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-30'))
     expect(dom.querySelectorAll('[data-failure-action="retry"]')).toHaveLength(1)
 
     await act(async () => {
@@ -1608,7 +1610,7 @@ it('takes the current issue from the service, not from the wall clock', async ()
   // Not the historical framing, and the action stays clickable.
   const action = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
   expect(action.disabled).toBe(false)
-  expect(action.getAttribute('aria-label')).toBe(text.headerGenerateTarget.replace('{date}', '2026-10-29'))
+  expect(action.getAttribute('aria-label')).toBe(text.manualGenerateTarget.replace('{date}', '2026-10-29'))
 
   // Another day without an edition is history: there the backfill reason does appear.
   await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click(); await Promise.resolve(); await Promise.resolve() })
@@ -1768,16 +1770,20 @@ it('never starts a run just because the page was opened', async () => {
   expect(client.regenerate).toHaveBeenCalledTimes(1)
 })
 
-it('labels the header action by whether today already has an edition', async () => {
+it('names the header action once, whoever it acts on', async () => {
+  // 期模型之后，"今天有没有版次"不再是这颗按钮的条件：一天可以有多期，重生成要指定是哪一期，
+  // 所以它只说一件事——手动生成；旧的两种说法（立即生成 / 重新生成今天的日报）随之作废。
   const ready = await renderPage(fakeClient())
-  expect(ready.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.regenerateToday)
+  expect(ready.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.manualGenerate)
+  expect(ready.querySelector('[data-toolbar-action="regenerate"]')?.textContent).not.toContain(text.regenerateToday)
 
   const missing = editions.map((edition) => ({ ...edition, state: 'missing' as const, generatedAt: undefined, availableLocales: [] }))
   const empty = await renderPage(fakeClient({
     getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
     list: vi.fn(async () => ({ state: 'available' as const, result: { editions: missing } }))
   }))
-  expect(empty.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.generateToday)
+  expect(empty.querySelector('[data-toolbar-action="regenerate"]')?.textContent).toContain(text.manualGenerate)
+  expect(empty.querySelector('[data-toolbar-action="regenerate"]')?.textContent).not.toContain(text.generateToday)
 })
 
 it('keeps a generate action in the header even when there is nothing to regenerate', async () => {
@@ -1791,7 +1797,7 @@ it('keeps a generate action in the header even when there is nothing to regenera
   expect(button).not.toBeNull()
   expect(button.disabled).toBe(false)
   // No edition for today yet: the label says "generate", not "regenerate".
-  expect(button.textContent).toContain(text.generateToday)
+  expect(button.textContent).toContain(text.manualGenerate)
 })
 
 it('shows one empty reason and no detail column when no edition exists', async () => {
