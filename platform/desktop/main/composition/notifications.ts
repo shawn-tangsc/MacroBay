@@ -1,7 +1,7 @@
 import type { AppLanguage, AppSettings } from '@platform/settings/schema/appSettings'
 import type { ProductManifest } from '@platform/product-manifest'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
-import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
+import { createNotificationCopyPort, type JobTitleResolver } from '@platform/notifications/contracts/notificationCopyPort'
 import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
@@ -45,6 +45,11 @@ export type NotificationCompositionPorts = Readonly<{
    * 明明能发、界面却说没有，这是最坏的一种谎：读者以为功能不存在。
    */
   getPushTargets?: () => Promise<readonly unknown[]>
+  /**
+   * 作业名解析（契约 v2.40）：按 `definitionId` 取作业定义上的 `JobTitle`，按当前语言选，
+   * **不另建文案表**。不传就一律解析不到——那会整条降级成兜底句，不会印出 `definitionId`。
+   */
+  jobTitle?: JobTitleResolver
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -73,7 +78,8 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     // 装配层注入产品文案表：运行时/契约不 import 产品，平台根只按 manifest 声明的表收（契约 §3.3）。
     copy: createNotificationCopyPort({
       platform: notificationCopy,
-      products: productNotificationCopyTables(ports.manifests)
+      products: productNotificationCopyTables(ports.manifests),
+      ...(ports.jobTitle === undefined ? {} : { jobTitle: ports.jobTitle })
     }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),

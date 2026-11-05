@@ -9,7 +9,7 @@ import {
   resolveNotificationCopyText,
   type NotificationCopyLanguage
 } from '../../i18n/notificationCopy'
-import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
+import type { NotificationCopyParam, NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type {
   NotificationAction,
   NotificationDiagnosticsSink,
@@ -60,7 +60,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     let unresolvedKey: string | undefined
     const resolve = (
       key: NotificationRecord['titleKey'] | undefined,
-      params: Readonly<Record<string, string>> | undefined
+      params: Readonly<Record<string, NotificationCopyParam>> | undefined
     ): string | null => {
       if (key === undefined) return ''
       const ref = record.productId === undefined
@@ -68,13 +68,15 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
         : { scope: 'product' as const, productId: record.productId, key, ...(params === undefined ? {} : { params }) }
       const resolved = input.copy?.resolve(ref, resolvedLanguage)
       if (typeof resolved === 'string' && resolved.length > 0) return resolved
+      // 没有端口、或端口解析不到时，退回平台闭集（产品键本来就不在闭集里，会落到兜底句）。
       const text = notificationCopyText(resolvedLanguage, key)
-      if (typeof text !== 'string' || text.length === 0) {
+      const literals = onlyLiteralParams(params)
+      if (typeof text !== 'string' || text.length === 0 || literals === null) {
         unresolvedKey = key
         return null
       }
       // 参数缺失时不许把 `{taskName}` 印到读者面前：回退兜底句。
-      const filled = resolveNotificationCopyText(resolvedLanguage, text, params ?? {})
+      const filled = resolveNotificationCopyText(resolvedLanguage, text, literals)
       if (/\{\w+\}/.test(filled)) {
         unresolvedKey = key
         return null
@@ -211,3 +213,19 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
 }
 
 export type NotificationDeliverySurface = ReturnType<typeof createNotificationDelivery>
+
+/**
+ * 平台闭集兜底只认字面量：参数里只要有一个 `{ ref }`，这条就必须走端口解析；
+ * 端口不在（或解析不到）就算解析不到——整条降级，绝不把没展开的引用印给读者。
+ */
+function onlyLiteralParams(
+  params: Readonly<Record<string, NotificationCopyParam>> | undefined
+): Record<string, string> | null {
+  if (params === undefined) return {}
+  const literals: Record<string, string> = {}
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value !== 'string') return null
+    literals[key] = value
+  }
+  return literals
+}

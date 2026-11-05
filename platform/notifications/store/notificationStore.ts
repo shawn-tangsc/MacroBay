@@ -1,4 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationCopyParam, NotificationCopyParamRef } from '../contracts/notificationCopyPort'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
@@ -187,15 +188,46 @@ function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
   return counters
 }
 
-/** 文案参数只收短字符串：这里进的是任务名之类的实体名，不是日志正文。 */
-function normalizeTextParams(value: unknown): Record<string, string> | undefined {
+/**
+ * 文案参数：字面串，或一个**不带参数**的引用（契约 v2.40）。
+ *
+ * 两条边界都在这里守：字面量必须短（进的是任务名这类实体名，不是日志正文）；引用只收三种
+ * scope 且**只带标识**——带 params 或再嵌一层就整条丢掉，不让「多一层」从数据里溜进解析器。
+ */
+function normalizeTextParams(value: unknown): Record<string, NotificationCopyParam> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const params: Record<string, string> = {}
+  const params: Record<string, NotificationCopyParam> = {}
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof raw !== 'string' || raw.length > 200) continue
-    params[key] = raw
+    if (typeof raw === 'string') {
+      if (raw.length <= 200) params[key] = raw
+      continue
+    }
+    const ref = normalizeParamRef(raw)
+    if (ref !== undefined) params[key] = { ref }
   }
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+/** 参数位置上的引用：只认 `{ ref: { scope, …标识 } }`，多一个字段都不要。 */
+function normalizeParamRef(value: unknown): NotificationCopyParamRef | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const holder = value as { ref?: unknown }
+  if (!holder.ref || typeof holder.ref !== 'object' || Array.isArray(holder.ref)) return undefined
+  const ref = holder.ref as Record<string, unknown>
+  const keys = Object.keys(ref)
+  const exactly = (...allowed: string[]): boolean =>
+    keys.length === allowed.length && allowed.every((field) => field in ref)
+  if (ref.scope === 'platform' && exactly('scope', 'key') && typeof ref.key === 'string') {
+    return { scope: 'platform', key: ref.key }
+  }
+  if (ref.scope === 'product' && exactly('scope', 'productId', 'key') &&
+    typeof ref.productId === 'string' && typeof ref.key === 'string') {
+    return { scope: 'product', productId: ref.productId, key: ref.key }
+  }
+  if (ref.scope === 'job-title' && exactly('scope', 'definitionId') && typeof ref.definitionId === 'string') {
+    return { scope: 'job-title', definitionId: ref.definitionId }
+  }
+  return undefined
 }
 
 export function createNotificationFromRequest(request: NotificationRequest, now = new Date().toISOString()): NotificationRecord {

@@ -1,4 +1,5 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationCopyParam } from './notificationCopyPort'
 import type { NotificationApprovedLevel, NotificationCategory } from './notificationEventCatalog'
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
@@ -61,12 +62,12 @@ export type NotificationRecord = {
   delivery: Partial<Record<'toast' | 'popup' | 'desktop' | 'push', NotificationDeliveryState>>
   /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
   titleKey: NotificationCopyKey
-  titleParams?: Record<string, string>
+  titleParams?: Record<string, NotificationCopyParam>
   bodyKey?: NotificationCopyKey
-  bodyParams?: Record<string, string>
+  bodyParams?: Record<string, NotificationCopyParam>
   /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
   reasonKey?: NotificationCopyKey
-  reasonParams?: Record<string, string>
+  reasonParams?: Record<string, NotificationCopyParam>
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
@@ -138,12 +139,12 @@ export type NotificationRequest = {
   eventTypeId?: string
   /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
   titleKey: NotificationCopyKey
-  titleParams?: Record<string, string>
+  titleParams?: Record<string, NotificationCopyParam>
   bodyKey?: NotificationCopyKey
-  bodyParams?: Record<string, string>
+  bodyParams?: Record<string, NotificationCopyParam>
   /** 「为什么推了」的键与参数；端口拿解析后的句子，不自己拼。 */
   reasonKey?: NotificationCopyKey
-  reasonParams?: Record<string, string>
+  reasonParams?: Record<string, NotificationCopyParam>
   severity: NotificationSeverity
   priority: NotificationPriority
   requestedChannels: NotificationChannel[]
@@ -320,10 +321,10 @@ export type NotificationSubmitRequest = {
   /** 读者眼前那一版；落库供 `redeliverPush` 核对。 */
   edition?: { editionId: string; locale: string }
   dedupeVars: NotificationDedupeVars
-  titleParams?: Readonly<Record<string, string>>
-  bodyParams?: Readonly<Record<string, string>>
+  titleParams?: Readonly<Record<string, NotificationCopyParam>>
+  bodyParams?: Readonly<Record<string, NotificationCopyParam>>
   bodyVariant?: string
-  reasonParams?: Readonly<Record<string, string>>
+  reasonParams?: Readonly<Record<string, NotificationCopyParam>>
   actions: readonly NotificationAction[]
   deeplink?: NotificationDeeplink
   correlationId?: string

@@ -140,6 +140,7 @@ import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, cr
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
 import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
+import { resolveJobTitle } from '../../jobs/runtime/jobTitle'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -917,7 +918,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     await replaceAgentState(localizedState)
   }
   // 通知运行时的端口：jobRuntime 已就绪，平台 handlerId 视为已登记。
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request) })
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   registerIpcHandlers(
     productManifests,
     productIpcRegistry,
