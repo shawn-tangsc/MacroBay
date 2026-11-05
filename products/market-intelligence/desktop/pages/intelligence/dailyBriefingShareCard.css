@@ -169,6 +169,15 @@
 .mi-brief-poster__macro > div > p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
 .mi-brief-poster__macro > div > small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
+/* What the section says when it has nothing to list: it was read, and here is why it is empty — or that
+   there genuinely was nothing. One row in the same rhythm as a macro row (so the block keeps its height
+   and the heading is not orphaned), in the section's secondary ink. No warning colour, no icon, no
+   retry, no left rule: "not read" is not "failed", and both cases look the same because they are the
+   same thing to the reader.
+   It sits beside the macro rows rather than inside their two-column grid, so it already spans the full
+   width; the `grid-column` is stated anyway because the requirement is written that way, and it costs
+   nothing when the parent is not a grid. */
+.mi-brief-poster__macro-empty { grid-column: 1 / -1; margin: 0; padding: 9px 0; border-top: 1px solid #c9bda3; color: #625f55; font-size: 12px; line-height: 1.5; }
 
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 

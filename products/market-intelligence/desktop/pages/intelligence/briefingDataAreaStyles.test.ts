@@ -16,6 +16,32 @@ import { describe, expect, it } from 'vitest'
  */
 const css = readFileSync(join(__dirname, 'dailyBriefingShareCard.css'), 'utf8')
 
+/**
+ * The line that says why a section has nothing in it. Two cases, one look: unreadable and genuinely
+ * empty are the same sentence shape to a reader, and neither is a failure — so no warning ink, no icon,
+ * no retry. It keeps a macro row's rhythm so the block does not collapse under its own heading.
+ */
+describe('the macro section says why it is empty', () => {
+  it('takes a row\'s rhythm in the section\'s secondary ink', () => {
+    const empty = rule('.mi-brief-poster__macro-empty')
+    expect(declaration(empty, 'padding')).toBe('9px 0')
+    expect(declaration(empty, 'border-top')).toBe('1px solid #c9bda3')
+    expect(declaration(empty, 'color')).toBe('#625f55')
+    expect(declaration(empty, 'font-size')).toBe('12px')
+    expect(declaration(empty, 'line-height')).toBe('1.5')
+    // Spans the block rather than the 112px date column: a line confined there reads as a missing date.
+    expect(declaration(empty, 'grid-column')).toBe('1 / -1')
+  })
+
+  it('does not look like a failure', () => {
+    const empty = rule('.mi-brief-poster__macro-empty')
+    expect(empty).not.toContain('#9f2d21')
+    expect(empty).not.toContain('#8a5a12')
+    expect(empty).not.toContain('background')
+    expect(empty).not.toContain('border-left')
+  })
+})
+
 /** The declarations of one top-level rule, by exact selector. */
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
