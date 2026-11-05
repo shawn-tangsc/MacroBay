@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { WorkspaceWindowChromePolicy } from '@platform/workspace/policies'
 import { platformText } from '../../i18n/platformText'
+import { placeholderRegistration } from './workspaceWindowSurfaces'
 import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
 import { resolveWindowPageChrome } from './workspaceWindowTopBar'
 
@@ -98,12 +99,18 @@ function installPageWindow(options: FakePageOptions): void {
   })
 }
 
-async function renderWindow(): Promise<HTMLDivElement> {
+async function renderWindow(
+  registrations?: WorkspaceWindowRootProps['registrations']
+): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   const current = root
-  await act(async () => { current.render(createElement(WorkspaceWindowRoot, {} as WorkspaceWindowRootProps)) })
+  await act(async () => {
+    current.render(
+      createElement(WorkspaceWindowRoot, (registrations === undefined ? {} : { registrations }) as WorkspaceWindowRootProps)
+    )
+  })
   await settle()
   return container
 }
@@ -120,9 +127,10 @@ describe('PLAT-39 ①：分离窗自绘顶栏承载本地化页面名，并设�
     const en = resolveWindowPageChrome({ pageId: BUILT_IN_PAGE_ID, menuKey: BUILT_IN_MENU_KEY, language: 'en-US' })
     expect(zh.title).toBe(zhTitle)
     expect(en.title).toBe(enTitle)
-    // 注册表缺项 ⇒ 退回 pageId（绝不空白）
+    // 注册表缺项 ⇒ 类型词「页面」（界面规范 1.6 §5.2），绝不把内部 id 当标题。
     const missing = resolveWindowPageChrome({ pageId: 'nobody.knows', menuKey: '/nobody/knows', language: 'zh-CN' as AppLanguage })
-    expect(missing.title).toBe('nobody.knows')
+    expect(missing.title).toBe(platformText['zh-CN'].workspace.pageFallback)
+    expect(missing.title).not.toContain('nobody.knows')
   })
 
   it('页窗：DOM 里有顶栏（携带页面名 + 回停靠动作），且 document.title = 页面名（原生标题的修法）', async () => {
@@ -137,13 +145,31 @@ describe('PLAT-39 ①：分离窗自绘顶栏承载本地化页面名，并设�
     expect(document.title).toBe(zhTitle)
   })
 
-  it('面板窗：同一份顶栏 + document.title = 面板名', async () => {
+  it('面板窗拿不到注册表 ⇒ 标题是类型词「面板」，不是 panelId，且顶栏与原生标题同一串', async () => {
     installPageWindow({ pageId: 'sample.panel-1', menuKey: '/sample/panel-1', role: 'panel', withMounts: true })
     const view = await renderWindow()
     const bar = view.querySelector<HTMLElement>('[data-window-topbar="true"]')
+    const title = bar?.querySelector('.workspace-window-topbar-title')?.textContent ?? ''
+
     expect(bar).not.toBeNull()
-    expect(bar?.querySelector('.workspace-window-topbar-title')?.textContent).toBe('sample.panel-1')
-    expect(document.title).toBe('sample.panel-1')
+    expect(title).toBe(platformText['zh-CN'].workspace.panelFallback)
+    // 内部标识任何情况下都不许当文案。
+    expect(title).not.toContain('sample.panel-1')
+    expect(title).not.toContain('panel-')
+    // 标题栏与原生标题（任务切换 / 窗口菜单 / Dock 都取 document.title）必须同一串。
+    expect(document.title).toBe(title)
+  })
+
+  it('面板窗拿到注册表 ⇒ 立刻换真名，同样是同一串', async () => {
+    installPageWindow({ pageId: 'sample.panel-1', menuKey: '/sample/panel-1', role: 'panel', withMounts: true })
+    const view = await renderWindow([
+      { ...placeholderRegistration('sample.panel-1'), title: { 'en-US': 'Inspector', 'zh-CN': '检查器' } }
+    ])
+    const bar = view.querySelector<HTMLElement>('[data-window-topbar="true"]')
+    const title = bar?.querySelector('.workspace-window-topbar-title')?.textContent ?? ''
+
+    expect(title).toBe('检查器')
+    expect(document.title).toBe(title)
   })
 
   it('顶栏高度只走命名策略（`--topbar-height`，与主窗同）；主窗角色不改标题', async () => {

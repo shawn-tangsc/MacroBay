@@ -131,7 +131,7 @@ describe('PLAT-37：分离面板窗根必须自己具名声明完整高度链', 
     root = reactRoot
     await act(async () => {
       reactRoot.render(createElement(WorkspaceDetachedPanelSurface, {
-        mounts: [MOUNT], views: views(), timeZone: 'UTC'
+        mounts: [MOUNT], views: views(), timeZone: 'UTC', language: 'en-US'
       }))
     })
 

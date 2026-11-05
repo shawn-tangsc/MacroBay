@@ -57,7 +57,8 @@ export function hostableMounts(context: WorkspaceHostContext, snapshot: Workspac
 export function placeholderRegistration(panelId: string): WorkspacePanelRegistration {
   return {
     panelId,
-    title: { 'en-US': panelId, 'zh-CN': panelId },
+    // 占位注册**不带名字**：名字拿不到时由调用方给类型词（「面板」），绝不把 panelId 当标题。
+    title: { 'en-US': '', 'zh-CN': '' },
     icon: 'panel-left',
     module: 'platform.shell.workspace',
     pageIds: [],
@@ -173,7 +174,8 @@ export function buildPanelViews(input: {
     const injected = input.renderPanelContent?.({ mount, registration, language: input.language }) ?? null
     views[mount.panelInstanceKey] = {
       registration,
-      title: registration.title[input.language],
+      // 注册信息缺该语言（或占位注册）⇒ 类型词；内部 id 不上屏。
+      title: registration.title[input.language]?.trim() || labels.panelFallback,
       content: injected ?? <p className="workspace-panel-placeholder">{labels.windowPanelPlaceholder}</p>,
       adapter: input.resolvePanelAdapter?.({
         panelInstanceKey: mount.panelInstanceKey, panelId: mount.panelId, registration, language: input.language
@@ -249,23 +251,24 @@ export function WorkspaceDetachedPanelSurface({ mounts, views, timeZone, languag
   mounts: readonly WorkspaceHostMount[]
   views: Readonly<Record<string, WorkspacePanelView>>
   timeZone: string
-  /** 当前语言（顶栏回停靠入口的 i18n 来源；缺省不渲染入口，绝不伪造文案）。 */
-  language?: AppLanguage
+  /** 当前语言：顶栏回停靠入口与「面板」类型词都从它取。 */
+  language: AppLanguage
   /** **PLAT-40**：受控回停靠端口（复用既有 `workspace.command` 的 `redockPanel`）；缺省 ⇒ 无入口。 */
   redock?: (input: { panelInstanceKey: string }) => Promise<WorkspacePanelResult>
 }): React.ReactElement {
   /**
    * PLAT-39 ①：面板窗与页窗**同一份自绘顶栏**（同高、同 token、同为拖拽区），承载面板名；
-   * 并设置原生标题（`document.title`）。面板名优先用注册信息（`view.title`），
-   * 生产环境分离窗拿不到注册表 ⇒ 退回 `panelId`（如实，不伪造文案）。
+   * 并设置原生标题（`document.title`）。面板名优先用注册信息（`view.title`）；
+   * 生产环境分离窗拿不到注册表 ⇒ 写类型词「面板」（界面规范 1.6 §5.2）。
+   * **绝不退回 `panelId`**：`panel-3` 对读者零信息量，还会让人以为界面坏了。
    */
-  const title = mounts.length === 1
-    ? (views[mounts[0].panelInstanceKey]?.title ?? mounts[0].panelId)
-    : (views[mounts[0]?.panelInstanceKey ?? '']?.title ?? mounts[0]?.panelId ?? '')
+  const labels = platformText[language].workspace
+  const singleTitle = mounts.length === 1 ? views[mounts[0].panelInstanceKey]?.title : undefined
+  const title = singleTitle?.trim() || labels.panelFallback
   useWindowDocumentTitle(title)
   /** PLAT-40：只有「恰好一个已提交面板」时才有唯一的回停靠目标（多面板/准备期一律不提供入口）。 */
   const redockPanelKey = mounts.length === 1 ? mounts[0]?.panelInstanceKey ?? null : null
-  const topBarActions = language !== undefined && redockPanelKey !== null
+  const topBarActions = redockPanelKey !== null
     ? <PanelWindowRedockControl language={language} panelInstanceKey={redockPanelKey} {...(redock === undefined ? {} : { redock })} />
     : null
   // PLAT-37：布局/配色全部由 `.workspace-panel-window` 承载（内联样式不得再声明高度，
@@ -282,7 +285,7 @@ export function WorkspaceDetachedPanelSurface({ mounts, views, timeZone, languag
             className="workspace-panel-surface"
             data-panel-key={mount.panelInstanceKey}
             data-dock={mount.mode}
-            aria-label={view?.title ?? mount.panelId}
+            aria-label={view?.title?.trim() || labels.panelFallback}
           >
             {view?.content ?? null}
           </section>

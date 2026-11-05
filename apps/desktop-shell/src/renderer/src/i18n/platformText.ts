@@ -75,6 +75,8 @@ export type PlatformText = {
     panelResetSize: string
     panelUnsupported: string
     panelFallback: string
+    /** 分离窗拿不到注册表时的类型词：页面。不带序号，标题必须稳定。 */
+    pageFallback: string
     panelResize: string
     panelInspector: string
     inspectorTitle: string
@@ -1598,7 +1600,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       agents: '智能体',
       panelActions: '面板操作', panelTabs: '面板标签', panelClose: '关闭面板', panelReopen: '重新打开面板', panelEmbedded: '嵌入页面',
       panelDockRight: '停靠右侧', panelDockBottom: '停靠底部', panelDetach: '分离窗口', panelResetSize: '恢复默认尺寸',
-      panelUnsupported: '当前空间不足', panelFallback: '面板', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
+      panelUnsupported: '当前空间不足', panelFallback: '面板', pageFallback: '页面', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
       inspectorDraft: '检查器草稿', inspectorSelection: '检查器选择', inspectorSelect: '选择检查项', inspectorSelected: '已选择',
       panelModeUnsupported: '此面板不支持该位置', panelCapabilityMissing: '当前版本不支持此能力', panelReturnToPage: '返回页面',
       panelShowPanel: '显示面板', panelCommandRejected: '操作被拒绝，面板状态未改变', panelCommandFailed: '操作失败，请重试',
@@ -2951,7 +2953,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       agents: 'Agents',
       panelActions: 'Panel actions', panelTabs: 'Panel tabs', panelClose: 'Close panel', panelReopen: 'Reopen panel', panelEmbedded: 'Embed',
       panelDockRight: 'Dock right', panelDockBottom: 'Dock bottom', panelDetach: 'Detach window', panelResetSize: 'Reset size',
-      panelUnsupported: 'Not available at this size', panelFallback: 'Panel', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',
+      panelUnsupported: 'Not available at this size', panelFallback: 'Panel', pageFallback: 'Page', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',
       inspectorDraft: 'Inspector draft', inspectorSelection: 'Inspector selection', inspectorSelect: 'Select item', inspectorSelected: 'Selected',
       panelModeUnsupported: 'This panel does not support that position', panelCapabilityMissing: 'Not supported in this version', panelReturnToPage: 'Back to page',
       panelShowPanel: 'Show panel', panelCommandRejected: 'The action was rejected; the panel state is unchanged', panelCommandFailed: 'The action failed. Try again',

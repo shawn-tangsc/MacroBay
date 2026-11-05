@@ -10,6 +10,7 @@ import {
   WorkspaceMainPanelProvider
 } from './workspaceMainPanelContext'
 import { usePageWindowTabSubscription, useWorkspaceSnapshotSubscription, type HostState } from './useWorkspaceWindowState'
+import { platformText } from '../../i18n/platformText'
 import { WorkspacePageWindowSurface } from './WorkspacePageWindowSurface'
 import { DetachedWindowThemeShell, useDetachedWindowAppearance } from './workspaceWindowTheme'
 import type { WorkspaceContentAdapter } from './workspaceHostAdapter'
@@ -446,9 +447,9 @@ export function WorkspaceWindowRoot(props: WorkspaceWindowRootProps): React.Reac
     const language = state.context.preferences.language
     const registration = props.registrations?.find((item) => item.panelId === state.transfer.panelId)
       ?? placeholderRegistration(state.transfer.panelId)
-    // P1-06h（N2）：正文用受控上下文语言；注册信息缺该语言条目时用 AppShell 传来的当前语言兜底，
-    // 再退到 panelId —— 准备期界面绝不渲染 undefined 标题。
-    const title = registration.title[language] ?? registration.title[fallbackLanguage] ?? registration.panelId
+    // 缺该语言 → 当前语言 → 类型词「面板」（规范 1.6 §5.2）；绝不用 panelId 垫背。
+    const labels = platformText[language].workspace
+    const title = registration.title[language]?.trim() || registration.title[fallbackLanguage]?.trim() || labels.panelFallback
     return themeShell(language, <WorkspacePreparingShell language={language} title={title} transfer={state.transfer} />)
   }
 

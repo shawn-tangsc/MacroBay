@@ -303,11 +303,13 @@ describe('WorkspaceWindowRoot 角色选择', () => {
     expect(host.textContent).toContain(labels.windowPanelPlaceholder)
   })
 
-  it('role:panel 缺注册信息时退回安全占位注册（标题取受控 context 的 panelId）', async () => {
+  it('role:panel 缺注册信息时退回安全占位注册（标题是类型词，不是 panelId）', async () => {
     const fake = createFakeBridge({ contextOutcome: hostContext('panel') })
     const host = await renderRoot(fake.bridge)
     const frame = host.querySelector<HTMLElement>('section[data-panel-key="' + PANEL_KEY + '"]')
-    expect(frame?.getAttribute('aria-label')).toBe(PANEL_ID)
+    // 内部标识不上屏：拿不到注册信息时写「面板」（规范 1.6 §5.2）。
+    expect(frame?.getAttribute('aria-label')).toBe(labels.panelFallback)
+    expect(frame?.getAttribute('aria-label')).not.toContain(PANEL_ID)
     expect(host.textContent).toContain(labels.windowPanelPlaceholder)
   })
 

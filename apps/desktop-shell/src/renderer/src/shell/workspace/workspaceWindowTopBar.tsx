@@ -4,6 +4,7 @@ import { FileText, type LucideIcon } from 'lucide-react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { WorkspaceWindowChromePolicy } from '@platform/workspace/policies'
 import { productMenuEntries } from '@products/generated/shellRegistry'
+import { platformText } from '../../i18n/platformText'
 import { mergeShellNavItems } from '../navigation/mergeShellNavigation'
 import { WindowControls } from '../window/WindowControls'
 
@@ -33,8 +34,10 @@ export function resolveWindowPageChrome(input: {
 }): { title: string; icon: LucideIcon } {
   const item = mergeShellNavItems(input.language, productMenuEntries)
     .find((entry) => entry.pageId === input.pageId || entry.menuKey === input.menuKey)
-  // 注册表缺项（产品被卸载等）⇒ 退回 pageId：绝不显示空白标题
-  return { title: item?.label ?? input.pageId, icon: item?.icon ?? FileText }
+  // 注册表缺项（产品被卸载等）⇒ 类型词「页面」（界面规范 1.6 §5.2）。
+  // **绝不退回 pageId**：`page-2` 对读者零信息量；「未知/未命名」也不写——那是在说我们不知道。
+  const fallbackTitle = platformText[input.language].workspace.pageFallback
+  return { title: item?.label ?? fallbackTitle, icon: item?.icon ?? FileText }
 }
 
 /**
