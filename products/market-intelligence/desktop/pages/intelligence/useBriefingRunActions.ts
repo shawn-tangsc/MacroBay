@@ -75,19 +75,28 @@ export function useBriefingRunActions(input: Readonly<{
     return undefined
   })
 
+  /**
+   * 一次运行的**起点**：每个入口都走这里，否则"再加一个入口就再坏一次"。
+   * 挂行 + 立 generating 标志 + 清上一次失败，三样在同一处发生。
+   */
+  const begin = (options: Readonly<{ locale?: 'zh-CN' | 'en-US'; periodId?: string; generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }> }> = {}): void => {
+    input.setRegenerateFailure(null)
+    input.setRegenerating(true)
+    if (input.todayDate === undefined) return
+    input.setEditions((current) => withGeneratingRow(current, {
+      date: input.todayDate!,
+      periodId: options.periodId ?? 'default',
+      locale: options.locale ?? input.locale,
+      ...(options.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
+    }))
+  }
+
   return {
     async regenerate(options) {
-      input.setRegenerating(true)
-      input.setRegenerateFailure(null)
+      begin(options)
       // 先挂一行"生成中"再开始跑：今天还没有任何版次/运行记录时，列表里连挂进度的那一行都没有，
       // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
       // 返回的结果替换；失败时下一轮重读会把这一行去掉。
-      if (input.todayDate !== undefined) input.setEditions((current) => withGeneratingRow(current, {
-        date: input.todayDate!,
-        periodId: options?.periodId ?? 'default',
-        locale: options?.locale ?? input.locale,
-        ...(options?.generation?.asOf === undefined ? {} : { periodTime: options.generation.asOf })
-      }))
       const document = await run(options)
       // 跑失败/超时也要把这行收回：它是"正在跑"的临时事实，不是一条版次。留着它会变成一行永远
       // "生成中"的幽灵（进程崩过的那次尤其明显）。判据只用"占位行 + 语言正在生成"这两个特征。
@@ -101,8 +110,8 @@ export function useBriefingRunActions(input: Readonly<{
       input.setRegenerating(false)
     },
     generateNow() {
-      input.setRegenerateFailure(null)
-      input.setRegenerating(true)
+      // 「生成中文版」这类入口也走同一条起点：以前它绕过了挂行，左侧就没有"生成中"那一行。
+      begin()
       void run()
         .then((document) => {
           if (document) {
