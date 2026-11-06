@@ -92,8 +92,8 @@ export const dailyBriefingText = {
       date: '日期', dateHintLabel: '解释：日期', dateHint: '这一版归档到哪一天。默认是你现在在的那一天；过去的任意一天都可以补，未来不行。',
       generateTarget: '将生成到 {date} {time}（{zone}）', generateTargetNow: '将生成到 {date}，截止时刻取你按下那一刻（{zone}）',
       windowHours: '统计窗口', language: '语言', windowValue: '{hours} 小时',
-      repeatable: '同一组合可以重复生成：选同样的时刻、窗口和语言再点一次，会再生成新的一期。',
-      cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一窗口、同一语言已经生成过一版。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
+      repeatable: '同一时刻、同一语言只保留一版：再点一次会先问你要不要替换那一版。',
+      cutoffInFuture: '截止时刻晚于现在：那一份还没有发生，先换一个已经过去的时刻。', alreadyRunning: '已经有一版在生成，等它跑完再试。', duplicateTitle: '这一版已经有了', duplicateBody: '同一时刻、同一语言已经生成过一版（窗口不同也算同一版）。替换会覆盖它，旧内容不保留。', duplicateReplace: '替换',
       cutoffUnreadable: '这个时刻换算不出来，换一个再试。',
       cancel: '取消', run: '生成', running: '生成中…'
     },
@@ -395,8 +395,8 @@ export const dailyBriefingText = {
       date: 'Date', dateHintLabel: 'Explain: date', dateHint: 'Which day this edition is filed under. Defaults to the day you are on; any past day can be filled in, but not a future one.',
       generateTarget: 'Will generate into {date} {time} ({zone})', generateTargetNow: 'Will generate into {date}, cut off at the moment you press ({zone})',
       windowHours: 'Window', language: 'Language', windowValue: '{hours} hours',
-      repeatable: 'The same combination can be generated again: choose the same time, window and language and press again, and it creates another issue.',
-      cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'The same cutoff, window and language were generated already. Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',
+      repeatable: 'One edition per cutoff and language: pressing again asks whether to replace that edition.',
+      cutoffInFuture: 'That cutoff is still in the future — nothing has happened there yet. Pick a time that has passed.', alreadyRunning: 'Another run is already generating; wait for it to finish.', duplicateTitle: 'This edition already exists', duplicateBody: 'An edition already exists at that cutoff in that language (a different window still counts as the same). Replacing overwrites it; the old text is not kept.', duplicateReplace: 'Replace',
       cutoffUnreadable: 'That time could not be resolved here; pick another one.',
       cancel: 'Cancel', run: 'Generate', running: 'Generating…'
     },

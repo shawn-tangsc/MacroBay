@@ -42,7 +42,8 @@ import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { readBriefingHistory } from './dailyBriefingHistory'
-import { createDailyBriefingRegenerate } from './dailyBriefingRegenerate'
+import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
+import { briefingEditionSlotPeriodId, type BriefingEditionSlotStore } from './dailyBriefingEditionSlot'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
@@ -128,9 +129,10 @@ export type DailyBriefingStorageSurface = Readonly<{
   retryUpgrade: () => Promise<DailyBriefingStorageState>
 }>
 
-export type DailyBriefingStore = Readonly<{
+export type DailyBriefingStore = BriefingEditionSlotStore & Readonly<{
   /** `periodId` defaults to the single issue `default`, so existing callers read their row. */
   get: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<DailyBriefingStoredEdition | undefined>
+  /** 哪个期已经占住 (日期, 截止, 语言) 这个槽（见 `briefingEditionSlotPeriodId`）。 */
   put: (edition: DailyBriefingStoredEdition) => Promise<void>
   list: (from: string, to: string, locale: DailyBriefingLocale) => Promise<readonly DailyBriefingStoredEdition[]>
   prune: (beforeDate: string) => Promise<void>
@@ -284,20 +286,7 @@ export type DailyBriefingService = Readonly<{
    * `generation.asOf` 就是读者在弹框里选定的一次性截止时刻——**只影响这一次运行**，不写回任何期
    * 配置（写回去就会污染列表，那正是"每次手动生成都多一条排期"的来源）。
    */
-  regenerate: (input: Readonly<{
-    locale: DailyBriefingLocale
-    timeZone: string
-    periodId?: string
-    generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
-    /**
-     * 重跑屏幕上那一版：这一版自己的截止与窗口。
-     *
-     * 与 `generation` 分开是有意的：`generation` 是"读者在弹框里选的一次性截止"，而 `rerun` 是
-     * "这一版当初就是按这个截止和窗口生成的"——它必须盖过任何默认期配置（用户 2026-11-06：
-     * 07:00 只是初始化那第 1 期的默认值，不许在别处当默认）。
-     */
-    rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
-  }>) => Promise<DailyBriefingTodayResult>
+  regenerate: (input: DailyBriefingRegenerateInput) => Promise<DailyBriefingTodayResult>
   publishToPhone: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
@@ -441,7 +430,7 @@ export function createDailyBriefingService(deps: Readonly<{
     ...(deps.readPeriods ? { readPeriods: deps.readPeriods } : {})
   })
 
-  async function resolveToday(input: Readonly<{
+  async function resolveToday(rawInput: Readonly<{
     asOf: string
     date: string
     periodId: string
@@ -451,6 +440,9 @@ export function createDailyBriefingService(deps: Readonly<{
     periodKind?: DailyBriefingPeriodKind
     runTrigger?: DailyBriefingRunTrigger
   }>, force: boolean): Promise<DailyBriefingTodayResult> {
+    // 一个 (日期, 截止, 语言) 只允许一版：槽被别的期占着就写进它，不另插一行。
+    const slotPeriodId = await briefingEditionSlotPeriodId(deps.store, rawInput)
+    const input = slotPeriodId === rawInput.periodId ? rawInput : Object.freeze({ ...rawInput, periodId: slotPeriodId })
     const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
     // 读数的那一刻（运行时刻）≠ 统计截止（`input.asOf`）：窗口按截止，读的是此刻最新的库；取一次时钟整跑共用。

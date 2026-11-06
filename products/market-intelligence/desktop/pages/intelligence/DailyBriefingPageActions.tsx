@@ -96,6 +96,9 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
         if (result.outcome === 'started') setManualOpen(false)
       }}
       onReplace={() => { manualDuplicate?.replace(); setManualOpen(false); setManualDuplicate(undefined) }}
+      /* 撞上已有那一版时，弹框要就地改成"替换"这一问。状态立在这里、却忘了传下去，于是
+         "问要不要替换"这一步从来没真的出现过：读者按了生成，什么也没发生（2026-11-06 查出的死路径）。 */
+      {...(manualDuplicate === undefined ? {} : { duplicate: manualDuplicate })}
       {...(manualProblem === undefined ? {} : { problem: manualProblem })}
       onClose={() => { setManualOpen(false); setManualProblem(undefined); setManualDuplicate(undefined) }}
     />

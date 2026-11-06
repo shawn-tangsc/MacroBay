@@ -231,6 +231,18 @@ async function confirmManualRun(): Promise<void> {
 }
 
 
+/**
+ * 手动生成一次：先挑一个**不占用已有版次**的截止时刻，再按生成。
+ *
+ * 现在的口径是「同一 (日期, 截止, 语言) 只有一版」（用户 2026-11-06），而这套用例把系统时钟钉在
+ * 今天那一版自己的截止时刻上——不挑时刻就等于"在同一刻再生成一份"，那正好该弹替换确认（有它自己
+ * 的用例钉着）。这些用例验的是"跑起来以后发生什么"，所以挑 08:00。
+ */
+async function startManualRunAt0800(): Promise<void> {
+  await pickSelectOption(text.manualRunDialog.cutoff, '08:00')
+  await confirmManualRun()
+}
+
 /** 确认框里的那颗键：工具栏也有一颗同名的「删除这一版」，所以必须在弹窗里找。 */
 function dialogButton(label: string): HTMLButtonElement {
   const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
@@ -863,7 +875,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     const run = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { run.click(); await Promise.resolve() })
-    await confirmManualRun()
+    await startManualRunAt0800()
     // 期号必须一路传到服务：没有它，这一跑会落到 `default` 那一期上，把别的期覆盖掉。
     expect(client.regenerate).toHaveBeenCalledWith(expect.objectContaining({
       locale: 'zh-CN',
@@ -888,7 +900,7 @@ describe('daily briefing page', () => {
     const dom = await renderPage(client)
     const button = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     await act(async () => { button.click(); await Promise.resolve() })
-    await confirmManualRun()
+    await startManualRunAt0800()
     const running = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!
     // 手动发起的那一次，按钮说的是"在写哪一天哪一期"（日期 + 时刻 + 语言），不再沿用「正在重新生成…」。
     expect(running.textContent).toMatch(/^正在生成 \d{2}\/\d{2} \d{2}:\d{2} 中文$/)
@@ -1832,7 +1844,7 @@ it('stays on the edition the run just wrote when it landed on another day', asyn
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
     await Promise.resolve()
   })
-  await confirmManualRun()
+  await startManualRunAt0800()
   for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
   // 正文是刚生成的那一版，不是"这一天还没有简报"。
   const paper = dom.querySelector('.mi-daily-briefing-page__paper')
@@ -1854,7 +1866,7 @@ it('jumps to the issue it started, then follows the reader when they switch away
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
     await Promise.resolve()
   })
-  await confirmManualRun()
+  await startManualRunAt0800()
 
   // 1. 选中项就是本次运行：期号与日期逐项相等。
   const started = (client.regenerate.mock.calls as unknown as [[{ periodId: string }]])[0]![0]
@@ -1929,6 +1941,35 @@ it('sends the moment and language the reader picked in the dialog, all the way t
   // 读者时区是 Asia/Shanghai：他选的 08:00 就是这一刻，不是排期里的 07:00。
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
   expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
+})
+
+it('asks before replacing an edition that already holds the same cutoff and language, even at another window', async () => {
+  // 用户 2026-11-06：同一时刻同一语言生成了两份。口径定成「同一 (日期, 截止, 语言) 只有一版，
+  // 窗口不同也算重复」，所以查重键里不许再比窗口，也不许只比手动期。
+  const today = '2026-10-30'
+  const listed = [{
+    date: today, periodId: 'period_a', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const,
+    state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`,
+    periodTime: '2026-10-30T00:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 24, readingsAvailable: 4
+  }]
+  const regenerate = vi.fn(async () => new Promise(() => undefined))
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } })),
+    regenerate
+  })
+  const dom = await renderPage(client)
+  await act(async () => {
+    dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
+    await Promise.resolve()
+  })
+  // 08:00 Asia/Shanghai = 00:00Z，与已有那一版同一个截止；窗口故意选 12 小时（已有那版是 24）。
+  await pickSelectOption(text.manualRunDialog.cutoff, '08:00')
+  await pickSelectOption(text.manualRunDialog.windowHours, text.manualRunDialog.windowValue.replace('{hours}', '12'))
+  await confirmManualRun()
+
+  expect(regenerate).not.toHaveBeenCalled()
+  // 弹框就地改口问"替换"：这一问以前根本没被传进弹框，读者按了生成什么也不会发生。
+  expect(document.querySelector('[data-manual-duplicate="true"]')).not.toBeNull()
 })
 
 it('writes into the day the reader is on, and says that day before the press', async () => {
@@ -2084,7 +2125,7 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
     dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.click()
     await Promise.resolve()
   })
-  await confirmManualRun()
+  await startManualRunAt0800()
 
   // 已定口径：正文留着，失败只说成一条标记——开头「重新生成失败 · 原因」，末尾写明下面是上一次的版本。
   // 以前挂的是整块失败面板 + 一颗正文里的重试，读者一屏两态、还多一个入口改同一件事。
@@ -2315,7 +2356,7 @@ it('never starts a run just because the page was opened', async () => {
     await Promise.resolve()
   })
   expect(client.regenerate).not.toHaveBeenCalled()
-  await confirmManualRun()
+  await startManualRunAt0800()
   expect(client.regenerate).toHaveBeenCalledTimes(1)
 })
 

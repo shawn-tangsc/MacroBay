@@ -264,6 +264,13 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       if (!isDailyBriefingDocumentWithinBudget(edition.document)) throw new Error('daily-briefing-document-too-large')
       statements.put(edition, edition.periodId ?? DEFAULT_PERIOD_ID)
     },
+    async editionAtCutoff(date, locale, cutoff) {
+      // 旧表没有 `period_id` 列：那一代一天一语言只有一版，没有可比的期号。
+      if (!tableColumns(db, 'daily_briefings').includes('period_id')) return undefined
+      const row = db.prepare('select period_id from daily_briefings where edition_date = ? and locale = ? and window_end = ? limit 1')
+        .get(date, locale, cutoff) as { period_id?: unknown } | undefined
+      return typeof row?.period_id === 'string' && row.period_id.length > 0 ? Object.freeze({ periodId: row.period_id }) : undefined
+    },
     async list(from, to, locale) {
       return Object.freeze(statements.list(from, to, locale).flatMap((row) => {
         const parsed = parseRow(row)

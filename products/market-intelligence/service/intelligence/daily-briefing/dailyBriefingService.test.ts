@@ -875,6 +875,31 @@ describe('period run', () => {
     expect(`${result.document.edition.periodKind}|${result.document.edition.runTrigger}`).toBe('manual|manual')
   })
 
+  it('keeps one edition when a second period claims the same (date, cutoff, language)', async () => {
+    // 用户 2026-11-06：「同一个时间，同一个窗口同一个语言生成了两份简报」。槽的身份是
+    // (日期, 截止时刻, 语言)：第二个期号来抢同一个槽时，写进已有那一版，不再插一行。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+
+    const first = await service.regenerate({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_a',
+      rerun: { periodTime: '2026-10-29T23:00:00.000Z', windowHours: 24 }
+    })
+    const second = await service.regenerate({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_b',
+      rerun: { periodTime: '2026-10-29T23:00:00.000Z', windowHours: 12 }
+    })
+
+    expect(first.state).toBe('available')
+    expect(second.state).toBe('available')
+    // 库里只有一版，而且就是第一个期号占着的那个槽——后来的那次写进了它。
+    const listed = await store.list('2026-10-29', '2026-10-31', 'zh-CN')
+    expect(listed).toHaveLength(1)
+    expect(listed[0]?.periodId).toBe('period_a')
+    expect(await store.get('2026-10-30', 'zh-CN', 'period_b')).toBeUndefined()
+    if (second.state === 'available') expect(second.document.edition.periodId).toBe('period_a')
+  })
+
   it('records a failed run when the source cannot be read', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     const failing: DailyBriefingSource = {

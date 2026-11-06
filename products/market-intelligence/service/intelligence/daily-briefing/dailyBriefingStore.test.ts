@@ -42,6 +42,29 @@ const edition = (date: string, text?: string) => ({
 })
 
 describe('daily briefing store', () => {
+  // 用户 2026-11-06：同一个时间、同一个窗口、同一个语言生成了两份简报。查这个槽的眼睛在这里：
+  // 键是 (日期, 截止时刻, 语言)，窗口不进键，期号也不进键（期号是那一版的属性，不是它的身份）。
+  it('finds the edition that occupies a (date, cutoff, language) slot, whoever its period is', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const cutoff = '2026-11-05T00:00:00.000Z'
+    await store.put({
+      ...edition('2026-11-06', '07:00 那版'),
+      periodId: 'period_a',
+      windowEnd: cutoff,
+      document: {
+        ...document('2026-11-06', '07:00 那版'),
+        edition: { ...document('2026-11-06', '07:00 那版').edition, periodId: 'period_a', windowEnd: cutoff, windowHours: 24 }
+      }
+    })
+
+    // 同一刻同一语言：即便窗口写的是 12h，这个槽也已经被占。
+    expect(await store.editionAtCutoff?.('2026-11-06', 'zh-CN', cutoff)).toEqual({ periodId: 'period_a' })
+    // 另一刻、另一语言都是空的。
+    expect(await store.editionAtCutoff?.('2026-11-06', 'zh-CN', '2026-11-05T01:00:00.000Z')).toBeUndefined()
+    expect(await store.editionAtCutoff?.('2026-11-06', 'en-US', cutoff)).toBeUndefined()
+    expect(await store.editionAtCutoff?.('2026-11-05', 'zh-CN', cutoff)).toBeUndefined()
+  })
+
   // 手动那一版必须落在自己的期号下，**而且不许动 default 那一期**。
   // 用户报的「选 8 点变成重跑 7 点」里，`periodId` 一路丢到 default，`put` 就把 07:00 那版覆盖了。
   it('files a manual edition under its own period and leaves the default edition untouched', async () => {

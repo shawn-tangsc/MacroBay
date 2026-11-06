@@ -280,13 +280,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     // 手动那一版走**唯一入口**：意图是 `manual`，期号/语言/截止由这一份 draft 给出。
     regenerate: (input) => runBriefing({ ...input, trigger: 'manual', date: input.date }),
     running: generating,
-    // A7.10 的查重键：同一 (日期, 截止时刻, 窗口, 语言) 已经有一版时，先问替换——再插一行就是两份
-    // 说同一件事的版次。手动期才有这个键，排期期按它自己的期号走。
-    findDuplicate: ({ asOf, windowHours, language }) => {
-      const existing = editions.find((edition) => edition.periodKind === 'manual'
-        && edition.periodTime === asOf
-        && edition.windowHours === windowHours
-        && edition.locale === language)
+    // A7.10 的查重键（用户 2026-11-06 定，统一口径、不分手动与排期）：**(日期, 截止时刻, 语言)**。
+    // 窗口不进这个键——同一时刻同一语言只允许一版，窗口不同也算重复；再插一行就是两份说同一件事。
+    // 期号也不进键：期号是那一版的属性，不是它的身份，以前按 (期号, 窗口) 比，于是同一刻插出两条。
+    findDuplicate: ({ asOf, language }) => {
+      const existing = editions.find((edition) =>
+        (edition.periodTime ?? edition.windowEnd) === asOf && edition.locale === language)
       return existing === undefined ? undefined : { periodId: existing.periodId }
     }
   })
