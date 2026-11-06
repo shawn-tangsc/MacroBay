@@ -444,6 +444,12 @@ export type AnalysisValidationMode =
   | 'not-applicable:truncated'
   | 'not-applicable:empty-set'
 
+/**
+ * How a claimed transport retry ended. `cancelled` is a real outcome, not a missing one: the claim
+ * already spent the day's chance, and leaving the result empty would make the quota look free.
+ */
+export type AnalysisRetryResult = 'succeeded' | 'failed' | 'cancelled'
+
 export type AnalysisRun = Readonly<{
   id: string
   schemaVersion: 1
@@ -470,6 +476,14 @@ export type AnalysisRun = Readonly<{
   validationMode: AnalysisValidationMode | null
   /** The run that opened the failure episode this run belongs to; null while it has not failed. */
   notificationEpisodeRunId?: string | null
+  /**
+   * When this run's one transport retry was **claimed**, in UTC — written before the second call so a
+   * crash in between still spends the day's one chance. Absent for runs that never retried, including
+   * every run written before the column existed.
+   */
+  retryUsedAt?: string | null
+  /** How the retry ended; filled after it finishes. Absent while unclaimed or still in flight. */
+  retryResult?: AnalysisRetryResult | null
   queuedAt: string
   startedAt: string | null
   completedAt: string | null
