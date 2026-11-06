@@ -91,12 +91,24 @@ describe('macro event landed notifier', () => {
     expect(selection.landings).toEqual([landing()])
     // The two that were dropped for a reason worth counting are counted: "signed filter kept" and
     // "we read nothing" must not look the same in a log.
-    expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1 })
+    expect(selection.suppressed).toEqual({ notComparable: 1, belowThreshold: 1, missingTitle: 0 })
     // A release this process already announced is not announced again, even though the key would merge.
     expect(selectLandedReleases([event()], asOf, new Set(['US.CPI.RELEASE.2026-M08:2026-09-10T10:00:00.000Z'])).landings).toEqual([])
     // `eventKey` is a per-batch HMAC: two collections of one release carry different ones, so identity
     // has to be `observationKey` or every refresh would read as a new event.
     expect(selectLandedReleases([event({ eventKey: 'another-hmac' })], asOf).landings).toEqual([landing()])
+  })
+
+  it('refuses to announce a release with no indicator name, and counts it', () => {
+    // 空标题会拼出「美国  高于预期」：双空格、没有指标，比不发更糟。纯空格走同一条路。
+    const empty = selectLandedReleases([event({ title: '' })], asOf)
+    expect(empty.landings).toHaveLength(0)
+    expect(empty.suppressed).toEqual({ notComparable: 0, belowThreshold: 0, missingTitle: 1 })
+    const blank = selectLandedReleases([event({ title: '   ' })], asOf)
+    expect(blank.landings).toHaveLength(0)
+    expect(blank.suppressed.missingTitle).toBe(1)
+    // 构建层再挡一次：没有指标名就没有请求。
+    expect(buildMacroEventLandedRequest(landing({ title: '' }))).toBeUndefined()
   })
 
   it('submits once, remembers what it said, and leaves a readable trace when a submit fails', async () => {

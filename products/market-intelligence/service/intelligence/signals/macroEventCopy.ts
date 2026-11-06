@@ -60,6 +60,9 @@ function knownIndicator(key: string | undefined): key is keyof typeof registered
  * 本来就与语言无关，冻住它不算「冻住语言」。
  */
 export function macroEventTitleParams(input: MacroEventLandingCopyInput): Readonly<Record<string, NotificationCopyParam>> {
+  // 国家这一格**两种形态**，是有意的：表内的国家传引用（要翻成「美国」），
+  // 表外的传**字面量代码**本身。代码就是要显示的内容，不是要翻的词——别「统一」成引用：
+  // 那样表外国家会解析不到，整条通知降级成兜底句，比显示 `JP` 更糟。
   const country = TRANSLATED_COUNTRY_CODES.includes(input.countryCode)
     ? copyRef(`country.${input.countryCode}`)
     : input.countryCode

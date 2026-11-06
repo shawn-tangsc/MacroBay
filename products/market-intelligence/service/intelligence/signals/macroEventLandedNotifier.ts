@@ -80,7 +80,7 @@ export type LandingSelection = Readonly<{
    * 分两种：算不出偏差（缺预期、单位对不上），以及没过阈值（例行发布）。两种都不报，但**必须
    * 能被数出来**——否则「筛得对」和「读漏了」在日志里长得一模一样。
    */
-  suppressed: Readonly<{ notComparable: number; belowThreshold: number }>
+  suppressed: Readonly<{ notComparable: number; belowThreshold: number; missingTitle: number }>
 }>
 
 /**
@@ -96,11 +96,14 @@ export function selectLandedReleases(
   seen?: ReadonlySet<string>
 ): LandingSelection {
   const asOfMs = Date.parse(asOf)
-  if (!Number.isFinite(asOfMs)) return Object.freeze({ landings: [], suppressed: { notComparable: 0, belowThreshold: 0 } })
+  if (!Number.isFinite(asOfMs)) {
+    return Object.freeze({ landings: [], suppressed: { notComparable: 0, belowThreshold: 0, missingTitle: 0 } })
+  }
   const policy = providerReleaseSurprisePolicy
   const landings: MacroEventLanding[] = []
   let notComparable = 0
   let belowThreshold = 0
+  let missingTitle = 0
   for (const event of events) {
     if (event.providerActual === null) continue
     const releaseAt = typeof event.scheduledAt === 'string' ? event.scheduledAt : undefined
@@ -111,6 +114,9 @@ export function selectLandedReleases(
     if (event.countryCode !== policy.qualifyingCountryCode) continue
     if (event.importance !== policy.qualifyingImportance) continue
     if (event.eventType !== policy.qualifyingEventFamily) continue
+    // 指标名为空 → 标题会变成「美国  高于预期」：双空格、没有指标，比不发更糟。
+    // 与「算不出偏差不报」同性质，所以算进 suppressed，而不是静默跳过。
+    if (event.title.trim() === '') { missingTitle += 1; continue }
     const assessment = assessMarketCalendarSurprise(event.providerActual, event.consensus)
     if (!exceedsSurpriseTrigger(assessment)) {
       if (assessment.absoluteDifference === null) notComparable += 1
@@ -139,13 +145,18 @@ export function selectLandedReleases(
     // 一批补采可能把窗口内好几条都读回来；上限让一次刷新不至于变成一串要人逐条划掉的推送。
     if (landings.length >= macroEventLandedPolicy.maximumPerRefresh) break
   }
-  return Object.freeze({ landings: Object.freeze(landings), suppressed: Object.freeze({ notComparable, belowThreshold }) })
+  return Object.freeze({
+    landings: Object.freeze(landings),
+    suppressed: Object.freeze({ notComparable, belowThreshold, missingTitle })
+  })
 }
 
 /** 一条落地 → 一次提交。只填参数，不填句子：标题与正文由平台的文案键按事件 id 解析。 */
 export function buildMacroEventLandedRequest(landing: MacroEventLanding): NotificationSubmitRequest | undefined {
   if (typeof landing.eventId !== 'string' || landing.eventId === '') return undefined
   if (!Number.isFinite(Date.parse(landing.releaseAt))) return undefined
+  // 没有指标名就没有标题可读：整条不发（选择那一步已经数过，这里再挡一次）。
+  if (landing.title.trim() === '') return undefined
   return {
     eventTypeId: EVENT_IDS.macroEventLanded,
     producerId: MACRO_EVENT_LANDED_PRODUCER_ID,
