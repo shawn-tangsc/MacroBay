@@ -135,6 +135,16 @@ type PeriodRows = Readonly<{
   locales?: readonly DailyBriefingLocale[]
   /** 只留下过失败 attempt、没有运行记录：原因照样是"这次失败"。 */
   attemptFailed?: boolean
+  /**
+   * 没有版次的那一行，身份来自**它自己那次尝试**：什么时候发起的、怎么触发、覆盖多长。
+   * 用户 2026-11-06：列表每一行要自己说清身份，不许拿默认期的 07:00 或当前设置顶上。
+   */
+  attemptIdentity?: Readonly<{
+    startedAt: string
+    trigger?: string
+    windowHours?: number
+    locale: DailyBriefingLocale
+  }>
 }>
 
 /**
@@ -156,7 +166,15 @@ export async function briefingHistorySummaries(input: Readonly<{
   /** Runs of the window; a run with no edition row is the only trace some periods leave. */
   runs?: readonly DailyBriefingPeriodRun[]
   /** Attempt rows of the window: a run that has not written its journal yet is still a row. */
-  attemptRuns?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; state: 'running' | 'succeeded' | 'failed' }>[]
+  attemptRuns?: readonly Readonly<{
+    date: string
+    periodId: string
+    locale: DailyBriefingLocale
+    state: 'running' | 'succeeded' | 'failed'
+    startedAt: string
+    trigger?: string
+    windowHours?: number
+  }>[]
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
@@ -210,6 +228,11 @@ export async function briefingHistorySummaries(input: Readonly<{
       known.add(attempt.periodId)
       periods.push({
         date, periodId: attempt.periodId, rows: new Map(), locales: [attempt.locale],
+        attemptIdentity: {
+          startedAt: attempt.startedAt, locale: attempt.locale,
+          ...(attempt.trigger === undefined ? {} : { trigger: attempt.trigger }),
+          ...(attempt.windowHours === undefined ? {} : { windowHours: attempt.windowHours })
+        },
         ...(attempt.state === 'failed' ? { attemptFailed: true } : {})
       })
     }
@@ -282,6 +305,14 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   const shown = rows.get(input.primary)
   const availableLocales = [...rows.keys()]
   const identity = identityOf(shown ?? [...rows.values()][0])
+  const attemptIdentity: Partial<DailyBriefingEditionSummary> = shown || period.attemptIdentity === undefined ? {} : {
+    // 没有版次的那一行：时刻 = 这次尝试的**发起时刻**，来源与窗口取它自己写下的那两个字段。
+    periodTime: period.attemptIdentity.startedAt,
+    // 手动期没有截止，第一行要写「发起」——期次类型据来源推，别让它落到"定时"那边写成「截止」。
+    periodKind: period.attemptIdentity.trigger === 'manual' ? 'manual' as const : 'scheduled' as const,
+    ...(period.attemptIdentity.trigger === undefined ? {} : { runTrigger: period.attemptIdentity.trigger as DailyBriefingRunTrigger }),
+    ...(period.attemptIdentity.windowHours === undefined ? {} : { windowHours: period.attemptIdentity.windowHours })
+  }
   const summary: DailyBriefingEditionSummary = {
     date,
     periodId,
@@ -289,6 +320,8 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     availableLocales,
     ...identity,
     state: shown ? 'generated' : 'missing',
+    // 没有版次的行：身份来自它自己那次尝试（发起时刻 / 触发方式 / 窗口），**不借当前设置**。
+    ...attemptIdentity,
     ...(shown ? {
       generatedAt: shown.generatedAt,
       ...(shown.document.conclusion ? { direction: shown.document.conclusion.direction } : {}),

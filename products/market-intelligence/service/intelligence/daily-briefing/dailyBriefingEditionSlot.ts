@@ -35,6 +35,10 @@ export type BriefingAttemptRun = Readonly<{
   periodId: string
   locale: DailyBriefingLocale
   state: 'running' | 'succeeded' | 'failed'
+  /** 这次尝试的发起时刻：没有版次的那一行，第一行的时刻就用它（手动期写「{HH:MM} 发起」）。 */
+  startedAt: string
+  trigger?: string
+  windowHours?: number
 }>
 
 /**

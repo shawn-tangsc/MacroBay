@@ -72,9 +72,12 @@ describe('daily briefing history rail', () => {
     expect(first.textContent).not.toContain(text.history.timePlanned)
     // 实际完成时刻不在行内（A5.4b 按图改过）：这一行只有一个时刻。
     expect(host.textContent).not.toContain(text.history.timeActual)
-    // 手动那期保留「截止」：它说的不是几点，而是"你按下那一刻"。
+    // 手动那期没有截止：它写的是「08:00 发起」（`02` A5.4b v2.147）。借默认期的 07:00 顶上就是骗人。
     render({ editions: [edition({ periodKind: 'manual', periodTime: '2026-11-02T00:00:00.000Z' })] })
-    expect(host.querySelector('.mi-daily-briefing__rail-line')?.textContent).toContain(`${text.history.timeCutoff} 08:00`)
+    expect(host.querySelector('.mi-daily-briefing__rail-line')?.textContent).toContain('08:00 发起')
+    // 定时期写「截止 08:00」：两种期不许混成一句话。
+    render({ editions: [edition({ periodTime: '2026-11-02T00:00:00.000Z' })] })
+    expect(host.querySelector('.mi-daily-briefing__rail-line')?.textContent).toContain('截止 08:00')
     // 项数是正文元数据，两行制之后不进行。
     expect(host.textContent).not.toMatch(/\d+\s*项/)
     expect(host.querySelector('[data-attempts-toggle]')).toBeNull()
@@ -86,10 +89,12 @@ describe('daily briefing history rail', () => {
       edition({ date: '2026-11-01', direction: undefined })
     ] })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-    // 来源徽标说「未运行」，第二行说原因——同一件事不在一行里说两遍。
-    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-run')
-    expect(row.querySelector('[data-run-source]')?.textContent).toBe(text.history.missingRun)
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railNotRun)
+    // 来源那一格只说"这一行是怎么来的"；这一次没有记录，所以写「未记录」。
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-recorded')
+    expect(row.querySelector('[data-run-source]')?.textContent).toBe(text.history.notRecorded)
+    // 状态词退到第二行：从没跑过 → 「这一期没有生成过」。
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.missingRun} ${text.history.railNotRun}`)
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('not-run')
     // 语言标签照标（这一行属于哪种语言），但没有版次就不画方向点。
     // 用户 2026-11-06：失败/没跑的那一行也要能看出是哪一种语言，否则英文那版失败看着像中文版。
     expect(row.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('zh-CN')
@@ -482,14 +487,15 @@ describe('the day head opens the latest edition of that day', () => {
 })
 
 describe('a row is two lines: the facts, then what it says', () => {
-  it('prints exactly one source badge, out of the five, and never 本期', () => {
-    // 第一行最右那一格"这一份怎么来的"：五个值，恰一枚；「本期」这个词不进侧栏。
+  it('prints exactly one trigger word — 定时 / 手动 / 重试 / 补跑 — and never 本期', () => {
+    // 用户 2026-11-06：「这次失败」以前占的就是这一格，把来源顶掉了。现在这一格只回答"怎么来的"，
+    // 四档互斥；老记录没存触发方式 → 「未记录」，不拿当前设置回填。
     const kinds = [
-      { edition: edition(), expected: 'scheduled' },
-      { edition: edition({ periodKind: 'manual' }), expected: 'manual' },
+      { edition: edition({ runTrigger: 'scheduled' }), expected: 'scheduled' },
+      { edition: edition({ periodKind: 'manual', runTrigger: 'manual' }), expected: 'manual' },
       { edition: edition({ runTrigger: 'catch-up' }), expected: 'catch-up' },
-      { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined }), expected: 'not-run' },
-      { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined, attemptCount: 2 }), expected: 'failed' }
+      { edition: edition({ runTrigger: 'retry' }), expected: 'retry' },
+      { edition: edition({ state: 'missing', availableLocales: [], generatedAt: undefined }), expected: 'not-recorded' }
     ] as const
     for (const { edition: row, expected } of kinds) {
       render({ editions: [row], selectedDate: '2026-11-02' })
@@ -599,8 +605,10 @@ describe('a row is two lines: the facts, then what it says', () => {
       onRegeneratePeriod
     })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('failed')
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railFailedReason)
+    // 用户 2026-11-06：「这次失败」不许占来源那一格——它退到第二行，来源位照旧说"怎么来的"。
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-recorded')
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.runFailed} ${text.history.railFailedReason}`)
     expect(row.textContent).not.toContain(text.history.railNoTitle)
     expect(host.querySelector('[data-rail-retry]')).not.toBeNull()
   })
@@ -616,10 +624,34 @@ describe('a row is two lines: the facts, then what it says', () => {
       })]
     })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('failed')
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('failed')
     expect(row.textContent).toContain(text.history.runFailed)
     expect(row.textContent).not.toContain(text.history.missingRun)
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railFailedReason)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.runFailed} ${text.history.railFailedReason}`)
+  })
+
+  it('says when a failed run started, over which window, and how it was triggered', () => {
+    // 用户 2026-11-06：一条「这次失败 英文」看不懂是哪一次。第一行必须自己说清：
+    // 18:11 发起 · 12 小时 · 手动 · 英文（手动期没有截止，写「发起」）。
+    render({
+      editions: [edition({
+        locale: 'en-US', state: 'missing', availableLocales: [], generatedAt: undefined,
+        periodKind: 'manual', runTrigger: 'manual', periodTime: '2026-11-06T10:11:23.000Z', windowHours: 12,
+        languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }]
+      })],
+      timeZone: 'Asia/Shanghai'
+    })
+    const first = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-line')!
+    expect(first.textContent).toContain('18:11 发起')
+    expect(first.textContent).toContain('12 小时')
+    expect(first.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('manual')
+    expect(first.textContent).not.toContain('截止')
+    // 窗口写整句，不写 `12h`；来源只出现一次；语言在徽标里只出现一次。
+    expect(first.textContent).not.toContain('12h')
+    expect(first.querySelectorAll('[data-run-source]')).toHaveLength(1)
+    expect(first.querySelectorAll('[data-edition-locale]')).toHaveLength(1)
+    // 行内不许出现 `·`（分隔只用留白）。
+    expect(first.textContent).not.toContain('·')
   })
 
   it('keeps a row that never ran saying so, with no "this time it did not come out"', () => {
@@ -632,10 +664,10 @@ describe('a row is two lines: the facts, then what it says', () => {
       })]
     })
     const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
-    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-run')
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('not-run')
     expect(row.textContent).toContain(text.history.missingRun)
     expect(row.textContent).toContain('07:00')
-    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railNotRun)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(`${text.history.missingRun} ${text.history.railNotRun}`)
     expect(row.textContent).not.toContain(text.history.railFailedReason)
   })
 

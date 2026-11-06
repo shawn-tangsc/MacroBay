@@ -37,49 +37,49 @@ export function briefingRailKey(row: Readonly<{ date: string; periodId: string; 
  */
 
 /** How this edition came to exist. Exactly one per row, five in total (`02` A5.4b). */
-type RailSourceKind = 'scheduled' | 'manual' | 'catch-up' | 'not-run' | 'failed'
-
-
-/**
- * Which of the five source words this row gets. `catch-up` is a scheduled run that came late, so it
- * says 补跑 instead of a second 定时 — one word, never two.
- */
-function sourceKindOf(edition: DailyBriefingEditionSummary): RailSourceKind {
-  if (edition.state === 'missing') {
-    // An interrupted run did start, so it is neither "failed" nor "never ran": line two says which.
-    // 第二行说"这次没生成出来"的那一行，第一行必须是「这次失败」——同一行里把一个**跑过并失败**的
-    // 期说成「未运行」，读者会以为它压根没被触发（用户 2026-11-06 就是照这一行来问的）。
-    // 判据取运行记录自己的结论，不取"这一版语言下有几条 attempt"：一期可能只跑了英文那一版。
-    const reason = runReasonOf(edition)
-    if (reason === 'run-interrupted') return 'not-run'
-    if (reason === 'run-failed' || edition.attemptCount) return 'failed'
-    return 'not-run'
-  }
-  if (edition.periodKind === 'manual') return 'manual'
-  if (edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry') return 'catch-up'
-  return 'scheduled'
-}
-
-function sourceLabelOf(kind: RailSourceKind, text: DailyBriefingText): string {
-  if (kind === 'manual') return text.history.runManual
-  if (kind === 'catch-up') return text.history.runCatchUp
-  if (kind === 'failed') return text.history.runFailed
-  if (kind === 'not-run') return text.history.missingRun
-  return text.history.runScheduled
-}
+type RailTriggerKind = 'scheduled' | 'manual' | 'retry' | 'catch-up'
 
 /**
- * The one clock a row prints (`02` A5.4b: the twice-recorded time does not live on the row).
+ * 第一行的**来源**：定时 / 手动 / 重试 / 补跑，四档互斥（`02` A5.4b v2.147）。
  *
- * A period that ran on time has the same nominal and actual minute, so the second clock was noise and
- * its label pushed everything else out of a 252px row. Only a manual run keeps a prefix: 截止 carries
- * something the time alone does not say.
+ * 用户 2026-11-06：「这次失败」以前占的就是这一格，把"手动还是定时"顶掉了，读者看不出这条记录是
+ * 怎么来的。状态词退到第二行，来源位从此只回答这一件事。老记录没存触发方式 → `undefined`，
+ * 界面写「未记录」，**不拿当前设置回填**。
+ */
+function triggerKindOf(edition: DailyBriefingEditionSummary): RailTriggerKind | undefined {
+  const trigger = edition.runTrigger
+  if (trigger === 'catch-up') return 'catch-up'
+  if (trigger === 'retry') return 'retry'
+  if (trigger === 'manual' || edition.periodKind === 'manual') return 'manual'
+  if (trigger === 'scheduled') return 'scheduled'
+  // 有正文的老版次没写来源：文档身份对旧记录的口径就是"定时"（`briefingEditionPeriod` 的缺省），
+  // 这不是拿当前设置回填。**没有版次**的行才写「未记录」——谁都不知道那次是怎么来的。
+  return edition.state === 'missing' ? undefined : 'scheduled'
+}
+
+function triggerLabelOf(kind: RailTriggerKind | undefined, text: DailyBriefingText): string {
+  if (kind === 'manual') return text.history.runManual
+  if (kind === 'retry') return text.history.runRetry
+  if (kind === 'catch-up') return text.history.runCatchUp
+  if (kind === 'scheduled') return text.history.runScheduled
+  return text.history.notRecorded
+}
+
+/**
+ * 第一行那个时刻：定时期写「截止 07:00」，**手动期没有截止**，写「08:00 发起」。
+ *
+ * 手动期借默认期的 07:00 是以前真出过的错：那一行说的是别人的时刻。老记录既没有 periodTime 也没有
+ * 排期时刻时返回 `undefined`，界面写「未记录」，不回填。
  */
 function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): string | undefined {
-  if (edition.state === 'missing') return edition.scheduledTime
-  const nominal = edition.periodTime ? railClock(edition.periodTime, timeZone) : edition.scheduledTime
-  if (!nominal) return undefined
-  return edition.periodKind === 'manual' ? `${text.history.timeCutoff} ${nominal}` : nominal
+  // 手动期：`periodTime` 就是这次发起的那一刻（没有版次时由尝试记录的 started_at 补上）。
+  if (edition.periodKind === 'manual') {
+    if (edition.periodTime === undefined) return undefined
+    return text.history.timeStarted.replace('{time}', railClock(edition.periodTime, timeZone))
+  }
+  const nominal = edition.periodTime === undefined ? edition.scheduledTime : railClock(edition.periodTime, timeZone)
+  if (nominal === undefined) return undefined
+  return `${text.history.timeCutoff} ${nominal}`
 }
 
 export function DailyBriefingHistoryRail({
@@ -276,7 +276,9 @@ export function DailyBriefingHistoryRail({
             const running = key === waitingKey
             // 生成中不是第六种来源：这一格仍是"这份是机器按时出的、还是我点出来的"。
             // 那一行此刻没有正文，但它的来源没变，所以不能借机写成「未运行」。
-            const kind = running ? (edition.periodKind === 'manual' ? 'manual' : 'scheduled') : sourceKindOf(edition)
+            const triggerKind = running
+              ? (edition.periodKind === 'manual' ? 'manual' as const : edition.runTrigger === 'catch-up' ? 'catch-up' as const : 'scheduled' as const)
+              : triggerKindOf(edition)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
             // 「重试」不能放在行按钮里：`<button>` 里套 `<button>` 是无效 HTML，键盘用户在无障碍树里
@@ -285,7 +287,8 @@ export function DailyBriefingHistoryRail({
             // 文案承诺了动作，就必须有那颗按钮——只有"失败"给重试，等于让中断行说完话没有下一句。
             // 与失败同一道门：只给今天（历史日不支持补生成），正在跑的那一行不给。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
-            const retryable = (kind === 'failed' || interrupted) && !running && edition.date === todayDate && onRegeneratePeriod !== undefined
+            const failedRun = runReasonOf(edition) === 'run-failed' || (!running && Boolean(edition.attemptCount))
+            const retryable = (failedRun || interrupted) && !running && edition.date === todayDate && onRegeneratePeriod !== undefined
             return <div role="listitem" key={key} className="mi-daily-briefing__rail-item" data-period={edition.periodId}>
               <button type="button"
                 {...(retryable ? { 'data-has-retry': 'true' } : {})}
@@ -310,24 +313,26 @@ export function DailyBriefingHistoryRail({
                   if (onSelectLocale) onSelectLocale({ date: edition.date, periodId: edition.periodId, locale: edition.locale })
                   else onSelect(edition.date)
                 }}>
-                {/* 第一行：时刻 → 窗口 → 方向点 → 来源徽标 → · → 语言标签。从左往右读，语序就是扫视顺序。 */}
+                {/* 第一行 = 这一行的身份（`02` A5.4b v2.147）：时刻 · 窗口 · 来源 · 语言，
+                    分隔只用留白，行内没有 `·`。状态词退到第二行——它以前占的正是来源那一格，
+                    把"手动还是定时"顶掉了（用户 2026-11-06 看不出这条失败是怎么来的）。 */}
                 <span className="mi-daily-briefing__rail-line">
-                  {clock ? <span className="mi-daily-briefing__rail-fact">{clock}</span> : null}
-                  {typeof edition.windowHours === 'number'
-                    ? <span className="mi-daily-briefing__rail-fact" data-window-hours={edition.windowHours}>{text.history.windowHoursShort.replace('{hours}', String(edition.windowHours))}</span>
-                    : null}
+                  <span className="mi-daily-briefing__rail-fact" data-rail-clock={clock === undefined ? 'not-recorded' : 'recorded'}>
+                    {clock ?? text.history.notRecorded}
+                  </span>
+                  <span className="mi-daily-briefing__rail-fact" data-window-hours={typeof edition.windowHours === 'number' ? edition.windowHours : 'not-recorded'}>
+                    {typeof edition.windowHours === 'number'
+                      ? text.history.windowHoursLong.replace('{hours}', String(edition.windowHours))
+                      : text.history.notRecorded}
+                  </span>
                   {/* 方向只用颜色说：一行里只有它有颜色，扫一眼就够；词留给读屏。 */}
                   {missing
                     ? null
                     : <i className="mi-daily-briefing__rail-dot" data-direction={edition.direction ?? 'none'} role="img"
                       aria-label={edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion} />}
-                  {/* 这一格永远有且只有一个：定时 / 手动 / 补跑 / 未运行 / 这次失败。 */}
-                  <span className="mi-daily-briefing__rail-source" data-run-source={kind}>{sourceLabelOf(kind, text)}</span>
-                  {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
-                  {/* 语言标签贴行右端：它与来源徽标之间不再有 `·`——两者天各一方，中间那段弹性留白
-                      就是右对齐本身（`02` v2.43）。 */}
-                  {/* 语言徽标每一行都有，包括还没有正文的那一行：一行就是"一期 + 一种语言"，
-                      失败的那次跑的是英文，这一行就该说英文（用户 2026-11-06 问的正是这个）。 */}
+                  {/* 这一格只回答"这一行是怎么来的"：定时 / 手动 / 重试 / 补跑，缺记录写「未记录」。 */}
+                  <span className="mi-daily-briefing__rail-source" data-run-source={triggerKind ?? 'not-recorded'}>{triggerLabelOf(triggerKind, text)}</span>
+                  {/* 语言徽标贴右，一行只出现一次：一行就是"一期 + 一种语言"。 */}
                   <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                 </span>
                 {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
@@ -341,7 +346,11 @@ export function DailyBriefingHistoryRail({
                   : missing
                     ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">
                       {/* 所属期已删且这一版没有正文：第二行只有这枚标记（`02` v2.77），仍然非空。 */}
-                      {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span> : reasonOf(edition, text)}
+                      {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span>
+                        // 状态词在第二行：这次失败 / 上次没跑完；后面那句是它为什么没出来。
+                        : <><span data-rail-status={failedRun ? 'failed' : interrupted ? 'interrupted' : 'not-run'}>
+                          {failedRun ? text.history.runFailed : interrupted ? text.history.runInterrupted : text.history.missingRun}
+                        </span>{reasonSuffix(edition, text, failedRun, interrupted)}</>}
                     </span>
                     : <span className="mi-daily-briefing__rail-row-title" data-rail-title="summary" title={title === '' ? undefined : title}>
                       {/* 「该期已删除」是**第二行开头的 chip**（`02` v2.77）：第一行放不下（中文最坏 250/252、
@@ -405,10 +414,11 @@ export function DailyBriefingHistoryRail({
         closeMenu()
         if (key !== 'delete-edition' || !target || !row || !onDeletePeriod) return
         // 与工具栏第五颗**同一个确认框、同一句话**：这条路径不另写一套文案。
-        const clock = clockOf(row, text, timeZone)
+        // 确认框自己要写「日期 · 时刻 · 语言」，时刻是裸的 HH:MM——这里不再套「截止」前缀。
+        const confirmClock = row.periodTime === undefined ? undefined : railClock(row.periodTime, timeZone)
         const copy = briefingEditionDeleteCopy(text, {
           date: row.date, language: row.locale,
-          ...(clock === undefined ? {} : { clock })
+          ...(confirmClock === undefined ? {} : { clock: confirmClock })
         })
         confirm({
           title: copy.title,
@@ -416,7 +426,7 @@ export function DailyBriefingHistoryRail({
           confirmLabel: copy.confirmLabel,
           cancelLabel: copy.cancelLabel,
           tone: 'danger',
-          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: target.locale, ...(clock === undefined ? {} : { clock }) })
+          onConfirm: () => onDeletePeriod({ date: target.date, periodId: target.periodId, locale: target.locale, ...(confirmClock === undefined ? {} : { clock: confirmClock }) })
         })
       }}
       open={menu !== null && menuItems.length > 0}
@@ -435,6 +445,12 @@ function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
  *
  * 中断过的、失败过的、从没跑过的不是同一件事：一个还可以再试，一个这次没生成出来，一个是根本没开始。
  */
+/** 第二行状态词后面那半句：失败说"这次没生成出来"，从没跑过说"这一期没有生成过"。 */
+function reasonSuffix(edition: DailyBriefingEditionSummary, text: DailyBriefingText, failedRun: boolean, interrupted: boolean): string | null {
+  if (interrupted) return null
+  return failedRun ? ` ${text.history.railFailedReason}` : ` ${text.history.railNotRun}`
+}
+
 function reasonOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText): string {
   const reason = runReasonOf(edition)
   if (reason === 'run-interrupted') return text.history.runInterrupted

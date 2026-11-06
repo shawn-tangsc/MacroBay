@@ -59,7 +59,7 @@ describe('history rows take incompleteness from the run', () => {
     // 一次跑在冻结事实之前就挂掉时，只有 attempt、没有运行记录、也没有版次，这一行同样必须在。
     const listed = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
-      attemptRuns: [{ date: '2026-11-02', periodId: '0faa8e15', locale: 'en-US', state: 'failed' }],
+      attemptRuns: [{ date: '2026-11-02', periodId: '0faa8e15', locale: 'en-US', state: 'failed', startedAt: '2026-11-02T10:11:23.000Z' }],
       scheduledTime: () => undefined
     })
     expect(listed).toHaveLength(1)
@@ -71,6 +71,38 @@ describe('history rows take incompleteness from the run', () => {
     expect(listed[0]?.scheduledTime).toBeUndefined()
   })
 
+  it('gives a failed row its own time, trigger and window from that attempt', async () => {
+    // 用户 2026-11-06：失败那一行以前只剩「这次失败 英文」，看不出是哪一次。时刻/来源/窗口必须来自
+    // **这一次尝试**，不是默认期的 07:00、也不是当前设置。
+    const [row] = await briefingHistorySummaries({
+      dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      attemptRuns: [{
+        date: '2026-11-06', periodId: 'period_failed', locale: 'en-US', state: 'failed',
+        startedAt: '2026-11-06T10:11:23.763Z', trigger: 'manual', windowHours: 12
+      }],
+      scheduledTime: () => '07:00'
+    })
+    expect(row).toMatchObject({
+      periodId: 'period_failed', locale: 'en-US', state: 'missing',
+      periodTime: '2026-11-06T10:11:23.763Z', periodKind: 'manual',
+      runTrigger: 'manual', windowHours: 12
+    })
+  })
+
+  it('leaves the identity out when the attempt recorded none — 未记录, never backfilled', async () => {
+    const [row] = await briefingHistorySummaries({
+      dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      attemptRuns: [{
+        date: '2026-11-06', periodId: 'period_legacy', locale: 'zh-CN', state: 'failed',
+        startedAt: '2026-11-06T01:00:00.000Z'
+      }],
+      scheduledTime: () => '07:00'
+    })
+    expect(row?.periodTime).toBe('2026-11-06T01:00:00.000Z')
+    expect(row?.runTrigger).toBeUndefined()
+    expect(row?.windowHours).toBeUndefined()
+  })
+
   it('shows no row for a run that succeeded but left no edition', async () => {
     // 用户 2026-11-06 的 5 个空壳行：同一天同槽位的后一版把前面几版的正文顶掉了，运行记录还在，
     // 于是被画成「未运行 / 这一期没有生成过」——"跑了却说没生成过"。
@@ -78,8 +110,8 @@ describe('history rows take incompleteness from the run', () => {
     const listed = await briefingHistorySummaries({
       dates: ['2026-11-06'], primary: 'zh-CN', primaryRows: [], otherRows: [],
       attemptRuns: [
-        { date: '2026-11-06', periodId: 'period_early', locale: 'zh-CN', state: 'succeeded' },
-        { date: '2026-11-06', periodId: 'period_late', locale: 'en-US', state: 'failed' }
+        { date: '2026-11-06', periodId: 'period_early', locale: 'zh-CN', state: 'succeeded', startedAt: '2026-11-06T01:00:00.000Z' },
+        { date: '2026-11-06', periodId: 'period_late', locale: 'en-US', state: 'failed', startedAt: '2026-11-06T02:00:00.000Z' }
       ],
       scheduledTime: () => undefined
     })
@@ -91,7 +123,7 @@ describe('history rows take incompleteness from the run', () => {
     const retried = await briefingHistorySummaries({
       dates: ['2026-11-02'], primary: 'zh-CN',
       primaryRows: [edition('zh-CN')], otherRows: [],
-      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'succeeded' }],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'succeeded', startedAt: '2026-11-02T00:00:00.000Z' }],
       periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'published' as const })),
       scheduledTime: () => '07:00'
     })
