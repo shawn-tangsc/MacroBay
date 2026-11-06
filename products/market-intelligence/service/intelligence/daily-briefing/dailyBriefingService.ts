@@ -26,6 +26,7 @@ import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBrie
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
+import { abandonDailyBriefingEditorial, publishDailyBriefingEdition } from './dailyBriefingPublish'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { prepareMarketForRun } from './dailyBriefProgressWaiting'
 import { createDailyBriefingReads } from './dailyBriefingReads'
@@ -618,54 +619,21 @@ export function createDailyBriefingService(deps: Readonly<{
       // AI off is the fact-layer edition too: published, with the reason in the provenance.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
-    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版（`lede.source='template'`、正文空）
-    // 一旦落库，页面就有正文可开、库里还记成功，三处口径互相打架。这里如实记一次失败并返回原因；
+    // 写作没出来就**不发布**（用户 2026-11-06 拍板）：模板版一旦落库，页面就有正文可开、库里还记成功。
     // 只有读者自己关掉 AI 编辑（`editorial-disabled`）才继续发事实层版次——那不是失败，是配置。
     const editorialFailure = document.provenance.editorialFailure
     if (editorialFailure !== undefined && editorialFailure !== 'editorial-disabled') {
-      const trace = recorder.complete('failed')
-      await attempts.settle('failed', trace.finishedAt ?? now(), { failureCode: editorialFailure, trace })
-      await run.settle('failed', 0)
-      await notifyDailyBriefing(deps.noticeSubmit, {
-        kind: 'failed', variant: 'editorial-missing', date: input.date, periodId: input.periodId
-      }, now())
-      return { state: 'unavailable', failureCode: editorialFailure as DailyBriefingTodayFailureCode, generationTrace: trace }
+      return abandonDailyBriefingEditorial({
+        failureCode: editorialFailure, attempts, run, recorder, now,
+        ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
+        date: input.date, periodId: input.periodId
+      })
     }
-    recorder.begin('store')
-    recorder.end('store', 'success')
-    const traced = withGenerationTrace(document, recorder.complete(editorialFailure ? 'failed' : 'success'))
-    try {
-      const edition = {
-        date: input.date,
-        periodId: input.periodId,
-        locale: input.locale,
-        generatedAt: traced.edition.generatedAt,
-        windowStart: traced.edition.windowStart,
-        windowEnd: traced.edition.windowEnd,
-        document: traced
-      }
-      const settled = attempts.build('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
-      // The edition row and the attempt that wrote it are one write: a reader never sees one
-      // without the other.
-      if (deps.store.publishEdition) {
-        await deps.store.publishEdition(edition, settled)
-      } else {
-        await deps.store.put(edition)
-        if (settled) await deps.store.finishAttempt?.(settled).catch(() => undefined)
-      }
-      await run.settle('published', 1)
-    } catch {
-      // Returning the document here would report a stored edition that does not exist; the next
-      // read would fall back to a different generation, so surface the write failure instead.
-      recorder.end('store', 'failed', { failureCode: 'store-failed' })
-      return fail('store-failed')
-    }
-    await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-    // 完成类一天一期：自动运行投递；手动重新生成照常写记录但不投递（见 `dailyBriefingNotifier`）。
-    await notifyDailyBriefing(deps.noticeSubmit, {
-      kind: 'ready', date: input.date, periodId: input.periodId, editionId: `${input.date}:${input.locale}:${input.periodId}`, locale: input.locale, deliver: !force
-    }, now())
-    return { state: 'available', document: traced }
+    return publishDailyBriefingEdition({
+      document, store: deps.store, attempts, run, recorder, now,
+      ...(deps.noticeSubmit ? { noticeSubmit: deps.noticeSubmit } : {}),
+      date: input.date, periodId: input.periodId, locale: input.locale, deliver: !force
+    })
   }
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
     const schedule = await generation()
