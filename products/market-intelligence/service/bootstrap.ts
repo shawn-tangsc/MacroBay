@@ -36,7 +36,7 @@ import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerI
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
-import { appendAnalysisRunSummary, createAnalysisRunSession } from './intelligence/analysis/analysisRunSession'
+import { analysisRunSessionPolicy, appendAnalysisRunSummary, createAnalysisRunSession } from './intelligence/analysis/analysisRunSession'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
   CrossAssetOps,
@@ -556,7 +556,17 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ensure: createAnalysisRunSession({
       getAgentState: deps.getAgentState,
       createAgentSession: deps.createAgentSession,
-      appendAgentSessionMessages: deps.appendAgentSessionMessages
+      appendAgentSessionMessages: deps.appendAgentSessionMessages,
+      // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
+      titleFor: (queuedAt) => {
+        const instant = new Date(queuedAt)
+        const stamp = Number.isFinite(instant.getTime())
+          ? new Intl.DateTimeFormat(deps.getAppLanguage ? 'zh-CN' : 'zh-CN', {
+            dateStyle: 'short', timeStyle: 'short', timeZone: currentReaderTimeZone()
+          }).format(instant)
+          : ''
+        return `${stamp} · ${analysisRunSessionPolicy.moduleName['zh-CN']}`
+      }
     }),
     appendSummary: appendAnalysisRunSummary({
       getAgentState: deps.getAgentState,

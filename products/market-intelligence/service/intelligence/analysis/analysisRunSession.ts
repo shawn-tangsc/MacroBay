@@ -19,18 +19,28 @@ export type AnalysisRunSessionDependencies = Readonly<{
   getAgentState?: () => Promise<{ sessions: readonly SessionRef[] }>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<SessionRef>
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<unknown>
+  /**
+   * 「时刻 · 模块名」，按**建会话时**的读者时区与语言落成文本。
+   *
+   * 落成文本后不再随语言/时区变：历史会话是快照，和已发布结论保持发布时语言同一条规则。
+   */
+  titleFor?: (queuedAt: string) => string
 }>
 
 export const analysisRunSessionPolicy = Object.freeze({
   agentId: analysisWorkspacePolicy.agentId,
   descriptionPrefix: 'market-analysis-run:',
   origin: 'automation' as const,
-  originGroup: 'market-analysis' as const
+  originGroup: 'market-analysis' as const,
+  /** 模块名，按建会话时的语言取；不出现内部标识。 */
+  moduleName: Object.freeze({ 'zh-CN': '市场分析', 'en-US': 'Market analysis' })
 })
 
 export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
   return async function ensureRunSession(input: Readonly<{
     runId: string
+    /** When the run was queued: the moment the title names, not the moment we happened to look. */
+    queuedAt?: string
     /** The one-line summary the card shows; absent while the run has not produced one. */
     summary?: string
   }>): Promise<string | undefined> {
@@ -42,7 +52,8 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     if (existing) return existing.id
     const session = await deps.createAgentSession({
       agentId: analysisRunSessionPolicy.agentId,
-      name: input.runId,
+      // 标题是「时刻 · 模块名」，绝不是 run id：读者在助手列表里不该看到我们的账本编号。
+      name: deps.titleFor?.(input.queuedAt ?? '') ?? analysisRunSessionPolicy.moduleName['zh-CN'],
       description,
       workspace: { type: 'system' },
       origin: analysisRunSessionPolicy.origin,
@@ -51,8 +62,22 @@ export function createAnalysisRunSession(deps: AnalysisRunSessionDependencies) {
     // Two messages: the context card (which run this is) and the summary. Never the prompt or the
     // model's raw answer — those live once, in the archive, and are read by this run id.
     if (deps.appendAgentSessionMessages) {
+      // 上下文卡片走 agent-context 部件：壳层把它画成卡片，标题来自文案键，payload 只带 runId。
+      // 正文里不出现 `market-analysis-run:` 这种内部标识。
       const messages = [
-        { role: 'system' as const, data: { parts: [{ type: 'text' as const, text: `market-analysis-run:${input.runId}` }] } },
+        {
+          role: 'system' as const,
+          data: {
+            parts: [{
+              // 壳层把它画成一张卡片：`label` 是读者看的那一行（时刻 · 模块名），`kind` 是机器认的
+              // 类型，`payload` 只带 runId——原始标识从不显示，也不会被当成正文念出来。
+              type: 'agent-context' as const,
+              kind: 'market-analysis-run',
+              label: deps.titleFor?.(input.queuedAt ?? '') ?? analysisRunSessionPolicy.moduleName['zh-CN'],
+              payload: { runId: input.runId }
+            }]
+          }
+        },
         ...(input.summary ? [{ role: 'assistant' as const, data: { parts: [{ type: 'text' as const, text: input.summary }] } }] : [])
       ]
       try { await deps.appendAgentSessionMessages({ sessionId: session.id, messages }) } catch { /* 会话是记录的附加物 */ }

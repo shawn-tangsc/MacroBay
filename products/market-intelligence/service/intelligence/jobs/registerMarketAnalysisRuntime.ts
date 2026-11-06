@@ -61,7 +61,7 @@ export type MarketAnalysisRuntime = Readonly<{
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   /** Mounted by the bootstrap: the session ports are injected there, not built here. */
   setRunSessionPort: (port: Readonly<{
-    ensure: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+    ensure: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
     appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
   }> | undefined) => void
   dispose: () => void
@@ -160,7 +160,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const triggerPolicy = createAnalysisTriggerPolicy()
   // 会话端口迟绑定：会话依赖由 bootstrap 注入（就是追问会话用的那一份），运行时不自己构造。
   type RunSessionPort = Readonly<{
-    ensure: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+    ensure: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
     appendSummary: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
   }>
   let runSessionPort: RunSessionPort | undefined
@@ -181,7 +181,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     notifyAnalysisNotice: async ({ decision, occurredAt }) =>
       deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
     // 一次分析一条会话：认领之后建（失败那次也要能查原文），发布后补一句摘要。
-    ensureRunSession: async ({ runId }) => runSessionPort ? runSessionPort.ensure({ runId }) : undefined,
+    ensureRunSession: async ({ runId, queuedAt }) => runSessionPort ? runSessionPort.ensure({ runId, queuedAt }) : undefined,
     appendRunSummary: async ({ runId, summary }) => { if (runSessionPort) await runSessionPort.appendSummary({ runId, summary }) }
   })
   const predictionVerification = createPredictionVerificationService({

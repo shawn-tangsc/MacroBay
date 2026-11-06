@@ -193,7 +193,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * One conversation per run, created once the run is claimed and before the first model call — so a
    * run that fails still has a conversation the reader can open to find the archived prompt.
    */
-  ensureRunSession?: (input: Readonly<{ runId: string }>) => Promise<string | undefined>
+  ensureRunSession?: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
   /** The summary, appended after the run published. Never the prompt or the model's answer. */
   appendRunSummary?: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
@@ -203,7 +203,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // 会话在「认领成功、还没调模型」之间建：失败那次也要有会话，否则最需要查原文的那种恰好没有。
     // 建会话失败不影响这次分析——它是记录的附加物，不是分析的前提。
     if (deps.ensureRunSession) {
-      try { await deps.ensureRunSession({ runId: runRecord.id }) } catch { /* 会话是附加物 */ }
+      try { await deps.ensureRunSession({ runId: runRecord.id, queuedAt: runRecord.queuedAt }) } catch { /* 会话是附加物 */ }
     }
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal

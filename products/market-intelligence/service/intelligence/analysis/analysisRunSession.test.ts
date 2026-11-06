@@ -43,7 +43,12 @@ describe('the analysis run session', () => {
     await ensure({ runId: 'mi-ar-2', summary: 'BTC 持仓骤降' })
     const call = appendAgentSessionMessages.mock.calls[0]![0] as unknown as { messages: { role: string; content: string }[] }
     expect(call.messages).toHaveLength(2)
-    expect(call.messages[0]).toMatchObject({ role: 'system', data: { parts: [{ type: 'text', text: 'market-analysis-run:mi-ar-2' }] } })
+    // 上下文卡片是 agent-context 部件，payload 只带 runId；正文里没有内部标识。
+    expect(call.messages[0]).toMatchObject({
+      role: 'system',
+      data: { parts: [{ type: 'agent-context', kind: 'market-analysis-run', payload: { runId: 'mi-ar-2' } }] }
+    })
+    expect(JSON.stringify(call.messages)).not.toContain('market-analysis-run:')
     // 原文只存在 mi_analysis_io，会话只放 runId；这里不该出现提示词或模型原文。
     expect(JSON.stringify(call.messages)).not.toContain('prompt')
   })
@@ -55,6 +60,20 @@ describe('the analysis run session', () => {
     const last = appendAgentSessionMessages.mock.calls.at(-1)![0] as unknown as { sessionId: string; messages: { role: string; content: string }[] }
     expect(last.sessionId).toBe('s-1')
     expect(last.messages).toEqual([{ role: 'assistant', data: { parts: [{ type: 'text', text: 'BTC 持仓骤降，量放大 3.4 倍' }] } }])
+  })
+
+  it('titles the conversation with the moment and the module, never the run id', async () => {
+    const { ensure, createAgentSession } = harness()
+    const titled = createAnalysisRunSession({
+      getAgentState: async () => ({ sessions: [] }),
+      createAgentSession: createAgentSession as never,
+      titleFor: queuedAt => `${queuedAt} · 市场分析`
+    })
+    await titled({ runId: 'mi-ar-9', queuedAt: '2026-11-06T10:15:00.000Z' })
+    const call = createAgentSession.mock.calls.at(-1)![0] as unknown as { name: string }
+    expect(call.name).toBe('2026-11-06T10:15:00.000Z · 市场分析')
+    expect(call.name).not.toContain('mi-ar-')
+    await ensure({ runId: 'mi-ar-10' })
   })
 
   it('stays quiet when the port is not injected', async () => {
