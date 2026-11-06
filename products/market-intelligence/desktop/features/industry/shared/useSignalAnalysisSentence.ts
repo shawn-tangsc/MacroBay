@@ -14,6 +14,7 @@ const TRIGGER = 'pages.intelligence.portal.dashboard.analysisTimeline.triggerSta
 export function useSignalAnalysisSentence(view: SignalAnalysisStateView | undefined): string | undefined {
   const resolveText = useProductTextKey()
   if (!view) return undefined
+
   return signalAnalysisSentence(view, (query: SignalAnalysisCopyPart) => {
     if (query.part === 'state') return resolveText(`${BASE}.states.${query.code}`)
     if (query.part === 'stoppedReason') return resolveText(`${BASE}.stoppedReasons.${query.code}`)

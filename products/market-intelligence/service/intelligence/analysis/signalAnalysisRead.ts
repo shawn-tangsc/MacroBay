@@ -30,7 +30,8 @@ export type SignalAnalysisReadStore = Readonly<{
     reasonCode: string
     analysisRunId: string | null
   }[]
-  getRun: (id: string) => { status: string; failureCode: string | null } | undefined
+  /** One query for every run the batch points at; a missing id simply does not appear. */
+  getRunsByIds: (ids: readonly string[]) => Readonly<Record<string, { status: string; failureCode: string | null }>>
 }>
 
 export function assembleSignalAnalysisRead(input: Readonly<{
@@ -41,15 +42,9 @@ export function assembleSignalAnalysisRead(input: Readonly<{
 }>): ModuleSignalAnalysisRead {
   const hashes = [...new Set(input.signals.map(entry => entry.signal.dedupeKey))]
   const rows = input.store.listLatestSignalLedgerStates(hashes)
-  const runs: Record<string, { status: string; failureCode: string | null }> = {}
-  for (const row of rows) {
-    if (!row.analysisRunId) continue
-    const run = input.store.getRun(row.analysisRunId)
-    if (!run) continue
-    // 原样交给投影：状态闭集比这里宽（invalid-output / stale / superseded），由投影分出
-    // 「没成」和「停下」两件事；在这里先压平，等于把「我们停了」说成「它坏了」。
-    runs[row.analysisRunId] = { status: run.status, failureCode: run.failureCode }
-  }
+  // 整屏两次查询：账本一次、运行一次。按行查会把一屏 30 条变成 31 次。
+  // 取不到的 id 不进 map——那是「运行记录已过保存期」，由投影判成 stopped，不是还在排队。
+  const runs = input.store.getRunsByIds(rows.flatMap(row => row.analysisRunId ? [row.analysisRunId] : []))
   return {
     state: 'available',
     signals: input.signals,

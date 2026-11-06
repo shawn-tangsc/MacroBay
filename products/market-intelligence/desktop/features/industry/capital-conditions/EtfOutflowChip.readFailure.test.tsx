@@ -28,10 +28,12 @@ describe('a failed signal read on the ETF chip', () => {
   it('marks the failure with one icon instead of a line of text', () => {
     const markup = render({ state: 'unreadable', failureCode: 'query-failed' })
     expect(markup).toContain('mi-signal-read-issue')
-    expect(markup).toContain('这项数据读取失败')
+    expect(markup).toContain('有没有被分析过')
     // 正面上没有那行排障话，也没有独立的重试按钮。
     expect(markup).not.toContain('判定记录没拿到')
     expect(markup).not.toContain('重试')
+    // 内部词不上屏：读者只问「这条分析过没有」，不关心我们的「状态 / 记录 / 通道」。
+    expect(markup).not.toMatch(/状态|记录|通道/)
     // 一处一个。
     expect(markup.split('mi-signal-read-issue').length - 1).toBe(1)
     // 牌子是「有这条信号」的陈述：读不到时一条都不许渲染，连灰牌也不行。

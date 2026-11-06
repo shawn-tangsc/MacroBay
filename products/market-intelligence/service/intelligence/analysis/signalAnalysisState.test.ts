@@ -13,7 +13,11 @@ describe('signal analysis state', () => {
   })
 
   it('is queued until the run answers, published when it succeeded, failed with the run’s code', () => {
+    // 有运行 id 但取不到运行行：那是「跑过、记录过期」，不是还在排队——说成排队，读者会一直等。
     expect(projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: undefined }))
+      .toMatchObject({ analysisState: 'stopped', analysisReason: 'run-expired' })
+    // 还没有运行 id：确实还没排上队。
+    expect(projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: null }), run: undefined }))
       .toMatchObject({ analysisState: 'queued' })
     expect(projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: { status: 'running', failureCode: null } }))
       .toMatchObject({ analysisState: 'queued' })

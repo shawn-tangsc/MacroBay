@@ -54,7 +54,7 @@ export function attachModuleSignals(host: ModuleSignalHost & {
     return assembleSignalAnalysisRead({
       signals: entries,
       droppedInvalid: 0,
-      store: { listLatestSignalLedgerStates: () => rows, getRun: id => runs[id] },
+      store: { listLatestSignalLedgerStates: () => rows, getRunsByIds: () => runs },
       analysisOffByReader: analysisReader.analysisOffByReader()
     })
   }

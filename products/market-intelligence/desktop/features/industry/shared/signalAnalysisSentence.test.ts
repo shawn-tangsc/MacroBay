@@ -3,14 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { signalAnalysisSentence, type SignalAnalysisCopyLookup, type SignalAnalysisCopyPart } from './signalAnalysisSentence'
 
 const states: Record<string, string> = {
-  'not-triggered': '还没有轮到这条信号分析',
-  queued: '已排上队，正在分析',
   published: '分析已出',
   skipped: '这次没有分析',
   failed: '分析了但没成',
   stopped: '这次运行提前结束了'
 }
-const stopped: Record<string, string> = { 'run-cancelled': '这次运行被取消了', 'run-superseded': '已被更新的一次取代', 'run-unrecognized': '状态读不出来' }
+const stopped: Record<string, string> = {
+  'run-cancelled': '这次运行被取消了',
+  'run-superseded': '已被更新的一次取代',
+  'run-unrecognized': '状态读不出来',
+  'run-expired': '这次运行的记录已过保存期'
+}
 const skippedReasons: Record<string, string> = { 'signal-cooldown-active': '同一规则刚分析过，这次不重复' }
 const failedReasons: Record<string, string> = { 'analysis-provider-error': '模型服务出错了' }
 
@@ -28,13 +31,18 @@ const view = (analysisState: string, analysisReason?: string) =>
 
 describe('the analysis-progress sentence', () => {
   it('says each state once, and only the three refusing states carry a reason', () => {
-    expect(signalAnalysisSentence(view('not-triggered'), lookup)).toBe('还没有轮到这条信号分析')
-    expect(signalAnalysisSentence(view('queued'), lookup)).toBe('已排上队，正在分析')
+    // 「还在等」不显示：连一句话都不产出，不是换个说法。
+    expect(signalAnalysisSentence(view('not-triggered'), lookup)).toBeUndefined()
+    expect(signalAnalysisSentence(view('queued'), lookup)).toBeUndefined()
     expect(signalAnalysisSentence(view('published'), lookup)).toBe('分析已出')
     expect(signalAnalysisSentence(view('skipped', 'signal-cooldown-active'), lookup)).toBe('这次没有分析：同一规则刚分析过，这次不重复')
     expect(signalAnalysisSentence(view('failed', 'analysis-provider-error'), lookup)).toBe('分析了但没成：模型服务出错了')
     expect(signalAnalysisSentence(view('stopped', 'run-cancelled'), lookup)).toBe('这次运行被取消了')
     expect(signalAnalysisSentence(view('stopped', 'run-superseded'), lookup)).toBe('已被更新的一次取代')
+  })
+
+  it('says a run whose record expired ran, instead of leaving the reader waiting', () => {
+    expect(signalAnalysisSentence(view('stopped', 'run-expired'), lookup)).toBe('这次运行的记录已过保存期')
   })
 
   it('keeps the two code tables apart instead of merging them', () => {

@@ -19,7 +19,7 @@ describe('the signal analysis read', () => {
       droppedInvalid: 0,
       store: {
         listLatestSignalLedgerStates: () => [{ changeHash: 'h-1', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: 'run-1' }],
-        getRun: id => id === 'run-1' ? { status: 'succeeded', failureCode: null } : undefined
+        getRunsByIds: ids => Object.fromEntries(ids.filter(id => id === 'run-1').map(id => [id, { status: 'succeeded', failureCode: null }]))
       }
     })
     if (read.state !== 'available') throw new Error('expected a readable answer')
@@ -35,7 +35,7 @@ describe('the signal analysis read', () => {
       droppedInvalid: 0,
       store: {
         listLatestSignalLedgerStates: () => [{ changeHash: 'h-1', decision: 'queued', reasonCode: 'signal-high-triggered', analysisRunId: null }],
-        getRun: () => { throw new Error('must not be asked') }
+        getRunsByIds: () => ({})
       }
     })
     if (read.state !== 'available') throw new Error('expected a readable answer')

@@ -46,7 +46,7 @@ describe('a failed signal read on the positioning chip', () => {
     const markup = render(positioning({ state: 'unreadable', failureCode: 'query-failed', onReload: () => undefined }))
     // 正面上只有标记：一句话在悬停/聚焦里。整行排障话不许上牌位。
     expect(markup).toContain('mi-signal-read-issue')
-    expect(markup).toContain('这项数据读取失败')
+    expect(markup).toContain('有没有被分析过')
     expect(markup).not.toContain('判定记录没拿到')
     // 一处一个：同一个失败在同一张卡上只挂一个。
     expect(markup.split('mi-signal-read-issue').length - 1).toBe(1)
@@ -62,6 +62,8 @@ describe('a failed signal read on the positioning chip', () => {
     // 标记仍在（我们确实出错了），但正面与浮层里都不许出现「重试」：这件事不用读者动手。
     expect(markup).toContain('mi-signal-read-issue')
     expect(markup).not.toContain('重试')
+    // 内部词不上屏：读者只问「这条分析过没有」，不关心我们的「状态 / 记录 / 通道」。
+    expect(markup).not.toMatch(/状态|记录|通道/)
     expect(markup).not.toContain('retry')
   })
 })

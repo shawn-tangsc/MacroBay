@@ -71,9 +71,14 @@ export function projectSignalAnalysisState(input: Readonly<{
   if (row.decision === 'skipped') {
     return { analysisOffByReader, analysisState: 'skipped', analysisReason: row.reasonCode }
   }
-  // `queued` (and `recorded`, which only exists on the evidence side) means something was asked for;
-  // whether it arrived is the run's answer, not the ledger's.
-  if (!run || run.status === 'queued' || run.status === 'running') {
+  // 账本行 15 天、运行行 14 天：中间那段时间账本还在、运行已经按年龄清掉了。那时 `run` 取不到，
+  // 但这不是「还在排队」——它跑过、记录过期了。说成排队，读者会等一件永远不会再来的事。
+  if (!run) {
+    return row.analysisRunId
+      ? { analysisOffByReader, analysisState: 'stopped', analysisReason: 'run-expired' }
+      : { analysisOffByReader, analysisState: 'queued' }
+  }
+  if (run.status === 'queued' || run.status === 'running') {
     return { analysisOffByReader, analysisState: 'queued' }
   }
   if (run.status === 'succeeded') return { analysisOffByReader, analysisState: 'published' }

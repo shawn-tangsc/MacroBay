@@ -216,8 +216,6 @@ mi: miText['zh-CN'],
             signalAnalysis: {
               label: '分析到哪一步',
               states: {
-                'not-triggered': '还没有轮到这条信号分析',
-                queued: '已排上队，正在分析',
                 published: '分析已出，可以在时间轴里看到',
                 skipped: '这次没有分析',
                 failed: '分析了但没成',
@@ -226,7 +224,8 @@ mi: miText['zh-CN'],
               stoppedReasons: {
                 'run-cancelled': '这次运行被取消了',
                 'run-superseded': '这次已被更新的一次取代，不用等',
-                'run-unrecognized': '这次运行的状态读不出来'
+                'run-unrecognized': '这次运行的状态读不出来',
+                'run-expired': '这次运行发生过，记录已经过了保存期'
               },
               reasonUnknown: '原因没记录',
               separator: '：'
@@ -304,11 +303,11 @@ mi: miText['zh-CN'],
             configureSources: '配置情报源',
             /** One sentence per failure code, shared by every card that reads module signals. */
             signalRead: {
-              'query-failed': '这项数据这次没读到，下次刷新会自己再读一次',
-              'invalid-as-of': '这次的时间点读不了，下次刷新会自己再读一次',
+              'query-failed': '这条信号有没有被分析过，这次没查到。上面的数字不受影响。',
+              'invalid-as-of': '这个时间点查不到这条信号有没有被分析过。上面的数字不受影响。',
               // 给读者看的是「读不到」，不是我们内部的判定原因：格式、契约这些词他既不懂也做不了。
-              'contract-invalid': '这项数据这次没读到，不是你没有，下次刷新会自己再读一次',
-              ariaLabel: '这项数据读取失败',
+              'contract-invalid': '这条信号有没有被分析过，这次没查到（不是没有分析过）。上面的数字不受影响。',
+              ariaLabel: '这条信号有没有被分析过，这次没查到；上面的数字不受影响',
             },
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
@@ -1528,8 +1527,6 @@ mi: miText['en-US'],
                         signalAnalysis: {
               label: 'Analysis progress',
               states: {
-                'not-triggered': 'This signal has not been analysed yet',
-                queued: 'Queued; the analysis is running',
                 published: 'The analysis is out; read it in the timeline',
                 skipped: 'Not analysed this time',
                 failed: 'Analysed but did not succeed',
@@ -1538,7 +1535,8 @@ mi: miText['en-US'],
               stoppedReasons: {
                 'run-cancelled': 'This run was cancelled',
                 'run-superseded': 'A newer run replaced this one; nothing to wait for',
-                'run-unrecognized': 'The state of this run could not be read'
+                'run-unrecognized': 'The state of this run could not be read',
+                'run-expired': 'This run happened; its record is past the retention period'
               },
               reasonUnknown: 'Reason not recorded',
               separator: ': '
@@ -1613,10 +1611,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             backToAgents: 'Back to Agents',
             configureSources: 'Configure intelligence sources',
             signalRead: {
-              'query-failed': 'This data was not read this time; the next refresh will read it again',
-              'invalid-as-of': 'This instant cannot be read; the next refresh will try again',
-              'contract-invalid': 'This data was not read this time; it is not missing, and the next refresh will read it again',
-              ariaLabel: 'This data could not be read',
+              'query-failed': 'We could not check whether this signal has been analysed. The numbers above are unaffected.',
+              'invalid-as-of': 'We could not check, at this instant, whether this signal has been analysed. The numbers above are unaffected.',
+              'contract-invalid': 'We could not check whether this signal has been analysed (this does not mean it was not). The numbers above are unaffected.',
+              ariaLabel: 'Could not check whether this signal has been analysed; the numbers are unaffected',
             },
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',

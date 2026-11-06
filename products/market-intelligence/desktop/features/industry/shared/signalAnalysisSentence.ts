@@ -18,7 +18,10 @@ export type SignalAnalysisCopyPart =
 /** 由渲染层提供：键 → 句子，未知键返回空串。缺的句子在这里统一落到兜底。 */
 export type SignalAnalysisCopyLookup = (query: SignalAnalysisCopyPart) => string
 
-export function signalAnalysisSentence(view: SignalAnalysisStateView, lookup: SignalAnalysisCopyLookup): string {
+export function signalAnalysisSentence(view: SignalAnalysisStateView, lookup: SignalAnalysisCopyLookup): string | undefined {
+  // 「还在等」不是信息：还没轮到、已经排上队，一个字都不出现（连占位都不要）。
+  // 界面只留两样东西——已经发生的结果，和为什么不分析。
+  if (view.analysisState === 'not-triggered' || view.analysisState === 'queued') return undefined
   const unknown = lookup({ part: 'reasonUnknown' })
   const state = lookup({ part: 'state', code: view.analysisState }) || unknown
   const code = view.analysisReason ?? ''
