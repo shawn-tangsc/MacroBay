@@ -42,6 +42,8 @@ import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
+export type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
+import type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
 import { briefingEditionSlotPeriodId, type BriefingAttemptRunStore, type BriefingEditionSlotStore } from './dailyBriefingEditionSlot'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
@@ -76,26 +78,8 @@ export type DailyBriefingStoredEdition = Readonly<{
 }>
 
 /** An attempt is opened when the work starts, so an interrupted run is still a row. */
-export type DailyBriefingAttemptStart = Readonly<{
-  date: string
-  /** Which issue this attempt belongs to; absent means `default`. */
-  periodId?: string
-  locale: DailyBriefingLocale
-  startedAt: string
-}>
 
 /** The same row, settled. It is updated in place, never deleted: the attempt is history. */
-export type DailyBriefingAttemptEnd = Readonly<{
-  date: string
-  periodId?: string
-  locale: DailyBriefingLocale
-  attemptNo: number
-  state: 'succeeded' | 'failed'
-  finishedAt: string
-  failureCode?: string
-  /** A failed attempt has no document, so its stage trace is the only record of what happened. */
-  trace?: BriefingGenerationTrace
-}>
 
 /** A period's run: one per day and issue, holding what the editions of that run were written from. */
 export type DailyBriefingPeriodRun = Readonly<{
@@ -458,7 +442,11 @@ export function createDailyBriefingService(deps: Readonly<{
     // Nothing is recorded while the market is unreadable: the wait happens before the attempt row.
     const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const market = await prepareMarketForRun({ backfill: deps.marketBackfill?.(), readiness: deps.readiness, asOf: input.asOf, manual: force, publish: (progress) => runs.progress.set(progressKey, progress), now })
-    const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
+    // 尝试记录写下这一次的**来源与窗口**：列表要就着这一行说清"这是哪一次、覆盖多长"。
+    const attempts = createDailyBriefingAttemptJournal(deps.store, {
+      date: input.date, periodId: input.periodId, locale: input.locale, now,
+      trigger: input.runTrigger ?? 'scheduled', windowHours: input.windowHours
+    })
     if (!await attempts.open()) return { state: 'unavailable', failureCode: 'attempt-not-recorded' }
     const recorder = createDailyBriefingGenerationRecorder({
       attemptId: `${input.date}:${input.locale}:${input.asOf}`,

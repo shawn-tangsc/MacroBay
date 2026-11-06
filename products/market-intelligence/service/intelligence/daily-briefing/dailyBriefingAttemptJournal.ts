@@ -1,8 +1,36 @@
 import type {
   BriefingGenerationTrace,
-  DailyBriefingLocale
+  DailyBriefingLocale,
+  DailyBriefingRunTrigger
 } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingAttemptEnd, DailyBriefingStore } from './dailyBriefingService'
+import type { DailyBriefingStore } from './dailyBriefingService'
+
+export type DailyBriefingAttemptStart = Readonly<{
+  date: string
+  /** Which issue this attempt belongs to; absent means `default`. */
+  periodId?: string
+  locale: DailyBriefingLocale
+  startedAt: string
+  /**
+   * 这一次跑是怎么来的、覆盖多长的窗口：写进尝试记录，列表据此说清这一行的身份
+   * （用户 2026-11-06）。缺省表示调用方不知道——老记录与旧调用点，界面写「未记录」。
+   */
+  trigger?: DailyBriefingRunTrigger
+  windowHours?: number
+}>
+
+/** The same row, settled. It is updated in place, never deleted: the attempt is history. */
+export type DailyBriefingAttemptEnd = Readonly<{
+  date: string
+  periodId?: string
+  locale: DailyBriefingLocale
+  attemptNo: number
+  state: 'succeeded' | 'failed'
+  finishedAt: string
+  failureCode?: string
+  /** A failed attempt has no document, so its stage trace is the only record of what happened. */
+  trace?: BriefingGenerationTrace
+}>
 
 /**
  * The attempt row of one generation: opened when the work starts, settled when it ends.
@@ -34,8 +62,10 @@ export function createDailyBriefingAttemptJournal(
     date: string
     periodId: string
     locale: DailyBriefingLocale
-    /** Called at open time, not at construction: the row records when the work actually started. */
     now: () => string
+    /** 这一次跑的来源与窗口：写进尝试记录，列表据此说清这一行的身份。 */
+    trigger?: DailyBriefingRunTrigger
+    windowHours?: number
   }>
 ): DailyBriefingAttemptJournal {
   let attemptNo: number | undefined
@@ -70,7 +100,9 @@ export function createDailyBriefingAttemptJournal(
           date: input.date,
           periodId: input.periodId,
           locale: input.locale,
-          startedAt: input.now()
+          startedAt: input.now(),
+          ...(input.trigger === undefined ? {} : { trigger: input.trigger }),
+          ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours })
         })
         return true
       } catch {

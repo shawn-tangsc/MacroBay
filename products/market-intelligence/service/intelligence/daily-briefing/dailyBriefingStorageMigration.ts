@@ -78,6 +78,10 @@ export function createAttemptsSql(table: string): string {
   finished_at text,
   trace_json text,
   cleaned_at text,
+  -- 这一次跑的来源与窗口（用户 2026-11-06：列表每一行要自己说清身份）。老记录为空 → 显示「未记录」，
+  -- 不许拿当前设置回填。
+  trigger text,
+  window_hours integer,
   primary key (edition_date, period_id, locale, attempt_no)
 );`
 }

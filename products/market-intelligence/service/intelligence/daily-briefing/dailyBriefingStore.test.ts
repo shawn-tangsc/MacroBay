@@ -127,6 +127,22 @@ describe('daily briefing store', () => {
     expect(await store.deletePeriod!('2026-10-30', 'default', 'zh-CN')).toEqual({ editions: 0, attempts: 0, periodRuns: 0 })
   })
 
+  it('records how each attempt was triggered and how long its window was', async () => {
+    // 用户 2026-11-06：列表那一行要自己说清"哪一次、怎么来的、覆盖多长"。
+    const store = createDailyBriefingSqliteStore(':memory:')
+    await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_catchup', locale: 'zh-CN',
+      startedAt: '2026-11-06T00:00:00.000Z', trigger: 'catch-up', windowHours: 12 })
+    // 老调用点不给这两样：写空，读出来就是"未记录"，绝不拿当前设置回填。
+    await store.beginAttempt!({ date: '2026-11-06', periodId: 'p_legacy', locale: 'zh-CN',
+      startedAt: '2026-11-06T00:01:00.000Z' })
+
+    const [recorded] = await store.listAttempts!('2026-11-06', 'zh-CN', 'p_catchup')
+    expect(recorded).toMatchObject({ trigger: 'catch-up', windowHours: 12 })
+    const [legacy] = await store.listAttempts!('2026-11-06', 'zh-CN', 'p_legacy')
+    expect(legacy?.trigger).toBeUndefined()
+    expect(legacy?.windowHours).toBeUndefined()
+  })
+
   it('replaces the same day rather than stacking editions', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
     await store.put(edition('2026-10-30', 'first'))

@@ -97,7 +97,6 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   secretVault?: SecretVault
   platformFetch?: typeof fetch
   getNetworkSettings?: () => Promise<NetworkSettings>
-  /** 平台的落盘日志（app.log）。后台事实（补跑、降级）走这条通道，事后才查得到。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
   sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>

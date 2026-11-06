@@ -454,6 +454,14 @@ export type DailyBriefingAttemptRecord = Readonly<{
   attemptNo: number
   state: 'running' | 'succeeded' | 'failed'
   failureCode?: string
+  /**
+   * 这一次跑是怎么来的（定时 / 手动 / 重试 / 补跑）与它覆盖多长的窗口。
+   *
+   * 用户 2026-11-06：列表那一行要自己说清身份。今天之前的记录没存这两样，读出来就是 `undefined`
+   * ——界面写「未记录」，**绝不拿当前设置回填**。
+   */
+  trigger?: string
+  windowHours?: number
   startedAt: string
   finishedAt?: string
   /** Set when the session behind this attempt was cleaned up; the row stays, its trace is gone. */

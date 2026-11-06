@@ -56,6 +56,13 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       db.exec(`alter table daily_briefing_period_runs add column ${column} ${ddl};`)
     }
   }
+  // 尝试记录补两列：这一次跑的触发方式与统计窗口（用户 2026-11-06：列表每一行要自己说清身份）。
+  // 可空——今天之前的记录没有这两样，界面上写「未记录」，绝不拿当前设置回填。
+  for (const [column, ddl] of [['trigger', 'text'], ['window_hours', 'integer']] as const) {
+    if (!tableColumns(db, 'daily_briefing_attempts').includes(column)) {
+      db.exec(`alter table daily_briefing_attempts add column ${column} ${ddl};`)
+    }
+  }
 
   const build = () => {
     const editionPeriod = tableColumns(db, 'daily_briefings').includes('period_id')
@@ -107,14 +114,17 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
           const periodId = attempt.periodId ?? DEFAULT_PERIOD_ID
           const next = db.prepare(`select coalesce(max(attempt_no), 0) + 1 as next from daily_briefing_attempts
             where edition_date = ? and period_id = ? and locale = ?`)
+          // 触发方式与窗口一起写下：列表要能就着这一行说清"这一次是怎么来的、覆盖多长"。
+          // 老记录这两列是空的，界面写「未记录」，不回填。
           const insert = db.prepare(`insert into daily_briefing_attempts
-            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at)
-            values (?, ?, ?, ?, 'running', null, ?, null, null, null)`)
+            (edition_date, period_id, locale, attempt_no, state, failure_code, started_at, finished_at, trace_json, cleaned_at, trigger, window_hours)
+            values (?, ?, ?, ?, 'running', null, ?, null, null, null, ?, ?)`)
           db.exec('begin immediate')
           try {
             const row = next.get(attempt.date, periodId, attempt.locale) as { next?: number } | undefined
             const attemptNo = Number(row?.next ?? 1)
-            insert.run(attempt.date, periodId, attempt.locale, attemptNo, attempt.startedAt)
+            insert.run(attempt.date, periodId, attempt.locale, attemptNo, attempt.startedAt,
+              attempt.trigger ?? null, attempt.windowHours ?? null)
             db.exec('commit')
             return attemptNo
           } catch (error) {
@@ -146,7 +156,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         }
 
     const listAttemptsStatement = attemptPeriod
-      ? db.prepare(`select attempt_no, state, failure_code, started_at, finished_at, cleaned_at from daily_briefing_attempts
+      ? db.prepare(`select attempt_no, state, failure_code, started_at, finished_at, cleaned_at, trigger, window_hours from daily_briefing_attempts
           where edition_date = ? and period_id = ? and locale = ? order by attempt_no desc`)
       : db.prepare('select trace_json, updated_at from daily_briefing_attempts where edition_date = ? and locale = ?')
     const latestAttempt = attemptPeriod
@@ -212,6 +222,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
           return Object.freeze(rows.map((row) => Object.freeze({
             attemptNo: Number(row.attempt_no),
             state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const,
+            trigger: typeof row.trigger === 'string' ? row.trigger : undefined,
+            windowHours: typeof row.window_hours === 'number' ? row.window_hours : undefined,
             ...(typeof row.failure_code === 'string' && row.failure_code ? { failureCode: row.failure_code } : {}),
             startedAt: String(row.started_at),
             ...(typeof row.finished_at === 'string' && row.finished_at ? { finishedAt: row.finished_at } : {}),
