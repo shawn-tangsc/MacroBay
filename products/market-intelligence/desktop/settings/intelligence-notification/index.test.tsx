@@ -118,6 +118,44 @@ describe('intelligence notification settings', () => {
     expect(switches()[3]?.getAttribute('aria-checked')).toBe('true')
   })
 
+  it('never says the rest of the intelligence only shows in the app and the centre', async () => {
+    // 旧句把三种表面说成两种：失败类（日报没生成、来源连续失败、时区无效）照样弹桌面。
+    // 读者据旧句会以为「关掉桌面就不收失败提醒」，所以这句标成不许写回。
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const copy = intelligenceNotificationText[language]
+      const footer = copy['pages.intelligence.notification.footer'] ?? ''
+      const groupInfo = copy['pages.intelligence.notification.groupInfo.1'] ?? ''
+      expect(footer).not.toContain('只出现在应用内和通知中心')
+      expect(footer).not.toContain('stays in the app and the notification centre')
+      expect(groupInfo).not.toContain('只出现在应用内和通知中心')
+      expect(groupInfo).not.toContain('stays in the app and the notification centre')
+      // 新句必须说清「其余不推手机，但仍按那两个开关提醒」。
+      expect(`${footer}${groupInfo}`).toMatch(/不推手机|off your phone/u)
+    }
+  })
+
+  it('draws the off-by-default row exactly like an off row of the other three', async () => {
+    // 读者看到一条灰着/禁用/半透明的开关会直接判它坏了。所以「默认关」只由开关状态表达：
+    // 把所有行都关掉，第四条的类名与禁用属性必须与第一条**完全相同**。
+    installApi({
+      getChannelEvents: vi.fn(async () => ({
+        [IDS.signal]: false,
+        [IDS.macro]: false,
+        [IDS.briefing]: false
+      }))
+    })
+    await renderPage()
+    const all = switches()
+    expect(all).toHaveLength(4)
+    const reference = all[0]!
+    const fourth = all[3]!
+    expect(fourth.className).toBe(reference.className)
+    expect(fourth.disabled).toBe(reference.disabled)
+    expect(fourth.getAttribute('aria-disabled')).toBe(reference.getAttribute('aria-disabled'))
+    // 也不许给它挂一行「默认关」的常驻说明——那会变成一条永远挂在行内的文字。
+    expect(container?.textContent ?? '').not.toContain('默认关')
+  })
+
   it('names the fourth row like the others: what triggered it, not the feature name', async () => {
     await renderPage()
     const title = text['pages.intelligence.notification.rows.sentimentAlert.title']
