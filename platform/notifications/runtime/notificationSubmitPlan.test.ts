@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { planNotificationSubmit } from './notificationSubmitPlan'
+import { externalActionUrl } from '../delivery/channelPushPort'
 
 const policy: NotificationEventPolicy = {
   'platform.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
@@ -200,6 +201,18 @@ describe('「看原文」动作：外链只有一种写法（契约 §7.5 ⑫）
     if (plan.kind !== 'new') return
     // 中心按钮与手机末尾那一行读的是**同一份**：记录里存原地址，不在正文里再放一份。
     expect(plan.record.actions).toEqual([external()])
+  })
+
+  it('normalizes the address once, so the centre button and the phone read the same value', () => {
+    const plan = planNotificationSubmit({
+      ...base,
+      request: request({ actions: [external({ url: '  https://example.com/news/42  ' })] })
+    })
+    expect(plan.kind).toBe('new')
+    if (plan.kind !== 'new') return
+    // 两端各 trim 一次不算保证：一个带空白的地址会「中心能开、手机打不开」。记录里只存一个值。
+    expect(plan.record.actions).toEqual([external()])
+    expect(externalActionUrl(plan.record.actions)).toEqual({ url: 'https://example.com/news/42', extra: 0 })
   })
 
   it('rejects open-external without a url: a button with nowhere to go', () => {

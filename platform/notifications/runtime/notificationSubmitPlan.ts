@@ -178,7 +178,10 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
 
   const surfaces = planNotificationSurfaces(entry, input.settings, input.desktopSupported)
   const levels = effectiveLevels(entry, surfaces)
-  const incoming = toLegacyRequest(entry, input.request, dedupeKey, levels, bodyKey)
+  // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
+  // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
+  const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
+  const incoming = toLegacyRequest(entry, request, dedupeKey, levels, bodyKey)
   if (input.duplicate) {
     return {
       kind: 'merge',
@@ -188,7 +191,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     }
   }
 
-  const record = createRecord(entry, input.request, dedupeKey, levels, surfaces, bodyKey, input.now)
+  const record = createRecord(entry, request, dedupeKey, levels, surfaces, bodyKey, input.now)
   return {
     kind: 'new',
     record,
@@ -359,6 +362,17 @@ function effectiveLevels(
   if (surfaces.toast) levels.push('toast')
   if (entry.approvedDisruptionLevels.includes('channel')) levels.push('channel')
   return Object.freeze(levels)
+}
+
+/**
+ * 「看原文」的地址在**进记录那一刻规范化一次**，之后中心按钮与手机末尾那一行读的是同一个值。
+ *
+ * 两端各 trim 一次不算保证：一个带首尾空白的地址，在中心能打开、在手机上打不开，读者会以为推错了
+ * （界面规范 §3.2 的硬要求是「两边必须是同一个地址」）。所以规范化只做一次，写在记录上。
+ */
+function normalizeActionUrl(action: NotificationAction): NotificationAction {
+  if (action.kind !== 'open-external' || typeof action.url !== 'string') return action
+  return { ...action, url: action.url.trim() }
 }
 
 function toLegacyRequest(
