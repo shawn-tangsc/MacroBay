@@ -44,8 +44,21 @@ export function createRunSessionPort(
  * 这样 `bootstrap.ts` 只多一行调用，而不再为一个端口的装配长出六行——它是只减不增的基线文件。
  */
 export function createRunSessionPortFromDeps(
-  deps: Pick<SessionDependencies, 'findAgentSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'>,
-  clock: Readonly<{ timeZone: () => string; language: () => Promise<'zh-CN' | 'en-US'> }>
+  deps: Pick<SessionDependencies, 'findAgentSessionByAutomationRef' | 'createAgentSession' | 'appendAgentSessionMessages'> & Readonly<{
+    getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
+  }>,
+  clock: Readonly<{
+    timeZone: () => string
+    /** 语言钩子没接上时留一行日志，再回落中文——静默回落会让英文读者看到中文标题。 */
+    log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  }>
 ): ReturnType<typeof createRunSessionPort> {
-  return createRunSessionPort({ ...deps, timeZone: clock.timeZone, language: clock.language })
+  return createRunSessionPort({
+    ...deps,
+    timeZone: clock.timeZone,
+    language: deps.getAppLanguage ?? (async () => {
+      clock.log?.('warn', 'analysis.session-language-hook-missing')
+      return 'zh-CN' as const
+    })
+  })
 }

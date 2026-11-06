@@ -1,12 +1,21 @@
 /*
- * 一个标记，不是一行公告：不撑行高、不推布局。红色只表达「我们出错了」，
- * 且只在出错时渲染——正常、加载中、「还没有分析」、「数据不齐」都不出这个图标。
+ * 一个标记，不是一行公告。
+ *
+ * 用**结构**保证不占版面：绝对定位贴在所在行的角落，不参与行高计算——行高变化在结构上就是 0，
+ * 不需要谁去量「抬高了 2px 还是 6px」。热区仍由 `IconButton` 自己给（md = 24）。
  */
 .mi-signal-read-issue {
-  /*
-   * 图标不是正文：图形门槛是 3:1，深色下 `--danger` 对 surface 是 3.94，够用；掺 15% `--text-strong`
-   * 再提一档对比，同时这条前景不再写成「状态色当正文」——它们门槛不同，不该走同一个写法。
-   */
-  color: color-mix(in srgb, var(--danger) 85%, var(--text-strong));
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--danger);
+}
+
+/*
+ * 承载它的两处头部都没有定位上下文，这里各补一条：绝对定位的标记需要一个坐标原点，
+ * 否则会跑到最近的定位祖先（图表区）上去。只加 `position`，不动它们的既有布局。
+ */
+.mi-positioning-panel__head,
+.mi-capital-conditions__header-band {
+  position: relative;
 }

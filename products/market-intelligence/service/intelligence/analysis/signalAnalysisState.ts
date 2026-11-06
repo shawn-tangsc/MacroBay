@@ -82,7 +82,6 @@ export function projectSignalAnalysisState(input: Readonly<{
     return { analysisOffByReader, analysisState: 'queued' }
   }
   if (run.status === 'succeeded') return { analysisOffByReader, analysisState: 'published' }
-  if (run.status === 'queued' || run.status === 'running') return { analysisOffByReader, analysisState: 'queued' }
   if (run.status === 'failed' || run.status === 'invalid-output') {
     return { analysisOffByReader, analysisState: 'failed', analysisReason: run.failureCode ?? undefined }
   }

@@ -553,7 +553,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
   // 自动分析会话：构造留在装配模块，这里只交依赖与时钟（固定智能体下按 runId 幂等）。
-  intelligenceModule.marketAnalysisRuntime.setRunSessionPort(createRunSessionPortFromDeps(deps, { timeZone: () => currentReaderTimeZone(), language: deps.getAppLanguage ?? (async () => 'zh-CN' as const) }))
+  intelligenceModule.marketAnalysisRuntime.setRunSessionPort(createRunSessionPortFromDeps(deps, {
+    timeZone: () => currentReaderTimeZone(),
+    log: deps.log
+  }))
   // 「这条信号分析过没有」的读口：装配层这里挂一次，卡片才有状态可显示。漏挂不会报错，只会
   // 让每张卡都显示「这次没查到」，所以这一处有专门的用例断言它真的被调用。
   mountSignalAnalysisReader({
