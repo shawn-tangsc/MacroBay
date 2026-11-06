@@ -26,7 +26,8 @@ Full walkthrough: **[Quick start](./getting-started/quick-start.md)**.
    model for agents.
 2. **Settings → Intelligence Sources**: enable the sources you have access to and add any required
    credentials.
-3. Open the **intelligence portal** → **Crypto Market Analyst** → **Open dashboard**.
+3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard. The agent portal is not
+   the first screen; reach it with **Back to Agents** on the dashboard.
 4. Ask the analyst agent a question, for example: *What changed in the last macro release, and
    which assets does it affect?*
 

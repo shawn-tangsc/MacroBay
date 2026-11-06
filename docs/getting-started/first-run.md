@@ -11,8 +11,9 @@ account and an API key, plus at least one intelligence source you can enable.
 pnpm dev
 ```
 
-If the window opens on the intelligence portal, that is expected: the product shell and the
-agent workspace are separate tabs.
+If the window opens on the intelligence dashboard, that is expected: the product shell and the agent
+workspace are separate tabs. The agent portal is not the first screen — reach it with **Back to
+Agents** on the dashboard (shown below).
 
 ![Intelligence portal](../assets/screenshots/portal-en.png)
 

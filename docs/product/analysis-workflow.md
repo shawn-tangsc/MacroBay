@@ -9,9 +9,10 @@ interpretation together.
 
 ## 1. Choose a market or asset
 
-Start from the intelligence portal or dashboard and select the market context you want to inspect.
-The selection determines which evidence the analysis can use. A broader question can still be asked
-without a selection, but the answer must then state that context is missing.
+Start from the dashboard (**Intelligence** in the sidebar lands there) or the agent portal
+(**Back to Agents**) and select the market context you want to inspect. The selection determines
+which evidence the analysis can use. A broader question can still be asked without a selection, but
+the answer must then state that context is missing.
 
 ## 2. Bind the context
 
