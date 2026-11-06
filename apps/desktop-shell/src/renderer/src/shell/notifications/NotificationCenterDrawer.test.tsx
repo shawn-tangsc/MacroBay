@@ -291,13 +291,13 @@ describe('句子由主进程解析，渲染层只负责画', () => {
     const source = fakeSource({
       list: async () => ({
         items: [
-          record({ id: 'degraded', deeplink, title: '有一条新通知，点开看详情', body: '' })
+          record({ id: 'degraded', deeplink, title: '有一条新通知', body: '' })
         ]
       })
     })
     await mount(source)
 
-    expect(document.body.textContent).toContain('有一条新通知，点开看详情')
+    expect(document.body.textContent).toContain('有一条新通知')
     // 占位符原样打出来与露键同罪：读者看到 `{taskName}` 就是在看我们的内部形状。
     expect(document.body.textContent).not.toContain('{')
   })

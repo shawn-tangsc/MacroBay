@@ -120,7 +120,7 @@ describe('渲染层看到的那一份', () => {
       reasonKey: undefined
     }))
 
-    expect(item.title).toBe('有一条新通知，点开看详情')
+    expect(item.title).toBe('有一条新通知')
     expect(item.body).toBe('')
     expect(item.title).not.toContain('notification.')
     expect(item.title).not.toContain('{')
@@ -147,7 +147,7 @@ describe('渲染层看到的那一份', () => {
       titleKey: 'notification.notInTheTable' as NotificationRecord['titleKey']
     }))
 
-    expect(item.title).toBe('A new notification arrived — open it for details.')
+    expect(item.title).toBe('A new notification arrived.')
   })
 
   it('作业名解析不到：标题仍在，动作不被吞（带 deeplink 的通知必须能点开）', async () => {
@@ -176,7 +176,8 @@ describe('渲染层看到的那一份', () => {
     expect(item.title).not.toContain('{')
     // 一行诊断：丢的是哪一格（不新增第三个码）。
     expect(diagnostics.map((entry) => entry.code)).toContain('copy-param-missing')
-    // 「点开看详情」不许是空承诺：时间与类型标签不参与文案解析，降级时照旧在。
+    // 降级态不许是空承诺：时间与类型标签不参与文案解析，降级时照旧在。
+    // 兜底句只说事实（v2.50）：手机上无法「点开」，原来那句承诺只有手机读者会当真。
     expect(item.category).toBe('needs-action')
     expect(item.createdAt).toBe('2026-11-05T00:00:00.000Z')
   })
