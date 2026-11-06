@@ -25,6 +25,46 @@ export type SentimentAlertContent = Readonly<{
   occurredAt: string
 }>
 
+export type SentimentAlertRequestInput = {
+  storyKey: string
+  strength: SentimentAlertStrength
+  headline: string
+  sourceName?: string
+  /** 读者能点的公开地址；缺它就不提交（没有原文链接的推送没有价值）。 */
+  url?: string
+  publishedAt: string
+}
+
+/**
+ * 完整提交请求。**`eventTypeId` 由调用点在 `submit(...)` 实参里给**（生产者门禁要求它就出现在
+ * 提交那一刻的实参上，藏在别的函数载荷里会被记成「无法判定」），所以这里返回的是除它以外的部分。
+ *
+ * 动作**至多一个** `open-external`：它身上带 `url`，不带 `deeplink`——应用内落点在手机上点不动。
+ * 手机末尾那一行由平台 `formatPushText` 从同一个 `url` 附上，两处是同一个地址。
+ */
+export type SentimentAlertRequest = Readonly<{
+  rendered: NotificationContentByLanguage
+  dedupeVars: NotificationDedupeVars
+  severity: 'info'
+  occurredAt: string
+  actions: readonly [{ id: 'open-original'; labelKey: 'notification.action.open-original'; kind: 'open-external'; url: string }]
+}>
+
+export function buildSentimentAlertRequest(input: SentimentAlertRequestInput): SentimentAlertRequest | undefined {
+  const content = buildSentimentAlertContent(input)
+  const url = input.url?.trim()
+  if (!content || !url) return undefined
+  // 只收 http/https 绝对地址：拒收规则在平台提交入口，这里先不产出明显打不开的地址。
+  if (!/^https?:\/\/[^\s]+$/iu.test(url)) return undefined
+  return {
+    rendered: content.rendered,
+    dedupeVars: content.dedupeVars,
+    severity: content.severity,
+    occurredAt: content.occurredAt,
+    actions: [{ id: 'open-original', labelKey: 'notification.action.open-original', kind: 'open-external', url }]
+  }
+}
+
 export function buildSentimentAlertContent(input: {
   storyKey: string
   strength: SentimentAlertStrength

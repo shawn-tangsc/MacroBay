@@ -16,8 +16,14 @@ import type { NewsPushLedgerStore } from './newsPushLedgerStore'
 export type NewsSentimentAlertDeliver = (input: {
   itemId: string
   storyKey: string
-  title?: string
-  tier: 'medium' | 'high'
+  strength: 'medium' | 'high'
+  /** 原标题：数据，不翻译、不改写。 */
+  headline: string
+  /** 来源显示名：缺它就不提交（正文三段必须齐）。 */
+  sourceName?: string
+  /** 公开可访问的原文地址：缺它就不提交，也不产出动作。 */
+  url?: string
+  publishedAt: string
 }) => Promise<void> | void
 
 export function createNewsSentimentAlertOutlet(deps: {
@@ -34,7 +40,7 @@ export function createNewsSentimentAlertOutlet(deps: {
       record: Pick<
         NewsSentimentRecord,
         'itemId' | 'engine' | 'strength' | 'storyKey' | 'publishedAt'
-      > & { title?: string }
+      > & { headline: string; sourceName?: string; url?: string }
     ): Promise<{ outcome: 'pushed'; tier: 'medium' | 'high' } | { outcome: 'skipped'; reason: string }> {
       const watermark = deps.ledger.readWatermark()
       // 开关默认关：没有水位就是「读者还没按过」，一条都不推——这是默认值，不是错误状态。
@@ -60,8 +66,11 @@ export function createNewsSentimentAlertOutlet(deps: {
       await deps.deliver({
         itemId: record.itemId,
         storyKey,
-        ...(record.title ? { title: record.title } : {}),
-        tier: decision.tier
+        strength: decision.tier,
+        headline: record.headline,
+        ...(record.sourceName ? { sourceName: record.sourceName } : {}),
+        ...(record.url ? { url: record.url } : {}),
+        publishedAt: record.publishedAt
       })
       return { outcome: 'pushed', tier: decision.tier }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildSentimentAlertContent } from './newsSentimentAlertRequest'
+import { buildSentimentAlertContent, buildSentimentAlertRequest } from './newsSentimentAlertRequest'
 
 const BASE = {
   storyKey: 'story:2026-11-06:item-a',
@@ -9,6 +9,28 @@ const BASE = {
   sourceName: 'CoinDesk',
   publishedAt: '2026-11-06T21:30:00.000Z'
 }
+
+describe('buildSentimentAlertRequest', () => {
+  it('carries exactly one open-external action with the same public url, and no deeplink', () => {
+    const request = buildSentimentAlertRequest({ ...BASE, url: 'https://www.coindesk.com/markets/x' })
+    expect(request?.actions).toHaveLength(1)
+    expect(request?.actions[0]).toEqual({
+      id: 'open-original',
+      labelKey: 'notification.action.open-original',
+      kind: 'open-external',
+      url: 'https://www.coindesk.com/markets/x'
+    })
+    // 应用内落点在手机上点不动：外链动作身上不许出现它。
+    expect(request?.actions[0]).not.toHaveProperty('deeplink')
+  })
+
+  it('refuses to build a request without a usable public url', () => {
+    expect(buildSentimentAlertRequest({ ...BASE })).toBeUndefined()
+    expect(buildSentimentAlertRequest({ ...BASE, url: 'javascript:alert(1)' })).toBeUndefined()
+    expect(buildSentimentAlertRequest({ ...BASE, url: '/markets/x' })).toBeUndefined()
+    expect(buildSentimentAlertRequest({ ...BASE, url: 'file:///etc/passwd' })).toBeUndefined()
+  })
+})
 
 describe('buildSentimentAlertContent', () => {
   it('renders the three blocks in both languages, with the bracket style each language uses', () => {

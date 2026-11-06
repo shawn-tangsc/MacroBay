@@ -59,7 +59,7 @@ import {
 } from './news-sentiment/newsSentimentSettingsStore'
 import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
-import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
+import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentReadiness'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
@@ -602,6 +602,7 @@ export function getIntelligenceModule(
           ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
           ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
           invoke: structuredModelInvocation.invoke,
+          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), submit: hooks.submitNotification } } : {}),
           now: () => new Date().toISOString()
         })
       : undefined

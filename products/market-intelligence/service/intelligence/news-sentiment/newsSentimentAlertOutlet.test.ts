@@ -12,7 +12,9 @@ function judgment(overrides: Record<string, unknown> = {}) {
     strength: 4,
     storyKey: 'story:2026-11-06:item-a',
     publishedAt: '2026-11-06T21:30:00.000Z',
-    title: 'Bitcoin drops as midterm vote nears',
+    headline: 'Bitcoin drops as midterm vote nears',
+    sourceName: 'CoinDesk',
+    url: 'https://www.coindesk.com/markets/x',
     ...overrides
   }
 }

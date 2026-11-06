@@ -14,6 +14,17 @@ import {
 import { buildNewsSentimentMessages, parseNewsPolarityModelOutput } from './newsSentimentModel'
 import { scoreNewsWithRules } from './newsSentimentRules'
 import { storyKeyOf, utcDayBucket, type StoryKeyCandidate } from './newsSentimentStoryKey'
+import { createNewsSentimentAlertOutlet } from './newsSentimentAlertOutlet'
+import { buildSentimentAlertRequest } from './newsSentimentAlertRequest'
+import { createNewsPushLedgerStore } from './newsPushLedgerStore'
+
+export { newsPushLedgerPolicy } from './newsPushLedgerStore'
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
 import { resolveNewsSentimentModel } from './newsSentimentSettings'
 import type { NewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import type { NewsSentimentStore } from './newsSentimentStore'
@@ -52,13 +63,34 @@ export function createNewsSentimentScoringService(deps: {
   now: () => string
   maxPerRun?: number
   /**
-   * 判定点：每条判断落库之后调用一次（含规则兜底的，出口自己决定推不推）。
+   * 推送出口。给了它，每条判断落库之后过一遍三道闸；没给就一条都不推（默认关）。
    *
    * 它**不影响评分**：通知那边抖一下不该让这一轮评分算失败，所以异常在这里吞掉。代价说清楚——
    * 提交失败的那条已经在账本里记成「推过」，不会重推；宁可漏一条，也不重复打扰。
    */
-  onJudged?: (record: NewsSentimentRecord) => Promise<void> | void
+  alertDelivery?: {
+    ledgerPath: string
+    submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  }
 }) {
+  /**
+   * 判定点。`eventTypeId` 必须出现在 `submit(...)` 的实参里：生产者门禁认的是「提交那一刻的
+   * 实参」，藏在别的函数的载荷里会被记成无法判定，等于给「已经接好了」发假证书。
+   */
+  const alertOutlet = deps.alertDelivery
+    ? createNewsSentimentAlertOutlet({
+        ledger: createNewsPushLedgerStore(deps.alertDelivery.ledgerPath),
+        deliver: async (alert) => {
+          const request = buildSentimentAlertRequest(alert)
+          if (!request) return
+          await deps.alertDelivery!.submit({
+            eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert,
+            ...request
+          })
+        },
+        now: deps.now
+      })
+    : undefined
   return {
     async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
       const settings = await deps.settingsStore.getSettings()
@@ -267,7 +299,14 @@ export function createNewsSentimentScoringService(deps: {
           caveats: [...new Set([...judgment.caveats, ...bodyCaveats, ...caveats])]
         }
         deps.store.upsertSentiment(record)
-        await Promise.resolve(deps.onJudged?.(record)).catch(() => undefined)
+        await Promise.resolve(
+          alertOutlet?.onJudged({
+            ...record,
+            headline: item.title,
+            url: item.url,
+            sourceName: getIntelligenceSourceDefinition(item.sourceId)?.displayName ?? item.sourceId
+          })
+        ).catch(() => undefined)
         if (entities.length > 0 && storyKey) {
           const day = utcDayBucket(item.publishedAt)
           if (day) readPeers(item.publishedAt).push({ itemId: item.itemId, publishedAt: item.publishedAt, entities, storyKey })
