@@ -89,6 +89,20 @@ export function briefingWindow(
 }
 
 /**
+ * 今天那一期的**计划截止时刻**，不管到没到点。
+ *
+ * `briefingWindow` 在没到点时会把右端夹到"现在"（窗口不伸进未来），所以它答不了"到点了没有"。
+ * 补跑要问的正是这个：今天这一期的计划时刻已经过去了，而今天一次都没跑。
+ */
+export function briefingScheduledCutoff(date: string, generationTime: string, timeZone: string): string | undefined {
+  const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC'
+  const cutoff = dailyBriefingCutoffMinutes(
+    isDailyBriefingGenerationTime(generationTime) ? generationTime : dailyBriefingGenerationPolicy.defaultGenerationTime
+  )
+  return zonedIso(date, Math.floor(cutoff / 60), cutoff % 60, zone)
+}
+
+/**
  * The window for a cutoff the reader picked by hand.
  *
  * `briefingWindow` answers "which scheduled edition does this instant belong to": it keeps the

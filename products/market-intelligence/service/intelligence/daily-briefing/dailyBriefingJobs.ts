@@ -5,6 +5,7 @@ import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGene
 import type { DailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import type { DailyBriefAttemptCleanup } from './dailyBriefSessionRetention'
 import type { DailyBriefingService } from './dailyBriefingService'
+import { catchUpMissedDailyBriefings } from './dailyBriefingCatchUp'
 import { notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { localDate } from './dailyBriefingWindow'
 import { registerDailyBriefSessionRetentionJob } from '../jobs/registerDailyBriefSessionRetentionJob'
@@ -20,7 +21,9 @@ import { applyDailyBriefingSchedules, registerDailyBriefingJob } from '../jobs/r
  */
 export function wireDailyBriefingJobs(deps: Readonly<{
   jobRuntime: JobRuntime
-  service: Pick<DailyBriefingService, 'getToday'>
+  service: Pick<DailyBriefingService, 'getToday' | 'listAttempts'>
+  /** 补跑时用的时钟；测试可注入。缺省取真实时间。 */
+  now?: () => string
   getLocale: () => Promise<DailyBriefingLocale>
   timeZone: () => string
   periods: Pick<DailyBriefingGenerationSettingsService, 'getPeriods'>
@@ -34,6 +37,36 @@ export function wireDailyBriefingJobs(deps: Readonly<{
   // 一期因为时区读不出来被暂停时，读者不会自己发现（自动生成静默停了）。一天一条由去重键判。
   const onPaused = (): void => {
     void notifyDailyBriefing(deps.submitNotification, { kind: 'timezone-invalid', date: new Date().toISOString().slice(0, 10) }, new Date().toISOString())
+  }
+  /**
+   * 今天已经过了点、却一次都没跑过的那一期，现在补跑一次（用户 2026-11-06）。
+   *
+   * 启动与重排时各看一次：定时器只会往前排，错过了的那一次没人替它补——今天 07:00 那期就是这么
+   * 一整天没人跑。补跑走**同一个入口**，只是把触发记成 `catch-up`；跑过的证据是 attempt 行，
+   * 所以重复调用最多并进正在跑的那一次，不会再补第二遍。
+   */
+  const catchUp = (): void => {
+    const timeZone = deps.timeZone()
+    void catchUpMissedDailyBriefings({
+      getPeriods: () => deps.periods.getPeriods(),
+      getLocale: deps.getLocale,
+      readerTimeZone: () => timeZone,
+      now: deps.now ?? (() => new Date().toISOString()),
+      hasEdition: async (input) => (await deps.service.getToday({ locale: input.locale, timeZone, periodId: input.periodId, generate: false })).state === 'available',
+      // 读不到尝试记录就当作"跑过"：宁可少补一次，也不在同一刻补两遍。
+      attemptCount: async (input) => {
+        const listed = await deps.service.listAttempts(input)
+        return listed.state === 'available' ? listed.attempts.length : 1
+      },
+      run: async (input) => deps.service.getToday({
+        locale: input.locale,
+        timeZone: input.timeZone,
+        periodId: input.periodId,
+        periodKind: 'scheduled',
+        runTrigger: 'catch-up',
+        generation: { generationTime: input.generationTime, windowHours: input.windowHours }
+      })
+    }).catch(() => Object.freeze([]))
   }
   registerDailyBriefingJob(deps.jobRuntime, {
     service: deps.service,
@@ -55,7 +88,11 @@ export function wireDailyBriefingJobs(deps: Readonly<{
       timeZone: deps.timeZone
     })
   }
+  // 启动即看一次：昨天到今天之间错过的，就在这里补。
+  catchUp()
   return async (timeZone) => {
     applyDailyBriefingSchedules(deps.jobRuntime, await deps.periods.getPeriods(), timeZone, onPaused)
+    // 重排之后再看一次：换时区可能把某一期推进"今天已过点"的状态。
+    catchUp()
   }
 }
