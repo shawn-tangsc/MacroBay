@@ -22,10 +22,10 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 16-row table (9 platform + 7 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(16)
+  it('is the signed 17-row table (10 platform + 7 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(17)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
-    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(9)
+    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(10)
     expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(7)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
@@ -37,8 +37,8 @@ describe('notification event policy', () => {
 
   it('keeps desktop to the rows the user approved, now including a finished briefing', () => {
     // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。2026-11-06 用户追加一条：
-    // **日报生成成功**也要能弹（此前只有失败那档弹），所以这张名单多了一行、共 13 条。
-    // 12 = 平台 8（9 行里 P7 自己不走桌面）+ 情报 4；+1 = 日报完成。
+    // **日报生成成功**也要能弹（此前只有失败那档弹）。同日加入 P9 手动分析失败（失败类，读者刚点过）。
+    // 14 = 平台 9（10 行里 P7 自己不走桌面）+ 情报 4 + 日报完成 1。
     const rows = Object.entries(NOTIFICATION_EVENT_POLICY)
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('desktop')).map(([id]) => id).sort()).toEqual([
       'market-intelligence.briefing.failed',
@@ -46,6 +46,7 @@ describe('notification event policy', () => {
       'market-intelligence.source.consecutive-failed',
       'market-intelligence.source.stale',
       'market-intelligence.timezone.invalid',
+      'platform.analysis.manual-failed',
       'platform.analysis.quota-exhausted',
       'platform.channel.connection-lost',
       'platform.channel.push-resumed',
@@ -63,7 +64,11 @@ describe('notification event policy', () => {
       'market-intelligence.macro.event-landed',
       'market-intelligence.signal.triggered'
     ])
-    // 提示 16 行全开：关掉桌面时它是唯一的本机提醒。
+    // 提示默认开：关掉桌面时它是唯一的本机提醒。唯一例外是 P9——读者刚点过、人就在面板前，
+    // 桌面优先，同一次失败不在应用内再吵第二遍（P7 反过来：它只有 center + toast，不走桌面）。
+    expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
+      'platform.analysis.manual-failed'
+    ])
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(16)
   })
 

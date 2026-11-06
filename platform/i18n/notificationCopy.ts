@@ -53,6 +53,14 @@ export type NotificationCopyTable = {
   'notification.event.platform.channel.connection-lost.body.network': string
   'notification.event.platform.channel.connection-lost.body.proxy': string
   'notification.event.platform.channel.connection-lost.reason': string
+  'notification.event.platform.analysis.manual-failed.title': string
+  'notification.event.platform.analysis.manual-failed.body': string,
+  'notification.event.platform.analysis.manual-failed.reason': string
+  /**
+   * P9 的动作文案。**这条必须和上面三个键一起登记**：动作标签解析不到时投递层会**整条丢掉这个按钮**，
+   * 而文案门禁只查标题/正文/理由，查不到这一个——缺了不会红，读者只是发现失败通知里没有入口。
+   */
+  'notification.event.platform.analysis.manual-failed.open': string
   /** 通道暂停事件里的动作：去设置检查。 */
   'notification.channelCheck.action': string
   /** 通用动作：去设置（来源两条等产品事件的动作标签）。 */
@@ -108,6 +116,10 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.channel.connection-lost.body.network': "自动重连一直没成功，{channel} 现在收不到新消息：这台机器连不上网络。网络恢复后连接会自己接上，不用再点一次启用。",
     'notification.event.platform.channel.connection-lost.body.proxy': "自动重连一直没成功，{channel} 现在收不到新消息：代理这一跳没连上（代理没开、端口不对或隧道被拒）。修好代理后连接会自己接上，不用再点一次启用。",
     'notification.event.platform.channel.connection-lost.reason': '自动重连连续失败才提醒一次，同一次断开不会反复提醒；重新连上后状态行与操作记录里能看到。',
+    'notification.event.platform.analysis.manual-failed.title': "你点的那次分析没完成",
+    'notification.event.platform.analysis.manual-failed.body': "你刚才点的那次分析没成：{reason}。这次没有产生结论，之前的结果不受影响。",
+    'notification.event.platform.analysis.manual-failed.reason': '只有你自己点的那次失败才回一条，同一次运行不会重复提醒；原因和重试入口在运行记录里。',
+    'notification.event.platform.analysis.manual-failed.open': '打开运行记录',
     'notification.channelCheck.action': '去设置检查',
     'notification.action.open-settings': '去设置',
     'notification.action.open-briefing': '打开日报',
@@ -153,6 +165,10 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.channel.connection-lost.body.network': "Automatic reconnection has kept failing, so {channel} is not receiving new messages: this machine cannot reach the network. The connection reconnects by itself once the network is back, so you do not need to enable it again.",
     'notification.event.platform.channel.connection-lost.body.proxy': "Automatic reconnection has kept failing, so {channel} is not receiving new messages: the proxy hop could not be reached (proxy off, wrong port, or tunnel refused). The connection reconnects by itself once the proxy is fixed, so you do not need to enable it again.",
     'notification.event.platform.channel.connection-lost.reason': 'Shown once after automatic reconnection fails; one outage never repeats, and the status row shows it once the channel reconnects.',
+    'notification.event.platform.analysis.manual-failed.title': 'The analysis you started did not finish',
+    'notification.event.platform.analysis.manual-failed.body': 'The analysis you started did not finish: {reason}. Nothing was published this time, and earlier results are unaffected.',
+    'notification.event.platform.analysis.manual-failed.reason': 'Only a failure of a run you started yourself is reported, once per run; the cause and a retry are in the run log.',
+    'notification.event.platform.analysis.manual-failed.open': 'Open run log',
     'notification.channelCheck.action': 'Check settings',
     'notification.action.open-settings': 'Open settings',
     'notification.action.open-briefing': 'Open briefing',
