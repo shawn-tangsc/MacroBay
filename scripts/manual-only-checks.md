@@ -18,6 +18,7 @@
 | `pnpm seed:analysis-quota` | 需要造「今天的分析额度已用尽」来验 P3 时；只写**临时目录**（`--out /tmp/...`），再用 `MACROBAY_USER_DATA` 指向它起应用，然后触发一次自动分析（市场日历「Refresh now」或模块信号） | 验 P3 的这条线 | 脚本输出 `seeded <UTC 日>: event 48/48, calendar 9/9` 那一行 + 临时目录里的 `market-analysis.sqlite` + 中心出现一条 P3（正文含「今天已用 48 次 / 上限 48 次」），同一天再触发不新增 |
 | `pnpm typecheck:products` | 清产品侧类型债务时（每清一批跑一次）、发布前 | 产品侧实现方 | 退出码 0 + 错误数（**干净 HEAD `4e3dafe` 实测 759**）**只减不增**；数字变大就是债务在长。**读数必须来自干净副本**：共享工作区里别人的在途文件会让它浮动（同一时刻脏树读 762），脏树读数不作对照 |
 | `pnpm docs:event-ids` | 改动通知事件 id、或改文档里引用这些 id 的段落时 | 改这块的实现方 | 报告里 `197 篇文档 / N 个已声明事件 id / 零处对不上` 那一行 + 退出码 0（**不接受 `skipped`**） |
+| `pnpm release:preflight`（带 `vX.Y.Z --online` 两个参数） | 打任何 `v*` 标签**之前**；必须在干净、且 HEAD 正好等于 `origin/main` 的 `main` 上 | 发版的人 | `preflight passed for vX.Y.Z` 那一行 + 退出码 0 |
 
 ## `check:boot-page` 为什么不进 `verify`
 
@@ -73,3 +74,15 @@ rm -rf /tmp/ty   # 收尾：git worktree remove --force /tmp/ty
 
 `demo:verify` 与 `channel:acceptance` 同时列在 `docs-private/10-development/release-process.md`
 的发布检查单里——只写在这里而发布时没人看，等于又造一个孤儿。
+
+## `release:preflight` 为什么不进 `verify`
+
+它不是"代码有没有坏"，是"这一笔该不该被打成标签"。三条，任何一条成立就进不了 `verify`：
+
+- **它要问远端**：HEAD 是否等于 `origin/main`、远端同名标签是否指向别处、这批 CI 是否绿——`verify`
+  是离线、可重复、在干净快照上跑的，查远端不满足任何一条。
+- **它问的是这一笔自己的 CI 结果**：放进 `verify` 就成了自己证明自己，那是同义反复。
+- **它有时间语义**：只在"准备打标签"那一刻有意义；每次改代码都跑它，只会把红变成噪音。
+
+2026-11-07 那次事故就是它的理由：0.4.0 是从一个落后远端 5 笔、还带着一笔旧本地提交的检出处打的标签，
+打出来的树还写着 0.3.1，发包作业已经开始构建，两分钟后才被工作流自己的版本检查拦下。
