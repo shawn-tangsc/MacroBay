@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
@@ -153,7 +154,8 @@ describe('signal notification sentences', () => {
         for (const part of parts) {
           expect(part).not.toMatch(/\{\w+\??\}/u)
           expect(part).not.toMatch(/oi-liquidation-proxy|open-interest|etf-outflow-3d|market-intelligence/u)
-          expect(part).not.toMatch(/点开|打开|查看|click to|tap to/u)
+          // 判定只有一处：源头自己先过平台那条判据，别在这里写第二张词表。
+          expect(findActionDirective(part)).toBeNull()
         }
       }
     }

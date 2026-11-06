@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
+
 import { findMissingNotificationEventCopy } from '@platform/notifications/contracts/notificationEventCopyGate'
 
 import { marketIntelligenceProductManifest } from '../../../../product.manifest'
@@ -34,12 +36,17 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
 }
 
 describe('market intelligence notification copy', () => {
-  it('builds every event key from the id: no hand-written `notification.event.` literal', () => {
+  it('builds every product event key from the id: no hand-written `notification.event.<product>.` literal', () => {
     // 手写全串的问题不是难看：事件改名时正文跟着变、标题不会，标题静默降级成兜底句而没人报错。
     // 这条守卫把「同一类键两种造法」挡在提交前。
-    const offenders = sourceFiles(join(process.cwd(), 'products'))
-      .filter((file) => /'notification\.event\./.test(readFileSync(file, 'utf8')))
-      .map((file) => file.replace(`${process.cwd()}/`, ''))
+    //
+    // **只管产品自己的键**：`notification.event.platform.…` 是平台闭集里的固定成员（动作标签
+    // 那几条也在里面），它没有「按产品事件 id 派生」这回事，写字面量就是唯一写法——
+    // 把它们也判红，会逼着下一个人把平台键也造一套工厂，那才是第二种造法。
+    const offenders = sourceFiles(join(process.cwd(), 'products')).flatMap((file) => {
+      const hits = readFileSync(file, 'utf8').match(/'notification\.event\.(?!platform\.)[^']*'/gu) ?? []
+      return hits.map((hit) => `${file.replace(`${process.cwd()}/`, '')}: ${hit}`)
+    })
     expect(offenders).toEqual([])
   })
 
@@ -97,20 +104,24 @@ describe('market intelligence notification copy', () => {
   it('never tells the reader to tap something: the push surface has nothing to tap', () => {
     // 动作由界面按钮承担。手机那条是纯文本，写「点开…」就是一句做不到的承诺。
     // 扫的是**最终文案表**，不是模板写法——模板可以改，句子不能骗人。
-    // 中文直接挡动作词；英文只挡**祈使/带宾语**的用法：`open interest`、`open orders` 这类
-    // 「未平仓 / 未成交」是领域名词，按单词 `open` 挡会把最该保住的那条信号标题判红。
-    // 判据是「名词不受影响」，不是「某一句不受影响」——所以这里不摘任何固定短语，靠句法形态判。
-    const instructions = [/点开/u, /打开/u, /查看/u, /点击/u, /\btap\b/iu, /\bclick\b/iu, /\bopen\s+(it|this|that|the|your|these|those|them)\b/iu]
+    // 判定只有一处（`@platform/notifications/contracts/actionDirective`）：这里不写第二张词表。
+    // 两套词表第一次判不一致，就没人知道该信哪条；而中文挡裸「打开 / 查看」会连
+    // 「去设置里打开代理」这种读者真做得到的去向指引一起判红。
     const offenders = (['zh-CN', 'en-US'] as const).flatMap((language) =>
       Object.entries(marketIntelligenceNotificationCopy[language])
-        .filter(([, sentence]) => instructions.some((pattern) => pattern.test(sentence)))
-        .map(([key, sentence]) => `${language} ${key}: ${sentence}`)
+        .map(([key, sentence]) => ({ key, sentence, hit: findActionDirective(sentence) }))
+        .filter((row) => row.hit !== null)
+        .map((row) => `${language} ${row.key}: ${row.sentence} → ${row.hit}`)
     )
     expect(offenders).toEqual([])
 
-    // 正面样本：专有名词不因这条守卫而需要改。以后出现别的名词（`open orders`）也照样通过。
+    // 正面样本：领域名词（未平仓 / 未成交）不是动作，守卫不该逼人写白名单。
     for (const noun of ['BTC open interest dropped', 'BTC open orders rose', 'Open interest climbed']) {
-      for (const pattern of instructions) expect(noun).not.toMatch(pattern)
+      expect(findActionDirective(noun)).toBeNull()
+    }
+    // 反面样本：真指向本条通知的说法必须判得出来——否则上面那个「零命中」可能只是没在看。
+    for (const bad of ['点开可以看全文', '点这里查看详情', 'Click to open the details', 'tap here to view details']) {
+      expect(findActionDirective(bad)).not.toBeNull()
     }
   })
 

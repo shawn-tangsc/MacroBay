@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
@@ -110,7 +111,8 @@ describe('macro event landed sentences', () => {
       for (const part of [parts.title, parts.body, parts.reason]) {
         expect(part).not.toMatch(/\{\w+\??\}/u)
         expect(part).not.toMatch(/cpi|macro\.event-landed|market-intelligence/u)
-        expect(part).not.toMatch(/点开|打开|查看|click to|tap to/u)
+        // 判定只有一处：源头自己先过平台那条判据，别在这里写第二张词表。
+          expect(findActionDirective(part)).toBeNull()
       }
     }
     // 缺预期那条今天不可达（筛选要求可比的一对），骨架留着、不造用例：
