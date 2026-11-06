@@ -11,7 +11,7 @@
  * 改动这里之前先想清楚：模型侧词表与服务侧 `analysisModelVocabulary` 必须同时改，否则红了是对的。
  */
 import { miText } from './text/mi'
-import { registeredEventNames } from '../../../contracts/registeredEventNames'
+import { registeredEventNames } from '../../../contracts/indicatorNames'
 import { dailyBriefingText } from './text/pages/dailyBriefing'
 import { macroCalendarText } from './text/settings/macroCalendar'
 import { intelligenceSourcesText } from './text/settings/intelligenceSources'

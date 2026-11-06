@@ -72,6 +72,24 @@ describe('macro event landed sentences', () => {
     expect(zh.title?.startsWith('JP ')).toBe(true)
   })
 
+  it('translates a free-text title that is in the table, and keeps the raw title when it is not', () => {
+    // 表里的自由文本（出处：本机 2026-10 采集到的美国「政府预算」标题）→ 中文名。
+    const known = render(
+      landing({ countryCode: 'US', title: 'Government Budget (billion USD)(Sep)', periodicity: undefined }),
+      'zh-CN'
+    )
+    expect(known.title).toBe('美国 政府预算（十亿美元） 高于预期')
+
+    // 表外的自由文本 → 原文照用；**整条不许降级成兜底句**（标题里必须还有国家与方向）。
+    const unknown = render(
+      landing({ countryCode: 'US', title: 'Some Unlisted Release (Sep)', periodicity: undefined }),
+      'zh-CN'
+    )
+    expect(unknown.title).toBe('美国 Some Unlisted Release (Sep) 高于预期')
+    expect(unknown.title).not.toBe('有一条新通知，点开看详情')
+    expect(unknown.body).not.toBeNull()
+  })
+
   it('switches the sentence when the previous value is missing, with no dash and no empty brackets', () => {
     const zh = render(landing({ previous: undefined }), 'zh-CN')
     expect(zh.body).toBe('实际 3.1%，预期 2.9%，前值没有公布（同比）')

@@ -1,6 +1,6 @@
 import type { NotificationCopyTableSet } from '@platform/notifications/contracts/notificationCopyPort'
 
-import { registeredEventNames } from '../../../../contracts/registeredEventNames'
+import { indicatorNames } from '../../../../contracts/indicatorNames'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   notificationEventBodyKey,
@@ -49,16 +49,15 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: '高于预期',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: '低于预期',
+    // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
+    ...Object.fromEntries(
+      Object.entries(indicatorNames).map(([id, name]) => [
+        notificationEventNamedKey(IDS.macroEventLanded, `indicator.${id}`),
+        name.zh
+      ])
+    ),
+
     [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: '美国',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.cpi')]: registeredEventNames['zh-CN']['cpi'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.core-cpi')]: registeredEventNames['zh-CN']['core-cpi'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.nonfarm-payrolls')]: registeredEventNames['zh-CN']['nonfarm-payrolls'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.unemployment')]: registeredEventNames['zh-CN']['unemployment'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.average-hourly-earnings')]: registeredEventNames['zh-CN']['average-hourly-earnings'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.pce')]: registeredEventNames['zh-CN']['pce'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.core-pce')]: registeredEventNames['zh-CN']['core-pce'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.gdp')]: registeredEventNames['zh-CN']['gdp'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.fomc')]: registeredEventNames['zh-CN']['fomc'],
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: '实际 {actual}，预期 {consensus}，前值 {previous}{periodLabel}',
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: '实际 {actual}，预期 {consensus}，前值没有公布{periodLabel}',
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: '实际 {actual}，这次没有预期值可比{periodLabel}',
@@ -102,16 +101,15 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: 'above forecast',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.below')]: 'below forecast',
+    // 指标名一张表：已注册按标识、自由文本按源站标题；表外就用原文（通知里拼的是字面量）。
+    ...Object.fromEntries(
+      Object.entries(indicatorNames).map(([id, name]) => [
+        notificationEventNamedKey(IDS.macroEventLanded, `indicator.${id}`),
+        name.en
+      ])
+    ),
+
     [notificationEventNamedKey(IDS.macroEventLanded, 'country.US')]: 'US',
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.cpi')]: registeredEventNames['en-US']['cpi'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.core-cpi')]: registeredEventNames['en-US']['core-cpi'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.nonfarm-payrolls')]: registeredEventNames['en-US']['nonfarm-payrolls'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.unemployment')]: registeredEventNames['en-US']['unemployment'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.average-hourly-earnings')]: registeredEventNames['en-US']['average-hourly-earnings'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.pce')]: registeredEventNames['en-US']['pce'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.core-pce')]: registeredEventNames['en-US']['core-pce'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.gdp')]: registeredEventNames['en-US']['gdp'],
-    [notificationEventNamedKey(IDS.macroEventLanded, 'indicator.fomc')]: registeredEventNames['en-US']['fomc'],
     [notificationEventVariantKey(IDS.macroEventLanded, 'values')]: 'Actual {actual} vs {consensus} forecast; previous {previous}{periodLabel}',
     [notificationEventVariantKey(IDS.macroEventLanded, 'noPrevious')]: 'Actual {actual} vs {consensus} forecast; no previous release{periodLabel}',
     [notificationEventVariantKey(IDS.macroEventLanded, 'noForecast')]: 'Actual {actual}; no forecast to compare{periodLabel}',

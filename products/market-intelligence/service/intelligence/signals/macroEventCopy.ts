@@ -1,7 +1,7 @@
 import type { NotificationCopyParam } from '@platform/notifications/contracts/notificationCopyPort'
 
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS, notificationEventNamedKey } from '../../../contracts/notificationEventKeys'
-import { registeredEventNames } from '../../../contracts/registeredEventNames'
+import { indicatorNameOf, resolveIndicatorNameId } from '../../../contracts/indicatorNames'
 
 /**
  * 宏观事件落地通知的参数（情报需求 §十二）：**这里只装配参数，不写句子**。
@@ -49,10 +49,6 @@ function copyRef(path: string): NotificationCopyParam {
   return { ref: { scope: 'product', productId: 'market-intelligence', key: notificationEventNamedKey(EVENT_ID, path) } }
 }
 
-function knownIndicator(key: string | undefined): key is keyof typeof registeredEventNames['zh-CN'] {
-  return key !== undefined && Object.hasOwn(registeredEventNames['zh-CN'], key)
-}
-
 /**
  * 标题三个槽：国家、指标、方向。
  *
@@ -66,7 +62,11 @@ export function macroEventTitleParams(input: MacroEventLandingCopyInput): Readon
   const country = TRANSLATED_COUNTRY_CODES.includes(input.countryCode)
     ? copyRef(`country.${input.countryCode}`)
     : input.countryCode
-  const indicator = knownIndicator(input.eventNameKey) ? copyRef(`indicator.${input.eventNameKey}`) : input.title.trim()
+  // 一个入口：稳定标识优先、其次源站标题（逐字）；都不中就用原文——**绝不整条降级**。
+  const indicatorId = resolveIndicatorNameId({ ...(input.eventNameKey === undefined ? {} : { eventNameKey: input.eventNameKey }), title: input.title })
+  const indicator = indicatorId === undefined || indicatorNameOf(indicatorId) === undefined
+    ? input.title.trim()
+    : copyRef(`indicator.${indicatorId}`)
   return {
     country,
     indicator,
