@@ -38,6 +38,12 @@ export function useNewsSentiment(input: {
   now: () => Date
   /** Tests shorten this; production keeps the deadline above. */
   readDeadlineMs?: number
+  /**
+   * The interface language. Titles and body translations are resolved **on the server for the
+   * language in force when the read runs**, so a language switch has to re-read: without this the
+   * drawer keeps the previous language's strings while the chrome has already changed.
+   */
+  language?: string
 }): UseNewsSentimentResult {
   const [window, setWindow] = useState<NewsSentimentWindow>('all')
   const [filters, setFiltersState] = useState<NewsSentimentFilters>(DEFAULT_FILTERS)
@@ -77,7 +83,7 @@ export function useNewsSentiment(input: {
       if (timer !== undefined) clearTimeout(timer)
       if (id === requestId.current) setLoading(false)
     }
-  }, [asOf, input.client, input.readDeadlineMs, window])
+  }, [asOf, input.client, input.language, input.readDeadlineMs, window])
 
   useEffect(() => {
     void load()

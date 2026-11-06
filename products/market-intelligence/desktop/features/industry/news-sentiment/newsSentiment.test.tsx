@@ -574,6 +574,22 @@ describe('NewsSentimentFeature', () => {
     expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
   })
 
+  it('re-reads the list when the interface language changes', async () => {
+    // Titles and body translations are resolved for the language in force at read time, so a
+    // language switch must re-read; otherwise the list keeps the previous language's strings.
+    const query = vi.fn()
+      .mockResolvedValueOnce(VIEW)
+      .mockResolvedValueOnce({ ...VIEW, items: VIEW.items.map((item) => ({ ...item, displayTitle: `中文：${item.title}` })) })
+    const node = (language: 'zh-CN' | 'en-US') =>
+      <NewsSentimentFeature language={language} text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    const container = await mount(node('en-US'))
+    expect(query).toHaveBeenCalledTimes(1)
+    await act(async () => { root?.render(node('zh-CN')) })
+    await act(async () => {})
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('中文：SEC Approves Spot Ethereum ETF Options')
+  })
+
   it('enables the four sources, collects once and re-reads when the reader asks', async () => {
     // The action says "enable", so it must switch the sources on and collect — not just open a page.
     const setEnabled = vi.fn(async () => ({ ok: true }))
