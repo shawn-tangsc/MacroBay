@@ -468,6 +468,8 @@ export type AnalysisRun = Readonly<{
   failureDetailCode: string | null
   /** Set at freeze time, before the model runs; null for runs written before this column existed. */
   validationMode: AnalysisValidationMode | null
+  /** The run that opened the failure episode this run belongs to; null while it has not failed. */
+  notificationEpisodeRunId?: string | null
   queuedAt: string
   startedAt: string | null
   completedAt: string | null

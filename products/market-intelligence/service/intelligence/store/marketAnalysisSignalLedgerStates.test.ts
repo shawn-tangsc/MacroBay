@@ -71,6 +71,28 @@ describe('the run id write-back', () => {
     expect(repository.listLatestSignalLedgerStates([signal.dedupeKey])[0]?.analysisRunId).toBe('mi-ar-1')
   })
 
+  it('writes the failure episode on the run and keeps it across restarts until a success ends it', () => {
+    const repository = harness()
+    const stored = snapshot()
+    repository.appendSnapshot(stored)
+    const enqueue = (id: string, queuedAt: string) => repository.enqueueRun({
+      id, schemaVersion: 1, eventGroupId: group.id, snapshotId: stored.id, snapshotHash: stored.snapshotHash,
+      analysisPhase: 'correction', triggerKey: 'signal.open-interest.oi-liquidation-proxy', idempotencyKey: `idem-${id}`,
+      status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'p', modelId: 'm',
+      policyVersion: 'policy', promptVersion: 'prompt', skillVersion: 'skill', outputSchemaVersion: 1,
+      jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: null,
+      queuedAt, startedAt: null, completedAt: null
+    })
+    const episodeOf = (id: string) => repository.getRun(id)?.notificationEpisodeRunId
+
+    enqueue('mi-ar-1', at); enqueue('mi-ar-2', '2026-11-06T10:45:00.000Z')
+    repository.updateRunStatus({ id: 'mi-ar-1', status: 'failed', failureCode: 'analysis-provider-error' })
+    repository.updateRunStatus({ id: 'mi-ar-2', status: 'failed', failureCode: 'analysis-provider-error' })
+    // 第二行失败沿用第一行打开的故障段：恢复通知报的是「从哪一次开始坏的」。
+    expect(episodeOf('mi-ar-1')).toBe('mi-ar-1')
+    expect(episodeOf('mi-ar-2')).toBe('mi-ar-1')
+  })
+
   it('takes the latest row per change hash and answers one query for a screenful', () => {
     const repository = harness()
     // 同一个 change hash 在另一组里又落了一行：牌子上必须显示最新那次，不回退。
