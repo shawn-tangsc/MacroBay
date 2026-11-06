@@ -130,3 +130,71 @@ describe('0049 repairs the channel allowed-chat-ids column after 0048 was edited
     }
   })
 })
+
+/**
+ * 0047 的判据不是「列加上了」，而是「老库升级之后，读者自己的会话一条没少、一条没错位」。
+ * 所以这条用例**先造出升级前的库**（没有这两列、迁移记录也未写），插几条老会话，再让迁移跑。
+ */
+describe('0047 adds the session origin columns to an existing database', () => {
+  it('gives every existing session the reader origin and keeps the default list unchanged', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-platform-origin-'))
+    const path = join(dir, 'agents.sqlite')
+    try {
+      // 1. 建库并写入老会话。
+      const first = createAgentPlatformDatabase(path)
+      first.connection
+        .prepare(
+          `insert into agent_workspaces (id, name, path, type, order_key, created_at, updated_at)
+           values (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run('workspace-1', 'Workspace', '/tmp/workspace', 'user', 'workspace-1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+      const insertSession = first.connection.prepare(
+        `insert into agent_sessions (id, agent_id, name, workspace_id, order_key, created_at, updated_at)
+         values (?, null, ?, ?, ?, ?, ?)`
+      )
+      for (const [id, name, orderKey] of [
+        ['session-a', 'First', '2026-01-01T00:00:00.000Z-0001'],
+        ['session-b', 'Second', '2026-01-02T00:00:00.000Z-0002'],
+        ['session-c', 'Third', '2026-01-03T00:00:00.000Z-0003']
+      ] as const) {
+        insertSession.run(id, name, 'workspace-1', orderKey, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+      }
+      // 2. 造出「升级前」的形状：两列不存在、0047 未记录。
+      first.connection.exec('alter table agent_sessions drop column origin_group; alter table agent_sessions drop column origin;')
+      first.connection.prepare('delete from agent_platform_migrations where id = ?').run('0047_agent_session_origin')
+      const beforeColumns = (first.connection.prepare('pragma table_info(agent_sessions)').all() as Array<{ name: string }>)
+        .map((column) => column.name)
+      expect(beforeColumns).not.toContain('origin')
+      first.connection.close()
+
+      // 3. 重新打开：迁移链执行 0047。
+      const second = createAgentPlatformDatabase(path)
+      const columns = (second.connection.prepare('pragma table_info(agent_sessions)').all() as Array<{ name: string }>)
+        .map((column) => column.name)
+      const rows = second.connection
+        .prepare('select id, origin, origin_group from agent_sessions order by id')
+        .all() as Array<{ id: string; origin: string; origin_group: string | null }>
+      const defaultList = second.connection
+        .prepare("select id from agent_sessions where origin = 'reader' order by order_key asc, id asc")
+        .all() as Array<{ id: string }>
+      const applied = second.connection
+        .prepare('select id from agent_platform_migrations where id = ?')
+        .get('0047_agent_session_origin') as { id?: string } | undefined
+      second.connection.close()
+
+      expect(columns).toContain('origin')
+      expect(columns).toContain('origin_group')
+      // 存量全落「读者发起」，且分组为空——不是被回填成某个产品名。
+      expect(rows).toEqual([
+        { id: 'session-a', origin: 'reader', origin_group: null },
+        { id: 'session-b', origin: 'reader', origin_group: null },
+        { id: 'session-c', origin: 'reader', origin_group: null }
+      ])
+      // 默认列表逐条不变：还是那三条，顺序也还是那条 order_key 顺序。
+      expect(defaultList.map((row) => row.id)).toEqual(['session-a', 'session-b', 'session-c'])
+      expect(applied?.id).toBe('0047_agent_session_origin')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

@@ -100,6 +100,32 @@ export type CreateAgentSessionMessagesDto = {
   messages: CreateAgentSessionMessageDto[]
 }
 
+/**
+ * Where a session came from.
+ *
+ * `reader` — the reader started it (every pre-0047 session, and the default for anything new).
+ * `automation` — a product created it on its own (for example one session per automatic analysis),
+ * which is why the default list must not mix them into the reader's own list.
+ */
+export type AgentSessionOrigin = 'reader' | 'automation'
+
+/**
+ * The one normalisation: anything that is not the explicit automation value is a reader session.
+ *
+ * The direction is deliberate — an automation session leaking into the default list is a nuisance,
+ * while a reader's own session being hidden is a lie about their own history.
+ */
+export function normalizeSessionOrigin(value: unknown): AgentSessionOrigin {
+  return value === 'automation' ? 'automation' : 'reader'
+}
+
+/** A free-form group the caller names (the platform does not know product vocabularies). */
+export function normalizeSessionOriginGroup(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
 export type AgentSessionEntity = {
   id: string
   agentId: string | null
@@ -117,6 +143,13 @@ export type AgentSessionEntity = {
    * 读侧统一走 `normalizeSessionAllowedTools(session.allowedTools)`，旧快照无需迁移。
    */
   allowedTools?: string[]
+  /**
+   * 来源：读者发起 / 自动。列带 `not null default 'reader'`，所以库里的老行一律是 `reader`；
+   * 读侧仍走 `normalizeSessionOrigin`，脏数据不会被当成自动会话藏起来。
+   */
+  origin?: AgentSessionOrigin
+  /** 自动会话的分组名（调用方给，平台只按它分组）。 */
+  originGroup?: string
   createdAt: string
   updatedAt: string
 }
@@ -132,6 +165,10 @@ export type CreateAgentSessionDto = {
    * agent 的 disabledTools（deny）仍然优先。
    */
   allowedTools?: string[]
+  /** 缺省 `reader`；未知值归一成 `reader`（见 `normalizeSessionOrigin`）。 */
+  origin?: AgentSessionOrigin
+  /** 自动会话的分组名；平台不做词表，只按原样存。 */
+  originGroup?: string
 }
 
 export type UpdateAgentSessionDto = {
@@ -149,6 +186,8 @@ export type ListAgentSessionsQuery = {
   agentId?: string
   cursor?: string
   limit?: number
+  /** 只看读者发起的（默认列表），或只看自动会话（「自动」分组）。缺省 = 不筛。 */
+  origin?: AgentSessionOrigin
 }
 
 export type DeleteAgentSessionsResult = {

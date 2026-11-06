@@ -1507,6 +1507,20 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    /**
+     * 会话来源两列（r21 §3.2）：读者自己的会话与产品自动建的会话共用一个列表，但默认列表只取
+     * `reader`，否则一天几十条自动会话会把读者的历史埋掉。
+     *
+     * `not null default 'reader'` 让**老行在加列那一刻就是 reader**，不需要 UPDATE 回填——
+     * 回填语句写错一次就会把自动会话洗成读者会话，那正好是这条迁移要防的方向的镜像。
+     */
+    id: '0047_agent_session_origin',
+    up: `
+      alter table agent_sessions add column origin text not null default 'reader';
+      alter table agent_sessions add column origin_group text;
+    `
+  },
+  {
     id: '0046_drop_agent_session_messages_fts',
     up: `
       -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。

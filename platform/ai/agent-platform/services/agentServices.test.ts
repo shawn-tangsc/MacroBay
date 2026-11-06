@@ -340,6 +340,34 @@ describe('agent platform services', () => {
     expect(await services.sessions.exists(first.id)).toBe(false)
   })
 
+  it('defaults a new session to the reader origin and keeps automation sessions out of that list', async () => {
+    const store = createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] }))
+    const services = createAgentPlatformServices(store)
+
+    const mine = await services.sessions.create({ agentId: agent.id, name: 'Mine', workspace: { type: 'system' } })
+    const automatic = await services.sessions.create({
+      agentId: agent.id,
+      name: '2026-11-06 19:00 · Market analysis',
+      workspace: { type: 'system' },
+      origin: 'automation',
+      originGroup: 'market-analysis'
+    })
+
+    // 缺省落 reader（老行与新行同一个值），自动会话带自己的分组。
+    expect(mine.origin).toBe('reader')
+    expect(mine.originGroup).toBeUndefined()
+    expect(automatic.origin).toBe('automation')
+    expect(automatic.originGroup).toBe('market-analysis')
+
+    // 默认列表（读者自己的）只有自己那条；「自动」视图反过来。
+    const readerPage = await services.sessions.listByCursor({ origin: 'reader' })
+    const automationPage = await services.sessions.listByCursor({ origin: 'automation' })
+    expect(readerPage.items.map((item) => item.id)).toEqual([mine.id])
+    expect(automationPage.items.map((item) => item.id)).toEqual([automatic.id])
+    // 不传来源就不筛（调用方决定看哪一栏，平台不替它藏）。
+    expect((await services.sessions.listByCursor({})).items).toHaveLength(2)
+  })
+
   it('marks session pin toggle as a focused session-pin persistence update', async () => {
     const optionsSeen: unknown[] = []
     let state = createAgentStoreState({ agents: [agent], sessions: [session], workspaces: [workspace] })

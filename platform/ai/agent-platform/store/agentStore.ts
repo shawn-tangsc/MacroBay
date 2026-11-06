@@ -29,6 +29,7 @@ import { DEFAULT_SYSTEM_WORKSPACE_PATH, type AgentWorkspaceEntity } from '../sch
 import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentWorkspaceDto } from '../schemas/workspaceSchemas'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
 import type { AgentProductToolPackageBinding } from '../productTools/productAgentToolSchemas'
 
 export type { AgentProductToolPackageBinding }
@@ -236,6 +237,10 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
     workspace,
     orderKey: createFirstOrderKey(state.sessions),
     allowedTools: normalizeSessionAllowedTools(payload.allowedTools),
+    origin: normalizeSessionOrigin(payload.origin),
+    ...(normalizeSessionOriginGroup(payload.originGroup) === undefined
+      ? {}
+      : { originGroup: normalizeSessionOriginGroup(payload.originGroup) }),
     createdAt: now,
     updatedAt: now
   }
@@ -474,8 +479,11 @@ export function listAgentSessions(
   const limit = normalizePageLimit(query.limit, DEFAULT_SESSION_PAGE_LIMIT, MAX_SESSION_PAGE_LIMIT)
   const cursor = query.cursor ? decodeSessionCursor(query.cursor) : null
   const sessionPins = state.sessionPins
+  const originWanted = query.origin === undefined ? undefined : normalizeSessionOrigin(query.origin)
   const sortedSessions = [...state.sessions]
     .filter((session) => !query.agentId || session.agentId === query.agentId)
+    // 归一的方向就是过滤的方向：只有显式 automation 才算自动，其余一律算读者发起。
+    .filter((session) => originWanted === undefined || normalizeSessionOrigin(session.origin) === originWanted)
     .sort((a, b) => compareSessionListOrder(a, b, sessionPins))
   const pageSource = cursor ? sortedSessions.filter((session) => isSessionAfterCursor(session, cursor, sessionPins)) : sortedSessions
   const pageItems = pageSource.slice(0, limit)

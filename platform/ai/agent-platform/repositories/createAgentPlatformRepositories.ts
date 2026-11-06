@@ -2,6 +2,7 @@ import type { AgentEntity } from '../schemas/agentSchemas'
 import type { AgentChannelEntity } from '../schemas/channelSchemas'
 import { stripQuietRuntimeControlParts } from '../schemas/messageDataHelpers'
 import type { McpRuntimeStatus, McpServerEntity } from '../schemas/mcpServerSchemas'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
 import type {
   AgentSessionMessagesListQuery,
   AgentSessionEntity,
@@ -102,6 +103,8 @@ type SessionRow = {
   trace_id: string | null
   order_key: string
   allowed_tools_json: string
+  origin: string | null
+  origin_group: string | null
   created_at: string
   updated_at: string
 }
@@ -465,8 +468,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     },
     upsert(entity: AgentSessionEntity): void {
       db.prepare(
-        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(id) do update set
            agent_id = excluded.agent_id,
            name = excluded.name,
@@ -475,6 +478,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
            trace_id = excluded.trace_id,
            order_key = excluded.order_key,
            allowed_tools_json = excluded.allowed_tools_json,
+           origin = excluded.origin,
+           origin_group = excluded.origin_group,
            created_at = excluded.created_at,
            updated_at = excluded.updated_at`
       ).run(
@@ -486,6 +491,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         entity.traceId ?? null,
         entity.orderKey,
         JSON.stringify(normalizeSessionAllowedTools(entity.allowedTools)),
+        normalizeSessionOrigin(entity.origin),
+        normalizeSessionOriginGroup(entity.originGroup) ?? null,
         entity.createdAt,
         entity.updatedAt
       )
@@ -493,7 +500,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     listAll(workspacesById: ReadonlyMap<string, AgentWorkspaceEntity>): AgentSessionEntity[] {
       return db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at
            from agent_sessions
            order by order_key asc, id asc`
         )
@@ -514,6 +521,11 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
       if (query.agentId !== undefined) {
         where.push('agent_id = ?')
         params.push(query.agentId)
+      }
+      if (query.origin !== undefined) {
+        // 归一的方向就是过滤的方向：只有显式的 `automation` 才算自动，**其余一律算读者发起**。
+        // 写成 `origin = 'reader'` 会把脏值（'robot'）和旧数据一起藏掉——那是拿读者的历史当脏数据。
+        where.push(normalizeSessionOrigin(query.origin) === 'automation' ? "s.origin = 'automation'" : "(s.origin is null or s.origin <> 'automation')")
       }
       if (cursor) {
         if (cursor.kind === 'pin') {
@@ -2171,6 +2183,10 @@ function mapSessionEntity(row: SessionRow, workspace: AgentWorkspaceEntity): Age
     traceId: row.trace_id ?? undefined,
     orderKey: row.order_key,
     allowedTools: parseAllowedTools(row.allowed_tools_json),
+    origin: normalizeSessionOrigin(row.origin),
+    ...(normalizeSessionOriginGroup(row.origin_group) === undefined
+      ? {}
+      : { originGroup: normalizeSessionOriginGroup(row.origin_group) }),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }

@@ -113,6 +113,52 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['session-3'])
   })
 
+  it('keeps automation sessions out of the reader list, and their group with them', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.agents.upsert(agent)
+    repos.workspaces.upsert(workspace)
+
+    repos.sessions.upsert(sessionFixture({ id: 'reader-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Mine' }))
+    repos.sessions.upsert({
+      ...sessionFixture({ id: 'auto-1', orderKey: '0002', updatedAt: '2026-01-02T00:00:00.000Z', name: 'Analysis' }),
+      origin: 'automation',
+      originGroup: 'market-analysis'
+    })
+    repos.sessions.upsert({
+      ...sessionFixture({ id: 'auto-2', orderKey: '0003', updatedAt: '2026-01-03T00:00:00.000Z', name: 'Analysis 2' }),
+      origin: 'automation',
+      originGroup: 'market-analysis'
+    })
+
+    // 默认列表（读者自己的）：只有那条 reader；不传 origin 时不做筛，谁传谁负责。
+    expect(repos.sessions.listByCursor({ origin: 'reader' }).items.map((item) => item.id)).toEqual(['reader-1'])
+    expect(repos.sessions.listByCursor({ origin: 'automation' }).items.map((item) => item.id)).toEqual(['auto-1', 'auto-2'])
+    expect(repos.sessions.listByCursor().items.map((item) => item.id)).toEqual(['reader-1', 'auto-1', 'auto-2'])
+
+    // 分组名跟着会话走：删或不删由产品侧定，平台只存原文。
+    const byId = new Map(repos.sessions.listAll(new Map([[workspace.id, workspace]])).map((session) => [session.id, session]))
+    expect(byId.get('auto-1')?.originGroup).toBe('market-analysis')
+    expect(byId.get('reader-1')?.origin).toBe('reader')
+    expect(byId.get('reader-1')?.originGroup).toBeUndefined()
+  })
+
+  it('normalises a dirty or unknown origin to reader, never to automation', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    // 写入口先筛一遍（未知值不落 automation），读入口再筛一遍：脏行不许把读者会话藏起来。
+    repos.sessions.upsert({
+      ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Edge' }),
+      origin: 'someone-else' as never
+    })
+    db.connection.prepare("update agent_sessions set origin = 'robot' where id = 'session-1'").run()
+
+    const session = repos.sessions.listAll(new Map([[workspace.id, workspace]]))[0]
+    expect(session?.origin).toBe('reader')
+    expect(repos.sessions.listByCursor({ origin: 'reader' }).items.map((item) => item.id)).toEqual(['session-1'])
+  })
+
   it('persists the session-scoped tool allowlist across a reopen', () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-session-tools-'))
     try {
