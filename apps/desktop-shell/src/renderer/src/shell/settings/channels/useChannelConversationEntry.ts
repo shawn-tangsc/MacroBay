@@ -45,10 +45,11 @@ export function useChannelConversationEntry(input: {
         // **不许把失败伪装成「这条频道没有会话」**：2026-11-06 就是这样——字段名对不上、每次调用
         // 都在主进程抛 `channel-input-invalid`，而这里静默吞掉，表现成「入口永远不出现」，
         // 用户只能对着日志里一串重复报错猜。用 error 级：应用日志只收 console.error。
-        console.error('[channels] listConversations failed', {
+        // 一句话、单参数：主进程 `console-message` 只把 message 记进 app.log，第二个对象参数会丢。
+        console.error(`[channels] listConversations failed ${JSON.stringify({
           channelId: channel.id,
           reason: error instanceof Error ? error.message : String(error)
-        })
+        })}`)
         return [channel.id, null] as const
       }
     }))

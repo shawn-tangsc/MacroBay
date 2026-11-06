@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import type { ChannelIpcPorts } from './channelIpc'
@@ -169,6 +172,31 @@ describe('channel ipc surface', () => {
     expect(management.calls.map((call) => call.method)).toEqual([...MANAGEMENT_METHODS])
   })
 
+  it('routes every channel id through channelIdOf, and lets only create/update pass a DTO through', () => {
+    // 成规模的守卫（Chief 2026-11-06）：这次的错不是「一条接口写错」，而是**每条接口都各写一遍**，
+    // 所以一处断了三天没人发现。这里按源码判：凡是把 id 交给服务的调用，都必须来自 `channelIdOf`。
+    // 先剥注释再扫：注释里写着「以前 handler 读 `value.id`」这件事本身是对的，
+    // 但扫描器不许被注释里的示例糊住（今晚这条教训已经踩过一次）。
+    const source = stripComments(readFileSync(resolve(__dirname, 'channelIpc.ts'), 'utf8').replace(/\r\n/g, '\n'))
+    // 旧名字在任何地方都不许出现（出现一次，就又是一处「静默 undefined」）。
+    expect(source).not.toMatch(/\bvalue\.id\b|\binput\.id\b/)
+
+    const calls = [...source.matchAll(/channel(?:Management|Inbound)Service\.[a-zA-Z]+\(/g)]
+    expect(calls.length).toBeGreaterThan(20)
+    const passthrough: string[] = []
+    for (const match of calls) {
+      const method = /channel(?:Management|Inbound)Service\.([a-zA-Z]+)\(/.exec(match[0])![1]!
+      const args = callArguments(source, (match.index ?? 0) + match[0].length - 1)
+      if (args.trim().startsWith('asChannelInput(input)')) { passthrough.push(method); continue }
+      // 交给服务的 id 不得是 `value.id` 这类裸字段，必须是 `channelIdOf(...)` 的结果。
+      if (/\bid:\s/.test(args)) expect(args, method).toMatch(/id:\s*channelIdOf\(/)
+      // 入站侧把通道 id 当位置参数传：同样必须是 channelIdOf 的结果。
+      if (match[0].startsWith('channelInboundService.')) expect(args, method).toContain('channelIdOf(')
+    }
+    // 唯二允许把载荷原样交给服务的：`create` / `update`（载荷就是通道 DTO，`id` 是 DTO 字段）。
+    expect(passthrough.sort()).toEqual(['create', 'update'])
+  })
+
   it('reads exactly one name for the channel id, and rejects the old one instead of passing undefined', async () => {
     // 2026-11-06 那串 `channel-input-invalid`：调用方传 `channelId`、handler 读 `value.id`，
     // `value.id` 恒为 undefined 并且被调用方 catch 掉，入口永远不出现。这里把名字钉死：
@@ -253,4 +281,23 @@ function managementOf(channel: string): string {
     'platform:channels-set-target': 'setTarget'
   }
   return map[channel]!
+}
+
+/** 去掉块注释与整行注释：源码守卫只看真的会执行的代码。 */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
+/** 从 `(` 处取出这一层括号里的实参文本：源码扫的是「这一条调用到底喂了什么」，不是整行。 */
+function callArguments(source: string, openingParenIndex: number): string {
+  let depth = 0
+  for (let index = openingParenIndex; index < source.length; index += 1) {
+    const character = source[index]
+    if (character === '(') depth += 1
+    else if (character === ')') {
+      depth -= 1
+      if (depth === 0) return source.slice(openingParenIndex + 1, index)
+    }
+  }
+  return ''
 }
