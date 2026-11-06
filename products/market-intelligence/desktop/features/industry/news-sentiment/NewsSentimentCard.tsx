@@ -213,13 +213,6 @@ export function NewsSentimentCard(props: {
           {outOfDate && view?.latestKnownItemAt
             ? <p className="mi-news-sentiment__updated" data-news-sentiment-updated>{text.updatedAt.replace('{time}', formatTime(view.latestKnownItemAt, 'minute'))}</p>
             : null}
-          {/* The footer used to carry a card-wide "Rules" badge whenever any visible item was
-              scored by the rule engine. It named no item, looked like a dead control, and the
-              drawer already reports each item's engine, so only the caveat remains — and the
-              footer disappears entirely when there is nothing to say. */}
-          {view?.caveats.includes('news-body-limited')
-            ? <footer className="mi-news-sentiment__footer"><span>{text.bodyLimited}</span></footer>
-            : null}
         </>
       )}
     </section>

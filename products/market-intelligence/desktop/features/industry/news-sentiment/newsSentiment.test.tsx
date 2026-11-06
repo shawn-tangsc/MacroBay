@@ -677,9 +677,10 @@ describe('NewsSentimentFeature', () => {
     expect(exclude?.getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('drops the card-wide engine badge and hides the empty footer', async () => {
-    // The footer badge said "Rules" whenever any item was scored by the rule engine. It named no
-    // item and looked like a control that did nothing, so the card no longer shows it.
+  it('carries no card-wide badge or caveat line under the list', async () => {
+    // The card used to add a card-wide "Rules" badge and, later, a "headline only" caveat line.
+    // Neither named an item; both read as controls or noise under a list that already says what
+    // each row is. The caveat stays in the data (the drawer still explains a row without a body).
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
         onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
@@ -688,15 +689,15 @@ describe('NewsSentimentFeature', () => {
     expect(container.textContent).not.toContain(text.engine.rules)
     expect(container.querySelector('.mi-news-sentiment__footer')).toBeNull()
 
-    // The caveat is still worth a line, and it is the only thing the footer carries now.
     const withCaveat = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
         onEnableSources={() => undefined} onIncludeNeutralChange={() => undefined} onRunSources={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} onWidenWindow={() => undefined} text={text}
         view={{ ...VIEW, caveats: ['news-body-limited'] }} />
     )
-    expect(withCaveat.querySelector('.mi-news-sentiment__footer')?.textContent).toBe(text.bodyLimited)
-    expect(withCaveat.textContent).not.toContain(text.engine.rules)
+    // The caveat no longer renders anywhere on the card.
+    expect(withCaveat.textContent).not.toContain('仅依据标题')
+    expect(withCaveat.querySelector('.mi-news-sentiment__footer')).toBeNull()
   })
 
   it('says the filter is empty instead of rendering a blank card', async () => {
