@@ -12,14 +12,13 @@ const text = productText['zh-CN'].settings.intelligenceSources.syncRun
 let root: Root | undefined
 let host: HTMLDivElement | undefined
 
-beforeEach(() => {
-  vi.spyOn(syncRunClient, 'list').mockResolvedValue({
-    state: 'available',
-    rows: [
+const ROWS = [
       { at: '2026-10-30T08:27:20.000Z', runId: 'r1', correlationId: 'r1', taskLabel: '官方日历排期', sources: [{ sourceId: 'macro-calendar-fed', label: '美联储官方日历' }], handlerId: 'h1', action: 'collect', outcome: 'failed', analysis: { state: 'not-applicable' }, durationMs: 32_000, failureCode: 'provider-disabled', detail: 'Macro calendar schedule run failed: provider-disabled' },
       { at: '2026-10-30T08:25:00.000Z', runId: 'r2', correlationId: 'r2', taskLabel: 'AI 分析', sources: [], handlerId: 'h2', action: 'analysis', outcome: 'succeeded', analysis: { state: 'not-applicable' }, durationMs: 1_200 }
-    ]
-  })
+] as const
+
+beforeEach(() => {
+  vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'available', rows: ROWS })
 })
 
 afterEach(async () => {
@@ -96,6 +95,25 @@ describe('sync run section', () => {
     })
     // 稀疏任务（翻译一天 45 次）必须由服务端筛，否则它永远排在采集记录之后、取不回来。
     expect(vi.mocked(syncRunClient.list).mock.calls.at(-1)?.[0]).toMatchObject({ handlerId })
+  })
+
+  it('says how much of the window the CSV left out instead of exporting silently', async () => {
+    // 页面上写着「还有更多」，导出却像是全量——这就是最容易被当成丢数据的那种不一致。
+    vi.mocked(syncRunClient.list).mockResolvedValue({ state: 'available', rows: ROWS, truncated: true })
+    const writeText = vi.fn(async () => undefined)
+    // `navigator.clipboard` 只有 getter，赋值会抛；用 defineProperty 换掉这一属性。
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    const dom = await render()
+    const exportButton = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.exportCsv)
+    expect(exportButton).toBeDefined()
+    await act(async () => {
+      exportButton!.click()
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalled()
+    expect(dom.textContent).toContain(text.exportTruncated.replace('{count}', String(ROWS.length)))
   })
 
   it('makes “no source” its own filter instead of letting the empty value stand for it', async () => {

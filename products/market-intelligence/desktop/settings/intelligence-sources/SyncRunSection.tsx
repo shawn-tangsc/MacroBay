@@ -76,6 +76,8 @@ export type SyncRunText = Readonly<{
   sourceFilterNone: string
   /** 触到装载上限时说实话：取回一些 ≠ 窗口里只有这些。 */
   truncatedNotice: string
+  /** 导出同样不许静默截断：少了多少要写在读者看得见的地方。 */
+  exportTruncated: string
   showing: string
   retention: string
   page: string
@@ -250,6 +252,8 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
 
   const exportCsv = async () => {
     // Export exactly what the filters produced, not the unfiltered window the IPC read returned.
+    // 导出走的就是页面这一条路（同一份 `rows` 与同一组筛选），只是**取回不全时也要说**：
+    // 页面上写着「还有更多」，导出却像是全量，那是最容易被当成丢数据的一种不一致。
     const csv = syncRunsCsv(filtered.map((row) => ({
       ...row,
       taskLabel: taskLabelOf(row),
@@ -257,7 +261,9 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
     })), text.csvHeader)
     try {
       await navigator.clipboard.writeText(csv)
-      setNotice(text.exported)
+      setNotice(truncated
+        ? text.exportTruncated.replace('{count}', String(filtered.length))
+        : text.exported)
     } catch {
       // A clipboard the shell refuses is not a reason to claim success.
       setNotice(text.exportFailed)
