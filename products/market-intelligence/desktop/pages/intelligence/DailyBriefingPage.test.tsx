@@ -2696,3 +2696,34 @@ describe('a today row that is not the default period still opens', () => {
     expect(dom.querySelector('.mi-daily-briefing-page__content')?.textContent).not.toContain('这一期没有生成')
   })
 })
+
+describe('a run in flight never steals the row the reader is reading', () => {
+  const today = '2026-10-30'
+
+  // 用户 2026-11-06：列表顶部挂一行「生成中」的临时行（state=missing、语言状态 generating），
+  // 打开页面默认选中的必须是**第一条有正文的行**，不是这行临时行。
+  it('skips the generating placeholder when choosing what to open', async () => {
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'not-generated' as const })),
+      list: vi.fn(async () => ({
+        state: 'available' as const,
+        result: {
+          editions: [
+            { date: today, periodId: 'p-running', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'missing' as const, languages: [{ locale: 'zh-CN' as const, state: 'generating' as const }] },
+            { date: today, periodId: 'p-done', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4, summaryLine: '已经生成好的那一版' }
+          ],
+          dates: [today], today
+        }
+      })),
+      get: vi.fn(async ({ periodId }: { periodId?: string }) => periodId === 'p-done'
+        ? { state: 'available' as const, document: { ...briefingDocument(today, '有正文的这一版'), edition: { ...briefingDocument(today).edition, periodId: 'p-done' } } }
+        : { state: 'missing' as const })
+    })
+    const dom = await renderPage(client)
+    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+    // 正文是那一版有内容的，不是"正在生成"的九步面板。
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')?.textContent).toContain('有正文的这一版')
+    expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).toBeNull()
+  })
+})

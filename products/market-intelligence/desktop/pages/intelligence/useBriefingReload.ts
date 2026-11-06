@@ -140,12 +140,14 @@ export function useBriefingReload(deps: Readonly<{
       })
       setRegenerateFailure(null)
     } else if (today?.state === 'unavailable' && today.failureCode === 'not-generated'
-      && rows.some((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))) {
+      && rows.some((edition) => edition.date === periodDate && edition.state !== 'missing'
+        && edition.availableLocales.includes(localeForLoad))) {
       // The list says this language exists, so the answer "nothing written" is the read's miss, not
       // the truth. Read that edition by its date and put the answer on screen here — handing it to
       // the row path made the result depend on state that was still settling after a delete.
       // 按**这一行自己的期号**读：今天这行可能是手动 UUID 期，不带期号会读到默认期（空）。
-      const recoveredRow = rows.find((edition) => edition.date === periodDate && edition.availableLocales.includes(localeForLoad))
+      const recoveredRow = rows.find((edition) => edition.date === periodDate && edition.state !== 'missing'
+        && edition.availableLocales.includes(localeForLoad))
       const recovered = await readEdition(periodDate, localeForLoad, {
         fresh: true, ...(recoveredRow === undefined ? {} : { periodId: recoveredRow.periodId })
       })
@@ -163,8 +165,9 @@ export function useBriefingReload(deps: Readonly<{
        */
       // 只要**这一门语言**今天有行：期号可以是任意期（手动 UUID 期也算）。缺这一门语言的，
       // 仍走下面的 locale-missing 判定——"这一期有英文、你要中文"是另一件事。
+      // 同样只认**有正文**的行：临时"生成中"行也带着这一门语言，选它就会把正文换成九步面板。
       const todayRow = rows.find((edition) => edition.date === periodDate
-        && edition.availableLocales.includes(localeForLoad))
+        && edition.state !== 'missing' && edition.availableLocales.includes(localeForLoad))
       if (todayRow !== undefined) {
         setPinnedDate(todayRow.date)
         setPickedPeriodId(todayRow.periodId)
@@ -191,7 +194,10 @@ export function useBriefingReload(deps: Readonly<{
          * 而不是给一屏"今天还没有"。整列都没有行才落到今天的空态。
          * 只在这一档生效：读者点过、切过语言、删完重读都不走这里。
          */
-        const withContent = rows.filter((row) => row.availableLocales.length > 0 || row.state !== 'missing')
+        // **只认有正文的行**（用户 2026-11-06）：生成中的临时行也是 `availableLocales` 有值、但
+        // `state` 还是 `missing`——它一旦被自动选中，正文就被"九步未开始"盖掉，刚生成的正文看不见了。
+        // 临时行只有读者自己点它才许选中。
+        const withContent = rows.filter((row) => row.state !== 'missing' && row.availableLocales.includes(localeForLoad))
         const fallback = firstShownEdition(withContent, listed?.state === 'available' ? listed.result.dates : undefined)
         if (fallback !== undefined && fallback.date !== periodDate) {
           setPinnedDate(fallback.date)
