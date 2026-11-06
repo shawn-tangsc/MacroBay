@@ -257,6 +257,37 @@ describe('daily briefing document', () => {
     expect(document.citations.some((entry) => entry.statement === 'ETF 资金流印证。')).toBe(true)
   })
 
+  it('lists only events that have a name in the edition’s language (A0.9)', () => {
+    // 真机：英文版次的「接下来」印着中文讲话名。源里只有中文名的（央行讲话那条源）在英文版**不列**，
+    // 少列几条是允许的，不当数据缺口；中文版次照列。
+    const speech = {
+      eventKey: 'CB.SPEECH', title: '芝加哥联储主席古尔斯比发表讲话', scheduledAt: '2026-10-31T02:00:00.000Z',
+      importance: 'high' as const, lifecycleState: 'scheduled' as const, category: 'central-bank-activity' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const registered = {
+      eventKey: 'US.CORE.CPI', title: 'core-cpi', titleKey: 'core-cpi', scheduledAt: '2026-10-31T02:00:00.000Z',
+      importance: 'high' as const, lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }
+
+    const english = buildDailyBriefingDocument({
+      packet: packet({ locale: 'en-US', calendar: { state: 'available', events: [registered, speech] } }),
+      date: '2026-10-30'
+    })
+    const englishNames = [english.next.focus, ...english.next.items].filter((item) => item !== undefined).map((item) => item.titleKey ?? item.title)
+    expect(englishNames).toContain('core-cpi')
+    expect(englishNames.join(' ')).not.toMatch(/[\u3400-\u9fff]/)
+    // 少列一条不产生缺口/警告：那是源的能力限制，不是这次读失败。
+    expect(english.next.note).toBeUndefined()
+
+    const chinese = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [registered, speech] } }),
+      date: '2026-10-30'
+    })
+    expect([chinese.next.focus, ...chinese.next.items].filter((item) => item !== undefined).map((item) => item.title).join(' ')).toContain('芝加哥联储')
+  })
+
   it('keeps a released high-impact event without consensus in the macro list', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

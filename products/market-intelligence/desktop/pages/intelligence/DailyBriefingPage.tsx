@@ -17,6 +17,7 @@ import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingF
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
+import { briefingEventTitles } from './briefingEventTitles'
 import { DailyBriefingHistoryRail, railClock } from './DailyBriefingHistoryRail'
 import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { useBriefingShareActions } from './useBriefingShareActions'
@@ -68,11 +69,10 @@ import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoadi
 import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
-import { formattedClock } from './dailyBriefingUnavailableRow'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
-import { briefingManualRunReport } from './briefingManualRunOutcome'
+import { briefingManualRunReport, briefingManualRunningLabel } from './briefingManualRunOutcome'
 import { briefingPageChrome } from './briefingPageChrome'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
@@ -293,22 +293,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // 说什么（重复时点名哪一版、点下去替换哪一版）与"能不能跑"分开：文案和替换动作在同一个模块里，
   // 页面只把结果交给工具栏。
-  /**
-   * 手动那次跑起来时，按钮要说清"在写哪一期"：时刻与语言都来自这一次的输入。
-   *
-   * 缺任何一样就退回「正在重新生成…」的旧说法——宁可不说，也不留一个 `{time}` 空洞。
-   */
-  const runningClock = runIntent?.kind === 'manual' && runIntent.asOf ? formattedClock(formatTime(runIntent.asOf, 'minute')) : undefined
-  // 文案带**这一期的日期**：只说「正在生成 00:00 中文版」时，读者不知道自己写的是哪一天（G4）。
-  const runningDate = runIntent?.kind === 'manual' && runIntent.date !== ''
-    ? `${runIntent.date.slice(5, 7)}/${runIntent.date.slice(8, 10)}`
-    : undefined
-  const manualRunningLabel = runIntent?.kind === 'manual' && runningClock !== undefined && runningDate !== undefined
-    ? text.manualRunning
-      .replace('{date}', runningDate)
-      .replace('{time}', runningClock)
-      .replace('{language}', text.history.languages[runIntent.locale])
-    : undefined
+  // 手动那次跑起来时的按钮文案：日期、时刻、语言都来自这一次的输入（见 `briefingManualRunOutcome`）。
+  const manualRunningLabel = briefingManualRunningLabel({ intent: runIntent, text, formatTime })
   const onManualRun = (draft: Parameters<typeof runManual>[0]) =>
     briefingManualRunReport({
       result: runManual(draft),
@@ -318,9 +304,17 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       regenerate: (input) => runBriefing({ ...input, trigger: 'manual' })
     })
 
+  // 事件名表跟着**这一版的语言**走（`02` `A0.9`）：界面中文 + 英文版次时，界面那张中文名表
+  // 会把「核心 CPI」印进英文正文。版次语言与页面语言不同就换表，不回落（回落就是把中文塞进去）。
+  const editionEventTitles = briefingEventTitles({
+    pageLocale: locale,
+    editionLocale: screenDocument?.edition.locale ?? effectiveLocale,
+    pageTitles: eventTitles
+  })
+
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: screenDocument,
-    locale, text, ...(eventTitles ? { eventTitles } : {}), shareRef
+    locale, text, eventTitles: editionEventTitles, shareRef
   })
 
   const { failure, editorialBlocked } = briefingFailure({ view, regenerateFailure })
@@ -457,7 +451,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         />,
         text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
-        eventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
+        eventTitles: editionEventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
         settingsOpen: settingsSection !== null,
         // 正文失败面板的「重新生成」：跑的是屏幕上这一版，所以期号与语言取自它，不是全局默认期。
         onRetry: () => void runBriefing({ periodId: onScreenPeriodId, locale: screenDocument?.edition.locale ?? effectiveLocale, trigger: 'regenerate', ...(screenRerun === undefined ? {} : { rerun: screenRerun }) }),

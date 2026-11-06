@@ -1,6 +1,8 @@
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { railClock } from './DailyBriefingHistoryRail'
+import { formattedClock } from './dailyBriefingUnavailableRow'
+import type { BriefingRunIntent } from './useBriefingRunActions'
 import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 
 /**
@@ -46,4 +48,27 @@ export function briefingManualRunReport(input: Readonly<{
     outcome: 'duplicate',
     duplicate: { label, replace: () => { void regenerate({ periodId, locale: language, generation: { asOf, windowHours } }) } }
   }
+}
+
+/**
+ * 手动那次跑起来时，按钮要说清「在写哪一期」：日期、时刻与语言都来自这一次的输入。
+ *
+ * 缺任何一样就退回「正在重新生成…」的旧说法——宁可不说，也不留一个 `{time}` 空洞。
+ * 与提交后的那句说明（本文件的 `briefingManualRunReport`）放在一起：同一个动作的前后两句话，
+ * 拆到两个文件就会各自漂移。
+ */
+export function briefingManualRunningLabel(input: Readonly<{
+  intent: BriefingRunIntent | null
+  text: DailyBriefingText
+  formatTime: (value: string, precision: 'minute') => string
+}>): string | undefined {
+  const { intent, text } = input
+  if (intent?.kind !== 'manual' || intent.asOf === undefined || intent.date === '') return undefined
+  const clock = formattedClock(input.formatTime(intent.asOf, 'minute'))
+  if (clock === undefined) return undefined
+  const date = `${intent.date.slice(5, 7)}/${intent.date.slice(8, 10)}`
+  return text.manualRunning
+    .replace('{date}', date)
+    .replace('{time}', clock)
+    .replace('{language}', text.history.languages[intent.locale])
 }

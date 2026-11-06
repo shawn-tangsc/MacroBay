@@ -13,6 +13,7 @@ import type {
   DailyBriefingReadingState
 } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import { indicatorNameOf } from '../../../contracts/indicatorNames'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
@@ -30,7 +31,7 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
-import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
  * 这一版算不算「补跑」：运行时刻明显晚于它的统计截止。
@@ -283,12 +284,22 @@ export function compareBriefingNextRelevance(left: BriefingNextItem, right: Brie
   return left.at.localeCompare(right.at) || left.eventKey.localeCompare(right.eventKey)
 }
 
+/** 注册指标按标识取英文名；自由文本事件只能用源站原文。中文原文不算英文名。 */
+function hasEnglishName(event: Pick<DailyBriefingCalendarEvent, 'title' | 'titleKey'>): boolean {
+  const registered = event.titleKey ? indicatorNameOf(event.titleKey) : undefined
+  const name = registered?.en ?? event.title
+  return !/[\u3400-\u9fff]/.test(name)
+}
+
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
     .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
+    // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
+    // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
+    .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
     .filter((event) => {
       const at = Date.parse(event.scheduledAt)
       const day = localDate(event.scheduledAt, packet.timeZone)
