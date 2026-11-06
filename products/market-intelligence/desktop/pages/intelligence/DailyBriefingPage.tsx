@@ -62,7 +62,6 @@ import {
 } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
-import { openBriefingEdition } from './openBriefingEdition'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
 import { useBriefingEditionReader } from './useBriefingEditionReader'
 import { briefingDocument, briefingRowState, briefingViewStatus, isBriefingLoading, readyKind, readyZone, resolveBriefingMode } from './dailyBriefingMode'
@@ -367,9 +366,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const activeGroup = openGroup ? groups.find((group) => group.key === openGroup.key) : undefined
   // A successful edition keeps its stage trace for auditing; a failed attempt carries the same
   // shape in the result, so the timeline survives a refresh once the service returns it.
+  // 没有正文的那一版也能有步骤：失败的那一次尝试把 trace 交回来了。它**只**来自这一次读到的结果，
+  // 不落回任何已存版次的 trace（同一天另一期的步骤不是这一版的步骤）。
+  const failureTrace = view.status === 'no-edition' || view.status === 'unavailable' ? view.generationTrace : undefined
   const generationTrace = screenDocument
     ? readGenerationTrace((screenDocument.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
-    : undefined
+    : failureTrace
   // The right-hand archive follows "this issue has an edition", not "the latest attempt succeeded":
   // regenerating today, or failing after an earlier success, must not make the stored archive vanish.
   // The archive belongs to the edition on screen, not to "today": reading a past edition must show

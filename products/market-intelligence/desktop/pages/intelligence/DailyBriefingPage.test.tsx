@@ -1810,6 +1810,38 @@ it('shows the steps of the issue being read, not the run this page started last'
 })
 
 // 反向：选中的是 A、手上读到的文档身份却是 B —— 那份文档不是"A 的正文"，绝不许冒充。
+it('opens a failed run with that attempt\u2019s steps and its readable reason', async () => {
+  // 用户 2026-11-06：点开列表里失败的那一项，要能看到**这次尝试自己的**步骤和失败原因。
+  const today = '2026-10-30'
+  const trace = generationTraceFixture('failed', 'writing', 'editorial-timeout')
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, generatedAt: today, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace }))
+  })
+  const dom = await renderPage(client)
+
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 人话原因（不是内部码）+ 步骤：卡在写作那一步。
+  const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+  expect(panel).not.toBeNull()
+  expect(panel.textContent).toContain(text.aiSettings.failure['editorial-timeout'])
+  expect(panel.textContent).not.toContain('editorial-timeout')
+  expect(panel.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('failed')
+  // 右列也是同一份步骤（不是空白）。
+  const stages = dom.querySelector<HTMLElement>('[data-briefing-stages]')!
+  expect(stages.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('failed')
+  // 这一行没有正文：不出现"打开看正文"那句。
+  expect(dom.textContent).not.toContain(text.history.railNoTitle)
+})
+
 it('never lets another issue\u2019s document stand in for the selected one', async () => {
   const today = '2026-10-30'
   const listed = [
@@ -1831,6 +1863,31 @@ it('never lets another issue\u2019s document stand in for the selected one', asy
   // 选中 B：A 的正文不许出现；B 在自己跑，所以正文是它的进度。
   expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
   expect(dom.querySelector('[data-briefing-stage-panel][data-state="generating"]')).not.toBeNull()
+})
+
+it('reads the row it clicked, not the first issue of that day', async () => {
+  // 同一天两期（07:00 与手动 08:00）都是中文：只按日期读，点第二行看到的是第一行那一版。
+  // 身份是三样（日期 + 期号 + 语言），读版次也一样。
+  const today = '2026-10-30'
+  const listed = [
+    { date: today, periodId: 'default', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, periodTime: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`, readingsAvailable: 4 },
+    { date: today, periodId: 'manual-0800', locale: 'zh-CN' as const, availableLocales: ['zh-CN'] as const, state: 'generated' as const, generatedAt: `${today}T00:40:00.000Z`, periodTime: `${today}T00:40:00.000Z`, windowEnd: `${today}T00:40:00.000Z`, readingsAvailable: 4 }
+  ]
+  const get = vi.fn(async ({ periodId }: { periodId?: string }) => ({
+    state: 'available' as const,
+    document: {
+      ...briefingDocument(today),
+      edition: { ...briefingDocument(today).edition, periodId: periodId ?? 'default', periodTime: `${today}T00:40:00.000Z` }
+    }
+  }))
+  const client = fakeClient({ list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed } })), get })
+  const dom = await renderPage(client)
+
+  const second = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="manual-0800"]')!
+  await act(async () => { second.click() })
+  for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+
+  expect(get).toHaveBeenCalledWith(expect.objectContaining({ date: today, locale: 'zh-CN', periodId: 'manual-0800' }))
 })
 
 it('stays on the edition the run just wrote when it landed on another day', async () => {

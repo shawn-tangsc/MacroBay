@@ -92,8 +92,7 @@ export type DailyBriefingClientAttemptsResult = Readonly<
 export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
   | Readonly<{ state: 'missing' }>
-  | Readonly<{ state: 'unavailable'; failureCode: string }>
-
+  | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
 export type DailyBriefingGenerationSettingsView = Readonly<{
   /** Every saved period, projected by the service. The list is the view; there is no flat copy. */
   periods: readonly DailyBriefingPeriodView[]
@@ -301,6 +300,7 @@ export const dailyBriefingClient: DailyBriefingClient = {
         if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
         return { state: 'available', document: value.document }
       }
+      if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       return unavailable()
     } catch {
       return unavailable()

@@ -4,6 +4,7 @@ import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../.
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { briefingEditionPeriod } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
+import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 
 /**
  * Reading one edition: one entry, one answer.
@@ -25,11 +26,20 @@ export function useBriefingEditionReader(input: Readonly<{
   setPinnedDate: (date: string) => void
   setRegenerateFailure: (failure: null) => void
 }>): Readonly<{
-  readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>>
+  readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{
+    kind: 'available' | 'missing' | 'failed' | 'unknown'
+    failureCode?: string
+    /** 失败那一次自己的步骤：点开这一行要看得见卡在哪一步（用户 2026-11-06）。 */
+    generationTrace?: GenerationTrace
+  }>>
   openEdition: (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string) => void
 }> {
   const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure } = input
-  const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean; periodId?: string }> = {}): Promise<Readonly<{ kind: 'available' | 'missing' | 'failed' | 'unknown'; failureCode?: string }>> => {
+  const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean; periodId?: string }> = {}): Promise<Readonly<{
+    kind: 'available' | 'missing' | 'failed' | 'unknown'
+    failureCode?: string
+    generationTrace?: GenerationTrace
+  }>> => {
     const key = `${date}:${options.periodId ?? 'default'}:${target}`
     const cached = options.fresh ? undefined : cache.current.get(key)
     if (cached) {
@@ -43,7 +53,10 @@ export function useBriefingEditionReader(input: Readonly<{
       return { kind: 'available' }
     }
     if (result?.state === 'missing') return { kind: 'missing' }
-    if (result?.state === 'unavailable') return { kind: 'failed', failureCode: result.failureCode }
+    if (result?.state === 'unavailable') {
+      const generationTrace = readGenerationTrace(result.generationTrace)
+      return { kind: 'failed', failureCode: result.failureCode, ...(generationTrace === undefined ? {} : { generationTrace }) }
+    }
     return { kind: 'unknown' }
   }
 
@@ -75,7 +88,15 @@ export function useBriefingEditionReader(input: Readonly<{
         const other = (row.availableLocales ?? []).find((candidate: 'zh-CN' | 'en-US') => candidate !== target)
         // A day that did not publish says which nothing it is; a failed attempt carries its code and
         // this version cannot backfill a past day, so the pane owns both facts.
-        if (row.state === 'missing') setView({ status: 'no-edition', date, failed: read.kind === 'failed', ...(read.kind === 'failed' && read.failureCode ? { failureCode: read.failureCode } : {}) })
+        // 失败的那一版：码 + **这次尝试自己的**步骤一起落进视图。步骤不借同一天另一期的，
+        // 也不落回已存版次的 trace —— 那会让读者以为这一版真跑过那几步。
+        if (row.state === 'missing') setView({
+          status: 'no-edition',
+          date,
+          failed: read.kind === 'failed',
+          ...(read.kind === 'failed' && read.failureCode ? { failureCode: read.failureCode } : {}),
+          ...(read.kind === 'failed' && read.generationTrace ? { generationTrace: read.generationTrace } : {})
+        })
         else if (other) setView({ status: 'locale-missing', locale: target, date, ...(date !== todayDate ? { historical: true } : {}) })
         else setView({ status: 'no-edition', date, failed: false })
       })

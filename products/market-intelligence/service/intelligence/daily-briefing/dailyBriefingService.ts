@@ -29,7 +29,7 @@ import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefB
 import { abandonDailyBriefingEditorial, publishDailyBriefingEdition } from './dailyBriefingPublish'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { prepareMarketForRun } from './dailyBriefProgressWaiting'
-import { createDailyBriefingReads } from './dailyBriefingReads'
+import { createDailyBriefingReads, type DailyBriefingGetResult } from './dailyBriefingReads'
 import { notifyBriefingFailure, notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import type { DailyBriefReadiness } from './dailyBriefReadinessGate'
@@ -248,9 +248,7 @@ export type DailyBriefingTodayResult =
     generationTrace?: BriefingGenerationTrace
   }>
 
-export type DailyBriefingGetResult =
-  | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
-  | Readonly<{ state: 'missing' }>
+export type { DailyBriefingGetResult } from './dailyBriefingReads'
 
 export type DailyBriefingListResultView =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>

@@ -46,6 +46,8 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
    */
   onRetryRead?: () => void
 }>): React.ReactElement {
+  const failedHere = view.status === 'no-edition' ? view.failed : view.status === 'unavailable'
+  const stagesShown = hasArchive || failedHere
   return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
         {/* 缺口清单**不再要求"有版次"**：文档读不懂时没有可解析的文档，但"这一版没被渲染"本身
             就是一条该留痕的事实（`02` v2.129 G5）。以前这块挂在 `hasArchive` 下面，于是那条缺口
@@ -90,9 +92,9 @@ export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, 
           </ol>
         </details>
         </section> : null}
-        {hasArchive ? <>
-        {/* The column's first block reports the run when one is in flight: same stepper, live states.
-            Otherwise it reports what the stored attempt recorded. */}
+        {/* 步骤块不要求"有版次"：失败的那一版没有正文，但它的尝试留下了步骤——点开这一行要看得见
+            卡在哪一步（用户 2026-11-06）。从没跑过的期没有尝试，就不出这一块。 */}
+        {stagesShown ? <>
         <div data-briefing-stages="true">{generating
           ? <DailyBriefingGenerationTimeline running text={text} formatTime={formatTime} trace={liveProgress ? traceFromProgress(liveProgress) : undefined} waiting={liveProgress?.waiting} />
           : <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />}</div>

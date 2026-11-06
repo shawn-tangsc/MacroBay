@@ -253,7 +253,8 @@ export const dailyBriefingText = {
       duration: '耗时 {duration}',
       expand: '展开阶段',
       collapse: '收起阶段',
-      missing: '本次未记录时间线', notExecutedCount: '{count} 步未执行', stepsCount: '{count} 步', allCompleted: '全部完成',
+      // 用户 2026-11-06：没有步骤记录时要说清"这次尝试没有留下步骤记录"，面板不许空着。
+      missing: '这次尝试没有留下步骤记录', notExecutedCount: '{count} 步未执行', stepsCount: '{count} 步', allCompleted: '全部完成',
       failedAt: '失败于：{stage}',
       notRecorded: '未记录',
       // "Not recorded" is for a finished run that left no row; a run in flight has not started that step yet.
@@ -555,7 +556,7 @@ export const dailyBriefingText = {
       duration: 'Took {duration}',
       expand: 'Show stages',
       collapse: 'Hide stages',
-      missing: 'No stage timeline was recorded for this attempt', notExecutedCount: '{count} steps not run', stepsCount: '{count} steps', allCompleted: 'all done',
+      missing: 'This attempt left no step record', notExecutedCount: '{count} steps not run', stepsCount: '{count} steps', allCompleted: 'all done',
       failedAt: 'Failed at: {stage}',
       notRecorded: 'Not recorded',
       states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notStarted: 'Not started', notNeeded: 'No repair needed', notRun: 'Not run' },
