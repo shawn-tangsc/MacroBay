@@ -66,7 +66,18 @@ export function wireDailyBriefingJobs(deps: Readonly<{
         runTrigger: 'catch-up',
         generation: { generationTime: input.generationTime, windowHours: input.windowHours }
       })
-    }).catch(() => Object.freeze([]))
+    }).then((outcome) => {
+      // 一行留痕：补了谁、跳过了谁、谁补了没成。用户 2026-11-06 那天"库里零尝试、日志无痕迹"，
+      // 就是因为跳过和失败都没有出口——不许再让它静默。
+      console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_CATCHUP', at: deps.now?.() ?? new Date().toISOString(), timeZone, ...outcome }))
+    }).catch((error: unknown) => {
+      console.log(JSON.stringify({
+        marker: 'MI_DAILY_BRIEF_CATCHUP',
+        at: deps.now?.() ?? new Date().toISOString(),
+        timeZone,
+        error: error instanceof Error ? error.message : String(error)
+      }))
+    })
   }
   registerDailyBriefingJob(deps.jobRuntime, {
     service: deps.service,

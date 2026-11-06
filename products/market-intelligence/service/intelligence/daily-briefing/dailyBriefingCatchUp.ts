@@ -43,7 +43,7 @@ export type BriefingCatchUpDeps = Readonly<{
   hasEdition: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<boolean>
   /** 这一期今天留下过几条尝试记录（任何状态都算"跑过"）。 */
   attemptCount: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<number>
-  /** 真的跑：与定时那条路同一个入口，只是把触发记成补跑。 */
+  /** 真的跑：与定时那条路同一个入口，只是把触发记成补跑。返回那一次的结果，好判成功还是失败。 */
   run: (input: Readonly<{
     date: string
     locale: DailyBriefingLocale
@@ -51,33 +51,58 @@ export type BriefingCatchUpDeps = Readonly<{
     timeZone: string
     generationTime: string
     windowHours: 12 | 24 | 48
-  }>) => Promise<unknown>
+  }>) => Promise<Readonly<{ state: string; failureCode?: string }>>
 }>
 
-/** 补跑今天错过了的那期；返回真的补了哪几期。失败不抛：启动与重排都不能被它挡住。 */
-export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Promise<readonly string[]> {
+/**
+ * 一次补跑检查的结果：补了谁、跳过了谁（为什么）、谁补了但没成功。
+ *
+ * 以前只返回"补了哪几期"，跳过和失败都没有出口——于是"补跑没发生"在日志和返回值里都查不到
+ * （2026-11-06 用户那天就是这样：库里零尝试，没人知道是没跑还是跑失败了）。现在三样都交出来，
+ * 调用方打一行带 marker 的日志。
+ */
+export type BriefingCatchUpOutcome = Readonly<{
+  ran: readonly string[]
+  skipped: readonly Readonly<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' }>[]
+  failed: readonly Readonly<{ periodId: string; failureCode?: string }>[]
+}>
+
+/** 补跑今天错过了的那期。失败不抛：启动与重排都不能被它挡住。 */
+export async function catchUpMissedDailyBriefings(deps: BriefingCatchUpDeps): Promise<BriefingCatchUpOutcome> {
     const periods = await deps.getPeriods().catch(() => [])
-    if (periods.length === 0) return Object.freeze([])
     const readerTimeZone = deps.readerTimeZone()
     const now = deps.now()
     const fallbackLocale = await deps.getLocale().catch(() => 'zh-CN' as const)
-    const caughtUp: string[] = []
+    const ran: string[] = []
+    const skipped: Array<{ periodId: string; why: 'not-due' | 'has-edition' | 'has-attempt' }> = []
+    const failed: Array<{ periodId: string; failureCode?: string }> = []
     for (const period of periods) {
-      const due = briefingCatchUpDue(period, readerTimeZone, now)
-      if (!due) continue
-      const locale = period.language ?? fallbackLocale
       const id = period.id || DEFAULT_PERIOD_ID
+      const due = briefingCatchUpDue(period, readerTimeZone, now)
+      if (!due) {
+        skipped.push({ periodId: id, why: 'not-due' })
+        continue
+      }
+      const locale = period.language ?? fallbackLocale
       // 跑过的证据：有版次，或者留下过任何一条 attempt。两者都不必再跑一遍。
-      if (await deps.hasEdition({ date: due.date, locale, periodId: id }).catch(() => true)) continue
-      if (await deps.attemptCount({ date: due.date, locale, periodId: id }).catch(() => 1) > 0) continue
+      if (await deps.hasEdition({ date: due.date, locale, periodId: id }).catch(() => true)) {
+        skipped.push({ periodId: id, why: 'has-edition' })
+        continue
+      }
+      if (await deps.attemptCount({ date: due.date, locale, periodId: id }).catch(() => 1) > 0) {
+        skipped.push({ periodId: id, why: 'has-attempt' })
+        continue
+      }
       // 同一刻重复调用是安全的：服务端按 (日期, 期号, 语言) 合并，第二次会并进正在跑的那一次。
-      await deps.run({
+      const result = await deps.run({
         date: due.date, locale, periodId: id,
         timeZone: period.generationTimeZone ?? readerTimeZone,
         generationTime: period.generationTime,
         windowHours: period.windowHours
-      })
-      caughtUp.push(id)
+      }).catch((error: unknown) => ({ state: 'threw', failureCode: error instanceof Error ? error.message : String(error) }))
+      // 补跑了不等于补成了：跑失败要说出来，否则"今天少了一期"永远没人知道。
+      if (result.state === 'available') ran.push(id)
+      else failed.push({ periodId: id, ...(result.failureCode === undefined ? {} : { failureCode: result.failureCode }) })
     }
-    return Object.freeze(caughtUp)
+    return Object.freeze({ ran: Object.freeze(ran), skipped: Object.freeze(skipped), failed: Object.freeze(failed) })
 }

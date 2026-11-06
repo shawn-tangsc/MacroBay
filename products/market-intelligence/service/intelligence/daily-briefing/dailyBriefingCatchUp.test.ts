@@ -46,7 +46,7 @@ describe('a missed period is caught up once, when the app starts', () => {
   // 用户 2026-11-06：今天 07:00 那期一次都没跑——修时区那一刻今天 07:00 已过，下一次触发直接到了明天。
   it('runs a period whose cutoff has passed today and that never ran', async () => {
     const { catchUp, run } = harness()
-    expect(await catchUp()).toEqual(['default'])
+    expect((await catchUp()).ran).toEqual(['default'])
     expect(run).toHaveBeenCalledTimes(1)
     // 补的是这一期**自己的**时刻、窗口、语言与时区，与定时那条路同一份输入。
     expect(run.mock.calls[0]![0]).toMatchObject({
@@ -65,19 +65,19 @@ describe('a missed period is caught up once, when the app starts', () => {
 
   it('skips a period that already left an attempt in any state', async () => {
     const { catchUp, run } = harness({ attempted: ['default'] })
-    expect(await catchUp()).toEqual([])
+    expect((await catchUp()).skipped).toEqual([{ periodId: 'default', why: 'has-attempt' }])
     expect(run).not.toHaveBeenCalled()
   })
 
   it('skips a period that already has an edition today', async () => {
     const { catchUp, run } = harness({ editions: ['default'] })
-    expect(await catchUp()).toEqual([])
+    expect((await catchUp()).skipped).toEqual([{ periodId: 'default', why: 'has-edition' }])
     expect(run).not.toHaveBeenCalled()
   })
 
   it('does nothing before today’s cutoff', async () => {
     const { catchUp, run } = harness({ now: BEFORE_CUTOFF })
-    expect(await catchUp()).toEqual([])
+    expect((await catchUp()).skipped).toEqual([{ periodId: 'default', why: 'not-due' }])
     expect(run).not.toHaveBeenCalled()
   })
 
@@ -110,5 +110,35 @@ describe('the cutoff of a period is the wall clock the reader configured', () =>
     // UTC 07:00 已过（此刻 UTC 00:30 还没到）——同一时刻在本地钟上是"过了"，在 UTC 钟上还没到。
     expect(briefingCatchUpDue(utc, ZONE, AFTER_CUTOFF)).toBeUndefined()
     expect(briefingCatchUpDue(utc, ZONE, '2026-11-06T07:30:00.000Z')).toEqual({ date: '2026-11-06', cutoff: '2026-11-06T07:00:00.000Z' })
+  })
+})
+
+describe('a catch-up that ran but did not succeed is reported, never swallowed', () => {
+  it('lists the period under failed with the service code', async () => {
+    // 用户 2026-11-06：补跑"库零尝试、日志无痕迹"，就是因为失败没有出口。跑了没成也要说出来。
+    const outcome = await catchUpMissedDailyBriefings({
+      getPeriods: async () => [period()],
+      getLocale: async () => 'zh-CN' as const,
+      readerTimeZone: () => ZONE,
+      now: () => AFTER_CUTOFF,
+      hasEdition: async () => false,
+      attemptCount: async () => 0,
+      run: async () => ({ state: 'unavailable', failureCode: 'run-timeout' })
+    })
+    expect(outcome.ran).toEqual([])
+    expect(outcome.failed).toEqual([{ periodId: 'default', failureCode: 'run-timeout' }])
+  })
+
+  it('reports a run that threw instead of failing the whole check', async () => {
+    const outcome = await catchUpMissedDailyBriefings({
+      getPeriods: async () => [period()],
+      getLocale: async () => 'zh-CN' as const,
+      readerTimeZone: () => ZONE,
+      now: () => AFTER_CUTOFF,
+      hasEdition: async () => false,
+      attemptCount: async () => 0,
+      run: async () => { throw new Error('store-down') }
+    })
+    expect(outcome.failed).toEqual([{ periodId: 'default', failureCode: 'store-down' }])
   })
 })
