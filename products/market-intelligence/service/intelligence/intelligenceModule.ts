@@ -950,9 +950,7 @@ export function getIntelligenceModule(
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       readiness: createDailyBriefReadinessFor(publicQueryService),
       marketBackfill: currentBriefMarketBackfill,
-      generationSettings: async () => (await briefingPeriodsSource.getPeriods())[0]!,
-      // 重跑/定时都必须按**这一期**的时刻、窗口与语言来（用户 2026-11-06）。
-      readPeriods: () => briefingPeriodsSource.getPeriods(),
+      generationSettings: async () => (await briefingPeriodsSource.getPeriods())[0]!, readPeriods: () => briefingPeriodsSource.getPeriods(),
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
         (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
