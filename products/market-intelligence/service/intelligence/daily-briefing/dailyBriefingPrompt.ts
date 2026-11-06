@@ -6,6 +6,7 @@ import {
   formatBriefingValueDisplay,
   formatPercentDisplay
 } from './dailyBriefingFactDisplay'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 
 /**
  * The editorial prompt is bounded to the frozen document: the model may add prose and a visibility
@@ -20,9 +21,30 @@ export function buildDailyBriefingPrompt(input: Readonly<{
 }>): StructuredModelMessage[] {
   const { document, locale } = input
   const rowFacts = dataFacts(document, locale)
+  /**
+   * 可引用集合（Chief 2026-11-06 批）：模型能看见候选（选择阶段的列表），但**只有落进这一版的
+   * 事实才允许被 `items` / `evidenceRefs` 引用**。以前两者混在一起，模型照着候选 id 写，校验回了
+   * 12 条 unknown-fact，白烧一轮修复。
+   */
+  const citableItems = document.news.items.map((item) => `news:${item.itemId}`)
+  const citableMacro = selectMacroAnalysisCandidates(document.news.macro).map((item) => `macro:${item.eventKey}`)
+  const citableData = rowFacts.map((item) => item.factId)
+  // 上一阶段的选择结果按原样带给写作段（读者要能解释"为什么没选"），但它的 hidden 只是理由，
+  // 不是这一版的事实：显式标 `citable: false`，别让 id 看起来像可写的。
+  const selection = input.selection as Readonly<{ hidden?: readonly Readonly<Record<string, unknown>>[] }> | undefined
   const facts = {
     locale,
-    ...(input.selection !== undefined ? { selection: input.selection } : {}),
+    citable: {
+      rule: 'items[].factId and evidenceRefs may only name ids listed here; a hidden candidate id is never citable.',
+      items: [...citableItems, ...citableMacro],
+      evidenceRefs: [...citableItems, ...citableMacro, ...citableData]
+    },
+    ...(selection !== undefined
+      ? { selection: {
+        ...selection,
+        ...(selection.hidden === undefined ? {} : { hidden: selection.hidden.map((entry) => ({ ...entry, citable: false })) })
+      } }
+      : {}),
     previousLedePattern: document.lede.previousPattern ?? null,
     edition: { date: document.edition.date, windowStart: document.edition.windowStart, windowEnd: document.edition.windowEnd },
     conclusion: document.conclusion ? {
@@ -53,7 +75,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       strength: item.strength,
       confidence: item.confidence
     })),
-    macro: document.news.macro.map((item) => ({
+    // 无值事件不进写作素材（`A0.12` ⑤）：版面照样显示它们，但没有可写的事实——模型看到只会
+    // 把"我们没拿到"写成一句判断。
+    macro: selectMacroAnalysisCandidates(document.news.macro).map((item) => ({
       factId: `macro:${item.eventKey}`,
       title: item.title,
       actual: item.actual ?? null,
@@ -159,9 +183,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- Act as a crypto trading analyst writing for BTC/ETH: for every candidate news:/macro: fact, decide whether a trader needs it today. Return one item (with why) for each fact you decide to show; omit the rest. There is no fixed count and no quota. Omit generic, duplicate, low-signal or already-known items.',
         '- items: only news:/macro: factIds, no duplicates, order by importance. An empty array is valid only when nothing is worth showing.',
         '- importance: the data: factIds you decide to show, unique, must/support/reference. Every listed data row becomes visible. A mustFloor row is always shown; keep it out of hiddenData.',
-        '- hiddenData: for every data: fact whose materiality.material is true that you do NOT show, give one sentence explaining why. Omit immaterial rows: the rule already hides them with reason no-material-change.',
-        '- data:leverage and data:policy-path are selectable only when materiality.material is true. Below the threshold they cannot be shown, whatever the ranking says. A flat open interest, a rate path that has not moved, and a row with no change are context, not news.',
-        '- Include a data fact only when it has a material change or explains today’s read; every hidden data fact is audited with a reason, never silently dropped.',
+        '- hiddenData: every reading with data appears on the page, whatever its materiality; a threshold decides emphasis, never presence. Use hiddenData only to explain your ranking, and never expect it to remove a row.',
+        '- data:leverage and data:policy-path are shown whether or not they moved: a flat open interest or an unchanged rate path is a quiet row, still a row. Rank them lower when nothing moved; do not treat "no change" as a reason the reader should not see them.',
+        '- Rank a data fact by whether it changed or explains today’s read; that ranking decides its tier, not whether it appears. Every reading is audited with a reason, and nothing is silently dropped.',
         '- conclusionTranslation: only when conclusionSynthesis is omitted and the fallback conclusion summary is in a different language from LOCALE. When you write conclusionSynthesis, omit it: the synthesized summary is already in LOCALE.',
         '- conclusionSynthesis: required when FACTS.priorConclusions is not empty; omit it when the list is empty (the fact-layer conclusion stays as a marked fallback). Weigh the prior conclusions against today’s facts and write your own forward verdict for a reader who never saw an earlier draft. Never copy any prior conclusion’s wording, sentence or structure; a verbatim or near-verbatim copy is rejected. Never describe the editing process, a window, frozen data, earlier AI views, models, documents called conclusions, or a timeline.',
         '- priorConclusions are claims, not facts: do not repeat their numbers as if verified and do not cite them as evidence. Cite only frozen news:/macro:/data: factIds in conclusionSynthesis.evidenceRefs, at least one. Never mention their observedAt/asOf clock times.',
@@ -176,6 +200,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
         '- items are shown facts with why; hidden contains every other candidate with a reason. items + hidden must cover every news and macro candidate exactly once.',
+        '- CITE ONLY ids listed in FACTS.citable: items[].factId and evidenceRefs must come from it. A candidate you hid is not a fact in this edition - its id is not citable, in items or in evidenceRefs; hidden exists to explain why you left it out, nothing else.',
+        '- If a validation reply names an id you cited that is not citable, drop that entry. Do not rewrite it to a different id to keep the sentence: the sentence is about a fact this edition does not carry.',
         '- Every shown macro needs a why. A macro without a why is not shown; do not list one in items and leave its explanation to be inferred.',
         '- A macro fact without consensus is not automatically shown and not automatically hidden: select it when its actual vs previous move matters, and hide it with a relevance, repetition or low-impact reason when it does not. Missing consensus is a data gap, never the reason an event is unimportant. When shown, its why must compare actual with previous by value.',
         '- The lede is event-first: lead with the dominant event/tension and its transmission, not with a direction or a data recital. Never enumerate the news headlines or the data rows. Avoid generic openers such as “market sentiment is cautious” or “mixed signals”.',
@@ -256,7 +282,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
   const { document, locale } = input
   const candidates = {
     news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
-    macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
+    macro: selectMacroAnalysisCandidates(document.news.macro).map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
     data: dataFacts(document, locale).map((item) => ({
       factId: item.factId,
       labelKey: item.labelKey,
@@ -286,7 +312,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
       'CANDIDATES:',
       JSON.stringify(candidates, null, 2),
       'Return this exact shape: {"stage":"select","focus":"<next eventKey>","focusWhy":"why it transmits to BTC/ETH","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"data":["data:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}],"hiddenData":[{"factId":"data:<id>","reason":"why not shown"}]}',
-      'Select only from the lists. Keep next/macro/news/data IDs exact. Choose one next focus plus at most 3 other next events, at most 4 macro and 6 news that actually change the day; do not select everything. macro: the 24h section is capped at four releases, so choose the ones a BTC/ETH trader needs, not every high-impact print: prefer the day’s key release, the events most relevant to crypto transmission, and the largest actual-vs-previous changes. data: show only rows with a material change or an explanatory role; leverage and policy-path are selectable only when materiality.material is true, and floor rows (must=true) are always shown. requests may ask for missing fields; do not invent values. List every unselected news/macro/next candidate in hidden with a reason; list a material data row you deliberately leave out in hiddenData with a reason (immaterial rows are already hidden by the rule).',
+      'Select only from the lists. Keep next/macro/news/data IDs exact. Choose one next focus plus at most 3 other next events, at most 4 macro and 6 news that actually change the day; do not select everything. macro: the 24h section is capped at four releases, so choose the ones a BTC/ETH trader needs, not every high-impact print: prefer the day’s key release, the events most relevant to crypto transmission, and the largest actual-vs-previous changes. data: every reading with data appears on the page whatever its materiality — a threshold decides emphasis, never presence; rank a quiet row lower instead of hiding it, and leverage/policy-path are shown even when nothing moved. requests may ask for missing fields; do not invent values. List every unselected news/macro/next candidate in hidden with a reason; hiddenData explains your ranking only and never removes a row.',
       'NO CONSENSUS IS NOT ITSELF A HIDING REASON: a released event without consensus is not automatically selected and not automatically hidden. Select it when its actual vs previous move matters and explain that comparison in the writing pass; otherwise hide it with a relevance, repetition or low-impact reason. Never use "no consensus" as the reason an event does not matter.',
       'NEXT FOCUS: choose the candidate whose transmission to BTC/ETH is strongest today, not simply the nearest event. The relevance field gives the channel and its default weight (rate-policy, inflation, labor, liquidity, ETF flows, regulation, stablecoins, exchange risk rank above Asia/commodity spillovers). A lower-ranked event such as China PMI or OPEC is allowed only when focusWhy states the concrete Asia or commodity transmission to BTC/ETH. focusWhy is required with focus and must name the channel or asset; a missing/unknown eventKey or a why with no BTC/ETH transmission is ignored and the deterministic relevance ranking becomes the focus.',
       'NEXT LIST: after the focus, choose at most 3 other events, ordered by relevance then time. Do not fill the list chronologically; the list is relevance-first. The focus plus those 3 is the 4-event cap.'
@@ -301,6 +327,17 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
  * there leaves the next attempt guessing — the loop that produced three identical failures in one
  * evening (MI-2-R16).
  */
-export function repairPromptFor(failureCode: string, failureDetail: string | undefined): string {
+export function repairPromptFor(
+  failureCode: string,
+  failureDetail: string | undefined,
+  failures?: readonly Readonly<{ code: string; detail?: string }>[]
+): string {
+  // Every independent defect in one message. Given one, a repair round fixes that one and the next
+  // round finds the next — which is how three writes each cleared a different field and the edition
+  // still failed on a field the model was never told about.
+  if (failures && failures.length > 1) {
+    const lines = failures.map((failure) => `- ${failure.code}${failure.detail ? `: ${failure.detail}` : ''}`).join('\n')
+    return `Your previous JSON failed validation in ${failures.length} places:\n${lines}\nFix every item above and rewrite the full JSON, using only facts from the prompt.`
+  }
   return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
 }

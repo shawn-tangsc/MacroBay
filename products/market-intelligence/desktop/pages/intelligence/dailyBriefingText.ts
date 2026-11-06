@@ -1,8 +1,25 @@
-import type { productText } from '../../shared/i18n/productText'
+import { productText } from '../../shared/i18n/productText'
+
+import { dailyBriefingGenerationGrid } from '../../../contracts/dailyBriefing'
 
 type DashboardText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']
 
 export type DailyBriefingText = DashboardText['dailyBriefing']
+
+/**
+ * The generation-time grid as one sentence, for the two dialogs that offer it.
+ *
+ * The four numbers come from the policy table, never from copy: the dialog once said "06:00–10:00"
+ * in prose while the table behind it had already moved to every half hour of the day, so the hint
+ * named a grid the form did not have. Nothing here is typed out separately from the table.
+ */
+export function briefingGenerationGridHint(text: DailyBriefingText): string {
+  return text.generationGridHint
+    .replace('{first}', dailyBriefingGenerationGrid.first)
+    .replace('{last}', dailyBriefingGenerationGrid.last)
+    .replace('{count}', String(dailyBriefingGenerationGrid.count))
+    .replace('{step}', String(dailyBriefingGenerationGrid.stepMinutes))
+}
 
 /** The product prefix a `StateView` reason key must carry (contract §17). */
 const reasonPrefix = 'mi.dailyBriefing.'
@@ -36,4 +53,9 @@ export function resolveBriefingStateReason(
     return value
   })
   return missing ? '' : sentence
+}
+
+/** The brief's own words for one edition language: the page follows the edition it shows. */
+export function briefingTextForLocale(locale: 'zh-CN' | 'en-US'): DailyBriefingText {
+  return productText[locale].pages.intelligence.portal.dashboard.dailyBriefing
 }

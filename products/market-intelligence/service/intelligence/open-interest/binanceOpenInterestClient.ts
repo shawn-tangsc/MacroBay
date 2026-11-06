@@ -24,8 +24,10 @@ export function createBinanceOpenInterestClient(deps: { platformFetch: typeof fe
       return parseOpenInterestRows(body, input)
     },
 
-    async requestKlines(input: Readonly<{ asset: 'btc' | 'eth'; symbol: string; limit: number; nowMs: number }>): Promise<readonly KlineRow[] | undefined> {
-      const url = `${openInterestHistoryPolicy.klinesEndpoint}?symbol=${input.symbol}&interval=${openInterestHistoryPolicy.storedPeriod}&limit=${input.limit}`
+    async requestKlines(input: Readonly<{ asset: 'btc' | 'eth'; symbol: string; limit: number; nowMs: number; endTime?: number }>): Promise<readonly KlineRow[] | undefined> {
+      // `endTime` pages backwards, the same way the open-interest endpoint does: a cold start
+      // asks for the newest page first and each later page for the one before it.
+      const url = `${openInterestHistoryPolicy.klinesEndpoint}?symbol=${input.symbol}&interval=${openInterestHistoryPolicy.storedPeriod}&limit=${input.limit}${input.endTime === undefined ? '' : `&endTime=${input.endTime}`}`
       const body = await requestJson(url, deps.platformFetch)
       if (body === undefined) return undefined
       return parseKlineRows(body, input)

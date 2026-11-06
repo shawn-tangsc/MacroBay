@@ -1,3 +1,4 @@
+import { jobTitleText } from './jobTitle'
 import type {
   JobCancelReason,
   JobDefinition,
@@ -395,7 +396,8 @@ function toRunInput(definition: JobDefinition) {
     handlerId: definition.handlerId,
     owner: definition.owner,
     productId: definition.productId,
-    title: definition.title,
+    // 运行记录是历史快照：存一次字符串，之后切语言不跟着变（界面上的名字走 resolveJobTitle）。
+    title: jobTitleText(definition.title),
     trigger: definition.trigger,
     payload: definition.payload,
     concurrencyKey: definition.concurrencyKey,

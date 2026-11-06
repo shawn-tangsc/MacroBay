@@ -62,7 +62,11 @@ function IntelligencePageBody(): React.ReactElement {
   const sampleNow = sample.now
   const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
-  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('portal')
+  /**
+   * 打开「情报」直接落在看板：智能体选择页仍在（从看板的「返回 Agent」进），只是不再是第一屏。
+   * 用户 2026-11-06：那张页先留着不删，多智能体方案未定前不改结构，只改默认落点。
+   */
+  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('dashboard')
   const sampleAvailable = sample.state.scenarioCount > 0
     && sample.state.unavailableReason !== 'no-scenario'
   const openCryptoPrimary = (): void => {

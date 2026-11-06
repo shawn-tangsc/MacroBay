@@ -50,14 +50,7 @@ describe('AppShell assistant composer readiness', () => {
     expect(safeProviders.find((provider) => provider.id === 'deepseek')).toMatchObject({ hasApiKey: true })
     const modelProviderList = vi.fn(async () => safeProviders)
     installPlatformApi(modelProviderList)
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-
-    await act(async () => {
-      root.render(createElement(AppShell))
-      await Promise.resolve()
-    })
+    const { container, root } = await renderShellOnAssistants()
 
     await vi.waitFor(() => {
       expect(modelProviderList).toHaveBeenCalledOnce()
@@ -110,14 +103,7 @@ describe('AppShell assistant composer readiness', () => {
     })
     const modelProviderList = vi.fn(async () => safeProviders)
     installPlatformApi(modelProviderList)
-    const container = document.createElement('div')
-    document.body.append(container)
-    const root = createRoot(container)
-
-    await act(async () => {
-      root.render(createElement(AppShell))
-      await Promise.resolve()
-    })
+    const { container, root } = await renderShellOnAssistants()
 
     await vi.waitFor(() => {
       expect(modelProviderList).toHaveBeenCalledOnce()
@@ -141,6 +127,28 @@ function createExistingSecretVault(ref: string): SecretVault {
     has: async (candidate) => candidate === ref,
     inspect: async () => null
   }
+}
+
+/**
+ * 渲染外壳并**切到助手页**。
+ *
+ * 2026-11-06 起：壳层的首次落点是「默认首页」（注册里声明 `home` 的那一页），没有受控 `.tabs.*` 桥时
+ * 走同一条解析（这个夹具就没有桥）。本文件要验的是**助手输入框的就绪**，所以显式切到助手页，
+ * 而不是依赖「首帧恰好画的是助手页」——那个前提已经随默认首页一起变了，靠它写用例就是假绿。
+ */
+async function renderShellOnAssistants(): Promise<{ container: HTMLDivElement; root: ReturnType<typeof createRoot> }> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+
+  await act(async () => {
+    root.render(createElement(AppShell))
+    await Promise.resolve()
+  })
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('[data-nav-key="assistants"]')?.click()
+  })
+  return { container, root }
 }
 
 function installPlatformApi(modelProviderList: () => Promise<unknown>): void {

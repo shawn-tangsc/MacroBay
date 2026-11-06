@@ -199,7 +199,8 @@ export default function AgentSessionMessages({
                     messages: t.messages,
                     runtimeActivity: t.runtimeActivity,
                     runtimeText: t.runtimeText,
-                    input: t.input
+                    input: t.input,
+                    common: t.common
                   }}
                   onStateChange={onStateChange}
                   pendingStatusText={isLiveAssistant ? livePhaseText ?? undefined : undefined}

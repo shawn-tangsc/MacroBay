@@ -35,6 +35,7 @@ type JobRunRow = {
   completed_at: string | null
   last_error: string | null
   progress_json: string | null
+  result_json: string | null
   logs_json: string
 }
 
@@ -72,8 +73,8 @@ export function createJobRunSqliteRepository(path: string): JobRunSqliteReposito
         `insert into job_runs (
           id, definition_id, handler_id, owner, product_id, title, status, trigger_json, payload_json,
           concurrency_key, attempt, max_attempts, created_at, started_at, completed_at, last_error, progress_json,
-          logs_json
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          result_json, logs_json
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(id) do update set
           definition_id = excluded.definition_id,
           handler_id = excluded.handler_id,
@@ -91,6 +92,7 @@ export function createJobRunSqliteRepository(path: string): JobRunSqliteReposito
           completed_at = excluded.completed_at,
           last_error = excluded.last_error,
           progress_json = excluded.progress_json,
+          result_json = excluded.result_json,
           logs_json = excluded.logs_json`
       ).run(
         run.id,
@@ -110,6 +112,7 @@ export function createJobRunSqliteRepository(path: string): JobRunSqliteReposito
         run.completedAt ?? null,
         run.lastError ?? null,
         run.progress ? stringifyJson(run.progress) : null,
+        run.result ? stringifyJson(run.result) : null,
         stringifyJson(run.logs)
       )
     },
@@ -119,7 +122,7 @@ export function createJobRunSqliteRepository(path: string): JobRunSqliteReposito
           `select
              id, definition_id, handler_id, owner, product_id, title, status, trigger_json, payload_json,
              concurrency_key, attempt, max_attempts, created_at, started_at, completed_at, last_error,
-             progress_json, logs_json
+             progress_json, result_json, logs_json
            from job_runs
            where id = ?`
         )
@@ -250,6 +253,7 @@ function applySchema(db: DatabaseSync): void {
       completed_at text,
       last_error text,
       progress_json text,
+      result_json text,
       logs_json text not null
     );
 
@@ -282,6 +286,14 @@ function applySchema(db: DatabaseSync): void {
       next_id integer not null check (typeof(next_id) = 'integer' and next_id >= ${JOB_RUN_SEQUENCE_POLICY.firstId})
     );
   `)
+
+  // 已有库不会因为上面的 `create table if not exists` 长出这一列：**只追加、不改写**
+  // （先例同 `providerSqliteSchema`）。旧行保持 `null` → 记录上 `result` 是 `undefined`，
+  // 页面据此显示「无计数」而不是 0——旧批真的没存过结论，填 0 会把成功率算错。
+  const columns = (db.prepare('pragma table_info(job_runs)').all() as { name?: string }[]).map((row) => row.name)
+  if (!columns.includes('result_json')) {
+    db.exec('alter table job_runs add column result_json text')
+  }
 }
 
 function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunRow[] {
@@ -311,6 +323,17 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
   if (query.statuses && query.statuses.length > 0) {
     where.push(`status in (${query.statuses.map(() => '?').join(', ')})`)
     params.push(...query.statuses)
+  }
+
+  // Half-open on created_at: `since` inclusive, `until` exclusive. Text comparison is chronological
+  // because every stored instant is an ISO string.
+  if (query.createdFrom !== undefined) {
+    where.push('created_at >= ?')
+    params.push(query.createdFrom)
+  }
+  if (query.createdTo !== undefined) {
+    where.push('created_at < ?')
+    params.push(query.createdTo)
   }
 
   if (query.payload) {
@@ -359,7 +382,7 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
       `select
          id, definition_id, handler_id, owner, product_id, title, status, trigger_json, payload_json,
          concurrency_key, attempt, max_attempts, created_at, started_at, completed_at, last_error,
-         progress_json, logs_json
+         progress_json, result_json, logs_json
        from job_runs
        ${where.length > 0 ? `where ${where.join(' and ')}` : ''}
        order by ${query.newestFirst ? 'created_at desc, id desc' : 'id desc'} limit ?`
@@ -387,6 +410,8 @@ function mapJobRun(row: JobRunRow): JobRunRecord {
     completedAt: row.completed_at ?? undefined,
     lastError: row.last_error ?? undefined,
     progress: row.progress_json ? (cloneJson(parseJson(row.progress_json)) as JobProgress) : undefined,
+    // 旧记录没有这一格：不补 0，`undefined` 表示「当时没存结论」。
+    result: row.result_json ? (cloneJson(parseJson(row.result_json)) as JobRunRecord['result']) : undefined,
     logs: (cloneJson(parseJson(row.logs_json)) as JobLogEntry[]) ?? []
   }
 }

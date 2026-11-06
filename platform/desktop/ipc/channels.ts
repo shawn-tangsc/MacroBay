@@ -25,8 +25,34 @@ export const IpcChannels = {
   appRelaunch: 'platform:app-relaunch',
   settingsGet: 'platform:settings-get',
   settingsUpdate: 'platform:settings-update',
+  /**
+   * 更新提示（「知道有新版本 + 给下载入口」）三条，只读一态 + 两个动作。
+   *
+   * - `get-state` 在**所有**模式下都注册：界面要拿到「开发态」这个值，否则只能靠猜；
+   * - 另外两条只在装好的包里注册：不存在的通道发不出请求，「零出网」由「没有那条路」保证；
+   * - `open-link` **不收地址**：地址与白名单都在主进程，渲染层只发「打开」这个动作。
+   */
+  updatesGetState: 'platform:updates-get-state',
+  updatesCheckNow: 'platform:updates-check-now',
+  updatesOpenLink: 'platform:updates-open-link',
+  /**
+   * 结论落定后的广播（成功与失败都算）。小点的唯一来源就是它：
+   * 壳层挂载时用 `get-state` 取一次初值，之后只订阅，不轮询、不自己比版本号。
+   * 载荷是那一刻的投影 `UpdateCheckProjection`，**不是事件对象**。
+   */
+  updatesChanged: 'platform:updates-changed',
+  /**
+   * 取「这一版」的更新说明。**无载荷**：版本由主进程从自己的结论取，渲染层不传任何东西。
+   * 返回节点，不返回原文——远端文字只能在主进程里变成受控结构。
+   */
+  updatesGetReleaseNotes: 'platform:updates-get-release-notes',
   channelsCatalog: 'platform:channels-catalog',
   channelsList: 'platform:channels-list',
+  /**
+   * 只读投影：通知设置页的「发送到通道」行读它（可投递 + 绑定目标数）。
+   * **不在这里改通道配置**——通知页一旦能改，就又有了第二个配置入口。
+   */
+  channelsListDeliveryTargets: 'platform:channels-list-delivery-targets',
   channelsGet: 'platform:channels-get',
   channelsCreate: 'platform:channels-create',
   channelsUpdate: 'platform:channels-update',
@@ -43,9 +69,24 @@ export const IpcChannels = {
   channelsRuntimeStatus: 'platform:channels-runtime-status',
   channelsListDeliveryAttempts: 'platform:channels-list-delivery-attempts',
   channelsListDeliveryAudits: 'platform:channels-list-delivery-audits',
+  /**
+   * 只读：设置页日志面板的「运行异常」按频道分页读（keyset 游标，服务端夹 limit ≤ 200）。
+   * 面板不新增第二份存储——数据就是运行审计表本身，随频道删除级联。
+   */
+  channelsListRuntimeAudits: 'platform:channels-list-runtime-audits',
+  /**
+   * 真发一条测试消息到该频道当前绑定的会话。回执三态：受理 / 已交给通道但未确认 / 失败给平台词。
+   * **没有「已送达」**——我们能证明的只是通道接受了。
+   */
+  channelsSendTestMessage: 'platform:channels-send-test-message',
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',
+  /**
+   * 「打开这条频道的会话」：只收频道 id + 对话 id，**不回会话 id**。会话 id 留在主进程里被用掉，
+   * 渲染层拿到的是「可以跳了」或一个具名原因。
+   */
+  channelsOpenConversation: 'platform:channels-open-conversation',
   channelsSetTarget: 'platform:channels-set-target',
   channelsListCandidates: 'platform:channels-list-candidates',
   channelsAllowCandidate: 'platform:channels-allow-candidate',
@@ -108,6 +149,8 @@ export const IpcChannels = {
   agentsRunTask: 'platform:agents-run-task',
   agentsCancelTaskRun: 'platform:agents-cancel-task-run',
   agentsListSessions: 'platform:agents-list-sessions',
+  /** 频道设置页「选择文件夹…」：路径 → 工作区编号；没有就先登记一条（写操作，因此不在只读表里）。 */
+  agentsEnsureWorkspace: 'platform:agents-ensure-workspace',
   agentsListSessionMessages: 'platform:agents-list-session-messages',
   agentsCreateSession: 'platform:agents-create-session',
   agentsUpdateAgent: 'platform:agents-update-agent',
@@ -214,6 +257,19 @@ export const IpcChannels = {
   notificationsSnooze: 'platform:notifications-snooze',
   /** 只读：主进程能查状态，但没有 API 能让系统弹一次授权框。名字不许再写 request。 */
   notificationsReadDesktopPermission: 'platform:notifications-read-desktop-permission',
+  /** 事件目录投影（契约 §5.2）：带批准档位，页面不写死事件名。 */
+  notificationsListEventCatalog: 'platform:notifications-list-event-catalog',
+  /** 读投递设置：当前 toastEnabled + desktopEnabled + pushWired + 可用通道；不是只给写口。 */
+  notificationsGetDeliverySettings: 'platform:notifications-get-delivery-settings',
+  // 订阅那一层整层撤销（2026-11-04）：get/set-subscription 与 set-push-channel 三个通道删除。
+  notificationsSetToastEnabled: 'platform:notifications-set-toast-enabled',
+  /** 桌面开关：打开那一刻才请求系统授权。 */
+  notificationsSetDesktopEnabled: 'platform:notifications-set-desktop-enabled',
+  /** 情报三条「推不推手机」：读回与写入（只接受批准含 channel 的三个 id）。 */
+  notificationsGetChannelEvents: 'platform:notifications-get-channel-events',
+  notificationsSetChannelEvent: 'platform:notifications-set-channel-event',
+  /** 读者显式点击「推送到手机」：只重投这一条记录的手机一面（契约 §16.3.4）。 */
+  notificationsRedeliverPush: 'platform:notifications-redeliver-push',
   /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
   notificationsChanged: 'platform:notifications-changed',
   /** 应用内投递（横幅 / 弹窗）：事件带那条记录的键与参数，渲染层自己解析句子。 */

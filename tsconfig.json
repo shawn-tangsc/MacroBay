@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "@platform/*": ["platform/*"],
@@ -31,6 +32,7 @@
     "apps/desktop-shell/src",
     "platform/**/*.ts",
     "products/**/*.{ts,tsx}",
+    "products/**/*.mts",
     "scripts/**/*.mts",
     "electron.vite.config.ts"
   ]

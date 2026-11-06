@@ -1,15 +1,53 @@
 import type { ProductManifest } from '../../platform/product-manifest'
+import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
+import { INTELLIGENCE_IPC_METHODS } from './contracts/intelligenceIpcMethods'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './service/intelligence/jobs/marketAnalysisJobIds'
+import {
+  notificationEventBodyKey,
+  notificationEventReasonKey,
+  notificationEventTitleKey
+} from '../../platform/notifications/contracts/platformNotificationEvents'
 
+import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
+
+
+/**
+ * 声明一条通知事件：**键由 id 机械生成**（平台同一处 `notification.event.<id>.*`）。
+ *
+ * 不手写键的理由：事件改名时手写的键不会有人同步，目录解析出来就落空——
+ * 同一个概念两个名字，接线时才发现。
+ */
+function notificationEvent(
+  id: string,
+  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey' | 'bodyKey' | 'bodyKeyByVariant'> & {
+    /** 这条事件有正文句（`…body`）。 */
+    body?: boolean
+    /** 同一事件两种正文时给变体名，键为 `…body.<variant>`。 */
+    bodyVariants?: readonly string[]
+  }
+): NotificationEventDeclaration {
+  const { body, bodyVariants, ...rest } = input
+  return {
+    id,
+    titleKey: notificationEventTitleKey(id),
+    reasonKey: notificationEventReasonKey(id),
+    ...(body ? { bodyKey: notificationEventBodyKey(id) } : {}),
+    ...(bodyVariants
+      ? { bodyKeyByVariant: Object.fromEntries(bodyVariants.map((variant) => [variant, notificationEventBodyKey(id, variant)])) }
+      : {}),
+    ...rest
+  }
+}
 
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.3.1',
+  version: '0.4.0',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
@@ -18,6 +56,7 @@ export const marketIntelligenceProductManifest = {
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
         icon: 'radar',
         order: 10,
+        home: true,
         module: './desktop/pages/intelligence'
       }
     ],
@@ -28,6 +67,22 @@ export const marketIntelligenceProductManifest = {
         icon: 'database',
         order: 10,
         module: './desktop/settings/intelligence-sources'
+      },
+      {
+        // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
+        id: 'intelligence-run-log',
+        title: { 'zh-CN': '运行日志', 'en-US': 'Run log' },
+        icon: 'scroll-text',
+        order: 11,
+        module: './desktop/settings/run-log'
+      },
+      {
+        // 设置 → 情报 → 通知：只放「这三条推不推手机」，本机两档在通用通知页（界面规范 §9d）。
+        id: 'intelligence-notification',
+        title: { 'zh-CN': '通知', 'en-US': 'Notifications' },
+        icon: 'message-square-text',
+        order: 12,
+        module: './desktop/settings/intelligence-notification'
       }
     ]
   },
@@ -39,6 +94,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.demo.getState' },
     { method: 'intelligence.demo.setActive' },
     ...Object.values(MARKET_ANALYSIS_IPC_METHODS).map(method => ({ method })),
+    // 情报这一族与上面同形：方法名只在 contracts/intelligenceIpcMethods.ts 写一次，注册器与基线同源。
+    ...Object.values(INTELLIGENCE_IPC_METHODS).map(method => ({ method })),
     { method: 'intelligence.crossAsset.acquire' },
     { method: 'intelligence.crossAsset.renew' },
     { method: 'intelligence.crossAsset.release' },
@@ -49,28 +106,15 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.crossAsset.query' },
     { method: marketCalendarPublicPolicy.methods.refresh },
     { method: marketCalendarPublicPolicy.methods.query },
+    { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
+    { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },
     { method: dashboardFeedStatusPublicPolicy.method },
     { method: macroRatesSnapshotPublicPolicy.method },
     // 口径查询（设计 144）：只读，agent 侧按需问"这个数从哪来"。
     { method: provenanceMethods.explainFigure },
-    { method: 'intelligence.getDetail' },
     { method: 'intelligence.getEvidenceExcerpt' },
-    { method: 'intelligence.getMonitoringScope' },
-    { method: 'intelligence.getOperationsHealth' },
-    { method: 'intelligence.getSentimentAggregates' },
-    { method: 'intelligence.getNewsSentiment' },
-    { method: 'intelligence.getNewsSentimentItem' },
-    { method: 'intelligence.getNewsSentimentSettings' },
-    { method: 'intelligence.saveNewsSentimentSettings' },
-    { method: 'intelligence.rescoreNewsSentiment' },
-    { method: 'intelligence.rebuildNewsSentiment' },
-    { method: 'intelligence.translateNewsSentimentBody' },
     { method: 'intelligence.getSourceHealth' },
-    { method: 'intelligence.getTimeline' },
-    { method: 'intelligence.getWorkspaceState' },
-    { method: 'intelligence.getWorkspaceTimeline' },
-    { method: 'intelligence.ingestEvent' },
     { method: 'intelligence.macro.economicCalendar.getEventDetail' },
     { method: 'intelligence.macro.economicCalendar.getProviderHealth' },
     { method: 'intelligence.macro.economicCalendar.getProviderPageState' },
@@ -96,20 +140,30 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.queryFundingRateHistory' },
     { method: 'intelligence.queryOpenInterestHistory' },
     { method: 'intelligence.queryMarketDivergence' },
-    { method: 'intelligence.queryModuleSignals' },
+    { method: 'intelligence.queryModuleSignalRead' },
     { method: 'intelligence.queryCapitalConditionsSnapshot' },
     { method: 'intelligence.queryFearGreedSnapshot' },
     { method: 'intelligence.dailyBriefing.getToday' },
     { method: 'intelligence.dailyBriefing.list' },
     { method: 'intelligence.dailyBriefing.get' },
+    { method: 'intelligence.dailyBriefing.listAttempts' },
     { method: 'intelligence.dailyBriefing.regenerate' },
+    { method: 'intelligence.dailyBriefing.publishToPhone' },
     { method: 'intelligence.dailyBriefing.getProgress' },
     { method: 'intelligence.dailyBriefing.getSettings' },
     { method: 'intelligence.dailyBriefing.saveSettings' },
+    { method: 'intelligence.dailyBriefing.getStorageState' },
+    { method: 'intelligence.dailyBriefing.retryUpgrade' },
+    { method: 'intelligence.dailyBriefing.deletePeriod' },
+    // 期配置自己的四个方法：读、加、改、删。启动自检按这张清单比注册结果，缺一条就拒绝启动——
+    // 这次漏登记的症状是"应用起不来"，而只有用户会撞到，所以顺序也排在一起便于下次核对。
+    { method: 'intelligence.dailyBriefing.listPeriods' },
+    { method: 'intelligence.dailyBriefing.createPeriod' },
+    { method: 'intelligence.dailyBriefing.updatePeriod' },
+    { method: 'intelligence.dailyBriefing.removePeriod' },
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },
-    { method: 'intelligence.retryItemAssessment' },
     { method: 'intelligenceSources.getFocusSettings' },
     { method: 'intelligenceSources.getHealth' },
     { method: 'intelligenceSources.getPageState' },
@@ -234,6 +288,116 @@ export const marketIntelligenceProductManifest = {
       handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB
     }
   ],
+  /**
+   * 通知事件声明（契约 §3）。**只声明「这条事件存不存在、能不能发、怎么去重」**，
+   * 不声明怎么触发（触发点在运行时，节奏由产品另定）；批准档位在平台批准表里，这里只写申请。
+   *
+   * 文案只填键、不填句子（句子归营销）：`notification.event.<完整事件 id>.<title|body|reason>`，四个键都由平台生成函数产出，这里不手拼。
+   * 去重粒度的出处是情报通知目录 §四之一（`intelligence-notification-catalog.md`），
+   * 键形状的出处是契约 §7 / §7.1；这里两处都只引用，不重写清单。
+   *
+   * **N8 不声明**（2026-11-04 撤回，编号不复用）：判定账本结算不产生通知。留着就是「生产一个没有
+   * 批准的事件」，运行时只会以 `unknown-event-type` 拒收。完成类（日报已完成）是读者翻案恢复的，
+   * 见下：只进中心、读者在情报页勾了才推手机、桌面不弹。
+   */
+  notificationEvents: [
+    notificationEvent('market-intelligence.briefing.failed', {
+      category: 'failure',
+      bodyVariants: ['not-generated', 'editorial-missing'],
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyTemplate: 'brief-failed:{date}:{period}',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.signal.triggered', {
+      category: 'reminder',
+      // 正文按「规则 × 档位」四个变体；标题是 `{asset} {headline}`，资产名开头。
+      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated'],
+      requiresUserAction: false,
+      // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
+      requestedDisruptionLevels: ['channel'],
+      dedupeKeyBuilder: 'moduleSignal',
+      // 键里不带时间（契约 v2.43 §7.4）；窗口数只有一处来源：规则自己的冷却。
+      dedupeUnit: 'condition',
+      conditionWindowMs: moduleSignalPolicy.intradayCooldownMs,
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.sentiment.alert', {
+      category: 'reminder',
+      // 只有「有来源」一种正文：缺来源名的条目不提交（三段必须齐，空段会被文案门禁拒成 copy-missing）。
+      bodyVariants: ['withSource'],
+      requiresUserAction: false,
+      // 信息类：只进中心与手机，桌面与提示都不申请。
+      requestedDisruptionLevels: ['channel'],
+      // 同一件事一条：键由 `storyKey` 构成（跨媒体归并键，同簇一个键），重复提交由平台合并计数。
+      dedupeKeyTemplate: 'sentiment-alert:{storyKey}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.macro.event-landed', {
+      category: 'reminder',
+      // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。
+      bodyVariants: ['values', 'noPrevious', 'noForecast'],
+      requiresUserAction: false,
+      // 同上：信息类不申请桌面档。
+      requestedDisruptionLevels: ['channel'],
+      dedupeKeyTemplate: 'calendar:{eventId}:{releaseAt}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.source.consecutive-failed', {
+      category: 'needs-action',
+      body: true,
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.source.stale', {
+      category: 'needs-action',
+      body: true,
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.briefing.ready', {
+      category: 'completed',
+      body: true,
+      requiresUserAction: false,
+      requestedDisruptionLevels: [],
+      // 一条版次一条提醒：键带日期、期号与语言，同一天两期（或同刻两种语言）各推一条。
+      // 仍**不许**混入版本号、生成时刻或内容哈希——否则同一天重新生成会被当成新事件重推。
+      dedupeKeyTemplate: 'briefing-ready:{date}:{periodId}:{locale}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.timezone.invalid', {
+      category: 'needs-action',
+      body: true,
+      requiresUserAction: true,
+      requestedDisruptionLevels: [],
+      dedupeKeyTemplate: 'timezone-invalid:{date}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    })
+  ],
+  /**
+   * 让渡给本产品的 producerId（契约 §14）：日报 job 的终态失败由本产品发
+   * `market-intelligence.briefing.failed`，来源采集 job 的失败由本产品发
+   * `source.consecutive-failed` / `source.stale`，平台不再为它们发任务失败事件。
+   * 键是稳定的 job handler id，不是带期号的 definitionId；两个 handler 各管一类，
+   * 采集是所有来源共用同一个 handler。
+   */
+  notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
+  /** 7 条事件的句子（含「日报已完成」）；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
+  notificationCopy: marketIntelligenceNotificationCopy,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest

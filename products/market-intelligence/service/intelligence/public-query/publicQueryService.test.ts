@@ -188,25 +188,25 @@ describe('publicQueryService hindsight regressions', () => {
     const service = createMarketIntelligencePublicQueryService({ pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => [] })
 
     // Nothing wired yet: the analysis must read "no cross-asset evidence", not crash.
-    expect(await service.queryCrossAssetSnapshot({ range: '24h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '24h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     service.setCrossAssetQuery({ query })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toMatchObject({ mode: 'historical', range: '1h' })
-    expect(query).toHaveBeenCalledWith({ range: '1h', asOf: AS_OF })
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toMatchObject({ mode: 'historical', range: '1h' })
+    expect(query).toHaveBeenCalledWith({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })
   })
 
   it('fails closed on a throwing or malformed cross-asset query instead of leaking an unvalidated shape', async () => {
     const service = createMarketIntelligencePublicQueryService({ pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => [] })
 
     service.setCrossAssetQuery({ query: () => { throw new Error('store-unavailable') } })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     // A snapshot the renderer would reject is not evidence the analysis may cite.
     service.setCrossAssetQuery({ query: () => ({ schemaVersion: 1, mode: 'historical' }) })
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
 
     service.setCrossAssetQuery(undefined)
-    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+    expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF, knowledgeAt: AS_OF })).toBeUndefined()
   })
 
   it('reads the macro history through one late-bound reader, and fails closed when it is unwired', () => {
@@ -612,7 +612,7 @@ describe('publicQueryService hindsight regressions', () => {
 
   it('serves the wired 0xRouter market calendar page and stops serving it after it is unset', () => {
     const page = { state: 'available' as const, month: '2026-09', locale: 'zh' as const, asOf: AS_OF, events: [],
-      sources: ['economic-indicator', 'financial-event', 'central-bank-activity'].map(eventType => ({ eventType,
+      sources: (['economic-indicator', 'financial-event', 'central-bank-activity'] as const).map(eventType => ({ eventType,
         status: 'success' as const, sourceObservedAt: AS_OF })) }
     const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
     service.setMarketCalendarQuery({ queryMonth: () => page })
@@ -622,6 +622,37 @@ describe('publicQueryService hindsight regressions', () => {
     service.setMarketCalendarQuery(undefined)
     expect(service.queryMarketCalendarMonth({ month: '2026-09', locale: 'zh', asOf: AS_OF }))
       .toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+  })
+
+  it('answers "not readable" for the calendar freshness until a reader is wired', () => {
+    const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
+
+    // ① 构建期缺装配：连月份读取都没有绑定。读者看到的是「读不到」，不是「没有」。
+    return expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+  })
+
+  it('forwards the calendar freshness reader and degrades a failing one to unavailable', async () => {
+    const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
+    const freshness = { state: 'available' as const, asOf: AS_OF, lastCollectedAt: null, sources: [
+      { descriptorId: 'macro-calendar-0xrouter-economic-data', lastCollectedAt: null },
+      { descriptorId: 'macro-calendar-0xrouter-financial-events', lastCollectedAt: null },
+      { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', lastCollectedAt: null }
+    ] }
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }), readCollectionFreshness: async () => freshness })
+    await expect(service.queryMarketCalendarFreshness()).resolves.toBe(freshness)
+
+    // ② 接了线但读失败：抛错的读数口，同样只能是「读不到」。
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }),
+      readCollectionFreshness: async () => { throw new Error('calendar store closed') } })
+    await expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
+
+    // ③ 接了线但回了个连契约都不满足的形状：不许转发半个读数。
+    service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }),
+      readCollectionFreshness: async () => ({ lastCollectedAt: AS_OF }) })
+    await expect(service.queryMarketCalendarFreshness())
+      .resolves.toEqual({ state: 'unavailable', failureCode: 'query-unavailable' })
   })
 })
 
@@ -663,9 +694,14 @@ describe('module signals', () => {
     const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
     // One read for the query, and the signals come out of its hints rather than a second pass.
     expect(read).toHaveBeenCalledTimes(1)
-    expect(signals.length).toBeGreaterThan(0)
-    expect(signals.every(signal => signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
-    expect(new Set(signals.map(signal => signal.asset))).toEqual(new Set(['btc', 'eth']))
+    const oi = signals.filter(entry => entry.signal.moduleId === 'open-interest')
+    expect(oi.length).toBeGreaterThan(0)
+    expect(oi.every(entry => entry.signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
+    expect(new Set(oi.map(entry => entry.signal.asset))).toEqual(new Set(['btc', 'eth']))
+    // The window travels with the signal: one closed bucket for this rule, never a default.
+    expect(oi.every(entry => entry.window.unit === 'buckets' && entry.window.amount === 1)).toBe(true)
+    // 这条服务没有资金面快照读取：ETF 腿如实说读不到，而不是消失成安静。
+    expect(signals.filter(entry => entry.signal.moduleId === 'etf-flows').every(entry => entry.signal.readiness === 'unavailable')).toBe(true)
   })
 
   it('lets another leg join the list without changing the shape the page reads', async () => {
@@ -682,12 +718,13 @@ describe('module signals', () => {
       dedupeKey: 'etf-flows:etf-outflow-3d:btc:2026-07-08',
       readiness: 'available' as const, triggerOwner: 'module-signal'
     }
-    service.addModuleSignalProducer({ query: async () => [later] })
+    const laterWindow = { unit: 'trading-days' as const, amount: 3, upperBoundMs: null }
+    service.addModuleSignalProducer({ query: async () => [{ signal: later, window: laterWindow }] })
 
     const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
-    expect(signals).toContainEqual(later)
+    expect(signals).toContainEqual({ signal: later, window: laterWindow })
     // The open-interest leg could not read, and it says so rather than vanishing.
-    expect(signals.filter(signal => signal.moduleId === 'open-interest').every(signal => signal.readiness === 'unavailable')).toBe(true)
+    expect(signals.filter(entry => entry.signal.moduleId === 'open-interest').every(entry => entry.signal.readiness === 'unavailable')).toBe(true)
   })
 
   it('asks nothing for an instant it cannot read', async () => {

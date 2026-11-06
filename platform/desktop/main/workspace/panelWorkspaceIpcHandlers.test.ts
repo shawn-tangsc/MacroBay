@@ -577,6 +577,13 @@ function createComposition(overrides: {
   layoutFilePath?: string
   panelLayoutStore?: ReturnType<typeof createPanelLayoutStore>
   ipcMain?: { handle: (channel: string, listener: unknown) => void }
+  /**
+   * 有界 flush 的预算。默认对齐生产（`releaseTimeoutMs = 2_000`）：
+   * 写成功那条用例要的是「真的等它写完」，预算不能比一次 fsync 还短。
+   * 演习超时路径的用例要的是**快**，自己显式传一个小值——别让一条用例的预算
+   * 顺手决定另一条的行为。
+   */
+  disposeTimeoutMs?: number
 } = {}) {
   const recorder = createIpcRecorder()
   const delivered: Array<{ webContentsId: number; event: WorkspaceEvent }> = []
@@ -587,7 +594,7 @@ function createComposition(overrides: {
     panelLayoutStore: overrides.panelLayoutStore,
     sendToHost: (webContentsId, event) => { delivered.push({ webContentsId, event }); return true },
     preferences: { getLanguage: async () => 'zh-CN', getTheme: () => 'light' , getTimeZone: async () => 'UTC'},
-    disposeTimeoutMs: 30
+    disposeTimeoutMs: overrides.disposeTimeoutMs ?? 2_000
   })
   if (composition.status !== 'ready') throw new Error(`composition disabled: ${composition.reason}`)
   return { composition, ipcMain: recorder, delivered }
@@ -692,7 +699,9 @@ describe('composePanelWorkspace', () => {
     expect(applied.status).toBe('applied')
     expect(applied.snapshot.persistenceState).toBe('pending')
 
-    await composition.flushLayout()
+    const flushed = await composition.flushLayout()
+    // 先断言报告：超时会在这里报 `timeout`，而不是伪装成「状态不对」。
+    expect(flushed.outcome).toBe('saved')
     expect(composition.layoutStore.persistenceState()).toBe('saved')
     const snapshot = await composition.handlers.getSnapshot(event)
     expect(snapshot).toMatchObject({ status: 'ok', snapshot: { persistenceState: 'saved' } })
@@ -712,10 +721,18 @@ describe('composePanelWorkspace', () => {
     writeStoredDocument(layoutFilePath, document)
 
     let releaseRead: (value: PanelLayoutDocumentV1) => void = () => undefined
+    // 等「读已经发出」这件**事件**，不要等 10 毫秒：满负载时 10ms 内 restore 可能还没轮到，
+    // 后面的用户命令就会先落，竞态用例也就测不到它要测的那个顺序（这条曾因此在全量里红）。
+    let signalReadStarted: () => void = () => undefined
+    const readStarted = new Promise<void>((resolve) => { signalReadStarted = resolve })
     const layoutStore = createPanelLayoutStore({
       filePath: layoutFilePath,
       storage: {
-        read: () => new Promise<PanelLayoutDocumentV1>((resolve) => { releaseRead = resolve }),
+        read: () => {
+          const pending = new Promise<PanelLayoutDocumentV1>((resolve) => { releaseRead = resolve })
+          signalReadStarted()
+          return pending
+        },
         write: async () => undefined
       },
       timers: { schedule: () => () => undefined },
@@ -723,7 +740,7 @@ describe('composePanelWorkspace', () => {
     })
     const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore })
     const started = composition.start()
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await readStarted
 
     composition.registerMainWindow({ webContentsId: 12 })
     const event: WorkspaceIpcSenderEvent = { senderFrame: { parent: null }, sender: { id: 12, isDestroyed: () => false } }
@@ -748,7 +765,9 @@ describe('composePanelWorkspace', () => {
       storage: { read: async () => storedDocument(), write: () => new Promise<void>(() => undefined) },
       timers: { schedule: () => () => undefined }
     })
-    const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore })
+    // 永不完结的写：耗时必然等于**预算**而不是写盘时间，所以这里必须给一个小预算，
+    // 否则这条用例从「快速演习超时」变成「等 2 秒」——它就不再证明响应性了。
+    const { composition } = createComposition({ layoutFilePath, panelLayoutStore: layoutStore, disposeTimeoutMs: 30 })
     await composition.start()
     composition.registerMainWindow({ webContentsId: 13 })
     const event: WorkspaceIpcSenderEvent = { senderFrame: { parent: null }, sender: { id: 13, isDestroyed: () => false } }

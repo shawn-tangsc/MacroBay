@@ -347,7 +347,7 @@ export async function buildMarketAnalysisContext(
     // `not-comparable`, and `safeProject` keeps a throwing read from failing the whole analysis.
     const snapshots = new Map<CrossAssetRange, CrossAssetSnapshot>()
     for (const range of crossAssetAnalysisRanges) {
-      const snapshot = await safeQuery(() => publicQueryService.queryCrossAssetSnapshot({ range, asOf: input.asOf }))
+      const snapshot = await safeQuery(() => publicQueryService.queryCrossAssetSnapshot({ range, asOf: input.asOf, knowledgeAt: input.asOf }))
       if (snapshot) snapshots.set(range, snapshot)
     }
     safeProject(() => projectCrossAsset(snapshots, input.asOf, facts, caveats, observations), observations, 'cross-asset')

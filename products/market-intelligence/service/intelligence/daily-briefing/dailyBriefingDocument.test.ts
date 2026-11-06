@@ -12,6 +12,8 @@ import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRates
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingMacroCategoryVisible } from './dailyBriefingDocumentMacro'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 const asOf = '2026-10-30T00:30:00.000Z'
@@ -58,32 +60,32 @@ const summary: AnalysisSummary = {
   id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
   conclusion: {
     direction: 'bearish',
-    summary: 'Stablecoin contraction and ETF redemptions pull bids away.',
-    change: 'No new comparable change this round.',
-    causalChain: 'Flows fall -> bids thin -> price pressure.',
-    conditions: ['Stablecoins keep contracting', 'ETFs do not show sustained inflows'],
+    summary: '稳定币持续收缩、ETF 赎回带走买盘。',
+    change: '本轮没有新的可比变化。',
+    causalChain: '资金流出 → 买盘变薄 → 价格承压。',
+    conditions: ['稳定币继续收缩', 'ETF 没有持续净流入'],
     macro: null,
-    evidenceStrength: 'Flow evidence is stronger than price evidence.',
-    dataGaps: ['No consensus', 'No cross-asset transmission']
+    evidenceStrength: '资金面证据强于价格证据。',
+    dataGaps: ['没有预期值', '没有跨资产传导']
   },
   knownFacts: [], transmissionHypotheses: [], marketReaction: [],
   supportingEvidence: [], counterEvidence: [
-    { statement: 'BTC ETF took in $110M.', evidenceRefId: 'ev-2' },
-    { statement: 'Fear and Greed sits at 48.', evidenceRefId: 'ev-3' }
+    { statement: 'BTC ETF 净流入 1.1 亿美元。', evidenceRefId: 'ev-2' },
+    { statement: '恐惧贪婪指数为 48。', evidenceRefId: 'ev-3' }
   ],
   scenarios: [], directions: [
-    { horizon: 'short', direction: 'bearish', rationale: 'Flows are still negative.', confidence: 'low', evidenceRefIds: ['ev-1'] },
-    { horizon: 'medium', direction: 'bearish', rationale: 'ETF flows confirm.', confidence: 'medium', evidenceRefIds: ['ev-2'] },
-    { horizon: 'long', direction: 'bearish', rationale: 'Real yield stays high.', confidence: 'medium', evidenceRefIds: ['ev-3'] }
+    { horizon: 'short', direction: 'bearish', rationale: '资金面仍为净流出。', confidence: 'low', evidenceRefIds: ['ev-1'] },
+    { horizon: 'medium', direction: 'bearish', rationale: 'ETF 资金流印证。', confidence: 'medium', evidenceRefIds: ['ev-2'] },
+    { horizon: 'long', direction: 'bearish', rationale: '实际利率仍高。', confidence: 'medium', evidenceRefIds: ['ev-3'] }
   ],
-  nextCatalysts: [], dataCaveats: ['Funding is not comparable across venues.'],
+  nextCatalysts: [], dataCaveats: ['资金费率跨交易所不可比。'],
   evidenceRefs: ['ev-1', 'ev-2', 'ev-3'], createdAt: '2026-10-30T00:00:00.000Z'
 }
 
 const predictions: readonly Prediction[] = [{
   id: 'mi-pr-1', schemaVersion: 1, summaryId: 'mi-as-1', asset: 'BTC',
   horizonStart: '2026-10-30T00:00:00.000Z', horizonEnd: '2026-10-31T00:00:00.000Z',
-  baseCase: 'BTC leans lower.', conditions: ['ETFs do not turn'], invalidation: 'Stablecoins turn positive and BTC ETFs take in two days.',
+  baseCase: 'BTC leans lower.', conditions: ['ETFs do not turn'], invalidation: '稳定币转正，且 BTC ETF 连续两天净流入。',
   nextCatalyst: null, status: 'pending', verificationDueAt: '2026-10-31T00:00:00.000Z', createdAt: '2026-10-30T00:00:00.000Z'
 }]
 
@@ -131,7 +133,7 @@ const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefing
         { seriesId: 'dxy-real', level: 102.2, atMs: Date.parse('2026-10-30T00:25:00.000Z'), returns: { '24h': 0.43 } },
         { seriesId: 'xau-usd', level: 3996, atMs: Date.parse('2026-10-30T00:25:00.000Z'), returns: { '24h': -0.54 } }
       ]
-    } as unknown as MacroMarketSnapshotView,
+    } as unknown as NonNullable<NonNullable<DailyBriefingFactPacket['market']>['macroMarket']>,
     macroRates: {
       state: 'available',
       readings: [
@@ -150,17 +152,21 @@ const positioning = (btcH24: number, ethH24: number): NonNullable<DailyBriefingF
   btc: [{ observedAt: asOf, notionalUsd: 1_200_000_000 }],
   eth: [{ observedAt: asOf, notionalUsd: 800_000_000 }],
   change: { btc: { h24Pct: btcH24 }, eth: { h24Pct: ethH24 } }
-})
+} as unknown as NonNullable<DailyBriefingFactPacket['positioning']>)
 
 const policyPath = (
   value: number,
-  overrides: Readonly<{ meetingDate?: string; outcome?: string }> = {}
+  overrides: Readonly<{
+    meetingDate?: string
+    outcome?: 'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus'
+    distribution?: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', number>>
+  }> = {}
 ): NonNullable<DailyBriefingFactPacket['policyPath']> => ({
   meetingDate: overrides.meetingDate ?? '2026-12-09',
   daysUntilMeeting: 40,
   hasProjectionMaterials: true,
   phase: { kind: 'normal' },
-  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12 },
+  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
   staleness: 'live'
 })
 
@@ -194,14 +200,14 @@ describe('daily briefing document', () => {
     expect(document.data.funds.every((row) => row.importance.tier === 'support')).toBe(true)
     expect(document.data.funds.find((row) => row.id === 'etf-btc')?.materiality).toMatchObject({ material: true, reasonCode: 'etf-flow' })
     expect(document.data.funds.find((row) => row.id === 'stablecoin')?.materiality).toMatchObject({ material: false })
-    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.visibility).toBe('hidden')
+    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.visibility).toBe('shown')
     expect(document.data.sentiment.fearGreed?.importance.tier).toBe('support')
     expect(document.data.sentiment.fearGreed?.materiality).toMatchObject({ material: false })
     expect(document.data.market).toHaveLength(7)
     expect(document.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
     expect(document.data.market.find((row) => row.id === 'btc')?.visibility).toBe('shown')
     expect(document.data.market.find((row) => row.id === 'index')?.materiality).toMatchObject({ material: false })
-    expect(document.data.market.find((row) => row.id === 'index')?.visibility).toBe('hidden')
+    expect(document.data.market.find((row) => row.id === 'index')?.visibility).toBe('shown')
     expect(document.data.market.find((row) => row.id === 'us10y')?.importance.tier).toBe('support')
     expect(document.data.market.find((row) => row.id === 'us10y')?.materiality).toMatchObject({ material: false })
     expect(document.data.market.find((row) => row.id === 'us10y')?.change).toMatchObject({ unit: 'bp', value: 4 })
@@ -220,10 +226,66 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.counterEvidence[0]?.citations).toEqual([1])
     expect(document.conclusion?.counterEvidence[1]?.citations).toEqual([2])
     expect(document.citations.map((entry) => entry.refId)).toEqual(['ev-2', 'ev-3'])
-    expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF flows confirm.' })
+    expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF 资金流印证。' })
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
     expect(document.lede.text).toBe('')
+  })
+
+  it('never copies the analysis conclusion into an edition of another language (A0.9)', () => {
+    // 用户 2026-11-06 报的真库现象：英文版次的结论与引用整段是中文。分析摘要只有一种语言，
+    // 逐字复制进另一种语言的版次就是「英文外壳、中文正文」——这里一律不进；编辑模型随后用
+    // 自己写的同语言版本替代（`applyDailyBriefingEditorial`）。
+    const document = buildDailyBriefingDocument({ packet: packet({ locale: 'en-US' }), date: '2026-10-30' })
+
+    expect(document.edition.locale).toBe('en-US')
+    expect(document.conclusion?.summary).toBe('')
+    expect(document.conclusion?.conditions).toHaveLength(0)
+    expect(document.conclusion?.counterEvidence).toHaveLength(0)
+    expect(document.conclusion?.invalidations).toHaveLength(0)
+    expect(document.conclusion?.caveats).toHaveLength(0)
+    expect(document.conclusion?.topSignal).toBeNull()
+    expect(document.citations.every((entry) => entry.statement === undefined)).toBe(true)
+  })
+
+  it('keeps the analysis conclusion when it is in the edition’s own language', () => {
+    // 反证：同一份分析摘要、中文版次，结论与引用照旧在——不是把结论块整个扔掉。
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+
+    expect(document.conclusion?.summary).toBe('稳定币持续收缩、ETF 赎回带走买盘。')
+    expect(document.conclusion?.counterEvidence).toHaveLength(2)
+    expect(document.citations.some((entry) => entry.statement === 'ETF 资金流印证。')).toBe(true)
+  })
+
+  it('lists only events that have a name in the edition’s language (A0.9)', () => {
+    // 真机：英文版次的「接下来」印着中文讲话名。源里只有中文名的（央行讲话那条源）在英文版**不列**，
+    // 少列几条是允许的，不当数据缺口；中文版次照列。
+    const speech = {
+      eventKey: 'CB.SPEECH', title: '芝加哥联储主席古尔斯比发表讲话', scheduledAt: '2026-10-31T02:00:00.000Z',
+      importance: 'high' as const, lifecycleState: 'scheduled' as const, category: 'central-bank-activity' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const registered = {
+      eventKey: 'US.CORE.CPI', title: 'core-cpi', titleKey: 'core-cpi', scheduledAt: '2026-10-31T02:00:00.000Z',
+      importance: 'high' as const, lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }
+
+    const english = buildDailyBriefingDocument({
+      packet: packet({ locale: 'en-US', calendar: { state: 'available', events: [registered, speech] } }),
+      date: '2026-10-30'
+    })
+    const englishNames = [english.next.focus, ...english.next.items].filter((item) => item !== undefined).map((item) => item.titleKey ?? item.title)
+    expect(englishNames).toContain('core-cpi')
+    expect(englishNames.join(' ')).not.toMatch(/[\u3400-\u9fff]/)
+    // 少列一条不产生缺口/警告：那是源的能力限制，不是这次读失败。
+    expect(english.next.note).toBeUndefined()
+
+    const chinese = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [registered, speech] } }),
+      date: '2026-10-30'
+    })
+    expect([chinese.next.focus, ...chinese.next.items].filter((item) => item !== undefined).map((item) => item.title).join(' ')).toContain('芝加哥联储')
   })
 
   it('keeps a released high-impact event without consensus in the macro list', () => {
@@ -250,7 +312,7 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.visibility).toBeUndefined()
   })
 
-  it('caps the 24h macro list at four and keeps the key floor event first', () => {
+  it('shows every candidate and keeps the key floor event first, with no cap (2026-11-06)', () => {
     const events = Array.from({ length: 6 }, (_, index) => ({
       eventKey: `US.EVENT_${index}`, title: `event ${index}`, scheduledAt: `2026-10-29T${String(12 + index).padStart(2, '0')}:30:00.000Z`,
       importance: 'high' as const, lifecycleState: 'released' as const, category: 'economic-indicator' as const,
@@ -263,8 +325,126 @@ describe('daily briefing document', () => {
     })
 
     expect(document.news.macroCandidates).toHaveLength(6)
-    expect(document.news.macro).toHaveLength(4)
+    // 不再截断：AI 判定有用的全部显示（用户 2026-11-06），没有"另 N 条未列出"这回事。
+    expect(document.news.macro).toHaveLength(6)
+    // 确定性兜底（最大意外值）仍排第一，其余按候选顺序。
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
+  })
+
+  // 用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示在 24h 宏观事件里面」。
+  // 按**类别**判，不按"有没有值"判——以后补上数值也不许自己冒出来；经济数据照常显示。
+  it('keeps central-bank and financial events out of the 24h macro block, and economic data in', () => {
+    const base = (eventKey: string, category: 'economic-indicator' | 'financial-event' | 'central-bank-activity') => ({
+      eventKey, title: eventKey, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category,
+      actual: '3.4%', previous: '3.1%', consensus: '3.2%',
+      surprise: { direction: 'beat' as const, value: 0.2, unit: 'pp' as const }
+    })
+    const events = [
+      base('US.CPI', 'economic-indicator'),
+      base('US.CLAIMS', 'economic-indicator'),
+      base('US.FED.SPEECH', 'central-bank-activity'),
+      base('US.TREASURY.AUCTION', 'financial-event')
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+
+    // 正文/导出读的是这一份，分析素材也读它：两类事件一处过滤，三处一致。
+    expect(document.news.macro.map((item) => item.eventKey).sort()).toEqual(['US.CLAIMS', 'US.CPI'])
+    expect(document.news.macroCandidates?.map((item) => item.eventKey) ?? []).not.toContain('US.FED.SPEECH')
+    // 经济数据不受影响（对照组）。
+    expect(document.news.macro.some((item) => item.eventKey === 'US.CPI')).toBe(true)
+  })
+
+  // 用户 2026-11-06：类别不可信时按名字兜底——讲话、发布会、纪要、决议一律按央行活动处理，
+  // 而「官方银行利率」这种带值的指标名字不沾这些词，必须照常显示。两种语言都要管：英文版次读的是英文事件名。
+  it('hides a speech by its name when the source called it an economic indicator', () => {
+    const event = (eventKey: string, title: string, extra: Record<string, unknown> = {}) => ({
+      eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'inline' as const }, ...extra
+    })
+    const events = [
+      event('EU.LAGARDE.SPEECH', '欧洲央行行长拉加德、管委多伦茨发表讲话'),
+      event('GB.BOE.PRESS', '英国央行行长贝利召开货币政策新闻发布会'),
+      event('GB.OFFICIAL.RATE', '官方银行利率', { actual: '4.00%', previous: '3.75%' })
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['GB.OFFICIAL.RATE'])
+  })
+
+  it('applies the same name fallback to english event titles', () => {
+    const event = (eventKey: string, title: string) => ({
+      eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category: 'economic-indicator' as const, surprise: { direction: 'inline' as const }
+    })
+    const events = [
+      event('US.FED.SPEECH', 'Fed Chair Powell speech on the economic outlook'),
+      event('GB.BOE.MINUTES', 'Minutes of the Bank of England Monetary Policy Committee'),
+      event('US.CPI', 'Consumer Price Index (YoY)')
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
+  })
+
+  it('hides a speech whose category is missing', () => {
+    // 老文档、或者换了个源没给类别：名字是讲话就还是不许冒出来。
+    const events = [{
+      eventKey: 'US.FED.SPEECH', title: '美联储主席鲍威尔发表讲话', scheduledAt: '2026-10-29T12:30:00.000Z',
+      importance: 'high' as const, lifecycleState: 'released' as const, surprise: { direction: 'inline' as const },
+      // 源没给类别时读到的就是 undefined：这三类在类型上必填，这里显式抹掉来模拟那种一行。
+      category: undefined as unknown as 'economic-indicator'
+    }]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro).toHaveLength(0)
+  })
+
+  it('decides by category, so a valued speech or auction stays hidden', () => {
+    // 判据是类别不是"有没有值"：这两个事件都带着实际值，仍然不许出现。
+    expect(briefingMacroCategoryVisible('central-bank-activity')).toBe(false)
+    expect(briefingMacroCategoryVisible('financial-event')).toBe(false)
+    expect(briefingMacroCategoryVisible('economic-indicator')).toBe(true)
+    // 老文档/旧日历没有类别时按"显示"处理，不许因为缺字段就吞掉一行。
+    expect(briefingMacroCategoryVisible(undefined)).toBe(true)
+  })
+
+  it('writes the period identity into the edition at the current schema', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({ asOf: '2026-10-30T00:30:12.345Z', windowEnd: asOf }),
+      date: '2026-10-30'
+    })
+
+    // schema 14 起宏观事件带自己的 `lifecycleState`（`02` v2.125），当前文档就是 14。
+    expect(document.schemaVersion).toBe(14)
+    // The id is a name, not the clock: this version's single fixed period.
+    expect(document.edition.periodId).toBe('default')
+    // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
+    expect(document.edition.periodTime).toBe(asOf)
+    expect(document.edition.generatedAt).toBe('2026-10-30T00:30:12.345Z')
+    expect(document.edition.periodTime).toMatch(/\.\d{3}Z$/)
+    expect(document.edition.periodKind).toBe('scheduled')
+    // The scheduled daily run of this version: never recorded as a catch-up or a retry.
+    expect(document.edition.runTrigger).toBe('scheduled')
+  })
+
+  it('writes the identity of the run it belongs to, not a literal default period', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        periodId: 'period_x',
+        periodTime: '2026-10-30T07:00:00.000Z',
+        periodKind: 'manual',
+        runTrigger: 'retry'
+      }),
+      date: '2026-10-30'
+    })
+
+    // A non-default period's edition must not be filed under `default`, and a retry must not claim
+    // it ran on schedule: both facts travel from the run into the document.
+    expect(document.edition).toMatchObject({
+      periodId: 'period_x',
+      periodTime: '2026-10-30T07:00:00.000Z',
+      periodKind: 'manual',
+      runTrigger: 'retry'
+    })
   })
 
   it('records the packet window that generation actually read', () => {
@@ -410,7 +590,7 @@ describe('daily briefing document', () => {
             // Old and no move at all: only the level survives.
             { seriesId: 'xau-usd', level: 3996, atMs: Date.parse('2026-10-20T00:25:00.000Z') }
           ]
-        } as unknown as MacroMarketSnapshotView,
+        } as unknown as NonNullable<NonNullable<DailyBriefingFactPacket['market']>['macroMarket']>,
         macroRates: {
           state: 'available',
           readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5, period: '2026-10-14' }]
@@ -593,6 +773,164 @@ describe('daily briefing document', () => {
     expect(document.data.sentiment.news).toMatchObject({ state: 'empty', itemCount: 0 })
   })
 
+  // `A0.8` 的核心判据：日历过期时写「读不到」，不许写「没有」。夹具照 11-05 那期的真实形状：
+  // 截止 07:00，最后一次成功采集在前天 13:27（差约 42 小时）。
+  it('says "not readable" — never "nothing" — when the calendar is stale', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T00:30:00.000Z',
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-28T06:27:00.000Z', catchUp: { state: 'timeout', timeoutMs: 90_000 } }
+      }),
+      date: '2026-10-30'
+    })
+    // 补采超时有自己的一句，不是「采集失败」、更不是「没有」。
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-timeout')
+
+    const stale = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-28T06:27:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+    expect(stale.news.notes.macroEmpty).toBe('calendar-stale')
+    expect(stale.news.notes.macroEmptyHours).toBe(42)
+    expect(stale.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
+
+    // 没有读数（旧调用方 / 夹具）：也只能说「读不到」。
+    const unread = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [] } }), date: '2026-10-30'
+    })
+    expect(unread.news.notes.macroEmpty).toBe('calendar-unavailable')
+  })
+
+  it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    expect(document.news.notes.macroEmptyHours).toBeUndefined()
+  })
+
+  it('records when the run read the world, and that the window did not move with it', () => {
+    // 用户 2026-11-05 定：读数用运行时刻，窗口仍按截止。文档必须同时记住这两个时刻，
+    // 否则"这一版读到哪一刻"和"统计到哪一刻"又会被混成一句。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T04:20:00.000Z',
+        windowStart: '2026-10-29T00:00:00.000Z',
+        windowEnd: '2026-10-30T00:00:00.000Z'
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.edition.generatedAt).toBe('2026-10-30T04:20:00.000Z')
+    // 读数时刻叫 `readAt`，不叫 `dataAsOf`：后者在本仓的旧口径里指统计截止，不许一名两义。
+    expect(document.edition.readAt).toBe('2026-10-30T04:20:00.000Z')
+    expect(document.edition.dataAsOf).toBeUndefined()
+    expect(document.edition.generatedAs).toBe('2026-10-30T04:20:00.000Z')
+    // 运行时刻晚于截止 → 这一版是补跑。
+    expect(document.edition.isBackfill).toBe(true)
+    // 窗口与名义截止都不动。
+    expect(document.edition.windowEnd).toBe('2026-10-30T00:00:00.000Z')
+    expect(document.edition.periodTime).toBe('2026-10-30T00:00:00.000Z')
+  })
+
+  it('does not stamp a punctual run as a backfill', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-30T00:00:20.000Z',
+        windowStart: '2026-10-29T00:00:00.000Z',
+        windowEnd: '2026-10-30T00:00:00.000Z'
+      }),
+      date: '2026-10-30'
+    })
+    // 准点是"截止后几秒起跑"，不是补跑：多写一个补跑标记会让每一版都多一句说明。
+    expect(document.edition.isBackfill).toBeUndefined()
+    expect(document.edition.readAt).toBe('2026-10-30T00:00:20.000Z')
+  })
+
+  it('keeps high-impact events whose actuals never arrived on the page (A0.12)', () => {
+    // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都没回补。
+    // 事件优先：它们照样是候选、照样进正文，缺的只是值那一格；空态那句「没有」根本不该出现。
+    const events = Array.from({ length: 9 }, (_, index) => ({
+      eventKey: `EV.${index}`,
+      title: `Event ${index}`,
+      scheduledAt: new Date(Date.parse(windowStart) + (index + 1) * 2 * 3_600_000).toISOString(),
+      importance: 'high' as const,
+      lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }))
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    // 九条都在候选里（页面按上限取前四条，其余留在候选表备查）。
+    expect(document.news.macroCandidates).toHaveLength(9)
+    expect(document.news.macro.length).toBeGreaterThan(0)
+    // 总数与缺值数一起写：句子念得出"共几条、其中几条没拿到"。
+    expect(document.news.notes.macroHighImpactCount).toBe(9)
+    // 正文不编数值。
+    expect(document.news.macro.every((item) => item.actual === undefined)).toBe(true)
+    // 也没有"没有事件"那句话——事件在。
+    expect(document.news.notes.macroEmpty).toBeUndefined()
+  })
+
+  it('keeps the plain "nothing" sentence when the window really had no high-impact event', () => {
+    // 反向：窗口里只有低影响事件时，仍然是"一条高影响都没有"，不许被上一档顶掉。
+    const events = [{
+      eventKey: 'EV.LOW', title: 'Low', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'medium' as const,
+      lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }]
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    // 窗口里连高影响事件都没有：总数不写，正文里也没有任何一句话。
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
+  })
+
+  it('keeps a cancelled event on the page and marks it, without inventing a value (A0.12)', () => {
+    // 取消的事件照常显示并标「已取消」（`02` v2.125）：那天原定有一场、后来取消了，这是真实的
+    // 排期变化，藏起来读者会以为数据漏了。它没有值，所以值格不渲染，也不进分析素材。
+    const events = [{
+      eventKey: 'EV.CANCELLED', title: 'Cancelled release', scheduledAt: '2026-10-29T12:30:00.000Z',
+      importance: 'high' as const, lifecycleState: 'cancelled' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'consensus-unavailable' as const }
+    }]
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events },
+        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+      }),
+      date: '2026-10-30'
+    })
+
+    // 行在、标记在、计入条数；「没有已发布的高影响事件」那句不出现（它是事实，不是"没有"）。
+    expect(document.news.macro).toHaveLength(1)
+    expect(document.news.macro[0]).toMatchObject({ eventKey: 'EV.CANCELLED', lifecycleState: 'cancelled' })
+    expect(document.news.macro[0]?.actual).toBeUndefined()
+    expect(document.news.notes.macroHighImpactCount).toBe(1)
+    expect(document.news.notes.macroEmpty).toBeUndefined()
+    // 分析素材里没有它：取消是"不会有了"，不是"我们没拿到"，模型更不该拿它讲故事。
+    expect(selectMacroAnalysisCandidates(document.news.macroCandidates ?? [])).toHaveLength(0)
+  })
+
   it('does not let stale or unavailable readings look available', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({
@@ -614,12 +952,12 @@ describe('daily briefing document', () => {
   it('admits leverage only when open interest or funding moved past the threshold', () => {
     const flat = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(1.2, 0.4) }), date: '2026-10-30' })
     expect(flat.data.leverage?.materiality).toMatchObject({ material: false, reasonCode: 'no-material-change' })
-    expect(flat.data.leverage?.visibility).toBe('hidden')
+    // A quiet block is still shown: the threshold decides emphasis, not presence.
+    expect(flat.data.leverage?.visibility).toBe('shown')
 
     const moved = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(12.4, -8.1) }), date: '2026-10-30' })
     expect(moved.data.leverage?.materiality).toMatchObject({ material: true, reasonCode: 'open-interest-shift' })
-    // Material is not the same as shown: the editor still has to ask for the line.
-    expect(moved.data.leverage?.visibility).toBe('hidden')
+    expect(moved.data.leverage?.visibility).toBe('shown')
 
     const extremeFunding = buildDailyBriefingDocument({
       packet: packet({
@@ -642,7 +980,7 @@ describe('daily briefing document', () => {
   it('admits the rate path only on a probability shift, an imminent meeting or a changed outcome', () => {
     const unchanged = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60) }), date: '2026-10-30' })
     expect(unchanged.data.policyPath?.materiality).toMatchObject({ material: false })
-    expect(unchanged.data.policyPath?.visibility).toBe('hidden')
+    expect(unchanged.data.policyPath?.visibility).toBe('shown')
 
     const previous = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(45) }), date: '2026-10-29' })
     const shifted = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(76) }), date: '2026-10-30', previous })
@@ -657,7 +995,7 @@ describe('daily briefing document', () => {
 
     const previousOutcome = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60, { outcome: 'hike-25' }) }), date: '2026-10-29' })
     const changedOutcome = buildDailyBriefingDocument({
-      packet: packet({ policyPath: policyPath(60, { outcome: 'hold' }) }),
+      packet: packet({ policyPath: policyPath(60, { outcome: 'no-change' }) }),
       date: '2026-10-30',
       previous: previousOutcome
     })
@@ -674,5 +1012,284 @@ describe('daily briefing document', () => {
     const latest = { ...cpi, eventKey: 'US.LATEST', scheduledAt: '2026-10-29T20:00:00.000Z', surprise: { direction: 'beat' as const, value: 0.1, unit: 'pp' as const } }
     expect(selectMacroFloorItem([smallerNewer, largerOlder])?.eventKey).toBe('US.OLDER')
     expect(selectMacroFloorItem([smallerNewer, latest])?.eventKey).toBe('US.LATEST')
+  })
+
+  /**
+   * The three facts schema 10 added to the document.
+   *
+   * All three were already in the packet and were dropped by this builder, so none of them is new
+   * collection: the policy venue prices five buckets, the open interest read returns a series, and the
+   * cross-asset snapshot carries a return curve. What these cases pin is that the edition now keeps
+   * them, in the shape the data region draws, and that an edition without them is still a document.
+   */
+  describe('the stored data behind the drawings', () => {
+    it('keeps all five priced buckets beside the lead probability', () => {
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          policyPath: policyPath(77.5, {
+            distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+          })
+        }),
+        date: '2026-10-30'
+      })
+
+      const distribution = document.data.policyPath?.distribution
+      expect(Object.keys(distribution ?? {}).sort()).toEqual(['cut-25', 'cut-50-plus', 'hike-25', 'hike-50-plus', 'no-change'])
+      // Normalized to one so the dial's three arcs can be shares of it without a second division.
+      expect(Object.values(distribution ?? {}).reduce((sum, share) => sum + share, 0)).toBeCloseTo(1, 6)
+      expect(distribution?.['hike-25']).toBeCloseTo(0.775, 6)
+      // The lead probability is unchanged: the distribution is beside it, not instead of it.
+      expect(document.data.policyPath?.probability).toBe(77.5)
+
+      // A venue that priced only the lead outcome is not given four invented buckets.
+      const partial = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5) }), date: '2026-10-30' })
+      expect(partial.data.policyPath).not.toHaveProperty('distribution')
+      expect(partial.data.policyPath?.probability).toBe(77.5)
+    })
+
+    it('never stores a dial share that contradicts the printed probability', () => {
+      const outcome = 'hike-25' as const
+      const fixture = (distribution: Readonly<Record<typeof outcome | 'no-change' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', number>>) =>
+        buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5, { distribution }) }), date: '2026-10-30' })
+
+      // The ordinary case: the venue's five buckets overshoot one by two tenths of a percent. After
+      // normalization the lead bucket is 77.35% against a printed 77.5% — one number, not two.
+      const overround = fixture({ 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.005, 'cut-50-plus': 0.002 })
+      expect(overround.data.policyPath?.distribution?.[outcome]).toBeCloseTo(0.7735, 3)
+      expect(Math.abs((overround.data.policyPath?.distribution?.[outcome] ?? 0) * 100 - 77.5)).toBeLessThanOrEqual(0.5)
+
+      // A payload whose buckets do not add up enough to be trusted with a dial. Normalizing would
+      // move the lead bucket to 85.2% while the card prints 77.5% — two odds for one fact — so the
+      // distribution is not stored and the card falls back to two segments.
+      const inconsistent = fixture({ 'no-change': 0.10, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.01, 'cut-50-plus': 0.01 })
+      expect(inconsistent.data.policyPath).not.toHaveProperty('distribution')
+      expect(inconsistent.data.policyPath?.probability).toBe(77.5)
+      // Dropping it leaves a trace: a two-segment dial in three months must be answerable.
+      expect(inconsistent.provenance.dataAudit).toEqual([{ field: 'policyPath.distribution', reason: 'inconsistent-totals' }])
+      expect(overround.provenance.dataAudit).toBeUndefined()
+
+      // An unpublished distribution is an absence, not a decision — nothing to audit.
+      const absent = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(77.5) }), date: '2026-10-30' })
+      expect(absent.provenance.dataAudit).toBeUndefined()
+
+      // Whatever survives must satisfy the invariant, checked rather than assumed.
+      for (const document of [overround, inconsistent]) {
+        const share = document.data.policyPath?.distribution?.[outcome]
+        if (share === undefined) continue
+        expect(Math.abs(share * 100 - (document.data.policyPath?.probability ?? 0))).toBeLessThanOrEqual(0.5)
+      }
+    })
+
+    it('keeps each positioning series, thinned, ending on the amount printed beside it', () => {
+      // Fifteen-minute buckets across the whole window: the read this edition asked for.
+      const readings = (offset: number) => Array.from({ length: 97 }, (_, index) => ({
+        observedAt: new Date(Date.parse(windowStart) + index * 900_000).toISOString(),
+        notionalUsd: offset + index * 1_000_000
+      }))
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          positioning: {
+            state: 'available', asOf, window: '24h',
+            btc: readings(7_000_000_000), eth: readings(4_000_000_000),
+            change: { btc: { h24Pct: 3.5 }, eth: { h24Pct: -1.2 } }
+          } as unknown as NonNullable<DailyBriefingFactPacket['positioning']>
+        }),
+        date: '2026-10-30'
+      })
+
+      const btc = document.data.leverage?.btc
+      expect(btc?.series).toHaveLength(24)
+      // The card's amount and the end of its line are the same reading.
+      expect(btc?.series?.at(-1)?.value).toBe(btc?.openInterestUsd)
+      expect(btc?.series?.at(-1)?.at).toBe(readings(0).at(-1)?.observedAt)
+      expect(document.data.leverage?.eth.series).toHaveLength(24)
+
+      // A read with a single point keeps the amount and states no series; a failed read is a different
+      // state entirely. Folding the two into one absence is what the card cannot tell apart.
+      const single = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(3.5, 1.2) }), date: '2026-10-30' })
+      expect(single.data.leverage?.state).toBe('available')
+      expect(single.data.leverage?.btc.openInterestUsd).toBe(1_200_000_000)
+      expect(single.data.leverage?.btc).not.toHaveProperty('series')
+    })
+
+    it('states the window amplitude on the three readings with continuous bars, and on nothing else', () => {
+      const coverage = { count: 289, expectedCount: 289, complete: true }
+      const extremes = { high: 10_800, low: 10_100, anchor: 10_400 }
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: {
+                btc: { '24h': { state: 'available', value: 3.8 } },
+                eth: { '24h': { state: 'available', value: -1.18 } },
+                index: { '24h': { state: 'available', value: 0.82 } }
+              },
+              indexSource: 'real',
+              extremes: { btc: extremes, eth: extremes, index: extremes, dxy: null, gold: null },
+              historyCoverage: { btc: coverage, eth: coverage, index: coverage, dxy: coverage, gold: coverage }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      // (10 800 − 10 100) / 10 400 × 100, with the close the curve is also divided by.
+      expect(document.schemaVersion).toBe(dailyBriefingPolicy.schemaVersion)
+      for (const id of ['btc', 'eth', 'index'] as const) {
+        expect(document.data.market.find((row) => row.id === id)?.amplitude)
+          .toEqual({ percent: 6.73, high: 10_800, low: 10_100, anchor: 10_400 })
+      }
+      // DXY, gold and the ten-year carry no continuous series: they are not given a field at all, so
+      // nothing downstream can show an amplitude for them.
+      for (const id of ['dxy', 'gold', 'us10y', 'us10y-real'] as const) {
+        const row = document.data.market.find((entry) => entry.id === id)!
+        expect(row).not.toHaveProperty('amplitude')
+        expect(row).not.toHaveProperty('amplitudeReason')
+      }
+    })
+
+    it('withholds the Nasdaq amplitude on a proxy day rather than attributing it to the index', () => {
+      const coverage = { count: 289, expectedCount: 289, complete: true }
+      const extremes = { high: 10_800, low: 10_100, anchor: 10_400 }
+      const build = (indexSource: 'real' | 'proxy') => buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z', indexSource,
+              closedReturns: { btc: { '24h': { state: 'available', value: 3.8 } }, eth: { '24h': { state: 'available', value: -1 } }, index: { '24h': { state: 'available', value: 0.8 } } },
+              extremes: { btc: extremes, eth: extremes, index: extremes },
+              historyCoverage: { btc: coverage, eth: coverage, index: coverage }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      // The index leg answered with the tokenised proxy: that amplitude belongs to the proxy, and the
+      // row has no marker to carry it beside, so the number is withheld rather than mis-attributed.
+      const proxied = build('proxy').data.market.find((row) => row.id === 'index')!
+      expect(proxied).not.toHaveProperty('amplitude')
+      expect(proxied).not.toHaveProperty('amplitudeReason')
+      // BTC and ETH are unaffected: their bars are their own.
+      expect(build('proxy').data.market.find((row) => row.id === 'btc')?.amplitude?.percent).toBe(6.73)
+      // On a real-index day the row states it.
+      expect(build('real').data.market.find((row) => row.id === 'index')?.amplitude?.percent).toBe(6.73)
+    })
+
+    it('withholds the amplitude on an incomplete window and says how incomplete', () => {
+      const complete = { count: 289, expectedCount: 289, complete: true }
+      const partial = { count: 231, expectedCount: 289, complete: false }
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: { btc: { '24h': { state: 'available', value: 3.8 } }, eth: { '24h': { state: 'available', value: -1 } }, index: { '24h': { state: 'available', value: 0.8 } } },
+              indexSource: 'real',
+              extremes: { btc: { high: 10_800, low: 10_100, anchor: 10_400 }, eth: null, index: null },
+              historyCoverage: { btc: partial, eth: complete, index: complete }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      const btc = document.data.market.find((row) => row.id === 'btc')!
+      // A hole can hide the real high, so the number is withheld rather than understated — and the
+      // counts travel with the reason so a later reader can see which window it was.
+      expect(btc.amplitude).toBeUndefined()
+      expect(btc.amplitudeReason).toBe('partial-bars')
+      expect(btc.amplitudeCoverage).toEqual({ count: 231, expectedCount: 289 })
+      // Full coverage but no anchored pair: no denominator, no number.
+      const eth = document.data.market.find((row) => row.id === 'eth')!
+      expect(eth.amplitudeReason).toBe('no-anchor')
+    })
+
+    it('keeps the price curve on the two cards that draw one, starting at the window and at zero', () => {
+      const curve = Array.from({ length: 289 }, (_, index) => ({
+        at: new Date(Date.parse(windowStart) + index * 300_000).toISOString(),
+        returnPercent: index / 10
+      }))
+      const document = buildDailyBriefingDocument({
+        packet: packet({
+          market: {
+            crossAsset: {
+              analysisEnd: '2026-10-30T00:25:00.000Z',
+              closedReturns: {
+                btc: { '24h': { state: 'available', value: 28.8 } },
+                eth: { '24h': { state: 'available', value: -1.18 } },
+                index: { '24h': { state: 'available', value: 0.82 } }
+              },
+              curves: { btc: curve, eth: curve, index: curve }
+            } as unknown as CrossAssetSnapshot,
+            macroMarket: packet().market.macroMarket,
+            macroRates: packet().market.macroRates
+          }
+        }),
+        date: '2026-10-30'
+      })
+
+      expect(document.schemaVersion).toBe(dailyBriefingPolicy.schemaVersion)
+      const btc = document.data.market.find((row) => row.id === 'btc')
+      const points = btc?.curve?.[0] ?? []
+      expect(btc?.curve).toHaveLength(1)
+      expect(points.length).toBeLessThanOrEqual(48)
+      expect(points[0]?.at).toBe(windowStart)
+      expect(points[0]?.returnPercent).toBeCloseTo(0, 2)
+      expect(document.data.market.find((row) => row.id === 'eth')?.curve).toHaveLength(1)
+      // The index row has no plot beside it, so it is not given a line nobody draws.
+      expect(document.data.market.find((row) => row.id === 'index')).not.toHaveProperty('curve')
+
+      // Schemas 9 and older simply have no such field; reading one is not an error.
+      const legacy = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+      expect(legacy.data.market.find((row) => row.id === 'btc')?.curveReason).toBe('no-snapshot')
+    })
+  })
+})
+
+describe('the level behind the percentage', () => {
+  it('records the close the window ended on, and which leg answered the index', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        market: {
+          crossAsset: {
+            analysisEnd: '2026-10-30T00:25:00.000Z',
+            indexSource: 'proxy',
+            closedReturns: {
+              btc: { '24h': { state: 'available', value: 3.8 } },
+              eth: { '24h': { state: 'available', value: -1 } },
+              index: { '24h': { state: 'available', value: 0.8 } }
+            },
+            lastClosed: {
+              btc: { at: '2026-10-30T00:20:00.000Z', close: '110432.1' },
+              eth: { at: '2026-10-30T00:20:00.000Z', close: '3840.55' },
+              index: { at: '2026-10-30T00:20:00.000Z', close: '21348.7' }
+            }
+          } as unknown as CrossAssetSnapshot,
+          macroMarket: packet().market.macroMarket,
+          macroRates: packet().market.macroRates
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    // A percentage without its base says nothing: the level travels with it, and its instant.
+    expect(document.data.market.find((row) => row.id === 'btc')?.close).toEqual({ value: 110432.1, at: '2026-10-30T00:20:00.000Z' })
+    expect(document.data.market.find((row) => row.id === 'eth')?.close?.value).toBe(3840.55)
+    // The index row states which leg answered, so a proxy's move is never read as the index's.
+    expect(document.data.market.find((row) => row.id === 'index')?.indexSource).toBe('proxy')
+    // A macro row is not a cross-asset leg: it carries neither field.
+    expect(document.data.market.find((row) => row.id === 'dxy')).not.toHaveProperty('close')
+    expect(document.data.market.find((row) => row.id === 'dxy')).not.toHaveProperty('indexSource')
+    // No closed bar at the cutoff is an absence, never a zero level.
+    const noBar = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    expect(noBar.data.market.find((row) => row.id === 'btc')).not.toHaveProperty('close')
   })
 })

@@ -104,7 +104,12 @@ export type CrossAssetRange = typeof crossAssetContractPolicy.ranges[number]
  * market did, not what this machine had already downloaded at minute +35. Such readers ask for `latest`.
  */
 export type CrossAssetKnowledge = 'as-of' | 'latest'
-export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge }
+/**
+ * `knowledgeAt` is the version cutoff on its own, when "as of the window end" and "as of now" are both
+ * wrong: a reading that must admit what arrived *shortly after* its window end, but not what arrived
+ * hours later. The window still ends at `asOf`; only "when did we know it" moves.
+ */
+export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge; knowledgeAt?: string }
 export type CrossAssetInput = Record<string, never> | { leaseId: string } | CrossAssetQueryInput
 export type CrossAssetId = typeof crossAssetContractPolicy.assets[number]
 export type CrossAssetMacroProxyId = typeof crossAssetContractPolicy.macroProxies[number]
@@ -117,6 +122,14 @@ export type CrossAssetSnapshot = {
   analysisEnd: string; windowStart: string
   historyCoverage: Record<CrossAssetId, { count: number; expectedCount: number; complete: boolean }>
   curves: Record<CrossAssetId, { at: string; returnPercent: number | null }[]>
+  /**
+   * The window's highest and lowest price, beside the close they are stated against.
+   *
+   * Optional so a main process that predates it still produces a snapshot this renderer accepts — the
+   * amplitude simply has nothing to show. `anchor` is the same window-start close `curves` divides by,
+   * never a bar's open: one window, one zero point, one definition of "how far it travelled".
+   */
+  extremes?: Record<CrossAssetId, { high: number; low: number; anchor: number } | null>
   /**
    * The macro rows' own same-anchor curves, on the same grid as `curves` so the lines are comparable.
    *
@@ -187,18 +200,28 @@ export function parseCrossAssetInput(method: string, value: unknown, nowMs: numb
         policy.leaseIdPattern.test(value.leaseId) ? { leaseId: value.leaseId } : undefined
     }
     if (method !== crossAssetMethods.query || !keys.includes('range') ||
-      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge') ||
+      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge' && key !== 'knowledgeAt') ||
       !policy.ranges.includes(value.range as CrossAssetRange)) return
     const range = value.range as CrossAssetRange
     const knowledge = value.knowledge
     if (knowledge !== undefined && knowledge !== 'as-of' && knowledge !== 'latest') return
     // A version rule only means something next to a window end; without `asOf` the query is current and
     // already reads the newest version of everything.
-    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined ? { range } : undefined
+    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined && value.knowledgeAt === undefined ? { range } : undefined
     const asOf = value.asOf
     if (typeof asOf !== 'string' || !policy.canonicalUtcPattern.test(asOf) || !Number.isFinite(Date.parse(asOf)) ||
       new Date(asOf).toISOString() !== asOf || Date.parse(asOf) > nowMs) return
-    return knowledge === undefined ? { range, asOf } : { range, asOf, knowledge }
+    const knowledgeAt = value.knowledgeAt
+    // A version cutoff with no window end has nothing to be the cutoff *of*, and it may not run ahead
+    // of what this process can know either.
+    if (knowledgeAt !== undefined && (typeof knowledgeAt !== 'string' || !policy.canonicalUtcPattern.test(knowledgeAt) ||
+      !Number.isFinite(Date.parse(knowledgeAt)) || new Date(knowledgeAt).toISOString() !== knowledgeAt ||
+      Date.parse(knowledgeAt) > nowMs || Date.parse(knowledgeAt) < Date.parse(asOf))) return
+    return {
+      range, asOf,
+      ...(knowledge === undefined ? {} : { knowledge }),
+      ...(knowledgeAt === undefined ? {} : { knowledgeAt })
+    }
   } catch { return }
 }
 
@@ -296,10 +319,49 @@ export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
  * until the main process is restarted with the same code. That is a restart, not data loss, and it is
  * the same reason the error text names the version rather than the source.
  */
-export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | undefined {
+/**
+ * Why a snapshot was refused, named at the check that refused it.
+ *
+ * The closed vocabulary is the contract's: `shape`, `schemaVersion`, `range`, `grid`, `indexSource`,
+ * `keys`, `historyCoverage.<asset>`, `curves.<asset>.length`, `curves.<asset>.point`,
+ * `closedReturns.<asset>.<window>`, `macroCurves.<proxy>`, `reading`, `extremes.<asset>`. A caller that passes a sink
+ * learns which check failed; a caller that passes nothing loses nothing (the answer is still
+ * `undefined`, exactly as before).
+ */
+export type CrossAssetRejection = { field?: string }
+
+/**
+ * The last closed bar each row prints, held to one shape whoever asks.
+ *
+ * Both modes carry it now, and the same rules apply: every asset present, `null` for "this market had
+ * no bar at or before the window end", and otherwise a real decimal price with a UTC instant that does
+ * not sit after the window end. One implementation on purpose — a second, looser check on the historical
+ * branch is how an unvalidated number would reach a row that prints it as a level.
+ */
+function lastClosedMap(value: unknown, analysisEnd: string): boolean {
   const policy = crossAssetContractPolicy
+  if (!exact(value, policy.assets)) return false
+  const map = value as Record<string, unknown>
+  return policy.assets.every((asset) => {
+    const closed = map[asset]
+    if (closed === null) return true
+    if (!exact(closed, ['at', 'close'])) return false
+    const { at, close } = closed as Record<string, unknown>
+    return utc(at) && typeof close === 'string' && close.length <= policy.maxPriceLength &&
+      policy.pricePattern.test(close) && Number.isFinite(Number(close)) && Number(close) > 0 &&
+      Date.parse(at) <= Date.parse(analysisEnd)
+  })
+}
+
+export function parseCrossAssetSnapshot(value: unknown, rejection?: CrossAssetRejection): CrossAssetSnapshot | undefined {
+  const policy = crossAssetContractPolicy
+  /** Records the most specific check that refused the snapshot, then answers the old way. */
+  const reject = (field: string): undefined => {
+    if (rejection && rejection.field === undefined) rejection.field = field
+    return undefined
+  }
   try {
-    if (!record(value)) return
+    if (!record(value)) return reject('shape')
     const fields = ['schemaVersion', 'mode', 'servedAt', 'asOf', 'range', 'analysisEnd', 'windowStart', 'historyCoverage', 'curves', 'closedReturns', 'correlations', 'relativeReturns', 'indexSource']
     // The macro lines are optional, and `exact` counts fields: a snapshot that carries them must list
     // them, and one from a main process that does not must not be asked for them.
@@ -307,36 +369,63 @@ export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | un
     // Optional like `macroCurves`: an older main process sends no field at all and must still pass. A field
     // that *is* sent has to be a reading this renderer can phrase without inventing anything.
     if (value.reading !== undefined) fields.push('reading')
+    // Optional for the same reason: a main process from before the amplitude existed sends no
+    // `extremes`, and one that sends them must send a pair this renderer can print.
+    if (value.extremes !== undefined) fields.push('extremes')
     if (value.mode === 'current') fields.push('sourceState', 'quotes', 'forming', 'marketState', 'lastClosed')
-    else if (value.mode !== 'historical') return
-    if (!exact(value, fields) || value.schemaVersion !== 1 || !policy.ranges.includes(value.range as CrossAssetRange) ||
-      ![value.servedAt, value.asOf, value.analysisEnd, value.windowStart].every(utc)) return
+    else if (value.mode === 'historical') {
+      // Optional, and only on this branch: the row's last closed bar used to be a current-mode-only
+      // fact, so a snapshot frozen in historical mode carried no `at`/`close` for the row to print and
+      // the reader got a level nobody measured. A main process from before this field keeps passing;
+      // one that sends it is held to the same shape as the current-mode map, below.
+      // Listed only here: pushing it on the current branch as well would list it twice and no snapshot
+      // would satisfy `exact`.
+      if (value.lastClosed !== undefined) fields.push('lastClosed')
+    } else return reject('shape')
+    if (!exact(value, fields) || ![value.servedAt, value.asOf, value.analysisEnd, value.windowStart].every(utc)) return reject('shape')
+    if (value.schemaVersion !== 1) return reject('schemaVersion')
+    if (!policy.ranges.includes(value.range as CrossAssetRange)) return reject('range')
     const range = value.range as CrossAssetRange
     const end = Date.parse(value.analysisEnd as string)
     const start = Date.parse(value.windowStart as string)
     const asOf = Date.parse(value.asOf as string)
     const stride = crossAssetCurveStrideMs(range)
     if (asOf > Date.parse(value.servedAt as string) || end !== Math.floor(asOf / policy.intervalMs) * policy.intervalMs ||
-      start !== end - (policy.coveragePoints[range] - 1) * policy.intervalMs) return
-    if (typeof value.indexSource !== 'string' || !(policy.indexSources as readonly string[]).includes(value.indexSource)) return
+      start !== end - (policy.coveragePoints[range] - 1) * policy.intervalMs) return reject('grid')
+    if (typeof value.indexSource !== 'string' || !(policy.indexSources as readonly string[]).includes(value.indexSource)) return reject('indexSource')
     if (!exact(value.historyCoverage, policy.assets) || !exact(value.curves, policy.assets) || !exact(value.closedReturns, policy.assets) ||
-      !exact(value.correlations, ['indexBtc', 'indexEth']) || !exact(value.relativeReturns, ['btcMinusIndex', 'ethMinusBtc'])) return
+      !exact(value.correlations, ['indexBtc', 'indexEth']) || !exact(value.relativeReturns, ['btcMinusIndex', 'ethMinusBtc'])) return reject('keys')
+    if (value.extremes !== undefined) {
+      if (!exact(value.extremes, policy.assets)) return reject('keys')
+      for (const asset of policy.assets) {
+        const extremes = (value.extremes as Record<string, unknown>)[asset]
+        // `null` is a stated absence: the window has no complete pair. A present pair must be one.
+        if (extremes === null) continue
+        if (!exact(extremes, ['high', 'low', 'anchor'])) return reject(`extremes.${asset}`)
+        const { high, low, anchor } = extremes as Record<string, unknown>
+        if (typeof high !== 'number' || !Number.isFinite(high) || high <= 0) return reject(`extremes.${asset}`)
+        if (typeof low !== 'number' || !Number.isFinite(low) || low <= 0 || low > high) return reject(`extremes.${asset}`)
+        if (typeof anchor !== 'number' || !Number.isFinite(anchor) || anchor <= 0) return reject(`extremes.${asset}`)
+      }
+    }
     for (const asset of policy.assets) {
       const coverage = value.historyCoverage[asset]
       if (!exact(coverage, ['count', 'expectedCount', 'complete']) || !Number.isSafeInteger(coverage.count) ||
         (coverage.count as number) < 0 || (coverage.count as number) > policy.coveragePoints[range] ||
-        coverage.expectedCount !== policy.coverageCounting[range].expected || coverage.complete !== (coverage.count === coverage.expectedCount)) return
+        coverage.expectedCount !== policy.coverageCounting[range].expected || coverage.complete !== (coverage.count === coverage.expectedCount)) return reject(`historyCoverage.${asset}`)
       const curve = value.curves[asset]
-      if (!Array.isArray(curve) || curve.length !== policy.points[range]) return
+      if (!Array.isArray(curve) || curve.length !== policy.points[range]) return reject(`curves.${asset}.length`)
       let last = -Infinity
       for (const [index, point] of curve.entries()) {
         if (!exact(point, ['at', 'returnPercent']) || !utc(point.at) || Date.parse(point.at) <= last ||
           Date.parse(point.at) !== start + index * stride ||
-          (point.returnPercent !== null && (typeof point.returnPercent !== 'number' || !Number.isFinite(point.returnPercent)))) return
+          (point.returnPercent !== null && (typeof point.returnPercent !== 'number' || !Number.isFinite(point.returnPercent)))) return reject(`curves.${asset}.point`)
         last = Date.parse(point.at)
       }
       const returns = value.closedReturns[asset]
-      if (!exact(returns, ['5m', '15m', '1h', '4h', '24h', '7d']) || !Object.values(returns).every(value => metric(value))) return
+      if (!exact(returns, ['5m', '15m', '1h', '4h', '24h', '7d'])) return reject(`closedReturns.${asset}.keys`)
+      const refusedWindow = (['5m', '15m', '1h', '4h', '24h', '7d'] as const).find((window) => !metric(returns[window]))
+      if (refusedWindow) return reject(`closedReturns.${asset}.${refusedWindow}`)
     }
     /**
      * The macro lines, when this build draws them. A main process that predates them sends no field at
@@ -346,43 +435,40 @@ export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | un
      * it, so there is no same-anchor line to draw at all.
      */
     if (value.macroCurves !== undefined) {
-      if (!exact(value.macroCurves, policy.macroProxies)) return
+      if (!exact(value.macroCurves, policy.macroProxies)) return reject('macroCurves.keys')
       for (const proxy of policy.macroProxies) {
         const curve = value.macroCurves[proxy]
-        if (!Array.isArray(curve) || curve.length !== 0 && curve.length !== policy.points[range]) return
+        if (!Array.isArray(curve) || curve.length !== 0 && curve.length !== policy.points[range]) return reject(`macroCurves.${proxy}.length`)
         let previous = -Infinity
         for (const [index, point] of curve.entries()) {
           if (!exact(point, ['at', 'returnPercent']) || !utc(point.at) || Date.parse(point.at) <= previous ||
             Date.parse(point.at) !== start + index * stride ||
-            (point.returnPercent !== null && (typeof point.returnPercent !== 'number' || !Number.isFinite(point.returnPercent)))) return
+            (point.returnPercent !== null && (typeof point.returnPercent !== 'number' || !Number.isFinite(point.returnPercent)))) return reject(`macroCurves.${proxy}`)
           previous = Date.parse(point.at)
         }
       }
     }
-    if (value.reading !== undefined && !reading(value.reading, range)) return
-    if (!Object.values(value.correlations).every(value => metric(value, true)) || !Object.values(value.relativeReturns).every(value => metric(value))) return
+    if (value.reading !== undefined && !reading(value.reading, range)) return reject('reading')
+    if (!Object.values(value.correlations).every(value => metric(value, true)) || !Object.values(value.relativeReturns).every(value => metric(value))) return reject('keys')
     if (value.mode === 'current') {
       if (typeof value.sourceState !== 'string' || !policy.sourceStates.includes(value.sourceState) || !exact(value.quotes, policy.assets) ||
-        !exact(value.forming, policy.assets) || !exact(value.marketState, policy.assets) || !exact(value.lastClosed, policy.assets)) return
+        !exact(value.forming, policy.assets) || !exact(value.marketState, policy.assets) ||
+        !lastClosedMap(value.lastClosed, value.analysisEnd as string)) return reject('keys')
       // The row's session, its last closed bar and the leg that answers it are one statement, and the
       // three have to agree: a row with no source has no reading, and a row with a source always has
       // the last bar it closed on. A snapshot that cannot say both is refused rather than displayed.
       const answersRow = value.indexSource !== 'unavailable'
-      const hasReading = value.marketState.index !== 'unavailable' && value.lastClosed.index !== null
-      if (answersRow !== hasReading) return
+      // The map itself was validated a line above; this only reads the index entry out of it again.
+      const closedByAsset = value.lastClosed as Record<string, unknown>
+      const hasReading = value.marketState.index !== 'unavailable' && closedByAsset.index !== null
+      if (answersRow !== hasReading) return reject('shape')
       for (const asset of policy.assets) {
-        if (!(policy.marketStates as readonly string[]).includes(value.marketState[asset] as string)) return
-        const closed = value.lastClosed[asset]
-        if (closed === null) continue
-        if (!exact(closed, ['at', 'close']) || !utc(closed.at) || typeof closed.close !== 'string' ||
-          closed.close.length > policy.maxPriceLength || !policy.pricePattern.test(closed.close) ||
-          !Number.isFinite(Number(closed.close)) || Number(closed.close) <= 0 ||
-          Date.parse(closed.at) > Date.parse(value.analysisEnd as string)) return
+        if (!(policy.marketStates as readonly string[]).includes(value.marketState[asset] as string)) return reject('shape')
       }
       // While the real index answers the row there is no live tick for it. A quote printed beside that
       // value would belong to the other instrument, so the contract refuses to carry one.
       const indexQuote = value.quotes.index as { state?: unknown } | undefined
-      if (value.indexSource !== 'proxy' && indexQuote?.state !== 'missing') return
+      if (value.indexSource !== 'proxy' && indexQuote?.state !== 'missing') return reject('reading')
       for (const asset of policy.assets) {
         const tail = value.forming[asset]
         if (tail === null) continue
@@ -390,7 +476,7 @@ export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | un
         const curve = value.curves[asset] as { returnPercent: number | null }[]
         if (value.sourceState !== 'live' || !record(quote) || quote.state !== 'live' || curve[0].returnPercent !== 0 || curve.at(-1)?.returnPercent === null) return
         if (range === '7d' || !exact(tail, ['at', 'returnPercent']) || !utc(tail.at) || typeof tail.returnPercent !== 'number' ||
-          !Number.isFinite(tail.returnPercent) || Date.parse(tail.at) <= Date.parse(value.analysisEnd as string) || Date.parse(tail.at) > Date.parse(value.asOf as string)) return
+          !Number.isFinite(tail.returnPercent) || Date.parse(tail.at) <= Date.parse(value.analysisEnd as string) || Date.parse(tail.at) > Date.parse(value.asOf as string)) return reject('reading')
       }
       for (const quote of Object.values(value.quotes)) {
         if (!record(quote)) return
@@ -400,6 +486,11 @@ export function parseCrossAssetSnapshot(value: unknown): CrossAssetSnapshot | un
           !Number.isFinite(Number(quote.price)) || Number(quote.price) <= 0 ||
           ![quote.tradedAtMs, quote.receivedAtMs].every(at => Number.isSafeInteger(at) && (at as number) >= 0)) return
       }
+    } else if (value.lastClosed !== undefined && !lastClosedMap(value.lastClosed, value.analysisEnd as string)) {
+      // Historical snapshots carry the map too, held to the shape the current branch just applied — one
+      // validator, not a second looser one. A snapshot from a main process that predates the field sends
+      // nothing and still passes; the row then prints `—` with its reason rather than a level.
+      return reject('keys')
     }
     if (new TextEncoder().encode(JSON.stringify(value)).byteLength > policy.maxSnapshotBytes) return
     return structuredClone(value) as CrossAssetSnapshot

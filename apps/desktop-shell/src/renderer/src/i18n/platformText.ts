@@ -1,6 +1,14 @@
 import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import type {
+  ChannelRuntimeAuditCopyKey,
+  ChannelRuntimeLifecycleCopyKey,
+  ChannelTelegramFailureCopyKey
+} from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import type { ChannelFailureCode } from '@platform/ai/agent-platform/channels/ChannelManagementContracts'
+import type { ChannelManagementAuditCopyKey } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
+import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 export type PlatformText = {
   brand: {
@@ -55,7 +63,6 @@ export type PlatformText = {
     tools: string
     skills: string
     agents: string
-    contributionLoadFailed: string
     panelActions: string
     /** 同一区域内多个面板时，标签条这组的可访问名（面板标题由注册表给，不走键）。 */
     panelTabs: string
@@ -68,6 +75,8 @@ export type PlatformText = {
     panelResetSize: string
     panelUnsupported: string
     panelFallback: string
+    /** 分离窗拿不到注册表时的类型词：页面。不带序号，标题必须稳定。 */
+    pageFallback: string
     panelResize: string
     panelInspector: string
     inspectorTitle: string
@@ -206,6 +215,143 @@ export type PlatformText = {
     channelCatalogReason: Record<'supported' | 'planned' | 'blockedImplemented' | 'blockedUnimplemented', string>
     channelConversationKind: Record<'direct' | 'group' | 'channel', string>
     channelState: Record<'credential-missing' | 'configuration-ready' | 'disabled' | 'deleting' | 'runtime-ready', string>
+    /** 频道设置页：平台显示名（列表与标题两处都读它，不各写一份）。 */
+    /** 「＋ 添加」按钮。 */
+    channelAdd: string
+    /** 每个平台的一句话用途（标题下方那一行）。按平台取，不许拿一个平台的句子套另一个。 */
+    channelPlatformPurpose: Record<'telegram' | 'feishu' | 'qq' | 'wechat' | 'discord' | 'slack', string>
+    /** 没接入的平台点进去只写这一句，不画添加按钮、不带红字。 */
+    channelUnsupportedPane: string
+    /** 适配器在、但还没通过真机验收：说清缺什么，不画添加按钮。 */
+    channelNeedsEvidence: string
+    /** 启用不再要求先交验收记录：点一下，应用现场检查连接。 */
+    channelEnableSelfCheckHint: string
+    /**
+     * 失败原因表（启用自检 + 新建/编辑/删除 + 运行时启动共用）：码 → 大白话，不出现内部码。
+     *
+     * 键的类型是平台那份闭集（`CHANNEL_FAILURE_CODES`）：**少一个就编译不过**。
+     * 上一版用 `Record<string, string>`，漏了新码也一路绿，用户看到的是「暂时说不出具体原因」。
+     */
+    channelFailureReason: Readonly<Record<ChannelFailureCode, string>>
+    /** 启用/自检这条路上表里没有的码：说「没通过、说不出具体原因」，不把空值包装成解释。 */
+    channelFailureReasonUnknown: string
+    /** 其它操作（新建、编辑、删除、启停）上表里没有的码：同一件事，换个说法。 */
+    channelOperationFailedUnknown: string
+    /** 行内四个动作的读屏名与提示。 */
+    channelLogs: string
+    channelEdit: string
+    /** Token 占位：整个字段只有星号，不露任何真值字符。 */
+    channelTokenMask: string
+    /** **没有凭据时不许写星号**：星号会被读成「有值但看不见」，那是在替空值发言。 */
+    channelTokenNone: string
+    /** 编辑弹层顶部：还没有凭据时的那一句（不是「当前已存」）。 */
+    channelTokenCurrentNone: string
+    /** 还没有凭据时输入框下面的提示：「留空＝不修改」在这里是假话。 */
+    channelTokenEnterHint: string
+    /** 正在输入的新 Token 可以临时看一眼（旧值永不可见、不可复制）。 */
+    channelTokenVisibility: string
+    /** `unavailable` 档：**存过但读不出来**，与「从来没存」是两件事，必须两句话。 */
+    channelTokenUnavailable: string
+    channelTokenUnavailableHint: string
+    channelTokenVisibleHint: string
+    /** 日志面板在没有数据源时的唯一一句话。 */
+    channelLogsEmpty: string
+    /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
+    channelEnableSwitch: string
+    /** 行内的「发送测试消息」：真发一次，回执三态就地显示。 */
+    channelTestSend: string
+    /** 行内的「查看这个频道的会话」：跳到这条频道绑定的助手，再打开那条会话。 */
+    channelOpenConversation: string
+    /** 「查看会话」打不开时的一句：两种原因都收在这一句里，不假装知道是哪一种。 */
+    channelOpenConversationFailed: string
+    /** 会话列表这次读不到：与「确实没有会话」是两件事——入口换成重试图标，这句进悬停与读屏。 */
+    channelConversationUnreadable: string
+    /** 重试还读不到：给一次 toast，入口保持可重试。 */
+    channelConversationUnreadableAgain: string
+    /** toast 上的重试动作。 */
+    channelConversationRetry: string
+    channelTestMessageBody: string
+    channelTestAccepted: string
+    channelTestUnconfirmed: string
+    channelTestNotReady: string
+    channelTestNoTarget: string
+    channelTestAmbiguousTarget: string
+    channelTestRejected: string
+    /** 编辑弹层的六字段标签；新建与编辑共用同一套。 */
+    channelFieldWorkspace: string
+    channelFieldAllowedChats: string
+    channelFieldPermissionMode: string
+    channelWorkspaceDefault: string
+    /** 下拉最后一项：调系统选目录窗口，选完登记成工作区并选中它。 */
+    channelWorkspaceChoose: string
+    /** 选目录/登记失败：如实说没成功，不静默退回「不使用工作目录」。 */
+    channelWorkspaceFailed: string
+    channelPermissionInherit: string
+    /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
+    channelFieldNotSavable: string
+    /** 编辑弹层里 Token：旧值不可读；留空表示不修改，输入新值表示整串替换。 */
+    channelTokenReadOnly: string
+    channelTokenReplaceHint: string
+    /** 编辑弹层顶部：当前已存的掩码 + 最近更新时间，用来确认「改没改成功」。 */
+    channelTokenCurrent: string
+    /** 保存次数（revision）：合法且不会说谎，别写成时间。 */
+    channelTokenRevision: string
+    /** 保存凭据后回读确认：没存上、没填、读不到，三句话三个意思，都不能说成「保存成功」。 */
+    channelCredentialRequired: string
+    channelCredentialSaveFailed: string
+    channelCredentialUnverified: string
+    /** 新建成功但 Token 没落库：先说频道已经建好，免得用户以为要再点一次「创建」。 */
+    channelCreatedWithoutCredential: string
+    /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
+    channelPermissionDefault: string
+    channelPermissionAcceptEdits: string
+    channelPermissionBypass: string
+    channelPermissionPlan: string
+    /** 工作目录：读者已经指定过一个工作区时，那一项的名字（本版没有工作区目录接口，只能回显它）。 */
+    channelWorkspaceCurrent: string
+    /** 允许的会话 ID：留空在「没有显式名单」的频道上等于允许所有，风险句要整块可见。 */
+    channelAllowedChatsHint: string
+    channelAllowedChatsRisk: string
+    /** 列表为空、且这个频道确实没有显式名单：当前状态就是「允许所有」。 */
+    channelAllowedChatsAll: string
+    /** 列表为空、但这个频道已有显式名单：留空不等于允许所有。 */
+    channelAllowedChatsPolicies: string
+    /** 判不出来：写「未知」，不许默认成其中一种。 */
+    channelAllowedChatsUnknown: string
+    /** 左侧设置导航的分组标题（模型与助手 / 系统与数据 / 通知与频道 / 其他）。 */
+    settingsNavGroupModels: string
+    settingsNavGroupSystem: string
+    settingsNavGroupNotify: string
+    settingsNavGroupOther: string
+    /** 日志面板：一条记录的三种类别，正文必须带前缀，读者一眼能分。 */
+    channelLogsTitle: string
+    channelLogsCopy: string
+    channelLogsRetry: string
+    channelLogsEmptyTitle: string
+    channelLogsEmptyHint: string
+    channelLogsReadFailed: string
+    channelLogsReadFailedHint: string
+    channelLogsFooter: string
+    /** 面板标题下那一行：时间口径声明；时区由 `formatShellTimeZoneLabel` 算，不写死。 */
+    channelLogsTimeZone: string
+    /** 闭集里查不到的码：只写这一句，原始码不上屏。 */
+    channelLogsUnknownCode: string
+    channelLogOperationPrefix: string
+    /** 启用失败那一行不写「启用了推送」：改成这个前缀 + 同一套原因人话，日志里能追到「为什么没开」。 */
+    channelLogEnableFailedPrefix: string
+    channelLogRuntimePrefix: string
+    /** 起停不算异常：单独一个「运行：」前缀。 */
+    channelLogLifecyclePrefix: string
+    channelLogDeliveryPrefix: string
+    /** 「交出去了、没拿到回执」不是失败：单独一类前缀，别并入「发送失败」。 */
+    channelLogUncertainPrefix: string
+    /** 闭集：动作码 → 人话。查不到走 `channelLogsUnknownCode`。 */
+    channelLogActionText: Readonly<Record<ChannelManagementAuditCopyKey, string>>
+    channelLogRuntimeText: Readonly<Record<ChannelRuntimeAuditCopyKey, string>>
+    channelLogLifecycleText: Readonly<Record<ChannelRuntimeLifecycleCopyKey, string>>
+    /** 镜像来的 Telegram 运行失败：九条以内，全部可读，不出现平台术语。 */
+    channelLogTelegramFailureText: Readonly<Record<ChannelTelegramFailureCopyKey, string>>
+    channelLogDeliveryText: Readonly<Record<string, string>> & { unknownAfterSend: string }
   }
   taskAutomation: {
     title: string
@@ -427,6 +573,8 @@ export type PlatformText = {
       sourcePlatform: string
       sourceProduct: (name: string) => string
       productGroupsTitle: string
+      /** 产品助手分组的兜底名：产品摘要里没有名字时用它，**绝不用 productId**（契约 v2.41 第三档）。 */
+      productGroupFallback: string
       detailPromptTitle: string
       addToAssistant: string
       emptyTitle: string
@@ -651,6 +799,8 @@ export type PlatformText = {
     /** 一次检测 run 结束后的汇总（成功 / 失败 / 跳过）。 */
     detectionRunSummary: (ok: number, failed: number, skipped: number) => string
     providerNames: Record<string, string>
+    /** 供应商没有名字时的兜底说法：**绝不用 providerId**（契约 v2.41 第三档；id 是我们生成的 `provider-<时间戳>`）。 */
+    providerFallback: string
     modelRetiredTag: string
     /** PLAT-80：模型服务页顶部「默认模型」区块。 */
     defaultModelAssistant: string
@@ -1026,8 +1176,81 @@ export type PlatformText = {
     system: string
     light: string
     dark: string
+    /**
+     * 设置页「版本」那一段。**键只放这里**，不开第二套命名（同一页面两套词，以后谁找文案都得猜）。
+     * 版本号、时刻都不进键：数字由数据填，时刻由 `formatShellInstant` 按读者时区格式化后传入。
+     */
+    version: {
+      current: string
+      latest: string
+      unknown: string
+      check: string
+      justChecked: string
+      autoCheck: string
+      autoHint: string
+      autoOffLine: string
+      unavailableLine: string
+      lastCheckedAt: (time: string) => string
+      pill: {
+        upToDate: string
+        available: string
+        unavailable: string
+        checking: string
+        notChecked: string
+        autoOff: string
+      }
+    }
+  }
+  /**
+   * 关于我们页。链接的动作字与失败句都在这里：**五颗按钮共用一个失败句**，
+   * 不带目的地（点了「官网」失败却提示去 Releases，是错的）。
+   */
+  about: {
+    title: string
+    tagline: string
+    settingsWithUpdate: string
+    /**
+     * 更新块里那颗唯一动作按钮——它不属于链接块，键就挂在 action 下。
+     *
+     * 文案是**用户拍过的字面**（2026-11-03）：页内「立即更新」是唯一执行按钮；
+     * 顶栏那颗只负责发现，文字是陈述句「有新版本 {版本}」，点它进关于页。
+     * 改这几个字要走用户确认，不许直接改：改文案的人通常连用例里的期望值一起改，
+     * 测试仍然是绿的。
+     */
+    action: {
+      update: string
+      /** 顶栏按钮的读屏名（无版本号时）：说出动作——打开关于我们。 */
+      updateAvailable: string
+      /** 顶栏按钮的可见文字：**带目标版本号**，陈述句，不是命令句。 */
+      updateToVersion: (version: string) => string
+      /** 取不到版本号（或串太长塞不下）时的可见文字，不硬拼一个空版本号。 */
+      updateNoVersion: string
+      /** 上面那条的读屏名：**以可见文字开头**（label-in-name），后面再补动作。 */
+      updateToVersionLabel: (version: string) => string
+    }
+    links: {
+      changelog: string
+      docs: string
+      site: string
+      feedback: string
+      actionView: string
+      actionFeedback: string
+      openFailed: string
+    }
+    notes: {
+      title: string
+      /** 内容被截到上限时那一行：他看的是开头，也知道去哪儿看全。 */
+      truncated: string
+    }
   }
   notifications: {
+    deliveryReason: {
+      desktopDisabled: string
+      pushUnavailable: string
+      systemUnsupported: string
+      handedToSystem: string
+      sendFailedUnknown: string
+    }
     channelsDescription: string
     scopeNote: string
     desktopEnabled: string
@@ -1055,6 +1278,10 @@ export type PlatformText = {
     desktopPermissionDenied: string
     desktopPermissionUnknown: string
     desktopPreferenceKept: string
+    /** 通知设置页「发送到通道」行的四种不可投递原因：按码查表，屏幕不出现码（判序：适配器→凭据→启用态→目标）。 */
+    channelBlockedAdapterNotSupported: string
+    channelBlockedCredentialMissing: string
+    channelBlockedNotEnabled: string
     sendTestHint: string
     sendTestSent: string
     sendTestToastOff: string
@@ -1068,7 +1295,8 @@ export type PlatformText = {
     centerMergedCount: (count: string) => string
     centerEmptyHint: string
     centerStaleNotice: string
-    centerRetry: string
+    centerReload: string
+    centerUnknownHint: string
     channelsHeading: string
   }
   webSearch: {
@@ -1378,10 +1606,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tools: '工具',
       skills: '技能',
       agents: '智能体',
-      contributionLoadFailed: '页面加载失败',
       panelActions: '面板操作', panelTabs: '面板标签', panelClose: '关闭面板', panelReopen: '重新打开面板', panelEmbedded: '嵌入页面',
       panelDockRight: '停靠右侧', panelDockBottom: '停靠底部', panelDetach: '分离窗口', panelResetSize: '恢复默认尺寸',
-      panelUnsupported: '当前空间不足', panelFallback: '面板', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
+      panelUnsupported: '当前空间不足', panelFallback: '面板', pageFallback: '页面', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
       inspectorDraft: '检查器草稿', inspectorSelection: '检查器选择', inspectorSelect: '选择检查项', inspectorSelected: '已选择',
       panelModeUnsupported: '此面板不支持该位置', panelCapabilityMissing: '当前版本不支持此能力', panelReturnToPage: '返回页面',
       panelShowPanel: '显示面板', panelCommandRejected: '操作被拒绝，面板状态未改变', panelCommandFailed: '操作失败，请重试',
@@ -1414,7 +1641,190 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelStaleNotice: '没能更新，下面是上次读到的通道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
+      notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '广播频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' },
+      channelAdd: '添加',
+      channelPlatformPurpose: {
+        telegram: '通过 Telegram 机器人用长轮询接收和回复消息。',
+        feishu: '通过飞书机器人接收和回复消息。',
+        qq: '通过 QQ 机器人接收和回复消息。',
+        wechat: '通过微信机器人接收和回复消息。',
+        discord: '通过 Discord 机器人接收和回复消息。',
+        slack: '通过 Slack 机器人接收和回复消息。'
+      },
+      channelUnsupportedPane: '这一版还接不了，先把 Telegram 接上。',
+      channelNeedsEvidence: '这个平台还没有通过真机验收；不影响你启用，应用会现场检查一次连接。',
+      channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
+      channelFailureReason: Object.freeze({
+      'adapter-not-supported': '这个平台还没接上，这一版启用不了',
+      'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
+      'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
+      'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
+      'channel-credential-missing': '还没有存 Token，先在「编辑」里填一把再启用',
+      'channel-credential-mutation-incomplete': '上一次更换没走完，重新打开编辑保存一次就能接着来',
+      'channel-credential-mutation-unattributed': '上一次更换没记到发起者，重新保存一次把它收拾干净',
+      'channel-credential-recovery-exhausted': '这把凭据反复恢复失败，重新填一把新的',
+      'channel-credential-unavailable': '存过，但读不出来了——重新保存一次会换一把新的',
+      'channel-delete-pending': '这条频道正在删除，等它删完再改',
+      'channel-management-metadata-failed': '这条频道的状态没存上，可以再试一次',
+      'channel-management-recovery-pending': '上一次的更换还在收尾，等一会儿再试',
+      'channel-not-found': '这条频道已经不在了，刷新一下列表',
+      'channel-policy-invalid': '访问策略填得不对，检查一下再存',
+      'channel-runtime-generation-stale': '频道状态刚变过，这次没有生效，再点一次就好',
+      'channel-runtime-owner-conflict': '启用时这条频道正被另一处改动抢着，稍等一秒再试一次',
+      'channel-runtime-owner-lost': '启用过程中运行许可被别的操作抢走了，再点一次就好',
+      'channel-runtime-owner-missing': '这次启用已经没有对应的运行许可了，再点一次就好',
+      'channel-smoke-failed': '这次没有通过检查',
+      'conversation-session-missing': '这条对话还没绑定会话，先让它收到一条消息',
+      'session-selection-unavailable': '会话列表现在打不开，稍后再试',
+      'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
+      'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
+      'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
+      'telegram-proxy-unavailable': '代理连不上：检查代理设置之后再试',
+      'telegram-rate-limited': '请求太频繁被限流，等一会儿再试',
+      'telegram-runtime-start-failed': '连接没能启动起来——具体原因写在这次运行的日志里',
+      }),
+      // 事实 + 下一步。原因不明这件事不解释（用户要的是下一步）。
+      channelFailureReasonUnknown: '这次没通过，再试一次',
+      channelOperationFailedUnknown: '这次没有成功，具体原因没说清楚，可以再试一次',
+      channelLogs: '日志',
+      channelEdit: '编辑',
+      channelTokenMask: '********',
+      channelTokenNone: '还没有 Token',
+      channelTokenCurrentNone: '这个频道还没有存 Token',
+      channelTokenEnterHint: '这个频道还没有 Token：填一个再保存，留空保存不会存上任何东西。',
+      channelTokenVisibility: '显示或隐藏刚输入的 Token',
+      channelTokenUnavailable: '存过，但读不出来了——重新保存一次会换一把新的',
+      channelTokenUnavailableHint: '现在这把读不出来：填一把新的再保存，会换掉它。',
+      channelTokenVisibleHint: '仅本机显示，关掉就恢复点号。',
+      channelLogsEmpty: '这个频道还没有记录',
+      channelEnableSwitch: '启用这个频道',
+      channelTestSend: '发送测试消息',
+      channelOpenConversation: '查看这个频道的会话',
+      channelOpenConversationFailed: '这条对话还没绑定会话，或会话列表暂时打不开。',
+      channelConversationUnreadable: '会话列表读不到，点一下再试一次',
+      channelConversationUnreadableAgain: '会话列表还是读不到，稍后再试',
+      channelConversationRetry: '再试一次',
+      channelTestMessageBody: '来自观潮的一条测试消息：收到它说明这个频道能把消息发到手机。',
+      // `{target}` 是会话名（`Telegram · 贾维斯`）或平台名（读不到名字时）。
+      // **只给事实**：发了没、发给谁。「已发给」而不是「已送达」——后者我们证明不了，
+      // 但这件事靠用词表达，不靠一句免责长句。
+      channelTestAccepted: '已发给 {target}',
+      channelTestUnconfirmed: '已发给 {target}，未拿到回执',
+      channelTestNotReady: '这条频道没在运行，先启用',
+      // 界面上**没有「绑定」入口**：不许把人指到做不到的地方（我们的红线）。
+      // 真实可做的下一步是「先在手机上发一条」——入站到达且还没有目标时会自动记下这个对话。
+      channelTestNoTarget: '先在手机上给这个机器人发一条消息，它就会自动记下这个对话',
+      // 同样不许指路到没有入口的地方：界面里现在没有「选一个对话」的操作，只能如实说清限制。
+      channelTestAmbiguousTarget: '绑了不止一个对话，这条没有发',
+      channelTestRejected: '通道拒收了，原因见日志',
+      channelFieldWorkspace: '工作目录',
+      channelFieldAllowedChats: '允许的会话 ID',
+      channelFieldPermissionMode: '频道权限模式',
+      channelWorkspaceDefault: '不使用工作目录',
+      channelWorkspaceChoose: '选择文件夹…',
+      channelWorkspaceFailed: '没能用上这个文件夹，可以再试一次',
+      channelPermissionInherit: '继承助手设置',
+      channelFieldNotSavable: '这一版还保存不了这一项',
+      channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
+      channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
+      channelTokenCurrent: '当前已存：{mask}',
+      channelTokenRevision: '第 {count} 次保存',
+      channelCredentialRequired: '这条频道还没有 Token，需要填一个',
+      channelCredentialSaveFailed: 'Token 没存上，请重试',
+      channelCredentialUnverified: '没确认到是否存上，重开弹层看一下',
+      channelCreatedWithoutCredential: '频道建好了，但 Token 没存上——在「编辑」里重新填一次',
+      channelPermissionDefault: '每次都要问',
+      channelPermissionAcceptEdits: '自动接受修改',
+      channelPermissionBypass: '完全放行',
+      channelPermissionPlan: '只做计划',
+      channelWorkspaceCurrent: '当前工作区',
+      channelAllowedChatsHint: '多个会话 ID 用逗号或换行分隔。',
+      channelAllowedChatsRisk: '留空＝允许所有会话——任何人都能用这个机器人。',
+      channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
+      channelAllowedChatsPolicies: '这个频道已有显式放行名单：留空不会放开所有人。',
+      channelAllowedChatsUnknown: '无法确认这个频道是否已有放行名单，留空的作用未知。',
+      settingsNavGroupModels: '模型与助手',
+      settingsNavGroupSystem: '系统与数据',
+      settingsNavGroupNotify: '通知与频道',
+      settingsNavGroupOther: '其他',
+      channelLogsTitle: '{name} — 日志',
+      channelLogsCopy: '复制',
+      channelLogsRetry: '重试',
+      channelLogsEmptyTitle: '这个频道还没有记录。',
+      channelLogsEmptyHint: '开启、改动、发送失败都会记在这里。',
+      channelLogsReadFailed: '日志没读出来。',
+      channelLogsReadFailedHint: '已有的记录不会因此丢失，这次只是没读到。',
+      channelLogsFooter: '记录连接的启动与停止、引起中断的错误，以及最近一次发送失败；不记录每一次轮询。',
+      channelLogsTimeZone: '时间均为 {zone}',
+      channelLogsUnknownCode: '没有更多说明',
+      channelLogOperationPrefix: '操作：',
+      channelLogEnableFailedPrefix: '启用没有通过——',
+      channelLogRuntimePrefix: '运行异常：',
+      channelLogLifecyclePrefix: '运行：',
+      channelLogDeliveryPrefix: '发送失败：',
+      channelLogUncertainPrefix: '不确定：',
+      channelLogActionText: Object.freeze({
+        actionCreate: '创建了这个频道',
+        actionUpdate: '修改了频道设置',
+        actionProvision: '写入了凭据',
+        actionRotate: '更换了凭据',
+        actionDisable: '停用了推送',
+        actionRequestEnable: '启用了推送',
+        actionRestart: '重启了运行时',
+        actionTargetSet: '调整了接收消息的会话',
+        actionPolicyCreate: '添加了一条放行名单',
+        actionPolicyDelete: '删除了一条放行名单',
+        actionDelete: '删除了这个频道'
+      }),
+      channelLogRuntimeText: Object.freeze({
+        runtimePolicyDenied: '这个会话不在放行名单里，消息没有处理',
+        runtimeMentionRequired: '群里没有 @ 机器人，已按规则忽略',
+        runtimeContentRejected: '这条消息的内容类型不支持，已跳过',
+        runtimeReceiptWithoutWorkItem: '消息收到了，但对应的任务不见了',
+        runtimeStaleGeneration: '旧的一次运行已经过期，被拒绝',
+        runtimeAgentMissing: '绑定的助手不在了，收不到消息',
+        runtimeWorkCapacityExhausted: '待处理的消息太多，暂停接收',
+        runtimeLifecycleFenced: '运行的代际变了，这次处理被放弃',
+        runtimeInboundFailed: '收到的消息没能处理成功',
+        runtimeConversationSwitched: '这个对话已切换到新助手的会话'
+      }),
+      channelLogLifecycleText: Object.freeze({
+        runtimeStarted: '连接已启动',
+        runtimeStopped: '连接已停止'
+      }),
+      channelLogTelegramFailureText: Object.freeze({
+        telegramConflict: '另一个程序也在用这个机器人，收消息被中断',
+        telegramProviderRejected: '机器人凭据被平台拒绝，需要重新填 Token',
+        telegramNetworkUnavailable: '网络连不上，收消息中断',
+        telegramProxyUnavailable: '代理这一跳没连上，收消息中断',
+        telegramRuntimeStartFailed: '连接启动失败，收消息没起来',
+        channelRuntimeOwnerMissing: '这次启用已经没有对应的运行许可了，再点一次',
+        channelRuntimeGenerationStale: '频道状态刚变过，这一次没有生效，再点一次',
+        channelRuntimeOwnerLost: '启用过程中运行许可被别的操作抢走了，再点一次',
+        telegramRuntimeEvidenceMissing: '缺少真机验证记录，所以没有启动',
+        telegramRateLimited: '请求太频繁，被平台限流，稍后会自动重试',
+        telegramPollFailed: '这一次取消息失败，稍后会自动重试',
+        telegramUpdateInvalid: '收到一条看不懂的消息，已跳过'
+      }),
+      channelLogDeliveryText: Object.freeze({
+        // 具体码优先：有它就不再显示下面那句兜底。
+        'delivery-provider-rejected': '平台拒绝了这条消息（可能是找不到这个会话）',
+        'delivery-target-invalid': '目标会话的 ID 不合法，一个请求都没发出去',
+        'delivery-rate-limited': '被平台限流了，等一会儿会自动重试',
+        'delivery-host-unavailable': '通道宿主没在运行，这条没有发出去',
+        'channel-delivery-unavailable': '通道暂时不可用，这条没有发出去',
+        'delivery-target-disabled': '接收的目标已停用，这条没有发出去',
+        'delivery-no-target-bound': '还没有接收消息的对话，这条没有发出去',
+        'delivery-not-authorized': '没有权限发到这条对话，这条没有发出去',
+        'delivery-permission-denied': '没有权限发到这条对话，这条没有发出去',
+        // 兜底：只有拿不到具体码时才会出现，别把它当解释。
+        'channel-delivery-failed': '这次没有发出去，具体原因没有记录',
+        'delivery-send-lease-expired': '发送没有回音，按未确认处理',
+        'delivery-lifecycle-fenced': '运行的代际变了，这次发送被放弃',
+        'channel-rejected': '通道拒收了这条',
+        unknownAfterSend: '已交给通道，但没拿到回执'
+      })
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -1423,7 +1833,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       scheduledTaskDelivery: '我的定时任务投递',
       resourceJobRuns: '资源任务最近一次运行',
       resourceJobRunsEmpty: '当前没有已注册的资源任务。',
-      healthScopeNote: '投递=定时任务把消息投递到通道/通知；运行=产品资源任务最近一次执行。两者口径不同，分别统计。',
+      healthScopeNote: '投递=定时任务把消息投递到频道/通知；运行=产品资源任务最近一次执行。两者口径不同，分别统计。',
       myTasks: '我的定时任务',
       columns: { name: '名称', status: '状态', schedule: '调度', nextRun: '下次运行', lastResult: '最近结果', actions: '操作', source: '来源', registration: '注册状态', lastRun: '最近运行' },
       all: '全部', searchTasks: '搜索任务名称', tasksLoading: '正在加载定时任务…', tasksLoadFailed: '定时任务加载失败。', loadMore: '加载更多',
@@ -1435,8 +1845,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
       deliverySkipReason: {
-        'delivery-no-target-bound': '这条任务还没绑定通道，去「通道」里绑定一个就会开始投递',
-        'delivery-target-disabled': '绑定的通道已停用，重新启用后才会投递',
+        'delivery-no-target-bound': '这条任务还没绑定频道，去「频道」里绑定一个就会开始投递',
+        'delivery-target-disabled': '绑定的频道已停用，重新启用后才会投递',
         'delivery-empty-output': '这次运行没有可投递的内容',
         'delivery-not-authorized': '投递身份校验未通过，已按安全策略跳过',
         'delivery-retry-not-permitted': '这次投递不满足重试条件，不再重试',
@@ -1446,7 +1856,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       // 说的是「这次改动有没有生效」，不是「谁接受了谁」：与左侧动作词连起来读成一句事实
       // （「创建 · 已生效」「暂停 · 未生效」）。两种取值都只是平台没让改动落地，不是失败，档位 muted。
       auditAccepted: '已生效', auditRejected: '未生效',
-      auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
+      auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递频道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
       resourceBridgeMissing: '缺少接口，应用可能未重启；请重启应用后重试。', resourceLoadTimeout: '读取资源任务超时，请重试。',
       resourceEmptyBody: '启用某个产品的自动采集能力后，这里会显示它的调度、注册状态、下次运行与最近一次结果。未注册 ≠ 出错，通常代表该能力未启用。',
@@ -1593,6 +2003,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         sourcePlatform: '平台',
         sourceProduct: (name) => `产品：${name}`,
         productGroupsTitle: '产品助手',
+        productGroupFallback: '这个产品',
         detailPromptTitle: '提示词',
         addToAssistant: '添加到助手',
         emptyTitle: '没有匹配的助手',
@@ -1649,6 +2060,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: '供应商',
+      providerFallback: '供应商',
       providersStaleNotice: '没能更新，下面是上一次读到的供应商列表',
       providerDetail: '供应商配置',
       addProvider: '新增供应商',
@@ -2142,9 +2554,66 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: '跟随系统',
       light: '浅色',
-      dark: '深色'
+      dark: '深色',
+      version: {
+        current: '当前版本',
+        latest: '最新版本',
+        unknown: '未知',
+        check: '检查更新',
+        justChecked: '刚查过',
+        autoCheck: '启动时检查更新',
+        // 原来那句「同一个 UTC 自然日最多查一次；应用不会自己下载或安装。」是自证清白式的解释，
+        // 用户两次说它是废话；现在只留最短的事实，和开关排在同一行右端（见 VersionCheckRow）。
+        autoHint: '每天最多一次',
+        autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
+        // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
+        // 与「上次检查：{时刻}」合成一行（时间在前、`·` 连接）：药丸已经说了「暂时查不到」，
+        // 这句要补的是「这不代表没有新版本」——丢了它就是把「拿不到」说成「没有」。
+        unavailableLine: '这不代表没有新版本。',
+        lastCheckedAt: (time) => `上次检查：${time}`,
+        pill: {
+          upToDate: '已是最新',
+          available: '有新版本',
+          unavailable: '暂时查不到',
+          checking: '正在检查',
+          notChecked: '还没检查',
+          autoOff: '未开启自动检查'
+        }
+      }
+    },
+    about: {
+      title: '关于我们',
+      tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
+      settingsWithUpdate: '设置，有新版本可用',
+      action: {
+        update: '立即更新',
+        updateAvailable: '有新版本可用，打开关于我们',
+        updateToVersion: (version) => `有新版本 ${version}`,
+        updateNoVersion: '有新版本',
+        updateToVersionLabel: (version) => `有新版本 ${version}，打开关于我们`
+      },
+      links: {
+        changelog: '更新日志',
+        docs: '帮助文档',
+        site: '官网',
+        feedback: '反馈问题',
+        actionView: '查看',
+        actionFeedback: '反馈',
+        openFailed: '打不开浏览器，可以稍后再试。'
+      },
+      notes: {
+        title: '更新说明',
+        truncated: '正文过长，已显示开头部分；完整内容见更新日志'
+      }
     },
     notifications: {
+      deliveryReason: {
+        desktopDisabled: notificationCopy['en-US']['notification.deliveryReason.desktopDisabled'],
+        pushUnavailable: notificationCopy['en-US']['notification.deliveryReason.pushUnavailable'],
+        systemUnsupported: notificationCopy['en-US']['notification.deliveryReason.systemUnsupported'],
+        handedToSystem: notificationCopy['en-US']['notification.deliveryReason.handedToSystem'],
+        sendFailedUnknown: notificationCopy['en-US']['notification.deliveryReason.sendFailedUnknown'],
+      },
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
@@ -2180,6 +2649,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
       desktopPermissionUnknown: '暂时无法确认系统是否放行',
       desktopPreferenceKept: '这里的选择会被保留，系统放行后生效。',
+      channelBlockedAdapterNotSupported: '这一类频道不能用来发通知，换一个已接入的类型。',
+      channelBlockedCredentialMissing: '这个频道还没填凭据，在频道设置里填好才能发消息。',
+      channelBlockedNotEnabled: '这个频道没有启用，或者没有启动起来，在频道设置里启用它。',
       sendTestHint:
         '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
       centerRecordedGroup: '仅记录',
@@ -2187,8 +2659,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerCollapse: '收起',
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。',
-      centerStaleNotice: '没能刷新，下面是上一次读到的列表。',
-      centerRetry: '重试'
+      centerStaleNotice: '刚才没能刷新，下面是上次读到的内容。',
+      centerReload: '重新加载',
+      centerUnknownHint: '批量操作先不可用：通知现在读不到。',
     },
     webSearch: {
       title: '网页搜索',
@@ -2490,10 +2963,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tools: 'Tools',
       skills: 'Skills',
       agents: 'Agents',
-      contributionLoadFailed: 'Failed to load page',
       panelActions: 'Panel actions', panelTabs: 'Panel tabs', panelClose: 'Close panel', panelReopen: 'Reopen panel', panelEmbedded: 'Embed',
       panelDockRight: 'Dock right', panelDockBottom: 'Dock bottom', panelDetach: 'Detach window', panelResetSize: 'Reset size',
-      panelUnsupported: 'Not available at this size', panelFallback: 'Panel', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',
+      panelUnsupported: 'Not available at this size', panelFallback: 'Panel', pageFallback: 'Page', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',
       inspectorDraft: 'Inspector draft', inspectorSelection: 'Inspector selection', inspectorSelect: 'Select item', inspectorSelected: 'Selected',
       panelModeUnsupported: 'This panel does not support that position', panelCapabilityMissing: 'Not supported in this version', panelReturnToPage: 'Back to page',
       panelShowPanel: 'Show panel', panelCommandRejected: 'The action was rejected; the panel state is unchanged', panelCommandFailed: 'The action failed. Try again',
@@ -2526,7 +2998,181 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
-      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
+      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Broadcast channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' },
+      channelAdd: 'Add',
+      channelPlatformPurpose: {
+        telegram: 'Receive and reply through a Telegram bot using long polling.',
+        feishu: 'Receive and reply through a Lark bot.',
+        qq: 'Receive and reply through a QQ bot.',
+        wechat: 'Receive and reply through a WeChat bot.',
+        discord: 'Receive and reply through a Discord bot.',
+        slack: 'Receive and reply through a Slack bot.'
+      },
+      channelUnsupportedPane: 'This version cannot connect it yet — start with Telegram.',
+      channelNeedsEvidence: 'This platform has no real-device acceptance record yet; that does not block you — the app checks the connection when you enable it.',
+      channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
+      channelFailureReason: Object.freeze({
+      'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
+      'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
+      'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
+      'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',
+      'channel-credential-missing': 'no token is stored yet; add one in Edit and enable again',
+      'channel-credential-mutation-incomplete': 'the last replacement did not finish; open Edit and save once more to continue',
+      'channel-credential-mutation-unattributed': 'the last replacement was not attributed; save once more to clean it up',
+      'channel-credential-recovery-exhausted': 'this credential kept failing to recover; enter a new one',
+      'channel-credential-unavailable': 'a token was stored, but it cannot be read any more — saving again replaces it',
+      'channel-delete-pending': 'this channel is being deleted; wait for that to finish',
+      'channel-management-metadata-failed': 'this channel state was not stored; retry',
+      'channel-management-recovery-pending': 'the last replacement is still finishing; try again in a moment',
+      'channel-not-found': 'this channel is gone now; refresh the list',
+      'channel-policy-invalid': 'the access policy is not valid; check it and save again',
+      'channel-runtime-generation-stale': 'the channel state changed just now, so this did not take effect; try again',
+      'channel-runtime-owner-conflict': 'another change is holding this channel right now; wait a second and retry',
+      'channel-runtime-owner-lost': 'another action took the run permit while enabling; try again',
+      'channel-runtime-owner-missing': 'this enable no longer holds a runtime permit; try again',
+      'channel-smoke-failed': 'the check did not pass',
+      'conversation-session-missing': 'this conversation has no session yet; send it one message first',
+      'session-selection-unavailable': 'the session list cannot be opened right now; try again shortly',
+      'telegram-conflict': 'another program is using the same bot; stop that one first',
+      'telegram-credential-missing': 'no token is stored yet; add one in Edit',
+      'telegram-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
+      'telegram-proxy-unavailable': 'the proxy could not be reached (off or wrong port); check the proxy settings and retry',
+      'telegram-rate-limited': 'too many requests right now; wait a moment and retry',
+      'telegram-runtime-start-failed': 'the connection did not start; check the runtime log and try again',
+      }),
+      channelFailureReasonUnknown: 'that did not pass; try again',
+      channelOperationFailedUnknown: 'that did not go through, and the reason is unclear; try again',
+      channelLogs: 'Logs',
+      channelEdit: 'Edit',
+      channelTokenMask: '********',
+      channelTokenNone: 'no token yet',
+      channelTokenCurrentNone: 'this channel has no token stored yet',
+      channelTokenEnterHint: 'this channel has no token yet: enter one and save; leaving it empty stores nothing.',
+      channelTokenVisibility: 'Show or hide the token you are typing',
+      channelTokenUnavailable: 'a token was stored, but it cannot be read any more — saving again replaces it',
+      channelTokenUnavailableHint: 'the stored token cannot be read; enter a new one and save to replace it.',
+      channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it is dots again.',
+      channelLogsEmpty: 'This channel has no records yet',
+      channelEnableSwitch: 'Enable this channel',
+      channelTestSend: 'Send test message',
+      channelOpenConversation: "Open this channel's conversations",
+      channelOpenConversationFailed: 'This conversation has no session yet, or the session list is unavailable right now.',
+      channelConversationUnreadable: "Couldn't read the conversation list — click to try again",
+      channelConversationUnreadableAgain: "Still can't read the conversation list — try again later",
+      channelConversationRetry: 'Try again',
+      channelTestMessageBody: 'A test message from MacroBay: if it arrives, this channel can reach your phone.',
+      channelTestAccepted: 'Sent to {target}',
+      channelTestUnconfirmed: 'Sent to {target}, no receipt yet',
+      channelTestNotReady: 'This channel is not running; enable it first',
+      channelTestNoTarget: 'Send this bot a message from your phone first; that conversation is then remembered automatically',
+      channelTestAmbiguousTarget: 'Bound to more than one conversation, so nothing was sent',
+      channelTestRejected: 'The channel rejected it; see the log',
+      channelFieldWorkspace: 'Working folder',
+      channelFieldAllowedChats: 'Allowed chat IDs',
+      channelFieldPermissionMode: 'Channel permission mode',
+      channelWorkspaceDefault: 'Do not use a working folder',
+      channelWorkspaceChoose: 'Choose a folder…',
+      channelWorkspaceFailed: 'That folder could not be used; try again',
+      channelPermissionInherit: 'Inherit the agent setting',
+      channelFieldNotSavable: 'This version cannot save this field yet',
+      channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',
+      channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
+      channelTokenCurrent: 'Currently stored: {mask}',
+      channelTokenRevision: 'saved {count} times',
+      channelCredentialRequired: 'this channel has no token yet; enter one',
+      channelCredentialSaveFailed: 'the token was not saved; retry',
+      channelCredentialUnverified: 'not confirmed as stored; reopen this dialog to check',
+      channelCreatedWithoutCredential: 'the channel was created, but the token was not saved — enter it again in Edit',
+      channelPermissionDefault: 'Ask every time',
+      channelPermissionAcceptEdits: 'Accept edits automatically',
+      channelPermissionBypass: 'Allow everything',
+      channelPermissionPlan: 'Plan only',
+      channelWorkspaceCurrent: 'Current working folder',
+      channelAllowedChatsHint: 'Separate several chat IDs with commas or new lines.',
+      channelAllowedChatsRisk: 'Empty means every conversation is allowed — anyone can use this bot.',
+      channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
+      channelAllowedChatsPolicies: 'This channel already has an explicit allow list, so an empty box does not open it up.',
+      channelAllowedChatsUnknown: 'Cannot tell whether this channel already has an allow list, so what an empty box does is unknown.',
+      settingsNavGroupModels: 'Models and assistants',
+      settingsNavGroupSystem: 'System and data',
+      settingsNavGroupNotify: 'Notifications and channels',
+      settingsNavGroupOther: 'Other',
+      channelLogsTitle: '{name} — Logs',
+      channelLogsCopy: 'Copy',
+      channelLogsRetry: 'Retry',
+      channelLogsEmptyTitle: 'This channel has no records yet.',
+      channelLogsEmptyHint: 'Enabling, changes and failed sends are recorded here.',
+      channelLogsReadFailed: 'The log could not be read.',
+      channelLogsReadFailedHint: 'Existing records are not lost; this read just failed.',
+      channelLogsFooter: 'Records when the connection starts and stops, the errors that interrupt it, and the last failed send; every poll is not recorded.',
+      channelLogsTimeZone: 'All times are in {zone}',
+      channelLogsUnknownCode: 'No further explanation',
+      channelLogOperationPrefix: 'Operation: ',
+      channelLogEnableFailedPrefix: 'enabling failed — ',
+      channelLogRuntimePrefix: 'Runtime error: ',
+      channelLogLifecyclePrefix: 'Runtime: ',
+      channelLogDeliveryPrefix: 'Send failed: ',
+      channelLogUncertainPrefix: 'Uncertain: ',
+      channelLogActionText: Object.freeze({
+        actionCreate: 'created this channel',
+        actionUpdate: 'changed the channel settings',
+        actionProvision: 'stored the credential',
+        actionRotate: 'replaced the credential',
+        actionDisable: 'turned sending off',
+        actionRequestEnable: 'turned sending on',
+        actionRestart: 'restarted the runtime',
+        actionTargetSet: 'changed the conversation that receives messages',
+        actionPolicyCreate: 'added an allowed conversation',
+        actionPolicyDelete: 'removed an allowed conversation',
+        actionDelete: 'deleted this channel'
+      }),
+      channelLogRuntimeText: Object.freeze({
+        runtimePolicyDenied: 'this conversation is not on the allow list, so the message was not handled',
+        runtimeMentionRequired: 'the bot was not mentioned, so the message was ignored as designed',
+        runtimeContentRejected: 'this message type is not supported and was skipped',
+        runtimeReceiptWithoutWorkItem: 'a message arrived but its work item was missing',
+        runtimeStaleGeneration: 'an older runtime generation was rejected',
+        runtimeAgentMissing: 'the bound agent is gone, so messages are not handled',
+        runtimeWorkCapacityExhausted: 'too many messages are waiting, so receiving paused',
+        runtimeLifecycleFenced: 'the runtime generation changed, so this handling was dropped',
+        runtimeInboundFailed: 'an incoming message could not be handled',
+        runtimeConversationSwitched: "this conversation now uses the new assistant's session"
+      }),
+      channelLogLifecycleText: Object.freeze({
+        runtimeStarted: 'connection started',
+        runtimeStopped: 'connection stopped'
+      }),
+      channelLogTelegramFailureText: Object.freeze({
+        telegramConflict: 'another program is using the same bot, so receiving was interrupted',
+        telegramProviderRejected: 'the platform rejected the bot credential; enter the token again',
+        telegramNetworkUnavailable: 'the network cannot be reached, so receiving stopped',
+        telegramProxyUnavailable: 'the proxy hop could not be reached, so receiving stopped',
+        telegramRuntimeStartFailed: 'the connection failed to start, so nothing is being received',
+        channelRuntimeOwnerMissing: 'this enable attempt no longer holds a runtime permit; try again',
+        channelRuntimeGenerationStale: 'the channel state just changed, so this attempt did not take effect; try again',
+        channelRuntimeOwnerLost: 'another action took the runtime permit during the enable; try again',
+        telegramRuntimeEvidenceMissing: 'no real-device verification record, so it did not start',
+        telegramRateLimited: 'too many requests; the platform is rate limiting, retrying shortly',
+        telegramPollFailed: 'this fetch failed; it will retry shortly',
+        telegramUpdateInvalid: 'an incoming update could not be understood and was skipped'
+      }),
+      channelLogDeliveryText: Object.freeze({
+        'delivery-provider-rejected': 'the platform rejected this message (the conversation may not exist)',
+        'delivery-target-invalid': 'the target conversation ID is not valid, so nothing was sent',
+        'delivery-rate-limited': 'the platform rate-limited this send; it retries shortly',
+        'delivery-host-unavailable': 'the channel host is not running, so nothing was sent',
+        'channel-delivery-unavailable': 'the channel is temporarily unavailable, so nothing was sent',
+        'delivery-target-disabled': 'the receiving target is disabled, so nothing was sent',
+        'delivery-no-target-bound': 'no conversation receives messages yet, so nothing was sent',
+        'delivery-not-authorized': 'no permission to send to that conversation, so nothing was sent',
+        'delivery-permission-denied': 'no permission to send to that conversation, so nothing was sent',
+        'channel-delivery-failed': 'this one was not sent, and no specific reason was recorded',
+        'delivery-send-lease-expired': 'the send went quiet and is treated as unconfirmed',
+        'delivery-lifecycle-fenced': 'the runtime generation changed, so this send was dropped',
+        'channel-rejected': 'the channel rejected this message',
+        unknownAfterSend: 'handed to the channel, but no receipt came back'
+      })
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
@@ -2704,6 +3350,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         sourcePlatform: 'Platform',
         sourceProduct: (name) => `Product: ${name}`,
         productGroupsTitle: 'Product assistants',
+        productGroupFallback: 'This product',
         detailPromptTitle: 'Prompt',
         addToAssistant: 'Add to Assistants',
         emptyTitle: 'No matching assistants',
@@ -2760,6 +3407,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     },
     models: {
       providerList: 'Providers',
+      providerFallback: 'Provider',
       providersStaleNotice: 'Could not refresh — these providers are from the last read',
       providerDetail: 'Provider Settings',
       addProvider: 'Add Provider',
@@ -3269,9 +3917,61 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: 'System',
       light: 'Light',
-      dark: 'Dark'
+      dark: 'Dark',
+      version: {
+        current: 'Current version',
+        latest: 'Latest version',
+        unknown: 'Unknown',
+        check: 'Check for updates',
+        justChecked: 'Just checked',
+        autoCheck: 'Check for updates at startup',
+        autoHint: 'At most once a day',
+        autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
+        unavailableLine: 'this does not mean there is no newer version.',
+        lastCheckedAt: (time) => `Last checked: ${time}`,
+        pill: {
+          upToDate: 'Up to date',
+          available: 'Update available',
+          unavailable: 'Cannot tell',
+          checking: 'Checking',
+          notChecked: 'Not checked yet',
+          autoOff: 'Automatic checks are off'
+        }
+      }
+    },
+    about: {
+      title: 'About',
+      tagline: 'A local-first AI workspace: platform plus removable modules',
+      settingsWithUpdate: 'Settings, an update is available',
+      action: {
+        update: 'Update now',
+        updateAvailable: 'An update is available; open About',
+        updateToVersion: (version) => `Version ${version} available`,
+        updateNoVersion: 'Update available',
+        updateToVersionLabel: (version) => `Version ${version} available; open About`
+      },
+      links: {
+        changelog: 'Release notes',
+        docs: 'Documentation',
+        site: 'Website',
+        feedback: 'Report a problem',
+        actionView: 'View',
+        actionFeedback: 'Feedback',
+        openFailed: 'The browser did not open. Try again later.'
+      },
+      notes: {
+        title: 'What changed',
+        truncated: 'This note is long, so only the beginning is shown; see Release notes for the full text'
+      }
     },
     notifications: {
+      deliveryReason: {
+        desktopDisabled: notificationCopy['zh-CN']['notification.deliveryReason.desktopDisabled'],
+        pushUnavailable: notificationCopy['zh-CN']['notification.deliveryReason.pushUnavailable'],
+        systemUnsupported: notificationCopy['zh-CN']['notification.deliveryReason.systemUnsupported'],
+        handedToSystem: notificationCopy['zh-CN']['notification.deliveryReason.handedToSystem'],
+        sendFailedUnknown: notificationCopy['zh-CN']['notification.deliveryReason.sendFailedUnknown'],
+      },
       channelsHeading: 'Delivery Channels',
       channelsDescription:
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
@@ -3309,6 +4009,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
       desktopPermissionUnknown: 'Could not check whether the system allows notifications',
       desktopPreferenceKept: 'Your choice here is saved and takes effect once the system allows notifications.',
+      channelBlockedAdapterNotSupported: 'Notifications cannot be delivered to this type of channel; choose a supported type.',
+      channelBlockedCredentialMissing: 'No credential is saved for this channel; add one in the channel settings before it can send.',
+      channelBlockedNotEnabled: 'This channel is not enabled, or its runtime is not up; enable it in the channel settings.',
       sendTestHint:
         'This only proves the pipeline works; it describes no real event. Whether the desktop banner appears is up to the system — if you do not see it, allow notifications in System Settings as described above and press the button again.',
       centerRecordedGroup: 'Recorded only',
@@ -3316,8 +4019,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerCollapse: 'Show less',
       centerMergedCount: (count) => `×${count}`,
       centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.',
-      centerStaleNotice: 'Could not refresh — this is the list from last time.',
-      centerRetry: 'Try again'
+      centerStaleNotice: 'Could not refresh — showing what was read last time.',
+      centerReload: 'Reload',
+      centerUnknownHint: 'Bulk actions are unavailable for now: notifications cannot be read right now.',
     },
     webSearch: {
       title: 'Web Search',

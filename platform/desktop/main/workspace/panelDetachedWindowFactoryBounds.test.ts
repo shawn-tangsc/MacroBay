@@ -68,6 +68,7 @@ import type { WorkspaceBounds } from '@platform/workspace/contracts'
 import { SECURE_WINDOW_PREFERENCE_BASELINE, createSecureWindowSecurity } from '../../window/createMainWindow'
 import { resolveWindowChromeOptions } from '../../window/windowChrome'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace（PLAT-04 focused，PM 授权 A 后新增）。
@@ -80,9 +81,6 @@ import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
  *     `close`/`closed`/崩溃广播语义与 P1-06g/P2-09 逐字一致（由既有 `panelDetachedWindowFactory.test.ts` 兜底）；
  *  4) 平台无法读取 bounds（缺失/抛错）⇒ 静默降级：不广播、不抛、不影响窗口语义。
  */
-
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const PRELOAD = '/app/preload/index.js'
 
 type FakeWindow = {

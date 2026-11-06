@@ -41,7 +41,7 @@ export function registerIntelligenceJobs(
     capitalConditions?: { refresh: () => Promise<unknown> }
     etfFlowHistory?: { refresh: () => Promise<unknown> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
-    openInterest?: { refresh: () => Promise<unknown> }
+    openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
@@ -62,7 +62,7 @@ export function registerIntelligenceJobs(
     // refreshed here rather than in a second job definition.
     if (input.sourceId === 'binance-futures-positioning') {
       await deps.fundingRateHistory?.refresh()
-      await deps.openInterest?.refresh()
+      await deps.openInterest?.refresh({ log: context.log })
       return
     }
     const result = await pipeline.collectSource({
@@ -94,6 +94,15 @@ export function registerIntelligenceJobs(
       level: 'info',
       message: `Translated ${result.processed} item(s); ${result.failed} failed.`
     })
+    // 只写真跑出来的结论：抛错或没算出数的批走不到这里，旧行就是「无计数」，
+    // 不会被补成 0/0/0/0 混进成功率的分母。
+    if (result.counts) {
+      await context.result?.({
+        counts: result.counts,
+        ...(result.reasonCode ? { reasonCode: result.reasonCode } : {}),
+        ...(result.reasons ? { reasons: result.reasons } : {})
+      })
+    }
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, async (payload, context) => {

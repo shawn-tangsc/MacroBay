@@ -13,7 +13,7 @@ export function formatBriefingValue(
     case 'usd': return compactUsd(value.number, locale)
     case 'flow-usd': return compactUsd(value.number, locale, true)
     case 'yield': return `${value.number.toFixed(2)}%`
-    case 'level': return value.number.toFixed(2)
+    case 'level': return levelText(value.number, locale)
   }
 }
 
@@ -29,6 +29,18 @@ export function formatBriefingChange(
     case 'bp': return `${sign}${Math.round(change.value)}bp`
     case 'usd': return compactUsd(change.value, locale, true)
   }
+}
+
+/**
+ * A price level: grouped thousands, at most two decimals and at least one.
+ *
+ * The precision belongs to the reading, not to the formatter. `110,432.1` and `3,927.99` follow the same
+ * rule, and printing the first as `110,432.10` would claim a digit nobody measured; the minimum of one
+ * decimal keeps a round level from looking like a count. No per-source precision field: a data source is
+ * not responsible for how the screen rounds it.
+ */
+function levelText(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value)
 }
 
 function percentDigits(value: number): number {

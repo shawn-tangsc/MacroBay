@@ -1,4 +1,6 @@
 import type { WorkspacePanelRegistration } from './workspace/contracts'
+import type { NotificationEventDeclaration } from './notifications/contracts/notificationEventCatalog'
+import type { NotificationCopyTableSet } from './notifications/contracts/notificationCopyPort'
 
 export interface LocalizedText {
   'zh-CN': string
@@ -21,6 +23,16 @@ export interface ProductMenuPageContribution {
   order: number
   module: string
   workspace?: ProductMenuPageWorkspaceCapability
+  /**
+   * 声明「这一页是默认首页」。
+   *
+   * **标在菜单项上，不是写一个 `defaultHomePageId: 'x'` 字符串**：字符串形状让「指向一个不在菜单里的
+   * 页」成为可达状态，于是就得为它写回落、诊断和用例；标在项上，那个状态在结构上不存在——项不在了，
+   * 它的 `home` 自然也不在。
+   *
+   * 只有首次启动、或布局被重置（没有任何可恢复的活动页）时才会被用到；「接着上次看」优先。
+   */
+  home?: true
 }
 
 export interface ProductSettingsSectionContribution {
@@ -190,6 +202,27 @@ export interface ProductManifest {
    */
   eventTopics?: readonly string[]
   eventConsumers?: readonly ProductEventConsumerRegistration[]
+  /**
+   * 该产品**声明**的通知事件（契约 §3）。目录由平台汇总注入，平台不 import 产品代码。
+   *
+   * 每条声明只写一次性的事实（id、标题/理由键、申请档位、去重键的输入形状）；批准值不在这里——
+   * 生效表面只读 `platform/notifications/contracts/notificationEventPolicy.ts` 的批准表。
+   * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
+   */
+  notificationEvents?: readonly NotificationEventDeclaration[]
+  /**
+   * 该产品**声明**的通知文案表（契约 §3.3）：`{ 'zh-CN': {...}, 'en-US': {...} }`。
+   *
+   * 平台不 import 产品文案文件，装配从注入的 manifest 列表里收这张表；没声明的产品，
+   * 它的事件文案解析不到，走平台兜底句并记一次 `copy-unresolved` 诊断。
+   */
+  notificationCopy?: NotificationCopyTableSet
+  /**
+   * 该产品**声明**的 producerId（契约 §14.1）：产品自己发的事件所用的稳定任务/来源标识。
+   * 声明之后平台不再为同一个 producerId 兜底发；没声明的默认平台发，并记一次
+   * `unclaimed-producer` 诊断。格式在生成期校验（前缀、非空、去重），存在性只能运行期观察。
+   */
+  notificationProducerClaims?: readonly string[]
   productAgentTools?: readonly ProductAgentToolRegistration[]
   assistantTemplates?: readonly ProductAssistantTemplateRegistration[]
   migrations: readonly unknown[]

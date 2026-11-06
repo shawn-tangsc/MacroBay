@@ -27,6 +27,7 @@ import { AppShell } from './AppShell'
  */
 
 const en = platformText['en-US']
+const zh = platformText['zh-CN']
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined
@@ -173,7 +174,8 @@ describe('PLAT-36：偏好写入后不再有额外的 getHostContext 调用', ()
 
     // ② 正向不回归：偏好写入确实发生了（否则「没有额外读取」是空断言）
     expect(fake.calls.settingsUpdate).toBe(1)
-    expect(host.textContent).toContain(en.status.saved)
+    // 这里走的是「切到中文」那条路径：断言必须取**当前语言**那份表，取 en 表就会永远红。
+    expect(host.textContent).toContain(zh.status.saved)
 
     // ③ 本项判据：偏好写入后不再多出一次受控读取
     expect(fake.calls.getHostContext).toBe(baseline)

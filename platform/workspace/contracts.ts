@@ -137,6 +137,11 @@ export class WorkspaceRegistrationError extends Error {
 export type WorkspacePageRegistration = {
   pageId: string
   menuKey: string
+  /**
+   * 这一页声明自己是默认首页。**注册层只带着它，不解释它**——决定落到哪一页的逻辑在壳层，
+   * 而且只在「没有可恢复的活动页」时才会被问到（见 `docs-private/10-development/home-menu-contract.md`）。
+   */
+  home?: true
   title?: LocalizedText
   titleKey?: string
   icon: string

@@ -1,0 +1,35 @@
+/*
+ * 一个标记，不是一行公告。
+ *
+ * 用**结构**保证不占版面：绝对定位贴在所在行的角落，不参与行高计算——行高变化在结构上就是 0，
+ * 不需要谁去量「抬高了 2px 还是 6px」。热区仍由 `IconButton` 自己给（md = 24）。
+ */
+.mi-signal-read-issue {
+  position: absolute;
+  top: 0;
+  right: 0;
+  /*
+   * 图标不是正文：图形门槛是 3:1，深色下 `--danger` 对 surface 是 3.94，够用；掺 15% `--text-strong`
+   * 再提一档对比，同时这条前景不再写成「状态色当正文」——它们门槛不同，不该走同一个写法。
+   * 这一行是 `c162214` 的修法，`35cb73f` 重写本文件时用了旧副本、把它冲掉了，门禁因此红过一次。
+   */
+  color: color-mix(in srgb, var(--danger) 85%, var(--text-strong));
+}
+
+/*
+ * 承载它的两处头部都没有定位上下文，这里各补一条：绝对定位的标记需要一个坐标原点，
+ * 否则会跑到最近的定位祖先（图表区）上去。只加 `position`，不动它们的既有布局。
+ */
+.mi-positioning-panel__head,
+.mi-capital-conditions__header-band {
+  position: relative;
+}
+
+/*
+ * 让角：标记绝对定位在右上角，而持仓卡头的分段控件（7d/24h）与资金面卡头的时间也在右端。
+ * 有标记时给头部留 24px，**只挪横向、不动高度**；没有标记时这条规则不生效，布局与原来完全一样。
+ */
+.mi-positioning-panel__head:has(.mi-signal-read-issue),
+.mi-capital-conditions__header-band:has(.mi-signal-read-issue) {
+  padding-inline-end: 24px;
+}

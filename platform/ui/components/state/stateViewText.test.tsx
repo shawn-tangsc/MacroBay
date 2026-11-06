@@ -66,4 +66,19 @@ describe('ui.state 文案归平台一处拥有', () => {
     expect(rendered('zh-CN', keys)).toContain('还没有发生过')
     expect(rendered('en-US', keys)).toContain('has not happened yet')
   })
+
+  /**
+   * 「状态不明」的句子是验收判据的一部分（中心规范 v2.5 / U11）：
+   * 读者必须能读出「这不代表没有通知」，否则「读不到」会被当成「今天没事」。
+   * 同时它与 `unreadable` 必须逐字不同——两态共用 `error`，只有原因句能区分它们。
+   */
+  it('状态不明的句子必须说明「这不代表没有通知」，且与读失败逐字不同', () => {
+    const unknown = 'ui.state.error.reason.notification-unknown' as StateViewTextKey
+    const unreadable = 'ui.state.error.reason.unreadable' as StateViewTextKey
+
+    expect(resolveStateViewText('zh-CN', unknown)).toContain('这不代表没有通知')
+    expect(resolveStateViewText('en-US', unknown)).toContain("doesn't mean there are none")
+    expect(resolveStateViewText('zh-CN', unknown)).not.toBe(resolveStateViewText('zh-CN', unreadable))
+    expect(resolveStateViewText('en-US', unknown)).not.toBe(resolveStateViewText('en-US', unreadable))
+  })
 })

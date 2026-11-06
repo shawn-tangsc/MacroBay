@@ -43,7 +43,7 @@ function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKe
   return {
     id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
     status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1', promptVersion: 'prompt.v1', skillVersion: 'skill.v1', outputSchemaVersion: 1,
-    jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+    jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: null, queuedAt: asOf, startedAt: null, completedAt: null
   }
 }
 
@@ -73,7 +73,7 @@ function timeline(id: string, eventGroupId: string, analysisRunId: string | null
 }
 
 describe('marketAnalysisRepository', () => {
-  it('creates all nine tables and can rerun migrations without changing rows', () => {
+  it('creates all ten tables and can rerun migrations without changing rows', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     const first = repository.inspectSchema()
     repository.appendEventGroup(group())
@@ -81,7 +81,8 @@ describe('marketAnalysisRepository', () => {
     expect(repository.inspectSchema()).toEqual(first)
     expect(first.tables).toEqual(expect.arrayContaining([
       'mi_analysis_event_groups', 'mi_analysis_snapshots', 'mi_analysis_runs', 'mi_analysis_summaries',
-      'mi_analysis_predictions', 'mi_analysis_prediction_verifications', 'mi_analysis_prediction_ledger', 'mi_analysis_timeline', 'mi_analysis_trigger_ledger'
+      'mi_analysis_predictions', 'mi_analysis_prediction_verifications', 'mi_analysis_prediction_ledger', 'mi_analysis_timeline', 'mi_analysis_trigger_ledger',
+      'mi_analysis_io'
     ]))
     expect(repository.getEventGroup('mi-eg-0001')).toEqual(group())
     repository.close()
@@ -167,6 +168,34 @@ describe('marketAnalysisRepository', () => {
     const second = repository.enqueueRun(run('mi-ar-0002', 'mi-eg-0001', 'mi-es-A1', 'same-key'))
     expect(first.created).toBe(true)
     expect(second).toEqual({ created: false, run: first.run })
+    repository.close()
+  })
+
+  it('stores the criterion a run was judged by, and leaves older runs without one', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    const group: EventGroup = {
+      id: 'mi-eg-mode', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official|US|2026-08|CPI',
+      firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'],
+      triggerCount: 0, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    }
+    repository.appendEventGroup(group)
+    const snapshotFor = (id: string) => ({
+      id, schemaVersion: 1 as const, eventGroupId: group.id, asOf, dataCutoff: asOf,
+      snapshotHash: buildAnalysisSnapshotHash({ profileId: 'crypto-market-analysis-v1', asOf, dataCutoff: asOf, facts: [], missingDomains: [], caveats: [], evidenceRefs: [] }),
+      profileId: 'crypto-market-analysis-v1' as const, facts: [], missingDomains: [], caveats: [], evidenceRefs: [], sourceHealth: [], createdAt: asOf,
+      policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1' as const
+    })
+    const withMode = snapshotFor('mi-es-mode-1')
+    const legacy = snapshotFor('mi-es-mode-2')
+    repository.appendSnapshot(withMode)
+    repository.appendSnapshot(legacy)
+    repository.enqueueRun({ ...run('mi-ar-mode', group.id, withMode.id, 'key-mode', withMode.snapshotHash), validationMode: 'reference-only' })
+    // A run written before the column existed has no mode; it must not be given one.
+    repository.enqueueRun(run('mi-ar-legacy', group.id, legacy.id, 'key-legacy', legacy.snapshotHash))
+
+    const stored = repository.listRuns()
+    expect(stored.find(candidate => candidate.validationMode === 'reference-only')).toBeDefined()
+    expect(stored.find(candidate => candidate.id === 'mi-ar-legacy')?.validationMode).toBeNull()
     repository.close()
   })
 
@@ -309,7 +338,7 @@ describe('marketAnalysisRepository', () => {
     expect(second.items).toHaveLength(1)
     expect(new Set([...first.items, ...second.items].map(item => item.id)).size).toBe(51)
     expect(second.nextCursor).toBeNull()
-    console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A02', event: 'sqlite-transaction', status: 'pass', details: { tables: 9, idempotentRuns: 1, snapshotHistory: 3, timelinePageSize: first.items.length, orphanArchives: 0 } }))
+    console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A02', event: 'sqlite-transaction', status: 'pass', details: { tables: repository.inspectSchema().tables.length, idempotentRuns: 1, snapshotHistory: 3, timelinePageSize: first.items.length, orphanArchives: 0 } }))
     repository.close()
   })
 
@@ -360,17 +389,18 @@ describe('marketAnalysisRepository', () => {
 
     // October 20th: the conclusion is older than fourteen days, the verdict is not yet older than a
     // hundred and eighty. The conclusion graph goes; the verdict about it stays.
-    const first = repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2026-04-23T00:00:00.000Z' })
+    const first = repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2026-04-23T00:00:00.000Z', triggerLedgerCutoffIso: '2026-09-30T00:00:00.000Z' })
     expect(first.deleted).toBe(1)
     expect(first.ledgerDeleted).toBe(0)
+    expect(first.triggerLedgerDeleted).toBe(0)
     expect(repository.getSummary('mi-as-0001')).toBeUndefined()
     expect(repository.listPredictions('mi-as-0001')).toEqual([])
     expect(repository.listPredictionLedger()).toHaveLength(1)
 
     // A cutoff that precedes the conclusion leaves both alone: the two windows cannot move each other.
-    expect(repository.retention({ conclusionCutoffIso: '2000-01-01T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z' })).toEqual({ deleted: 0, ledgerDeleted: 0, oldestKeptAtMs: null })
+    expect(repository.retention({ conclusionCutoffIso: '2000-01-01T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2000-01-01T00:00:00.000Z' })).toEqual({ deleted: 0, ledgerDeleted: 0, triggerLedgerDeleted: 0, oldestKeptAtMs: null })
 
-    const last = repository.retention({ conclusionCutoffIso: '2027-04-01T00:00:00.000Z', ledgerCutoffIso: '2027-03-01T00:00:00.000Z' })
+    const last = repository.retention({ conclusionCutoffIso: '2027-04-01T00:00:00.000Z', ledgerCutoffIso: '2027-03-01T00:00:00.000Z', triggerLedgerCutoffIso: '2027-03-17T00:00:00.000Z' })
     expect(last.ledgerDeleted).toBe(1)
     expect(repository.listPredictionLedger()).toEqual([])
     repository.close()
@@ -413,6 +443,77 @@ describe('marketAnalysisRepository trigger ledger rows', () => {
       ['mi-ledger-2', 'skipped', 'hour-budget-exhausted']
     ])
     expect(countAnalysisRuns(repository, asOf).dayRuns).toBe(1)
+    repository.close()
+  })
+})
+
+describe('marketAnalysisRepository signal ledger retention', () => {
+  const ledgerRow = (id: string, changeHash: string, createdAt: string, overrides: Record<string, unknown> = {}) => ({
+    id, eventGroupId: 'mi-eg-0001', triggerKey: 'macro.actual.first-confirmed', changeHash,
+    decision: 'skipped', reasonCode: 'hour-budget-exhausted', snapshotHash: null, analysisRunId: null, createdAt, ...overrides
+  })
+
+  it('deletes a sixteen-day row and keeps a ten-day one on a night with no expired conclusion', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-old', 'hash-old', '2026-10-05T00:00:00.000Z'))
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-recent', 'hash-recent', '2026-10-11T00:00:00.000Z'))
+
+    // No conclusion exists at all: the sweep must still run. It used to live inside the conclusion
+    // loop, so on a quiet night the "why did nothing run" record never aged.
+    const first = repository.retention({ conclusionCutoffIso: '2026-10-07T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2026-10-06T00:00:00.000Z' })
+    expect(first.deleted).toBe(0)
+    expect(first.triggerLedgerDeleted).toBe(1)
+    expect(repository.listTriggerLedger('mi-eg-0001').map(row => row.id)).toEqual(['mi-ledger-recent'])
+    // The group is still named by the surviving row, so it is not collected yet.
+    expect(repository.getEventGroup('mi-eg-0001')).toBeDefined()
+
+    const second = repository.retention({ conclusionCutoffIso: '2026-10-07T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2026-10-20T00:00:00.000Z' })
+    expect(second.triggerLedgerDeleted).toBe(1)
+    expect(repository.listTriggerLedger('mi-eg-0001')).toEqual([])
+    // Nothing names the group anymore: the next pass collects it, deterministically at the window's end.
+    expect(repository.getEventGroup('mi-eg-0001')).toBeUndefined()
+    repository.close()
+  })
+
+  it('keeps a run one more day while a ledger row cites it, then collects it', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun(run('mi-ar-0001', 'mi-eg-0001', 'mi-es-A1', 'key-1'))
+    expect(repository.claimRun('mi-ar-0001', later)).toBe(true)
+    repository.commitSuccessfulAnalysis({ runId: 'mi-ar-0001', summary: summary('mi-as-0001', 'mi-ar-0001', 'mi-eg-0001'), predictions: [], timeline: timeline('mi-tl-0001', 'mi-eg-0001', 'mi-ar-0001', 'mi-as-0001') })
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-run', 'hash-run', later, { decision: 'queued', reasonCode: 'severity-confirmed', analysisRunId: 'mi-ar-0001' }))
+
+    // Fourteen days: the conclusion goes, but its ledger row is still inside its fifteen-day window
+    // and cites the run. Deleting the run here would be a foreign-key failure; it waits one day.
+    const first = repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2026-09-20T00:00:00.000Z' })
+    expect(first.deleted).toBe(1)
+    expect(repository.getSummary('mi-as-0001')).toBeUndefined()
+    expect(repository.getRun('mi-ar-0001')).toBeDefined()
+
+    // The next pass, after the ledger window closes, collects the run, its snapshot and the group.
+    const second = repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2026-10-30T00:00:00.000Z' })
+    expect(second.triggerLedgerDeleted).toBe(1)
+    expect(repository.getRun('mi-ar-0001')).toBeUndefined()
+    expect(repository.getSnapshot('mi-es-A1')).toBeUndefined()
+    expect(repository.getEventGroup('mi-eg-0001')).toBeUndefined()
+    repository.close()
+  })
+
+  it('collects a run that never produced a conclusion once it is old enough', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun(run('mi-ar-failed', 'mi-eg-0001', 'mi-es-A1', 'key-failed'))
+    expect(repository.claimRun('mi-ar-failed', later)).toBe(true)
+    expect(repository.updateRunStatus({ id: 'mi-ar-failed', status: 'failed', completedAt: later, failureCode: 'provider-error' })).toBe(true)
+
+    // No conclusion ever existed, so the summary-driven loop cannot see this row; without the run
+    // sweep it would have lived forever.
+    repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z', triggerLedgerCutoffIso: '2026-10-30T00:00:00.000Z' })
+    expect(repository.getRun('mi-ar-failed')).toBeUndefined()
+    expect(repository.getEventGroup('mi-eg-0001')).toBeUndefined()
     repository.close()
   })
 })

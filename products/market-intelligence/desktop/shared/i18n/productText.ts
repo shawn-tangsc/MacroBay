@@ -11,25 +11,23 @@
  * 改动这里之前先想清楚：模型侧词表与服务侧 `analysisModelVocabulary` 必须同时改，否则红了是对的。
  */
 import { miText } from './text/mi'
+import { registeredEventNames } from '../../../contracts/indicatorNames'
+import { dailyBriefingText } from './text/pages/dailyBriefing'
 import { macroCalendarText } from './text/settings/macroCalendar'
 import { intelligenceSourcesText } from './text/settings/intelligenceSources'
 
-const registeredEventNames = {
-  'zh-CN': {
-    cpi: '消费者物价指数（CPI）', 'core-cpi': '核心 CPI', 'nonfarm-payrolls': '非农就业人数',
-    unemployment: '失业率', 'average-hourly-earnings': '平均时薪', pce: 'PCE 物价', 'core-pce': '核心 PCE',
-    gdp: 'GDP', fomc: '美联储议息会议'
-  },
-  'en-US': {
-    cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'Nonfarm payrolls',
-    unemployment: 'Unemployment rate', 'average-hourly-earnings': 'Average hourly earnings', pce: 'PCE', 'core-pce': 'Core PCE',
-    gdp: 'GDP', fomc: 'FOMC decision'
-  }
-} as const
 
 /**
  * Market Intelligence 产品文案（i18n）。
  */
+/**
+ * Where the sentences shared by every module-signal card live.
+ *
+ * The failure codes are named in the contract; this is the path they are appended to, so two cards
+ * cannot end up with two spellings of "we could not read".
+ */
+export const moduleSignalReadCopyBase = 'pages.intelligence.portal.dashboard.signalRead'
+
 export const productText = {
   'zh-CN': {
     // 卡片空态的产品句（唯一出处）：键名与平台 `ui.state.*` 同形，由 `StateView` 的产品句入口按
@@ -210,7 +208,12 @@ mi: miText['zh-CN'],
           analysisTimeline: {
             retryAnalysis: '重试分析', attemptFailed: '上次分析未发布',
             failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-invalid-json': '模型返回的不是合法 JSON（可能被截断），本次未发布，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '模型未就绪，请检查模型服务配置。', 'analysis-provider-error': '模型调用失败，请检查连接后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
-            triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘' } },
+            /**
+             * 牌子上的「分析到哪一步」。状态只有六句，`skipped` / `failed` / `stopped` 各自再带原因：
+             * 前两个的原因来自两张不同的码表（账本的 signal-* / 运行的 analysis-*），第三个是中性
+             * 停下的三句。码本身不上屏，查不到才落「原因没记录」。
+             */
+            triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'same-release-coalesced': '同一次发布的其它指标已经分析过，这次不再重复', 'same-release-abandoned': '同一次发布的分析没成，补位次数已经用完，这条不再单独分析', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘', 'signal-high-triggered': '规则触发，已开始分析', 'signal-medium-triggered': '规则触发，已开始分析', 'signal-cooldown-active': '同一规则刚分析过，这次不重复', 'signal-low-marker-only': '这类情况只在看板标注，不单独分析', 'signal-calendar-owned': '宏观日历已经在处理，不重复分析', 'signal-freeze-unavailable': '分析没排上队，这次没有执行' } },
             loadMore: '加载更多', selectEntry: '选择一个时间轴节点查看详情。',
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
             // 否则相隔几十秒的两条结论（一条消息面、一条宏观）看起来像重复发布。
@@ -236,10 +239,8 @@ mi: miText['zh-CN'],
             retry: '重试',
             refresh: '刷新',
             labels: { bullish: '偏多', bearish: '偏空', neutral: '中性', mixed: '分歧' },
-            counts: '{count} 条',
-            breakdown: '多 {bull} · 空 {bear} · 中性 {flat}',
             engine: { model: '模型', rules: '规则' },
-            bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
+            neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
             openAll: '查看舆情列表',
             // 与「数据已过期 · 最后更新 {time}」同一个字段（latestKnownItemAt）、同一个格式化器，
             // 两处永远指向同一时刻。
@@ -253,7 +254,7 @@ mi: miText['zh-CN'],
               detail: { evidence: '证据引文', translated: '译文', strength: '强度', confidence: '置信', strengthLevels: { weak: '弱', medium: '中', strong: '强' }, body: '正文摘录', noBody: '仅依据标题与摘要判断', translatingBody: '正在翻译正文…', translationFailed: '正文翻译失败，先显示原文。', translateBody: '翻译正文', engine: '引擎', prompt: '提示词', original: '原文', openOriginal: '原文链接' },
               emptyFiltered: '当前筛选没有结果。',
               moreActions: '更多操作',
-              translationStatus: { waiting: '等待翻译', waitingHint: '排队中：最多 5 条并发，前面有空位就开翻；可点「取消翻译」停止剩余队列', translating: '翻译中', translated: '已翻译', failed: '翻译失败', contextMenu: '右键更多操作', translateOne: '翻译此条', retranslateOne: '重新翻译' },
+              translationStatus: { waiting: '等待翻译', queue: '正在翻译 {done}/{total}', translating: '翻译中', translated: '已翻译', failed: '翻译失败', contextMenu: '右键更多操作', translateOne: '翻译此条', retranslateOne: '重新翻译' },
               clearFilters: '清除筛选',
               loadMore: '加载更多',
               settings: '设置'
@@ -278,11 +279,38 @@ mi: miText['zh-CN'],
           },
           analysisDrawer: { title: '分析时间轴', open: '分析时间轴', close: '关闭' },
           dashboard: {
+            signalAnalysis: {
+              label: '分析到哪一步',
+              states: {
+                published: '分析已出，可以在时间轴里看到',
+                skipped: '这次没有分析',
+                failed: '分析了但没成'
+                // 没有 `stopped` 这一行：这一支**直接返回原因句**，外层状态句永远不上屏。
+              },
+              /** 读者自己在设置里关了自动分析：这句优先于任何运行状态，且不给按钮（卡片没有设置路由）。 */
+              offByReader: '你关闭了自动分析，这条信号不会自动分析',
+              stoppedReasons: {
+                'run-cancelled': '这次运行被取消了',
+                'run-superseded': '这次已被更新的一次取代，不用等',
+                'run-unrecognized': '这次运行的状态读不出来',
+                'run-expired': '这次分析跑过，但已经超过保存期，看不到结果'
+              },
+              reasonUnknown: '原因没记录',
+              separator: '：'
+            },
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: '数字货币市场检查表',
             description: '按资金、宏观、加密风险偏好、杠杆顺序阅读；没有覆盖时保留 partial，不以中性填补。',
             backToAgents: '返回 Agent',
             configureSources: '配置情报源',
+            /** One sentence per failure code, shared by every card that reads module signals. */
+            signalRead: {
+              'query-failed': '这条信号有没有被分析过，这次没查到。上面的数字不受影响。',
+              'invalid-as-of': '这个时间点查不到这条信号有没有被分析过。上面的数字不受影响。',
+              // 给读者看的是「读不到」，不是我们内部的判定原因：格式、契约这些词他既不懂也做不了。
+              'contract-invalid': '这条信号有没有被分析过，这次没查到（不是没有分析过）。上面的数字不受影响。',
+              ariaLabel: '这条信号有没有被分析过，这次没查到；上面的数字不受影响',
+            },
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
               chart: '同起点收益率',
@@ -481,6 +509,8 @@ mi: miText['zh-CN'],
               signalDetailsOpen: '看数据',
               signalDetailsTitle: '信号读数',
               signalDetailsRule: '规则',
+              /** The rule's own words; the internal id never reaches the reader. */
+              signalDetailsRuleName: '持仓骤降',
               signalDetailsWindow: '窗口',
               signalDetailsDrop: '持仓降幅',
               signalDetailsVolume: '成交量为均值',
@@ -509,10 +539,25 @@ mi: miText['zh-CN'],
               sourceStates: { loading: '加载中', available: '持仓与费率可用', empty: '暂无观测值', unavailable: '持仓数据不可用' },
               manageSettings: '管理 Binance Futures Positioning 设置',
               assets: { btc: 'BTC', eth: 'ETH' },
-              paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
+              paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
+              // The brief's small line has ~280px; the full English wording does not fit. Same meaning,
+              // same keys; the Chinese values are the full ones because there is nothing shorter to say.
+              paymentDirectionsCompact: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' },
+              // The arrow a signed change prints. A glyph in the copy table, not in the component: the two
+              // languages may disagree later, and a literal in a card is a word nobody can edit.
+              changeArrows: { up: '↑', down: '↓' }
             },
             divergence: {
               title: '跨面板背离',
+              chip: '背离：资金-杠杆',
+              chipTip: '资金-杠杆背离｜窗口 7 日 / 24 小时｜事实',
+              chipDetailsOpen: '看数据',
+              chipDetailsTitle: '背离读数',
+              chipFreshLabel: '新鲜期',
+              chipFresh: '在新鲜期内',
+              chipAsOf: '截至 {at}',
+              chipWhyLabel: '为什么算背离',
+              chipWhy: '稳定币 7 天在减少、持仓 24 小时在增加，费率同时为负：三条同时成立才判为背离。',
               helpLabel: '这张卡怎么来的',
               /** Four one-look bullets: the bubble is a glance, not a document. */
               helpBullets: [
@@ -533,17 +578,8 @@ mi: miText['zh-CN'],
               withheldListSep: '、',
               labelSep: '：',
               missingValue: '—',
-              retry: '重试',
-              unavailableWhy: {
-                'all-legs-missing': '六个数据源一个都没返回',
-                'query-failed': '查询出错，和有没有数据无关',
-                'invalid-clock': '系统时间格式不对，属于程序问题',
-                'too-large': '结果太大，超出了这张卡的容量',
-                'bad-payload': '请求参数不合法（程序问题，不是数据问题）',
-                'bad-answer': '后端返回的格式不符合约定（程序问题）'
-              },
-              nothingCompared: '三对都没能比：缺的数据没凑齐，今天不给结论',
-              missingLegs: '还缺：{legs}',
+
+              unavailableTrace: '背离读数暂不可用',
               loading: '正在比对三对数据…',
               empty: '今日三对均未出现背离：资金、杠杆与价格指向同一方向。',
               unavailable: '暂时比不了：需要的几组数字没同时拿到，先不给结论。',
@@ -656,13 +692,38 @@ mi: miText['zh-CN'],
             },
             capitalConditions: {
               title: '资金面', loading: '正在加载资金面…', empty: '暂时没有可用的资金面数据。',
-              stablecoin: '稳定币', asset: '资产', totalSupply: '总供给',
+              /* The row name is drawn as two lines; the scope keeps its own brackets (and, in
+                 English, the space before them), so the spoken name is the plain concatenation. */
+              stablecoin: '稳定币', stablecoinScope: '（USDT + USDC）', asset: '资产', totalSupply: '总供给',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: '最新', windowDays: '{days} 日', coverage: '仅 {days} 天', streakColumn: '连续',
               streak: '{flow} · {count} 日', streakSingle: '{flow} · 1 日',
-              observedAt: '观测时间', etfFlow: '市场资金流', recent7TradingDays: '近 7 个交易日', funds: '资金面', btc: 'BTC ETF', eth: 'ETH ETF',
+              shortFlowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
+              observedAt: '观测时间', etfFlow: '市场资金流', chartWindow: '最近 7 个交易日 · 单位：百万美元',
+              fundsColumn: '稳定币净流入', fundsScope: '全部美元稳定币', btc: 'BTC ETF', eth: 'ETH ETF', etfScope: '美国现货 ETF',
+              infoAria: '本卡口径说明',
+              chartScopeNoteMain: '稳定币净流入 = 全部美元稳定币总供给的逐日变化（不含当天）；',
+              chartScopeNoteEtf: 'BTC / ETH 是美国现货 ETF 的净流，不是同一批钱。',
+              columnScopeNote: '列口径：稳定币列＝全部美元稳定币；BTC / ETH 列＝美国现货 ETF。',
+              notComparable: '与卡片「{row}」行不可相互核对：那行含今天。',
+              expandDaily: '查看逐日数据',
+              dailyDialogTitle: '市场资金流 · 逐日数据',
+              dailyCaption: '逐日数值', dailyUnits: '百万美元 · 按 UTC 日',
+              dailyFundsShort: '稳定币', dateColumn: '日期',
+              flowNotEnoughDays: '最近 7 天里只有 {days} 天有数据。',
+              flowNoDays: '这 7 天没有可用的资金流数据。',
+              a11yAmountYi: '{value} 亿美元', a11yAmountWan: '{value} 万', a11yNoFlow: '没有净流入', a11yLabel: '{direction} {amount}', a11yCell: '{amount}，{scope}',
               flowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
-              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。', staleRead: '这次刷新没读出来，下面是上一次的读数。'
+              refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。', staleRead: '这次刷新没读出来，下面是上一次的读数。',
+              /* 现货牌子的三种状态与详情。规则名与窗口一律用白话，详情里不出现内部标识。 */
+              signalChip: '三日净流出 {amount}', signalInsufficient: '数据不齐',
+              signalInsufficientReason: '数据不齐：三日累计拿不到',
+              signalTooltip: '{rule}｜窗口 {window}｜{kind}', signalRuleName: 'ETF 净流出', signalRuleWindow: '3 个交易日', signalKindObserved: '来源报告的事实',
+              signalAriaAlert: '{chip}，{asset}',
+              signalDetailTitle: 'ETF 三日净流出', signalDetailRule: '规则', signalDetailWindow: '窗口',
+              signalDetailCumulative: '三日累计', signalDetailCoverage: '覆盖', signalCoverage: '{covered}/{required} 个交易日',
+              signalDetailTradingDay: '数据所属交易日（UTC）', signalDetailObservedAt: '观测时间',
+              signalDetailNote: '这是来源报告的净流事实，不是本机推算；数据所属交易日与观测时间不是同一件事。'
             },
             sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
@@ -715,208 +776,7 @@ mi: miText['zh-CN'],
               manageSources: '管理来源 ›'
             },
             context: { sourceStatus: { title: '来源状态' } },
-            dailyBriefing: {
-              entry: '今日简报', title: '每日简报', generation: { schedule: '08:05 自动生成', checking: '检查中…', ready: '已生成', missing: '未生成 · 下次打开补生成', history: '历史版次' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；08:05 只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
-              window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsUnit: '读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
-              moreNumbers: '更多数字', noValue: '—',
-              sections: { news: '过去 24 小时要闻', macro: '过去 24 小时宏观事件', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来 7 日关注', limits: '数据缺口与限制', leverage: '杠杆', policyPath: '利率路径', marketImplied: '市场隐含', rangeUnavailable: '区间未收录' },
-              newsFocus: '重点',
-              newsCount: '{count} 条',
-              labelSeparator: '：',
-              citationSources: { macroCalendar: '宏观日历', news: '新闻', analysis: '分析证据' },
-              countries: { US: '美国', EU: '欧元区', EZ: '欧元区', DE: '德国', FR: '法国', GB: '英国', JP: '日本', CN: '中国' },
-              policyOutcomes: { 'no-change': '维持利率', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp+', 'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp+' },
-              comparison: { label: '较上一版', sameDirection: '方向未变', directionChanged: '方向由 {from} 转为 {to}', funding: '资金费率 BTC {value}', stablecoin: '稳定币 {value}', etf: '美国比特币现货基金 {value}', newMacro: '新增 {count} 条宏观事件' },
-              groups: { market: '行情', funds: '资金', sentiment: '情绪' },
-              tiers: { must: '重点', support: '补充', reference: '参考' },
-              states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
-              // 分享卡只回答一件事：这个数是哪个时点的。五种口径各不相同，所以逐条写出来，
-              // 不合并成一个读者没见过的词；没有依据时干脆不标，不拿一句话去凑。
-              // 只在读数不是名字所承诺的口径时才写一句；24 小时的涨跌本来就有下面的时刻在说。
-              staleBasis: { lastClose: '最近一次收盘', seriesLevel: '最新水平（当天没有 24 小时涨跌）', published: '上一交易日的官方收盘' },
-              reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面数据不可用', 'etf-unavailable': 'ETF 读数不可用' },
-              changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
-              // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
-              changeWindows: { '24h': '24h', '1d': '1d', daily: '1d', '7d': '7d', '30d': '30d', latest: '', 'trading-day': '较上一交易日收盘', 'publication-day': '较上次发布' },
-              changeBaselineSpan: '（{from} → {to}）',
-              units: { points: '点' },
-              rowTotal: '总量 {value}',
-              rowCurrent: '当前 {value}',
-              rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: '美国比特币现货基金', etfEth: '美国以太坊现货基金', btc: 'BTC', eth: 'ETH', index: '纳指', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '美债 10Y 名义收益率', us10yReal: '美债 10Y 实际收益率' },
-              empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
-              newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
-              macroEmptyCodes: { 'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
-              nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
-              macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
-              conclusion: { invalidation: '什么会推翻它', conditions: '判断前提', counter: '证伪条件', outlook: '前瞻', watch: '观察点', whatWouldChange: '什么会推翻', regimeChanged: '判断有变', basisHeld: '依据成立', basisOverturned: '依据被推翻', basisPartlyHeld: '依据部分成立', gaps: '数据缺口', caveats: '数据限制' },
-              next: { category: { 'economic-indicator': '数据', 'financial-event': '金融事件', 'central-bank-activity': '央行' }, focus: '重点关注', count: '{count} 个高影响事件 · 按时间排序', importance: { high: '高影响', medium: '中影响', low: '低影响' }, expected: '预期', previous: '前值', noExpected: '预期未收录', soon: '距现在 {days} 天', why: '为什么关注', watchHigher: '高于预期', watchLower: '低于预期', watchInline: '符合预期', watchOther: '其他情形' },
-              citations: '证据',
-              translated: '译',
-              polarity: { bearish: '偏空', bullish: '偏多', mixed: '冲突', neutral: '中性' },
-              flow: { in: '净流入', out: '净流出' },
-              horizons: { short: '短期', medium: '中期', long: '长期' },
-              visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', scale: '刻度 ±{max}', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
-              history: { title: '过去 14 天', loading: '正在读取历史版次…', today: '今天', missing: '缺口', missingRun: '未生成 · 当天未运行', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' },
-              stateReasons: {
-                noBrief: '简报只读取已启用的来源和已发布的结论。打开需要的来源并完成一次采集后，今天的消息、数据和结论会出现在这里。',
-                unreadable: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
-                unreadableSince: '这次读取没有完成；上次成功生成于 {moment}。',
-                nothingEnabled: '四块读数都没有接通。先检查情报源，再打开今天。',
-                noEditions: '还没有历史版次。'
-              },
-              settings: { title: '日报设置', generation: '生成', ai: 'AI 编辑', open: '日报设置' },
-              emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
-              noBriefTitle: '还没有可用的日报',
-              noBriefBody: '简报只读取已启用的来源和已发布的结论。先在「配置看板来源」里打开需要的源，等一次采集完成后，今天的消息、数据和结论会出现在这里。',
-              unavailableHint: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
-              configureSources: '配置情报源',
-              copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试',
-              aiSettings: { notApplied: 'AI 编辑未生成', failedHint: 'AI 没有通过校验，日报未生成；可以重试或检查 AI 设置。', failure: { 'editorial-disabled': 'AI 编辑已关闭', 'model-unavailable': '默认模型不可用', 'editorial-timeout': 'AI 编辑超时', 'editorial-fallback': 'AI 输出未通过校验', 'invalid-shape': 'AI 输出格式不合规', 'unknown-fact': 'AI 引用了不存在的事实', 'unknown-number': 'AI 写入了事实包外的数字', 'forbidden-content': 'AI 输出包含禁用内容', 'too-long': 'AI 输出超长', 'language-mismatch': 'AI 输出语言不符', 'model-not-ready': '模型尚未就绪', 'provider-disabled': '模型供应商已停用', 'missing-api-key': '模型供应商缺少 API Key', timeout: 'AI 调用超时', cancelled: 'AI 调用被取消', 'rate-limited': '模型请求被限流', 'provider-error': '模型供应商返回错误', 'invalid-json': 'AI 返回的不是合法 JSON', 'schema-validation-failed': 'AI 输出未通过结构校验', 'invalid-translation': '译文未通过校验', 'agent-turn-output-truncated': 'AI 单轮输出被截断', 'source-failed': '情报源采集失败', 'candidate-overflow': '候选数据超出上限', 'build-failed': '日报生成失败', 'store-failed': '日报保存失败', 'time-invalid': '生成时间无效' }, loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', webSearch: '允许补查缺失结论', webSearchHint: '仅在本地缺少高影响事件结论时搜索；来源/时间写入日报，截止到本期生成时间。', webSearchOff: '日报未授权 WebSearch', webSearchOffHint: '若 Web Search 源已配置，点“去授权”打开日报 AI 设置开启；若未配置，先到 设置 → 网页搜索 → 供应商 配置。', webSearchNeedsSetup: '无法开启：请先在 设置 → 网页搜索 → 供应商 配置并启用搜索源。', webSearchUnsupported: '当前模型不支持 Anthropic 内置搜索；补查将使用平台 Web Search（需已启用搜索源）。', goEnable: '去授权', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', save: '保存', saving: '保存中…', cancel: '取消', failed: '保存失败，请重试', openModelSettings: '打开模型设置' },
-              limits: {
-                expand: '展开问题留痕',
-                collapse: '收起',
-                counts: { blocking: '{count} 阻塞', warning: '{count} 警告', info: '{count} 提示' },
-                severity: { blocking: '阻塞', warning: '警告', info: '提示' },
-                categories: { data: '数据获取', baseline: '变化基线', backfill: '回补', ai: 'AI 生成', evidence: '证据', system: '系统', timing: '时点' },
-                groupCount: '{count} 项',
-                groupExample: '例：{text}',
-                openGroup: '查看「{label}」的 {count} 项明细',
-                drawerTitle: '「{label}」明细（{count} 项）',
-                drawerClose: '关闭明细',
-                groupLabels: {
-                  'row-disabled': '来源未启用', 'row-unavailable': '数据不可用', 'row-stale': '数据陈旧', 'row-no-value': '没有可用数值',
-                  'etf-no-history': '08:00 前无可用历史', 'capital-gate': '随资金面数据不可用',
-                  'no-baseline': '变化基线缺失', 'no-baseline-last-release': '变化基线缺失', 'insufficient-window': '比较窗口不足',
-                  'news-disabled': '新闻来源未启用', 'news-unavailable': '新闻舆情不可用',
-                  'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
-                  'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录',
-                  'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
-                  'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
-                  'source-failure': '情报源采集失败', 'system-failure': '生成或存储未完成',
-                  'evidence-gap': '数据缺口', 'evidence-caveat': '数据限制', 'evidence-no-citation': '反证未附证据',
-                  'evidence-conflict': '来源冲突', 'evidence-none': '没有证据脚注', 'timing-late': '生成晚于截止'
-                },
-                roles: { source: '来源', time: '时间', advice: '建议' },
-                listSeparator: '、',
-                sources: {
-                  stablecoin: 'DefiLlama 稳定币', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
-                  market: '行情数据', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
-                  analysis: '分析结论', webSearch: 'WebSearch 证据', editorial: '日报 AI 编辑', backfill: '历史接口回补',
-                  settings: '日报生成设置', collector: '情报源', system: '生成服务'
-                },
-                row: {
-                  noBaseline: '{row}：昨日无可比数据，已隐藏变化',
-                  noBaselineLastRelease: '{row}：昨日无可比数据，已隐藏变化；上次发布于 {time}，间隔 {interval}',
-                  insufficientWindow: '{row}：比较窗口不足，未显示变化',
-                  stale: '{row}：数据陈旧，最后观测于 {time}',
-                  unavailable: '{row}：数据不可用',
-                  disabled: '{row}：来源未启用，未显示数据',
-                  noValue: '{row}：没有可用数值',
-                  etfNoHistory: '{row}：08:00 前无可用历史，最近交易日数据尚未返回',
-                  capitalGate: '{row}：随稳定币/资金面数据不可用'
-                },
-                interval: { minutes: '{count} 分钟', hours: '{count} 小时', days: '{count} 天' },
-                macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录' },
-                calendarDisabled: '宏观日历来源未启用，事件与未来日程未显示',
-                calendarUnavailable: '宏观日历暂不可用',
-                newsDisabled: '新闻来源未启用，舆情未显示',
-                newsUnavailable: '新闻舆情暂不可用',
-                backfill: { done: '已回补 {count} 个核心数据行：{rows}', generic: '已执行一次核心数据回补' },
-                ai: { fallback: '自选模型不可用，本期回落到默认模型', webSearchOff: 'WebSearch 未授权，缺失的宏观结论无法补查', failure: 'AI 编辑未完成：{reason}' },
-                evidence: { gap: '数据缺口：{text}', caveat: '数据限制：{text}', noCitation: '反证未附证据：{text}', conflict: '来源冲突：{text}', none: '本期结论没有证据脚注' },
-                system: { failure: '生成或存储未完成：{reason}' },
-                timing: { late: '本期在统计截止后 {interval}生成' },
-                advice: {
-                  enableSource: '在「配置看板来源」里启用该来源，等一次采集完成后再生成。',
-                  checkSource: '检查来源网络与凭据，等一次成功采集后再生成；沿用上次数据时按陈旧值阅读。',
-                  waitCollection: '等一次采集完成后再生成。',
-                  restoreCapital: '先恢复稳定币与资金面数据，ETF 会随之恢复。',
-                  etfAfterOpen: '08:00 前 ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。',
-                  waitNextRelease: '等下一次发布或上一交易日数据后再比较；本期不显示变化。',
-                  widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
-                  fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
-                  checkCalendar: '在「配置情报源」里启用宏观日历，或等日历采集恢复。',
-                  checkNews: '在「配置情报源」里启用新闻来源，或等舆情采集恢复。',
-                  backfill: '无需操作；若同一指标反复回补，检查常规采集是否按时完成。',
-                  modelFallback: '在模型服务里恢复自选模型，或继续使用默认模型。',
-                  webSearch: '在日报 AI 设置里授权 WebSearch，然后重新生成。',
-                  retryAi: '重新生成；若反复失败，检查日报 AI 设置和模型服务。',
-                  evidence: '按现有证据阅读，必要时重新生成并要求结论引用证据。',
-                  citeEvidence: '以带脚注的证据为主；可重新生成并要求反证引用证据。',
-                  officialSource: '以官方来源为准；冲突未消解前降低该条证据权重。',
-                  keepRunning: '保持应用在生成时间运行；错过时会在下次打开补生成。',
-                  system: '重新生成；若反复失败，检查本地存储和运行状态。'
-                }
-              },
-              generationProgress: {
-                running: '进行中',
-                waiting: '等待',
-                elapsed: '已用 {duration}',
-                repair: '修正',
-                finished: '已完成',
-                note: '写作和校验各是一次模型调用，会停一会儿；这一步会显示已用时间，说明它仍在运行。',
-                railRunning: '生成中',
-                unknown: '生成还在进行，只是这一步没取回来，会自动再试。',
-                unknownStage: '进度未知'
-              },
-              generationTrace: {
-                title: '生成阶段',
-                completed: '已完成',
-                failed: '失败',
-                attempt: '本次尝试',
-                duration: '耗时 {duration}',
-                expand: '展开阶段',
-                collapse: '收起阶段',
-                missing: '本次未记录时间线',
-                failedAt: '失败于：{stage}',
-                notRecorded: '未记录',
-                states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notNeeded: '无需修正', notRun: '未执行' },
-                stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '字段响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
-                stageHelpLabel: '查看{stage}的阶段说明',
-                // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
-                stageHelp: {
-                  source: '按本期截止时间读取当时的数据：窗口、源与禁用/缺失状态，不取晚于截止时间的值。',
-                  candidates: '汇总 24h 宏观/新闻、7 日事件、数据行、杠杆与利率路径，去重后算 relevance/materiality 并套用上限。',
-                  selection: '把完整候选交给 AI，由它给出 shown/items、focus 与 hidden reason；缺 consensus 不是隐藏理由。',
-                  'field-backfill': '执行 AI 请求的字段/回补，校验 asOf ≤ cutoff；本地 store 优先，缺失才查历史 API，失败记 gap。',
-                  writing: '用已选 facts 生成 lede/items/hidden/importance/nextFocus；数字只能取自 facts，输出 JSON。',
-                  validation: '校验 schema、未知 fact/数字、hidden 覆盖、语言、citation、缺 why 与截断。',
-                  'repair-1': '带校验错误重写一次。',
-                  'repair-2': '第二次带校验错误重写；仍失败就终止，不落库。',
-                  store: '写 edition、更新 banner、清理 attempt；失败不落库。'
-                },
-                durationUnits: { milliseconds: '{count} ms', seconds: '{count} 秒', minutes: '{count} 分 {seconds} 秒' }
-              },
-              failurePanel: {
-                editorialTitle: 'AI 编辑失败，日报未生成',
-                generationTitle: '日报生成失败',
-                codeLabel: '原因',
-                detailLabel: '详情',
-                suggestionLabel: '建议',
-                unknownCode: '未知原因',
-                // 结论校验类的失败码（缺字段/写法不合规）过去落到「未知原因」，读者看不出该改什么方向。
-                conclusionRejected: '结论未通过校验：缺字段或写法不合规',
-                advice: {
-                  model: '打开模型服务或 AI 设置，确认供应商已启用、API Key 已填写，并选择一个可用模型后重试。',
-                  retryOrModel: '换一个模型，或稍后重新生成；若反复出现，请在 AI 设置里换用输出上限更高的模型。',
-                  retryOrSettings: '先重新生成；若反复失败，检查日报 AI 设置和所选模型，再试一次。',
-                  data: '这不是模型问题：请检查情报源采集和候选数据，等一次采集完成后再生成。',
-                  system: '先重新生成；若反复失败，检查本地存储空间和运行状态。'
-                },
-                detail: { 'default-unavailable': '平台默认模型不可用', 'custom-unavailable': '自选模型不可用', selection: '模型返回的选择结果格式不正确' },
-                openAiSettings: 'AI 设置',
-                openModelService: '打开模型服务'
-              },
-              generationSettings: {
-                generationTime: '生成时间', generationTimeHint: '按你的显示时区解释：写 08:05 就是你所在时区的早上 8:05。既是自动生成时刻，也是本期统计截止时间。默认 08:00。',
-                invalidTimeZone: '时区无效（{zone}），自动生成已暂停；改成有效的时区后保存即可恢复。',
-                manualUtcNote: '时区无效，手动生成会按 UTC 时刻生成。',
-                windowHours: '统计窗口', windowHoursHint: '日报覆盖最近这段时间的数据，默认 24 小时。',
-                windowHoursOption: '{hours} 小时',
-                note: '保存后从下一份日报生效；已生成的版次保留当时的窗口和截止时间，不回溯改写。',
-                save: '保存', saving: '保存中…', cancel: '取消', loading: '正在读取设置…', failed: '保存失败，请重试'
-              }
-            }
+            dailyBriefing: dailyBriefingText['zh-CN']
           },
           calendar: {
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
@@ -977,6 +837,7 @@ mi: miText['zh-CN'],
             fomcRefresh: {
               publishedAt: '官方公布时间', retained: '刷新失败，显示上次官方值',
               action: '获取官方值',
+              confirm: '获取', cancel: '取消',
               confirmation: '将请求 Fed 官方 FOMC 决议并更新此事件的已验证值。',
               pending: '正在获取 Fed 官方值…',
               updated: '已获取 Fed 官方值。', unchanged: 'Fed 官方值已是最新。', unavailable: 'Fed 官方值暂不可用，未保存任何值。'
@@ -1665,7 +1526,7 @@ mi: miText['en-US'],
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
             failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
-                        triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart' } },
+            triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
 loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
             // so two conclusions seconds apart do not read as the same one posted twice.
@@ -1690,10 +1551,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             retry: 'Retry',
             refresh: 'Refresh',
             labels: { bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral', mixed: 'Mixed' },
-            counts: '{count} items',
-            breakdown: '{bull} bullish · {bear} bearish · {flat} neutral',
             engine: { model: 'Model', rules: 'Rules' },
-            bodyLimited: 'Some items are headline-only',
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
             openAll: 'Open sentiment list',
             updatedAt: 'Updated {time}',
@@ -1707,7 +1565,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               detail: { evidence: 'Evidence quote', translated: 'Translation', strength: 'Strength', confidence: 'Confidence', strengthLevels: { weak: 'weak', medium: 'medium', strong: 'strong' }, body: 'Body excerpt', noBody: 'Judged from the headline and summary only', translatingBody: 'Translating body…', translationFailed: 'Body translation failed; showing the original.', translateBody: 'Translate body', engine: 'Engine', prompt: 'Prompt', original: 'Original', openOriginal: 'Open original' },
               emptyFiltered: 'No items match these filters.',
               moreActions: 'More actions',
-              translationStatus: { waiting: 'Waiting', waitingHint: 'Queued: up to 5 run concurrently; Cancel stops the remaining queue', translating: 'Translating', translated: 'Translated', failed: 'Failed', contextMenu: 'Right-click for actions', translateOne: 'Translate this item', retranslateOne: 'Retranslate' },
+              translationStatus: { waiting: 'Waiting', queue: 'Translating {done}/{total}', translating: 'Translating', translated: 'Translated', failed: 'Failed', contextMenu: 'Right-click for actions', translateOne: 'Translate this item', retranslateOne: 'Retranslate' },
               clearFilters: 'Clear filters',
               loadMore: 'Load more',
               settings: 'Settings'
@@ -1732,11 +1590,36 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           },
           analysisDrawer: { title: 'Analysis timeline', open: 'Analysis timeline', close: 'Close' },
           dashboard: {
+                        signalAnalysis: {
+              label: 'Analysis progress',
+              states: {
+                published: 'The analysis is out; read it in the timeline',
+                skipped: 'Not analysed this time',
+                failed: 'Analysed but did not succeed'
+                // No `stopped` line: that branch returns the reason sentence directly, so an outer
+                // status sentence would never reach the screen.
+              },
+              offByReader: 'You turned auto-analysis off, so this signal will not be analysed automatically',
+              stoppedReasons: {
+                'run-cancelled': 'This run was cancelled',
+                'run-superseded': 'A newer run replaced this one; nothing to wait for',
+                'run-unrecognized': 'The state of this run could not be read',
+                'run-expired': 'This analysis ran, but it is past the retention period, so the result cannot be seen'
+              },
+              reasonUnknown: 'Reason not recorded',
+              separator: ': '
+            },
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: 'Crypto market checklist',
             description: 'Read capital, macro, crypto risk appetite, then leverage. Keep partial when coverage is missing; do not fill it as neutral.',
             backToAgents: 'Back to Agents',
             configureSources: 'Configure intelligence sources',
+            signalRead: {
+              'query-failed': 'We could not check whether this signal has been analysed. The numbers above are unaffected.',
+              'invalid-as-of': 'We could not check, at this instant, whether this signal has been analysed. The numbers above are unaffected.',
+              'contract-invalid': 'We could not check whether this signal has been analysed (this does not mean it was not). The numbers above are unaffected.',
+              ariaLabel: 'Could not check whether this signal has been analysed; the numbers are unaffected',
+            },
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',
               chart: 'Common-anchor returns',
@@ -1923,6 +1806,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               signalDetailsOpen: 'View data',
               signalDetailsTitle: 'Signal reading',
               signalDetailsRule: 'Rule',
+              /** The rule's own words; the internal id never reaches the reader. */
+              signalDetailsRuleName: 'Sharp open-interest drop',
               signalDetailsWindow: 'Window',
               signalDetailsDrop: 'Open interest change',
               signalDetailsVolume: 'Volume vs average',
@@ -1951,10 +1836,21 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceStates: { loading: 'Loading', available: 'Positioning and funding available', empty: 'No observation', unavailable: 'Positioning unavailable' },
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
-              paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' }
+              paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' },
+              paymentDirectionsCompact: { 'long-pays-short': 'Longs pay', 'short-pays-long': 'Shorts pay', neutral: 'Neutral' },
+              changeArrows: { up: '↑', down: '↓' }
             },
             divergence: {
               title: 'Cross-panel divergence',
+              chip: 'Divergence: funding – leverage',
+              chipTip: 'Funding–leverage divergence | windows 7 days / 24 hours | observed',
+              chipDetailsOpen: 'View data',
+              chipDetailsTitle: 'Divergence reading',
+              chipFreshLabel: 'Freshness',
+              chipFresh: 'within its freshness window',
+              chipAsOf: 'as of {at}',
+              chipWhyLabel: 'Why this counts as a divergence',
+              chipWhy: 'Stablecoins falling over 7 days, open interest rising over 24 hours, and funding negative: all three must hold.',
               helpLabel: 'How this card is produced',
               /** Four one-look bullets: the bubble is a glance, not a document. */
               helpBullets: [
@@ -1974,17 +1870,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               withheldListSep: ', ',
               labelSep: ': ',
               missingValue: '—',
-              retry: 'Retry',
-              unavailableWhy: {
-                'all-legs-missing': 'all six sources came back empty',
-                'query-failed': 'the query failed, independently of the data',
-                'invalid-clock': 'the clock value was malformed, a program fault',
-                'too-large': 'the answer was too large for this card',
-                'bad-payload': 'the request was malformed (a program fault, not a data one)',
-                'bad-answer': 'the answer did not match the agreed shape (a program fault)'
-              },
-              nothingCompared: 'None of the three pairs could be compared: the missing figures were not available',
-              missingLegs: 'Still missing: {legs}',
+              unavailableTrace: 'Divergence reading unavailable',
               loading: 'Comparing the three pairs…',
               empty: 'None of the three pairs diverged today: money, leverage and price point the same way.',
               unavailable: 'Cannot compare right now: the figures needed did not arrive together, so no conclusion today.',
@@ -2095,13 +1981,35 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             capitalConditions: {
               title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'Capital-conditions data is not available yet.',
-              stablecoin: 'Stablecoin', asset: 'Asset', totalSupply: 'Total supply',
+              stablecoin: 'Stablecoins', stablecoinScope: ' (USDT + USDC)', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',
-              streak: '{flow} · {count} days', streakSingle: '{flow} · 1 day',
-              observedAt: 'Observed at', etfFlow: 'Market flows', recent7TradingDays: 'Last 7 trading days', funds: 'Capital', btc: 'BTC ETF', eth: 'ETH ETF',
+              streak: '{flow} · {count}d', streakSingle: '{flow} · 1d',
+              shortFlowDirections: { inflow: 'Inflow', outflow: 'Outflow', zero: 'Flat' },
+              observedAt: 'Observed at', etfFlow: 'Market flows', chartWindow: 'Last 7 sessions · USD millions',
+              fundsColumn: 'Stablecoin net inflow', fundsScope: 'All USD stablecoins', btc: 'BTC ETF', eth: 'ETH ETF', etfScope: 'US spot ETF',
+              infoAria: 'How to read this card',
+              chartScopeNoteMain: 'Stablecoin net inflow of all USD stablecoins, no today.',
+              chartScopeNoteEtf: 'BTC / ETH are US spot ETF net flows, not the same money.',
+              columnScopeNote: 'Column scope: stablecoins = all USD; BTC/ETH = US spot ETF.',
+              notComparable: 'Not comparable: {row} row has today.',
+              expandDaily: 'View daily values',
+              dailyDialogTitle: 'Market flows · Daily values',
+              dailyCaption: 'Daily values', dailyUnits: 'USD millions · UTC days',
+              dailyFundsShort: 'Stablecoins', dateColumn: 'Date',
+              flowNotEnoughDays: 'Only {days} days have data in the last 7.',
+              flowNoDays: 'No usable flow data for these 7 days.',
+              a11yAmountMillion: '{value} million US dollars', a11yNoFlow: 'No net inflow', a11yLabel: '{direction} {amount}', a11yCell: '{amount}, {scope}',
               flowDirections: { inflow: 'Net inflow', outflow: 'Net outflow', zero: 'Flat' },
-              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.', staleRead: 'This refresh did not read; these are the previous readings.'
+              refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.', staleRead: 'This refresh did not read; these are the previous readings.',
+              signalChip: 'Three-day net outflow {amount}', signalInsufficient: 'Insufficient data',
+              signalInsufficientReason: 'Insufficient data: the three-day total is not available',
+              signalTooltip: '{rule} | window {window} | {kind}', signalRuleName: 'ETF net outflow', signalRuleWindow: '3 trading days', signalKindObserved: 'fact reported by the source',
+              signalAriaAlert: '{chip}, {asset}',
+              signalDetailTitle: 'ETF three-day net outflow', signalDetailRule: 'Rule', signalDetailWindow: 'Window',
+              signalDetailCumulative: 'Three-day total', signalDetailCoverage: 'Coverage', signalCoverage: '{covered}/{required} trading days',
+              signalDetailTradingDay: 'Trading day (UTC)', signalDetailObservedAt: 'Observed at',
+              signalDetailNote: 'This is a net flow the source reported, not a figure computed here; the trading day and the observation time are different things.'
             },
             sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {
@@ -2154,207 +2062,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               manageSources: 'Manage sources ›'
             },
             context: { sourceStatus: { title: 'Source status' } },
-            dailyBriefing: {
-              entry: 'Daily brief', title: 'Daily brief', generation: { schedule: 'Auto at 08:05', checking: 'Checking…', ready: 'Generated', missing: 'Not generated · caught up on next open', history: 'History' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; 08:05 is only a head start, and a missed run is caught up on the next open.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
-              window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsUnit: 'readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
-              moreNumbers: 'More numbers', noValue: '—',
-              sections: { news: 'Past 24 hours', macro: 'Macro in the past 24 hours', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next 7 days', limits: 'Data gaps & limits', leverage: 'Leverage', policyPath: 'Rate path', marketImplied: 'Market-implied', rangeUnavailable: 'Range unavailable' },
-              newsFocus: 'Focus',
-              newsCount: '{count} items',
-              labelSeparator: ': ',
-              citationSources: { macroCalendar: 'Macro calendar', news: 'News', analysis: 'Analysis evidence' },
-              countries: { US: 'United States', EU: 'Euro area', EZ: 'Euro area', DE: 'Germany', FR: 'France', GB: 'United Kingdom', JP: 'Japan', CN: 'China' },
-              policyOutcomes: { 'no-change': 'No change', 'hike-25': 'Hike 25bp', 'hike-50-plus': 'Hike 50bp+', 'cut-25': 'Cut 25bp', 'cut-50-plus': 'Cut 50bp+' },
-              comparison: { label: 'vs previous edition', sameDirection: 'Direction unchanged', directionChanged: 'Direction turned from {from} to {to}', funding: 'BTC funding {value}', stablecoin: 'Stablecoins {value}', etf: 'US spot Bitcoin fund {value}', newMacro: '{count} new macro events' },
-              groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
-              tiers: { must: 'Must', support: 'Support', reference: 'Reference' },
-              states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
-              // This reading is a fallback, not the exact 24h value; unmarked, the poster reads as live.
-              // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
-              // last close is not today's reading.
-              staleBasis: { lastClose: 'Most recent close', seriesLevel: 'Latest level (no 24-hour move that day)', published: 'Official close of the prior session' },
-              reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
-              changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
-              // What each change is measured against: a rolling window, a session close, a release.
-              changeWindows: { '24h': '24h', '1d': '1d', daily: '1d', '7d': '7d', '30d': '30d', latest: '', 'trading-day': 'vs prior session close', 'publication-day': 'vs last publication' },
-              changeBaselineSpan: ' ({from} → {to})',
-              units: { points: 'pts' },
-              rowTotal: 'Total {value}',
-              rowCurrent: 'Current {value}',
-              rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'US spot bitcoin ETF', etfEth: 'US spot ether ETF', btc: 'BTC', eth: 'ETH', index: 'Nasdaq', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: 'US 10Y nominal yield', us10yReal: 'US 10Y real yield' },
-              empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
-              newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
-              macroEmptyCodes: { 'past-24h-no-high-impact-release': 'No high-impact release in the past 24 hours', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
-              nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
-              macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },
-              conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },
-              next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Consensus', previous: 'Previous', noExpected: 'Consensus not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with consensus', watchOther: 'Other scenario' },
-              citations: 'Evidence',
-              translated: 'Translated',
-              polarity: { bearish: 'Bearish', bullish: 'Bullish', mixed: 'Mixed', neutral: 'Neutral' },
-              flow: { in: 'Net inflow', out: 'Net outflow' },
-              horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
-              visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', scale: 'Scale ±{max}', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
-              history: { title: 'Past 14 days', loading: 'Reading earlier editions…', today: 'Today', missing: 'Missing', missingRun: 'Not generated · app was not running', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' },
-              stateReasons: {
-                noBrief: 'The brief reads only enabled sources and published conclusions. Open the sources you need and let one collection finish; today’s messages, numbers and conclusion will appear here.',
-                unreadable: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
-                unreadableSince: 'This read did not finish; it last generated at {moment}.',
-                nothingEnabled: 'All four readings are disconnected. Check the sources, then open today again.',
-                noEditions: 'No earlier editions yet.'
-              },
-              settings: { title: 'Briefing settings', generation: 'Generation', ai: 'AI editing', open: 'Briefing settings' },
-              emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
-              noBriefTitle: 'No daily brief yet',
-              noBriefBody: 'The brief reads only enabled sources and published conclusions. Open the dashboard sources, wait for one collection, and today’s messages, numbers and conclusion will appear here.',
-              unavailableHint: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
-              configureSources: 'Configure sources',
-              copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again',
-              aiSettings: { notApplied: 'AI editing did not run', failedHint: 'AI failed validation, so the brief was not generated. Retry or check AI settings.', failure: { 'editorial-disabled': 'AI editing is off', 'model-unavailable': 'Default model unavailable', 'editorial-timeout': 'AI editing timed out', 'editorial-fallback': 'AI output failed validation', 'invalid-shape': 'AI output shape is invalid', 'unknown-fact': 'AI cited a fact that does not exist', 'unknown-number': 'AI wrote a number outside the fact packet', 'forbidden-content': 'AI output contains forbidden content', 'too-long': 'AI output is too long', 'language-mismatch': 'AI output language mismatch', 'model-not-ready': 'Model is not ready', 'provider-disabled': 'Model provider is disabled', 'missing-api-key': 'Model provider has no API key', timeout: 'AI invocation timed out', cancelled: 'AI invocation was cancelled', 'rate-limited': 'Model request was rate-limited', 'provider-error': 'Model provider returned an error', 'invalid-json': 'AI did not return valid JSON', 'schema-validation-failed': 'AI output failed schema validation', 'invalid-translation': 'Translation failed validation', 'agent-turn-output-truncated': 'AI output was truncated', 'source-failed': 'Source collection failed', 'candidate-overflow': 'Too many candidates', 'build-failed': 'Brief generation failed', 'store-failed': 'Brief could not be saved', 'time-invalid': 'Invalid generation time' }, loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', webSearch: 'Allow missing-conclusion research', webSearchHint: 'Only when a high-impact conclusion is missing; sources/time are cited and capped at this edition\'s generation time.', webSearchOff: 'WebSearch is not authorized for the brief', webSearchOffHint: 'If the source is configured, open Brief AI settings to authorize it; otherwise configure a provider under Settings → Web Search → Providers first.', webSearchNeedsSetup: 'Cannot enable: configure and enable a provider under Settings → Web Search → Providers first.', webSearchUnsupported: 'This model does not support Anthropic built-in web search; research will use the platform Web Search (a configured provider is required).', goEnable: 'Authorize', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', save: 'Save', saving: 'Saving…', cancel: 'Cancel', failed: 'Save failed — try again', openModelSettings: 'Open model settings' },
-              limits: {
-                expand: 'Show diagnostics',
-                collapse: 'Collapse',
-                counts: { blocking: '{count} blocking', warning: '{count} warnings', info: '{count} notes' },
-                severity: { blocking: 'Blocking', warning: 'Warning', info: 'Note' },
-                categories: { data: 'Data access', baseline: 'Change baseline', backfill: 'Backfill', ai: 'AI generation', evidence: 'Evidence', system: 'System', timing: 'Timing' },
-                groupCount: '{count} items',
-                groupExample: 'Example: {text}',
-                openGroup: 'Show the {count} items in {label}',
-                drawerTitle: '{label} ({count} items)',
-                drawerClose: 'Close details',
-                groupLabels: {
-                  'row-disabled': 'Source disabled', 'row-unavailable': 'Data unavailable', 'row-stale': 'Stale data', 'row-no-value': 'No usable value',
-                  'etf-no-history': 'No history before 08:00', 'capital-gate': 'Blocked by the capital snapshot',
-                  'no-baseline': 'Change baseline missing', 'no-baseline-last-release': 'Change baseline missing', 'insufficient-window': 'Comparison window too short',
-                  'news-disabled': 'News sources disabled', 'news-unavailable': 'News sentiment unavailable',
-                  'calendar-disabled': 'Calendar sources disabled', 'calendar-unavailable': 'Calendar unavailable',
-                  'macro-consensus': 'Consensus not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected',
-                  'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
-                  'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
-                  'source-failure': 'Source collection failed', 'system-failure': 'Generation or storage incomplete',
-                  'evidence-gap': 'Data gap', 'evidence-caveat': 'Data limit', 'evidence-no-citation': 'Counter-evidence without citation',
-                  'evidence-conflict': 'Source conflict', 'evidence-none': 'No evidence footnotes', 'timing-late': 'Generated after cutoff'
-                },
-                roles: { source: 'Source', time: 'Time', advice: 'Advice' },
-                listSeparator: ', ',
-                sources: {
-                  stablecoin: 'DefiLlama stablecoins', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
-                  market: 'Market snapshot', macro: 'Macro market', rates: 'Macro rates', calendar: 'Macro calendar', news: 'News sources',
-                  analysis: 'Analysis conclusion', webSearch: 'WebSearch evidence', editorial: 'Brief AI editor', backfill: 'Historical interface backfill',
-                  settings: 'Brief generation settings', collector: 'Intelligence sources', system: 'Generation service'
-                },
-                row: {
-                  noBaseline: '{row}: no comparable data for yesterday, so the change is hidden',
-                  noBaselineLastRelease: '{row}: no comparable data for yesterday, so the change is hidden; last published {time}, {interval} ago',
-                  insufficientWindow: '{row}: the comparison window is too short, so no change is shown',
-                  stale: '{row}: stale data, last observed {time}',
-                  unavailable: '{row}: data unavailable',
-                  disabled: '{row}: source is disabled, so no value is shown',
-                  noValue: '{row}: no usable value',
-                  etfNoHistory: '{row}: no usable history before 08:00; the latest trading day has not arrived',
-                  capitalGate: '{row}: unavailable with the stablecoin/capital snapshot'
-                },
-                interval: { minutes: '{count} min', hours: '{count} hours', days: '{count} days' },
-                macro: { consensusMissing: '{event}: consensus not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected' },
-                calendarDisabled: 'Macro calendar sources are disabled, so events and the upcoming schedule are hidden',
-                calendarUnavailable: 'The macro calendar is unavailable',
-                newsDisabled: 'News sources are disabled, so sentiment is hidden',
-                newsUnavailable: 'News sentiment is unavailable',
-                backfill: { done: 'Backfilled {count} core data rows: {rows}', generic: 'A core-data backfill ran for this edition' },
-                ai: { fallback: 'The selected model was unavailable, so this edition fell back to the default model', webSearchOff: 'WebSearch is not authorized, so missing macro conclusions could not be researched', failure: 'AI editing did not finish: {reason}' },
-                evidence: { gap: 'Data gap: {text}', caveat: 'Data limit: {text}', noCitation: 'Counter-evidence has no citation: {text}', conflict: 'Source conflict: {text}', none: 'This conclusion has no evidence footnotes' },
-                system: { failure: 'Generation or storage did not finish: {reason}' },
-                timing: { late: 'Generated {interval} after the statistics cutoff' },
-                advice: {
-                  enableSource: 'Enable the source in dashboard sources and wait for one collection, then generate again.',
-                  checkSource: 'Check the source network and credentials, then wait for a successful collection; read retained data as stale.',
-                  waitCollection: 'Wait for one collection, then generate again.',
-                  restoreCapital: 'Restore the stablecoin/capital snapshot first; the ETF rows recover with it.',
-                  etfAfterOpen: 'ETF has no usable history before 08:00; generate after the open, or confirm the 0xRouter ETF source is enabled.',
-                  waitNextRelease: 'Compare after the next release or trading day; this edition shows no change.',
-                  widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
-                  fillConsensus: 'Fill in the consensus value in the macro calendar source; without it the conclusion cannot compute a surprise.',
-                  checkCalendar: 'Enable the macro calendar under intelligence sources, or wait for calendar collection to recover.',
-                  checkNews: 'Enable news sources under intelligence sources, or wait for sentiment collection to recover.',
-                  backfill: 'No action needed; if the same metric keeps backfilling, check that routine collection runs on time.',
-                  modelFallback: 'Restore the selected model in the model service, or keep using the default.',
-                  webSearch: 'Authorize WebSearch in Brief AI settings, then regenerate.',
-                  retryAi: 'Regenerate; if it keeps failing, check Brief AI settings and the model service.',
-                  evidence: 'Read with the available evidence; regenerate and require the conclusion to cite evidence if needed.',
-                  citeEvidence: 'Rely on cited evidence first; regenerate and require counter-evidence to cite evidence.',
-                  officialSource: 'Prefer the official source; lower the weight of this evidence until the conflict is resolved.',
-                  keepRunning: 'Keep the app running at the generation time; a missed run is caught up on the next open.',
-                  system: 'Regenerate; if it keeps failing, check local storage and runtime status.'
-                }
-              },
-              generationProgress: {
-                running: 'Running',
-                waiting: 'Waiting',
-                elapsed: 'Elapsed {duration}',
-                repair: 'Revision',
-                finished: 'Done',
-                note: 'Writing and validation are one model call each, so they hold still for a while; the elapsed time keeps counting, which is how you know it is still running.',
-                railRunning: 'Generating',
-                unknown: 'The generation is still running; this step just could not be read. It will be asked again.',
-                unknownStage: 'progress unknown'
-              },
-              generationTrace: {
-                title: 'Generation stages',
-                completed: 'Completed',
-                failed: 'Failed',
-                attempt: 'This attempt',
-                duration: 'Took {duration}',
-                expand: 'Show stages',
-                collapse: 'Hide stages',
-                missing: 'No stage timeline was recorded for this attempt',
-                failedAt: 'Failed at: {stage}',
-                notRecorded: 'Not recorded',
-                states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notNeeded: 'No repair needed', notRun: 'Not run' },
-                stages: { source: 'Data collection', candidates: 'Candidate pool', selection: 'AI selection', 'field-backfill': 'Field response/backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Store/publish' },
-                stageHelpLabel: 'About the {stage} stage',
-                // One fixed line per stage, shown only in the question-mark tooltip.
-                stageHelp: {
-                  source: 'Reads the as-of snapshot at the edition cutoff: window, sources and disabled/missing state; never values after the cutoff.',
-                  candidates: 'Collects 24h macro/news, 7-day events, data rows, leverage and rate path; dedupes, scores relevance/materiality and applies caps.',
-                  selection: 'Hands the full candidate set to the AI to pick shown/items, focus and hidden reasons; missing consensus is not a hidden reason.',
-                  'field-backfill': 'Runs the AI’s field/backfill requests and checks asOf ≤ cutoff; local store first, history API only when missing, failures become gaps.',
-                  writing: 'Writes lede/items/hidden/importance/nextFocus from the selected facts, numbers only from facts, as JSON.',
-                  validation: 'Checks schema, unknown facts/numbers, hidden coverage, language, citations, missing why and truncation.',
-                  'repair-1': 'Rewrites once with the validation errors.',
-                  'repair-2': 'Rewrites a second time with the validation errors; a further failure stops the run.',
-                  store: 'Writes the edition, updates the banner and clears the attempt; a failure stores nothing.'
-                },
-                durationUnits: { milliseconds: '{count} ms', seconds: '{count} s', minutes: '{count} min {seconds} s' }
-              },
-              failurePanel: {
-                editorialTitle: 'AI editing failed, so the brief was not generated',
-                generationTitle: 'Daily brief generation failed',
-                codeLabel: 'Reason',
-                detailLabel: 'Details',
-                suggestionLabel: 'Suggested fix',
-                unknownCode: 'Unknown cause',
-                conclusionRejected: 'The conclusion failed validation: a field is missing or the wording does not match the contract',
-                advice: {
-                  model: 'Open the model service or AI settings, confirm the provider is enabled and has an API key, then pick an available model and retry.',
-                  retryOrModel: 'Switch to another model, or regenerate later; if it keeps happening, choose a model with a higher output limit in AI settings.',
-                  retryOrSettings: 'Regenerate first; if it keeps failing, check the brief AI settings and the selected model, then try again.',
-                  data: 'This is not a model problem: check intelligence source collection and candidate data, wait for a collection, then generate again.',
-                  system: 'Regenerate first; if it keeps failing, check local storage space and runtime status.'
-                },
-                detail: { 'default-unavailable': 'The platform default model is unavailable', 'custom-unavailable': 'The selected model is unavailable', selection: 'The model returned an invalid selection result' },
-                openAiSettings: 'AI settings',
-                openModelService: 'Open model service'
-              },
-              generationSettings: {
-                generationTime: 'Generation time', generationTimeHint: 'Read in your display time zone: 08:05 here is 08:05 in the zone shown beside it. It is both the automatic run and this edition\'s statistical cutoff. Defaults to 08:00.',
-                invalidTimeZone: 'That time zone is not valid ({zone}), so automatic generation is paused. Save a valid one to resume.',
-                manualUtcNote: 'Automatic generation is paused; a manual run uses the UTC time.',
-                windowHours: 'Statistics window', windowHoursHint: 'How far back each brief reads. Defaults to 24 hours.',
-                windowHoursOption: '{hours} hours',
-                note: 'Applies from the next brief. Editions that already exist keep the window and cutoff they were generated with.',
-                save: 'Save', saving: 'Saving…', cancel: 'Cancel', loading: 'Reading settings…', failed: 'Save failed — try again'
-              }
-            }
+            dailyBriefing: dailyBriefingText['en-US']
           },
           calendar: {
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
@@ -2413,6 +2121,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             fomcRefresh: {
               publishedAt: 'Official publication time', retained: 'Refresh failed; showing previous official value',
               action: 'Fetch official value',
+              confirm: 'Fetch', cancel: 'Cancel',
               confirmation: 'This requests the official Fed FOMC decision and updates verified values for this event.',
               pending: 'Fetching official Fed value…',
               updated: 'Official Fed value was fetched.', unchanged: 'Official Fed value is already current.', unavailable: 'Official Fed value is unavailable. No values were saved.'

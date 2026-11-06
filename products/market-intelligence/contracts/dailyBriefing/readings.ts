@@ -7,8 +7,8 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -123,6 +123,57 @@ export type BriefingRowChange = Readonly<{
   window: BriefingWindow
 }>
 
+/**
+ * One point of a card's stored series: the instant the value belongs to, and the value itself.
+ *
+ * Open interest keeps the notional amount, not a percentage, because the card's number is the amount's
+ * change and the line is drawn from the amounts it moved between.
+ */
+export type BriefingSeriesPoint = Readonly<{ at: string; value: number }>
+
+/**
+ * One point of a price curve: a zero-anchored return, never a price.
+ *
+ * A price line on this card would only ever go up; `returnPercent` says what the window did.
+ */
+export type BriefingCurvePoint = Readonly<{ at: string; returnPercent: number }>
+
+/**
+ * One drawable stretch of a curve.
+ *
+ * Rebased and thinned at build time, and split wherever the source had no reading, so a gap in the
+ * data is a gap in the drawing instead of a straight line through minutes nobody measured.
+ */
+export type BriefingCurveSegment = readonly BriefingCurvePoint[]
+
+/**
+ * Why a card has no curve to draw.
+ *
+ * These are four different facts and stay four: `no-snapshot` the market read carried no curve at
+ * all, `no-anchor` no point in the window with a value (so there is nothing to be zero against),
+ * `too-few-points` fewer than two drawable points, `window-too-long` the edition's window is longer
+ * than the 24-hour curve can honestly cover.
+ */
+export type BriefingCurveReason = 'no-snapshot' | 'no-anchor' | 'too-few-points' | 'window-too-long'
+
+/**
+ * How far the reading travelled inside the edition's window.
+ *
+ * `percent = (high − low) / anchor × 100`, where `anchor` is the window-start close the curve is also
+ * divided by — never a bar's open, never the current price. One window, one zero point: otherwise the
+ * amplitude drifts with the day and the same data computes two different numbers.
+ */
+export type BriefingAmplitude = Readonly<{ percent: number; high: number; low: number; anchor: number }>
+
+/**
+ * Why a row states no amplitude.
+ *
+ * `partial-bars`: the window's bars are not all there, so the real high or low may be missing and the
+ * number would understate the day. `no-anchor`: no window-start close to divide by. Both are stated
+ * instead of a number with a caveat nobody reads.
+ */
+export type BriefingAmplitudeReason = 'partial-bars' | 'no-anchor'
+
 export type BriefingMarketRow = Readonly<{
   id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real'
   labelKey: string
@@ -151,6 +202,37 @@ export type BriefingMarketRow = Readonly<{
    * /`series-level` a daily series' move or level, `published` the official stamp for the session.
    */
   valueBasis?: 'snapshot' | 'curve' | 'last-close' | 'series-return' | 'series-level' | 'published'
+  /**
+   * The card's window return curve, split at every missing reading and already rebased to its own
+   * first point. Absent on editions built before schema 10, and on any edition with nothing to draw.
+   */
+  curve?: readonly BriefingCurveSegment[]
+  /** Stated only when `curve` is absent, so "no line" always has a reason the reader can be told. */
+  curveReason?: BriefingCurveReason
+  /**
+   * The window's travel, on the three readings that have continuous bars. Absent on editions built
+   * before schema 11, on rows without a continuous series, and when the window's bars are incomplete.
+   */
+  amplitude?: BriefingAmplitude
+  /**
+   * The close this row's window ended on, so the card can print a level and not only a percentage.
+   *
+   * A percentage alone leaves the reader without a base: `+0.9%` of what? Absent on editions built before
+   * schema 12, and whenever the read carried no closed bar at the cutoff — the card then shows its reason
+   * rather than a zero.
+   */
+  close?: Readonly<{ value: number; at: string }>
+  /**
+   * Which leg answered the index row: the licensed index or the tokenised proxy.
+   *
+   * Written down so a stored edition can say what its number was about — a proxy's move is not the index's,
+   * and a reader comparing it against the dollar or gold would be comparing different instruments.
+   */
+  indexSource?: 'real' | 'proxy'
+  /** Stated only when `amplitude` is absent, same rule as `curveReason`. */
+  amplitudeReason?: BriefingAmplitudeReason
+  /** The window's own bar count against what it should hold, when an amplitude was withheld for it. */
+  amplitudeCoverage?: Readonly<{ count: number; expectedCount: number }>
 }>
 
 export type BriefingPulseRow = Readonly<{
@@ -196,6 +278,19 @@ export type BriefingNewsItem = Readonly<{
   visibilityReason?: string
 }>
 
+/**
+ * The headline to draw for one edition. A translated title is used only when it belongs to that
+ * edition's language; an English edition falls back to the source (English) title rather than print
+ * Chinese. This is a display fallback for documents written before the language gate — it never
+ * infers a source language, never drops an item, and never affects a Chinese edition.
+ */
+export function editionNewsTitle(item: Readonly<{ title: string; translatedTitle?: string }>, editionLocale: DailyBriefingLocale): string {
+  const translated = item.translatedTitle
+  if (!translated) return item.title
+  if (editionLocale === 'en-US' && /[\u3400-\u9fff]/.test(translated)) return item.title
+  return translated
+}
+
 export type BriefingMacroItem = Readonly<{
   eventKey: string
   title: string
@@ -207,6 +302,21 @@ export type BriefingMacroItem = Readonly<{
   actual?: string
   previous?: string
   consensus?: string
+  /**
+   * The event's own lifecycle, carried from the calendar (`02` `A0.12`, schema 14).
+   *
+   * `cancelled` means the release was called off: the row is real schedule news, so the card draws
+   * it and marks it, but no value will ever arrive — it must not read as "we failed to get one",
+   * and it must not enter the analysis snapshot. Absent on documents written before schema 14; the
+   * renderers treat absence as "not cancelled", never as a fourth state.
+   */
+  lifecycleState?: 'scheduled' | 'released' | 'cancelled'
+  /**
+   * 这个实际值是从哪儿来的（`02` v2.128）：日历源就是 `calendar`，联网取到的是 `web`。
+   * 只用于在值后面标「（网页）」——**来源标注不是可信度话术**，四个禁用词照旧命中 0。
+   * 老文档没有这个字段 = 全部来自日历，渲染不补任何后缀。
+   */
+  valueSource?: 'calendar' | 'web'
   surprise: Readonly<{
     direction: 'beat' | 'miss' | 'inline' | 'consensus-unavailable'
     value?: number

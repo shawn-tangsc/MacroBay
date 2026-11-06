@@ -36,6 +36,8 @@ export type PositioningPanelText = Readonly<{
   signalDetailsOpen: string
   signalDetailsTitle: string
   signalDetailsRule: string
+  /** The rule's own words. The internal id never reaches the card. */
+  signalDetailsRuleName: string
   signalDetailsWindow: string
   signalDetailsDrop: string
   signalDetailsVolume: string

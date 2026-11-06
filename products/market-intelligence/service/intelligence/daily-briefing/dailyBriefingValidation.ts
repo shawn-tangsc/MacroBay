@@ -20,10 +20,15 @@ import {
 import {
   briefingDataFactIds,
   briefingDataVisibilityAudit,
-  selectBriefingDataFacts
+  selectBriefingDataFacts,
+  withEditorialReasons
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBriefingConclusionValidation'
+import { failAll, type DailyBriefingValidationFailureEntry, type DailyBriefingValidationFailureResult } from './dailyBriefingValidationFailures'
+import { editorialProse } from './dailyBriefingValidationProse'
+import { validatedNextFocus } from './dailyBriefingNextFocusValidation'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -46,7 +51,7 @@ export type DailyBriefingEditorialOutput = Readonly<{
 }>
 
 export type DailyBriefingValidationFailure =
-  | 'invalid-shape'
+  | 'invalid-shape' | 'direction-conflict' | 'row-set-mismatch'
   | 'unknown-fact'
   | 'forbidden-content'
   | 'unknown-number'
@@ -71,7 +76,13 @@ export type DailyBriefingValidationFailure =
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
-  | Readonly<{ ok: false; failureCode: DailyBriefingValidationFailure; detail?: string }>
+  /**
+   * `failures` is every independent defect this pass found, not just the first. A repair round that
+   * hears only one of them spends a round on it and leaves the rest untouched — which is how three
+   * writes in one evening each fixed a different field and the last one still failed on a field it
+   * had never been told about.
+   */
+  | DailyBriefingValidationFailureResult
 
 export type DailyBriefingEditorialMeta = Readonly<{
   promptVersion: string
@@ -92,18 +103,21 @@ export function validateDailyBriefingEditorial(
   priorConclusions: readonly BriefingPriorConclusion[] = []
 ): DailyBriefingValidation {
   if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['hiddenData', 'dataNote', 'invalidationNote', 'conclusionTranslation', 'conclusionSynthesis', 'nextFocus', 'webEvidence'])) {
-    return fail('invalid-shape')
+    return failShape('shape')
   }
-  if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
-  if (!isLedePattern(raw.ledePattern)) return fail('invalid-shape')
-  if (document.lede.previousPattern && document.lede.previousPattern === raw.ledePattern) return fail('invalid-shape')
+  if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return failShape('lede')
+  if (!isLedePattern(raw.ledePattern)) return failShape('ledePattern')
+  if (document.lede.previousPattern && document.lede.previousPattern === raw.ledePattern) return failShape('ledePattern')
   if (raw.lede.length > 600) return fail('too-long')
-  if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
-  if (!Array.isArray(raw.hidden)) return fail('invalid-shape')
-  if (!Array.isArray(raw.importance)) return fail('invalid-shape')
-  if (raw.hiddenData !== undefined && !Array.isArray(raw.hiddenData)) return fail('invalid-shape')
+  if (!Array.isArray(raw.items) || raw.items.length > 50) return failShape('items')
+  if (!Array.isArray(raw.hidden)) return failShape('hidden')
+  if (!Array.isArray(raw.importance)) return failShape('importance')
+  if (raw.hiddenData !== undefined && !Array.isArray(raw.hiddenData)) return failShape('hiddenData')
+  const issues: DailyBriefingValidationFailureEntry[] = []
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
-  const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
+  // 覆盖判定只看模型见过的那些（有实际值的）：无值事件不在写作素材里，不能要求编辑替它写
+  // why 或隐藏理由（`A0.12` ⑤）。
+  const macroIds = new Set(selectMacroAnalysisCandidates(document.news.macro).map((item) => `macro:${item.eventKey}`))
   const dataIds = new Set(briefingDataFactIds(document))
   const items: Array<{ factId: string; why: string }> = []
   for (const item of raw.items) {
@@ -112,11 +126,17 @@ export function validateDailyBriefingEditorial(
     if (isRecord(item) && typeof item.factId === 'string' && item.factId.startsWith('macro:') && !isText(item.why)) {
       return fail('missing-macro-why', item.factId)
     }
-    if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
-    if (!isText(item.factId) || !isText(item.why)) return fail('invalid-shape')
+    if (!isExact(item, ['factId', 'why'])) return failShape('items[]')
+    if (!isText(item.factId) || !isText(item.why)) return failShape('items.factId')
     if (item.why.length > 200) return fail('too-long')
-    if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact', `${item.factId} is not a fact in this edition`)
-    if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
+    if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) {
+      // Collected, not returned: a reply can cite a fact that does not exist *and* write a field
+      // wrongly, and one repair round must hear both or it fixes one and leaves the other.
+      // Recorded, and then kept in place: the id is still an entry the reply wrote, so dropping it
+      // would turn the refused citation into a different, unrelated shape complaint.
+      issues.push({ code: 'unknown-fact', detail: unknownFactDetail(document, item.factId) })
+    }
+    if (items.some((existing) => existing.factId === item.factId)) return failShape('items.factId')
     items.push({ factId: item.factId, why: item.why })
   }
   // A release without a consensus still needs a reason to be shown. "No consensus was published" is
@@ -130,45 +150,50 @@ export function validateDailyBriefingEditorial(
   }
   const hidden: Array<{ factId: string; reason: string }> = []
   for (const entry of raw.hidden) {
-    if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
-    if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
+    if (!isExact(entry, ['factId', 'reason'])) return failShape('hidden[]')
+    if (!isText(entry.factId) || !isText(entry.reason)) return failShape('hidden[].factId')
     if (entry.reason.length > 200) return fail('too-long')
-    if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a fact in this edition`)
-    if (items.some((shown) => shown.factId === entry.factId) || hidden.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) {
+      issues.push({ code: 'unknown-fact', detail: unknownFactDetail(document, entry.factId) })
+    }
+    if (items.some((shown) => shown.factId === entry.factId) || hidden.some((existing) => existing.factId === entry.factId)) return failShape('hidden[].factId')
     hidden.push({ factId: entry.factId, reason: entry.reason })
   }
-  if (items.length + hidden.length !== newsIds.size + macroIds.size) return fail('invalid-shape')
+  // Only judge "every fact is shown or hidden" over a reply whose citations all exist: with a refused
+  // fact in hand, the count is off by construction and would hide the real reason behind a shape
+  // complaint.
+  if (issues.length === 0 && items.length + hidden.length !== newsIds.size + macroIds.size) return failShape('items')
   const webEvidence: DailyBriefWebEvidenceRef[] = []
-  if (toolInvocations.filter((invocation) => invocation.toolName === 'WebSearch').length > dailyBriefWebSearchBudget.maximumSearches) return fail('invalid-shape')
+  if (toolInvocations.filter((invocation) => invocation.toolName === 'WebSearch').length > dailyBriefWebSearchBudget.maximumSearches) return failShape('toolInvocations')
   if (raw.webEvidence !== undefined) {
-    if (!Array.isArray(raw.webEvidence)) return fail('invalid-shape')
+    if (!Array.isArray(raw.webEvidence)) return failShape('webEvidence')
     const budget = createWebSearchBudget()
     const results = collectToolResults(toolInvocations)
     for (const entry of raw.webEvidence) {
-      if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return fail('invalid-shape')
-      if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return fail('invalid-shape')
+      if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return failShape('webEvidence[]')
+      if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return failShape('webEvidence[]')
       const macro = document.news.macro.find((item) => item.eventKey === entry.eventKey)
-      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact', `macro:${entry.eventKey} is not in this edition`)
-      if (entry.field === 'actual' && macro?.actual) return fail('invalid-shape')
-      if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
+      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact', unknownFactDetail(document, `macro:${entry.eventKey}`))
+      if (entry.field === 'actual' && macro?.actual) return failShape('webEvidence[].field')
+      if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return failShape('webEvidence[].field')
       const result = results.get(entry.sourceUrl)
-      if (!result || (result.publishedAt !== undefined && result.publishedAt !== entry.publishedAt)) return fail('invalid-shape')
+      if (!result || (result.publishedAt !== undefined && result.publishedAt !== entry.publishedAt)) return failShape('webEvidence[].reference')
       // The same event/field lookup is cached; a fourth event or seventh lookup is refused before
       // it can enter the citation list.
-      if (budget.request(entry.eventKey, entry.field as DailyBriefWebEvidenceField) === 'denied') return fail('invalid-shape')
+      if (budget.request(entry.eventKey, entry.field as DailyBriefWebEvidenceField) === 'denied') return failShape('webEvidence[].field')
       const ref: DailyBriefWebEvidenceRef = Object.freeze({
         evidenceRefId: `web:${entry.eventKey}:${entry.field}:${webEvidence.length + 1}`,
         eventKey: entry.eventKey, field: entry.field as DailyBriefWebEvidenceField, value: entry.value,
         sourceName: entry.sourceName, sourceUrl: entry.sourceUrl, publishedAt: entry.publishedAt, retrievedAt: document.provenance.readAt
       })
-      if (checkDailyBriefWebEvidence(ref, document.edition.windowEnd) !== 'ok') return fail('invalid-shape')
+      if (checkDailyBriefWebEvidence(ref, document.edition.windowEnd) !== 'ok') return failShape('webEvidence[].reference')
       const existingIndex = webEvidence.findIndex((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)
       if (existingIndex < 0) {
         webEvidence.push(ref)
         continue
       }
       const existing = webEvidence[existingIndex]!
-      if (existing.value === ref.value && existing.sourceUrl === ref.sourceUrl) return fail('invalid-shape')
+      if (existing.value === ref.value && existing.sourceUrl === ref.sourceUrl) return failShape('webEvidence[]')
       const existingOfficial = isOfficialWebSource(existing.sourceUrl)
       const refOfficial = isOfficialWebSource(ref.sourceUrl)
       if (refOfficial && !existingOfficial) webEvidence[existingIndex] = Object.freeze({ ...ref, sourceConflict: true })
@@ -179,21 +204,21 @@ export function validateDailyBriefingEditorial(
   }
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
   for (const entry of raw.importance) {
-    if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return fail('invalid-shape')
-    if (!isText(entry.factId) || !isText(entry.tier)) return fail('invalid-shape')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
-    if (entry.tier !== 'must' && entry.tier !== 'support' && entry.tier !== 'reference') return fail('invalid-shape')
+    if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return failShape('importance[]')
+    if (!isText(entry.factId) || !isText(entry.tier)) return failShape('importance[]')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', unknownFactDetail(document, entry.factId))
+    if (entry.tier !== 'must' && entry.tier !== 'support' && entry.tier !== 'reference') return failShape('importance[].tier')
     if (entry.reasonText !== undefined && (!isText(entry.reasonText) || entry.reasonText.length > 200)) return fail('too-long')
-    if (importance.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    if (importance.some((existing) => existing.factId === entry.factId)) return failShape('importance[].factId')
     importance.push({ factId: entry.factId, tier: entry.tier, ...(entry.reasonText ? { reasonText: entry.reasonText } : {}) })
   }
   const hiddenData: Array<{ factId: string; reason: string }> = []
   for (const entry of (raw.hiddenData ?? []) as unknown[]) {
-    if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
-    if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
+    if (!isExact(entry, ['factId', 'reason'])) return failShape('hidden[]')
+    if (!isText(entry.factId) || !isText(entry.reason)) return failShape('hiddenData[]')
     if (entry.reason.length > 200) return fail('too-long')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
-    if (importance.some((shown) => shown.factId === entry.factId) || hiddenData.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', unknownFactDetail(document, entry.factId))
+    if (importance.some((shown) => shown.factId === entry.factId) || hiddenData.some((existing) => existing.factId === entry.factId)) return failShape('hiddenData[].factId')
     hiddenData.push({ factId: entry.factId, reason: entry.reason })
   }
   // A material data fact may be hidden, but not silently: the editorial must say why. Immaterial
@@ -216,8 +241,8 @@ export function validateDailyBriefingEditorial(
   let conclusionSynthesis: BriefingConclusionSynthesis | undefined
   if (priorConclusions.length > 0) {
     const synthesized = validateConclusionSynthesis(raw.conclusionSynthesis, document, priorConclusions)
-    if (!synthesized.ok) return fail(synthesized.failureCode, synthesized.detail)
-    conclusionSynthesis = synthesized.value
+    if (!synthesized.ok) issues.push({ code: synthesized.failureCode, ...(synthesized.detail ? { detail: synthesized.detail } : {}) })
+    else conclusionSynthesis = synthesized.value
   }
   // A synthesized summary is already written in LOCALE, so a translation of the old fallback summary
   // would be attached to the wrong text. The field belongs to the no-synthesis (fallback) path only.
@@ -226,50 +251,27 @@ export function validateDailyBriefingEditorial(
   if (conclusionSynthesis) conclusionTranslation = undefined
   if (conclusionTranslation !== undefined && (!document.conclusion || !needsTranslation(document.conclusion.summary, locale))) return fail('invalid-translation')
 
-  let nextFocus: DailyBriefingEditorialOutput['nextFocus']
-  if (raw.nextFocus !== undefined && isExact(raw.nextFocus, ['eventKey', 'why', 'watch'])) {
-    const focusKey = document.next.focus?.eventKey
-    const watchRaw = raw.nextFocus.watch
-    const watchCount = Array.isArray(watchRaw) ? watchRaw.length : 0
-    const watch = Array.isArray(watchRaw) && watchCount >= 2 && watchCount <= 3
-      ? watchRaw.filter((entry): entry is { condition: string; implication: string } => isExact(entry, ['condition', 'implication']) && isText(entry.condition) && isText(entry.implication))
-      : []
-    if (focusKey && raw.nextFocus.eventKey === focusKey && isText(raw.nextFocus.why) && raw.nextFocus.why.length <= 200 &&
-      hasBriefingNextTransmission(raw.nextFocus.why) &&
-      watch.length === watchCount && watch.every((entry) => entry.condition.length <= 80 && entry.implication.length <= 160)) {
-      nextFocus = Object.freeze({ eventKey: raw.nextFocus.eventKey, why: raw.nextFocus.why, watch: Object.freeze(watch.map((entry) => Object.freeze(entry))) })
-    }
-  }
-  const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
-    ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),
-    ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
-    ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : []),
-    ...(conclusionSynthesis ? [
-      conclusionSynthesis.summary,
-      conclusionSynthesis.outlook,
-      conclusionSynthesis.regimeChange,
-      conclusionSynthesis.coreTension,
-      conclusionSynthesis.whatWouldChange,
-      ...conclusionSynthesis.conditions,
-      ...conclusionSynthesis.counterEvidence,
-      ...conclusionSynthesis.watch,
-      ...conclusionSynthesis.confirmed,
-      ...conclusionSynthesis.refuted
-    ] : [])].join('\n')
+  const nextFocus = validatedNextFocus(raw.nextFocus, document)
+  const prose = editorialProse({
+    lede: raw.lede, items, importance, nextFocus, dataNote, invalidationNote, conclusionTranslation, conclusionSynthesis
+  })
   const hiddenTitles = [
     ...document.news.items.filter((item) => hidden.some((entry) => entry.factId === `news:${item.itemId}`)).map((item) => item.translatedTitle ?? item.title),
     ...document.news.macro.filter((item) => hidden.some((entry) => entry.factId === `macro:${item.eventKey}`)).map((item) => item.title)
   ].filter((title) => title.trim().length >= 8)
   const proseLower = prose.toLowerCase()
-  if (hiddenTitles.some((title) => proseLower.includes(title.trim().toLowerCase()))) return fail('invalid-shape')
+  if (hiddenTitles.some((title) => proseLower.includes(title.trim().toLowerCase()))) return failShape('prose')
   const forbidden = forbiddenContent(prose)
-  if (forbidden) return fail('forbidden-content', forbidden)
+  if (forbidden) issues.push({ code: 'forbidden-content', detail: forbidden })
   // Times are facts from calendar timestamps but are written as HH:mm, not as a bare number; do
   // not let a legitimate "20:30" fail the numeric whitelist. Counts of the shown candidate set are
   // also safe and are not stored as string tokens in the document.
   const numericProse = prose.replace(/\b\d{1,2}:\d{2}\b/g, ' ')
   const unknown = findUnknownNumber(numericProse, buildNumericFactWhitelist(document))
-  if (unknown) return fail('unknown-number', unknown)
+  if (unknown) issues.push({ code: 'unknown-number', detail: unknown })
+  // Every defect found above travels together: the first is the verdict, the rest are what the
+  // repair round has to fix in one pass.
+  if (issues.length > 0) return failAll(issues)
   return Object.freeze({
     ok: true as const,
     value: Object.freeze({
@@ -361,6 +363,9 @@ export function applyDailyBriefingEditorial(
         // Visibility is the editor's decision. The system never injects a shown release without a
         // why, so a macro the editorial did not explain stays hidden with its reason.
         if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
+        // 没有实际值、或已取消的事件不参加选材（`A0.12` ⑤ / v2.125），模型也就没有 why 可写；
+        // 但它们在版面上必须出现：值缺席时那一格整块不渲染，取消的那一行带「已取消」标记。
+        if (item.actual === undefined || item.lifecycleState === 'cancelled') return Object.freeze({ ...item, visibility: 'shown' as const })
         return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
       }))
     }),
@@ -399,7 +404,7 @@ export function applyDailyBriefingEditorial(
     citations: Object.freeze(citations),
     provenance: Object.freeze({
       ...document.provenance,
-      selectionAudit: mergeSelectionAudit(document.provenance.selectionAudit, briefingDataVisibilityAudit({ ...document, data })),
+      selectionAudit: mergeSelectionAudit(document.provenance.selectionAudit, withEditorialReasons(briefingDataVisibilityAudit({ ...document, data }), editorial.hiddenData)),
       editorialMeta: Object.freeze({
         promptVersion: meta.promptVersion,
         model: meta.model,
@@ -441,9 +446,20 @@ function mergeSelectionAudit(
   })
 }
 
+/**
+ * A shape failure always names the field it was reading.
+ *
+ * "The AI output is malformed" is true of every shape failure and useful for none of them: the reader
+ * cannot act on it and the repair prompt cannot aim at it. The field path is the whole message.
+ */
+function failShape(field: string): DailyBriefingValidation {
+  return fail('invalid-shape', field)
+}
+
 function fail(failureCode: DailyBriefingValidationFailure, detail?: string): DailyBriefingValidation {
   return Object.freeze({ ok: false as const, failureCode, ...(detail ? { detail } : {}) })
 }
+
 
 /**
  * A release without consensus has no surprise to explain, so it is explained by the number itself:
@@ -489,31 +505,10 @@ function isText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-export function isLedePattern(value: unknown): value is import('../../../contracts/dailyBriefing').DailyBriefLedePattern {
-  return value === 'event-shock' || value === 'surprise-gap' || value === 'tension' || value === 'structure' || value === 'setup' || value === 'outlier' || value === 'falsification'
-}
-
-/**
- * A next-focus rationale has to name a transmission channel into the crypto book, not just say the
- * event is important or imminent. The vocabulary is deliberately broad (assets and channels) so a
- * correct sentence is not rejected for wording, while "it is the next event" is.
- */
-export function hasBriefingNextTransmission(text: string): boolean {
-  return /\b(?:btc|eth|bitcoin|ether|crypto|stablecoins?|etfs?|on-chain|liquidity|dollar|dxy|yields?|rates?|risk assets?|risk appetite)\b|比特币|以太坊|加密|稳定币|流动性|美元|收益率|利率|风险资产|链上/i.test(text)
-}
-
-function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]): Map<string, { title: string; publishedAt?: string }> {
-  const results = new Map<string, { title: string; publishedAt?: string }>()
-  const walk = (value: unknown): void => {
-    if (Array.isArray(value)) { for (const item of value) walk(item); return }
-    if (!value || typeof value !== 'object') return
-    const row = value as { title?: unknown; url?: unknown; publishedAt?: unknown; content?: unknown; results?: unknown }
-    if (typeof row.url === 'string') {
-      results.set(row.url, { title: typeof row.title === 'string' ? row.title : row.url, ...(typeof row.publishedAt === 'string' ? { publishedAt: row.publishedAt } : {}) })
-    }
-    if (row.content !== undefined) walk(row.content)
-    if (row.results !== undefined) walk(row.results)
-  }
-  for (const invocation of invocations) walk(invocation.output)
-  return results
+import { collectToolResults, isLedePattern } from './dailyBriefingValidationGuards'
+export { hasBriefingNextTransmission } from './dailyBriefingValidationGuards'
+// 报错点名是哪个 id、它到底在哪（Chief 2026-11-06）：只说 unknown-fact，模型只能猜，猜错再烧一轮。
+function unknownFactDetail(document: DailyBriefingDocument, factId: string): string {
+  const hidden = document.provenance.selectionAudit?.hidden ?? []
+  return hidden.some((entry) => entry.factId === factId) ? `${factId} was hidden by selection, so it is not a fact in this edition; do not show or cite it` : `${factId} is not a fact in this edition`
 }

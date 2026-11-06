@@ -4,18 +4,24 @@ import { Button } from 'antd'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { Drawer } from '@platform/ui/components/drawer'
-import { notificationCopy, type NotificationCopyKey, type NotificationCopyLanguage } from '@platform/i18n/notificationCopy'
 import type {
-  NotificationDeeplink,
-  SafeNotificationRecord
+  NotificationCenterItem,
+  NotificationDeeplink
 } from '@platform/notifications/contracts/notificationContracts'
 
 import type { PlatformText } from '../../i18n/platformText'
 
 import { createNotificationCenterSource, type NotificationCenterSource } from './notificationCenterSource'
-import { resolveNotificationText } from './notificationText'
 
 import './notificationCenter.css'
+
+/**
+ * 抽屉面板的 id：铃铛的 `aria-controls` 指向它。
+ *
+ * 只在抽屉打开时存在——所以铃铛那边**只在打开时**输出 `aria-controls`。指向一个不存在的 id
+ * 比不写更糟：读屏会给出一个跳到空处的指令。
+ */
+export const NOTIFICATION_CENTER_PANEL_ID = 'notification-center-panel'
 
 export const CENTER_TITLE_KEY = 'notifications.centerTitle'
 
@@ -23,13 +29,16 @@ type NotificationCenterDrawerProps = {
   open: boolean
   onClose: () => void
   labels: PlatformText['notifications']
-  language: NotificationCopyLanguage
   /** 通知自带的动作要真的做那件事：把 deeplink 交给外壳打开，而不是再标一次已读。 */
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   source?: NotificationCenterSource
 }
 
-type LoadState = 'loading' | 'ready' | 'error'
+/**
+ * 四态。`error` 是「读失败、知道要重试」；`unknown` 是「连读失败还是本来就为空都判不出来」——
+ * 后者必须走 `notification-unknown`，不能退成空态（那是在说「没有」）、也不能推到权限态。
+ */
+type LoadState = 'loading' | 'ready' | 'error' | 'unknown'
 
 /**
  * 通知中心抽屉。
@@ -45,12 +54,11 @@ export function NotificationCenterDrawer({
   open,
   onClose,
   labels,
-  language,
   onOpenDeeplink,
   source
 }: NotificationCenterDrawerProps): React.ReactElement {
   const [state, setState] = useState<LoadState>('loading')
-  const [items, setItems] = useState<readonly SafeNotificationRecord[]>([])
+  const [items, setItems] = useState<readonly NotificationCenterItem[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -58,6 +66,12 @@ export function NotificationCenterDrawer({
     const centre = source ?? createNotificationCenterSource()
     try {
       const page = await centre.list()
+      // 回了对象但 `items` 不是数组：这既不是成功，也不是一个能说出原因的错误。
+      // 归到 `unknown` 而不是 `error`，因为 `error` 承诺「可以重试就好了」，这里没人能保证。
+      if (!isNotificationPage(page)) {
+        setState('unknown')
+        return
+      }
       setItems(page.items)
       setState('ready')
     } catch {
@@ -138,6 +152,7 @@ export function NotificationCenterDrawer({
           )}
         </div>
       }>
+      <div id={NOTIFICATION_CENTER_PANEL_ID} data-notification-center-panel>
       {notice === null ? null : (
         <p className="notification-center-notice" role="status">
           {notice}
@@ -153,13 +168,12 @@ export function NotificationCenterDrawer({
             <p className="notification-center-stale" role="status" data-center-stale>
               <span>{labels.centerStaleNotice}</span>
               <button type="button" className="notification-center-link" onClick={() => void load()}>
-                {labels.centerRetry}
+                {labels.centerReload}
               </button>
             </p>
           ) : null}
           <NotificationGroups
             labels={labels}
-            language={language}
             onOpenDeeplink={onOpenDeeplink}
             onRead={markOneRead}
             readItems={readItems}
@@ -168,7 +182,21 @@ export function NotificationCenterDrawer({
           />
         </>
       ) : state === 'error' ? (
+        // 「读取失败」：知道要重试。原因码与未知态**必须不同**，两屏只靠原因句区分。
         <StateView state="error" reasonCode="unreadable" size="md" action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }} />
+      ) : state === 'unknown' ? (
+        <>
+          <StateView
+            state="error"
+            reasonCode="notification-unknown"
+            size="md"
+            action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }}
+          />
+          {/* 底部两个批量动作这时是禁用的，原因写在这里一次：否则读者只看到两个灰按钮。 */}
+          <p className="notification-center-empty-hint" role="note" data-center-unknown-hint>
+            {labels.centerUnknownHint}
+          </p>
+        </>
       ) : (
         <>
           <StateView state="empty" reasonCode="not-yet" size="md" />
@@ -177,27 +205,26 @@ export function NotificationCenterDrawer({
           <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
         </>
       )}
+      </div>
     </Drawer>
   )
 }
 
 function NotificationGroups(props: {
   labels: PlatformText['notifications']
-  language: NotificationCopyLanguage
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onRead: (id: string) => Promise<void>
-  unreadItems: readonly SafeNotificationRecord[]
-  readItems: readonly SafeNotificationRecord[]
-  recorded: readonly SafeNotificationRecord[]
+  unreadItems: readonly NotificationCenterItem[]
+  readItems: readonly NotificationCenterItem[]
+  recorded: readonly NotificationCenterItem[]
 }): React.ReactElement {
-  const { labels, language, onOpenDeeplink, onRead } = props
+  const { labels, onOpenDeeplink, onRead } = props
   return (
     <div className="notification-center-groups">
       {props.unreadItems.length === 0 ? null : (
         <Group
           title={labels.centerUnreadGroup}
           items={props.unreadItems}
-          language={language}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
           onRead={onRead}
@@ -208,7 +235,6 @@ function NotificationGroups(props: {
         <Group
           title={labels.centerEarlierGroup}
           items={props.readItems}
-          language={language}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
           onRead={onRead}
@@ -219,7 +245,6 @@ function NotificationGroups(props: {
         <Group
           title={labels.centerRecordedGroup}
           items={props.recorded}
-          language={language}
           labels={labels}
           onOpenDeeplink={onOpenDeeplink}
           onRead={onRead}
@@ -231,8 +256,7 @@ function NotificationGroups(props: {
 
 function Group(props: {
   title: string
-  items: readonly SafeNotificationRecord[]
-  language: NotificationCopyLanguage
+  items: readonly NotificationCenterItem[]
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
@@ -249,7 +273,6 @@ function Group(props: {
             item={item}
             key={item.id}
             labels={props.labels}
-            language={props.language}
             onOpenDeeplink={props.onOpenDeeplink}
             onRead={props.onRead}
           />
@@ -262,7 +285,7 @@ function Group(props: {
 /** 同事件重复合并的窗口：只有 7 天内的重复才带 `×N`，跨窗口不合并（A4）。 */
 export const MERGED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
-export function mergedCountOf(item: SafeNotificationRecord, now: number): number | null {
+export function mergedCountOf(item: NotificationCenterItem, now: number): number | null {
   if (item.occurrenceCount <= 1) return null
   const created = Date.parse(item.createdAt)
   if (!Number.isFinite(created)) return null
@@ -273,16 +296,16 @@ export function mergedCountOf(item: SafeNotificationRecord, now: number): number
 export const LONG_BODY_CHARS = 90
 
 function NotificationRow(props: {
-  item: SafeNotificationRecord
+  item: NotificationCenterItem
   actionable: boolean
-  language: NotificationCopyLanguage
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
 }): React.ReactElement {
-  const { item, labels, language } = props
+  const { item, labels } = props
   const [expanded, setExpanded] = useState(false)
-  const text = resolveNotificationText(item, language)
+  // 句子在主进程读的那一刻解析好了：这里没有表可查、没有参数要填、也没有兜底可写。
+  const text = { title: item.title, body: item.body }
   const unread = item.state === 'unread'
   const merged = mergedCountOf(item, Date.now())
   const longBody = text.body.length > LONG_BODY_CHARS
@@ -314,18 +337,12 @@ function NotificationRow(props: {
       {props.actionable ? (
         <NotificationActionButton
           item={item}
-          language={language}
           onOpenDeeplink={props.onOpenDeeplink}
           onRead={props.onRead}
         />
       ) : null}
     </li>
   )
-}
-
-/** 通知自带动作的文案解析：标签同样只存键，句子按当前语言取。 */
-function actionLabel(labelKey: string, language: NotificationCopyLanguage): string {
-  return notificationCopy[language][labelKey as NotificationCopyKey] ?? labelKey
 }
 
 /**
@@ -336,15 +353,14 @@ function actionLabel(labelKey: string, language: NotificationCopyLanguage): stri
  * 现在点击真的把 deeplink 交给外壳打开；没有动作的通知本来就不会进主位。
  */
 function NotificationActionButton(props: {
-  item: SafeNotificationRecord
-  language: NotificationCopyLanguage
+  item: NotificationCenterItem
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   onRead: (id: string) => Promise<void>
 }): React.ReactElement | null {
   const action = props.item.actions[0]
   const deeplink = action?.deeplink ?? props.item.deeplink
   if (action === undefined || deeplink === undefined) return null
-  const label = actionLabel(action.labelKey, props.language)
+  const label = action.label
   return (
     <Button
       size="small"
@@ -357,4 +373,9 @@ function NotificationActionButton(props: {
       {label}
     </Button>
   )
+}
+
+/** 只认「有 items 数组」这一种成功形态：其余一律当作判不出来，不是「没有」。 */
+function isNotificationPage(value: unknown): value is { items: NotificationCenterItem[] } {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)
 }

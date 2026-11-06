@@ -102,7 +102,7 @@ describe('positioning panel', () => {
     const markup = render({
       positioning: {
         ...positioning,
-        signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(0) }
+        signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
       }
     })
     // One mark, pinned to the signal's own bucket, and one chip naming it.
@@ -331,7 +331,7 @@ describe('the module rule chip', () => {
     window: '7d' as const,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],
-    signal: { state: 'alert' as const, asset: 'btc' as const, dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(15) },
+    signal: { state: 'alert' as const, asset: 'btc' as const, dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(15) },
     ...overrides
   })
 
@@ -373,7 +373,7 @@ describe('opening the reading', () => {
     state: 'available', window: '7d',
     btc: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
     eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
-    signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(0) }
+    signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, observedAt: at(0) }
   }
 
   async function mount() {
@@ -391,7 +391,7 @@ describe('opening the reading', () => {
     return { container, root, invoke }
   }
 
-  it('opens the numbers behind the chip, and the chip is a keyboard-reachable button', async () => {
+  it('opens the numbers behind the chip as plain words, and the chip is a keyboard-reachable button', async () => {
     const { container, root, invoke } = await mount()
     const chip = container.querySelector('button.mi-positioning-panel__signal')!
     expect(chip.getAttribute('aria-expanded')).toBe('false')
@@ -399,12 +399,34 @@ describe('opening the reading', () => {
     await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(chip.getAttribute('aria-expanded')).toBe('true')
     const detail = container.querySelector('#mi-positioning-signal-detail')!
-    expect(detail.textContent).toContain('oi-liquidation-proxy')
+    // The rule is named in the reader's words. The internal id is not a reading and never shows.
+    expect(detail.textContent).toContain(text.signalDetailsRuleName)
+    expect(detail.textContent).not.toContain('oi-liquidation-proxy')
     expect(detail.textContent).toContain('-1.9%')
     expect(detail.textContent).toContain('3.4×')
     // Opening the numbers is free: nothing reaches the bridge, so no analysis or budget is spent.
     expect(invoke).not.toHaveBeenCalled()
     delete (window as unknown as { platform?: unknown }).platform
     await act(async () => { root.unmount() })
+  })
+
+  it('names the block it opens, and closes it again with the focus still on the chip', async () => {
+    const { container, root } = await mount()
+    // focus() only works on a node inside the document; the other cases never need it.
+    document.body.append(container)
+    const chip = container.querySelector('button.mi-positioning-panel__signal') as HTMLButtonElement
+    const controls = chip.getAttribute('aria-controls')
+    expect(controls).toBe('mi-positioning-signal-detail')
+    await act(async () => { chip.focus() })
+    expect(document.activeElement).toBe(chip)
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(container.querySelector(`#${controls}`)).not.toBeNull()
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // The trigger is not replaced, so closing returns the reader to it rather than to the document.
+    expect(container.querySelector(`#${controls}`)).toBeNull()
+    expect(document.activeElement).toBe(chip)
+    delete (window as unknown as { platform?: unknown }).platform
+    await act(async () => { root.unmount() })
+    container.remove()
   })
 })

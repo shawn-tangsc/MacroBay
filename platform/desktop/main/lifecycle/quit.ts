@@ -32,6 +32,8 @@ export type RuntimeDisposerPorts<WorkspaceReport = unknown> = Readonly<{
   disposeWorkspace: () => Promise<WorkspaceReport | undefined>
   reportWorkspaceDispose: (report: WorkspaceReport) => void
   closeJobRunStore: () => void
+  /** 缓存审计库的句柄：与运行记录同一类，退出前必须关掉（SQLite 关闭时 checkpoint 并清 -wal/-shm）。 */
+  closeCacheAuditStore: () => void
 }>
 
 export type RuntimeDisposer = {
@@ -60,6 +62,7 @@ export function createRuntimeDisposer<WorkspaceReport = unknown>(
     const report = await ports.disposeWorkspace()
     if (report !== undefined) ports.reportWorkspaceDispose(report)
     ports.closeJobRunStore()
+    ports.closeCacheAuditStore()
   }
 
   return { dispose, isDisposed: () => disposed }

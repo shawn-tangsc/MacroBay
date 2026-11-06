@@ -67,7 +67,10 @@ export class ChannelDeliveryService {
       const result = await this.deps.transport.send({ channelId: request.channelId, providerConversationKey, text: output, idempotencyKey: attempt.idempotencyKey })
       const status = result.kind
       const errorCode = result.kind === 'failed' ? result.code : null
-      const committed = this.deps.repository.finish({ owner, status, errorCode, retryable: isRetryableDeliveryError(errorCode), executionClaim: request.executionClaim, now: this.now() })
+      const detail = 'detail' in result ? result.detail : undefined
+      const committed = this.deps.repository.finish({
+        owner, status, errorCode, detail, retryable: isRetryableDeliveryError(errorCode), executionClaim: request.executionClaim, now: this.now()
+      })
       return committed
         ? { status, attemptId: attempt.id, errorCode }
         : { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-lifecycle-fenced' }

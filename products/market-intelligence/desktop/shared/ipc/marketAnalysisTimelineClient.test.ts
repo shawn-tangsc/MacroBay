@@ -52,7 +52,7 @@ describe('marketAnalysisTimelineClient', () => {
 
   it('passes a structured conclusion through and keeps its direction key', async () => {
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '收益率上行压制风险资产。', direction: 'bearish' as const, version: 1
     }
     const conclusion = {
@@ -94,7 +94,7 @@ describe('marketAnalysisTimelineClient', () => {
 
   it('joins a selected timeline entry only to its matching safe run and summary detail', async () => {
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const invoke = vi.fn(async (_productId: string, method: string) => {
@@ -124,7 +124,7 @@ describe('marketAnalysisTimelineClient', () => {
   })
 
   it('names the refusals a reader can act on instead of blaming the model configuration', async () => {
-    const entry = { id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: 't', safeExcerpt: 'e', version: 1 }
+    const entry = { id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null, occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: 't', safeExcerpt: 'e', version: 1 }
     void entry
     const invokeFor = (error: string) => vi.fn(async () => { throw new Error(error) })
     const cases: readonly (readonly [string, string])[] = [
@@ -173,7 +173,7 @@ describe('marketAnalysisTimelineClient', () => {
     // limit rather than a validity rule, and rejecting the payload turned the whole detail into
     // "详情暂不可用" for the richest analysis in the store.
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const knownFacts = Array.from({ length: 54 }, (_, index) => ({ factId: `f${index}`, statement: `事实 ${index}`, evidenceRefIds: ['ev-1'] }))
@@ -202,7 +202,7 @@ describe('marketAnalysisTimelineClient', () => {
     // the renderer rejected any string list longer than the 50-item timeline page — a payload bound
     // applied to a validity rule, which blanked exactly the richest analysis.
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const evidenceRefs = Array.from({ length: 62 }, (_, index) => `query:source:metric:${index}`)
@@ -238,7 +238,7 @@ describe('marketAnalysisTimelineClient', () => {
 
   it('carries the operation directions through the wire, one row per horizon', async () => {
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const directions = [
@@ -274,7 +274,7 @@ describe('marketAnalysisTimelineClient', () => {
 
   it('drops the whole detail when the directions are malformed, and keeps working without them', async () => {
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const summary = (directions?: unknown) => ({
@@ -308,7 +308,7 @@ describe('marketAnalysisTimelineClient', () => {
     // that has not been restarted yet), so an absent optional field must not turn
     // the whole detail into "unavailable".
     const entry = {
-      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
       occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
     }
     const invoke = vi.fn(async (_productId: string, method: string) => {

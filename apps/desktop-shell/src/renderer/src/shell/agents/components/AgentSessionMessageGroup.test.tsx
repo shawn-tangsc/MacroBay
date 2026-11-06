@@ -1,5 +1,8 @@
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
@@ -13,12 +16,13 @@ const text = {
   messages: agentText['zh-CN'].messages,
   runtimeActivity: agentText['zh-CN'].runtimeActivity,
   runtimeText: agentText['zh-CN'].runtimeText,
-  input: agentText['zh-CN'].input
+  input: agentText['zh-CN'].input,
+  common: agentText['zh-CN'].common
 }
 
 describe('AgentSessionMessageGroup', () => {
   it('marks user groups for right-aligned bubble layout', () => {
-    const markup = renderToStaticMarkup(
+    const markup = ssr(
       <AgentSessionMessageGroup
         group={group('user')}
         activeAgent={agent()}
@@ -39,7 +43,7 @@ describe('AgentSessionMessageGroup', () => {
   })
 
   it('does not render an avatar or redundant user name for successful user bubbles', () => {
-    const markup = renderToStaticMarkup(
+    const markup = ssr(
       <AgentSessionMessageGroup
         group={group('user')}
         activeAgent={agent()}
@@ -60,7 +64,7 @@ describe('AgentSessionMessageGroup', () => {
   })
 
   it('keeps assistant groups in the left-aligned default layout', () => {
-    const markup = renderToStaticMarkup(
+    const markup = ssr(
       <AgentSessionMessageGroup
         group={group('assistant')}
         activeAgent={agent()}
@@ -118,7 +122,7 @@ describe('AgentSessionMessageGroup', () => {
   })
 
   it('renders assistant file artifacts under the message content', () => {
-    const markup = renderToStaticMarkup(
+    const markup = ssr(
       <AgentSessionMessageGroup
         group={{
           ...group('assistant'),
@@ -132,7 +136,7 @@ describe('AgentSessionMessageGroup', () => {
                     type: 'claude-sdk-tool-call',
                     toolCallId: 'write-1',
                     toolName: 'Write',
-                    input: { file_path: '/Users/demo/project/hello.py', content: 'print("hi")' }
+        input: { file_path: '/Users/demo/project/hello.py', content: 'print("hi")' }
                   }
                 ]
               }
@@ -157,8 +161,13 @@ describe('AgentSessionMessageGroup', () => {
   })
 })
 
+/** 组件在渲染时就要求宿主（`useConfirm()` 没有 Provider 直接抛错），静态渲染也要把它包进来。 */
+function ssr(node: ReactElement): string {
+  return renderToStaticMarkup(<ConfirmProvider>{node}</ConfirmProvider>)
+}
+
 function render(groupValue: AgentMessageGroup): string {
-  return renderToStaticMarkup(
+  return ssr(
     <AgentSessionMessageGroup
       group={groupValue}
       activeAgent={agent()}

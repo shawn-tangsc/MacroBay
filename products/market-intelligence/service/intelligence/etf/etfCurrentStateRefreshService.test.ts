@@ -65,6 +65,47 @@ describe('ETF current-state refresh service', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
+  // The ETF leg's trigger point: the rule is asked only after this source actually wrote new
+  // flows, and the answer goes out through the platform. A quiet window, a failed write or an
+  // incomplete window must not ring.
+  it("hands the rule's own signals to the outlet after a write, one per flowing asset", async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const handOffSignals = vi.fn(async () => undefined)
+    const service = createEtfCurrentStateRefreshService({
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: outflowRows('BTC'), eth: outflowRows('ETH', [1, 2, 3, 4, 5]) }),
+      store,
+      now: () => '2026-09-01T12:00:00.000Z',
+      handOffSignals
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    expect(handOffSignals).toHaveBeenCalledTimes(1)
+    const handed = handOffSignals.mock.calls[0]![0] as readonly { moduleId: string; ruleId: string; asset: string; readiness: string }[]
+    // Only the asset whose three days really cleared the threshold; a quiet asset says nothing.
+    expect(handed).toHaveLength(1)
+    expect(handed[0]).toMatchObject({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', readiness: 'available' })
+  })
+
+  // The outlet's own switch is not this layer's business: this must stay green whether production
+  // opens or closes notifications, otherwise a switch flip would look like a broken refresh.
+  it('still hands out nothing when the window is too short to judge, even though the write succeeds', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const handOffSignals = vi.fn()
+    const service = createEtfCurrentStateRefreshService({
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
+      store,
+      now: () => '2026-09-01T12:00:00.000Z',
+      handOffSignals
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    expect(handOffSignals).not.toHaveBeenCalled()
+  })
+
   it('fails closed without a write for a future or non-common asset date', async () => {
     const replace = vi.fn()
     const service = createEtfCurrentStateRefreshService({
@@ -189,6 +230,19 @@ describe('ETF current-state refresh service', () => {
     })
   })
 })
+
+/** Five complete days whose last three are a large net outflow, so the three-day rule fires. */
+function outflowRows(asset: 'BTC' | 'ETH', amounts: readonly number[] = [1, 2, -200_000_000, -200_000_000, -200_000_000]) {
+  // Monday–Friday: a trading-day rule counts trading days, and a weekend in the middle would make
+  // the three-day window look complete when it is not.
+  return ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21'].map((tradingDate, index) => ({
+    asset,
+    date: Date.parse(`${tradingDate}T00:00:00.000Z`),
+    change: index + 1,
+    changeUsd: amounts[index]!,
+    list: [{ name: 'example', ticker: `${asset}-EXAMPLE` }]
+  }))
+}
 
 function rows(asset: 'BTC' | 'ETH') {
   return ['2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01'].map((tradingDate, index) => ({

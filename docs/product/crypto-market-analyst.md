@@ -141,8 +141,9 @@ providers exposes a model the agent runtime can use.
 
 ## 2. Activate the agent
 
-Open **Intelligence** in the sidebar. The card for the Crypto Market Analyst shows its preset summary
-and one of two states: **Configurable** or, for the two sibling agents, **Coming soon**.
+Open **Intelligence** in the sidebar — it lands on the dashboard; choose **Back to Agents** for the
+agent portal. The card for the Crypto Market Analyst shows its preset summary and one of two states:
+**Configurable** or, for the two sibling agents, **Coming soon**.
 
 Choose **Configure and activate**. The drawer lists the seven presets with their tier and the
 underlying sources, and shows what each preset needs.

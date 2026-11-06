@@ -53,6 +53,16 @@ describe('McpCatalog', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
+  it('次要行不拿内部 id 垫背：没有状态也没有描述时就不画这一行（契约 v2.41 第三档）', () => {
+    const markup = renderCatalog({
+      bound: [{ ...baseItem, bound: true, statusText: '', description: '', command: null, baseUrl: null }]
+    })
+
+    // 名字是读者起的，照常显示；`mcp-files` 是服务实体的内部标识，不该出现在界面上。
+    expect(markup).toContain('Filesystem')
+    expect(markup).not.toContain('mcp-files')
+  })
+
   it('never calls an errored server "available" — the switch repeats the status tag', () => {
     const markup = renderCatalog({
       addable: [{ ...baseItem, status: 'error', statusText: 'Process exited' }]

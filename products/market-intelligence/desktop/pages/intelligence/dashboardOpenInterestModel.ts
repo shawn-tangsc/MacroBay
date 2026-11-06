@@ -9,6 +9,9 @@ import {
   type PositioningState
 } from '../../../contracts/openInterestPositioning'
 import type { ModuleSignal, SignalSeverity } from '../../../contracts/moduleSignal'
+import type { ModuleSignalRead, ModuleSignalReadFailureCode } from '../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../service/intelligence/analysis/signalAnalysisRead'
+import type { SignalAnalysisStateView } from '../../../service/intelligence/analysis/signalAnalysisState'
 
 /**
  * The card's view of the positioning series.
@@ -33,6 +36,8 @@ export type DashboardPositioningViewState =
       staleSince?: string
       /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
       signal: DashboardSignalChip
+      /** 这条信号的分析到哪一步；与信号并列，不塞进 `signal`。 */
+      signalAnalysis?: SignalAnalysisStateView
       /**
        * Re-reads the card. Carried on the view state because the error surface needs a recovery
        * action and the panel is the component that draws it, not the page that owns the hook.
@@ -43,8 +48,9 @@ export type DashboardPositioningViewState =
 /**
  * The card's chip, as a state rather than a string.
  *
- * Three shapes and no fourth: a normal market draws nothing, a rule that fired draws its own words
- * and numbers, and a rule that could not read its data says so without a single digit. Severity is
+ * Four shapes and no fifth: a normal market draws nothing, a rule that fired draws its own words and
+ * numbers, a rule that could not read its data says so without a single digit, and a read that never
+ * happened says that instead — the reader's next move is a retry, not a wait. Severity is
  * deliberately absent — the panel may order two signals by it, the reader must not compare two
  * modules by it.
  */
@@ -52,11 +58,17 @@ export type DashboardSignalChip =
   | Readonly<{ state: 'hidden' }>
   | Readonly<{ state: 'insufficient' }>
   | Readonly<{
+      /** The signal read itself failed; the code decides whether a retry is offered. */
+      state: 'unreadable'
+      failureCode: ModuleSignalReadFailureCode
+      /** Re-reads the card, the only action a failed read suggests. */
+      onReload: () => void
+    }>
+  | Readonly<{
       state: 'alert'
       asset: 'btc' | 'eth'
       dropPct: number
       volumeMultiple: number
-      ruleId: string
       observedAt: string
     }>
 
@@ -139,11 +151,30 @@ const severityRank: Readonly<Record<SignalSeverity, number>> = Object.freeze({ h
  *
  * The card reads its own module only. A signal from another module belongs to that module's card.
  */
-export function projectModuleSignalChip(
-  signals: readonly ModuleSignal[] | undefined,
+/** The state of the signal this card's chip draws: the loudest one, the same rule the chip uses. */
+export function chipAnalysisOf(
+  read: ModuleSignalAnalysisRead | ModuleSignalRead | undefined,
   moduleId: ModuleSignal['moduleId'] = 'open-interest'
+): SignalAnalysisStateView | undefined {
+  if (!read || read.state !== 'available') return undefined
+  const mine = read.signals.filter(entry => entry.signal.moduleId === moduleId)
+  if (mine.length === 0) return undefined
+  const loudest = mine.reduce((best, entry) =>
+    severityRank[entry.signal.severity] > severityRank[best.signal.severity] ? entry : best)
+  return (read as { analysis?: Readonly<Record<string, SignalAnalysisStateView>> }).analysis?.[loudest.signal.dedupeKey]
+}
+
+export function projectModuleSignalChip(
+  read: ModuleSignalRead | undefined,
+  moduleId: ModuleSignal['moduleId'] = 'open-interest',
+  onReload: () => void = () => undefined
 ): DashboardSignalChip {
-  const mine = (signals ?? []).filter(signal => signal.moduleId === moduleId)
+  // No read at all is "not yet", not "nothing happened": the card is still loading its own data and
+  // has nothing to say about the signal either. A read that failed is its own state, because the
+  // reader can retry it and cannot retry a quiet market.
+  if (read === undefined) return { state: 'hidden' }
+  if (read.state === 'unavailable') return { state: 'unreadable', failureCode: read.failureCode, onReload }
+  const mine = read.signals.map(entry => entry.signal).filter(signal => signal.moduleId === moduleId)
   if (mine.length === 0) return { state: 'hidden' }
   const loudest = mine.reduce((best, signal) => severityRank[signal.severity] > severityRank[best.severity] ? signal : best)
   // A rule that could not finish reading says only that. Printing its partial numbers would be a
@@ -155,5 +186,5 @@ export function projectModuleSignalChip(
   if (asset === null || observedAt === undefined || dropPct === undefined || volumeMultiple === undefined) {
     return { state: 'insufficient' }
   }
-  return { state: 'alert', asset, dropPct, volumeMultiple, ruleId: loudest.ruleId, observedAt }
+  return { state: 'alert', asset, dropPct, volumeMultiple, observedAt }
 }

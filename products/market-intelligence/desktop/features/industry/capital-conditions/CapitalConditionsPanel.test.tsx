@@ -8,12 +8,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
 import { CapitalConditionsPanel } from './CapitalConditionsPanel'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 /** Every host can retry; tests that do not care about the action still need a reachable one. */
+const englishCapitalConditions = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+
+/** The app always has a language in context; the harness has to supply the one the fixture is written in. */
 const ScopedCapitalConditionsPanel = (props: Omit<Parameters<typeof CapitalConditionsPanel>[0], 'onRefresh'> & { onRefresh?: () => void }): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props }))
+  createElement(ShellLanguageProvider, { language: props.text === englishCapitalConditions ? 'en-US' : 'zh-CN' },
+    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props })))
 
 /** The platform state icon is inline SVG; its namespace is the one URL a clean panel may carry. */
 const withoutSvgNamespace = (markup: string): string => markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
@@ -55,7 +60,8 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain(`<th scope="col">${text.asset}</th>`)
     expect(markup).toContain(`<th scope="col">${text.totalSupply}</th>`)
     for (const label of [text.change1d, text.change7d, text.change30d]) expect(markup).toContain(`<th scope="col">${label}<span`)
-    expect(markup).toContain(`<th scope="row">${text.stablecoin}</th>`)
+    expect(markup).toContain(`<span class="mi-capital-conditions__asset-name">${text.stablecoin}</span>`)
+    expect(markup).toContain(`<span class="mi-capital-conditions__asset-scope">${text.stablecoinScope}</span>`)
     expect(markup).toContain('$254.9B')
     for (const value of ['+$42M', '+0.17%', '+$82.4M', '+0.03%', '-$500M', '-0.21%']) expect(markup).toContain(value)
     expect(markup).toContain('class="mi-capital-conditions__etf-table"')
@@ -127,7 +133,7 @@ describe('CapitalConditionsPanel', () => {
       text,
       state: {
         state: 'available', conclusion: 'partial', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-        flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1, btc: 2, eth: -3 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
+        flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1_000_000, btc: 2_000_000, eth: -3_000_000 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
         etf: {
           state: 'available',
           coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
@@ -150,7 +156,10 @@ describe('CapitalConditionsPanel', () => {
   it('defaults the shared chart to the latest seven complete days without a window control', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
-    expect(markup).not.toContain('<button')
+    // Two controls in the title row: the info bubble and the daily-data trigger. No window switcher.
+    expect(markup).toContain('aria-haspopup="dialog"')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('data-etf-flow-window=')
     expect((markup.match(/class="mi-capital-conditions__chart-day"/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="funds" data-flow/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="btc" data-flow/g) ?? []).length).toBe(7)
@@ -161,34 +170,31 @@ describe('CapitalConditionsPanel', () => {
 
   it('uses the latest seven days and all three series to share the maximum axis magnitude', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    const rows = [
-      { tradingDate: '2026-08-01', funds: 999, btc: 0, eth: 0 },
-      ...Array.from({ length: 7 }, (_, index) => ({
-        tradingDate: `2026-08-${String(index + 2).padStart(2, '0')}`,
-        funds: index,
-        btc: index * 2,
-        eth: index === 6 ? -24 : -index
-      }))
-    ]
+    // The seven-day cut happens in the projection; the panel renders what it is handed.
+    const rows = Array.from({ length: 7 }, (_, index) => ({
+      tradingDate: `2026-08-${String(index + 2).padStart(2, '0')}`,
+      funds: index * 1_000_000,
+      btc: index * 2_000_000,
+      eth: index === 6 ? -24_000_000 : -index * 1_000_000
+    }))
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: flowState(rows) }))
 
-    expect(markup).toContain('+$24')
+    expect(markup).toContain('$24M')
     expect(markup).toContain('$0')
-    expect(markup).toContain('-$24')
-    expect(markup).not.toContain('$999')
+    expect(markup).toContain('-$24M')
     expect(markup).toContain('data-series="eth" data-flow="outflow" style="--mi-flow-height:100%"')
   })
 
   it('scales a short flow history from only its actual rows', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const rows = [
-      { tradingDate: '2026-08-17', funds: 3, btc: -4, eth: 5 },
-      { tradingDate: '2026-08-18', funds: -12, btc: 2, eth: 0 }
+      { tradingDate: '2026-08-17', funds: 3_000_000, btc: -4_000_000, eth: 5_000_000 },
+      { tradingDate: '2026-08-18', funds: -12_000_000, btc: 2_000_000, eth: 0 }
     ]
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: flowState(rows) }))
 
-    expect(markup).toContain('+$12')
-    expect(markup).toContain('-$12')
+    expect(markup).toContain('$12M')
+    expect(markup).toContain('-$12M')
     expect(markup).not.toContain('2026-08-01')
     expect((markup.match(/class="mi-capital-conditions__chart-day"/g) ?? []).length).toBe(2)
   })
@@ -207,7 +213,7 @@ describe('CapitalConditionsPanel', () => {
     expect(axisMarkup).toContain('$0')
     expect(axisMarkup).not.toContain('+$0')
     expect(axisMarkup).not.toContain('-$0')
-    expect((markup.match(/data-flow="zero" style="--mi-flow-height:0%"/g) ?? []).length).toBe(6)
+    expect((markup.match(/data-flow="zero"[^>]*style="--mi-flow-height:0%"/g) ?? []).length).toBe(6)
   })
 
   it('keeps the shared-axis maximum at full half-axis height without a second CSS scale', () => {
@@ -227,7 +233,7 @@ describe('CapitalConditionsPanel', () => {
 
     const legend = container.querySelector<HTMLElement>('[data-flow-tooltip]')!
     expect(legend.textContent).toContain('2026-08-24')
-    expect(legend.textContent).toContain(text.funds)
+    expect(legend.textContent).toContain(text.fundsColumn)
     expect(legend.textContent).toContain(text.btc)
     expect(legend.textContent).toContain(text.eth)
     expect(legend.textContent).toContain('+$13')
@@ -314,6 +320,100 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('data-size="md"')
     expect(markup).not.toContain('data-state="empty"')
     expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
+  })
+
+  it('shows \u201cinsufficient data\u201d as a statement, not a control, and draws no number', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } }
+    }))
+
+    // 「数据不齐」是陈述不是控件：背后没有可展开的读数，做成按钮只会让人点个空。
+    expect(markup).toContain('status-pill')
+    expect(markup).toContain(text.signalInsufficient)
+    expect(markup).not.toContain('mi-capital-conditions__signal"')
+    // 数据不齐时牌子里的字一个数字都不许有：拿不到不许被画成「很小」。
+    const pillLabel = markup.match(/status-pill__label">(.*?)<\/span>/)?.[1] ?? ''
+    expect(pillLabel).toBe(text.signalInsufficient)
+    expect(pillLabel).not.toMatch(/[\d$%]/)
+    // 陈述不是控件：牌位里没有按钮，也没有可展开的读数。
+    const header = markup.slice(markup.indexOf('mi-capital-conditions__header-band'), markup.indexOf('</div>', markup.indexOf('mi-capital-conditions__header-band')))
+    expect(header).not.toContain('<button')
+    expect(markup).toMatch(new RegExp(`<h2>${text.title}</h2><span class="mi-capital-conditions__signal-statement"`))
+  })
+
+  it('draws no chip at all while the rule had nothing to say', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
+    expect(markup).not.toContain('mi-capital-conditions__signal')
+  })
+
+  it('opens the readings inside the card, keeps focus on the chip, and closes again', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const state = {
+      ...fullState(),
+      etfSignal: {
+        state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M',
+        coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z'
+      }
+    }
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state })))
+    const chip = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!
+    expect(chip.textContent).toBe('Three-day net outflow $488.7M')
+    expect(chip.getAttribute('aria-label')).toBe('Three-day net outflow $488.7M, BTC')
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(chip.getAttribute('aria-controls')).toBe('mi-capital-conditions-signal-detail')
+
+    await act(async () => { chip.focus(); chip.click() })
+
+    const detail = container.querySelector<HTMLElement>('#mi-capital-conditions-signal-detail')!
+    const content = detail.textContent ?? ''
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    // 读数由共用详情块渲染：在卡片里展开（不盖住要对照的卡片与日流表），区域有名字。
+    expect(detail.tagName).toBe('DIV')
+    expect(detail.getAttribute('role')).toBe('region')
+    expect(detail.getAttribute('aria-label')).toBe(text.signalDetailTitle)
+    expect(container.querySelector('.drawer__body')).toBeNull()
+    expect(content).toContain(text.signalDetailRule)
+    expect(content).toContain(text.signalRuleName)
+    expect(content).toContain(text.signalRuleWindow)
+    expect(content).toContain('-$488.7M')
+    expect(content).toContain('3/3')
+    expect(content).toContain('2026-10-30')
+    expect(content).toContain(text.signalDetailNote)
+    // 读者看得见的只有白话：规则名、模块名、原始码都不出现。
+    expect(content).not.toContain('etf-outflow-3d')
+    expect(content).not.toContain('etf-flows')
+    // 焦点留在牌子上，再点收起。
+    expect(document.activeElement).toBe(chip)
+    await act(async () => chip.click())
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+  })
+
+  it('closes the readings when the chip stops being an alert, so the next hit does not open itself', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const alert = { state: 'alert' as const, asset: 'btc' as const, amountUsd: '$488.7M', cumulativeUsd: '-$488.7M', coveredDays: 3, requiredDays: 3, observedAt: '2026-10-30T00:00:00.000Z' }
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
+    await act(async () => container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.click())
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).not.toBeNull()
+
+    // 刷新后这一路变成「数据不齐」：读数块与牌子一起消失。
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: { state: 'insufficient' as const } } })))
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+
+    // 下一次真的命中：读者没点过，就不能自己弹开。
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { ...fullState(), etfSignal: alert } })))
+    expect(container.querySelector('#mi-capital-conditions-signal-detail')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__signal')!.getAttribute('aria-expanded')).toBe('false')
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {
@@ -414,7 +514,7 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     flowHistory: { state: 'available' as const, rows },
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [] },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [] }
     }
@@ -425,10 +525,11 @@ function fullState() {
   const rows = Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, direction: index === 29 ? 'zero' as const : 'inflow' as const, magnitudePercent: index === 29 ? 0 : index + 1 }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-    flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: index - 10, btc: index + 1, eth: -(index + 1) })) },
+    // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
+    flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
     }
@@ -446,7 +547,7 @@ function streakState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     etf: {
       state: 'available' as const,
-      coverage: completeCoverage(),
+      coverage: completeCoverage(), verifiedAt: '2026-08-18T07:00:00.000Z',
       btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: btcRows },
       eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: ethRows }
     }

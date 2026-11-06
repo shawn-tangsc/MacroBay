@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderWithConfirm, type ConfirmHarness } from '@platform/ui/components/confirm/confirmTestSupport'
 import { productText } from '../../shared/i18n/productText'
 import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 
-let root: Root | undefined
+let harness: ConfirmHarness | undefined
 afterEach(async () => {
-  await act(async () => root?.unmount())
-  root = undefined
+  await harness?.unmount()
+  harness = undefined
   document.body.replaceChildren()
   // The composer keeps its draft in localStorage; a leftover draft would leak between cases.
   window.localStorage.clear()
@@ -174,19 +174,19 @@ it('puts a rail header above the split, not inside the calendar row', async () =
 })
 
 async function renderPanel(props: Record<string, unknown> = {}, openPanel = true): Promise<HTMLElement> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  root = createRoot(container)
-  await act(async () => {
-    root?.render(
-      createElement(MarketAnalysisAgentWorkspace, {
-        text,
-        floatingText,
-        card: createElement('p', { 'data-card': true }, '接下来要看的'),
-        ...props
-      } as never)
-    )
-  })
+  // 共用入口：对话里的删除走 `useConfirm()`，确认框必须在树内渲染（缺 Provider 会抛）。
+  // 这层前提不在九个调用点各写一遍，也不 mock antd——弹窗跟主题走这件事本身就是要验的。
+  const view = renderWithConfirm(
+    createElement(MarketAnalysisAgentWorkspace, {
+      text,
+      floatingText,
+      card: createElement('p', { 'data-card': true }, '接下来要看的'),
+      ...props
+    } as never)
+  )
+  harness = view
+  await view.settle()
+  const container = view.host
   if (openPanel) {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-agent-floating-button]')?.click()

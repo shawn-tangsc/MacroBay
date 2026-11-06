@@ -1,0 +1,72 @@
+{
+  "--workspace-title-height": {
+    "injectedBy": "WorkspacePanelHost.tsx:264",
+    "file": "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelHost.tsx",
+    "reason": "值来自代码策略常量 WorkspaceUiPolicy.titleHeight，注在面板宿主上由每个面板帧继承；写进 tokens.css 等于给同一个尺寸留两份定义。"
+  },
+  "--workspace-splitter-size": {
+    "injectedBy": "WorkspacePanelHost.tsx:265",
+    "file": "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelHost.tsx",
+    "reason": "值来自代码策略常量 WorkspaceUiPolicy.splitterSize，拖拽条的几何由布局代码算，不是主题色。"
+  },
+  "--workspace-splitter-hit-size": {
+    "injectedBy": "WorkspacePanelHost.tsx:266",
+    "file": "apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelHost.tsx",
+    "reason": "值来自代码策略常量 WorkspaceUiPolicy.splitterHitSize，命中区随布局代码变，静态定义会与代码常量漂开。"
+  },
+  "--avatar-size": {
+    "injectedBy": "VisualIdentityAvatar.tsx:17",
+    "file": "apps/desktop-shell/src/renderer/src/shell/VisualIdentityAvatar.tsx",
+    "reason": "每个头像实例的 size prop（默认 28，调用方各按一行放几个定）；一个实例一个值，静态 CSS 只能写死一个。"
+  },
+  "--avatar-bg": {
+    "injectedBy": "VisualIdentityAvatar.tsx:18",
+    "file": "apps/desktop-shell/src/renderer/src/shell/VisualIdentityAvatar.tsx",
+    "reason": "取自身份色板 visual.tone.background，颜色由身份数据决定，不在主题里。"
+  },
+  "--avatar-fg": {
+    "injectedBy": "VisualIdentityAvatar.tsx:19",
+    "file": "apps/desktop-shell/src/renderer/src/shell/VisualIdentityAvatar.tsx",
+    "reason": "取自身份色板 visual.tone.foreground，必须与 background 成对，拆到两个文件就会有一半失真。"
+  },
+  "--avatar-border": {
+    "injectedBy": "VisualIdentityAvatar.tsx:20",
+    "file": "apps/desktop-shell/src/renderer/src/shell/VisualIdentityAvatar.tsx",
+    "reason": "取自身份色板 visual.tone.border ?? 'transparent'，无边框身份的显式透明值不能写进主题。"
+  },
+  "--side-panel-width": {
+    "injectedBy": "SidePanel.tsx:144",
+    "file": "platform/ui/components/side-panel/SidePanel.tsx",
+    "reason": "两档闭集 SIZE_CSS（282px / min(480px, 46vw)），档位由组件 prop 决定；窄屏那档含视口计算，静态值表达不了。"
+  },
+  "--mi-flow-height": {
+    "injectedBy": "CapitalFlowChart.tsx:144",
+    "file": "products/market-intelligence/desktop/features/industry/capital-conditions/CapitalFlowChart.tsx",
+    "reason": "每根资金流柱子自己的量值百分比，一次渲染一个值，静态 CSS 不可能有定义。"
+  },
+  "--mi-cross-asset-tick-count": {
+    "injectedBy": "CrossAssetReturnChart.tsx:166",
+    "file": "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetReturnChart.tsx",
+    "reason": "刻度数来自 policy.tickSlots，与图表宽度策略同源；写死会让刻度落在错误位置。"
+  },
+  "--mi-conclusion-direction": {
+    "injectedBy": "AnalysisConclusionDetail.tsx:87（另 LatestAnalysisConclusionCard.tsx:98、AnalysisDirectionsBlock.tsx:46）",
+    "file": "products/market-intelligence/desktop/pages/intelligence/AnalysisConclusionDetail.tsx",
+    "reason": "注入的值本身是 var(<方向策略里的颜色 token>)，方向是数据不是主题；静态 CSS 写不出「跟着这条结论的方向转色」。"
+  },
+  "--mi-chat-percent": {
+    "injectedBy": "MarketAnalysisAgentWorkspace.tsx:191",
+    "file": "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisAgentWorkspace.tsx",
+    "reason": "读者拖出来的上下分栏比例，是交互状态，静态定义会把拖拽结果锁死。"
+  },
+  "--chat-message-font-size": {
+    "injectedBy": "AssistantChatPane.tsx:154",
+    "file": "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantChatPane.tsx",
+    "reason": "读者在设置里选的字号（默认 14px），按会话列表容器注入；主题里只能是默认值，不能是读者选择。"
+  },
+  "--agent-message-font-size": {
+    "injectedBy": "AgentSessionMessages.tsx:172",
+    "file": "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionMessages.tsx",
+    "reason": "同一份字号设置注入到 Agent 面板；与 AssistantChatPane 成对，两边必须读同一个设置。"
+  }
+}

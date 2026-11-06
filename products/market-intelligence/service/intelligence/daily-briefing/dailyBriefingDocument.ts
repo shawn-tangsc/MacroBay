@@ -2,23 +2,51 @@ import type {
   BriefingConclusion,
   BriefingCounterEvidence,
   BriefingMacroItem,
-  BriefingMateriality,
   BriefingNewsItem,
   BriefingNewsSummary,
   BriefingNextItem,
   BriefingNextRelevance,
   BriefingNextRelevanceRole,
-  BriefingPulseRow,
   BriefingTopSignal,
   DailyBriefingDocument,
   DailyBriefingReadingId,
   DailyBriefingReadingState
 } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import { indicatorNameOf } from '../../../contracts/indicatorNames'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
-import { baselineVisibility, leverageMateriality, policyPathMateriality } from './dailyBriefingDataSelection'
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
+import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
+import { proseLanguageBreach } from './dailyBriefingProseLanguage'
+import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
+import { toBriefingNewsItem } from './dailyBriefingNewsItem'
+import {
+  highImpactEventsInWindow,
+  maximumBriefingMacroItems,
+  selectBriefingMacroItems,
+  selectMacro,
+  selectMacroCandidates,
+  selectMacroFloorItem
+} from './dailyBriefingDocumentMacro'
+
+// 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
+export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+
+/**
+ * 这一版算不算「补跑」：运行时刻明显晚于它的统计截止。
+ *
+ * 留 5 分钟容差：定时触发在整点后几秒到几分钟内起跑，那是准点，不是补跑；把准点写成补跑会让每一版
+ * 都多一句"数据截至"的说明，读者会以为所有版次都是事后补的。
+ */
+export const BRIEFING_BACKFILL_TOLERANCE_MS = 5 * 60 * 1_000
+
+export function briefingRunIsBackfill(input: Readonly<{ readAt: string; cutoff: string }>): boolean {
+  const read = Date.parse(input.readAt)
+  const cutoff = Date.parse(input.cutoff)
+  if (!Number.isFinite(read) || !Number.isFinite(cutoff)) return false
+  return read - cutoff > BRIEFING_BACKFILL_TOLERANCE_MS
+}
 
 export function buildDailyBriefingDocument(input: Readonly<{
   packet: DailyBriefingFactPacket
@@ -28,13 +56,28 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const { packet, date } = input
   const readings = buildBriefingReadingRows(packet, previousFearGreedBaseline(packet, input.previous))
   const news = selectNews(packet)
-  const macroCandidates = selectMacroCandidates(packet)
+  const macroCandidates = selectMacroCandidates(packet, new Set(packet.macroWebValueKeys ?? []))
   const macro = selectMacro(packet, macroCandidates)
+  // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
+  const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
+  // 窗口里到底有多少条高影响事件（不看有没有值）。版面不再印"几条没拿到"（用户 2026-11-06），
+  // 所以只留总数；缺值这件事由事实本身表达——事件行在、值格不渲染。
+  const highImpact = highImpactEventsInWindow(packet)
+  const macroTotals = highImpact.length === 0 ? {} : { macroHighImpactCount: highImpact.length }
+  const macroEmptyNotes = macroEmpty === undefined ? {} : {
+    macroEmpty,
+    // The stale sentence names the age; nothing else can fill it truthfully, and the number
+    // rides beside the code rather than inside it so the copy stays in the text table.
+    ...(macroEmpty === 'calendar-stale' && macroEmptyHours(packet) !== undefined
+      ? { macroEmptyHours: macroEmptyHours(packet)! }
+      : {})
+  }
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
-  const policyPathData = buildPolicyPath(packet, input.previous)
-  const leverage = buildLeverage(packet, readings.funds)
+  const policyBlock = buildPolicyPathBlock(packet, input.previous)
+  const policyPathData = policyBlock.policyPath
+  const leverage = buildLeverageBlock(packet, readings.funds)
   const document: DailyBriefingDocument = Object.freeze({
     // Read from the policy rather than repeating the literals: a version bump that updates only one
     // of the two makes every read look stale, and the brief is regenerated on every poll.
@@ -43,7 +86,25 @@ export function buildDailyBriefingDocument(input: Readonly<{
     edition: Object.freeze({
       date,
       locale: packet.locale,
+      // Identity travels with the edition, not with a configuration row: a deleted period must still
+      // say which one it was. Taken from the packet the run was built for; a run that never said
+      // which period it belonged to is this version's single fixed period.
+      periodId: packet.periodId ?? 'default',
+      // The nominal cutoff: for a scheduled period this is the configured generation time, which is
+      // exactly where the window ends. `generatedAt` below is the actual moment the run finished.
+      periodTime: packet.periodTime ?? packet.windowEnd,
+      periodKind: packet.periodKind ?? 'scheduled',
+      runTrigger: packet.runTrigger ?? 'scheduled',
+      // `generatedAt` 是"这一版真的什么时候跑出来的"：`packet.asOf` 现在是运行时刻，不是截止。
       generatedAt: packet.asOf,
+      // 三个字段一起写（`A0.10`）：哪一刻读的世界（`readAt`）、什么时候跑出来的（`generatedAs`）、
+      // 这次是不是补跑。两个时刻取同一瞬间——一次跑只有一个时钟，分两个会互相对不上。
+      // 不写 `dataAsOf`：那是旧名，旧义是"统计截止"，重名会让旧版次被误读。
+      readAt: packet.asOf,
+      generatedAs: packet.asOf,
+      ...(briefingRunIsBackfill({ readAt: packet.asOf, cutoff: packet.periodTime ?? packet.windowEnd })
+        ? { isBackfill: true }
+        : {}),
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,
       // Written from the packet, never recomputed from the current setting: a later settings change
@@ -65,7 +126,11 @@ export function buildDailyBriefingDocument(input: Readonly<{
       ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
-        ...(macro.length > 0 ? {} : { macroEmpty: macroEmptyCode(packet) })
+        ...(macroEmpty === undefined ? {} : macroEmptyNotes),
+        ...macroTotals,
+        ...(packet.macroValueConflicts === undefined || packet.macroValueConflicts.length === 0
+          ? {}
+          : { macroValueConflicts: packet.macroValueConflicts })
       })
     }),
     data: Object.freeze({
@@ -88,7 +153,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
     citations: built.citations,
     provenance: Object.freeze({
       summaryId: packet.conclusion?.summary.id ?? null,
-      readAt: packet.asOf
+      readAt: packet.asOf,
+      ...(policyBlock.audit.length > 0 ? { dataAudit: policyBlock.audit } : {})
     })
   })
   return input.previous ? Object.freeze({ ...document, comparison: buildComparison(document, input.previous) }) : document
@@ -152,93 +218,7 @@ function selectNews(packet: DailyBriefingFactPacket): readonly BriefingNewsItem[
       return true
     })
     .slice(0, dailyBriefingPolicy.maximumNewsItems)
-    .map((item) => Object.freeze({
-      itemId: item.itemId,
-      title: item.title,
-      ...(item.displayTitle && item.displayTitle !== item.title ? { translatedTitle: item.displayTitle } : {}),
-      sourceName: item.sourceName,
-      publishedAt: item.publishedAt,
-      polarity: item.polarity,
-      strength: item.strength,
-      confidence: item.confidence,
-      symbols: Object.freeze([...item.symbols])
-    })))
-}
-
-function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
-  if (packet.calendar.state !== 'available') return Object.freeze([])
-  const start = Date.parse(packet.windowStart)
-  const end = Date.parse(packet.windowEnd)
-  return Object.freeze(packet.calendar.events
-    .filter((event) => event.lifecycleState === 'released' && event.importance === 'high' && Boolean(event.actual))
-    .filter((event) => {
-      const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at >= start && at < end
-    })
-    .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
-    .map((event) => toMacroItem(event)))
-}
-
-function selectMacro(packet: DailyBriefingFactPacket, candidates: readonly BriefingMacroItem[]): readonly BriefingMacroItem[] {
-  return selectBriefingMacroItems(candidates, selectMacroFloorItem(candidates))
-}
-
-/**
- * The 24h macro section is a judgement, not a table: at most four releases reach the reader. The
- * deterministic floor stays first, the editor's selection follows in candidate order (largest
- * actual-vs-previous surprise first), and everything past the cap stays in `macroCandidates` for the
- * audit instead of being rendered as another row without an explanation.
- */
-export const maximumBriefingMacroItems = 4
-
-export function selectBriefingMacroItems(
-  selected: readonly BriefingMacroItem[],
-  floor?: BriefingMacroItem
-): readonly BriefingMacroItem[] {
-  const ordered: BriefingMacroItem[] = []
-  const seen = new Set<string>()
-  for (const item of [floor, ...selected]) {
-    if (!item || seen.has(item.eventKey)) continue
-    seen.add(item.eventKey)
-    ordered.push(item)
-    if (ordered.length === maximumBriefingMacroItems) break
-  }
-  return Object.freeze(ordered)
-}
-
-/**
- * The key release for the default selection: the largest surprise, and the latest release on a tie.
- * It is the fallback when there is no editor selection yet, so a template document shows one key
- * print instead of every high-impact release.
- */
-export function selectMacroFloorItem(items: readonly BriefingMacroItem[]): BriefingMacroItem | undefined {
-  let floor: BriefingMacroItem | undefined
-  for (const item of items) {
-    if (item.importance !== 'high') continue
-    if (!floor) {
-      floor = item
-      continue
-    }
-    const difference = surpriseMagnitude(item) - surpriseMagnitude(floor)
-    if (difference > 0 || (difference === 0 && Date.parse(item.scheduledAt) > Date.parse(floor.scheduledAt))) floor = item
-  }
-  return floor
-}
-
-function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
-  return Object.freeze({
-    eventKey: event.eventKey,
-    title: event.title,
-    ...(event.titleKey ? { titleKey: event.titleKey } : {}),
-    scheduledAt: event.scheduledAt,
-    importance: event.importance,
-    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
-    ...(event.countryName ? { countryName: event.countryName } : {}),
-    ...(event.actual === undefined ? {} : { actual: event.actual }),
-    ...(event.previous === undefined ? {} : { previous: event.previous }),
-    ...(event.consensus === undefined ? {} : { consensus: event.consensus }),
-    surprise: Object.freeze({ ...event.surprise })
-  })
+    .map((item) => toBriefingNewsItem(item, packet.locale)))
 }
 
 const nextRelevanceByRole: Readonly<Record<BriefingNextRelevanceRole, Readonly<{ score: number; reasonCode: string }>>> = Object.freeze({
@@ -304,12 +284,22 @@ export function compareBriefingNextRelevance(left: BriefingNextItem, right: Brie
   return left.at.localeCompare(right.at) || left.eventKey.localeCompare(right.eventKey)
 }
 
+/** 注册指标按标识取英文名；自由文本事件只能用源站原文。中文原文不算英文名。 */
+function hasEnglishName(event: Pick<DailyBriefingCalendarEvent, 'title' | 'titleKey'>): boolean {
+  const registered = event.titleKey ? indicatorNameOf(event.titleKey) : undefined
+  const name = registered?.en ?? event.title
+  return !/[\u3400-\u9fff]/.test(name)
+}
+
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
     .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
+    // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
+    // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
+    .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
     .filter((event) => {
       const at = Date.parse(event.scheduledAt)
       const day = localDate(event.scheduledAt, packet.timeZone)
@@ -351,6 +341,10 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
 }> {
   const input = packet.conclusion
   if (!input) return Object.freeze({ conclusion: null, citations: Object.freeze([]) })
+  // 分析摘要是一种语言写死的，这一期可以是另一种（`02` `A0.9` v2.148）。逐字复制进英文版次的
+  // 中文段落，读者会认定「英文版是假的」——所以复制时就按这一期的语言过一遍：不同语言的那一段
+  // 不进来（编辑模型之后用自己写的同语言版本替代，见 `applyDailyBriefingEditorial`）。
+  const inLocale = (text: string): boolean => !proseLanguageBreach(text, packet.locale)
   const summary = input.summary
   const structured = summary.conclusion
   const direction = structured?.direction ?? input.direction ?? 'undecided'
@@ -361,7 +355,7 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
   }))
   const top = selectTopSignal(structured ? summary.directions ?? [] : [])
   const citations = new CitationCollector(input.evidenceRefs ?? [])
-  const topSignal: BriefingTopSignal | null = top
+  const topSignal: BriefingTopSignal | null = top && inLocale(top.rationale)
     ? Object.freeze({
       horizon: top.horizon,
       direction: top.direction,
@@ -371,29 +365,33 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
     })
     : null
   const counterEvidence: readonly BriefingCounterEvidence[] = Object.freeze(summary.counterEvidence
+    .filter((claim) => inLocale(claim.statement))
     .slice(0, dailyBriefingPolicy.maximumCounterEvidence)
     .map((claim) => Object.freeze({
       statement: claim.statement,
       citations: Object.freeze(citations.cite([claim.evidenceRefId], claim.statement))
     })))
+  const summaryText = structured?.summary ?? summary.eventAssessment ?? ''
   const conclusion: BriefingConclusion = Object.freeze({
     summaryId: summary.id,
     publishedAt: summary.createdAt,
     direction,
     directions: Object.freeze(directions),
-    summary: structured?.summary ?? summary.eventAssessment ?? '',
-    ...(structured?.change ? { change: structured.change } : {}),
-    conditions: Object.freeze((structured?.conditions ?? []).slice(0, dailyBriefingPolicy.maximumConditions)),
-    invalidations: Object.freeze(input.predictions.slice(0, 4).map((prediction) => Object.freeze({
+    summary: inLocale(summaryText) ? summaryText : '',
+    ...(structured?.change && inLocale(structured.change) ? { change: structured.change } : {}),
+    conditions: Object.freeze((structured?.conditions ?? [])
+      .filter((entry) => inLocale(entry))
+      .slice(0, dailyBriefingPolicy.maximumConditions)),
+    invalidations: Object.freeze(input.predictions.filter((prediction) => inLocale(prediction.invalidation)).slice(0, 4).map((prediction) => Object.freeze({
       asset: prediction.asset,
       horizonEnd: prediction.horizonEnd,
       text: prediction.invalidation
     }))),
     counterEvidence,
     topSignal,
-    ...(structured?.evidenceStrength ? { evidenceStrength: structured.evidenceStrength } : {}),
-    dataGaps: Object.freeze((structured?.dataGaps ?? []).slice(0, dailyBriefingPolicy.maximumGaps)),
-    caveats: Object.freeze(summary.dataCaveats.slice(0, dailyBriefingPolicy.maximumCaveats)),
+    ...(structured?.evidenceStrength && inLocale(structured.evidenceStrength) ? { evidenceStrength: structured.evidenceStrength } : {}),
+    dataGaps: Object.freeze((structured?.dataGaps ?? []).filter((entry) => inLocale(entry)).slice(0, dailyBriefingPolicy.maximumGaps)),
+    caveats: Object.freeze(summary.dataCaveats.filter((entry) => inLocale(entry)).slice(0, dailyBriefingPolicy.maximumCaveats)),
     // The fact-layer conclusion is the fallback, never a synthesis: a failed or disabled editorial
     // turn must be readable as "this is the last analysis conclusion", not as an aggregation of the
     // window's AI views. The editorial pass upgrades this marker only when it actually synthesizes.
@@ -526,10 +524,51 @@ function newsEmptyCode(packet: DailyBriefingFactPacket): string {
   return 'no-directional-news'
 }
 
+/**
+ * Why the macro section is empty, in the six reason codes of `A0.8` — plus the catch-up timeout.
+ *
+ * The one rule this function exists to enforce: **only a fresh reading of an empty window may say
+ * "there was nothing"**. Everything else — switched off, unreadable, never collected, stale, the last
+ * collection failed, the catch-up ran out of time, or a packet that carries no freshness reading at
+ * all — says "not readable" with its own reason. Folding any of those into "nothing" is the exact
+ * defect the reader reported on 2026-11-05.
+ *
+ * The baseline is the packet's own `asOf`, which *is* `dataAsOf` (`A0.10`): on a backfill the two
+ * differ, and measuring against the period's nominal cutoff would make the section show events while
+ * claiming it could not read them.
+ */
 function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
-  if (packet.calendar.state === 'unavailable') return 'calendar-unavailable'
-  return 'past-24h-no-high-impact-release'
+  const freshness = packet.calendarFreshness
+  // No reading at all (an older caller or a fixture): the section must not claim "nothing happened".
+  if (!freshness) return 'calendar-unavailable'
+  // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
+  if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
+  // A catch-up that failed is a collection failure, which is also not "nothing".
+  if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
+  const reason = briefingMacroEmptyReason({
+    state: packet.calendar.state === 'unavailable' ? 'unavailable'
+      : freshness.state === 'source-disabled' ? 'source-disabled'
+        : freshness.state === 'not-wired' || freshness.state === 'unavailable' ? 'unavailable'
+          : 'available',
+    ...(freshness.lastCollectedAt ? { lastCollectedAt: freshness.lastCollectedAt } : {}),
+    ...(freshness.lastAttemptAt ? { lastAttemptAt: freshness.lastAttemptAt } : {}),
+    ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
+    dataAsOf: packet.asOf
+  })
+  // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
+  // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
+  // 反过来也要说清（`02` v2.125 ①）：**已取消的事件仍然算「有事件」**——它照常显示、带取消标记、
+  // 值那一格不渲染；"取消了"不等于"发生过却没有数据"，更不等于"没有发生"。
+  return reason
+}
+
+/** How many hours the calendar was behind this edition's own data cutoff, for the stale sentence. */
+function macroEmptyHours(packet: DailyBriefingFactPacket): number | undefined {
+  const last = packet.calendarFreshness?.lastCollectedAt
+  if (!last) return undefined
+  const hours = (Date.parse(packet.asOf) - Date.parse(last)) / 3_600_000
+  return Number.isFinite(hours) && hours > 0 ? Math.round(hours) : undefined
 }
 
 function nextEmptyCode(packet: DailyBriefingFactPacket): string {
@@ -538,76 +577,6 @@ function nextEmptyCode(packet: DailyBriefingFactPacket): string {
   return 'next-7d-no-high-impact-event'
 }
 
-function surpriseMagnitude(event: Readonly<{ surprise: BriefingMacroItem['surprise'] }>): number {
-  if (event.surprise.unit === 'pp' && typeof event.surprise.value === 'number') return Math.abs(event.surprise.value)
-  if (event.surprise.unit === 'relative-percent' && typeof event.surprise.value === 'number') return Math.abs(event.surprise.value) / 10
-  return event.surprise.direction === 'inline' || event.surprise.direction === 'consensus-unavailable' ? 0 : 1
-}
-
 function normalizeTitle(value: string): string {
   return value.trim().toLowerCase().replace(/[\s\p{P}]+/gu, '')
-}
-
-function buildPolicyPath(
-  packet: DailyBriefingFactPacket,
-  previous: DailyBriefingDocument | undefined
-): DailyBriefingDocument['data']['policyPath'] {
-  const policyPath = packet.policyPath
-  const probability = policyPath?.probability
-  if (!policyPath || !probability) return undefined
-  const current = probability.value <= 1 ? probability.value * 100 : probability.value
-  const previousProbability = previous?.data.policyPath?.probability
-  const probabilityChangePp = typeof previousProbability === 'number' && Number.isFinite(previousProbability)
-    ? Math.round((current - previousProbability) * 10) / 10
-    : undefined
-  const materiality = policyPathMateriality({
-    meetingDate: policyPath.meetingDate,
-    outcome: probability.outcome,
-    previousOutcome: previous?.data.policyPath?.outcome,
-    probabilityChangePp,
-    windowEnd: packet.windowEnd
-  })
-  return Object.freeze({
-    state: 'available' as const,
-    meetingDate: policyPath.meetingDate,
-    outcome: probability.outcome,
-    probability: current,
-    observedAt: probability.asOf,
-    ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}),
-    ...(probabilityChangePp !== undefined ? { probabilityChangePp } : {}),
-    materiality,
-    ...baselineVisibility(materiality)
-  })
-}
-
-function buildLeverage(
-  packet: DailyBriefingFactPacket,
-  funds: readonly BriefingPulseRow[]
-): NonNullable<DailyBriefingDocument['data']['leverage']> | undefined {
-  const positioning = packet.positioning
-  if (!positioning || positioning.state !== 'available') {
-    if (positioning?.state !== 'empty') return undefined
-    // An empty positioning read is a gap, not a flat market: keep the row so the reader sees the
-    // hole instead of a silently complete data section.
-    const gap: BriefingMateriality = Object.freeze({ material: true, reasonCode: 'gap' as const })
-    return Object.freeze({ state: 'unavailable' as const, btc: {}, eth: {}, materiality: gap, ...baselineVisibility(gap, true) })
-  }
-  const funding = (id: string) => {
-    const row = funds.find((candidate) => candidate.id === id)
-    return row?.value?.number
-  }
-  const last = (rows: readonly { notionalUsd: number }[]) => rows.at(-1)?.notionalUsd
-  const change = positioning.change
-  const materiality = leverageMateriality({
-    funding: funds,
-    openInterestChange24hPct: { btc: change?.btc.h24Pct, eth: change?.eth.h24Pct }
-  })
-  return Object.freeze({
-    state: 'available' as const,
-    materiality,
-    ...baselineVisibility(materiality),
-    observedAt: positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt,
-    btc: Object.freeze({ ...(funding('funding-btc') !== undefined ? { fundingRate: funding('funding-btc') } : {}), ...(last(positioning.btc) !== undefined ? { openInterestUsd: last(positioning.btc) } : {}), ...(positioning.change?.btc.h1Pct !== undefined ? { change1hPct: positioning.change.btc.h1Pct } : {}), ...(positioning.change?.btc.h24Pct !== undefined ? { change24hPct: positioning.change.btc.h24Pct } : {}) }),
-    eth: Object.freeze({ ...(funding('funding-eth') !== undefined ? { fundingRate: funding('funding-eth') } : {}), ...(last(positioning.eth) !== undefined ? { openInterestUsd: last(positioning.eth) } : {}), ...(positioning.change?.eth.h1Pct !== undefined ? { change1hPct: positioning.change.eth.h1Pct } : {}), ...(positioning.change?.eth.h24Pct !== undefined ? { change24hPct: positioning.change.eth.h24Pct } : {}) })
-  })
 }

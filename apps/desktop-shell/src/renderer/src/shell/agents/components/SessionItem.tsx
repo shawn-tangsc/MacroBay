@@ -14,6 +14,7 @@ import { getSessionDeleteClickIntent } from '../agentSessionDeleteInteraction'
 import type { AgentSessionRuntimeStatus } from '../agentSessionViewModel'
 import { getAgentChannelTypeIconUrl } from '../agentChannelVisuals'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../agentTextProvider'
@@ -27,13 +28,6 @@ type SessionItemProps = {
   channelType?: string
   channelRuntime?: AgentSessionChannelRuntimeBadge
   sessionPanelPosition: AgentSessionPanelPosition
-  dragging?: boolean
-  dragOver?: boolean
-  draggable?: boolean
-  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDrop?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragEnd?: () => void
   onUpdateSessionPanelPosition: (position: AgentSessionPanelPosition) => void
   onPress: () => void
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
@@ -47,18 +41,12 @@ export default function SessionItem({
   channelType,
   channelRuntime,
   sessionPanelPosition,
-  dragging = false,
-  dragOver = false,
-  draggable = false,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
   onUpdateSessionPanelPosition,
   onPress,
   onStateChange
 }: SessionItemProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const tooltipKeys = {
     deleteShortcut: 'sessionItem.deleteShortcut',
     more: 'sessionItem.more'
@@ -114,9 +102,17 @@ export default function SessionItem({
       icon: <Trash2 size={14} />,
       danger: true,
       onClick: () => {
-        if (!window.confirm(t.sessionItem.confirmDeleteSession(session.name))) return
-        void deleteSessionsViaApi(window.platform, [session.id]).catch(() => {
-          onStateChange((current) => deleteSession(current, session.id))
+        confirm({
+          title: t.sessionItem.delete,
+          description: t.sessionItem.confirmDeleteSession(session.name),
+          confirmLabel: t.sessionItem.delete,
+          cancelLabel: t.common.cancel,
+          tone: 'danger',
+          onConfirm: () => {
+            void deleteSessionsViaApi(window.platform, [session.id]).catch(() => {
+              onStateChange((current) => deleteSession(current, session.id))
+            })
+          }
         })
       }
     }
@@ -179,19 +175,7 @@ export default function SessionItem({
       <div
         role="button"
         tabIndex={0}
-        className={[
-          'agent-session-item',
-          active ? 'active' : '',
-          dragging ? 'dragging' : '',
-          dragOver ? 'drag-over' : ''
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        draggable={draggable && !editing}
-        onDragStart={onDragStart}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        onDragEnd={onDragEnd}
+        className={['agent-session-item', active ? 'active' : ''].filter(Boolean).join(' ')}
         onClick={pressSessionRow}
         onKeyDown={handleSessionRowKeyDown}
         onDoubleClick={() => {

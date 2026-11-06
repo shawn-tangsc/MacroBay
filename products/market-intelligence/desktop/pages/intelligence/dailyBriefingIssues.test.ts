@@ -97,6 +97,46 @@ describe('daily briefing issues', () => {
     expect(issue.advice).toContain('下一次发布')
   })
 
+  // `A0.8`：过期的那一档必须在问题清单里说出来，连「几小时没更新」一起说；
+  // 「确实没有」那一档则一条问题都不报——它本来就不是问题。
+  it('reports a source disagreement as exactly one gap, and never as a value', () => {
+    // `02` v2.128：两个来源说两个数 → 值格整格不渲染，右列**恰一条**冲突说明。
+    const issues = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroValueConflicts: ['US.ADP'] } } }),
+      text: zhText,
+      formatTime
+    })
+    const conflicts = issues.filter((entry) => entry.template === 'macro-value-conflict')
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0]!.title).toBe(zhText.limits.macro.valueConflict)
+  })
+
+  it('names each "not readable" reason for the calendar, and stays silent for "nothing happened"', () => {
+    const stale = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 } } }),
+      text: zhText,
+      formatTime
+    })
+    const staleIssue = stale.find((entry) => entry.id === 'data:calendar:calendar-stale')!
+    expect(staleIssue.severity).toBe('warning')
+    expect(staleIssue.title).toContain('42')
+    expect(staleIssue.title).not.toContain('没有已发布的高影响事件')
+
+    const timeout = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-catch-up-timeout' } } }),
+      text: zhText,
+      formatTime
+    })
+    expect(timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title).toContain('90')
+
+    const nothing = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } } }),
+      text: zhText,
+      formatTime
+    })
+    expect(nothing.some((entry) => entry.id.startsWith('data:calendar'))).toBe(false)
+  })
+
   it('explains the fear-and-greed baseline and how long ago it was last published', () => {
     const fearGreed = pulse({
       id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed',
@@ -124,9 +164,23 @@ describe('daily briefing issues', () => {
       text: zhText,
       formatTime
     }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
-    expect(noHistory.title).toBe('美国比特币现货基金：08:00 前无可用历史，最近交易日数据尚未返回')
+    // The clock comes from this edition's own cutoff, not from the current settings.
+    expect(noHistory.title).toBe('美国比特币现货基金：00:30 前无可用历史，最近交易日数据尚未返回')
     expect(noHistory.source).toBe('0xRouter ETF')
     expect(noHistory.advice).toContain('开盘后')
+
+    // No readable cutoff: the sentence says only that the trading day has not arrived, and prints no time.
+    const noTime = briefingIssues({
+      document: withFunds([pulse({
+        id: 'etf-btc', labelKey: 'dailyBriefing.row.etfBtc', value: null, change: null,
+        state: 'unavailable', reason: 'etf-unavailable', window: 'trading-day', observedAt: null
+      })]),
+      text: zhText,
+      formatTime: () => ''
+    }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
+    expect(noTime.title).toBe('美国比特币现货基金：最近交易日数据尚未返回')
+    expect(noTime.title).not.toMatch(/\d{2}:\d{2}/)
+    expect(noTime.advice).not.toMatch(/\d{2}:\d{2}/)
 
     const gated = briefingIssues({
       document: withFunds([pulse({
@@ -163,6 +217,23 @@ describe('daily briefing issues', () => {
     expect(issues.find((entry) => entry.id === 'data:macro:consensus:US.CPI')?.title).toBe('CPI：预期值未收录')
     expect(issues.find((entry) => entry.id === 'data:next:consensus:US.FOMC')?.title).toBe('FOMC：预期值未收录')
     expect(issues.find((entry) => entry.id === 'data:next:previous:US.FOMC')?.severity).toBe('info')
+  })
+
+  // `02` v2.133 B 案：讲话/声明类事件没有数值是设计如此，**不是缺口**。
+  // 记进右列会让读者和排查的人都以为坏了，而它本来就不会有数。
+  it('files no gap for a statement-only event, and still files one for a numeric release that is missing', () => {
+    const speech = macro({ eventKey: 'US.FED.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话', actual: undefined, previous: undefined, consensus: undefined })
+    // 正常发布行：有前值、有预期值，只是这次的实际值还没到——那是缺口。
+    const released = macro({ eventKey: 'US.CPI', actual: undefined, consensus: '3.2%', previous: '3.1%' })
+    const issues = briefingIssues({
+      document: document({ news: { items: [], macro: [speech, released], notes: {} } }),
+      text: zhText,
+      formatTime
+    })
+    // 讲话行：一条缺口都不该有（实际值 / 预期值 / 前值三项都不记）。
+    expect(issues.filter((entry) => entry.id.includes('US.FED.SPEECH'))).toHaveLength(0)
+    // 有预期值、缺实际值的正常发布行照旧记缺口——两种行在数据上可区分。
+    expect(issues.some((entry) => entry.id === 'data:macro:actual:US.CPI')).toBe(true)
   })
 
   it('explains DXY, gold and the ten-year when they are unavailable or lack a comparison window', () => {
@@ -302,6 +373,46 @@ describe('daily briefing issues', () => {
 
   it('returns nothing for an edition without a limitation', () => {
     expect(briefingIssues({ document: document(), text: zhText, formatTime })).toEqual([])
+  })
+
+  /**
+   * "Not applicable" is not a limitation.
+   *
+   * A window longer than the 24-hour curve makes the two price cards state no curve — the read did
+   * answer, the curve simply cannot cover the window. Counting that as a gap would tell the reader the
+   * data is missing, and would make a 48-hour edition look worse than the 24-hour edition of the same
+   * day for a reason that is purely about the drawing.
+   */
+  it('does not turn an inapplicable curve into a limitation', () => {
+    const plain = briefingIssues({ document: withMarket([market()]), text: zhText, formatTime })
+    const withCurve = briefingIssues({
+      document: withMarket([market({ curve: [[
+        { at: '2026-10-29T00:30:00.000Z', returnPercent: 0 },
+        { at: '2026-10-30T00:30:00.000Z', returnPercent: 0.4 }
+      ]] })]),
+      text: zhText,
+      formatTime
+    })
+    const inapplicable = briefingIssues({
+      document: withMarket([market({ curveReason: 'window-too-long' })]),
+      text: zhText,
+      formatTime
+    })
+
+    // The same edition with and without a stored curve yields the same limitations, and a longer
+    // window adds none either: the only thing that changed is whether a line can be drawn.
+    expect(withCurve).toEqual(plain)
+    expect(inapplicable).toEqual(plain)
+
+    const longerWindow = briefingIssues({
+      document: document({
+        edition: { ...document().edition, windowStart: '2026-10-28T00:30:00.000Z', windowHours: 48 },
+        data: { market: [market({ curveReason: 'window-too-long' })], funds: [], sentiment: { fearGreed: null, news: { state: 'available' } } }
+      }),
+      text: zhText,
+      formatTime
+    })
+    expect(longerWindow).toEqual(plain)
   })
 
   it('renders the same derivation in English', () => {

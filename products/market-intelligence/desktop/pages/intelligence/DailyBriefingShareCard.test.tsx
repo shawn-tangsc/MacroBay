@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -81,15 +82,22 @@ afterEach(async () => {
 
 const renderWith = async (
   doc: DailyBriefingDocument,
-  copy: typeof text,
-  locale: 'zh-CN' | 'en-US',
-  omitFallbackReadings = false
+  // Both locales are passed here; the component's own prop is the union of the two copy trees.
+  copy: typeof text | typeof zhText,
+  locale: 'zh-CN' | 'en-US'
 ): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime, omitFallbackReadings })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, {
+    document: doc, text: copy, locale, formatTime,
+    // 宏观空态那句要印「截至 {time}（{zone}）」：时区由页面给，卡片不自猜。
+    timeZone: 'UTC',
+    // The card never owns these words; the page hands them in, so the test hands them in too.
+    paymentDirectionsCompact: briefingPaymentDirections(locale),
+    policyWords: briefingPolicyGaugeWords(locale), changeArrows: briefingChangeArrows(locale), fearGreedBuckets: briefingFearGreedBuckets(locale)
+  })))
   return host
 }
 
@@ -100,13 +108,179 @@ const withFocus = (overrides: Partial<NonNullable<DailyBriefingDocument['next'][
   return { ...base, next: { ...base.next, focus: { ...base.next.focus!, ...overrides } } }
 }
 
+describe('a backfilled edition says which world it read', () => {
+  const backfilled = (): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      edition: { ...base.edition, isBackfill: true, readAt: '2026-10-30T12:20:00.000Z', generatedAs: '2026-10-30T12:20:00.000Z' }
+    }
+  }
+
+  it('prints the cutoff only, never when we read the store', async () => {
+    // 用户 2026-11-06：简报里**不显示具体生成时刻**——「本版读取 …」整段撤掉（正文/导出/复制同源）。
+    // 统计截止保留：那是这一版的窗口末端，读者要看。
+    const host = await render(backfilled())
+    const cutoff = host.querySelector<HTMLElement>('[data-meta-cutoff]')!
+    expect(cutoff.textContent).toBe(text.metaCutoff.replace('{time}', '2026-10-30 00:30').replace('{zone}', 'GMT'))
+    expect(host.querySelector('[data-meta-read-at]')).toBeNull()
+    expect(host.textContent).not.toContain('本版读取')
+  })
+
+  it('prints no backfill marker at all, and keeps the field in the document', async () => {
+    // 用户 2026-11-06：这句也从简报里去掉（正文/导出/复制同源）。字段仍写在文档里，排查要用。
+    const host = await render(backfilled())
+    expect(host.querySelector('[data-backfill-note]')).toBeNull()
+    expect(host.textContent).not.toContain('补跑')
+    expect((backfilled() as { edition: { isBackfill?: boolean } }).edition.isBackfill).toBe(true)
+  })
+
+  it('says nothing on a punctual edition', async () => {
+    const host = await render(briefing())
+    expect(host.querySelector('[data-backfill-note]')).toBeNull()
+  })
+})
+
+describe('the macro section draws events, never a message about missing data (v2.124)', () => {
+  const emptyMacro = (notes: DailyBriefingDocument['news']['notes']): DailyBriefingDocument => {
+    const doc = briefing()
+    return { ...doc, news: { ...doc.news, macro: [], notes } }
+  }
+  // 用户 2026-11-06：正文里「没数据」「没拿到」「未拿到」「未公布」一个都不许出现。
+  const forbidden = ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件', '暂时读不到']
+  const assertClean = (host: HTMLElement): void => {
+    for (const word of forbidden) expect(host.textContent).not.toContain(word)
+  }
+
+  it('draws nothing at all when the window held no high-impact event', async () => {
+    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-no-high-impact-release' }))
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(rendered.querySelectorAll('.mi-brief-poster__macro')).toHaveLength(0)
+    assertClean(rendered)
+  })
+
+  it('draws nothing for a calendar that could not be read — the gap belongs to the audit column', async () => {
+    // 「读不到」不进正文：右列缺口负责说它（原因 + 重试），正文里一个字都不提。
+    for (const notes of [{ macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, { macroEmpty: 'calendar-catch-up-timeout' }, { macroEmpty: 'calendar-unavailable' }]) {
+      const rendered = await render(emptyMacro(notes))
+      expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+      assertClean(rendered)
+    }
+  })
+
+  it('keeps an event that has no actual, and renders no value cell for it', async () => {
+    // 反证：把值删掉，事件行仍在（时刻/国家/名称），值那一格**整块不渲染**——连破折号都没有。
+    const doc = briefing()
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: [{ ...doc.news.macro[0]!, actual: undefined }], notes: {} } })
+    const rows = rendered.querySelectorAll('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    expect(rows).toHaveLength(1)
+    expect(rendered.textContent).toContain(doc.news.macro[0]!.title)
+    expect(rendered.textContent).not.toContain(text.macro.actual)
+    expect(rows[0]!.textContent).not.toContain('3.4%')
+    // 值格整块不渲染：破折号、占位符都不留（别处的分隔符不在这条判据里）。
+    expect(rows[0]!.textContent).not.toContain('—')
+    expect(rows[0]!.querySelector('small')).toBeNull()
+    assertClean(rendered)
+  })
+
+  // `02` v2.133 B 案：讲话/声明类行**不写解析**，且结构上就看得出不同——不是少一句话。
+  it('draws a statement row as one segment, and an explained row as two', async () => {
+    const doc = briefing()
+    const speech = {
+      ...doc.news.macro[0]!, eventKey: 'US.FED.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话',
+      actual: undefined, previous: undefined, consensus: undefined, why: undefined,
+      surprise: { direction: 'consensus-unavailable' as const, reason: 'missing-actual' }
+    }
+    const explained = { ...doc.news.macro[0]!, why: '初请低于前值，劳动力市场仍紧，抬高贴现率压力。' }
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: [speech, explained], notes: {} } })
+
+    const absent = rendered.querySelector('[data-macro-parse="absent"]')!
+    const present = rendered.querySelector('[data-macro-parse="present"]')!
+    expect(absent).not.toBeNull()
+    expect(present).not.toBeNull()
+    // 结构判据：absent 行里**根本不生成**解析容器；present 行里恰一个。
+    expect(absent.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(0)
+    expect(present.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(1)
+    // 讲话行照常显示时刻与标题，但没有值、没有解析，也不出现任何缺失话术。
+    expect(absent.textContent).toContain('里奇蒙联储主席巴尔金发表讲话')
+    expect(absent.textContent).not.toContain('—')
+    assertClean(rendered)
+  })
+
+  it('marks a web-sourced value with the same suffix, and leaves a store value alone', async () => {
+    // `02` v2.128：只给网页取到的值加「（网页）」；库内值一个字都不加。
+    const base = briefing()
+    const web = await render({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'web' }], notes: {} }
+    })
+    expect(web.textContent!.split(text.macroWebValue).length - 1).toBe(1)
+    const store = await render({ ...base, news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'calendar' }], notes: {} } })
+    expect(store.textContent).not.toContain(text.macroWebValue)
+    // 值本身两处都在：加的全是后缀，不是换了一份文字。
+    expect(web.textContent).toContain('3.4%')
+    expect(store.textContent).toContain('3.4%')
+  })
+
+  it('prints the value when there is one', async () => {
+    const rendered = await render(briefing())
+    expect(rendered.textContent).toContain('3.4%')
+  })
+
+  it('stays silent for an edition written before reasons were recorded', async () => {
+    const rendered = await render({ ...briefing(), news: { ...briefing().news, macro: [], notes: {} } })
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+  })
+
+  it('marks a cancelled event and draws it without a value cell (v2.125)', async () => {
+    // 那天原定有一场、后来取消了：行在、含「已取消」、值格不渲染。藏起来读者会以为数据漏了。
+    const doc = briefing()
+    const rendered = await render({
+      ...doc,
+      news: { ...doc.news, macro: [{ ...doc.news.macro[0]!, actual: undefined, lifecycleState: 'cancelled' }], notes: {} }
+    })
+    const row = rendered.querySelector('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    expect(row).not.toBeNull()
+    expect(row!.textContent).toContain(text.macro.cancelled)
+    expect(rendered.textContent).not.toContain(text.macro.actual)
+    expect(row!.querySelector('small')).toBeNull()
+    assertClean(rendered)
+  })
+
+  // 用户 2026-11-06：AI 判定有用的**全部显示**，所以「共 N 条（另 M 条未列出）」这句连同截断一起删。
+  it('never prints a shown/hidden count, whatever the candidate list holds', async () => {
+    const doc = briefing()
+    const candidates = Array.from({ length: 6 }, (_, index) => ({ ...doc.news.macro[0]!, eventKey: `EV.${index}`, title: `Event ${index}` }))
+    const rendered = await render({ ...doc, news: { ...doc.news, macro: candidates.slice(0, 4), macroCandidates: candidates } })
+    expect(rendered.querySelector('[data-macro-coverage]')).toBeNull()
+    expect(rendered.textContent).not.toMatch(/未列出|not listed/)
+  })
+
+  it('still renders an edition written at schema 13, before the lifecycle field existed', async () => {
+    // 库里已有旧版本文档（A11.2）：读 13 的文档不许报错、不许丢字段，缺 lifecycleState 就当没取消。
+    const base = briefing()
+    const old: DailyBriefingDocument = {
+      ...base,
+      schemaVersion: 13,
+      policyVersion: 'daily-briefing.v23',
+      edition: { ...base.edition, periodId: 'default', periodTime: '2026-10-30T00:30:00.000Z', periodKind: 'scheduled', runTrigger: 'scheduled' }
+    }
+    const rendered = await render(old)
+    expect(rendered.textContent).toContain('3.4%')
+    expect(rendered.querySelector('.mi-brief-poster__macro-cancelled')).toBeNull()
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).not.toBeNull()
+  })
+})
+
 describe('daily brief share card in English', () => {
   it('names the leverage, rate path and news count in English', async () => {
     const rendered = await render()
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
     expect(poster).toContain(text.sections.leverage)
-    expect(poster).toContain(text.sections.policyPath)
-    expect(poster).toContain(text.sections.marketImplied)
+    // The card names what the dial is, not the section it sits in.
+    expect(poster).toContain(text.sections.policyProbability)
+    // The label names what the value is (the target range), not a claim about how it was priced.
+    expect(poster).toContain(text.sections.policyRange)
     expect(poster).toContain(text.sections.rangeUnavailable)
     expect(poster).toContain(text.policyOutcomes['hike-25'])
     expect(poster).toContain('4 items:')
@@ -160,7 +334,7 @@ describe('daily brief share card in English', () => {
     expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.lastClose)
   })
 
-  it('leaves that row out of the exported image', async () => {
+  it('keeps a stale row in the exported image, marked as stale', async () => {
     const base = briefing()
     const doc: DailyBriefingDocument = {
       ...base,
@@ -171,9 +345,10 @@ describe('daily brief share card in English', () => {
           : row)
       }
     }
-    const rendered = await renderWith(doc, text, 'en-US', true)
-    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
-    expect(rendered.textContent).not.toContain('BTC')
+    const rendered = await renderWith(doc, text, 'en-US')
+    // The image and the copied text are one edition: a stale row is labelled, not dropped from half
+    // of the exports. Dropping it here made the PNG lose rows the text still carried.
+    expect(rendered.textContent).toContain('BTC')
   })
 
   it('renders only the data rows the editor kept', async () => {
@@ -204,7 +379,7 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toContain(text.sections.policyPath)
   })
 
-  it('leads stablecoins and fear and greed with the change, not the level', async () => {
+  it('leads the money and sentiment cells with their level, and keeps one comparison beside it', async () => {
     const base = briefing()
     const rendered = await render({
       ...base,
@@ -236,12 +411,16 @@ describe('daily brief share card in English', () => {
     })
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
 
-    expect(poster).toContain('1d -0.33%')
-    expect(poster).toContain('1d -2 pts')
-    // The level is the caption, and the longer windows stay visible behind the day move.
-    expect(poster).toContain('Total 253B USD')
-    expect(poster).toContain('7d -0.81%')
-    expect(poster).toContain('Current 28')
+    // The cell leads with the stock and keeps the day's dollar move; the longer windows are the
+    // copied text's, not a cell's.
+    expect(poster).toContain('253B USD')
+    expect(poster).toContain('↓843.9M USD')
+    expect(poster).not.toContain('7d -0.81%')
+    expect(poster).not.toContain('30d')
+    // Fear and greed leads with the score, then the step since the last release — no date span.
+    expect(poster).toContain('28')
+    // A move is an arrow and a magnitude: the arrow carries the direction, so the number does not repeat it.
+    expect(poster).toContain('↓2 pts')
   })
 
   it('prints the missing baseline instead of a zero change', async () => {
@@ -269,13 +448,14 @@ describe('daily brief share card in English', () => {
         }
       }
     })
-    const numbers = rendered.querySelector('.mi-brief-poster__numbers')!.textContent ?? ''
+    // A row that is not one of the four headline numbers lands in the metrics block, so read the
+    // whole card: where it prints does not matter, that it prints does.
+    const numbers = rendered.textContent ?? ''
 
-    // A change-led row with no baseline is left out of the poster rather than printed as a level or
-    // a fabricated flat move; the document itself keeps `no-baseline` for the reader's audit.
-    expect(numbers).not.toContain(text.rows.stablecoin)
-    expect(numbers).not.toContain(text.rows.fearGreed)
-    expect(numbers).not.toContain('Total 253B USD')
+    // The rows print with their missing baseline stated; the poster used to drop them silently,
+    // which is how a quiet day looked like a day with no readings.
+    expect(numbers).toContain(text.rows.stablecoin)
+    expect(numbers).toContain(text.rows.fearGreed)
     expect(numbers).not.toContain('0.00%')
   })
 
@@ -470,5 +650,79 @@ describe('daily brief share card in English', () => {
 
     expect(meta).toBe('高影响 · 美国 · 前值 29')
     expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
+  })
+})
+
+describe('news titles follow the edition language', () => {
+  const SOURCE = 'JPMorgan says AI labels no longer win lenders'
+  const TRANSLATED = '摩根大通表示，AI 标签不再能赢得贷款方'
+  const SECOND = 'Spot ETF inflows hit a record'
+
+  const newsItem = (overrides: Partial<DailyBriefingDocument['news']['items'][number]>) => ({
+    itemId: 'n1', title: SOURCE, sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T00:00:00.000Z',
+    polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+    ...overrides
+  })
+
+  const withNews = (locale: 'zh-CN' | 'en-US', items: DailyBriefingDocument['news']['items']): DailyBriefingDocument => {
+    const base = briefing()
+    return { ...base, edition: { ...base.edition, locale }, news: { ...base.news, items } }
+  }
+
+  it('falls back to the source title on an English card', async () => {
+    const rendered = await renderWith(withNews('en-US', [newsItem({ translatedTitle: TRANSLATED })]), text, 'en-US')
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    expect(poster).toContain(SOURCE)
+    expect(poster).not.toContain(TRANSLATED)
+  })
+
+  it('keeps the translated title on a Chinese card', async () => {
+    const rendered = await renderWith(withNews('zh-CN', [newsItem({ translatedTitle: TRANSLATED })]), zhText, 'zh-CN')
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    expect(poster).toContain(TRANSLATED)
+    expect(poster).not.toContain(SOURCE)
+  })
+
+  it('keeps both items, in order, and drops none', async () => {
+    const rendered = await renderWith(withNews('en-US', [
+      newsItem({ itemId: 'n1', translatedTitle: TRANSLATED }),
+      newsItem({ itemId: 'n2', title: SECOND, polarity: 'bullish' })
+    ]), text, 'en-US')
+    const titles = [...rendered.querySelectorAll('.mi-brief-poster__news p')].map((node) => node.textContent ?? '')
+    expect(titles).toHaveLength(2)
+    expect(titles[0]).toContain(SOURCE)
+    expect(titles[1]).toContain(SECOND)
+  })
+})
+
+describe('the sheet lists newest first (user 2026-11-06)', () => {
+  it('draws news by publishedAt, latest on top, whatever order the document holds', async () => {
+    const doc = briefing()
+    const base = doc.news.items[0]!
+    const items = [
+      { ...base, itemId: 'older', title: 'Older', publishedAt: '2026-10-29T18:57:00.000Z' },
+      { ...base, itemId: 'newest', title: 'Newest', publishedAt: '2026-10-30T02:48:00.000Z' },
+      { ...base, itemId: 'middle', title: 'Middle', publishedAt: '2026-10-29T20:27:00.000Z' }
+    ]
+    const host = await render({ ...doc, news: { ...doc.news, items, notes: {} } })
+    const titles = [...host.querySelectorAll('.mi-brief-poster__news')].map((node) => node.textContent ?? '')
+    expect(titles[0]).toContain('Newest')
+    expect(titles[1]).toContain('Middle')
+    expect(titles[2]).toContain('Older')
+  })
+
+  it('draws macro events by scheduledAt, latest on top', async () => {
+    const doc = briefing()
+    const base = doc.news.macro[0]!
+    const macro = [
+      { ...base, eventKey: 'older', title: 'Older event', scheduledAt: '2026-10-29T13:30:00.000Z' },
+      { ...base, eventKey: 'newest', title: 'Newest event', scheduledAt: '2026-10-29T14:10:00.000Z' },
+      { ...base, eventKey: 'middle', title: 'Middle event', scheduledAt: '2026-10-29T13:50:00.000Z' }
+    ]
+    const host = await render({ ...doc, news: { ...doc.news, macro, notes: {} } })
+    const rows = [...host.querySelectorAll('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')].map((node) => node.textContent ?? '')
+    expect(rows[0]).toContain('Newest event')
+    expect(rows[1]).toContain('Middle event')
+    expect(rows[2]).toContain('Older event')
   })
 })

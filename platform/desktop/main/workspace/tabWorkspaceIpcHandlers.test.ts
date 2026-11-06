@@ -15,6 +15,7 @@ import { createTabDetachedWindowHost } from './tabDetachedWindowHost'
 import { createTabWorkspaceIpcHandlers, type TabWorkspaceIpcDependencies } from './tabWorkspaceIpcHandlers'
 import { createWorkspaceEventRouter } from './workspaceEventRouter'
 import { createWorkspaceWindowRegistry, type WorkspaceWindowRecord } from './workspaceWindowRegistry'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace。P2-03 `.tabs.*` 接线矩阵。
@@ -76,8 +77,8 @@ function createHarness(options: {
     return handle
   }
   const sharedHost = createPanelDetachedWindowHost({
-    entryUrl: 'file:///app/renderer/index.html',
-    appRoot: 'file:///app/renderer',
+    entryUrl: ENTRY,
+    appRoot: APP_ROOT,
     createWindow,
     security: createSecureWindowSecurity({ preload: '/app/preload/index.js', openExternal: () => undefined }),
     registry: windowRegistry,

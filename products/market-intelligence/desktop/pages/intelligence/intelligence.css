@@ -702,7 +702,7 @@ button.mi-agent-card__status:focus-visible {
 }
 
 .mi-dashboard-source-drawer__detail p {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -1117,31 +1117,6 @@ button.mi-agent-card__status:focus-visible {
   color: var(--mi-dashboard-caution);
   font-size: 20px;
   font-weight: 600;
-}
-
-.mi-crypto-dashboard__gauge {
-  position: relative;
-  height: 5px;
-  margin: 12px 0 4px;
-  background: linear-gradient(90deg, var(--danger), var(--mi-dashboard-caution) 48%, var(--accent));
-}
-
-.mi-crypto-dashboard__gauge::before {
-  position: absolute;
-  top: -3px;
-  left: calc(var(--mi-fear-greed-score) * 1%);
-  width: 2px;
-  height: 11px;
-  background: var(--text-strong);
-  content: '';
-}
-
-.mi-crypto-dashboard__gauge span {
-  display: block;
-  padding-top: 10px;
-  color: var(--mi-dashboard-muted);
-  font-size: 10px;
-  text-align: right;
 }
 
 .mi-crypto-dashboard__state p {

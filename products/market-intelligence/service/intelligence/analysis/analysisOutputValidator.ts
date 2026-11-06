@@ -1,6 +1,5 @@
 import {
   MARKET_ANALYSIS_ERROR_CODES,
-  MARKET_ANALYSIS_POLICY_PATH_METRICS,
   isMarketAnalysisFiniteNumber,
   type AnalysisDirectionHorizon,
   type AnalysisScenarioHorizon,
@@ -15,6 +14,8 @@ import {
   type AnalysisConclusion
 } from '../../../contracts/marketAnalysisContracts'
 import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisValidationPolicy } from './analysisConstants'
+import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
+import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 
 export type FrozenAnalysisEvidence = Readonly<{
@@ -68,7 +69,13 @@ export const analysisValidationRules = Object.freeze({
    * cited with that fact's own as-of at minute precision. A percentage near "概率/定价" that no
    * policy fact carries is a fabricated number, not a rounding difference.
    */
-  policyProbabilityCitation: 'policy-probability-citation'
+  policyProbabilityCitation: 'policy-probability-citation',
+  /**
+   * The conclusion never returned to the change that triggered the run: it cites something else and
+   * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
+   * the repairable set, so the model gets its one rewrite; the detail names this rule.
+   */
+  triggerFocus: 'missing-trigger-focus'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -83,12 +90,13 @@ export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof
  */
 export type AnalysisShapeDefect = `shape:${string}`
 
+
 export type AnalysisOutputValidationResult =
   | Readonly<{ ok: true; value: ValidatedAnalysisModelOutput; redactions: readonly AnalysisOutputRedaction[] }>
-  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect }>
+  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect; detail?: AnalysisProbabilityDefect }>
 
-function missingEvidence(rule: AnalysisValidationRule): AnalysisOutputValidationResult {
-  return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule }
+function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabilityDefect): AnalysisOutputValidationResult {
+  return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule, ...(detail ? { detail } : {}) }
 }
 
 const outputKeys = [
@@ -157,7 +165,7 @@ function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
   return `shape:top-level:${details.join(',') || 'unknown'}`
 }
 
-export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence): AnalysisOutputValidationResult {
+export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus): AnalysisOutputValidationResult {
   if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
   let value: unknown
@@ -219,7 +227,11 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
     ])
     if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
   }
-  if (!hasTraceablePolicyProbability(output.conclusion, snapshot)) return missingEvidence(analysisValidationRules.policyProbabilityCitation)
+  const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
+  if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
+  // Only when the caller could resolve a trigger source; a snapshot with no change record never
+  // ran this rule and must not be judged by it.
+  if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
 
   return { ok: true, value: output, redactions }
 }
@@ -312,49 +324,6 @@ function isCatalysts(value: unknown): value is Catalyst[] {
  * that fact's `observedAt` at minute precision; a percentage next to 「概率」 or 「定价」 that no
  * policy fact carries is rejected as an invented number.
  */
-function hasTraceablePolicyProbability(conclusion: AnalysisConclusion, snapshot: FrozenAnalysisEvidence): boolean {
-  const probabilities = snapshot.facts.filter(fact =>
-    fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability &&
-    typeof fact.value === 'number' && Number.isFinite(fact.value) && typeof fact.observedAt === 'string')
-  if (probabilities.length === 0) return true
-  const prose = [
-    conclusion.summary, conclusion.change, conclusion.causalChain,
-    ...(conclusion.macro ? [conclusion.macro] : []),
-    ...conclusion.conditions, ...(conclusion.evidenceStrength ? [conclusion.evidenceStrength] : []),
-    ...conclusion.dataGaps
-  ].join('\n')
-  // Only percentages written as a probability are policed: a yield or a CPI print is not one.
-  const mentioned = policyProbabilityMentions(prose)
-  const allowed = probabilities.map(fact => Number(fact.value))
-  if (mentioned.some(value => !allowed.some(candidate => nearlyEqual(candidate, value)))) return false
-  for (const fact of probabilities) {
-    const value = Number(fact.value)
-    if (mentioned.some(candidate => nearlyEqual(candidate, value)) && !mentionsInstant(prose, fact.observedAt!)) return false
-  }
-  return true
-}
-
-/** Percentages next to 「概率」 or 「定价」, in either order, without crossing a sentence break. */
-function policyProbabilityMentions(text: string): number[] {
-  return [
-    ...text.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*[%％]/g),
-    ...text.matchAll(/(\d+(?:\.\d+)?)\s*[%％][^。；\n]{0,8}?(?:概率|定价)/g)
-  ].map(match => Number(match[1])).filter(value => Number.isFinite(value))
-}
-
-function nearlyEqual(left: number, right: number): boolean {
-  return Math.abs(left - right) < 0.05
-}
-
-/** `observedAt` is UTC; accept the ISO form, `YYYY-MM-DD HH:mm`, or `MM-DD HH:mm`. */
-function mentionsInstant(text: string, observedAt: string): boolean {
-  const date = observedAt.slice(0, 10)
-  const time = observedAt.slice(11, 16)
-  const short = date.slice(5)
-  return text.includes(observedAt) || text.includes(`${date} ${time}`) || text.includes(`${date}T${time}`) ||
-    text.includes(`${short} ${time}`) || text.includes(`${short}T${time}`)
-}
-
 function hasKnownReferences(output: ValidatedAnalysisModelOutput, factIds: ReadonlySet<string>, evidenceRefIds: ReadonlySet<string>): boolean {
   const referencedFactIds = [
     ...output.knownFacts.map((claim) => claim.factId),

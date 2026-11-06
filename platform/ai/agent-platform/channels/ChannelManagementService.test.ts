@@ -5,7 +5,9 @@ import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegistry'
 import { seedChannelAdapterSupport } from './channelTestSupport'
 import { assertLarkSecret, assertSlackSecret } from './ChannelManagementContracts'
+import { ChannelAcceptanceService } from './ChannelAcceptanceService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
+import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelManagementService } from './ChannelManagementService'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 
@@ -124,6 +126,23 @@ describe('ChannelManagementService', () => {
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ generation: 2, lifecycle_state: 'inactive' })
   })
 
+  it('keeps the enable intent across a graceful quit even when the adapter has no acceptance record', () => {
+    const { database, repository } = harness()
+    const id = 'channel-self-check-quit'
+    expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    // 这个用户是靠现场自检启用的：库里适配器仍是 blocked。
+    database.connection.prepare("update agent_channels set requested_enabled=1,lifecycle_state='enabled',credential_health='configured' where id=?").run(id)
+    database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,1,'active','2026-07-19') on conflict(channel_id) do update set generation=1,lifecycle_state='active'").run(id)
+
+    expect(repository.fenceAllForQuit('2026-07-19T00:00:00.000Z')).toContain(id)
+
+    // 运行时被围栏，但**开启意图保留**：下次启动才有恢复候选，读者不用再点一次启用。
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
+      requested_enabled: 1, lifecycle_state: 'enabled'
+    })
+    expect(database.connection.prepare('select lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ lifecycle_state: 'inactive' })
+  })
+
   it('quit invalidates a pending owner before deferred credential inspection can activate it', async () => {
     const { database, repository, vault, cipher } = harness()
     const id = 'channel-pending-quit'
@@ -189,7 +208,15 @@ describe('ChannelManagementService', () => {
     expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
     database.connection.prepare("update agent_channels set credential_ref='channel-migration:channel-enable-mutation:ref',credential_revision=1,credential_health='configured',lifecycle_state='ready' where id=?").run(id)
     let resolveInspect!: (value: ChannelCredentialSafeView | null) => void
-    vault.inspectSafe = async () => new Promise<ChannelCredentialSafeView | null>((resolve) => { resolveInspect = resolve })
+    // 只挡住**第一次** inspect（启用那笔的凭据核对）：轮换现在也要先读一次凭据形态，
+    // 若把每一次都挡住，轮换自己会等一个测试最后才 resolve 的 promise，用例就死锁了。
+    const inspectGate = new Promise<ChannelCredentialSafeView | null>((resolve) => { resolveInspect = resolve })
+    const baseInspect = vault.inspectSafe.bind(vault)
+    let gatePending = true
+    vault.inspectSafe = async (ref: string) => {
+      if (gatePending) { gatePending = false; return inspectGate }
+      return baseInspect(ref)
+    }
     const start = vi.fn(async () => true)
     const service = new ChannelManagementService({ repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff(), runtime: { start, stop: () => {} } })
     const pending = Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))
@@ -311,8 +338,9 @@ describe('ChannelManagementService', () => {
     await expect(first).resolves.toMatchObject({ ok: false, code: 'channel-management-metadata-failed' })
     await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     expect(vault.putReservedCalls).toBe(1)
+    // 落定（settle）后 revision 是 2：预留记录 1 → 普通记录 2，元数据必须跟着写 2。
     expect(database.connection.prepare('select credential_ref,credential_revision,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
-      credential_ref: 'reserved-ref', credential_revision: 1, lifecycle_state: 'ready'
+      credential_ref: 'reserved-ref', credential_revision: 2, lifecycle_state: 'ready'
     })
     expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state='completed'").get(id)).toEqual({ count: 1 })
   })
@@ -450,7 +478,8 @@ describe('ChannelManagementService', () => {
     await expect(A).resolves.toMatchObject({ ok: false })
     await expect(B).resolves.toMatchObject({ ok: false })
 
-    // B's journal survives the failed CAS until restart recovery. It must not adopt A's receipt.
+    // 轮换失败当场收尾（不再留到重启），所以 B 的日志是 abandoned/`mutation-incomplete`；
+    // 关键在于重启恢复**不许**把 A 写成的 revision 记到 B 头上。
     await service.recover()
     expect(database.connection.prepare('select credential_revision,credential_health,lifecycle_state,requested_enabled from agent_channels where id=?').get(id)).toEqual({
       credential_revision: 1, credential_health: 'unavailable', lifecycle_state: 'disabled', requested_enabled: 0
@@ -458,8 +487,9 @@ describe('ChannelManagementService', () => {
     expect(await vault.inspectSafe('known-ref')).toMatchObject({ revision: 2 })
     expect(await vault.inspectMutationReceipt('known-ref')).toMatchObject({ mutationEpoch: 1, revision: 2 })
     expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state in ('external-inflight','revoked-inflight','revoked-cleanup')").get(id)).toEqual({ count: 0 })
-    expect(database.connection.prepare("select stable_error_code from channel_management_operations where channel_id=? order by updated_at desc limit 1").get(id)).toEqual({
-      stable_error_code: 'channel-credential-mutation-unattributed'
+    // 按插入顺序取最后一条（B 那笔）：两笔可能落在同一毫秒，`updated_at desc` 会随机挑一条。
+    expect(database.connection.prepare("select stable_error_code from channel_management_operations where channel_id=? order by rowid desc limit 1").get(id)).toEqual({
+      stable_error_code: 'channel-credential-mutation-incomplete'
     })
   })
 
@@ -593,7 +623,7 @@ describe('ChannelManagementService', () => {
     await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     await expect(first).resolves.toMatchObject({ ok: false })
     expect(database.connection.prepare('select credential_ref,credential_revision,lifecycle_state from agent_channels where id=?').get(id)).toEqual({
-      credential_ref: 'reserved-ref', credential_revision: 1, lifecycle_state: 'ready'
+      credential_ref: 'reserved-ref', credential_revision: 2, lifecycle_state: 'ready'
     })
     // Provision is serialized per channel: the stale reservation is cleaned before the winner writes.
     expect(vault.reservedDeletes).toBe(1)
@@ -618,7 +648,7 @@ describe('ChannelManagementService', () => {
     const winner = service.provision({ id, actorId: 'user-b', senderId: 7, handoff: await credentialHandoff(service, id, 'same-token') })
     await expect(winner).resolves.toMatchObject({ ok: true })
     await expect(first).resolves.toMatchObject({ ok: false })
-    expect(database.connection.prepare('select credential_ref,credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_ref: 'reserved-ref', credential_revision: 1 })
+    expect(database.connection.prepare('select credential_ref,credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_ref: 'reserved-ref', credential_revision: 2 })
   })
 
   it('keeps deleting and both known journals when revoked cleanup fails, then settles on recovery', async () => {
@@ -752,7 +782,9 @@ describe('ChannelManagementService', () => {
     database.connection.exec('drop trigger management_stale_metadata')
     await service.recover()
     expect(database.connection.prepare('select credential_revision,requested_enabled from agent_channels where id=?').get(id)).toEqual({ credential_revision: 2, requested_enabled: 0 })
-    expect(vault.inspectRefs).toEqual(['known-ref', 'known-ref'])
+    // 轮换前先读一次形态（判 reserved / configured / stale），恢复与健康度各再读一次；关键在「只读 known-ref」。
+    expect(vault.inspectRefs.length).toBeGreaterThanOrEqual(2)
+    expect(new Set(vault.inspectRefs)).toEqual(new Set(['known-ref']))
   })
 
   it('abandons a rotate intent when Vault failed before write and never pretends the old revision completed', async () => {
@@ -761,9 +793,11 @@ describe('ChannelManagementService', () => {
     database.connection.prepare("update agent_channels set credential_ref='known-ref',credential_revision=1,lifecycle_state='ready',credential_health='configured' where id=?").run(id)
 
     await expect(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff: await credentialHandoff(service, id, 'token-a') })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
+    // 失败当场收尾：以前这条会留在 external-inflight，重启时被打成「恢复中」并把 health 打成 unavailable。
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
     await service.recover()
     expect(database.connection.prepare('select credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_revision: 1 })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'revoked-cleanup' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
   })
 
   it('fails closed when a recovered rotate observes a jumped revision instead of adopting it', async () => {
@@ -807,7 +841,8 @@ describe('ChannelManagementService', () => {
     const handoff = await credentialHandoff(service, id, 'token-a')
 
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'external-inflight' })
+    // put 失败也可能已经落了记录：当场登记清理意图并清掉，不再留 external-inflight 让下次启动算成「恢复中」。
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     await service.recover()
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     vault.failPutReserved = false
@@ -823,6 +858,16 @@ describe('ChannelManagementService', () => {
     expect(service.setTarget({ channelId: id, conversationId: 'conversation-a', enabled: true, actorId: 'user-a' })).toEqual({ ok: true, code: 'target-updated' })
     expect(service.setTarget({ channelId: id, conversationId: 'not-a-conversation', enabled: true, actorId: 'user-a' })).toEqual({ ok: false, code: 'channel-not-found' })
     expect(JSON.stringify(service.listConversations({ id, limit: 100 }))).not.toMatch(/payload-ref|opaque-hash|session-a/i)
+  })
+
+  it('returns the stored conversation title instead of null (the column was selected but never read)', () => {
+    const { service, database } = harness()
+    const id = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(`insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,session_title,created_at,updated_at) values('conversation-a',?,x'01','payload-ref',1,'opaque-hash','direct','session-a','Telegram · 贾维斯','2026-07-19','2026-07-19')`).run(id)
+    // `session_title` 以前只写在类型里、没进 select：界面读到的名字永远是 null（会话列表回退成平台名）。
+    expect(service.listConversations({ id, limit: 100 })).toEqual([
+      expect.objectContaining({ id: 'conversation-a', sessionTitle: 'Telegram · 贾维斯', hasBoundSession: true })
+    ])
   })
 
   it('rejects begin-delete-submit credential and policy handoffs without new Vault or policy writes', async () => {
@@ -1060,12 +1105,20 @@ class FakeVault implements ChannelCredentialVault {
     return { credentialRef: 'reserved-ref', revision: 1, maskedFields: { bot_token: '********' } }
   }
   async inspectReserved(): Promise<ChannelCredentialSafeView | null> {
-    return this.failPutReserved ? null : { credentialRef: 'reserved-ref', revision: 1, maskedFields: { bot_token: '********' } }
+    return this.failPutReserved ? null : { credentialRef: 'reserved-ref', revision: this.revision, maskedFields: { bot_token: '********' } }
+  }
+  settledRefs: string[] = []
+  async settleReserved(input: { credentialRef: string; expectedRevision: number }): Promise<ChannelCredentialSafeView> {
+    // 与真实现一致：只有预留记录能落定，而且必须用 settle 之前的 revision 判。
+    if (this.failPutReserved || input.credentialRef !== 'reserved-ref') throw new Error('unavailable')
+    if (input.expectedRevision !== this.revision) throw new Error('unavailable')
+    this.settledRefs.push(input.credentialRef)
+    this.revision += 1
+    return { credentialRef: input.credentialRef, revision: this.revision, maskedFields: { bot_token: '********' } }
   }
   async deleteReservedIfRevision() { this.reservedDeletes += 1; if (this.failReservedDelete) throw new Error('unavailable'); return true }
   async claimReservedCleanup() { this.cleanupClaim = `claim-${this.reservedDeletes}`; return { revision: 1, cleanupToken: this.cleanupClaim } }
   async deleteReservedIfCleanupClaim(input: { cleanupToken: string }) {
-    console.log('CLEANUP', new Error().stack)
     this.reservedDeletes += 1
     if (this.failReservedDelete) throw new Error('unavailable')
     return input.cleanupToken === this.cleanupClaim
@@ -1120,3 +1173,534 @@ function supportedTelegramEntry() {
     receiveSmokeAt: '2026-07-19', sendSmokeAt: '2026-07-19', reconnectSmokeAt: '2026-07-19', restartRecoveryAt: '2026-07-19', proxySmokeAt: '2026-07-19', credentialRotationAt: '2026-07-19', disableDeleteFencingAt: '2026-07-19', capabilityEvidence: {}
   }
 }
+
+describe('read-only delivery targets projection', () => {
+  function deliveryHarness() {
+    const { database, repository, vault, cipher } = harness()
+    const id = 'channel-deliverable'
+    expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', requested_enabled=1, lifecycle_state='enabled' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    const service = new ChannelManagementService({
+      repository,
+      vault,
+      cipher,
+      registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]),
+      handoff: new ChannelSecureHandoff(),
+      now: () => new Date('2026-07-19T00:00:00.000Z')
+    })
+    return { database, repository, service, id }
+  }
+
+  function addTarget(
+    database: ReturnType<typeof harness>['database'],
+    channelId: string,
+    index: number,
+    kind: 'direct' | 'group' | 'channel' = 'direct',
+    sessionBound = true
+  ): void {
+    database.connection.prepare(
+      `insert into channel_conversations(id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at)
+       values(?, ?, x'01', 'ref', 1, ?, ?, ?, '2026-07-19', '2026-07-19')`
+    ).run(`conversation-${index}`, channelId, `hash-${index}`, kind, sessionBound ? `session-${index}` : null)
+    database.connection.prepare(
+      `insert into channel_delivery_targets(id, channel_id, conversation_id, enabled, created_at, updated_at)
+       values(?, ?, ?, 1, '2026-07-19', '2026-07-19')`
+    ).run(`target-${index}`, channelId, `conversation-${index}`)
+  }
+
+  it('reports a ready channel with one enabled target as deliverable and shows that target', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+
+    expect(service.listDeliveryTargets()).toEqual({
+      channels: [{
+        id,
+        name: 'Telegram',
+        deliverable: true,
+        reason: null,
+        target: { kind: 'bound', conversationKind: 'direct' }
+      }]
+    })
+  })
+
+  it('names the missing target instead of pretending the channel can deliver', () => {
+    const { service, id } = deliveryHarness()
+
+    expect(service.listDeliveryTargets().channels[0]).toEqual({
+      id,
+      name: 'Telegram',
+      deliverable: false,
+      reason: 'no-enabled-target',
+      target: { kind: 'unbound' }
+    })
+  })
+
+  it('reports the count when several targets are bound, and picks none of them', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+    addTarget(database, id, 2, 'group')
+
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: true,
+      reason: null,
+      target: { kind: 'ambiguous', count: 2 }
+    })
+  })
+
+  // 与投递判据同源（通道方案 §2.3）：设置行说的「已绑定」必须就是投递会用的那一个。
+  it('counts only targets that are enabled and have a bound session', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+    addTarget(database, id, 2, 'group', false)
+
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: true,
+      reason: null,
+      target: { kind: 'bound', conversationKind: 'direct' }
+    })
+  })
+
+  it('treats an enabled target without a bound session as no target at all', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct', false)
+
+    expect(service.listDeliveryTargets().channels[0]).toEqual({
+      id,
+      name: 'Telegram',
+      deliverable: false,
+      reason: 'no-enabled-target',
+      target: { kind: 'unbound' }
+    })
+  })
+
+  // 判序固定：适配器 → 凭据 → 启用态 → 目标。混着报会让用户去修一个还不是问题的地方。
+  it('stops at the first unmet condition', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1)
+
+    database.connection.prepare("update agent_channels set credential_health='missing' where id=?").run(id)
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({ deliverable: false, reason: 'credential-missing' })
+
+    database.connection.prepare("update agent_channels set credential_health='configured', lifecycle_state='ready' where id=?").run(id)
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({ deliverable: false, reason: 'not-enabled' })
+
+    database.connection.prepare("update agent_channels set lifecycle_state='enabled' where id=?").run(id)
+    // 适配器没有真机证据也**不再**是一个理由：`supported` 只决定「对外声明支持」，
+    // 不决定这条正在运行、凭据可用、目标已绑的通道能不能当投递目标（Chief 2026-11-04 定）。
+    const unsupported = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: new FakeVault(false, false, false, false),
+      cipher: new FakeCipher(),
+      registry: new ChannelAdapterAcceptanceRegistry(),
+      handoff: new ChannelSecureHandoff()
+    })
+    expect(unsupported.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: true,
+      reason: null
+    })
+  })
+})
+
+describe('channel runtime audits', () => {
+  function seededChannel() {
+    const { database, service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    return { database, service, id }
+  }
+
+  function insertAudit(
+    database: ReturnType<typeof harness>['database'],
+    channelId: string,
+    id: string,
+    code: string,
+    createdAt: string
+  ): void {
+    database.connection.prepare(
+      'insert into channel_runtime_audits (id, channel_id, generation, code, created_at) values (?, ?, ?, ?, ?)'
+    ).run(id, channelId, 7, code, createdAt)
+  }
+
+  it('pages by (createdAt, id) so rows sharing a timestamp are not skipped or repeated', () => {
+    const { database, service, id } = seededChannel()
+    for (const suffix of ['a', 'b', 'c', 'd', 'e']) insertAudit(database, id, `audit-${suffix}`, 'channel-content-rejected', '2026-11-03T00:00:00.000Z')
+
+    const first = service.listRuntimeAudits({ id, limit: 2 })
+    expect(first.rows.map((row) => row.id)).toEqual(['audit-a', 'audit-b'])
+    expect(first.nextCursor).toEqual({ createdAt: '2026-11-03T00:00:00.000Z', id: 'audit-b' })
+
+    const second = service.listRuntimeAudits({ id, limit: 2, cursor: first.nextCursor })
+    expect(second.rows.map((row) => row.id)).toEqual(['audit-c', 'audit-d'])
+
+    const third = service.listRuntimeAudits({ id, limit: 2, cursor: second.nextCursor })
+    expect(third.rows.map((row) => row.id)).toEqual(['audit-e'])
+    expect(third.nextCursor).toBeNull()
+  })
+
+  it('never returns the internal generation and clamps the server-side limit to 200', () => {
+    const { database, service, id } = seededChannel()
+    for (let index = 0; index < 250; index += 1) {
+      const suffix = String(index).padStart(3, '0')
+      insertAudit(database, id, `audit-${suffix}`, 'channel-lifecycle-fenced', `2026-11-03T00:00:${suffix.slice(0, 2)}.000Z`)
+    }
+
+    const page = service.listRuntimeAudits({ id, limit: 500 })
+    expect(page.rows).toHaveLength(200)
+    expect(JSON.stringify(page.rows)).not.toContain('generation')
+    expect(Object.keys(page.rows[0]!)).toEqual(['id', 'code', 'createdAt'])
+
+    // 非法 limit 退回默认值，不抛错：翻页失败不该把面板变成「没读出来」。
+    expect(service.listRuntimeAudits({ id, limit: -3 }).rows).toHaveLength(50)
+    expect(service.listRuntimeAudits({ id, limit: Number.NaN }).rows).toHaveLength(50)
+  })
+
+  it('keeps only the newest 500 rows per channel, trimmed inside the same insert transaction', () => {
+    const { database, service, id } = seededChannel()
+    const inbound = new ChannelInboundRepository(database)
+    for (let index = 0; index < 505; index += 1) {
+      const seconds = String(index % 60).padStart(2, '0')
+      const minutes = String(Math.floor(index / 60)).padStart(2, '0')
+      inbound.recordInboundFailure(id, 1, new Date(`2026-11-03T${minutes}:${seconds}:00.000Z`))
+    }
+
+    const kept = database.connection.prepare('select count(*) as count from channel_runtime_audits where channel_id = ?').get(id) as { count: number }
+    expect(kept.count).toBe(500)
+    expect(service.listRuntimeAudits({ id, limit: 200 }).rows).toHaveLength(200)
+  })
+})
+
+describe('channel test message through the management service', () => {
+  it('reports not-ready when no delivery service is installed, instead of pretending it sent', async () => {
+    const { service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    await expect(service.sendTestMessage({ id, text: '测试消息' })).resolves.toEqual({ state: 'failed', reason: 'not-ready' })
+  })
+
+  it('rejects an empty or oversized text at the service boundary', async () => {
+    const { service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    service.setDelivery({ deliver: async () => ({ status: 'delivered', attemptId: 'a', errorCode: null }) })
+    await expect(service.sendTestMessage({ id, text: '   ' })).rejects.toThrow('channel-input-invalid')
+    await expect(service.sendTestMessage({ id, text: 'x'.repeat(501) })).rejects.toThrow('channel-input-invalid')
+    // 频道不存在是同步校验，直接抛，不是 promise rejection。
+    expect(() => service.sendTestMessage({ id: 'missing-channel', text: 'ok' })).toThrow('channel-not-found')
+  })
+})
+
+describe('channel settings overrides (workspace / allowed chats / permission mode)', () => {
+  function created() {
+    const h = harness()
+    const channel = h.service.create({
+      type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a',
+      workspace: { type: 'user', workspaceId: 'workspace-1' },
+      allowedChatIds: ['111', '222'],
+      permissionMode: 'plan'
+    }).channel!
+    return { ...h, channel }
+  }
+
+  it('stores the three fields on the channel row and reads them back', () => {
+    const { service, database, channel } = created()
+    expect(channel.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
+    expect(channel.allowedChatIds).toEqual(['111', '222'])
+    expect(channel.permissionMode).toBe('plan')
+
+    const row = database.connection.prepare('select workspace_json, active_chat_ids_json, permission_mode from agent_channels where id = ?').get(channel.id)
+    expect(row).toEqual({
+      workspace_json: '{"type":"user","workspaceId":"workspace-1"}',
+      active_chat_ids_json: '["111","222"]',
+      permission_mode: 'plan'
+    })
+    expect(service.get(channel.id)?.permissionMode).toBe('plan')
+  })
+
+  it('defaults to the system workspace, allow-all chats and an inherited permission mode', () => {
+    const { service, database } = harness()
+    const channel = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!
+    expect(channel.workspace).toEqual({ type: 'system' })
+    expect(channel.allowedChatIds).toEqual([])
+    expect(channel.permissionMode).toBeNull()
+    // 「继承」必须落 null：落成助手级默认值 'default' 就和「显式选了 default」分不开了。
+    expect(database.connection.prepare('select permission_mode from agent_channels where id = ?').get(channel.id)).toEqual({ permission_mode: null })
+  })
+
+  it('changes only the fields that were passed, and an empty list clears the allowlist', () => {
+    const { service, database, channel } = created()
+    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', permissionMode: null })
+    const inherited = service.get(channel.id)!
+    expect(inherited.permissionMode).toBeNull()
+    expect(inherited.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
+    expect(inherited.allowedChatIds).toEqual(['111', '222'])
+
+    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: [] })
+    expect(service.get(channel.id)?.allowedChatIds).toEqual([])
+    expect(database.connection.prepare('select active_chat_ids_json from agent_channels where id = ?').get(channel.id)).toEqual({ active_chat_ids_json: null })
+
+    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'system' } })
+    const reset = service.get(channel.id)!
+    expect(reset.workspace).toEqual({ type: 'system' })
+    expect(reset.allowedChatIds).toEqual([])
+  })
+
+  it('rejects a malformed workspace, an oversized allowlist entry and an unknown permission mode', () => {
+    const { service } = harness()
+    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'user' } })).toThrow('channel-input-invalid')
+    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: ['x'.repeat(65)] })).toThrow('channel-input-invalid')
+    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', permissionMode: 'yolo' })).toThrow('channel-input-invalid')
+  })
+})
+
+describe('Slack enable chain (evidence -> canEnable -> in-app enable)', () => {
+  function slackEntry() {
+    return {
+      adapterType: 'slack' as const,
+      adapterVersion: 'release-b',
+      status: 'supported' as const,
+      capabilities: {
+        receiveText: true, receiveImages: false, receiveFiles: false, sendText: true,
+        streaming: false, typingIndicator: false, nativeCommands: false, groupMention: false,
+        qrEnrollment: false, reconnect: true
+      },
+      receiveSmokeAt: '2026-11-04T00:00:00.000Z',
+      sendSmokeAt: '2026-11-04T00:00:00.000Z',
+      reconnectSmokeAt: '2026-11-04T00:00:00.000Z',
+      restartRecoveryAt: '2026-11-04T00:00:00.000Z',
+      proxySmokeAt: '2026-11-04T00:00:00.000Z',
+      credentialRotationAt: '2026-11-04T00:00:00.000Z',
+      disableDeleteFencingAt: '2026-11-04T00:00:00.000Z',
+      capabilityEvidence: {}
+    }
+  }
+
+  function slackChannel(database: ReturnType<typeof harness>['database'], service: ChannelManagementService): string {
+    const id = service.create({ type: 'slack', name: 'Slack', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    // 凭据由加密交接写入；这里直接把「已配置」的事实摆上，专注这条链本身。
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    return id
+  }
+
+  it('turns the acceptance record written by the CLI into canEnable for Slack', () => {
+    const { database } = harness()
+    const acceptance = new ChannelAcceptanceService(database)
+    expect(acceptance.isSupported('slack')).toBe(false)
+    // 这就是 `pnpm channel:acceptance --record` 的写入路径：证据进台账、投影翻成 supported。
+    acceptance.recordSuccessfulSmoke({ entry: slackEntry(), actor: 'cli-operator', realSmokeAt: '2026-11-04T00:00:00.000Z' })
+    expect(acceptance.isSupported('slack')).toBe(true)
+
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    acceptance.load(registry)
+    expect(registry.canEnable('slack')).toBe(true)
+    // 目录状态由注册表驱动：证据进台账后，接入页那一行才会翻成「证据完备」。
+    const catalogService = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff()
+    })
+    expect(catalogService.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'supported', reason: 'evidence-complete' })
+  })
+
+  it('enables a Slack channel in-app once the adapter is supported and starts its runtime once', async () => {
+    const { database, service } = harness()
+    const acceptance = new ChannelAcceptanceService(database)
+    acceptance.recordSuccessfulSmoke({ entry: slackEntry(), actor: 'cli-operator', realSmokeAt: '2026-11-04T00:00:00.000Z' })
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    acceptance.load(registry)
+
+    const started: string[] = []
+    const guarded = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} },
+      now: () => new Date('2026-11-04T00:00:00.000Z')
+    })
+    const id = slackChannel(database, guarded)
+
+    await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: true,
+      code: 'runtime-ready'
+    })
+    expect(started).toEqual([id])
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id = ?').get(id)).toEqual({
+      requested_enabled: 1,
+      lifecycle_state: 'enabled'
+    })
+  })
+
+  it('refuses to enable Slack while its evidence is still missing', async () => {
+    const { database, service } = harness()
+    const registry = new ChannelAdapterAcceptanceRegistry()
+    expect(registry.canEnable('slack')).toBe(false)
+    const started: string[] = []
+    const guarded = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: harness().vault,
+      cipher: new FakeCipher(),
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} }
+    })
+    const id = slackChannel(database, guarded)
+
+    await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: false,
+      code: 'adapter-not-supported'
+    })
+    expect(started).toEqual([])
+    expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
+  })
+})
+
+describe('in-app smoke on enable (unsupported adapter)', () => {
+  function harnessWithSmoke(
+    smoke: (channel: { id: string; type: string }) => Promise<{ ok: true } | { ok: false; code: string }>,
+    supported = false
+  ) {
+    const base = harness()
+    const started: string[] = []
+    const registry = new ChannelAdapterAcceptanceRegistry(supported ? [supportedTelegramEntry()] : [])
+    const service = new ChannelManagementService({
+      repository: new ChannelManagementRepository(base.database),
+      vault: base.vault,
+      cipher: base.cipher,
+      registry,
+      handoff: new ChannelSecureHandoff(),
+      smoke,
+      runtime: { start: async (channelId: string) => { started.push(channelId); return true }, stop: () => {} },
+      now: () => new Date('2026-11-04T00:00:00.000Z')
+    })
+    return { ...base, service, started }
+  }
+
+  function configuredSlack(
+    database: ReturnType<typeof harness>['database'],
+    service: ChannelManagementService,
+    type: 'slack' | 'telegram' = 'slack'
+  ): string {
+    const id = service.create({ type, name: 'Channel', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    return id
+  }
+
+  it('enables the channel when the smoke passes, without flipping the platform to supported', async () => {
+    const { database, service, started } = harnessWithSmoke(async () => ({ ok: true }))
+    const id = configuredSlack(database, service)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({ ok: true, code: 'runtime-ready' })
+    expect(started).toEqual([id])
+    expect(database.connection.prepare('select requested_enabled, lifecycle_state from agent_channels where id = ?').get(id)).toEqual({
+      requested_enabled: 1,
+      lifecycle_state: 'enabled'
+    })
+    // 平台整体仍是未声明支持：七项真机验收照旧决定这一格。
+    expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
+    // 没有写任何 support 证据行。
+    expect(database.connection.prepare("select count(*) as count from channel_adapter_support where adapter_key = 'slack' and status = 'supported'").get()).toEqual({ count: 0 })
+  })
+
+  it('stays disabled and explains the reason when the smoke fails', async () => {
+    const { database, service, started } = harnessWithSmoke(async () => ({ ok: false, code: 'telegram-conflict' }))
+    const id = configuredSlack(database, service)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+      ok: false,
+      code: 'channel-smoke-failed',
+      reason: 'telegram-conflict'
+    })
+    expect(started).toEqual([])
+    expect(database.connection.prepare('select requested_enabled from agent_channels where id = ?').get(id)).toEqual({ requested_enabled: 0 })
+    // 失败按现有审计链记一行，动作沿用 request-enable，原因写进 code。
+    expect(database.connection.prepare(
+      "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
+    ).all(id)).toEqual([{ code: 'telegram-conflict' }])
+  })
+
+  it('never leaves the failure reason empty: throws, timeouts and blank codes are normalised', async () => {
+    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string]> = [
+      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable'],
+      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable'],
+      [async () => ({ ok: false, code: 'something-new' }), 'telegram-network-unavailable']
+    ]
+    for (const [smoke, expected] of cases) {
+      const { database, service } = harnessWithSmoke(smoke as never)
+      // 用 telegram：未知/异常码归一成「网络不可用」，非 telegram 会归成「适配器未支持」——那是另一条语义。
+      const id = configuredSlack(database, service, 'telegram')
+      const result = await service.requestEnable({ id, actorId: 'user-a' })
+      expect(result).toMatchObject({ ok: false, code: 'channel-smoke-failed', reason: expected })
+      // 审计行必须能看出「因为什么没开」：与返回的 reason 同一个码。
+      expect(database.connection.prepare(
+        "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
+      ).all(id)).toEqual([{ code: expected }])
+    }
+  })
+
+  it('keeps a known credential-missing reason instead of rewriting it', async () => {
+    const { database, service } = harnessWithSmoke(async () => ({ ok: false, code: 'channel-credential-missing' }))
+    const id = configuredSlack(database, service)
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+      ok: false,
+      code: 'channel-smoke-failed',
+      reason: 'channel-credential-missing'
+    })
+  })
+
+  it('does not run the smoke when the platform is already supported', async () => {
+    const smoke = vi.fn(async () => ({ ok: true as const }))
+    const { database, service } = harnessWithSmoke(smoke, true)
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', lifecycle_state='ready' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+
+    await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({ ok: true })
+    expect(smoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('saving a token on a channel that has none', () => {
+  it('provisions instead of failing to rotate when the channel has no stored credential', async () => {
+    const { database, service } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    expect(service.get(id)?.credential.status).toBe('missing')
+
+    // 编辑弹层就是这么保存的：同一条交接材料，走的是 rotate。
+    const handoff = await credentialHandoff(service, id, '123456789:AAHfake-token-for-test')
+    await expect(Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff })))
+      .resolves.toMatchObject({ ok: true })
+
+    const stored = service.get(id)
+    expect(stored?.credential.status).toBe('configured')
+    expect(stored?.credential.hasCredential).toBe(true)
+    expect(database.connection.prepare('select credential_ref, credential_health from agent_channels where id = ?').get(id))
+      .toMatchObject({ credential_health: 'configured' })
+  })
+})
+
+describe('replacing a token after an edit (the order the settings page uses)', () => {
+  it('updates the channel first and still rotates the credential', async () => {
+    const { database, service, vault } = harness()
+    const id = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
+    // 已有一条真实凭据（FakeVault 只认 'known-ref'；用它模拟真机上已存好的那条）。
+    database.connection.prepare(
+      "update agent_channels set credential_ref='known-ref', credential_revision=1, credential_health='configured', lifecycle_state='disabled' where id = ?"
+    ).run(id)
+    expect(service.get(id)?.credential.status).toBe('configured')
+
+    // 编辑弹层的顺序：先 update（会把频道停用），再换 Token。
+    expect(service.update({ id, name: 'test', agentId: 'agent-a', actorId: 'user-a' })).toMatchObject({ ok: true })
+    const handoff = await credentialHandoff(service, id, '123456789:AAHsecond-token-for-test')
+    const rotated = await Promise.resolve(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff }))
+    expect(rotated).toMatchObject({ ok: true })
+    expect(service.get(id)?.credential.revision).toBe(2)
+    expect(database.connection.prepare('select credential_health from agent_channels where id = ?').get(id)).toEqual({ credential_health: 'configured' })
+  })
+})

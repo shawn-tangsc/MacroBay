@@ -45,6 +45,8 @@ const liveFixture = (atMs: number) => ({ state: 'live' as const, quotes: {
 function snapshot(input: Readonly<{
   nowMs: number; range?: '1h' | '24h' | '7d'; bySymbol: Record<string, readonly unknown[]>
   feed: CrossAssetIndexFeedState; liveState?: CrossAssetLiveState
+  /** A cutoff turns the read into the historical mode the daily brief always asks in. */
+  asOf?: string; knowledgeAt?: string
 }>) {
   const query = createCrossAssetSnapshotQuery({
     now: () => input.nowMs,
@@ -57,7 +59,10 @@ function snapshot(input: Readonly<{
     live: () => ({ ...liveFixture(input.nowMs), state: input.liveState ?? 'live' }),
     indexFeed: () => ({ state: input.feed })
   })
-  return query.query({ range: input.range ?? '1h' })
+  return query.query({
+    range: input.range ?? '1h',
+    ...(input.asOf === undefined ? {} : { asOf: input.asOf, knowledgeAt: input.knowledgeAt ?? input.asOf })
+  })
 }
 
 /** One contract's continuous history plus the licensed session, which the default must ignore. */
@@ -137,6 +142,25 @@ describe('cross-asset Nasdaq 100 row', () => {
     expect(result.historyCoverage.index.count).toBe(0)
     // The row is not silently rebuilt from the other assets' bars.
     expect(result.curves.index.every(point => point.returnPercent === null)).toBe(true)
+  })
+
+  it('carries the last closed bar on a historical read too, which is the only read the brief makes', () => {
+    // The daily brief always asks with a cutoff, so its snapshot is always historical. While this field
+    // existed only in current mode the row had no level to print — missing for a structural reason, not
+    // because the market had no bar. Same analytics, same source, written out in both modes now.
+    const historical = snapshot({ nowMs: overnightMs, range: '24h', feed: 'ready', liveState: 'disabled',
+      bySymbol: bothLegs(overnightMs), asOf: new Date(overnightMs).toISOString() })
+
+    expect(historical.mode).toBe('historical')
+    expect(historical.lastClosed?.btc).toEqual({ at: new Date(overnightMs).toISOString(), close: '102.88' })
+    expect(historical.lastClosed?.eth?.close).toBe('102.88')
+    // The index row states the leg that answered and the level that leg closed on — never a curve point.
+    expect(historical.indexSource).toBe('proxy')
+    expect(historical.lastClosed?.index?.close).toBe('102.88')
+    // Current mode is unchanged: same field, same values, read by the panel.
+    const current = snapshot({ nowMs: overnightMs, range: '24h', feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    expect(current.mode).toBe('current')
+    expect(current.lastClosed?.index?.close).toBe('102.88')
   })
 
   it('leaves the closed stretch of the licensed curve empty instead of flattening the last value', () => {

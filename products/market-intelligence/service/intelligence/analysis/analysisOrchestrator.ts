@@ -1,4 +1,5 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
+import type { AnalysisIoStore } from '../store/marketAnalysisIoStore'
 import type { StructuredModelMessage, StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
 import {
   MARKET_ANALYSIS_ERROR_CODES,
@@ -8,6 +9,12 @@ import {
   type Prediction,
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
+import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
+import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
+import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
+import { analysisRunLineOf, isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
+import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
 import {
   formatUnsafeOutputRedaction,
   validateAnalysisModelOutput,
@@ -23,6 +30,16 @@ import { withSnapshotChange } from './snapshotChange'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
+  /** 每次模型调用一行的原文存档：提示词在调用之前落盘，回答在回来后回填。 */
+  analysisIo?: AnalysisIoStore
+  /** The recent runs, for the failure-notice decision. Absent in narrow test doubles. */
+  listRuns?: () => readonly AnalysisRun[]
+  /** 断流重试的当日额度与占用；缺席时（窄测试替身）就不重试。 */
+  retry?: Readonly<{
+    usedOn: (triggerKey: string, nowIso: string) => string | null
+    claim: (runId: string, nowIso: string) => boolean
+    record: (runId: string, result: 'succeeded' | 'failed' | 'cancelled') => void
+  }>
   getSnapshot?: (id: string) => EvidenceSnapshot | undefined
   listSnapshots?: (eventGroupId: string) => readonly EvidenceSnapshot[]
   getEventGroup: (id: string) => { id: string; currentSummaryId: string | null } | undefined
@@ -103,7 +120,9 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
   'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
   'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
-  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。'
+  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。',
+  // The answer must return to the change that triggered the run, not to a better-writable topic.
+  'missing-trigger-focus': '上一次结论没有回答触发它的那条变化：请在 supportingEvidence / marketReaction / directions 里引用那条变化的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的写法，不要改写）。不要换一个更好写的话题。'
 })
 
 function repairInstruction(defect: Readonly<{ errorCode: string; rule?: string }>): string {
@@ -156,10 +175,36 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * 缺省（headless / 测试）按契约原语言处理。
    */
   getLanguage?: () => Promise<import('@platform/settings/schema/appSettings').AppLanguage>
+  /**
+   * 0′ notice for a failure the reader asked for.
+   *
+   * The reader pressed the button and is watching: this attempt always gets an answer. Only the
+   * attempt itself is notified (dedupe key is the run id), and a submission that fails must not
+   * change the run's outcome — the notifier swallows its own errors.
+   */
+  notifyManualFailure?: (input: Omit<AnalysisManualFailure, 'language'>) => Promise<void>
+  /**
+   * The three throttled notices (repeated failure / abandoned / recovered). Optional so the tests and
+   * any caller without the notification runtime keep working; the decision itself lives in
+   * `analysisFailureNotices`, not here.
+   */
+  notifyAnalysisNotice?: (input: Readonly<{ decision: AnalysisFailureNoticeDecision; occurredAt: string }>) => Promise<void>
+  /**
+   * One conversation per run, created once the run is claimed and before the first model call — so a
+   * run that fails still has a conversation the reader can open to find the archived prompt.
+   */
+  ensureRunSession?: (input: Readonly<{ runId: string; queuedAt: string }>) => Promise<string | undefined>
+  /** The summary, appended after the run published. Never the prompt or the model's answer. */
+  appendRunSummary?: (input: Readonly<{ runId: string; summary: string }>) => Promise<void>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
+    // 会话在「认领成功、还没调模型」之间建：失败那次也要有会话，否则最需要查原文的那种恰好没有。
+    // 建会话失败不影响这次分析——它是记录的附加物，不是分析的前提。
+    if (deps.ensureRunSession) {
+      try { await deps.ensureRunSession({ runId: runRecord.id, queuedAt: runRecord.queuedAt }) } catch { /* 会话是附加物 */ }
+    }
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
 
@@ -172,6 +217,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const facts = withChange.facts.filter(fact => fact.evidenceRefId && evidenceIds.has(fact.evidenceRefId))
     if (!facts.length) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.missingEvidence)
     const frozenEvidence: FrozenAnalysisEvidence = { facts, evidenceRefs: withChange.evidenceRefs }
+    // Resolved from the frozen snapshot, so the rule judges the question the run actually held.
+    const triggerFocus: TriggerFocus = resolveTriggerFocus(withChange)
 
     // The run's own trigger key says which open it serves; recovery runs and manual runs keep the
     // prompt they had.
@@ -192,8 +239,26 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // A model that answers outside the contract once is not a failed analysis: the previous
     // product required the reader to press "Analyze now" again (which is exactly what they did,
     // and the second answer was published). Asking again in place costs one call and no re-freeze.
-    for (let attempt = 1; attempt <= marketAnalysisInvocationPolicy.maxModelAttempts; attempt += 1) {
+    // 每次调用属于哪一类，显式给出：初次 / 修复 / 传输重试。用一个计数器兼顾三种，重试和修复
+    // 就会叠出第四次调用，而额度是按调用算的。
+    let callsSpent = 0
+    let nextCallKind: 'initial' | 'repair' | 'transport-retry' = 'initial'
+    let retried = false
+    let repaired = false
+    while (callsSpent < analysisUpstreamRetryPolicy.maximumCallsPerRun) {
       if (signal.aborted) return cancel(runRecord.id)
+      callsSpent += 1
+      const callKind = nextCallKind
+      // 先写提示词再调用：进程在超时中被杀掉时，最该留的那份仍然在库里。
+      const ioRecord = deps.repository.analysisIo?.begin({
+        analysisRunId: runRecord.id,
+        callIndex: callsSpent,
+        callKind,
+        prompt: messages,
+        modelProviderId: runRecord.modelProviderId,
+        modelId: runRecord.modelId,
+        timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs
+      })
       try {
         invocation = await deps.structuredModelInvocation.invoke({
           taskId: runRecord.id,
@@ -204,37 +269,81 @@ export function createAnalysisOrchestrator(deps: Readonly<{
           parse: value => value
         })
       } catch {
-        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+        // The invocation contract reports failures as results, so a throw here means the call never
+        // reached it. That is a provider fault we can name no further than "other".
+        if (ioRecord) deps.repository.analysisIo?.complete({ id: ioRecord.id, outputStatus: 'transport-error', failureDetailCode: 'provider-other' })
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
+      }
+      if (ioRecord) {
+        deps.repository.analysisIo?.complete({
+          id: ioRecord.id,
+          outputStatus: invocation.ok
+            ? 'answered'
+            : invocation.errorCode === 'cancelled' ? 'cancelled'
+              : invocation.errorCode === 'invalid-json' ? 'invalid-json'
+                : 'transport-error',
+          ...(invocation.ok ? { output: invocation.output } : { failureDetailCode: invocation.errorCode })
+        })
       }
       // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
       // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
       // model was slow when nothing had gone wrong with the model at all.
       if (!invocation.ok) {
         if (invocation.errorCode === 'cancelled') return cancel(runRecord.id)
-        const repairable = invocation.errorCode === 'invalid-json'
-        if (!repairable || attempt >= marketAnalysisInvocationPolicy.maxModelAttempts) {
-          return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+        const failureCode = mapInvocationError(invocation.errorCode)
+        // The detail is what tells a cut call apart from a rate limit or a dead connection; the
+        // coarse code alone made every provider fault read the same.
+        const failureDetailCode = resolveAnalysisRunFailureDetail({
+          failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
+        })
+        // 断流重试：同一次运行内、先占后跑、每 UTC 日一次。取消就当场结束，认定这一次仍没成。
+        if (failureDetailCode === 'upstream-aborted' && !retried && deps.repository.retry) {
+          const decision = decideUpstreamRetry({
+            failureDetailCode,
+            callsSpent,
+            lastRetryAt: deps.repository.retry.usedOn(runRecord.triggerKey, deps.now()),
+            now: deps.now()
+          })
+          if (decision.retry && deps.repository.retry.claim(runRecord.id, deps.now())) {
+            retried = true
+            const waited = await waitForRetry(analysisUpstreamRetryPolicy.backoffMs, signal)
+            if (waited === 'cancelled') {
+              deps.repository.retry.record(runRecord.id, 'cancelled')
+              return cancel(runRecord.id)
+            }
+            if (!ioRecord) { /* 没有存档时也照常重试 */ }
+            nextCallKind = 'transport-retry'
+            continue
+          }
         }
+        const repairable = invocation.errorCode === 'invalid-json'
+        if (!repairable || repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun) {
+          if (retried) deps.repository.retry?.record(runRecord.id, 'failed')
+          return fail(runRecord.id, 'failed', failureCode, failureDetailCode)
+        }
+        repaired = true
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
-      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
+      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
       if (validated.ok) break
-      if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
+      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !repairableRejection.has(validated.errorCode)) break
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
-    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
 
     if (!validated.ok) {
-      // The coarse code is what the reader sees; the rule is what the next investigation needs.
-      // Three different defects used to arrive as one "missing evidence" message.
+      // The coarse code is what the reader sees; the rule (and, for the probability rule, which
+      // part of it failed) is what the next investigation needs. Three different defects used to
+      // arrive as one "missing evidence" message.
       console.log(JSON.stringify({
         marker: 'MI_ANALYSIS_OUTPUT_REJECTED',
         analysisRunId: runRecord.id,
         errorCode: validated.errorCode,
-        rule: validated.rule ?? null
+        rule: validated.rule ?? null,
+        detail: validated.detail ?? null
       }))
-      return fail(runRecord.id, 'invalid-output', validated.errorCode, validated.rule ?? validated.errorCode)
+      return fail(runRecord.id, 'invalid-output', validated.errorCode, validated.detail ?? validated.rule ?? validated.errorCode)
     }
     // A removed prohibited value is recorded rather than silently dropped: the
     // conclusion stays usable, and the run says what was taken out and where.
@@ -260,7 +369,33 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     } catch {
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
+    if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
+    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。
+    if (deps.appendRunSummary) {
+      const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
+      if (summaryText) {
+        try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
+      }
+    }
+    // A success may end a failure episode; the decision is made once, from the same rows the notices
+    // are judged from, so "recovered" and "still failing" can never both be true.
+    await announceRunOutcome(runRecord.triggerKey)
     return { status: 'succeeded' }
+  }
+
+  /** One place that turns "this run just ended" into at most one notice. */
+  async function announceRunOutcome(triggerKey: string): Promise<void> {
+    if (!deps.notifyAnalysisNotice || !deps.repository.listRuns) return
+    try {
+      const decision = decideAnalysisFailureNotice({
+        runs: analysisRunOutcomesOf(deps.repository.listRuns()),
+        line: analysisRunLineOf(triggerKey)
+      })
+      if (decision.kind === 'none') return
+      await deps.notifyAnalysisNotice({ decision, occurredAt: deps.now() })
+    } catch {
+      // A notice is an addition to the record; it must never turn a finished run into a failure.
+    }
   }
 
   function cancel(id: string): AnalysisOrchestratorResult {
@@ -268,8 +403,17 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     return { status: 'cancelled', errorCode: MARKET_ANALYSIS_ERROR_CODES.cancelled }
   }
 
-  function fail(id: string, status: 'failed' | 'invalid-output', errorCode: string, failureDetailCode = errorCode): AnalysisOrchestratorResult {
-    deps.repository.updateRunStatus({ id, status, completedAt: deps.now(), failureCode: errorCode, failureDetailCode })
+  async function fail(id: string, status: 'failed' | 'invalid-output', errorCode: string, failureDetailCode = errorCode): Promise<AnalysisOrchestratorResult> {
+    const completedAt = deps.now()
+    deps.repository.updateRunStatus({ id, status, completedAt, failureCode: errorCode, failureDetailCode })
+    // 0′: the reader asked for this run and is waiting for an answer. Only the manual keys reach
+    // here; automatic failures are throttled by their own levels and must not wake the reader.
+    const run = deps.repository.getRun(id)
+    if (run && isGateExempt(run.triggerKey)) {
+      await deps.notifyManualFailure?.({ runId: id, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
+    } else if (run) {
+      await announceRunOutcome(run.triggerKey)
+    }
     return { status, errorCode }
   }
 

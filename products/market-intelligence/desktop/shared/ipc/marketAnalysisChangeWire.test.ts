@@ -27,7 +27,7 @@ function runDetail(change: ReturnType<typeof computeSnapshotChange>) {
 }
 
 const entry = {
-  id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+  id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
   occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: 't', safeExcerpt: null, version: 1
 }
 

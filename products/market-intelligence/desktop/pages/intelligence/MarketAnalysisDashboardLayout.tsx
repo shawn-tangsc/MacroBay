@@ -30,6 +30,11 @@ import './marketAnalysisWorkspace.css'
 export type MarketAnalysisDashboardInjection = Readonly<{
   conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
+   * The runs bar, rendered by the dashboard as the footer of its scroll column: it belongs under
+   * the readers' cards, not floating over them. Handed down as a node because its data (the
+   * timeline) lives here while its place in the layout belongs to the dashboard.
+   */
+  /**
    * The rail slot the page portals its policy card into: the card reads the page's state but lives
    * at the top of the rail, next to the calendar the same numbers are about.
    */

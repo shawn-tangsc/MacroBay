@@ -5,11 +5,10 @@ import type { DailyBriefingClient, DailyBriefingClientProgressResult } from '../
 /**
  * Follows the generation that is running right now.
  *
- * Polling is deliberately narrow: it starts only while the page says a generation is in flight,
- * stops the moment that stops being true, and never overlaps two requests. The answer is a memory
- * snapshot on the service side, so a one-second interval costs no model calls and no store reads —
- * but an interval that keeps running after the run ends is still a leak, and this hook is where
- * that is prevented rather than left to each caller.
+ * The caller keeps it running whenever the page is open, because the run it must report may have
+ * been started elsewhere — by the 07:00 schedule, or by another window — and local state cannot see
+ * it. The answer is a memory snapshot on the service side: no model calls and no store reads, so a
+ * one-second read is cheap. Requests never overlap.
  *
  * A failed read is reported as `unavailable`, never as `idle`: a reader told "nothing is running"
  * while the pipeline is still spending model calls would stop waiting for the edition.
@@ -20,9 +19,11 @@ export function useDailyBriefingProgress(input: Readonly<{
   running: boolean
   locale: 'zh-CN' | 'en-US'
   timeZone: string
+  /** 这一次跑的期号（发起时记下的），不是"当前选中的期"：并行时两者可能不是同一跑。 */
+  periodId?: string
   intervalMs?: number
 }>): DailyBriefingClientProgressResult | undefined {
-  const { client, running, locale, timeZone, intervalMs = 1_000 } = input
+  const { client, running, locale, timeZone, periodId, intervalMs = 1_000 } = input
   const [result, setResult] = useState<DailyBriefingClientProgressResult | undefined>(undefined)
   // The client object may be rebuilt on every render; polling must not restart because of that.
   const clientRef = useRef(client)
@@ -40,7 +41,7 @@ export function useDailyBriefingProgress(input: Readonly<{
       if (inFlight) return
       inFlight = true
       try {
-        const next = await clientRef.current.getProgress({ locale, timeZone })
+        const next = await clientRef.current.getProgress({ locale, timeZone, ...(periodId === undefined ? {} : { periodId }) })
         if (!cancelled) setResult(next)
       } finally {
         inFlight = false
@@ -52,7 +53,7 @@ export function useDailyBriefingProgress(input: Readonly<{
       cancelled = true
       clearInterval(timer)
     }
-  }, [running, locale, timeZone, intervalMs])
+  }, [running, locale, timeZone, periodId, intervalMs])
 
   return result
 }

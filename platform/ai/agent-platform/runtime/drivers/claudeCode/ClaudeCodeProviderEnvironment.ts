@@ -13,6 +13,10 @@ import type {
   AgentRuntimeProbeSnapshot,
   AgentRuntimeRoute
 } from '../../compatibility/agentRuntimeCompatibilityTypes'
+import {
+  DEFAULT_AGENT_TURN_TIMEOUT_MS,
+  formatAgentModelRequestTimeoutHeader
+} from '../../agentModelRequestBudget'
 
 export type ClaudeCodeProviderEnvironmentMetadata = {
   providerId: string
@@ -292,7 +296,10 @@ function buildGatewayEnv(
     ANTHROPIC_DEFAULT_OPUS_MODEL: modelId,
     ANTHROPIC_DEFAULT_SONNET_MODEL: modelId,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: modelId,
-    CLAUDE_CODE_USE_BEDROCK: '0'
+    CLAUDE_CODE_USE_BEDROCK: '0',
+    // The gateway times a request against the budget the caller declares; without this header the
+    // gateway falls back to 60 seconds and cuts a long thinking step the turn watchdog still allows.
+    ANTHROPIC_CUSTOM_HEADERS: formatAgentModelRequestTimeoutHeader(DEFAULT_AGENT_TURN_TIMEOUT_MS)
   }
 }
 

@@ -1,3 +1,4 @@
+import { openInterestBucketPolicy } from '../../../contracts/openInterestHistory'
 import {
   detectLiquidationHints,
   liquidationHintPolicy,
@@ -22,8 +23,12 @@ import { buildSignalDedupeKey, moduleSignalPolicy, type ModuleSignal } from '../
 export const openInterestSignalRule = Object.freeze({
   moduleId: 'open-interest' as const,
   ruleId: 'oi-liquidation-proxy',
-  /** The bucket the panel charts and the store keeps. */
-  bucketMs: 15 * 60 * 1_000,
+  /**
+   * The width one judgement covers. Read from the bucket policy, not spelled here: the store may
+   * get finer without the rule's own bucket moving, and a local literal is how that distinction
+   * gets lost.
+   */
+  bucketMs: openInterestBucketPolicy.signalBucketMs,
   triggerOwner: 'module-signal'
 })
 

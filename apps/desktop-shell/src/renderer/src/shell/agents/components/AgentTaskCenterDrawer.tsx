@@ -5,6 +5,7 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-p
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { JobRunRecord } from '@platform/jobs'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
@@ -37,6 +38,7 @@ import {
   updateTaskViaApi
 } from '../agentTaskDataApi'
 import { selectSessionViaApi } from '../agentSessionDataApi'
+import { agentTaskCenterErrorText, type AgentTaskCenterError } from '../agentTaskCenterErrorText'
 import { resolveAgentTextKey } from '../agentTooltipText'
 import AgentTaskCenterActions from './AgentTaskCenterActions'
 import AgentTaskCenterList from './AgentTaskCenterList'
@@ -65,13 +67,14 @@ export default function AgentTaskCenterDrawer({
   onStateChange
 }: AgentTaskCenterDrawerProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const [loadState, setLoadState] = useState<AgentTaskCenterLoadState>(emptyAgentTaskCenterLoadState)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<AgentTaskDraft>(() => buildDefaultAgentTaskDraft(workspace))
   /** 初值 `true`：`useEffect` 在首帧之后才跑，初值 `false` 会先画一帧「从来没有创建过」。 */
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<AgentTaskCenterError | null>(null)
   /** 读失败单独一格：它要的是「重试读取」，而 `error` 里那些要的是「补一个动作」。 */
   const [loadError, setLoadError] = useState(false)
   const [selectedRunLogId, setSelectedRunLogId] = useState<string | null>(null)
@@ -120,7 +123,11 @@ export default function AgentTaskCenterDrawer({
       if (selectedTaskId) {
         const result = buildUpdateTaskRequestFromDraft(draft)
         if (!result.ok) {
-          setError(result.reason === 'revision-required' ? t.taskCenter.saveFailed : t.taskCenter.validation[result.reason])
+          setError(
+            result.reason === 'revision-required'
+              ? { kind: 'save-failed' }
+              : { kind: 'validation', reason: result.reason }
+          )
           return
         }
         const saved = await updateTaskViaApi(
@@ -137,7 +144,7 @@ export default function AgentTaskCenterDrawer({
 
       const result = buildCreateTaskDtoFromDraft(draft)
       if (!result.ok) {
-        setError(t.taskCenter.validation[result.reason])
+        setError({ kind: 'validation', reason: result.reason })
         return
       }
       const saved = await createTaskViaApi(window.platform, agent.id, result.dto)
@@ -151,27 +158,36 @@ export default function AgentTaskCenterDrawer({
         const latest = await listTasksViaApi(window.platform, agent.id, { limit: 50 })
         const refreshedTask = latest.tasks.find((task) => task.id === selectedTaskId)
         if (refreshedTask) setDraft(buildAgentTaskDraftFromTask(refreshedTask))
-        setError(t.taskCenter.revisionConflict)
+        setError({ kind: 'revision-conflict' })
       } else {
-        setError(t.taskCenter.saveFailed)
+        setError({ kind: 'save-failed' })
       }
     } finally {
       setSaving(false)
     }
   }
-  async function deleteTask(task: ScheduledTaskEntity): Promise<void> {
-    if (!window.confirm(t.taskCenter.confirmDelete(task.name))) return
-    setSaving(true)
-    setError(null)
-    try {
-      await deleteTaskViaApi(window.platform, agent.id, task.id, task.revision ?? 1)
-      setDraft(buildDefaultAgentTaskDraft(workspace))
-      await refresh(null)
-    } catch {
-      setError(t.taskCenter.deleteFailed)
-    } finally {
-      setSaving(false)
-    }
+  function deleteTask(task: ScheduledTaskEntity): void {
+    // 确认框由 Provider 渲染（深色主题才跟着界面走）；删掉的动作放进 onConfirm。
+    confirm({
+      title: t.taskCenter.deleteTask,
+      description: t.taskCenter.confirmDelete(task.name),
+      confirmLabel: t.taskCenter.deleteTask,
+      cancelLabel: t.common.cancel,
+      tone: 'danger',
+      onConfirm: async () => {
+        setSaving(true)
+        setError(null)
+        try {
+          await deleteTaskViaApi(window.platform, agent.id, task.id, task.revision ?? 1)
+          setDraft(buildDefaultAgentTaskDraft(workspace))
+          await refresh(null)
+        } catch {
+          setError({ kind: 'delete-failed' })
+        } finally {
+          setSaving(false)
+        }
+      }
+    })
   }
   async function runTask(task: ScheduledTaskEntity): Promise<void> {
     setSaving(true)
@@ -180,7 +196,7 @@ export default function AgentTaskCenterDrawer({
       const result = await runTaskViaApi(window.platform, agent.id, task.id, task.revision ?? 1)
       await refresh(result.taskId)
     } catch {
-      setError(t.taskCenter.runFailed)
+      setError({ kind: 'run-failed' })
     } finally {
       setSaving(false)
     }
@@ -192,7 +208,7 @@ export default function AgentTaskCenterDrawer({
       await cancelTaskRunViaApi(window.platform, runLogId)
       await refresh(selectedTaskId)
     } catch {
-      setError(t.taskCenter.cancelFailed)
+      setError({ kind: 'cancel-failed' })
     } finally {
       setSaving(false)
     }
@@ -231,7 +247,7 @@ export default function AgentTaskCenterDrawer({
       })
       setSelectedRunLogId(runLogId)
     } catch {
-      setError(t.taskCenter.retryDeliveryFailed)
+      setError({ kind: 'retry-delivery-failed' })
     } finally {
       setSaving(false)
     }
@@ -284,7 +300,7 @@ export default function AgentTaskCenterDrawer({
             staleDataNotice={t.taskCenter.staleDataNotice}
             onRetry={() => void refresh()}
           />
-          {error === null ? null : <div className="agent-task-error">{error}</div>}
+          {error === null ? null : <div className="agent-task-error">{agentTaskCenterErrorText(t.taskCenter, error)}</div>}
           <AgentTaskDraftForm
             draft={draft}
             workspaces={state.workspaces}
@@ -316,7 +332,7 @@ export default function AgentTaskCenterDrawer({
               onOpenSession={(sessionId) => void openRunSession(sessionId)}
               onRun={() => void runTask(selectedTask)}
               onCancel={(runLogId) => void cancelRunningTask(runLogId)}
-              onDelete={() => void deleteTask(selectedTask)}
+              onDelete={() => deleteTask(selectedTask)}
               />
               {selectedTask.status === 'paused' ? (
                 <div className="agent-task-state-note">

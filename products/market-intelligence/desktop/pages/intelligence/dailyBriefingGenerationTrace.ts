@@ -23,6 +23,8 @@ export type GenerationStageState = 'success' | 'failed' | 'skipped' | 'pending'
 export type GenerationTraceStage = Readonly<{
   id: GenerationStageId
   state: GenerationStageState
+  /** Segments this stage ran: more than one means the row was checked/rewritten repeatedly. */
+  runs?: number
   startedAt?: string
   finishedAt?: string
   durationMs?: number

@@ -36,17 +36,28 @@ export function resolveShellTimeZone(setting: TimeZoneSetting | undefined): stri
   return setting
 }
 
+/** 显示时区里的一个瞬时，只拆一次字段，两种宽度共用。 */
+type ShellInstantParts = {
+  year: string
+  month: string
+  day: string
+  time: string
+  zone: string
+}
+
 /**
- * 把一个 UTC 瞬时按显示时区写成 `2026-10-09 11:39 GMT+8`。
+ * 解析并拆分出一个 UTC 瞬时。
  *
- * 无法解析的输入原样返回：宁可显示原始字符串，也不显示一个由猜测拼出来的时刻。
+ * `formatShellInstant`（带年份）与 `formatShellCompactInstant`（去掉年份）都走这里：
+ * 两份宽度如果各写一套 `Intl` 选项，偏移与 `hourCycle` 迟早会漂开，同屏出现两个时刻。
+ * 解析不了或时区非法 → `null`，由调用方决定「原样返回」。
  */
-export function formatShellInstant(
+function readShellInstantParts(
   instant: string,
   options: Readonly<{ timeZone: string; locale?: string; precision?: ShellTimePrecision }>
-): string {
+): ShellInstantParts | null {
   const parsed = Date.parse(instant)
-  if (!Number.isFinite(parsed)) return instant
+  if (!Number.isFinite(parsed)) return null
   const precision = options.precision ?? 'minute'
   let parts: Intl.DateTimeFormatPart[]
   try {
@@ -57,13 +68,48 @@ export function formatShellInstant(
       hourCycle: 'h23', timeZoneName: 'shortOffset'
     }).formatToParts(new Date(parsed))
   } catch {
-    return instant
+    return null
   }
   const value = (type: Intl.DateTimeFormatPartTypes): string => parts.find(part => part.type === type)?.value ?? ''
-  const date = `${value('year')}-${value('month')}-${value('day')}`
-  const time = [value('hour'), value('minute'), ...(precision === 'second' ? [value('second')] : [])].join(shellTimeFormatPolicy.timeSeparator)
-  const zone = normalizeTimeZoneName(value('timeZoneName'))
-  return [date, time, zone].filter(Boolean).join(shellTimeFormatPolicy.dateTimeSeparator)
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    time: [value('hour'), value('minute'), ...(precision === 'second' ? [value('second')] : [])].join(shellTimeFormatPolicy.timeSeparator),
+    zone: normalizeTimeZoneName(value('timeZoneName'))
+  }
+}
+
+/**
+ * 把一个 UTC 瞬时按显示时区写成 `2026-10-09 11:39 GMT+8`。
+ *
+ * 无法解析的输入原样返回：宁可显示原始字符串，也不显示一个由猜测拼出来的时刻。
+ */
+export function formatShellInstant(
+  instant: string,
+  options: Readonly<{ timeZone: string; locale?: string; precision?: ShellTimePrecision }>
+): string {
+  const at = readShellInstantParts(instant, options)
+  if (at === null) return instant
+  const date = `${at.year}-${at.month}-${at.day}`
+  return [date, at.time, at.zone].filter(Boolean).join(shellTimeFormatPolicy.dateTimeSeparator)
+}
+
+/**
+ * 紧凑时刻 `MM-DD HH:mm GMT+8`（通知中心合并条的「最近 {时间}」、列表行、手机正文都用它）。
+ *
+ * 与 `formatShellInstant` **同一套字段拆分**，只去掉年份：偏移仍取 `shortOffset`，不自己算，
+ * 也不让调用点 `slice` 字符串——两处各拼一次，跨年或 DST 时一定会出现两个时刻。
+ * 无法解析的输入原样返回（与 `formatShellInstant` 同一条策略）。
+ */
+export function formatShellCompactInstant(
+  instant: string,
+  options: Readonly<{ timeZone: string; locale?: string }>
+): string {
+  const at = readShellInstantParts(instant, options)
+  if (at === null) return instant
+  const date = `${at.month}-${at.day}`
+  return [date, at.time, at.zone].filter(Boolean).join(shellTimeFormatPolicy.dateTimeSeparator)
 }
 
 /**
@@ -79,6 +125,31 @@ export function formatShellYearMonth(at: Date, timeZone: string): string {
     return `${year}-${month}`
   } catch {
     return at.toISOString().slice(0, 7)
+  }
+}
+
+/**
+ * 显示时区里的日键 `YYYY-MM-DD`：按天分组用。
+ *
+ * 不能拿 `toISOString().slice(0,10)` 顶替——那是 UTC 的日；东八区 07:00 的一条会被分到前一天，
+ * 于是「今天」那一节里出现昨天的会话，而昨天的会话又不在任何一节里。
+ */
+export function formatShellDay(instant: string, timeZone: string): string | null {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return null
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date(parsed))
+    const read = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((part) => part.type === type)?.value ?? ''
+    const year = read('year')
+    const month = read('month')
+    const day = read('day')
+    return year && month && day ? `${year}-${month}-${day}` : null
+  } catch {
+    return null
   }
 }
 

@@ -10,6 +10,9 @@ import { createAgentPlatformServices } from '../../../ai/agent-platform/services
 import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
+import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
+import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
+import { describeActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
@@ -77,7 +80,20 @@ const channelManagementService = new ChannelManagementService({
   cipher: channelCredentialVault.payloadCipher,
   registry: channelAdapterRegistry,
   acceptance: channelAcceptance,
-  handoff: new ChannelSecureHandoff()
+  handoff: new ChannelSecureHandoff(),
+  // 单频道不变量：启动时把历史遗留的「多条启用」收口成一条（保留最近启用的那条）。
+  singleEnabledChannel: (now) => reconcileSingleEnabledChannel(agentDatabase, now),
+  // 用户点「启用」时现场自检：握手 + 一次接收往返（够证明 token、网络与代理都通），
+  // 通过才在这条通道上启用；平台的七项真机验收照旧决定「对外是否声明支持」。
+  // 实现在 `telegramChannelSmoke`：它有独立用例，免得「长轮询套短超时」这种必失败写法再躲进来。
+  smoke: createTelegramChannelSmoke({
+    credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+    readSecret: (ref) => channelCredentialVault.get(ref),
+    getPlatformFetch,
+    // 失败时把「实际生效的代理」记进审计：这是唯一能把「代理没生效」与「代理连不上」分开的事实。
+    describeProxy: describeActiveProxy,
+    fetchKind: 'net'
+  })
 })
 const agentStore = createAgentSqliteStoreWithOptions(
   agentDatabase,

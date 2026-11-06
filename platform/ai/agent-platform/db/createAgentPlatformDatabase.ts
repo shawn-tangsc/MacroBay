@@ -1,8 +1,16 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { channelSettingsOverrides } from './migrations/channelSettingsOverrides'
+import { channelCredentialRecovery } from './migrations/channelCredentialRecovery'
+import { channelDeliveryAuditDetail } from './migrations/channelDeliveryAuditDetail'
+import { channelConversationSessionTitle } from './migrations/channelConversationSessionTitle'
+import { channelDispatchFailureReason } from './migrations/channelDispatchFailureReason'
+
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
-type AgentPlatformMigration = {
+import { applyMigrations, runInTransaction } from './agentPlatformMigrationRunner'
+
+export type AgentPlatformMigration = {
   id: string
   up: string | ((connection: DatabaseSync) => void)
 }
@@ -1501,11 +1509,39 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    /**
+     * 会话来源两列（r21 §3.2）：读者自己的会话与产品自动建的会话共用一个列表，但默认列表只取
+     * `reader`，否则一天几十条自动会话会把读者的历史埋掉。
+     *
+     * `not null default 'reader'` 让**老行在加列那一刻就是 reader**，不需要 UPDATE 回填——
+     * 回填语句写错一次就会把自动会话洗成读者会话，那正好是这条迁移要防的方向的镜像。
+     */
+    id: '0047_agent_session_origin',
+    up: `
+      alter table agent_sessions add column origin text not null default 'reader';
+      alter table agent_sessions add column origin_group text;
+    `
+  },
+  {
     id: '0046_drop_agent_session_messages_fts',
     up: `
       -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
       -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
       drop table if exists agent_session_messages_fts;
+    `
+  },
+  ...channelSettingsOverrides,
+  ...channelCredentialRecovery,
+  ...channelDeliveryAuditDetail,
+  ...channelConversationSessionTitle,
+  ...channelDispatchFailureReason,
+  {
+    id: '0048_agent_session_origin_ref',
+    // 自动会话的**幂等键**：哪一次运行创建了这条会话。只追加、可空、不回填。
+    // 与 `origin_group`（侧栏分组名）分开：分组键说「这些属于同一类」，幂等键说「这一次是哪条」。
+    // 合成一个字段的后果是：每次分析变成侧栏里的一个独立分组，一天几十块。
+    up: `
+      alter table agent_sessions add column origin_ref text;
     `
   }
 ]
@@ -1519,7 +1555,7 @@ export function createAgentPlatformDatabase(path: string): AgentPlatformDatabase
   const connection = openSqliteDatabase(path)
   let transactionDepth = 0
   connection.exec('pragma foreign_keys = on;')
-  applyMigrations(connection)
+  applyMigrations(connection, migrations)
   return {
     connection,
     transact: <T>(callback: () => T) => runInTransaction(connection, callback, {
@@ -1528,63 +1564,5 @@ export function createAgentPlatformDatabase(path: string): AgentPlatformDatabase
         transactionDepth = nextDepth
       }
     })
-  }
-}
-
-function applyMigrations(connection: DatabaseSync): void {
-  connection.exec(`
-    create table if not exists agent_platform_migrations (
-      id text primary key,
-      applied_at text not null
-    );
-  `)
-
-  for (const migration of migrations) {
-    const applied = connection
-      .prepare('select id from agent_platform_migrations where id = ?')
-      .get(migration.id) as { id?: string } | undefined
-    if (applied?.id) continue
-
-    runInTransaction(connection, () => {
-      if (typeof migration.up === 'string') connection.exec(migration.up)
-      else migration.up(connection)
-      connection
-        .prepare('insert into agent_platform_migrations (id, applied_at) values (?, ?)')
-        .run(migration.id, new Date().toISOString())
-    })
-  }
-}
-
-function runInTransaction<T>(
-  connection: DatabaseSync,
-  callback: () => T,
-  depthState: {
-    getDepth: () => number
-    setDepth: (nextDepth: number) => void
-  } = {
-    getDepth: () => 0,
-    setDepth: () => undefined
-  }
-): T {
-  const depth = depthState.getDepth()
-  const savepoint = `agent_platform_sp_${depth}`
-  if (depth === 0) connection.exec('begin')
-  else connection.exec(`savepoint ${savepoint}`)
-  depthState.setDepth(depth + 1)
-  try {
-    const result = callback()
-    depthState.setDepth(depth)
-    if (depth === 0) connection.exec('commit')
-    else connection.exec(`release savepoint ${savepoint}`)
-    return result
-  } catch (error) {
-    depthState.setDepth(depth)
-    if (depth === 0) {
-      connection.exec('rollback')
-    } else {
-      connection.exec(`rollback to savepoint ${savepoint}`)
-      connection.exec(`release savepoint ${savepoint}`)
-    }
-    throw error
   }
 }

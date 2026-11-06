@@ -41,7 +41,7 @@ export async function syncInUseModelPatrolSchedule(
       id: inUseModelPatrolJobId,
       owner: 'platform',
       handlerId: inUseModelPatrolJobId,
-      title: 'In-use model patrol',
+      title: { 'zh-CN': '在用模型巡检', 'en-US': 'In-use model patrol' },
       audience: 'internal' as const,
       trigger: { kind: 'cron', expression: '30 3 * * *' },
       payload: {}

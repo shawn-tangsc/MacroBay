@@ -1,7 +1,7 @@
 import { minutesOfDayInTimeZone } from '../../time/timeZoneClock'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationDeeplink, NotificationRequest } from '../contracts/notificationContracts'
 
 export type DeliveryAttempt = {
   channel: NotificationChannel
@@ -14,10 +14,29 @@ export type DeliveryAttempt = {
   reason?: string
 }
 
+/** 投递前由运行时解析好的一份正文（通道方案 §2.2）：端口不做解析，也不碰原始记录之外的东西。 */
+export type NotificationDeliveryContent = {
+  title: string
+  body: string
+  /** 「为什么推了」那一句 */
+  reason: string
+  /**
+   * 动作标签，按动作 id 取（`{ actionId: '打开任务' }`）。**连同正文一起解析一次**：
+   * 界面拿到的是句子而不是 `labelKey`，否则它就得自己带一张文案表来查。
+   * 解析不出标签的动作不出现在这张表里，界面据此不画那个按钮。
+   */
+  actionLabels: Readonly<Record<string, string>>
+  /** 只在合并过时给：单条记录的「共 1 次」是噪音，也是读者没见过的第二个东西。 */
+  occurrenceLabel?: string
+  deeplink?: NotificationDeeplink
+}
+
 export type DeliveryHooks = {
-  toast?: (record: NotificationRecord) => void
-  popup?: (record: NotificationRecord) => void
-  desktop?: (record: NotificationRecord) => Promise<{ ok: boolean; reason?: string }>
+  toast?: (record: NotificationRecord, content: NotificationDeliveryContent) => void
+  popup?: (record: NotificationRecord, content: NotificationDeliveryContent) => void
+  desktop?: (record: NotificationRecord, content: NotificationDeliveryContent) => Promise<{ ok: boolean; reason?: string }>
+  /** 出站到读者已绑定的通道；由主进程装配，通知运行时只调这个口（通道方案 §2.2）。 */
+  push?: (record: NotificationRecord, content: NotificationDeliveryContent) => Promise<{ ok: boolean; reason?: string; messageId?: string }>
 }
 
 /**
@@ -31,7 +50,8 @@ export function routeTransientDelivery(
   record: NotificationRecord,
   settings: NotificationRuntimeSettings,
   hooks: DeliveryHooks,
-  clock: NotificationClock
+  clock: NotificationClock,
+  content: NotificationDeliveryContent = buildDeliveryContent(record)
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
   // 编译期已经要求必传；这里再挡一次 `as never` 之类的绕过，并给出可读原因，
@@ -51,7 +71,7 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-unavailable' })
         continue
       }
-      hooks.toast(record)
+      hooks.toast(record, content)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
       continue
     }
@@ -65,7 +85,7 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'popup-unavailable' })
         continue
       }
-      hooks.popup(record)
+      hooks.popup(record, content)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
     }
   }
@@ -83,7 +103,7 @@ export function routeTransientDelivery(
     return Promise.resolve(attempts)
   }
 
-  return hooks.desktop(record).then((result) => {
+  return hooks.desktop(record, content).then((result) => {
     attempts.push({
       channel: 'desktop',
       attemptedAt: now,
@@ -188,4 +208,16 @@ function parseLocalMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10))
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0
   return hours * 60 + minutes
+}
+
+
+/** 旧的 `(record)` 调用点没有正文：用记录里的键兜底，保证端口永远拿到同一份形状。 */
+export function buildDeliveryContent(record: NotificationRecord): NotificationDeliveryContent {
+  return {
+    title: String(record.titleKey),
+    body: record.bodyKey === undefined ? '' : String(record.bodyKey),
+    reason: record.reasonKey === undefined ? '' : String(record.reasonKey),
+    actionLabels: {},
+    ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
+  }
 }

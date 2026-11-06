@@ -14,6 +14,11 @@ const maxRunsPerAgent = 1
 type Dependencies = {
   services: AgentPlatformServices
   now?: () => string
+  /**
+   * 读者当前设置时区：排程按「当地钟点」解析（`trigger.timezone` 为空 = 跟随设置）。
+   * 不传时退回引擎既有的「无时区＝UTC」，那只该出现在没有读者时区来源的测试里。
+   */
+  timeZone?: () => string
   dispatchQueuedRun: (input: { task: AgentTaskSchedulerRuntimeTask; runLog: TaskRunLogEntity }) => Promise<void>
 }
 
@@ -23,6 +28,11 @@ export class AgentTaskExecutionCoordinator {
   private draining = false
 
   constructor(private readonly deps: Dependencies) {}
+
+  private readerTimeZone(): { timeZone: string } | Record<string, never> {
+    const timeZone = this.deps.timeZone?.()
+    return timeZone ? { timeZone } : {}
+  }
 
   async enqueueDueTask(taskId: string): Promise<TaskRunLogEntity | null> {
     let result: TaskRunLogEntity | null = null
@@ -54,7 +64,7 @@ export class AgentTaskExecutionCoordinator {
     const timestamp = this.timestamp()
     let runLog: TaskRunLogEntity | null = null
     const mutate = (state: Awaited<ReturnType<AgentPlatformServices['state']['getState']>>) => {
-      const task = buildAgentTaskSchedulerSnapshot(state, { now: timestamp }).tasksById[taskId]
+      const task = buildAgentTaskSchedulerSnapshot(state, { now: timestamp, ...this.readerTimeZone() }).tasksById[taskId]
       if (!task || !task.isDue || !task.isRunnable || !isAutonomousTaskAgent(state, task.agentId)) {
         return { state, result: null, runLog: null }
       }
@@ -134,7 +144,7 @@ export class AgentTaskExecutionCoordinator {
     const mutate = (state: Awaited<ReturnType<AgentPlatformServices['state']['getState']>>) => {
       const runLog = state.taskRunLogs.find((run) => run.id === runLogId)
       if (!runLog || runLog.status !== 'queued') return { state, result: null, runLog: null }
-      const task = buildAgentTaskSchedulerSnapshot(state, { now: timestamp }).tasksById[runLog.scheduleId]
+      const task = buildAgentTaskSchedulerSnapshot(state, { now: timestamp, ...this.readerTimeZone() }).tasksById[runLog.scheduleId]
       const running = state.taskRunLogs.filter((run) => run.status === 'running')
       const eligibilityInvalid = !task || !task.isRunnable || !isAutonomousTaskAgent(state, task.agentId) ||
         (task ? countRecentStarts(state.taskRunLogs, task.agentId, timestamp) >= taskMaxStartsPerAgentPerHour : false)

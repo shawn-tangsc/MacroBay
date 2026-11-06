@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { productText } from '../desktop/shared/i18n/productText'
 import type { DailyBriefingDocument } from './dailyBriefing'
+import { briefingDataRows } from './dailyBriefingDataGroups'
 import { dailyBriefingToMarkdown } from './dailyBriefingMarkdown'
 
 const labels = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -75,7 +76,70 @@ const options = {
   formatTime: (value: string) => value.slice(0, 16)
 }
 
+describe('the copied text reads the same figures as the card', () => {
+  it('prints the level and the move for a price row, exactly as the card does', () => {
+    // 生产形态：`close` 有值、`value` 是 percent、`change: null`。以前只读 `change`，复制出来只剩一个
+    // 百分比、连点位都没有——图上是 `80,682.1 · ↑1.2%`，文本是 `+1.23%`，同一份内容两个样子。
+    const base = document()
+    const doc = {
+      ...base,
+      data: {
+        ...base.data,
+        market: [{
+          ...base.data.market[0]!,
+          close: { value: 80_682.1, at: '2026-10-30T00:25:00.000Z' },
+          value: { number: 1.23, format: 'percent' as const },
+          change: null
+        }]
+      }
+    }
+    const markdown = dailyBriefingToMarkdown(doc, options)
+    const line = markdown.split('\n').find((entry) => entry.startsWith('- ') && entry.includes('BTC'))!
+    // 点位与涨跌幅两个数都在，而且与卡片同一份读取函数给出（一位小数）。
+    expect(line, markdown).toBeDefined()
+    expect(line).toContain('80,682.1')
+    expect(line).toContain('1.2%')
+  })
+})
+
+describe('a web-sourced value says so in the copy too (v2.128)', () => {
+  it('prints the same value label the card prints, suffix included', () => {
+    const base = document()
+    const web = dailyBriefingToMarkdown({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, valueSource: 'web' }] }
+    }, options)
+    const store = dailyBriefingToMarkdown(base, options)
+    // 三处一致：这里用的就是分享卡同一份拼法（`briefingMacroValueLabel`）。
+    expect(web).toContain(`实际 3.4%${labels.macroWebValue}`)
+    // 库内值一个字都不加。
+    expect(store).toContain('实际 3.4%')
+    expect(store).not.toContain(labels.macroWebValue)
+  })
+
+  it('prints no value segment at all when the event has no value', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      news: { ...base.news, macro: [{ ...base.news.macro[0]!, actual: undefined }] }
+    }, options)
+    // 没有值就整段不出现：不印破折号、也不说"没拿到"（v2.124/v2.128）。
+    expect(markdown).not.toContain('实际 —')
+    expect(markdown).not.toContain('没拿到')
+  })
+})
+
 describe('daily briefing markdown', () => {
+  it('leaves the readings count out of the copy header', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+    // The header block only: the body may legitimately say "5 项" about its own rows, so scanning
+    // the whole document would turn this into a rule about wording rather than about the header.
+    const header = markdown.split('\n').filter((line) => line.startsWith('> '))
+    expect(header).toHaveLength(1)
+    expect(header[0]).not.toMatch(/\d+\s*项/)
+    expect(header[0]).toContain('2026-10-30')
+  })
+
   it('keeps every source and fallback word out of the exported copy', () => {
     // The reader decided: the brief text and the exported image carry the reading, not the
     // provenance. Trace lives in the trace column.
@@ -97,7 +161,7 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('# 每日简报 — 2026-10-30')
     expect(markdown).toContain('## 过去 24 小时要闻')
     expect(markdown).toContain('JPMorgan says AI labels no longer win lenders')
-    expect(markdown).toContain('## 一天的数据')
+    expect(markdown).toContain('## 过去 24 小时数据')
     expect(markdown).toContain('### 重点')
     expect(markdown).toContain('稳定币')
     expect(markdown).toContain('## 结论')
@@ -138,10 +202,10 @@ describe('daily briefing markdown', () => {
       }
     }, options)
 
-    // A change-led row with no baseline is not printed as a bare level or a flat move: the document
-    // keeps `no-baseline` for the screen, and the export leaves the row out rather than claim a zero.
-    expect(markdown).not.toContain('- 稳定币:')
-    expect(markdown).not.toContain('- 恐惧贪婪:')
+    // The rows print — a reading without a baseline is still a reading — and the missing baseline is
+    // stated instead of a fabricated zero. Dropping the row made a quiet day look like no data.
+    expect(markdown).toContain('- 稳定币:')
+    expect(markdown).toContain('- 恐惧贪婪:')
     expect(markdown).not.toContain('0.00%')
   })
 
@@ -169,6 +233,12 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('- 恐惧贪婪: 较上次发布 +4 点（10-30 → 11-02） (当前 30)')
   })
 
+  it('leaves the banned word out of every reason the copied text can print', () => {
+    // Reasons reach the copy through the whole text tree (`labels.reasons[row.reason]`), so the
+    // check has to look at the values the tree actually carries, not at a `.reasons` call site.
+    for (const reason of Object.values(options.labels.reasons)) expect(reason).not.toContain('读数')
+  })
+
   it('states an empty edition instead of leaving blank sections', () => {
     const empty = document({
       status: { readings: [
@@ -182,7 +252,7 @@ describe('daily briefing markdown', () => {
       next: { items: [], note: 'calendar-source-disabled' }
     })
     const markdown = dailyBriefingToMarkdown(empty, options)
-    expect(markdown).toContain('四个读数都读不到')
+    expect(markdown).toContain('四项数据都读不到')
     expect(markdown).not.toContain('## 过去 24 小时要闻')
     expect(markdown).not.toContain('## 结论')
     expect(markdown).not.toContain('## 接下来 7 日关注')
@@ -225,5 +295,113 @@ describe('daily briefing markdown', () => {
       }
     }), options)
     expect(markdown).toContain('A \\*star\\* \\[link\\]')
+  })
+})
+
+describe('daily briefing markdown news titles', () => {
+  const SOURCE = 'JPMorgan says AI labels no longer win lenders'
+  const TRANSLATED = '摩根大通表示，AI 标签不再能赢得贷款方'
+  const SECOND = 'Spot ETF inflows hit a record'
+
+  const newsItem = (overrides: Partial<DailyBriefingDocument['news']['items'][number]>) => ({
+    itemId: 'n1', title: SOURCE, sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T00:00:00.000Z',
+    polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+    ...overrides
+  })
+
+  const withNews = (locale: 'zh-CN' | 'en-US', items: DailyBriefingDocument['news']['items']): DailyBriefingDocument => {
+    const base = document()
+    return { ...base, edition: { ...base.edition, locale }, news: { ...base.news, items } }
+  }
+
+  it('draws the source title in an English edition when the translation is Chinese', () => {
+    const markdown = dailyBriefingToMarkdown(
+      withNews('en-US', [newsItem({ translatedTitle: TRANSLATED })]),
+      { ...options, locale: 'en-US' }
+    )
+    expect(markdown).toContain(SOURCE)
+    expect(markdown).not.toContain(TRANSLATED)
+  })
+
+  it('keeps the translated title in a Chinese edition', () => {
+    const markdown = dailyBriefingToMarkdown(
+      withNews('zh-CN', [newsItem({ translatedTitle: TRANSLATED })]),
+      { ...options, locale: 'zh-CN' }
+    )
+    expect(markdown).toContain(TRANSLATED)
+    expect(markdown).not.toContain(`**${SOURCE}**`)
+  })
+
+  it('keeps every news item, in order, on both paths', () => {
+    const items = [
+      newsItem({ itemId: 'n1', translatedTitle: TRANSLATED }),
+      newsItem({ itemId: 'n2', title: SECOND, polarity: 'bullish' })
+    ]
+    const english = dailyBriefingToMarkdown(withNews('en-US', items), { ...options, locale: 'en-US' })
+    const chinese = dailyBriefingToMarkdown(withNews('zh-CN', items), { ...options, locale: 'zh-CN' })
+    for (const [markdown, first] of [[english, SOURCE], [chinese, TRANSLATED]] as const) {
+      expect(markdown).toContain(first)
+      expect(markdown).toContain(SECOND)
+      expect(markdown.indexOf(first)).toBeLessThan(markdown.indexOf(SECOND))
+    }
+  })
+})
+
+describe('the data region has one partition', () => {
+  it('keeps the funding rows out of the row list and the ETF rows in it', () => {
+    // The duplicate that started this: the funding rate printed in the funds block and again in the
+    // leverage card. Restoring it to the list turns this red, which is the point.
+    const base = document()
+    const fundRow = (id: 'funding-btc' | 'funding-eth' | 'etf-btc' | 'etf-eth', value: number) => ({
+      id, group: 'funds' as const, labelKey: `dailyBriefing.row.${id}`,
+      importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+      state: 'available' as const, value: { number: value, format: 'percent' as const },
+      change: null, window: '24h' as const, observedAt: base.edition.windowEnd
+    })
+    const rows = briefingDataRows({
+      ...base,
+      data: {
+        ...base.data,
+        funds: [...base.data.funds, fundRow('funding-btc', 0.01), fundRow('funding-eth', 0.01), fundRow('etf-btc', -398_600_000), fundRow('etf-eth', -139_700_000)]
+      }
+    })
+    const ids = rows.map((row) => row.id)
+    expect(ids.filter((id) => id === 'funding-btc')).toHaveLength(0)
+    expect(ids.filter((id) => id === 'funding-eth')).toHaveLength(0)
+    expect(ids.filter((id) => id === 'etf-btc')).toHaveLength(1)
+    expect(ids.filter((id) => id === 'etf-eth')).toHaveLength(1)
+  })
+})
+
+describe('one number, one place', () => {
+  it('prints each ETF row once, alongside the funding block rather than inside it', () => {
+    const base = document()
+    const fund = (id: 'etf-btc' | 'etf-eth', value: number) => ({
+      id, group: 'funds' as const, labelKey: `dailyBriefing.row.${id}`,
+      importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+      state: 'available' as const, value: { number: value, format: 'flow-usd' as const },
+      change: null, window: 'trading-day' as const, observedAt: base.edition.windowEnd
+    })
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: { ...base.data, funds: [...base.data.funds, fund('etf-btc', -398_600_000), fund('etf-eth', -139_700_000)] }
+    }, options)
+    // The fixture carries the label keys, so the ids are what identifies a row here.
+    const occurrences = (needle: string): number => markdown.split(needle).length - 1
+    expect(occurrences('dailyBriefing.row.etf-btc')).toBe(1)
+    expect(occurrences('dailyBriefing.row.etf-eth')).toBe(1)
+    // The funding rows are excluded from the data list: the leverage block is their only home.
+    expect(occurrences('dailyBriefing.row.funding-btc')).toBe(0)
+  })
+})
+
+describe('the copied text carries the whole title', () => {
+  it('writes the lede in full, with no ellipsis', () => {
+    const long = 'Stablecoin contraction keeps the read defensive across every venue the desk covers today, and the funding leg still leans short'
+    const markdown = dailyBriefingToMarkdown(document({ lede: { source: 'template', text: long, generatedAt: '2026-10-30T00:30:00.000Z' } }), options)
+    // The export image may clamp to two lines (a separate implementation-period item); the copied
+    // text is the full sentence, and it must not arrive pre-truncated.
+    expect(markdown).toContain(long)
+    expect(markdown).not.toContain(`${long.slice(0, 40)}…`)
   })
 })

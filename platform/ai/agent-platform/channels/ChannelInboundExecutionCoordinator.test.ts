@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { ChannelInboundExecutionCoordinator } from './ChannelInboundExecutionCoordinator'
+import { isChannelSession, resetChannelSessions } from '../runtime/channelToolApproval'
 
 describe('ChannelInboundExecutionCoordinator', () => {
   const claim = { workItemId: 'work-a', receiptId: 'receipt-a', channelId: 'channel-a', dispatchId: 'dispatch-a', generation: 1, leaseToken: 'lease-a', leaseExpiresAt: '2026-07-19T01:00:00.000Z' }
@@ -30,6 +31,113 @@ describe('ChannelInboundExecutionCoordinator', () => {
     })
     await expect(coordinator.execute(claim)).resolves.toBe('failed')
     expect(delivery.deliverStreamFinal).toHaveBeenCalledWith(expect.objectContaining({ text: '处理失败，请稍后重试。' }), ['处理失败，请稍后重试。'])
+  })
+
+  it('marks the session as a phone channel before the very first turn after a restart', async () => {
+    // 重启场景：进程内的「手机通道」标记是空的，靠的是**每次分发前重新标记**。
+    resetChannelSessions()
+    const seen: boolean[] = []
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode('{"text":"hi"}'), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-restarted' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value),
+      dispatchConversationId: vi.fn(() => 'conversation-a')
+    }
+    const runs = { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never,
+      delivery: { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) } as never,
+      cipher: {
+        decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext,
+        encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
+      } as never,
+      runtime: {
+        sendMessage: vi.fn(async () => {
+          // 分发那一刻必须已经标记：否则这一轮的审批又会进「等界面」队列。
+          seen.push(isChannelSession('session-restarted'))
+          return { assistantMessage: { data: { parts: [{ type: 'text', text: 'ok' }] } }, state: {} }
+        })
+      } as never,
+      runs: runs as never
+    })
+
+    await expect(coordinator.execute(claim)).resolves.toBe('completed')
+    expect(seen).toEqual([true])
+    resetChannelSessions()
+  })
+
+  it('records the real failure reason and names it to the reader', async () => {
+    const runs = { get: vi.fn(() => null), fail: vi.fn(), start: vi.fn(() => true) }
+    const failureText = vi.fn(() => '这个对话绑的会话还属上一个助手，下一条消息会自动换过来。')
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode('{"text":"hi"}'), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value),
+      dispatchConversationId: vi.fn(() => 'conversation-a')
+    }
+    const delivery = { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never, delivery: delivery as never,
+      cipher: { decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext } as never,
+      runtime: { sendMessage: vi.fn(async () => { throw new Error('Session "s" does not belong to agent "agent-a".') }) } as never,
+      runs: runs as never,
+      failureText
+    })
+
+    await expect(coordinator.execute(claim)).resolves.toBe('failed')
+
+    // 原因进台账（闭集码 + 脱敏说明），不再是只有 status。
+    expect(runs.fail).toHaveBeenCalledWith('dispatch-a', 'failed', expect.any(Date), {
+      code: 'dispatch-session-agent-mismatch',
+      detail: 'Session "s" does not belong to agent "agent-a".'
+    })
+    // 回给读者的话按原因给，不是套话。
+    expect(failureText).toHaveBeenCalledWith('run-failed', 'dispatch-session-agent-mismatch')
+    expect(delivery.deliverStreamFinal).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '这个对话绑的会话还属上一个助手，下一条消息会自动换过来。' }),
+      ['这个对话绑的会话还属上一个助手，下一条消息会自动换过来。']
+    )
+  })
+
+  it('runs two dispatches for one conversation one after another, never at the same time', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const runs = { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() }
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode('{"text":"hi"}'), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value),
+      dispatchConversationId: vi.fn(() => 'conversation-a')
+    }
+    const delivery = { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never, delivery: delivery as never,
+      cipher: {
+        decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext,
+        encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
+      } as never,
+      runtime: {
+        sendMessage: vi.fn(async () => {
+          inFlight += 1
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise((resolve) => { setTimeout(resolve, 10) })
+          inFlight -= 1
+          return { assistantMessage: { data: { parts: [{ type: 'text', text: 'ok' }] } }, state: {} }
+        })
+      } as never,
+      runs: runs as never
+    })
+
+    const [first, second] = await Promise.all([
+      coordinator.execute({ ...claim, dispatchId: 'dispatch-1' }),
+      coordinator.execute({ ...claim, dispatchId: 'dispatch-2' })
+    ])
+
+    expect(maxInFlight).toBe(1)
+    expect([first, second]).toEqual(['completed', 'completed'])
   })
 
   it('marks a recovered started run interrupted instead of calling the Agent twice', async () => {

@@ -67,7 +67,26 @@ export const analysisBudgetPolicy = Object.freeze({
   })
 })
 
-export type BudgetDecision = Readonly<{ decision: 'queued' | 'skipped'; reasonCode: string | null }>
+/**
+ * The numbers behind a refusal, in the same shape the reader sees them.
+ *
+ * The policy owns the quota numbers, so it also reports the pair that was actually hit: `used`
+ * and `limit` of **that** gate (a line's daily quota, the global backstop, an hourly window).
+ * Recomputing the pair at the call site would mean a second copy of the limits, and the two
+ * copies would disagree exactly when the global gate is the one that refused.
+ */
+export type DailyQuota = Readonly<{ used: number; limit: number }>
+
+export type BudgetDecision = Readonly<{
+  decision: 'queued' | 'skipped'
+  reasonCode: string | null
+  /**
+   * The day's pair behind a **daily** refusal — the only refusal that means 「今天的次数用完了」.
+   * Absent on a queue and on hourly / interval / reserve refusals: those are not the day's quota,
+   * and reporting them as one would tell the reader something false about how much is left.
+   */
+  dailyQuota?: DailyQuota
+}>
 
 export type AnalysisBudgetInput = Readonly<{
   triggerKey: string
@@ -84,8 +103,10 @@ export type AnalysisBudgetInput = Readonly<{
 }>
 
 export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
-  const skip = (reasonCode: string): BudgetDecision => ({ decision: 'skipped', reasonCode })
+  const skip = (reasonCode: string, dailyQuota?: DailyQuota): BudgetDecision =>
+    ({ decision: 'skipped', reasonCode, ...(dailyQuota === undefined ? {} : { dailyQuota }) })
   const queued: BudgetDecision = { decision: 'queued', reasonCode: null }
+  const quotaOf = (used: number, limit: number): DailyQuota => Object.freeze({ used, limit })
   const counts = [
     input.hourRuns, input.dayRuns, input.eventRunsToday, input.eventRunsThisHour,
     input.calendarRunsToday, input.calendarRunsThisHour, input.scheduledRunsToday
@@ -112,7 +133,7 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   const quota = line === 'event' ? analysisBudgetPolicy.lineQuotas.event : analysisBudgetPolicy.lineQuotas.calendar
   const runsToday = line === 'event' ? input.eventRunsToday : input.calendarRunsToday
   const runsThisHour = line === 'event' ? input.eventRunsThisHour : input.calendarRunsThisHour
-  if (runsToday >= quota.daily) return skip(analysisBudgetPolicy.reasonCodes.daily)
+  if (runsToday >= quota.daily) return skip(analysisBudgetPolicy.reasonCodes.daily, quotaOf(runsToday, quota.daily))
   if (runsThisHour >= quota.hourly) return skip(analysisBudgetPolicy.reasonCodes.hourly)
   if (quota.coalesce && input.lastAutoRunAt !== null && Date.parse(input.now) - Date.parse(input.lastAutoRunAt) < analysisBudgetPolicy.minimumIntervalMs) {
     return skip(analysisBudgetPolicy.reasonCodes.interval)
@@ -122,6 +143,6 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   // which is what the combined guard these replace used to count. The slots themselves are exempt:
   // they are already capped at three a day, and 48 + 9 + 3 is exactly the 60 this gate enforces.
   if (input.hourRuns >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
-  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily)
+  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily, quotaOf(input.dayRuns, analysisBudgetPolicy.maximumDailyRuns))
   return queued
 }

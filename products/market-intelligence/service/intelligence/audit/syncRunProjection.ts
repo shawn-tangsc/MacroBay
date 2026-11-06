@@ -1,13 +1,17 @@
 import type { JobRunRecord } from '@platform/jobs'
 
+import type { AnalysisRun } from '../../../contracts/marketAnalysisContracts'
 import { getSource } from '../application/providerRegistry'
 
 import {
-  SYNC_RUN_LIMITS,
+  SYNC_RUN_LOAD_CAP, SYNC_RUN_LIMITS,
   type SyncAuditEntry,
   type SyncRunAction,
+  type SyncRunAnalysis,
+  type SyncRunAnalysisResult,
   type SyncRunOutcome,
   type SyncRunQuery,
+  type SyncRunCounts,
   type SyncRunRow,
   type SyncRunWindow
 } from '../../../contracts/syncRunRecords'
@@ -20,6 +24,25 @@ type CatalogEntry = Readonly<{
   /** Used only when the run's payload names no source. */
   sourceId?: string
   sourceLabel?: string
+  /**
+   * Only the handler that actually executes an analysis produces one. Enqueuing, freezing and
+   * recovery all touch analysis runs without being the run that owns one, so "action is analysis"
+   * is not the same question.
+   */
+  producesAnalysis?: true
+}>
+
+/**
+ * The analysis runs a page of task rows may refer to.
+ *
+ * `byJobRunId` is the durable direction (`mi_analysis_runs.job_run_id`, written back after the run
+ * finishes); `byRunId` resolves the id a job carried in its own enqueue payload, which exists even
+ * before that write-back lands. Reading both is what makes the column truthful today instead of
+ * after another line ships.
+ */
+export type SyncRunAnalysisLookup = Readonly<{
+  byJobRunId: ReadonlyMap<string, AnalysisRun>
+  byRunId: ReadonlyMap<string, AnalysisRun>
 }>
 
 /**
@@ -43,7 +66,7 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.collect-cross-asset-index': { taskLabel: '纳指指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-realmarketapi-dxy': { taskLabel: '美元指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-policy-path': { taskLabel: 'Fed 决议盘口', action: 'collect', sourceId: 'policy-path-market', sourceLabel: 'Fed 决议盘口' },
-  'market-intelligence.runMarketAnalysis': { taskLabel: 'AI 分析', action: 'analysis' },
+  'market-intelligence.runMarketAnalysis': { taskLabel: 'AI 分析', action: 'analysis', producesAnalysis: true },
   'market-intelligence.freezeMarketAnalysisSnapshot': { taskLabel: '分析快照', action: 'analysis' },
   'market-intelligence.dailyBriefing': { taskLabel: '每日简报', action: 'analysis' },
   'market-intelligence.translateItems': { taskLabel: '翻译任务', action: 'other' },
@@ -65,7 +88,7 @@ const auditActionLabels: Readonly<Record<string, string>> = {
 
 const FAILURE_CODE = /\b([a-z]+(?:-[a-z]+){1,4})\b/
 
-export function projectSyncRun(row: JobRunRecord): SyncRunRow {
+export function projectSyncRun(row: JobRunRecord, analysis?: SyncRunAnalysisLookup): SyncRunRow {
   const entry = syncRunHandlerCatalog[row.handlerId]
   const at = row.completedAt ?? row.startedAt ?? row.createdAt
   const detail = row.lastError ? row.lastError.slice(0, SYNC_RUN_LIMITS.detailMaxLength) : undefined
@@ -80,6 +103,11 @@ export function projectSyncRun(row: JobRunRecord): SyncRunRow {
     handlerId: row.handlerId,
     action: entry?.action ?? 'other',
     outcome: outcomeOf(row.status),
+    analysis: analysisOf(row, entry, analysis),
+    ...(countsOf(row) === undefined ? {} : { counts: countsOf(row) }),
+    ...(row.result?.reasonCode ? { resultReasonCode: row.result.reasonCode } : {}),
+    ...(row.result?.reasons === undefined ? {} : { reasons: row.result.reasons }),
+    ...(languagesOf(row) === undefined ? {} : { languages: languagesOf(row) }),
     ...(durationMs === undefined ? {} : { durationMs }),
     ...(failureCode === undefined ? {} : { failureCode }),
     ...(detail ? { detail } : {})
@@ -99,6 +127,8 @@ export function projectSyncAudit(entry: SyncAuditEntry): SyncRunRow {
     handlerId: entry.action,
     action: entry.action,
     outcome: entry.outcome,
+    // A configuration action never runs an analysis, so it has no analysis side at all.
+    analysis: { state: 'not-applicable' },
     ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
     ...(entry.failureCode === undefined ? {} : { failureCode: entry.failureCode }),
     ...(entry.detail === undefined ? {} : { detail: entry.detail })
@@ -106,13 +136,56 @@ export function projectSyncAudit(entry: SyncAuditEntry): SyncRunRow {
 }
 
 /** Newest first, filtered by window, task, source and outcome, then capped. */
-export function projectSyncRuns(runs: readonly JobRunRecord[], query: SyncRunQuery, nowMs: number): readonly SyncRunRow[] {
-  return runs.map(projectSyncRun)
+export function projectSyncRuns(
+  runs: readonly JobRunRecord[],
+  query: SyncRunQuery,
+  nowMs: number,
+  analysis?: SyncRunAnalysisLookup
+): readonly SyncRunRow[] {
+  return runs.map((run) => projectSyncRun(run, analysis))
     .filter((row) => withinWindow(row.at, query.window, nowMs))
     .filter((row) => query.sourceId === undefined || row.sources.some((source) => source.sourceId === query.sourceId))
     .filter((row) => query.outcome === undefined || row.outcome === query.outcome)
     .sort((left, right) => right.at.localeCompare(left.at))
-    .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LIMITS.maximumLimit))
+    // 上限是装载量，不是「一页」：存储层已经按游标分页取完整个窗口，这里再按一页截断就等于把它白取。
+    .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LOAD_CAP))
+}
+
+/**
+ * The analysis side of one task row.
+ *
+ * The write-back (`job_run_id`) wins because it is written after the run finishes; the id the task
+ * carried when it was enqueued is the fallback for the window before that lands. A task that owns
+ * an analysis but has neither is reported as `unlinked` — never as a blank cell or a zero.
+ */
+function analysisOf(
+  row: JobRunRecord,
+  entry: CatalogEntry | undefined,
+  lookup: SyncRunAnalysisLookup | undefined
+): SyncRunAnalysis {
+  if (entry?.producesAnalysis !== true) return { state: 'not-applicable' }
+  const run = lookup?.byJobRunId.get(row.id) ?? analysisRunFromPayload(row, lookup)
+  return run ? { state: 'linked', result: toAnalysisResult(run) } : { state: 'unlinked' }
+}
+
+function analysisRunFromPayload(row: JobRunRecord, lookup: SyncRunAnalysisLookup | undefined): AnalysisRun | undefined {
+  if (!lookup) return undefined
+  const payload = row.payload && typeof row.payload === 'object' ? row.payload as Record<string, unknown> : {}
+  const id = payload.analysisRunId
+  return typeof id === 'string' && id ? lookup.byRunId.get(id) : undefined
+}
+
+function toAnalysisResult(run: AnalysisRun): SyncRunAnalysisResult {
+  return {
+    runId: run.id,
+    state: run.status,
+    ...(run.failureCode ? { failureCode: run.failureCode } : {}),
+    ...(run.failureDetailCode ? { failureDetailCode: run.failureDetailCode } : {}),
+    ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    ...(run.modelProviderId ? { modelProviderId: run.modelProviderId } : {}),
+    ...(run.modelId ? { modelId: run.modelId } : {})
+  }
 }
 
 /**
@@ -147,6 +220,39 @@ function withinWindow(at: string, window: SyncRunWindow, nowMs: number): boolean
   if (window === 'all') return true
   const parsed = Date.parse(at)
   return Number.isFinite(parsed) && nowMs - parsed <= SYNC_RUN_LIMITS.windowMs[window]
+}
+
+/**
+ * The batch tally, when the run recorded one that adds up.
+ *
+ * The platform refuses to write a tally whose parts do not sum, but this is a read path: a record
+ * from an older build, or a store written before that check existed, must not put four numbers on
+ * screen that contradict each other. A tally that does not add up is dropped, exactly like no tally.
+ */
+function countsOf(row: JobRunRecord): SyncRunCounts | undefined {
+  const counts = row.result?.counts
+  if (counts === undefined) return undefined
+  const { total, succeeded, failed, skipped } = counts
+  if (![total, succeeded, failed, skipped].every((value) => Number.isInteger(value) && value >= 0)) return undefined
+  if (succeeded + failed + skipped !== total) return undefined
+  return { total, succeeded, failed, skipped }
+}
+
+/**
+ * 这一批瞄准的语言，来自入队时写死的快照（`payload.targetLocale`）。
+ *
+ * 为什么读 payload 而不另存一份：语言是**任务参数**，平台已明确它不进运行结论
+ * （`JobRunOutcome` 里没有它的位置）；再存一份就有两处要同步。
+ */
+function languagesOf(row: JobRunRecord): readonly string[] | undefined {
+  if (!row.payload || typeof row.payload !== 'object') return undefined
+  const value = (row.payload as Record<string, unknown>).targetLocale
+  if (typeof value === 'string' && value.trim().length > 0) return [value]
+  if (Array.isArray(value)) {
+    const many = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    return many.length > 0 ? many : undefined
+  }
+  return undefined
 }
 
 function outcomeOf(status: JobRunRecord['status']): SyncRunOutcome {

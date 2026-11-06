@@ -74,6 +74,38 @@ describe('newsSentimentStore', () => {
     ).toBe('unchanged')
   })
 
+  it('round-trips entities, story key and why', () => {
+    const store = createNewsSentimentSqliteStore(':memory:')
+    store.upsertSentiment(
+      sentiment({
+        engine: 'model',
+        ruleId: undefined,
+        entities: [
+          { name: 'democrats', kind: 'org' },
+          { name: 'bitcoin', kind: 'asset' }
+        ],
+        storyKey: 'story:2026-10-24:item-a',
+        why: '选举结果改变监管预期。'
+      })
+    )
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')).toMatchObject({
+      storyKey: 'story:2026-10-24:item-a',
+      why: '选举结果改变监管预期。',
+      entities: [
+        { name: 'democrats', kind: 'org' },
+        { name: 'bitcoin', kind: 'asset' }
+      ]
+    })
+  })
+
+  it('rejects a story key whose shape did not come from the builder, and an over-long why', () => {
+    const store = createNewsSentimentSqliteStore(':memory:')
+    expect(() => store.upsertSentiment(sentiment({ storyKey: 'item-a' }))).toThrow()
+    expect(() => store.upsertSentiment(sentiment({ storyKey: 'story:2026-10-24:' }))).toThrow()
+    expect(() => store.upsertSentiment(sentiment({ why: 'x'.repeat(41) }))).toThrow()
+    expect(() => store.upsertSentiment(sentiment({ why: '   ' }))).toThrow()
+  })
+
   it('rejects invalid judgments', () => {
     const store = createNewsSentimentSqliteStore(':memory:')
     expect(() => store.upsertSentiment(sentiment({ strength: 9 }))).toThrow()

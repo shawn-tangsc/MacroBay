@@ -1,0 +1,124 @@
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
+import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
+
+import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import { signalAssetSymbol } from './signalNotificationCopy'
+import { renderEtfOutflowSentence } from './signalNotificationSentence'
+import { etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../contracts/etfFlows'
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
+
+/**
+ * 「ETF 连续三日净流出」这条信号出站为一条通知。
+ *
+ * 三件事刻意交给平台，不在这里各写一份：
+ * - **去重键由平台按参数构造**（`builder: 'moduleSignal'`），调用点只交 `moduleId / ruleId /
+ *   asset / observedAt / cadence`。手拼键就会长出第二种拼法，同一桶被当成两件事；
+ * - **同一桶重复只更新次数与正文、不重推**，是平台按键判的，这里不做第二套判断；
+ * - **事件 id 与档位**来自产品声明（`market-intelligence.signal.triggered`），这里只引用常量。
+ *
+ * 只在信号真的成立时才提交：`readiness: 'unavailable'` 是「窗口还没凑齐」，不是一件发生的事，
+ * 更不是失败——给它发通知等于告诉读者「有信号」，而规则其实还没判。
+ *
+ * **话是源头说的**（契约 v2.56）：标题、正文、「为什么推了」都在这里拼成中英两份成品，
+ * 平台只挑一份转发。结构化读数的真源是信号表，不是这条通知记录——将来详情页要读数请回源里取，
+ * 不要反解析句子。
+ */
+
+/** 稳定 handler id：同一条刷新路径换名字会让平台把它当成另一个生产者。 */
+export const ETF_SIGNAL_NOTIFICATION_PRODUCER_ID = 'market-intelligence.etf-flow-refresh'
+
+export type SignalNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+
+/**
+ * 落点暂不挂：外壳今天只解析设置分区，`pageId` 一律返回 null，挂上去就是一颗写着「打开」
+ * 却哪儿也不去的按钮。恢复它需要三件同批——外壳解析、有生产者、一条点下去真能到那一屏的
+ * 用例——缺一件都是再造一次假指路。
+ */
+/**
+ * 把一条已成立的信号变成提交请求，或 `undefined`（还没判、或参数描述不出一个桶）。
+ *
+ * 注意这里**不**拿平台键去和信号自带的 `dedupeKey` 比字面：两者是两个命名空间——信号键给
+ * 卡片与信号存储用（`etf-flows:…:btc:2026-08-28`），通知键由平台按同一批参数生成
+ * （`module-signal:ETF:…:BTC:2026-08-28`）。要求它们字面相等，就会为了对齐一个前缀去手拼键，
+ * 那正是「不手拼 dedupeKey」这条要挡的事。这里只保证平台能凭参数构造出一个键。
+ */
+export function buildEtfOutflowSignalRequest(signal: ModuleSignal): NotificationSubmitRequest | undefined {
+  if (signal.moduleId !== 'etf-flows' || signal.ruleId !== 'etf-outflow-3d') return undefined
+  if (signal.readiness !== 'available' || signal.asset === null) return undefined
+
+  // 交易日规则键里带交易日；日内规则键里**不带任何时间**（契约 v2.43 §7.4，窗口交给声明）。
+  const dedupeVars = signal.cadence.kind === 'trading-day'
+    ? {
+        builder: 'moduleSignal' as const,
+        moduleId: signal.moduleId,
+        ruleId: signal.ruleId,
+        asset: signal.asset,
+        observedAt: signal.observedAt,
+        cadence: 'trading-day' as const
+      }
+    : {
+        builder: 'moduleSignal' as const,
+        moduleId: signal.moduleId,
+        ruleId: signal.ruleId,
+        asset: signal.asset,
+        cadence: 'intraday' as const
+      }
+
+  // 参数描述不出一个键时平台会拒收；那时不发，也不在这里替它拼一个。
+  if (notificationDedupeBuilders.moduleSignal(dedupeVars) === undefined) return undefined
+
+  // 读数与阈值都来自信号的 values（规则常量在造信号时已经写进去），这里不再回头读常量。
+  const flowUsd = signal.values.cumulativeNetFlowUsd
+  const thresholdUsd = signal.values.thresholdUsd
+  if (!Number.isFinite(flowUsd) || !Number.isFinite(thresholdUsd)) return undefined
+  const aggravated = signal.severity === 'high'
+
+  // 成品句子由源头拼（契约 v2.56）：平台只按读者语言挑一份，不拼不改。拼不出就不提交——
+  // 半句真话比不说更糟，而「缺一格」是这里的事，不是平台的降级动作。
+  const rendered = renderEtfOutflowSentence({
+    asset: signalAssetSymbol(signal.asset),
+    flowUsd,
+    thresholdUsd,
+    aggravated
+  })
+  if (rendered === undefined) return undefined
+
+  return {
+    eventTypeId: EVENT_IDS.signalTriggered,
+    producerId: ETF_SIGNAL_NOTIFICATION_PRODUCER_ID,
+    signalSeverity: signal.severity,
+    dedupeVars,
+    rendered,
+    actions: [],
+    // 信号描述的那个交易日，不是提交这一下的时刻：晚到的流水仍属于它自己那天。
+    occurredAt: signal.observedAt
+  }
+}
+
+/**
+ * 提交；一条通知发不出去不能把已经落库的行情判成失败，所以吞掉提交异常。
+ *
+ * 没有提交入口（例如未接通知的运行环境）时静默跳过——刷新本身照常完成。
+ *
+ * 出口开关在这里挡的是**发送**，不是读取与写回：牌子还没落地时通知先关，行情照常采集，
+ * 开关一开就补上，不用重做这一笔。判断委托给 `isEtfOutflowOutletOpen`，牌子关着时这里
+ * 即使写着 `true` 也不发——两条路共用一个开关，不给第二个入口留自己的总闸。
+ */
+export async function notifyEtfOutflowSignals(
+  submit: SignalNoticeSubmit | undefined,
+  signals: readonly ModuleSignal[],
+  outlets: EtfOutflowOutletSwitch = etfOutflowOutletPolicy
+): Promise<void> {
+  if (!submit || !isEtfOutflowOutletOpen(outlets, 'notification')) return
+  const requests = signals.map(buildEtfOutflowSignalRequest).filter((request): request is NotificationSubmitRequest => request !== undefined)
+  for (const request of requests) {
+    try {
+      await submit(request)
+    } catch {
+      // 通知不是事实来源：行情与状态已经写好了。
+    }
+  }
+}

@@ -34,7 +34,7 @@ export function registerNotificationRetentionJob(
     id: notificationRetentionJobId,
     owner: 'platform',
     handlerId: notificationRetentionJobId,
-    title: 'Notification retention',
+    title: { 'zh-CN': '通知保留期清理', 'en-US': 'Notification retention' },
     audience: 'internal' as const,
     // 凌晨跑，避开用户活跃时段；时区取读者时区，和「运行语义跟设置时区」一致。
     trigger: { kind: 'cron', expression: '40 3 * * *', timezone: deps.timeZone() },

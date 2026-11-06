@@ -1,6 +1,10 @@
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
 
-export type ChannelDeliverySource = 'inbound-reply' | 'task-result' | 'agent-notify'
+/**
+ * 一条出站消息从哪来。`notification` 是通知推送（通道方案 §2.2）：幂等键是通知记录 id，
+ * 与任务的 `task-result` 分开记账——两边的失败语义与重试策略都不一样。
+ */
+export type ChannelDeliverySource = 'inbound-reply' | 'task-result' | 'agent-notify' | 'notification'
 /**
  * Where one delivered message stands. NOT `TaskResultOutcome` (completed/failed/cancelled), which is
  * what happened to the task run and goes into `source_id`. The two never convert into each other;
@@ -42,14 +46,17 @@ export function isChannelDeliverySkipReason(value: string | null | undefined): v
 
 export type ChannelDeliveryTransportResult =
   | { kind: 'delivered' }
-  | { kind: 'failed'; code: ChannelDeliveryFailureCode }
-  | { kind: 'unknown-after-send' }
+  /** `detail` 是通道自己给的一句话（已脱敏截断），只用于日志排查，不参与判定。 */
+  | { kind: 'failed'; code: ChannelDeliveryFailureCode; detail?: string }
+  | { kind: 'unknown-after-send'; detail?: string }
 
 export type ChannelDeliveryFailureCode =
   | 'delivery-host-unavailable'
   | 'delivery-permission-denied'
   | 'delivery-rate-limited'
   | 'delivery-provider-rejected'
+  /** 会话键里补不出平台认的目标（例如 Telegram 的 chat id）：这是目标解析问题，不是网络。 */
+  | 'delivery-target-invalid'
 
 export type ChannelDeliveryTransport = {
   send: (input: {

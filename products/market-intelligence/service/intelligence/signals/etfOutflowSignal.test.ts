@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { isModuleSignal, signalCooldown, signalWindow } from '../../../contracts/moduleSignal'
 import { etfFlowPolicy } from '../../../contracts/etfFlows'
 import { buildEtfOutflowSignal, etfOutflowSignalPolicy } from './etfOutflowSignal'
+import { isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
+import { signalTriggerKey } from '../../../contracts/moduleSignal'
 
 const threshold = etfFlowPolicy.signalOutflowUsd
 

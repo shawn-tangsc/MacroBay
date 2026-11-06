@@ -4,6 +4,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { Pencil, RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
@@ -236,11 +237,29 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
 }
 
 function BlsRefreshAction({ disabled, eventKey, onRefresh, pending, text }: { disabled: boolean; eventKey: string; onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>; pending: boolean; text: EconomicCalendarText }): ReactElement {
-  return <Button disabled={disabled} onClick={() => { if (confirmRefresh(text.blsRefresh.confirmation)) void onRefresh('bls', eventKey) }} size="small">{pending ? text.blsRefresh.pending : text.blsRefresh.action}</Button>
+  // The confirmation is rendered by the tree's own modal instance, so it follows the theme the reader
+  // is in; the old `window.confirm` was a system sheet that ignored it entirely.
+  const confirm = useConfirm()
+  return <Button disabled={disabled} onClick={() => confirm({
+    title: text.blsRefresh.title,
+    description: text.blsRefresh.confirmation,
+    confirmLabel: text.blsRefresh.confirm,
+    cancelLabel: text.blsRefresh.cancel,
+    tone: 'default',
+    onConfirm: () => onRefresh('bls', eventKey)
+  })} size="small">{pending ? text.blsRefresh.pending : text.blsRefresh.action}</Button>
 }
 
 function FedFomcRefreshAction({ disabled, eventKey, onRefresh, pending, text }: { disabled: boolean; eventKey: string; onRefresh: (operation: EconomicCalendarRefreshOperation, eventKey: string) => Promise<void>; pending: boolean; text: EconomicCalendarText }): ReactElement {
-  return <Button disabled={disabled} icon={<RefreshCw aria-hidden="true" size={14} />} onClick={() => { if (confirmRefresh(text.fomcRefresh.confirmation)) void onRefresh('fomc', eventKey) }} size="small">{pending ? text.fomcRefresh.pending : text.fomcRefresh.action}</Button>
+  const confirm = useConfirm()
+  return <Button disabled={disabled} icon={<RefreshCw aria-hidden="true" size={14} />} onClick={() => confirm({
+    title: text.fomcRefresh.action,
+    description: text.fomcRefresh.confirmation,
+    confirmLabel: text.fomcRefresh.confirm,
+    cancelLabel: text.fomcRefresh.cancel,
+    tone: 'default',
+    onConfirm: () => onRefresh('fomc', eventKey)
+  })} size="small">{pending ? text.fomcRefresh.pending : text.fomcRefresh.action}</Button>
 }
 
 function isBlsRefreshEligible(event: EconomicCalendarEventView, now: Date): boolean {
@@ -278,10 +297,6 @@ function refreshActionPresentation(state: EconomicCalendarRefreshState | undefin
 
 function dateOnly(value: Date): string {
   return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`
-}
-
-function confirmRefresh(message: string): boolean {
-  try { return typeof window.confirm === 'function' && window.confirm(message) } catch { return false }
 }
 
 /**

@@ -94,6 +94,9 @@ export function buildGeneratedProductRegistry(products: readonly DiscoveredProdu
       routePath: toProductRoutePath(product.productId, contribution.id),
       // P2-01：能力默认值只来自平台命名策略（旧贡献缺字段时的唯一补齐点）
       workspace: resolveMenuPageWorkspaceCapability(contribution),
+      // 默认首页：**只有声明过才带上**，未声明时不生成这个键（不是 `home: false`）——
+      // 「没有页声明首页」与「另一页声明了首页」是两个不同的问题，见 `GeneratedProductMenuEntry.home`。
+      ...(contribution.home === true ? { home: true as const } : {}),
       modulePath: contribution.module
     }))
   })
@@ -161,7 +164,7 @@ function renderShellRegistryFile(_products: readonly DiscoveredProduct[], regist
     order: ${entry.order},
     routePath: ${JSON.stringify(entry.routePath)},
     workspace: ${JSON.stringify(entry.workspace)},
-    load: () => import(${JSON.stringify(importPath)})
+${entry.home === true ? '    home: true,\n' : ''}    load: () => import(${JSON.stringify(importPath)})
   }`
     })
     .join(',\n')
@@ -256,7 +259,14 @@ export type ProductServiceDependencies = {
   getProviderState: () => Promise<ProviderState>
   getAppLanguage: () => Promise<'zh-CN' | 'en-US'>
   getModelDefaults: () => Promise<ModelDefaultsSettings>
+  /** The reader's display zone; a product's schedule and day boundary follow the setting. */
+  getTimeZone: () => string
   getNetworkSettings: () => Promise<NetworkSettings>
+  /**
+   * 平台的落盘日志（app.log）。产品要留一条**事后可查**的事实（补跑、后台任务、降级），
+   * 就走这条通道——console.log 只落在跑 dev 的那个终端里，事后查不到。
+   */
+  log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   platformFetch: typeof fetch
   secretVault: SecretVault
   registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
@@ -270,7 +280,17 @@ export type ProductServiceDependencies = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
+  /**
+   * 自动会话的**幂等窄查**：按「智能体 + 幂等键（这一次运行）」取一条会话，只读。
+   *
+   * 产品侧唯一的按身份找会话的入口——**不许再开「按描述查」的第二个口子**：
+   * 描述是给人看、还能改的自由文本，拿它当身份，改一句话就等于换了一条会话。
+   * 只读：不创建、不改写。找不到就是 null，不抛错。
+   */
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
   isWebSearchProviderReady?: () => Promise<boolean>
+  /** 只读搜索入口（产品侧缺值时取一次）；宿主透传平台 WebSearchService，产品不自己发请求。 */
+  searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>
   invokeProductAgentTool?: (
     state: AgentStoreState,
     input: ProductAgentToolInvokeInput

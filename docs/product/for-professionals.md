@@ -8,7 +8,7 @@ other, and where the answer can survive someone asking *"how do you know?"*.
 
 MacroBay is built for that second problem.
 
-![The dashboard and the analyst agent working on the same evidence](../assets/screenshots/demo-en-poster.png)
+![The dashboard and the analyst agent working on the same evidence](../assets/screenshots/dashboard-window-en.png)
 
 ## The problem it actually solves
 

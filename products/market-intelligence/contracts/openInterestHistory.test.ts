@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  batchesForSpan,
+  bucketPeriodLabel,
+  bucketsInSpan,
+  openInterestBucketPolicy,
+  isBucketPolicyValid,
   isCanonicalOpenInterestTime,
   isOpenInterestChange,
   isOpenInterestNotional,
@@ -18,11 +23,46 @@ const point = (offsetMs: number, notionalUsd = 8_000_000_000) => ({
 
 describe('open interest policy', () => {
   it('pins the request limits the endpoint actually enforces', () => {
-    expect(openInterestHistoryPolicy.requestLimit).toEqual({ openInterest: 500, klines: 672 })
+    // Per-request caps, not coverage: coverage is the batch count below.
+    expect(openInterestHistoryPolicy.requestLimit).toEqual({ openInterest: 500, klines: 1000 })
     expect(openInterestHistoryPolicy.storedPeriod).toBe('15m')
     expect(openInterestHistoryPolicy.maximumDtoBytes).toBe(32 * 1024)
     expect(Object.isFrozen(openInterestHistoryPolicy)).toBe(true)
     expect([...openInterestWindows]).toEqual(['7d', '24h'])
+  })
+
+  it('derives the lookback and the request limits from the bucket width, not from a count', () => {
+    // The assertion that would have caught the regression: `96 bars` is a day at fifteen minutes
+    // and eight hours at five. A count encodes the bucket width it was written for.
+    expect(openInterestBucketPolicy.storageBucketMs).toBe(900_000)
+    expect(openInterestBucketPolicy.signalBucketMs).toBe(900_000)
+    expect(bucketsInSpan(86_400_000, openInterestBucketPolicy.signalBucketMs)).toBe(96)
+    expect(bucketsInSpan(86_400_000, 5 * 60_000)).toBe(288)
+    expect(bucketsInSpan(7 * 86_400_000, openInterestBucketPolicy.storageBucketMs)).toBe(672)
+    expect(bucketsInSpan(7 * 86_400_000, 5 * 60_000)).toBe(2016)
+    expect(bucketPeriodLabel(openInterestBucketPolicy.storageBucketMs)).toBe('15m')
+    expect(bucketPeriodLabel(5 * 60_000)).toBe('5m')
+  })
+
+  it('plans a cold start in pages, and the page count follows the bucket width', () => {
+    // Seven days in buckets at the current storage width, split by each endpoint's cap. The two
+    // numbers the architect named: five pages of open interest and three of klines at five
+    // minutes; two and one when the bucket goes back to fifteen.
+    expect(batchesForSpan(7 * 86_400_000, openInterestHistoryPolicy.requestLimit.openInterest, 5 * 60_000)).toBe(5)
+    expect(batchesForSpan(7 * 86_400_000, openInterestHistoryPolicy.requestLimit.klines, 5 * 60_000)).toBe(3)
+    expect(batchesForSpan(7 * 86_400_000, openInterestHistoryPolicy.requestLimit.openInterest, 900_000)).toBe(2)
+    expect(batchesForSpan(7 * 86_400_000, openInterestHistoryPolicy.requestLimit.klines, 900_000)).toBe(1)
+  })
+
+  it('keeps the judgement bucket at or above the storage bucket, and a whole multiple of it', () => {
+    // Finer than storage could only be interpolation, and an interpolated reading is invented.
+    expect(isBucketPolicyValid()).toBe(true)
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 900_000 })).toBe(true)
+    expect(isBucketPolicyValid({ storageBucketMs: 300_000, signalBucketMs: 900_000 })).toBe(true)
+    // The pair the architect named: a 5-minute judgement over 15-minute storage must be refused.
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 300_000 })).toBe(false)
+    expect(isBucketPolicyValid({ storageBucketMs: 900_000, signalBucketMs: 600_000 })).toBe(false)
+    expect(isBucketPolicyValid({ storageBucketMs: 0, signalBucketMs: 900_000 })).toBe(false)
   })
 
   it('allows 172 points on the 7-day window, because the fold yields 168 or 169', () => {

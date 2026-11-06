@@ -201,7 +201,14 @@ function McpRow({
       </span>
       <span className="agent-tool-copy">
         <strong>{item.name}</strong>
-        <small>{item.statusText || item.description || item.command || item.baseUrl || item.id}</small>
+        {/*
+         * 次要行只放**读者认得的东西**：运行时状态、服务描述（描述里已含命令与地址）。
+         * 这里原来还退到 `item.id`——那是服务实体的内部标识（不是读者填的字），契约 v2.41
+         * 第三档：内部标识任何情况下都不许当文案。什么都没有就不画这一行，不拿 id 垫背。
+         */}
+        {item.statusText || item.description ? (
+          <small>{item.statusText || item.description}</small>
+        ) : null}
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (

@@ -7,6 +7,7 @@ import type { EventBusRuntime } from '@platform/message-bus'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
@@ -19,6 +20,8 @@ import { createIntelligencePipeline } from './application/intelligencePipeline'
 import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
+import { createSourceIssueNotifier } from './application/sourceIssueNotifier'
+import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
@@ -56,29 +59,36 @@ import {
 } from './news-sentiment/newsSentimentSettingsStore'
 import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
-import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
+import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentReadiness'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
-import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
+import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { macroWebReadFromHooks, type WebSearchProductHooks } from './webSearchProductHooks'
+import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
+import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
+import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
+import { createBriefingPeriodsSource } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
-import { briefingScheduleFrom, briefingScheduleInput, registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
-import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
+import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
-import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
+import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
 import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
+import { createEditionLanguageSettingsService, createEditionLanguageSettingsJsonStorage } from './daily-briefing/dailyBriefingLanguageSettingsService'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import {
   createDailyBriefingGenerationSettingsJsonStorage,
@@ -93,6 +103,9 @@ import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/
 import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
 import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
 import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
+import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
+import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
+import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
@@ -185,16 +198,16 @@ const intelligenceRawRecordStartupRecoveryPolicy = {
   }
 } as const
 
-export type IntelligenceModulePlatformHooks = {
-  getProviderState?: () => Promise<ProviderState>
+export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
+  getProviderState?: () => Promise<ProviderState>; /** 平台落盘日志（app.log）：补跑等后台事实走它，console 只在终端里。 */ log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
   eventBusRuntime?: EventBusRuntime
   /** Required: the first call must inject it, and every consumer reads this one. */
   platformFetch: CapitalConditionsPlatformFetch
-  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
-  getTimeZone?: () => string
+  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. Required: a missing one used to become UTC silently. */
+  getTimeZone: () => string
   /** The reader changed their display zone: the brief schedule follows it without a settings save. */
   onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
   /**
@@ -214,11 +227,13 @@ export type IntelligenceModulePlatformHooks = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
-  isWebSearchProviderReady?: () => Promise<boolean>
+  /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
+  redeliverPush?: import('./daily-briefing/dailyBriefingPublishToPhone').BriefingRedeliver
 }
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
-
 export type IntelligenceModule = {
   /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
   rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
@@ -242,6 +257,7 @@ export type IntelligenceModule = {
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
+  deleteDailyBriefingPeriod: DailyBriefingPeriodDeletion
   /** The deterministic core-fact pass, exposed for logs and focused verification. */
   dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
@@ -280,6 +296,7 @@ export type IntelligenceModule = {
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
+  bindBriefingCalendarRefresh: (refresh: BriefingCalendarRefresh) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
@@ -321,7 +338,6 @@ function articleFetchUrl(url: string): string {
     return url
   }
 }
-
 function articleFetchHeaders(url: string): Record<string, string> {
   if (url.includes('sec.gov')) {
     return { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
@@ -399,6 +415,12 @@ export function getIntelligenceModule(
     const eventPublisher = hooks?.eventBusRuntime
       ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
       : undefined
+    const sourceIssueNotifier = hooks?.submitNotification
+      ? createSourceIssueNotifier({
+          submit: hooks.submitNotification,
+          defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS
+        })
+      : undefined
     const pipeline = createIntelligencePipeline({
       profileStore,
       rawRecordStore,
@@ -412,7 +434,8 @@ export function getIntelligenceModule(
         join(dataDir, 'intelligence-runtime-state-history.json')
       ),
       runtimeStateHistoryStorage,
-      eventPublisher
+      eventPublisher,
+      ...(sourceIssueNotifier === undefined ? {} : { sourceIssueNotifier })
     })
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
@@ -439,6 +462,9 @@ export function getIntelligenceModule(
       store: perpetualPositioningStore,
       now: () => new Date().toISOString()
     })
+    const openInterestWithSignals = createSignalledOpenInterestRefresh({ refresh: openInterestRefresh.refresh,
+      readHistory: input => queryOpenInterestHistoryAsync({ ...input, store: perpetualPositioningStore }),
+      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }) })
     const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
     // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
     // REST provider, read through the same profile/credential pair every other source uses. The real
@@ -487,7 +513,9 @@ export function getIntelligenceModule(
         return credential?.apiKey ? etfFlowHistoryClient.requestWindow(credential.apiKey) : Object.freeze({ state: 'unavailable' as const })
       },
       store: etfCurrentStateStore,
-      now: () => new Date().toISOString()
+      now: () => new Date().toISOString(),
+      // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
+      ...etfOutflowSignalHandoff(hooks?.submitNotification)
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
@@ -574,6 +602,7 @@ export function getIntelligenceModule(
           ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
           ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
           invoke: structuredModelInvocation.invoke,
+          ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), submit: hooks.submitNotification } } : {}),
           now: () => new Date().toISOString()
         })
       : undefined
@@ -696,7 +725,7 @@ export function getIntelligenceModule(
       capitalConditions,
       etfFlowHistory: etfCurrentStateRefresh,
       fundingRateHistory: fundingRateHistoryRefresh,
-      openInterest: openInterestRefresh,
+      openInterest: openInterestWithSignals,
       ...(newsSentimentEnrichment && newsSentimentScoring
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
@@ -739,6 +768,7 @@ export function getIntelligenceModule(
       getAppLanguage,
       // 重点舆情进分析：与「Key sentiment」卡读的是同一个查询，窗口由分析运行时决定。
       ...(newsSentimentQuery ? { newsSentimentQuery } : {}),
+      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
       dataDir
     })
     const sourcesService = createIntelligenceSourcesService({
@@ -794,16 +824,19 @@ export function getIntelligenceModule(
       },
       applyAgentModel: applyDailyBriefAgentModel
     })
-    // The generation setting owns when the edition runs and what it covers. Saving it re-registers
-    // the same job id so the next run uses the new time; the service reads the stored value at
-    // generation time, so a change never rewrites an edition that already exists.
+    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
+    // settings surface, but it no longer decides when an edition runs.
+    const briefingPeriodsSource = createBriefingPeriodsSource({ filePath: join(dataDir, 'daily-briefing-periods.json'), locale: getAppLanguage })
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
-      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(settings, shellTimeZone()))
+      onSaved: () => { void briefingPeriodsSource.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
     })
+    const dailyBriefingLanguageSettings = createEditionLanguageSettingsService({
+      storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')), uiLanguage: getAppLanguage })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
-      generation: dailyBriefingGenerationSettings
+      generation: dailyBriefingGenerationSettings,
+      language: dailyBriefingLanguageSettings
     })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
@@ -896,58 +929,35 @@ export function getIntelligenceModule(
       cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
       isSourceEnabled,
       now: () => new Date().toISOString(),
-      onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
     })
+    const briefingCalendar = createBriefingCalendarCommands()
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
         publicQuery: publicQueryService,
         policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
-        // Read-only history: the morning brief synthesizes the window's earlier brief conclusions
-        // together with the analysis conclusions instead of copying one of them.
+        // 只读取历史版次：早报把窗口内更早的简报结论与分析结论一起综合，不复制其中任何一份。
         briefEditions: dailyBriefingStore,
-        news: newsSentimentQuery
-          ? { query: (input) => newsSentimentQuery.query(input) }
-          : {
-            async query(input) {
-              return {
-                state: 'unavailable' as const,
-                asOf: input.asOf,
-                generatedAt: input.asOf,
-                window: input.window,
-                items: [],
-                caveats: []
-              }
-            }
-          },
-        profiles: profileStore
+        news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
+        profiles: profileStore,
+        calendarCommands: briefingCalendar.commands,
+        macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),
       store: dailyBriefingStore,
+      ...briefingNotificationPorts(hooks),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
-      generationSettings: () => dailyBriefingGenerationSettings.getView(),
+      readiness: createDailyBriefReadinessFor(publicQueryService, hooks?.log ? { log: hooks.log } : {}),
+      marketBackfill: currentBriefMarketBackfill,
+      generationSettings: async () => (await briefingPeriodsSource.getPeriods())[0]!, readPeriods: () => briefingPeriodsSource.getPeriods(),
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
         (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
-      agentAllowedTools: async () => {
-        const view = await dailyBriefingAiSettings.getView()
-        const providerReady = hooks?.isWebSearchProviderReady
-          ? await hooks.isWebSearchProviderReady()
-          : true
-        return resolveDailyBriefAgentAllowedTools({
-          webSearchEnabled: view.settings.webSearchEnabled,
-          authorized: Boolean(view.settings.webSearchAuthorizedAt),
-          providerReady,
-          serverWebSearchSupported: view.webSearchSupported
-        })
-      }
-    })
-    registerDailyBriefingJob(jobRuntime, {
-      service: dailyBriefingService,
-      getLocale: getAppLanguage,
-      timeZone: shellTimeZone,
-      getSchedule: async () => briefingScheduleInput(await dailyBriefingGenerationSettings.getView())
+      agentAllowedTools: () => resolveBriefingRunAllowedTools({
+        getView: () => dailyBriefingAiSettings.getView(),
+        ...(hooks?.isWebSearchProviderReady ? { isWebSearchProviderReady: hooks.isWebSearchProviderReady } : {})
+      }),
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
@@ -959,23 +969,20 @@ export function getIntelligenceModule(
         ensure: dailyBriefFactEnsure.ensure,
         locale: getAppLanguage,
         now: () => new Date().toISOString(),
-        onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
-      }))
+        }))
       .catch(() => undefined)
-    if (hooks?.deleteAgentSessions) {
-      registerDailyBriefSessionRetentionJob(jobRuntime, {
-        links: dailyBriefSessionLinks,
-        deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
-        today: () => {
-          const zone = shellTimeZone()
-          return localDate(new Date().toISOString(), zone) ?? new Date().toISOString().slice(0, 10)
-        },
-        timeZone: shellTimeZone
-      })
-    }
-    const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
-      scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(await dailyBriefingGenerationSettings.reanchor(timeZone), timeZone))
-    }
+    const markAttemptCleaned = dailyBriefingStore.markAttemptCleaned?.bind(dailyBriefingStore)
+    const rescheduleBriefingForDisplayTimeZone = wireDailyBriefingJobs({
+      jobRuntime,
+      service: dailyBriefingService,
+      getLocale: getAppLanguage,
+      timeZone: shellTimeZone,
+      periods: briefingPeriodsSource,
+      links: dailyBriefSessionLinks,
+      ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}), ...(hooks?.log === undefined ? {} : { log: hooks.log }),
+      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}),
+      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
+    })
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
       rescheduleBriefingForDisplayTimeZone,
@@ -995,7 +1002,8 @@ export function getIntelligenceModule(
       },
       sourcesService,
       publicQueryService,
-      dailyBriefingService,
+      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
+        ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}) }),
       dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
@@ -1042,7 +1050,8 @@ export function getIntelligenceModule(
             }
           }
         })
-      }
+      },
+      bindBriefingCalendarRefresh: briefingCalendar.bind
     }
   }
   return intelligenceModule

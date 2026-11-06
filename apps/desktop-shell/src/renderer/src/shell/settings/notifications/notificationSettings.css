@@ -1,0 +1,244 @@
+/*
+ * 设置 → 通知（规范 v2.27 §2）。只用已定义 token，不新增硬编码色值。
+ * 一卡两组：本机（两个开关）/ 测试（一个按钮）+ 页脚一行。没有事件清单、没有频道控件。
+ */
+.notification-settings-pane {
+  max-width: 960px;
+}
+
+/* 卡片：与频道页同一套（`--surface` 底 + 1px `--border` + 圆角 10 + 内边距 24）。 */
+.notification-card {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.notification-group + .notification-group {
+  margin-top: 8px;
+}
+
+.notification-group-title {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.notification-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notification-rows {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 18px;
+}
+
+.notification-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 66px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-row:last-child {
+  border-bottom: none;
+}
+
+.notification-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.notification-row-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.notification-row-desc,
+.notification-row-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notification-row-state {
+  font-size: 11.5px;
+  color: var(--muted-strong);
+}
+
+
+/* 失败行：药丸 + 一句中性文字。**不要给这句话上 `--danger`**——红字只属于圆点与边框（见约定），
+   而且 `--danger` 在深色底上对比度 3.25–3.94，低于正文 4.5。 */
+.notification-row-state-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 整行禁用（弹窗）：不靠降低透明度，原因本身就是内容。 */
+.notification-row--disabled .notification-row-copy strong,
+.notification-row--disabled .notification-row-desc {
+  color: var(--muted);
+}
+
+.notification-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.notification-channel-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.notification-channel-target b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* 可选宽度不写死：频道名长短由数据决定，写死就会截断成两条不同的频道。 */
+.notification-channel-select {
+  min-width: 186px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* 订阅清单：三列固定宽，清单名字吃掉剩余宽度；频道就绪时才多出第四列（`.notification-subs--channel`）。 */
+.notification-subs {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.notification-subs-head,
+.notification-subs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 84px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+
+/* 频道就绪时才有的那一次列宽变化；列不在时不留下一条空轨道。 */
+.notification-subs--channel .notification-subs-head,
+.notification-subs--channel .notification-subs-row {
+  grid-template-columns: minmax(0, 1fr) 64px 84px 84px;
+}
+
+.notification-subs-head {
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted-strong);
+}
+
+.notification-subs-head-reason {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--caution);
+  white-space: normal;
+}
+
+.notification-subs-row + .notification-subs-row {
+  border-top: 1px solid var(--border);
+}
+
+.notification-subs-name {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-subs-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.notification-subs-fixed {
+  font-size: 11px;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.notification-subs-recorded {
+  font-size: 11px;
+  color: var(--muted-strong);
+  white-space: normal;
+  text-align: center;
+}
+
+/* 未批准：灰色「—」，不是禁用的勾。 */
+.notification-subs-dash {
+  color: var(--muted);
+}
+
+.notification-subs-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  accent-color: var(--accent);
+}
+
+/* 读屏专用：不可见但可读，不能用 aria-hidden 把它一起消掉。 */
+.notification-subs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.notification-subs-section {
+  margin-top: 18px;
+}
+
+.notification-subs-title {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* 写操作没存上：红色只落在左侧 2px 竖条上，句子用中性色（--danger 在正文档读不清）。 */
+.notification-settings-write-failed {
+  margin: 0 0 14px;
+  padding-left: 10px;
+  border-left: 2px solid var(--danger);
+  color: var(--muted-strong);
+  font-size: 12.5px;
+}

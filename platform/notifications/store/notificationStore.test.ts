@@ -113,4 +113,107 @@ describe('notification store', () => {
   it('defaults to an empty counter map so a fresh file has nothing to fold from', () => {
     expect(normalizeNotificationStoreState({ records: [] }).dailyCounters).toEqual({})
   })
+
+  it('ignores a legacy subscription table instead of resurrecting it', () => {
+    // 订阅层 2026-11-04 整层撤销：旧文件里还留着 `subscriptions`，读时**忽略**，不回写、不迁移。
+    const legacy = normalizeNotificationStoreState({
+      records: [],
+      subscriptions: { 'market-intelligence.briefing.ready': { record: true } }
+    })
+    expect(legacy).not.toHaveProperty('subscriptions')
+    // 整份重写后也不会把它带回去。
+    const rewritten = normalizeNotificationStoreState(JSON.parse(JSON.stringify(legacy)))
+    expect(rewritten).not.toHaveProperty('subscriptions')
+    expect(rewritten.providerCredentialHealth).toEqual({})
+  })
+
+  it('normalizes old records to a legacy event type and an empty delivery map', () => {
+    // 契约 §6：旧记录缺 eventTypeId / delivery → 读时归一化，不回写。
+    const state = normalizeNotificationStoreState({
+      records: [
+        {
+          id: 'legacy-1',
+          owner: 'platform',
+          sourceId: 'old-source',
+          titleKey: 'notification.taskFailed.title',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          updatedAt: '2026-11-01T00:00:00.000Z'
+        }
+      ]
+    })
+    expect(state.records[0]?.eventTypeId).toBe('legacy.untyped')
+    expect(state.records[0]?.delivery).toEqual({})
+  })
+
+  it('keeps push backoff across a JSON round-trip and drops malformed entries', () => {
+    const state = normalizeNotificationStoreState({
+      records: [],
+      pushBackoff: {
+        telegram: { channelId: 'telegram', failures: 3, pausedUntil: '2026-11-01T13:00:00.000Z' },
+        'bad id': { channelId: 'bad id', failures: 1, pausedUntil: null },
+        other: { channelId: 'other', failures: -1, pausedUntil: null }
+      }
+    })
+    expect(state.pushBackoff).toEqual({
+      telegram: { channelId: 'telegram', failures: 3, pausedUntil: '2026-11-01T13:00:00.000Z' }
+    })
+    expect(normalizeNotificationStoreState(JSON.parse(JSON.stringify(state))).pushBackoff).toEqual(state.pushBackoff)
+  })
+
+  it('merges by the four signed rules: title/actions first, body latest, no empty overwrite', () => {
+    const first = createNotificationFromRequest({
+      owner: 'platform',
+      sourceId: 'signal',
+      eventTypeId: 'market-intelligence.signal.triggered',
+      titleKey: 'notification.taskFailed.title',
+      titleParams: { taskName: 'first-title' },
+      bodyKey: 'notification.taskFailed.body',
+      bodyParams: { taskName: 'first-body' },
+      severity: 'warning',
+      priority: 'normal',
+      requestedChannels: ['center'],
+      actions: [{ id: 'first-action', labelKey: 'notification.taskFailed.open', kind: 'open' }],
+      dedupeKey: 'module-signal:OI:rule:BTC:2026-11-02'
+    })
+
+    const merged = mergeDuplicateNotification(first, {
+      owner: 'platform',
+      sourceId: 'interpreted',
+      eventTypeId: 'market-intelligence.signal.interpreted',
+      titleKey: 'notification.test.title',
+      titleParams: { taskName: 'second-title' },
+      bodyKey: 'notification.aggregate.title',
+      bodyParams: { taskName: 'second-body' },
+      severity: 'critical',
+      priority: 'urgent',
+      requestedChannels: ['center', 'desktop'],
+      actions: [{ id: 'second-action', labelKey: 'notification.test.title', kind: 'open' }],
+      dedupeKey: 'module-signal:OI:rule:BTC:2026-11-02'
+    }, '2026-11-02T12:00:00.000Z')
+
+    // 标题与动作取第一次，正文取最新，跨类型不增次数。
+    expect(merged.titleKey).toBe('notification.taskFailed.title')
+    expect(merged.titleParams).toEqual({ taskName: 'first-title' })
+    expect(merged.actions.map((action) => action.id)).toEqual(['first-action'])
+    expect(merged.bodyKey).toBe('notification.aggregate.title')
+    expect(merged.occurrenceCount).toBe(1)
+    expect(merged.mergedEventTypes).toEqual([
+      'market-intelligence.signal.triggered',
+      'market-intelligence.signal.interpreted'
+    ])
+
+    // 最新一次没有正文：保留既有正文，不被空值覆盖（T28）。
+    const withoutBody = mergeDuplicateNotification(merged, {
+      owner: 'platform',
+      sourceId: 'signal',
+      eventTypeId: 'market-intelligence.signal.triggered',
+      titleKey: 'notification.test.title',
+      severity: 'warning',
+      priority: 'normal',
+      requestedChannels: ['center'],
+      dedupeKey: 'module-signal:OI:rule:BTC:2026-11-02'
+    }, '2026-11-02T12:05:00.000Z')
+    expect(withoutBody.bodyKey).toBe('notification.aggregate.title')
+    expect(withoutBody.bodyParams).toEqual({ taskName: 'second-body' })
+  })
 })

@@ -20,6 +20,7 @@ import {
   pulseRowMateriality
 } from './dailyBriefingDataSelection'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { briefingAmplitude, briefingPriceCurve } from './dailyBriefingSeries'
 import { previousUsEquityTradingDay, tradingSessionsBehind } from '../macro-calendar/tradingDayCalendar'
 
 const gap: FactImportance = Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'gap' })
@@ -122,7 +123,7 @@ function toPulseRow(
     labelKey: row.labelKey,
     importance: isGap ? gap : context,
     materiality,
-    ...baselineVisibility(materiality, isGap),
+    ...baselineVisibility(!isGap, isGap),
     state,
     value: row.value ? Object.freeze({ number: row.value.number, format: row.value.format }) : null,
     change,
@@ -214,10 +215,30 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
   const realTenYear = rates?.state === 'available' || rates?.state === 'empty'
     ? rates.readings.find((reading) => reading.metricKey === 'US_REAL_YIELD_10Y')
     : undefined
+  // Only the two cards that draw a curve get one; the index row has no plot beside it, and a stored
+  // series nobody draws reads as a promise the layout never keeps. The amplitude is asked for on the
+  // three readings that have continuous bars — BTC, ETH and the Nasdaq row — and on nothing else.
+  // A proxy leg's amplitude is the proxy's, not the index's, and the row has no marker to carry that
+  // distinction beside the number. So on such a day the field is omitted entirely rather than shown
+  // without its warning — an absent key cannot be mistaken for the index's own travel.
+  const indexOnProxy = cross?.indexSource !== 'real'
+  const drawing = (id: 'btc' | 'eth' | 'index') => ({
+    // Only the two cards draw a curve. The amplitude is asked for on the three readings with continuous
+    // bars; DXY, gold and the ten-year are not given a field at all, so nothing downstream can show one.
+    ...(id === 'index' ? {} : briefingPriceCurve({ points: cross?.curves?.[id], windowStart: packet.windowStart, windowEnd: packet.windowEnd, windowHours: packet.windowHours })),
+    // The level the card prints: the close this window ended on, from the same read that produced the
+    // curve. Absent when that read carried no closed bar — a zero would be a level nobody measured.
+    ...(cross?.lastClosed?.[id] ? { close: Object.freeze({ value: Number(cross.lastClosed[id]!.close), at: cross.lastClosed[id]!.at }) } : {}),
+    ...(id === 'index' && cross?.indexSource ? { indexSource: cross.indexSource } : {}),
+    ...(id === 'index' && indexOnProxy ? {} : briefingAmplitude({
+      extremes: cross?.extremes?.[id],
+      ...(cross?.historyCoverage?.[id] ? { coverage: cross.historyCoverage[id] } : {})
+    }))
+  })
   return [
-    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }),
-    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }),
-    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }),
+    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }, drawing('btc')),
+    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }, drawing('eth')),
+    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }, drawing('index')),
     macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf, 'fx-move'),
     macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf, 'gold-move'),
     ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf, 'yield-move'),
@@ -230,7 +251,8 @@ function crossRow(
   labelKey: string,
   snapshot: DailyBriefingFactPacket['market']['crossAsset'],
   asOf: string,
-  rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>
+  rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>,
+  drawing?: Readonly<{ curve?: BriefingMarketRow['curve']; curveReason?: BriefingMarketRow['curveReason']; amplitude?: BriefingMarketRow['amplitude']; amplitudeReason?: BriefingMarketRow['amplitudeReason']; amplitudeCoverage?: BriefingMarketRow['amplitudeCoverage'] }>
 ): BriefingMarketRow {
   const metric = snapshot?.closedReturns[id]?.['24h']
   const importance: FactImportance = rule.must
@@ -240,15 +262,16 @@ function crossRow(
     const stale = age(asOf, snapshot.analysisEnd) > marketStaleAfterMs
     const materiality = stale ? materialVerdict('gap') : marketMoveMateriality(normalize(metric.value), briefingDataMaterialityPolicy.marketPercent, rule.code)
     return Object.freeze({
-      id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(materiality, rule.must || stale),
+      id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(true, rule.must || stale),
       state: stale ? 'stale' as const : 'available' as const,
       ...(stale ? { valueBasis: 'snapshot' as const } : {}),
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
-      change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd
+      change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd,
+      ...(drawing ?? {})
     })
   }
   if (!snapshot) {
-    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(drawing ?? {}) }
   }
   // The 24h pair is unavailable here; keep any persisted curve/last close.
   {
@@ -258,13 +281,13 @@ function crossRow(
     // returned nothing; a missing curve is a gap, not a crash on the way to the row.
     const curve = [...(snapshot.curves?.[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const, ...(drawing ?? {}) }
     }
     const last = snapshot.lastClosed?.[id]
     if (last) {
-      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const }
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const, ...(drawing ?? {}) }
     }
-    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
+    return { ...gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null), ...(drawing ?? {}) }
   }
 }
 
@@ -281,7 +304,7 @@ function gapRow(
   // data is missing, and hiding it would make the brief look complete when it is not.
   const materiality = materialVerdict('gap')
   return Object.freeze({
-    id, labelKey, importance: gap, materiality, ...baselineVisibility(materiality, true),
+    id, labelKey, importance: gap, materiality, ...baselineVisibility(false, true),
     state, value, change: null, window, cadence: rowCadence[id], observedAt, reason
   })
 }
@@ -319,19 +342,22 @@ function macroRow(
     }
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
+    // The level is the fact a reader wants ("what is the dollar at"), and the 24-hour move is its own
+    // column. Printing the return under `format: percent` made "美元 -0.21%" read as a price.
     const materiality = marketMoveMateriality(normalize(value), briefingDataMaterialityPolicy.marketPercent, code)
     return Object.freeze({
-      id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+      id, labelKey, importance: context, materiality, ...baselineVisibility(true),
       state: 'available' as const,
-      value: Object.freeze({ number: normalize(value), format: 'percent' as const }),
-      change: null, window: 'trading-day' as const, cadence: 'trading-day' as const, observedAt
+      value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
+      change: Object.freeze({ value: normalize(value), unit: 'percent' as const, window: '24h' as const }),
+      window: 'trading-day' as const, cadence: 'trading-day' as const, observedAt
     })
   }
   // The stored history answered the as-of level but not its 24h window. Printing the level keeps the
   // fact the conclusion cites; a dash here would say "no data" about a number that is in hand. A
   // level alone is not a change, so it stays a context row.
   return Object.freeze({
-    id, labelKey, importance: context, materiality: immateriality, ...baselineVisibility(immateriality),
+    id, labelKey, importance: context, materiality: immateriality, ...baselineVisibility(true),
     state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
     change: null, window: 'latest' as const, cadence: 'trading-day' as const, observedAt
@@ -368,7 +394,7 @@ function ratesRow(
     ? materialVerdict(code)
     : immateriality
   return Object.freeze({
-    id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+    id, labelKey, importance: context, materiality, ...baselineVisibility(true),
     state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.actual), format: 'yield' as const }),
     change: changeBp === undefined

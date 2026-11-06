@@ -76,11 +76,19 @@ export function ModelServiceBrandBlock({
 
   return (
     <div className="model-service-brand" data-model-service-brand>
-      <VisualIdentityAvatar visual={resolveProviderVisual(provider.id, provider.name)} size={24} />
+      <VisualIdentityAvatar
+        // 名字走同一张 `providerNames` 表；两者都没有时给兜底词，**绝不退到 providerId**。
+        visual={resolveProviderVisual(
+          provider.id,
+          resolveProviderDisplayName(labels, provider),
+          labels.providerFallback
+        )}
+        size={24}
+      />
       <div className="model-service-brand-info">
         <div className="model-service-brand-headline">
           <h1 className="model-service-title" data-provider-name>
-            {resolveProviderDisplayName(labels, provider)}
+            {resolveProviderDisplayName(labels, provider) || labels.providerFallback}
           </h1>
           {titleLink ? (
             <button

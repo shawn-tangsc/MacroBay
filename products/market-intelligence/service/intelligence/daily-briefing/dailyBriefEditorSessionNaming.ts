@@ -74,6 +74,3 @@ export function dailyBriefSessionTitle(input: Readonly<{
   return title.length <= MAX_TITLE ? title : title.slice(0, MAX_TITLE)
 }
 
-export function dailyBriefEditionKey(date: string, locale: DailyBriefLocale): string {
-  return `${date}:${locale}`
-}

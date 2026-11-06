@@ -71,8 +71,13 @@ describe('product acceptance profile', () => {
 
     expect(first.enabled).toBe(true)
     expect(second.enabled).toBe(true)
-    expect(first.userDataPath).toMatch(/^\/.*ai-desktop-product-acceptance-/)
-    expect(second.userDataPath).toMatch(/^\/.*ai-desktop-product-acceptance-/)
+    // 名字以固定前缀开头、并且**直接**落在传入的 tempRoot 下：用 path 判断，不写死分隔符。
+    // 原来写的是 `/^\/.*ai-desktop-product-acceptance-/`，那是 POSIX 形状；Windows 上路径以盘符
+    // 开头（`C:\Users\…`），同一条正则在那边永远不匹配。
+    for (const profile of [first, second]) {
+      expect(path.basename(profile.userDataPath!)).toMatch(/^ai-desktop-product-acceptance-/u)
+      expect(path.dirname(profile.userDataPath!)).toBe(root)
+    }
     expect(first.userDataPath).not.toBe(second.userDataPath)
 
     for (const profile of [first, second]) {

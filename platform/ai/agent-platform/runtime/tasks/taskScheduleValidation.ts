@@ -1,5 +1,6 @@
 import type { ScheduledTaskEntity, Trigger } from '../../schemas/taskSchemas'
 import { computeNextCronRunAt } from '../../../../jobs'
+import { normalizeCronTimeZone } from './taskScheduleMath'
 
 export const MIN_TASK_INTERVAL_MS = 5 * 60 * 1000
 export const MAX_TASK_INTERVAL_MS = 31 * 24 * 60 * 60 * 1000
@@ -74,7 +75,18 @@ export function previewNextTaskRun(
   return previewTaskSchedule(task.trigger, options)
 }
 
-export function materializeTaskTriggerTimezone(
+/**
+ * 校验触发器（含它此刻解析出的时区），**并把触发器原样返回**。
+ *
+ * 名字里不再有 `materialize`：它以前会把当时的读者时区写进 `trigger.timezone`，
+ * 于是「建任务那一刻的设置」变成了任务的一部分——而那从来不是读者的决定（2026-11-05 反转，
+ * 见 `docs-private/10-development/task-timezone-scheduling-contract.md`）。
+ *
+ * 现在 `trigger.timezone` 为空是**合法且有意义**的值：它表示「跟随读者当前的设置」，
+ * 由排程那一步解析（`taskSchedulerPlanner` 的 `timeZone` 入参）。这里仍要校验一次，
+ * 因为**非空**的时区必须当场上报无效（否则坏值会被存进任务，直到排程时才暴露）。
+ */
+export function validateTaskTrigger(
   trigger: Trigger,
   options: TaskScheduleValidationOptions
 ): { ok: true; trigger: Trigger } | { ok: false; code: 'task-schedule-invalid' | 'task-timezone-invalid' } {
@@ -82,9 +94,16 @@ export function materializeTaskTriggerTimezone(
   if (!validation.ok) return validation
   if (trigger.kind !== 'cron') return { ok: true, trigger }
 
-  const timezone = resolveEffectiveCronTimezone(trigger, options.defaultTimezone)
+  // 空串与缺省是同一件事：都表示「跟随读者设置」。**归一后写回**，否则 `''` 会被当成
+  // 「显式指定过一个叫空字符串的时区」，planner 用 `??` 取到 `''`，引擎再按 UTC 跑——
+  // 界面上仍是「每天 08:00」，实际按世界标准时间跑。
+  const normalized = normalizeCronTimeZone(trigger.timezone)
+  const normalizedTrigger = normalized === trigger.timezone ? trigger : { ...trigger, timezone: normalized }
+  if (normalized === undefined) return { ok: true, trigger: normalizedTrigger }
+
+  const timezone = resolveEffectiveCronTimezone(normalizedTrigger as Extract<Trigger, { kind: 'cron' }>, options.defaultTimezone)
   if (!timezone.ok) return timezone
-  return { ok: true, trigger: { ...trigger, timezone: timezone.timezone } }
+  return { ok: true, trigger: normalizedTrigger }
 }
 
 function resolveEffectiveCronTimezone(

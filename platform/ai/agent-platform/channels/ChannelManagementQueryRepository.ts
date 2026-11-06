@@ -1,13 +1,17 @@
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { managedChannelSql } from './ChannelManagementPredicates'
+import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type {
   ChannelConversationSafeView,
+  ChannelWorkspaceOverride,
   ChannelDeliveryAttemptSafeView,
   ChannelDeliveryAuditSafeView,
   ChannelManagementAuditView,
   ChannelManagementSafeView,
   ChannelManagementState,
   ChannelPolicySafeView,
+  ChannelRuntimeAuditCursor,
+  ChannelRuntimeAuditPage,
   ChannelRuntimeSafeView
 } from './ChannelManagementContracts'
 
@@ -20,6 +24,9 @@ type ChannelRow = {
   credential_health: 'configured' | 'missing' | 'unavailable'
   requested_enabled: number
   migration_state: string
+  workspace_json: string
+  active_chat_ids_json: string | null
+  permission_mode: string | null
   created_at: string
   updated_at: string
 }
@@ -32,7 +39,7 @@ export class ChannelManagementQueryRepository {
 
   get(id: string): ChannelManagementSafeView | null {
     const row = this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
        from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)`
     ).get(id) as ChannelRow | undefined
@@ -41,7 +48,7 @@ export class ChannelManagementQueryRepository {
 
   list(): ChannelManagementSafeView[] {
     return (this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
        from agent_channels where ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)
        order by updated_at desc, id asc`
@@ -127,29 +134,104 @@ export class ChannelManagementQueryRepository {
     }))
   }
 
+  /**
+   * 运行审计的一页（设置页日志面板的「运行异常」那一类）。
+   *
+   * 分页用 keyset 而不是 offset：`created_at` 相同的行很多（一次失败会连写几条），
+   * offset 在插入并发下会漏行或重复。索引就是 `(channel_id, created_at desc, id asc)`，
+   * 所以排序必须与之相同，游标也按 `(createdAt, id asc)` 往后走。
+   */
+  runtimeAudits(channelId: string, limit: number, cursor: ChannelRuntimeAuditCursor | null): ChannelRuntimeAuditPage {
+    const rows = (cursor === null
+      ? this.database.connection.prepare(
+        `select id, code, created_at from channel_runtime_audits
+         where channel_id = ? and exists (
+           select 1 from agent_channels where id = channel_runtime_audits.channel_id
+             and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
+         ) order by created_at desc, id asc limit ?`
+      ).all(channelId, limit)
+      : this.database.connection.prepare(
+        `select id, code, created_at from channel_runtime_audits
+         where channel_id = ? and (created_at < ? or (created_at = ? and id > ?)) and exists (
+           select 1 from agent_channels where id = channel_runtime_audits.channel_id
+             and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
+         ) order by created_at desc, id asc limit ?`
+      ).all(channelId, cursor.createdAt, cursor.createdAt, cursor.id, limit)) as Array<{
+      id: string; code: string; created_at: string
+    }>
+    const last = rows.at(-1)
+    return {
+      rows: rows.map((row) => ({ id: row.id, code: row.code, createdAt: row.created_at })),
+      nextCursor: last === undefined || rows.length < limit ? null : { createdAt: last.created_at, id: last.id }
+    }
+  }
+
+  /**
+   * 日志面板读的投递审计：**只返回失败**。
+   *
+   * 这一栏的标题就是「最近一次发送失败」，而面板以前把每一条都当失败渲染——用户 2026-11-04
+   * 看到四条「发送失败：没有更多说明」，实际全是**发送成功**。成功码在读取处就排除，
+   * 面板侧再兜一层（不认识的成功码也不许画成失败）。
+   */
   deliveryAudits(channelId: string, limit: number, offset: number): ChannelDeliveryAuditSafeView[] {
     return (this.database.connection.prepare(
-      `select id, attempt_id, code, created_at from channel_delivery_audits
-       where channel_id = ? and exists (
+      `select id, attempt_id, code, detail, created_at from channel_delivery_audits
+       where channel_id = ? and code <> 'channel-delivery-delivered' and exists (
          select 1 from agent_channels where id = channel_delivery_audits.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ? offset ?`
-    ).all(channelId, limit, offset) as Array<{ id: string; attempt_id: string | null; code: string; created_at: string }>).map((row) => ({
-      id: row.id, attemptId: row.attempt_id, code: row.code, createdAt: row.created_at
+    ).all(channelId, limit, offset) as Array<{ id: string; attempt_id: string | null; code: string; detail: string | null; created_at: string }>).map((row) => ({
+      id: row.id, attemptId: row.attempt_id, code: row.code, detail: row.detail, createdAt: row.created_at
     }))
+  }
+
+  /**
+   * 每个通道当前**启用且已绑定会话**的投递目标（只取通道 id 与会话类型，不取会话 id 或名称）。
+   * 一次查询取全量：通道数量是个位数，逐通道查会把一个只读投影变成 N+1。
+   *
+   * 两个条件缺一不可，并且必须与投递判据同源（通道方案 §2.3）：只数 `enabled` 会让设置行把一条
+   * 没绑会话的历史目标算成「已绑定 / 多目标」，而投递侧判为未绑定——同一个事实两处说法。
+   */
+  enabledDeliveryTargets(): Array<{ channelId: string; conversationKind: ChannelConversationSafeView['kind'] }> {
+    return (this.database.connection.prepare(
+      `select t.channel_id as channel_id, c.conversation_kind as conversation_kind
+       from channel_delivery_targets t join channel_conversations c on c.id = t.conversation_id
+       where t.enabled = 1 and c.agent_session_id is not null and exists (
+         select 1 from agent_channels where id = t.channel_id and ${MANAGED_CHANNEL_SQL}
+       )
+       order by t.channel_id asc, t.updated_at asc, t.id asc`
+    ).all() as Array<{ channel_id: string; conversation_kind: ChannelConversationSafeView['kind'] }>).map((row) => ({
+      channelId: row.channel_id,
+      conversationKind: row.conversation_kind
+    }))
+  }
+
+  /** 这条频道有没有任何投递目标（含停用的）：决定「自动绑定」要不要动手。 */
+  hasAnyDeliveryTarget(channelId: string): boolean {
+    return Boolean(this.database.connection.prepare(
+      'select 1 as present from channel_delivery_targets where channel_id = ? limit 1'
+    ).get(channelId))
   }
 
   conversations(channelId: string, limit: number): ChannelConversationSafeView[] {
     return (this.database.connection.prepare(
-      `select c.id, c.conversation_kind, c.agent_session_id, c.created_at, coalesce(t.enabled, 0) as target_enabled
+      `select c.id, c.conversation_kind, c.agent_session_id, c.session_title, c.created_at,
+              coalesce(t.enabled, 0) as target_enabled
        from channel_conversations c left join channel_delivery_targets t on t.conversation_id = c.id and t.channel_id = c.channel_id
        where c.channel_id = ? and exists (
          select 1 from agent_channels where id = c.channel_id and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by c.created_at desc, c.id desc limit ?`
     ).all(channelId, limit) as Array<{
-      id: string; conversation_kind: ChannelConversationSafeView['kind']; agent_session_id: string | null; target_enabled: number; created_at: string
+      id: string; conversation_kind: ChannelConversationSafeView['kind']; agent_session_id: string | null
+      session_title: string | null; target_enabled: number; created_at: string
     }>).map((row) => ({
-      id: row.id, kind: row.conversation_kind, hasBoundSession: Boolean(row.agent_session_id), targetEnabled: Boolean(row.target_enabled), createdAt: row.created_at
+      id: row.id,
+      kind: row.conversation_kind,
+      hasBoundSession: Boolean(row.agent_session_id),
+      targetEnabled: Boolean(row.target_enabled),
+      // `session_title` 以前只写在类型里、没进 select：会话列表读到的名字永远是 null（2026-11-05 修）。
+      sessionTitle: row.session_title ?? null,
+      createdAt: row.created_at
     }))
   }
 
@@ -192,9 +274,40 @@ function toSafeView(row: ChannelRow): ChannelManagementSafeView {
             : { bot_token: '********' }
         : {}
     },
+    workspace: readWorkspace(row.workspace_json),
+    allowedChatIds: readAllowedChatIds(row.active_chat_ids_json),
+    permissionMode: readPermissionMode(row.permission_mode),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
+}
+
+/** 存的是原始 JSON；读不出来就当系统默认目录，不猜一个工作区 id。 */
+function readWorkspace(value: string): ChannelWorkspaceOverride {
+  try {
+    const parsed = JSON.parse(value) as { type?: unknown; workspaceId?: unknown }
+    if (parsed?.type === 'user' && typeof parsed.workspaceId === 'string' && parsed.workspaceId.length > 0) {
+      return { type: 'user', workspaceId: parsed.workspaceId }
+    }
+  } catch { /* 坏 JSON 也落回系统默认目录 */ }
+  return { type: 'system' }
+}
+
+/** `null` 与 `[]` 同义：**空＝允许所有**。坏形状一律当空，方向是「允许」而不是静默拦死。 */
+function readAllowedChatIds(value: string | null): readonly string[] {
+  if (value === null) return []
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+  } catch {
+    return []
+  }
+}
+
+/** 只认四档；**`null` 就是继承**，不把助手级默认值 `'default'` 当前者的替代。 */
+function readPermissionMode(value: string | null): AgentPermissionMode | null {
+  return value === 'default' || value === 'acceptEdits' || value === 'bypassPermissions' || value === 'plan' ? value : null
 }
 
 function normalizeState(value: string): ChannelManagementState {

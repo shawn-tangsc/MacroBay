@@ -6,6 +6,8 @@ import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StatusPill } from '@platform/ui/components/status-pill'
+// 深路径：`@platform/jobs` 那个 barrel 会带进 sqlite（主进程用），渲染层只要这一个小函数。
+import { resolveJobTitle } from '@platform/jobs/runtime/jobTitle'
 import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
@@ -17,6 +19,7 @@ import {
   type ResourceJobRegistrationFilter,
   type ResourceJobSourceFilter
 } from './resourceJobFilters'
+import { resolveResourceJobSourceName } from './resourceJobSourceLabel'
 import { REGISTRATION_PILL, RUN_OUTCOME_PILL, pillTextResolver } from './taskAutomationStatusPills'
 import {
   clampPage,
@@ -210,13 +213,17 @@ export function TaskAutomationResourceJobsSection(props: {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleItems.map((job) => (
+                  {visibleItems.map((job) => {
+                    // 名字的解析只走 `resolveJobTitle` 一处：内置作业双语按当前语言取、占位符在这里替换，
+                    // 读者自己建的任务（`{ literal }`）原样显示、永不翻译。
+                    const jobTitle = resolveJobTitle(job.title, job.titleParams, language)
+                    return (
                     <tr
                       key={job.id}
                       className={`task-automation-row${job.registered ? '' : ' task-automation-row-unregistered'}`}
                     >
-                      <td title={job.title}>
-                        <span className="task-automation-name">{job.title}</span>
+                      <td title={jobTitle}>
+                        <span className="task-automation-name">{jobTitle}</span>
                       </td>
                       <td>{sourceLabel(job, controller.productNames, labels)}</td>
                       <td className="task-automation-mono">{formatJobSchedule(job.trigger, labels, language)}</td>
@@ -234,7 +241,8 @@ export function TaskAutomationResourceJobsSection(props: {
                         <JobLastRun job={job} labels={labels} language={language} />
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
               <div className="task-automation-pagination">
@@ -311,5 +319,5 @@ function sourceLabel(
   labels: TaskAutomationLabels
 ): string {
   if (job.owner === 'platform') return labels.platform
-  return productNames[job.productId ?? ''] ?? job.productId ?? labels.product
+  return resolveResourceJobSourceName(productNames, job.productId, labels.product)
 }

@@ -11,6 +11,9 @@ The names are deliberately neither the `StateSize` density words nor the `Drawer
 both would make a wrong assignment compile. The call-site inventory is in
 `docs-private/05-desktop/ui-audit/modal-call-site-requirements-2026-11-02.md`.
 
+If closing the modal can discard what the reader typed, the close behaviour is a matrix, not a
+sentence: see [Closing a container that holds unsaved input](unsaved-changes.md).
+
 ## The component
 
 | Export | Use it for |

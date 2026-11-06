@@ -12,6 +12,7 @@ const roomy: Omit<AnalysisBudgetInput, 'triggerKey'> = {
 const calendar = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'calendar.refresh', ...roomy, ...overrides })
 const event = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'macro.actual.first-confirmed', ...roomy, ...overrides })
 const slot = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'schedule.asia.open', ...roomy, ...overrides })
+const signal = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'signal.open-interest.oi-liquidation-proxy', ...roomy, ...overrides })
 
 it('states every quota in one frozen policy, one line at a time', () => {
   expect(analysisBudgetPolicy.version).toBe('marketAnalysisBudgetPolicy.v3')
@@ -29,9 +30,9 @@ it('states every quota in one frozen policy, one line at a time', () => {
 
 it('gives each line its own daily quota, and lets neither spend the other', () => {
   expect(event({ eventRunsToday: 47 })).toEqual({ decision: 'queued', reasonCode: null })
-  expect(event({ eventRunsToday: 48 })).toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+  expect(event({ eventRunsToday: 48 })).toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 48, limit: 48 } })
   expect(calendar({ calendarRunsToday: 8 })).toEqual({ decision: 'queued', reasonCode: null })
-  expect(calendar({ calendarRunsToday: 9 })).toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+  expect(calendar({ calendarRunsToday: 9 })).toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 9, limit: 9 } })
   // The old arrangement counted the calendar line against the event line's total: a busy event day
   // ate all nine calendar calls. A full event day must not move the calendar line at all.
   expect(calendar({ eventRunsToday: 48, calendarRunsToday: 8 })).toEqual({ decision: 'queued', reasonCode: null })
@@ -72,10 +73,24 @@ it('never limits a manual request', () => {
 
 it('treats an unregistered key as the calendar line, never the generous one', () => {
   // A future source must be registered to get the item line's 48 a day; by default it is strict.
-  expect(decideBudget({ triggerKey: 'signal.future.rule', ...roomy, calendarRunsToday: 9 }))
-    .toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
-  expect(decideBudget({ triggerKey: 'signal.future.rule', ...roomy, eventRunsToday: 47 }))
+  expect(decideBudget({ triggerKey: 'future.unknown.key', ...roomy, calendarRunsToday: 9 }))
+    .toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 9, limit: 9 } })
+  expect(decideBudget({ triggerKey: 'future.unknown.key', ...roomy, eventRunsToday: 47 }))
     .toEqual({ decision: 'queued', reasonCode: null })
+})
+
+it('puts every module signal on the event line, not the calendar\u2019s nine a day', () => {
+  // The registration itself: a signal spends the event line's counts, so a busy calendar cannot
+  // silence the signals and the signals cannot empty the calendar.
+  expect(signal({ eventRunsToday: 47 })).toEqual({ decision: 'queued', reasonCode: null })
+  expect(signal({ eventRunsToday: 48 })).toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted', dailyQuota: { used: 48, limit: 48 } })
+  expect(signal({ eventRunsThisHour: 11 })).toEqual({ decision: 'queued', reasonCode: null })
+  expect(signal({ eventRunsThisHour: 12 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  // A spent calendar line does not touch it.
+  expect(signal({ calendarRunsToday: 9, calendarRunsThisHour: 3 })).toEqual({ decision: 'queued', reasonCode: null })
+  // And it does not inherit the calendar's coalescing window: the signal path carries its own
+  // cooldown, so a second window here would refuse attempts it never refused before.
+  expect(signal({ lastAutoRunAt: '2026-10-09T11:45:00.000Z' })).toEqual({ decision: 'queued', reasonCode: null })
 })
 
 it('fails closed on counts or instants it cannot trust', () => {

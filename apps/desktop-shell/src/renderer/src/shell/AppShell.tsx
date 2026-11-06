@@ -26,16 +26,21 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { AppShellToastLayer } from './window/AppShellToastLayer'
+import { useDocumentLanguage } from './hooks/useDocumentLanguage'
 import { useNavigationFocusHandoff } from './navigation/useNavigationFocusHandoff'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
 import brandMarkUrl from '../assets/brand/mark.svg'
-import { platformText } from '../i18n/platformText'
+import { platformText, type PlatformText } from '../i18n/platformText'
 import { AppMenuBar } from './window/AppMenuBar'
 import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
+import { builtInWorkspacePages } from '@platform/workspace/registry/builtInWorkspacePages'
+import { resolveHomeMenuKey, toProductHomeMenuCandidate } from './navigation/homeMenuKey'
+import './navigation/settingsNav.css'
+import { UpdateActionButton } from './updates/UpdateActionButton'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
 import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
 import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
@@ -46,9 +51,9 @@ import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
-import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { NotificationBanner } from './notifications/NotificationBanner'
-import { createNotificationDeeplinkHandler } from './notifications/notificationDeeplinkHandler'
+import { useNotificationNavigation } from './notifications/notificationDeeplinkWiring'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -70,16 +75,13 @@ import { createShellWorkspacePageRegistry, type ShellWorkspacePage } from './nav
 import { WorkspacePageHost } from './workspace/WorkspacePageHost'
 import { createWorkspacePageContentProvider } from './workspace/workspacePageContentProvider'
 import { WorkspaceTabStrip, type WorkspaceTabDraftGuard } from './workspace/WorkspaceTabStrip'
-import {
-  createWorkspaceTabClient,
-  readWorkspaceTabsBridge,
-  type WorkspaceTabClient
-} from './workspace/workspaceClient'
+import { useWorkspaceTabSession } from './workspace/useWorkspaceTabSession'
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
 import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { Segmented } from '@platform/ui/components/segmented'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
@@ -103,7 +105,10 @@ import {
 import { AgentPage } from './agents/AgentPage'
 import { AssistantPage } from './assistants/AssistantPage'
 import { createConnectionCheckApiKeyOptions, selectDefaultConnectionCheckModelId } from './modelProviderConnectionCheck'
-import { formatProviderRuntimeCheckReason, resolveProviderRuntimeCheckReasonCode } from './providerRuntimeCheckReason'
+import { resolveProviderRuntimeCheckReasonCode } from './providerRuntimeCheckReason'
+import { describeConnectionStatus } from './modelConnectionStatus'
+import { resolveLiveText, type PlatformLiveText } from './liveText'
+import { useLiveNotice } from './useLiveNotice'
 import {
   sanitizeIpcErrorMessage,
   type ModelSyncErrorState
@@ -118,7 +123,8 @@ import { buildProviderInputFromDraft } from '@platform/ai/providers/providerConf
 import { resolveProviderChatBase } from '@platform/ai/providers/providerChatEndpoints'
 import type { ModelSyncPreview } from '@platform/ai/providers/providerModelSync'
 import { PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId } from './modelPins'
-import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
+import { NotificationSettingsScreen } from './settings/NotificationSettingsScreen'
+import { AboutSettingsPage } from './settings/about/AboutSettingsPage'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
@@ -165,6 +171,7 @@ type AppShellNavigateDetail = {
 }
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
+
 
 function createEmptyProviderDraft(): ProviderDraft {
   return {
@@ -216,12 +223,36 @@ export function AppShell(): React.ReactElement {
   )
 }
 
+/**
+ * 首次落点（口径 A）：**只在没有可恢复的活动页**（首次打开 / 布局被重置）时被问到。
+ * 有历史时下面 `.tabs.*` 的快照会接管（高亮跟随权威活动项），这个初始值压根不参与。
+ *
+ * 三层来源，逐层降级：菜单声明的 `home` → 菜单 `order` 第一项 → 常量 `'assistants'`。
+ * 那个常量现在的**唯一触发条件**是「菜单里一页都没有」（解析器返回 `null`）；正常构建里内置页总在，
+ * 所以它只是装配残缺时的最后兜底，不是「默认页」。判据见 `navigation/homeMenuKey.test.ts`。
+ */
+const LANDING_NAV_KEY_FALLBACK = 'assistants'
+
 /** 主窗 shell 内容：语言变化时回传给 AppShell，供面板窗 error-shell/准备期壳兜底使用（P1-06h / N2）。 */
 function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => void } = {}): React.ReactElement {
-  const [activeNavKey, setActiveNavKey] = useState('assistants')
+  // 默认首页的输入不依赖语言（只用菜单键、order、home 声明），所以放在 state 外面算一次即可：
+  // 它必须在这一行就有值，否则首帧会先画 `'assistants'` 再跳走——那就是「打开时闪一下别页」。
+  const landingNavKey = useMemo(
+    () => resolveHomeMenuKey(builtInWorkspacePages, productMenuEntries.map(toProductHomeMenuCandidate))
+      ?? LANDING_NAV_KEY_FALLBACK,
+    []
+  )
+  const [activeNavKey, setActiveNavKey] = useState(landingNavKey)
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
-  const openNotificationTarget = createNotificationDeeplinkHandler({ productMenuEntries, setActiveNavKey, setSettingsPanelKey, setNotificationCenterOpen })
+  // 装配与定位状态收在 `notificationDeeplinkWiring`：绑错 `navigate` 只换高亮不切页，那件事要有守卫盯着。
+  const { openNotificationTarget, focusEntityId } = useNotificationNavigation({
+    productMenuEntries,
+    navigate: activateNavKey,
+    setSettingsPanelKey,
+    productSettingsEntries,
+    setNotificationCenterOpen
+  })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
@@ -242,8 +273,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [isAddModelOpen, setIsAddModelOpen] = useState(false)
   const [editingModelId, setEditingModelId] = useState<string | null>(null)
   const [providerSearch, setProviderSearch] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<string | null>(null)
+  const liveNotice = useLiveNotice()
+  const [connectionStatus, setConnectionStatus] = useState<PlatformLiveText | null>(null)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [preserveProviderDraftForId, setPreserveProviderDraftForId] = useState<string | null>(null)
   const [isConnectionCheckOpen, setIsConnectionCheckOpen] = useState(false)
@@ -268,6 +299,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 提示与状态在渲染时解析：存的是「怎么生成这句话」，所以切语言后连历史提示一起变。
+  const noticeText = resolveLiveText(liveNotice.notice, t)
+  const connectionStatusText = resolveLiveText(connectionStatus, t)
   // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。
   const preferencesText = (key: string): string =>
     resolvePreferencesText(t.preferences as unknown as Record<string, unknown>, key)
@@ -360,47 +394,26 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * P2-03：**生产 Tab 宿主接线**（这是移除「单 active 页面销毁」旧路径的挂载点）。
    *
    * 唯一来源是受控 `.tabs.*` 桥：没有桥（例如既有 shell 单测注入的 platform 不含 workspace）时
-   * `tabClient` 为 null，本组件保持 P2-02 之前的直接切页行为 —— 绝不在 renderer 复制一份 Tab 权威。
+   * `tabClientRef.current` 为 null，本组件保持 P2-02 之前的直接切页行为 —— 绝不在 renderer 复制一份 Tab 权威。
    * 页面正文仍只来自 `builtInPageAdapters` / 产品 loader，Tab 宿主只是容器。
+   *
+   * 会话主体（桥 → client → 快照 state，含首次落点补开首页）收在 `useWorkspaceTabSession`：
+   * 这段只在「没有可恢复的活动页」时才补首页，而那个判定点只存在于它内部。
    */
-  const tabClientRef = useRef<WorkspaceTabClient | null>(null)
-  const [workspaceTabState, setWorkspaceTabState] = useState<WorkspaceTabState | null>(null)
+  const {
+    clientRef: tabClientRef, state: workspaceTabState, openMenuPage
+  } = useWorkspaceTabSession({ landingNavKey, onActiveMenuKey: setActiveNavKey })
 
-  useEffect(() => {
-    const bridge = readWorkspaceTabsBridge()
-    if (bridge === null) return
-    const client = createWorkspaceTabClient(bridge)
-    tabClientRef.current = client
-    let cancelled = false
-    const adopt = (next: WorkspaceTabState | null): void => {
-      if (cancelled || next === null) return
-      setWorkspaceTabState(next)
-      const active = next.tabs.find((tab) => tab.open && tab.workspaceInstanceKey === next.activeWorkspaceInstanceKey)
-      // 顶栏/侧栏高亮跟随权威活动项（menuKey 就是导航键），不在本层维护第二份「当前页」
-      if (active !== undefined) setActiveNavKey((previous) => (previous === active.menuKey ? previous : active.menuKey))
-    }
-    void client.load().then(adopt)
-    const stop = client.observe(adopt)
-    return () => {
-      cancelled = true
-      stop()
-      client.dispose()
-      tabClientRef.current = null
-    }
-  }, [])
-
-  /** 一级菜单点击：有 Tab 桥即走受控命令（打开/激活同一实例），否则保持既有直接切页（无桥兜底）。 */
+  /**
+   * 一级菜单点击：有 Tab 桥即走受控命令（打开/激活同一实例），否则保持既有直接切页（无桥兜底）。
+   * 「开没开成」的判定与拒绝诊断都在 `openMenuPage` 里（一处实现）；这里只决定没开成时退到高亮。
+   */
   function activateNavKey(navKey: string): void {
-    const client = tabClientRef.current
-    if (client === null) {
+    if (tabClientRef.current === null) {
       setActiveNavKey(navKey)
       return
     }
-    void client.port.openTab({ menuKey: navKey })
-      .then((result) => {
-        setWorkspaceTabState(result.snapshot)
-      })
-      .catch(() => { setActiveNavKey(navKey) })
+    void openMenuPage(navKey).then((outcome) => { if (outcome === 'rejected') setActiveNavKey(navKey) })
   }
 
   useEffect(() => {
@@ -428,6 +441,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   useEffect(() => {
     props.onLanguageChange?.(settings.language)
   }, [props.onLanguageChange, settings.language])
+
+  useDocumentLanguage(settings.language)
 
   // 导航后的焦点交接收在 hook 里（契约 §14）：导航成功后调一次，effect 在渲染后执行。
   const scheduleNavFocusHandoff = useNavigationFocusHandoff()
@@ -544,23 +559,15 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     })
   }
 
-  async function updateNotificationSettings(patch: Partial<NotificationSettings>): Promise<void> {
-    await updateSettings({
-      notifications: {
-        ...settings.notifications,
-        ...patch
-      }
-    })
-  }
 
   async function updateSettings(patch: AppSettingsPatch): Promise<void> {
-    setNotice(null)
+    liveNotice.clear()
     try {
       const nextSettings = (await window.platform.settings.update(patch)) as AppSettings
       setSettings(nextSettings)
-      setNotice(t.status.saved)
+      liveNotice.showSaved()
     } catch (error) {
-      setNotice(proxyRejectionNotice(error, t.preferences) ?? t.status.failed)
+      liveNotice.showSaveFailed(error)
     }
   }
 
@@ -659,7 +666,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       await reloadProviders(selectedProvider.id)
       setProviderDraft((current) => ({ ...current, enabled: true }))
     } catch (error) {
-      setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
       return
     }
     await startConnectionCheck({ enabledOverride: true })
@@ -701,12 +708,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     // PLAT-61：拉取模型清单是只读操作 ⇒ 只要求 baseUrl + Key，停用状态也允许（便于先看免费模型）。
     if (!selectedProvider.baseUrl.trim() || !(selectedProvider.hasApiKey || apiKeyDraft.trim())) {
-      setConnectionStatus(t.models.modelSyncNeedsApiKey)
+      setConnectionStatus(() => (current: PlatformText) => current.models.modelSyncNeedsApiKey)
       return
     }
 
     setIsSyncingModels(true)
-    setNotice(null)
+    liveNotice.clear()
     setModelSyncError(null)
     try {
       setPreserveProviderDraftForId(selectedProvider.id)
@@ -753,7 +760,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       if (hasDiff || options.openDrawerWhenDiff !== false) {
         setIsModelSyncOpen(true)
       } else {
-        setNotice(t.models.modelSyncUpToDate)
+        liveNotice.show((current) => current.models.modelSyncUpToDate)
       }
     } catch (error) {
       const friendly = sanitizeIpcErrorMessage(error)
@@ -789,7 +796,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       }
       await reloadProviders(selectedProvider.id)
       const removed = plan.toRemove.length
-      setNotice(t.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
+      liveNotice.show((current) => current.models.modelSyncAppliedSummary(preview.added.length, preview.updated.length, removed))
       if (options.closeDrawer !== false) setIsModelSyncOpen(false)
     } catch (error) {
       const friendly = sanitizeIpcErrorMessage(error)
@@ -876,7 +883,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     try {
       await window.platform.agents.setModelGatewayEnabled(true)
     } catch (error) {
-      setConnectionStatus(sanitizeIpcErrorMessage(error) ?? t.status.failed)
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
       return
     }
     await startConnectionCheck()
@@ -892,19 +899,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   function openConnectionCheck(): void {
     if (!selectedProvider) return
     if (!providerConnectionTestable) {
-      setConnectionStatus(t.models.connectionNeedsConfig)
+      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
       return
     }
 
     const defaultModelId = selectDefaultConnectionCheckModelId(selectedProvider)
     if (!defaultModelId) {
-      setConnectionStatus(t.models.noChatModelForConnectionCheck)
+      setConnectionStatus(() => (current: PlatformText) => current.models.noChatModelForConnectionCheck)
       return
     }
 
     const apiKeyOptions = createConnectionCheckApiKeyOptions(selectedProvider, apiKeyDraft)
     if (apiKeyOptions.length === 0) {
-      setConnectionStatus(t.models.connectionNeedsConfig)
+      setConnectionStatus(() => (current: PlatformText) => current.models.connectionNeedsConfig)
       return
     }
 
@@ -946,27 +953,19 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       })) as import('@platform/ai/agent-platform/runtime/compatibility/providerRuntimeCheckTypes').ProviderRuntimeCheckReport
       const overallOk = report.finalCompatibility.selectable
       // PLAT-61：最终结论文案同样「把原因说出来」（例如供应商停用），不再只回英文 summary。
-      const finalReason = formatProviderRuntimeCheckReason(
-        resolveProviderRuntimeCheckReasonCode({
-          status: report.finalCompatibility.status,
-          summary: report.finalCompatibility.summary,
-          providerEnabled: options.enabledOverride === true || providerDraft.enabled,
-          hasApiKey: connectionCheckApiKeyOptions.length > 0
-        }),
-        t.models
-      )
+      const reasonCode = resolveProviderRuntimeCheckReasonCode({
+        status: report.finalCompatibility.status,
+        summary: report.finalCompatibility.summary,
+        providerEnabled: options.enabledOverride === true || providerDraft.enabled,
+        hasApiKey: connectionCheckApiKeyOptions.length > 0
+      })
       const chatOk = report.ordinaryChat.status === 'ready'
-      const message = overallOk
-        ? t.models.connectionCheckAgentReady
-        : chatOk
-          ? t.models.connectionCheckAgentMixed
-          : finalReason || report.finalCompatibility.summary || t.models.connectionCheckAgentNotReady
-      setConnectionCheckResult({ ok: overallOk, message, report })
-      setConnectionStatus(chatOk && overallOk ? null : message)
+      const messageFor = describeConnectionStatus({ overallOk, chatOk, reasonCode, summary: report.finalCompatibility.summary })
+      setConnectionCheckResult({ ok: overallOk, message: messageFor(t), report })
+      setConnectionStatus(chatOk && overallOk ? null : () => messageFor)
     } catch (error) {
-      const message = sanitizeIpcErrorMessage(error) ?? t.status.failed
-      setConnectionCheckResult({ ok: false, message })
-      setConnectionStatus(message)
+      setConnectionCheckResult({ ok: false, message: sanitizeIpcErrorMessage(error) ?? t.status.failed })
+      setConnectionStatus(() => (current: PlatformText) => sanitizeIpcErrorMessage(error) ?? current.status.failed)
     } finally {
       setIsTestingConnection(false)
     }
@@ -1007,7 +1006,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     if (!selectedProvider) return
     await window.platform.modelProviders.removeModel(selectedProvider.id, modelId)
     await reloadProviders(selectedProvider.id)
-    setNotice(t.models.modelRemovedNotice(1))
+    liveNotice.show((current) => current.models.modelRemovedNotice(1))
   }
 
   /**
@@ -1111,18 +1110,18 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           <StorageCacheSettingsPage language={settings.language} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
-          <TaskAutomationSettingsPage language={settings.language} />
+          <TaskAutomationSettingsPage language={settings.language} focusTaskId={focusEntityId} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
           <ChannelSettingsPage language={settings.language} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
+        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'about' ? <AboutSettingsPage settings={settings} onUpdateSettings={updateSettings} productName={appInfo?.name ?? ''} /> : null}
         {productSettingsEntry ? (
           <ProductContributionHost
             language={settings.language}
-            load={productSettingsEntry.load}
-            title={resolveLocalizedTitle(productSettingsEntry.title, settings.language)}
+            load={productSettingsEntry.load} focusEntityId={focusEntityId}
           />
         ) : null}
       </div>
@@ -1148,9 +1147,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         apiKeyDraft={apiKeyDraft}
         modelGroups={modelGroups}
         collapsedGroups={collapsedModelGroups}
-        connectionStatus={connectionStatus}
+        connectionStatus={connectionStatusText}
         isSyncingModels={isSyncingModels}
-        notice={notice}
+        notice={noticeText}
         syncError={modelSyncError}
         onProviderSearchChange={setProviderSearch}
         onSelectProvider={selectProvider}
@@ -1328,7 +1327,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       <section className="settings-detail-pane preferences-pane">
         <div className="section-heading">
           <span>{t.settings.basicSettings}</span>
-          {notice ? <small>{notice}</small> : null}
+          {noticeText ? <small>{noticeText}</small> : null}
         </div>
 
         <div className="preference-section">
@@ -1459,12 +1458,10 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   function renderNotifications(): React.ReactElement {
     return (
-      <NotificationSettingsPane
+      <NotificationSettingsScreen
         title={t.settings.notifications}
-        notice={notice}
-        settings={settings.notifications}
-        labels={t.notifications}
-        onChange={(patch) => void updateNotificationSettings(patch)}
+        notice={noticeText}
+        language={settings.language}
       />
     )
   }
@@ -1596,7 +1593,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         <ProductContributionHost
           language={settings.language}
           load={productMenuEntry.load}
-          title={resolveLocalizedTitle(productMenuEntry.title, settings.language)}
         />
       )
     }
@@ -1707,6 +1703,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   return (
     <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG} wave={WINDOW_ANTD_WAVE_CONFIG}>
+      {/* 确认框宿主：必须在 ConfigProvider 里面，`Modal.useModal()` 才吃得到当前主题（深浅色一致）。 */}
+      <ConfirmProvider>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
       {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
@@ -1725,7 +1723,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         <div className="topbar-actions">
           {/* 搜索 / 布局两颗图标已删除：它们从来没有 onClick，标签承诺的动作不存在。
               等真有面板时再连功能一起加回来，别只把按钮补回顶栏。 */}
-          <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
+          <UpdateActionButton language={settings.language} />
+          <NotificationBell labels={t.notifications} open={notificationCenterOpen}
+            controlsId={NOTIFICATION_CENTER_PANEL_ID} onOpen={() => setNotificationCenterOpen(true)} />
         </div>
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
@@ -1743,7 +1743,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           queueMicrotask(() => document.querySelector<HTMLElement>('[data-notification-bell] button')?.focus())
         }}
         labels={t.notifications}
-        language={settings.language}
       />
 
       <InUseModelRetiredBanner
@@ -1767,6 +1766,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
+                data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>
@@ -1785,6 +1786,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 className={item.key === activeNavKey ? 'nav-item active' : 'nav-item'}
                 title={item.label}
                 aria-label={item.label}
+                // 稳定键：外壳的行为用例要能点到「具体哪一页」，而不是靠本地化后的可读文案去找按钮。
+                data-nav-key={item.key}
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>
@@ -1814,6 +1817,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       </div>
       </ShellLanguageProvider>
       </ShellTimeZoneProvider>
+      </ConfirmProvider>
     </ConfigProvider>
   )
 }

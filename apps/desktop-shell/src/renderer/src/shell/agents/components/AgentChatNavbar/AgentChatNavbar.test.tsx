@@ -10,6 +10,7 @@ import type { AgentWorkspaceEntity } from '@platform/ai/agent-platform/schemas/w
 import { createAgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 
 import { platformText } from '../../../../i18n/platformText'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { AgentTextProvider } from '../../agentTextProvider'
 import AgentChatNavbar from './index'
 
@@ -18,6 +19,7 @@ const timestamp = '2026-01-01T00:00:00.000Z'
 describe('AgentChatNavbar', () => {
   it('keeps the agent config action beside the active agent name instead of in the right toolbar', () => {
     const markup = renderToStaticMarkup(
+      <ConfirmProvider>
       <AgentTextProvider language="zh-CN">
         <AgentChatNavbar
           state={createAgentStoreState({
@@ -33,6 +35,7 @@ describe('AgentChatNavbar', () => {
           onEditAgent={() => undefined}
         />
       </AgentTextProvider>
+      </ConfirmProvider>
     )
 
     const identityMarkup = sliceBetweenClasses(markup, 'agent-chat-identity', 'agent-chat-toolbar')
@@ -63,6 +66,7 @@ describe('AgentChatNavbar', () => {
     }
 
     const markup = renderToStaticMarkup(
+      <ConfirmProvider>
       <AgentTextProvider language="en-US">
         <AgentChatNavbar
           state={createAgentStoreState({
@@ -79,6 +83,7 @@ describe('AgentChatNavbar', () => {
           onEditAgent={() => undefined}
         />
       </AgentTextProvider>
+      </ConfirmProvider>
     )
 
     expect(markup).toContain('Following default: Anthropic / Claude Sonnet')
@@ -112,7 +117,8 @@ describe('AgentChatNavbar', () => {
       const activeSession = session({ name: sessionName })
 
       const markup = renderToStaticMarkup(
-        <AgentTextProvider language="zh-CN">
+        <ConfirmProvider>
+      <AgentTextProvider language="zh-CN">
           <AgentChatNavbar
             state={createAgentStoreState({
               agents: [activeAgent],
@@ -127,6 +133,7 @@ describe('AgentChatNavbar', () => {
             onEditAgent={() => undefined}
           />
         </AgentTextProvider>
+      </ConfirmProvider>
       )
 
       const identityMarkup = sliceBetweenClasses(markup, 'agent-chat-identity', 'agent-chat-toolbar')
@@ -142,7 +149,8 @@ describe('AgentChatNavbar', () => {
     const seeded = workspace({ name: '默认工作区' })
     const render = (language: 'zh-CN' | 'en-US') =>
       renderToStaticMarkup(
-        <AgentTextProvider language={language}>
+        <ConfirmProvider>
+      <AgentTextProvider language={language}>
           <AgentChatNavbar
             state={createAgentStoreState({ agents: [agent()], sessions: [session({ workspace: seeded })], workspaces: [seeded] })}
             providers={[]}
@@ -153,6 +161,7 @@ describe('AgentChatNavbar', () => {
             onEditAgent={() => undefined}
           />
         </AgentTextProvider>
+      </ConfirmProvider>
       )
 
     expect(render('en-US')).toContain('System Workspace')
@@ -191,6 +200,7 @@ describe('AgentChatNavbar model selector trigger', () => {
   it('shows the model name and the provider name for the selected model', () => {
     const activeAgent = { ...agent(), model: 'silicon:deepseek-v4-pro', modelName: 'DeepSeek V4 Pro' }
     const markup = renderToStaticMarkup(
+      <ConfirmProvider>
       <AgentTextProvider language="zh-CN">
         <AgentChatNavbar
           state={createAgentStoreState({
@@ -206,6 +216,7 @@ describe('AgentChatNavbar model selector trigger', () => {
           onEditAgent={() => undefined}
         />
       </AgentTextProvider>
+      </ConfirmProvider>
     )
 
     expect(markup).toContain('DeepSeek V4 Pro')

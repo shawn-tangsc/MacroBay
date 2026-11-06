@@ -1,0 +1,9 @@
+/* 升级未完成的提示条：放在日报内容区顶部，复用状态横幅的外观，只改内边距与按钮位置。 */
+.mi-daily-briefing-storage-notice {
+  margin: 0 0 12px;
+  align-items: center;
+}
+
+.mi-daily-briefing-storage-notice .mi-daily-brief-banner__copy {
+  flex: 1 1 320px;
+}

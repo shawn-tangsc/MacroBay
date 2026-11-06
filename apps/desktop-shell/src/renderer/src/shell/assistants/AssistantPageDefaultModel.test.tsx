@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from 'react'
+import { act, createElement, type ComponentProps, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ToastHost } from '@platform/ui/components/toast'
 
 import { AssistantPage } from './AssistantPage'
+
+/** 页面在渲染时要求确认框宿主（`useConfirm()` 没有 Provider 直接抛错），测试按线上同一棵树包一层。 */
+function Page(props: ComponentProps<typeof AssistantPage>): ReactElement {
+  return createElement(ConfirmProvider, null, createElement(AssistantPage, props))
+}
 
 
 const providers: SafeModelProvider[] = [
@@ -100,7 +106,7 @@ async function renderPage(defaultAssistantModelId?: string): Promise<HTMLElement
   await act(async () => {
     // 输入栏的「为什么不能用」走 `useToast`（fail-closed）：没有宿主，整页渲染直接抛。
     root?.render(
-      createElement(ToastHost, null, createElement(AssistantPage, {
+      createElement(ToastHost, null, createElement(Page, {
         language: 'en-US',
         providers,
         chatSettings: createDefaultAppSettings().chat,

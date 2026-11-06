@@ -73,6 +73,7 @@ import {
   SOURCE_CLASSIFIER_VERSION
 } from './sourceClassifiers/classifyParsedIntelligence'
 import type { ClassifiedSourceEvent } from './sourceClassifiers/sourceClassifierTypes'
+import { notifySourceIssueForSource, type SourceIssueNotifier } from './sourceIssueNotifier'
 
 export type IntelligencePipelineHealth = {
   sourceId: string
@@ -132,6 +133,8 @@ export function createIntelligencePipeline(deps?: {
   runtimeStateHistorySnapshot?: RuntimeStateRecord[]
   runtimeStateHistoryStorage?: IntelligenceRuntimeStateHistoryStorage
   eventPublisher?: IntelligenceEventPublisher
+  /** 来源事件提交（`source.consecutive-failed` / `source.stale`）；不注入就不发通知。 */
+  sourceIssueNotifier?: SourceIssueNotifier
 }): IntelligencePipeline {
   const profileStore = deps?.profileStore ?? createSourceProfileStore(createInMemoryProfileStorage())
   const rawRecordStore = deps?.rawRecordStore ?? createRawRecordStore()
@@ -288,6 +291,7 @@ export function createIntelligencePipeline(deps?: {
     runtimeStateStore.recordFailure('product', 'market-intelligence', sourceId, message)
     await recordRuntimeHealthRevision(sourceId)
     await publishEventsAfterPersist({ sourceIds: [sourceId] })
+    await notifySourceIssueForSource({ notifier: deps?.sourceIssueNotifier, sourceId, health: buildHealthSnapshot(sourceId), adapterConfig: getIntelligenceSourceDefinition(sourceId)?.adapterConfig })
   }
 
   async function recordCollectionSuccess(
@@ -298,6 +302,7 @@ export function createIntelligencePipeline(deps?: {
     runtimeStateStore.recordSuccess('product', 'market-intelligence', sourceId, checkpoint, summary)
     await recordRuntimeHealthRevision(sourceId)
     await publishEventsAfterPersist({ sourceIds: [sourceId] })
+    await notifySourceIssueForSource({ notifier: deps?.sourceIssueNotifier, sourceId, health: buildHealthSnapshot(sourceId), adapterConfig: getIntelligenceSourceDefinition(sourceId)?.adapterConfig })
   }
 
   async function assessChangedItemsImpl({ itemIds }: { itemIds?: string[] }) {

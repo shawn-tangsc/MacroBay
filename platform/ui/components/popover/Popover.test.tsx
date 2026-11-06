@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { IconButton } from '../icon-button'
 import { Popover, type PopoverTriggerProps } from './Popover'
@@ -166,6 +166,42 @@ describe('Popover', () => {
 
     expect(isOpen(trigger)).toBe(false)
     expect(document.activeElement).toBe(trigger)
+  })
+
+  it('keeps Escape to itself, so the panel under it does not close with the bubble', async () => {
+    // 真窗口里量到的缺陷（2026-11-03）：浮层开在设置面板里，按一次 Esc，浮层关了、**设置面板也关了**，
+    // 焦点落回页面上那颗开启按钮。行为上就是「按掉一段说明，丢掉整个设置页」。
+    const trigger = await mount()
+    const outerEscape = vi.fn()
+    const onOuterKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') outerEscape()
+    }
+    // 外层按冒泡阶段监听，与设置面板自己的处理同一层；浮层在捕获阶段拦下来。
+    document.addEventListener('keydown', onOuterKeyDown)
+    try {
+      await act(async () => {
+        trigger.focus()
+      })
+      await tick()
+      expect(isOpen(trigger)).toBe(true)
+
+      await act(async () => {
+        trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }))
+      })
+      await tick()
+
+      expect(isOpen(trigger)).toBe(false)
+      expect(document.activeElement).toBe(trigger)
+      expect(outerEscape).not.toHaveBeenCalled()
+
+      // 浮层已经关了，再按一次必须传出去——监听只在开着时挂着，不许变成一直吞按键的组件。
+      await act(async () => {
+        trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }))
+      })
+      expect(outerEscape).toHaveBeenCalledTimes(1)
+    } finally {
+      document.removeEventListener('keydown', onOuterKeyDown)
+    }
   })
 
   it('keeps a max width, so a long explanation wraps instead of widening the page', async () => {

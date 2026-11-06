@@ -4,18 +4,12 @@ import { readFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
 import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/AgentSessionRuntimeService'
 import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/runtime/AgentRuntimeOpenTelemetryTraceRecorder'
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
 import { resolveEffectiveAgentModel } from '../../ai/agent-platform/runtime/effectiveAgentModel'
 import { APP_ACCEPTANCE_NAME, APP_BUNDLE_ID, APP_INTERNAL_NAME } from '../appIdentity'
-import {
-  AgentTaskDispatchService,
-  AgentTaskExecutionCoordinator,
-  AgentTaskSchedulerRuntimeService,
-  TaskManagementToolRuntimeService
-} from '../../ai/agent-platform/runtime/tasks'
+import { TaskManagementToolRuntimeService } from '../../ai/agent-platform/runtime/tasks'
 import {
   registerChannelMaintenanceJobHandlers,
   scheduleChannelMaintenanceJobs
@@ -96,8 +90,7 @@ import {
   type BuiltinSeedLanguageVariant
 } from '../../ai/agent-platform/seeds'
 import type { ProductAgentSeedFactory } from '../../ai/agent-platform/seeds/mergeAgentSeeds'
-import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
-import type { AgentEntity, UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
+import type { AgentSessionMessageEntity } from '../../ai/agent-platform/schemas/sessionSchemas'
 import type { ProductAgentToolHandlerRegistration } from '../../ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import {
   ProductAgentToolRegistry,
@@ -105,10 +98,6 @@ import {
   buildProductAgentToolPackageEditorView,
   upsertAgentProductToolPackageBinding
 } from '../../ai/agent-platform/productTools'
-import type {
-  ProductAgentToolInvokeInput,
-  ProductAgentToolInvokeResult
-} from '../../ai/agent-platform/productTools/productAgentToolSchemas'
 import { createSqliteProductAgentToolTraceRepository } from '../../ai/agent-platform/productTools/createSqliteProductAgentToolTraceRepository'
 import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSettings } from '../../settings/schema/appSettings'
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
@@ -119,6 +108,7 @@ import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachab
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
+import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
@@ -130,7 +120,7 @@ import { registerAssistantIpc } from './ipc/assistantIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
-import { composeNotificationRuntime } from './composition/notifications'
+import { composeNotificationRuntimeForApp } from './composition/notifications'
 import { composeModelIpc } from './composition/model'
 import { composeAgentToolsIpc } from './composition/agentTools'
 import { composeAgentIpc } from './composition/agent'
@@ -144,6 +134,7 @@ import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, cr
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
 import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
+import { resolveJobTitle } from '../../jobs/runtime/jobTitle'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -184,6 +175,8 @@ import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver }
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
 import { persistSkillRowChanges } from './skillRowPersistence'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
+import { composeProductAgentPlatformDeps, type ProductAgentPlatformDeps } from './productAgentPlatformWiring'
+import { composeAgentTaskRuntime } from './taskAutomationWiring'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
 import {
@@ -219,6 +212,7 @@ import { createPlatformCore } from './composition/platformCore'
 import { createRepositories } from './composition/repositories'
 import { createAgentRuntime, platformRuntimesDisposed } from './composition/agentRuntime'
 import { createChannelsAndJobs } from './composition/channelsAndJobs'
+import { createAssistantsAndRuntimes } from './composition/assistantsAndRuntimes'
 
 // 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
 bindReplaceAgentState(replaceAgentState)
@@ -401,7 +395,9 @@ const runtimeDisposer = createRuntimeDisposer({
   disposeAgentRuntimes: [() => agentRuntimeService.dispose(), () => mcpRuntimeService.dispose()],
   disposeWorkspace: async () => getPanelWorkspaceForDisposal()?.dispose(),
   reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report }),
-  closeJobRunStore: () => jobRunStore.close()
+  closeJobRunStore: () => jobRunStore.close(),
+  // 关句柄而不是删文件：SQLite 关闭时 checkpoint 并移除 -wal/-shm，退出后不留半截日志。
+  closeCacheAuditStore: () => cacheAuditRepository.close()
 })
 async function disposePlatformRuntimes(): Promise<void> {
   await runtimeDisposer.dispose()
@@ -417,7 +413,7 @@ const agentBroadcasts = createAgentBroadcasts({ getMainWindow: () => getMainWind
  * 那条链错位在退出瞬间静默出错，全量测试看不见。
  */
 const channelsAndJobs = createChannelsAndJobs({
-  settingsStore,
+  core: platformCore,
   agentBroadcasts,
   agentRuntimeService,
   repositories: {
@@ -444,7 +440,7 @@ const {
   channelInboundService,
   channelInboundExecutionRunner,
   channelDeliveryMaintenance,
-  deliverTaskResultToChannels,
+  deliverTaskResultToChannels, channelDeliveryService,
   taskAutomationMaintenance,
   telegramRuntimeManager,
   slackRuntimeManager,
@@ -459,30 +455,22 @@ const {
   discordRuntimeMaintenance,
   wechatRuntimeMaintenance
 } = channelsAndJobs
-const agentTaskDispatchService = new AgentTaskDispatchService({
+const {
+  dispatchService: agentTaskDispatchService,
+  schedulerRuntimeService: agentTaskSchedulerRuntimeService
+} = composeAgentTaskRuntime({
   services: agentServices,
   runtime: agentRuntimeService,
   timeZone: () => shellTimeZone.get(),
   getJobBridge: () => agentTaskJobBridge,
   readHeartbeat: readHeartbeatFileFromWorkspace,
   deliverTaskResult: deliverTaskResultToChannels.deliver,
-  onStateChanged: async () => {
-    const nextState = await agentStore.getState()
-    agentTaskSchedulerRuntimeService.syncFromState(nextState)
-    agentBroadcasts.stateChanged(nextState)
-  }
-})
-const agentTaskSchedulerRuntimeService = new AgentTaskSchedulerRuntimeService({
-  startupAt: new Date().toISOString(),
   getAgentState: () => agentStore.getState(),
-  enqueueDueTask: async (task) => {
-    await getAgentTaskExecutionCoordinatorOrNull()?.enqueueDueTask(task.taskId)
-  }
+  publishStateChanged: (state) => agentBroadcasts.stateChanged(state),
+  getExecutionCoordinator: getAgentTaskExecutionCoordinatorOrNull,
+  setExecutionCoordinator: setAgentTaskExecutionCoordinator,
+  startupAt: new Date().toISOString()
 })
-setAgentTaskExecutionCoordinator(new AgentTaskExecutionCoordinator({
-  services: agentServices,
-  dispatchQueuedRun: (input) => agentTaskDispatchService.dispatchQueuedRun(input)
-}))
 agentStateCoordinator = createAgentStateCoordinator({
   getState: () => agentStore.getState(),
   replaceState: (state) => agentStore.replace(state),
@@ -534,11 +522,12 @@ registerPlatformCacheProviders({
   agentModelRuntimeProbeService,
   agentRuntimeProbeSnapshotStore
 })
+const cacheAuditRepository = createSqliteCacheOperationAuditRepository(
+  join(app.getPath('userData'), 'platform', 'cache-governance.sqlite')
+)
 const cacheGovernanceService = new CacheGovernanceService({
   registry: cacheRegistry,
-  auditRepository: createSqliteCacheOperationAuditRepository(
-    join(app.getPath('userData'), 'platform', 'cache-governance.sqlite')
-  )
+  auditRepository: cacheAuditRepository
 })
 const cacheGovernanceIpcHandlers = createCacheGovernanceIpcHandlers(cacheGovernanceService)
 const registerProductCache = createProductCacheRegistrar(cacheRegistry)
@@ -549,193 +538,32 @@ const agentModelCompatibilityControl = createAgentModelCompatibilityControl({
   gatewayService: agentModelGatewayService,
   snapshotStore: agentRuntimeProbeSnapshotStore
 })
-const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies({
-  getProviderState: providerStore.getState,
-  refreshRuntimeCheck: async (providerId, modelId, checkGateway) => providerRuntimeCheckService.runChecks({
-    providerId,
-    modelId,
-    runtimeId: 'claude-code',
-    checkGateway
-  }),
-  gatewayService: agentModelGatewayService,
-  snapshotStore: agentRuntimeProbeSnapshotStore,
-  systemWorkspaceRoot: agentSystemWorkspacesRoot
-})
-const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
-  const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
-  const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
-  const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
-  return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
-}
-const platformAgentWebSearchBridge = {
-  search: async (request: Readonly<{ query: string; maxResults?: number }>, options?: Readonly<{ signal?: AbortSignal }>) => {
-    const response = await webSearchService.searchKeywords(
-      { keywords: [request.query] },
-      { ...(options?.signal ? { signal: options.signal } : {}), consumer: { kind: 'agent' } }
-    )
-    return request.maxResults ? { ...response, results: response.results.slice(0, request.maxResults) } : response
-  },
-  isReady: isAgentWebSearchProviderReady
-}
-const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
-  loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
-  getProviderState: providerStore.getState,
-  getAgentState: () => agentStore.getState(),
-  saveAgentState: async (state, options) => {
-    if (options?.mergeSessionId) {
-      await mergeAndReplaceAgentSessionState(state, options.mergeSessionId)
-      return
-    }
-    await replaceAgentState(state)
-  },
-  platformWebSearchBridge: platformAgentWebSearchBridge,
-  productAgentToolBridge: {
-    registry: productAgentToolRegistry,
-    runtime: productAgentToolRuntimeService,
-    getAgentState: () => agentStore.getState()
-  },
-  skillToolBridge: {
-    runtime: skillsRuntimeService,
-    getAgentState: () => agentStore.getState()
-  },
-  taskManagementToolBridge: {
-    runtime: taskManagementToolRuntimeService,
-    commands: agentServices.taskCommands,
-    getAgentState: () => agentStore.getState(),
-    getTaskRunController: () => getAgentTaskRunController()
-  }
-})
-const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
-  ...claudeCodeRuntimeDependencies,
-  emitChunk: (chunk) => agentRuntimeService.emitChunk?.(chunk),
-  requestToolApproval: (input) => agentRuntimeService.requestToolApproval(input),
-  prewarmSession: (input) => claudeAgentSdkRuntime.prewarmSession(input),
-  executeTurn: createClaudeSdkPreferredExecutor({
-    sdkRuntime: claudeAgentSdkRuntime,
-    platformWebSearchBridge: platformAgentWebSearchBridge,
-    loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
-    getProviderState: providerStore.getState,
-    getAgentState: () => agentStore.getState(),
-    saveAgentState: async (state, options) => {
-      if (options?.mergeSessionId) {
-        await mergeAndReplaceAgentSessionState(state, options.mergeSessionId)
-        return
-      }
-      await replaceAgentState(state)
-    }
-  })
-})
-if (workspaceTestFixtures.enabled && workspaceTestFixtures.streamStub !== null) {
-  /**
-   * PLAT-33（test-only）：受控**流源驱动桩**经**既有注册点**替换 claude-code 驱动（与 task smoke 同一姿态，
-   * 不新增 AgentType、不写假 provider、不发网络请求）。块间延迟让真机能在**流仍 in-flight** 时 detach/redock；
-   * send/emit 计数只经 seam 自装的 `globalThis` 钩子暴露给同进程 harness。
-   */
-  const streamStub = createWorkspaceTestStreamDriver({
-    getState: () => agentStore.getState(),
-    saveState: async (state, sessionId) => {
-      await mergeAndReplaceAgentSessionState(state, sessionId)
-    },
-    emitChunk: (chunk) => agentRuntimeService.emitChunk(chunk),
-    chunkCount: workspaceTestFixtures.streamStub.chunkCount,
-    chunkIntervalMs: workspaceTestFixtures.streamStub.chunkIntervalMs,
-    finalText: workspaceTestFixtures.streamStub.finalText
-  })
-  runtimeDriverRegistry.register('claude-code', streamStub.driver)
-  installWorkspaceTestFixtureHandle({ target: globalThis as unknown as Record<string, unknown>, fixtures: workspaceTestFixtures, streamStub: streamStub.stats })
-} else if (taskAutomationSmokeProfile.enabled) {
-  runtimeDriverRegistry.register(
-    'claude-code',
-    createTaskAutomationSmokeDriver({
-      getState: () => agentStore.getState(),
-      saveState: async (state, sessionId) => {
-        await mergeAndReplaceAgentSessionState(state, sessionId)
-      },
-      taskTools: taskManagementToolRuntimeService
-    })
-  )
-} else {
-  runtimeDriverRegistry.register('claude-code', claudeCodeRuntimeDriver)
-}
-const agentIpcHandlers = createAgentIpcHandlers(
-  agentServices,
-  agentRuntimeService,
-  {
-    runTask: (agentId: string, taskId: string, expectedRevision: number) =>
-      getAgentTaskExecutionCoordinator().enqueueManualRun({
-        agentId,
-        taskId,
-        expectedRevision,
-        actor: { kind: 'user', source: 'renderer-agent-drawer' }
-      })
-        .then((runLog) => ({ taskId, runLogId: runLog.id }))
-  },
-  {
-    cancelTaskRun: (runLogId: string) => {
-      const controller = getAgentTaskRunController()
-      if (!controller) {
-        throw new Error('Agent task run controller is not available.')
-      }
-      return controller.cancelTaskRun(runLogId)
-    }
-  },
-  {
-    getSkillRuntime: async (agentId: string) =>
-      buildAgentSkillsRuntimeCatalog(skillsRuntimeService.getAgentRuntime(await agentStore.getState(), agentId))
-  },
-  {
-    listProductToolPackages: async (agentId: string) => {
-      const state = await agentStore.getState()
-      return productAgentToolRegistry.listPackages(getInstalledProductManifestIds()).map((pkg) =>
-        buildProductAgentToolPackageEditorView({
-          package: pkg,
-          binding: (state.agentProductToolPackages ?? []).find(
-            (item) => item.agentId === agentId && item.productId === pkg.productId
-          ),
-          installedProductIds: getInstalledProductManifestIds()
-        })
-      )
-    },
-    updateProductToolPackageBinding: async (
-      agentId: string,
-      productId: string,
-      permissionMode: 'allow-read-only' | 'prompt' | 'disabled'
-    ) => {
-      const nextState = await agentStore.update((state) => ({
-        ...state,
-        agentProductToolPackages: upsertAgentProductToolPackageBinding(state.agentProductToolPackages ?? [], {
-          agentId,
-          productId,
-          permissionMode,
-          updatedAt: new Date().toISOString()
-        })
-      }))
-      syncProductToolsRuntimeFromState(nextState)
-      agentBroadcasts.stateChanged(nextState)
-      return nextState
-    },
-    listProductToolCallTracePage: async (query: {
-      agentSessionId?: string
-      productId?: string
-      consumerProductId?: string
-      cursor?: string
-      limit?: number
-    }) => agentRepositories.productToolTraces.listPage(query),
-    getProductToolCallTrace: async (toolCallId: string) => agentRepositories.productToolTraces.get(toolCallId)
-  },
-  {
-    getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot(),
-    restartChannelRuntime: (channelId) => channelRuntimeSupervisor.restart(channelId)
-  },
+const assistantsAndRuntimes = createAssistantsAndRuntimes({
+  core: platformCore,
+  repositories,
+  agentRuntime,
+  channelsAndJobs,
+  agentModelGatewayService,
+  agentRuntimeProbeSnapshotStore,
+  providerRuntimeCheckService,
+  webSearchService,
   agentModelCompatibilityControl,
-  {
-    compose: (input) => agentRuntimeCompositionService.compose(input)
-  },
-  {
-    retryTaskDelivery: (agentId, runLogId, attemptId) => deliverTaskResultToChannels.retry(agentId, runLogId, attemptId)
-  }
-)
-
+  agentTaskSchedulerRuntimeService,
+  agentBroadcasts,
+  getMainWindow,
+  syncSkillsRuntimeFromState,
+  syncProductToolsRuntimeFromState,
+  workspaceTestFixtures,
+  taskAutomationSmokeProfile
+})
+const {
+  agentIpcHandlers,
+  assistantIpcHandlers,
+  assistantChatRuntime,
+  assistantTemplateRegistry,
+  ensureDefaultAssistantSeed,
+  isAgentWebSearchProviderReady
+} = assistantsAndRuntimes
 function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   if (providerId) {
     agentModelRuntimeProbeService.invalidateProvider(providerId)
@@ -745,62 +573,6 @@ function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   agentModelRuntimeProbeService.invalidateAll()
   void agentRuntimeProbeSnapshotStore.clear()
 }
-
-const assistantTopicNamingService = new AssistantTopicNamingService({
-  isEnabled: async () => (await settingsStore.get()).assistant.topicNamingEnabled,
-  getLanguage: async () => (await settingsStore.get()).language,
-  getNamingPrompt: async () => (await settingsStore.get()).assistant.topicNamingPrompt,
-  getNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
-  getProviderState: providerStore.getState,
-  fetch: getPlatformFetch(),
-  renameTopic: async (topicId, name) => {
-    assistantRepositories.topics.update(topicId, { name, isNameManuallyEdited: false })
-  }
-})
-
-const assistantChatRuntime = createAssistantChatRuntimeService({
-  repos: assistantRepositories,
-  getProviderState: providerStore.getState,
-  fetch: getPlatformFetch(),
-  webSearchService,
-  topicNaming: assistantTopicNamingService,
-  getTopicNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
-  getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId,
-  logContextPlan: (summary) =>
-    appLog.log('info', 'assistant.context-plan', { ...summary }),
-  // 流式广播的装配只有这一行：通道名与窗口都在 assistantStreamBroadcast 里，
-  // 组合根不再出现任何一个 assistantsStream* 的名字。
-  // 传 thunk 而不是引用：`getMainWindow` 在本文件更靠后声明，直接取值会撞 TDZ（tsc 2448）。
-  // 而它本来就应该在**发送那一刻**取窗口——所以延迟取值正是我们想要的行为。
-  events: createAssistantStreamSink({ getMainWindow: () => getMainWindow() })
-})
-const assistantTemplateRegistry = new AssistantTemplateRegistry()
-assistantTemplateRegistry.registerMany(platformAssistantTemplates)
-const assistantLibraryService = new AssistantLibraryService({
-  registry: assistantTemplateRegistry,
-  repos: assistantRepositories
-})
-const assistantIpcHandlers = createAssistantIpcHandlers(
-  assistantRepositories,
-  assistantChatRuntime,
-  assistantLibraryService
-)
-
-async function ensureDefaultAssistantSeed(): Promise<void> {
-  const language = (await settingsStore.get()).language
-  const seed = createDefaultAssistantSeed({ language })
-  const existing = assistantRepositories.assistants.getById(seed.id)
-  if (!existing) {
-    assistantRepositories.assistants.create(seed)
-    return
-  }
-
-  const localizationPatch = buildDefaultAssistantLocalizationPatch(existing, language)
-  if (localizationPatch) {
-    assistantRepositories.assistants.update(existing.id, localizationPatch)
-  }
-}
-
 
 const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
   mainWindowHost.resolveInvokingWindow(event)
@@ -827,19 +599,6 @@ async function replaceAgentStateAfterSkillMutation(
     },
     previousState
   })
-}
-
-async function mergeAndReplaceAgentSessionState(
-  runtimeSnapshot: AgentStoreState,
-  sessionId: string
-): Promise<AgentStoreState> {
-  const nextState = await agentStore.update((current) => mergeAgentRuntimeSessionState(current, runtimeSnapshot, sessionId))
-  syncSkillsRuntimeFromState(nextState)
-  syncProductToolsRuntimeFromState(nextState)
-  mcpRuntimeService.syncFromState(nextState)
-  agentTaskSchedulerRuntimeService.syncFromState(nextState)
-  agentBroadcasts.stateChanged(nextState)
-  return nextState
 }
 
 function syncSkillsRuntimeFromState(state: AgentStoreState): void {
@@ -878,28 +637,15 @@ export type DesktopAppBootstrapOptions = {
     getModelDefaults: () => Promise<ModelDefaultsSettings>
     getNetworkSettings: () => Promise<NetworkSettings>
     /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
-    getTimeZone?: () => string
+    getTimeZone: () => string
+    log: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
     onSettingsCommitted?: (listener: SettingsCommittedListener) => () => void
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
-    getAgentState?: () => Promise<AgentStoreState>
-    createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
-    sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
-    cancelAgentSession?: (sessionId: string) => Promise<void> | void
-    appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
-    updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
-    deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-    updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
-    isWebSearchProviderReady?: () => Promise<boolean>
-    invokeProductAgentTool?: (
-      state: AgentStoreState,
-      input: ProductAgentToolInvokeInput
-    ) => Promise<ProductAgentToolInvokeResult>
-    invokeProductIpc?: (productId: string, method: string, payload?: unknown) => Promise<unknown>
-  }) => void | Promise<void>
+  } & ProductAgentPlatformDeps) => void | Promise<void>
 }
 
 function resolveBootstrapProductManifests(
@@ -1026,8 +772,6 @@ function registerIpcHandlers(
     getLanguage: async () => (await settingsStore.get()).language
   })
 
-  // 通知运行时的端口在 composition 里定义；这里只提供它需要的两份状态。
-  composeNotificationRuntime({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get() })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
@@ -1117,7 +861,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const onRunTerminal = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
     listDefinitions: () => jobRuntime.listSchedules(),
-    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant))
+    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), listDefinitionRuns: (definitionId) => jobRuntime.listRuns({ definitionId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 50 })
   })
   const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
   setJobRuntimeForDisposal(jobRuntime)
@@ -1158,6 +902,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     if (localizedState === currentState) return
     await replaceAgentState(localizedState)
   }
+  // 通知运行时的端口：jobRuntime 已就绪，平台 handlerId 视为已登记。
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   registerIpcHandlers(
     productManifests,
     productIpcRegistry,
@@ -1165,7 +911,17 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     jobScheduleQueryService,
     refreshBuiltinSeedCopy
   )
-  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
+  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, cacheAudit: { pruneAudit: () => cacheGovernanceService.pruneAudit() }, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
+
+  // 更新检查：源码启动与装好的包同一套逻辑，没有「开发态」分支；每天最多一次在服务里封顶。
+  const updateCheck = await composeUpdateCheck({
+    ipcMain,
+    currentVersion: app.getVersion(), platform: process.platform,
+    stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), releaseNotesFilePath: join(platformDataDirectory, 'updates', 'release-notes.json'), fetch: getPlatformFetch(),
+    now: () => new Date(), isCheckEnabled: async () => (await settingsStore.get()).updates.checkEnabled,
+    openExternal: (url) => shell.openExternal(url), log: appLog.log,
+    broadcast: (projection) => safeSendToMainWindow(getMainWindow, IpcChannels.updatesChanged, projection)
+  })
 
   if (!productAcceptanceProfile.enabled) app.on('second-instance', () => {
     const window = getMainWindow()
@@ -1279,6 +1035,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
                 const settings = await settingsStore.get()
                 return settings.network
               },
+              log: appLog.log,
               // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
               getTimeZone: () => shellTimeZone.get(),
               onSettingsCommitted: settingsStore.onCommitted,
@@ -1287,17 +1044,16 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               registerProductAgentToolHandler,
               registerProductCache,
               registerProductDisposer: productServiceDisposerRegistry.register,
-              getAgentState: () => agentStore.getState(),
-              createAgentSession: (input) => agentServices.sessions.create(input),
-              sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
-              cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
-              appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
-              updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
-              deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
-              updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
-              isWebSearchProviderReady: isAgentWebSearchProviderReady,
-              invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
-              invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
+              // 产品能看到的智能体会话面：形状与绑定都在 `productAgentPlatformWiring`，这里只传服务。
+              ...composeProductAgentPlatformDeps({
+                agentStore,
+                agentServices,
+                agentRuntimeService,
+                webSearchService,
+                productAgentToolRuntimeService,
+                productIpcRegistry,
+                isAgentWebSearchProviderReady
+              }),
             }),
       sealIpcSurface: () => productIpcRegistry.seal(expectedProductIpcMethods(productManifests)),
       reportAcceptance: productAcceptanceProfile.enabled
@@ -1407,6 +1163,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
   buildAppMenu(getMainWindow)
   await mainWindowHost.loadAndMount()
+
+  // 自动检查：主界面出来之后才排，一次性、延迟 15 秒；闸门与静默都在服务里。
+  updateCheck.startAutomaticCheck()
+
   // 挂载：退订旧 listener → 直发 current snapshot → 续增量（Main 侧顺序由 router 保证）
   if (workspaceMainWindow) {
     panelWorkspace.attachMainWindow({ webContentsId: workspaceMainWindow.webContents.id })

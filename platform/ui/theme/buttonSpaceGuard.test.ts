@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
+import { Button, ConfigProvider } from 'antd'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+
+import { WINDOW_ANTD_BUTTON_CONFIG } from './windowAntdTheme'
 
 /**
  * Owner: platform/ui/theme（**「两个汉字之间不加空格」只关一次**）。
@@ -41,6 +46,29 @@ describe('antd 中文按钮不加空格，只关一次', () => {
       .filter((file) => file !== OWNER && readFileSync(resolve(ROOT, file), 'utf8').includes('autoInsertSpace'))
 
     expect(offenders).toEqual([])
+  })
+
+  it('全局配置真的生效：包上时两个汉字贴在一起，不包时才插入空格', () => {
+    // 上面两条只证明「只有一处写了 autoInsertSpace」，证明不了那一处**有效**：
+    // 常量被改成 true、antd 换属性名、ConfigProvider 漏传 button，三种坏法都不会让它们变红，
+    // 而全站中文按钮会长出「收 起」。所以这里断言**渲染出来的文字**，不是属性值。
+    const label = (html: string): string => /<span[^>]*>([^<]*)<\/span>/.exec(html)?.[1] ?? ''
+
+    const wrapped = renderToStaticMarkup(
+      createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG }, createElement(Button, null, '查看'))
+    )
+    expect(label(wrapped)).toBe('查看')
+    expect(label(wrapped)).not.toContain(' ')
+
+    // 反向夹具：不包配置时确实会插入空格——否则这条用例可能只是「两边都没空格也算过」。
+    const bare = renderToStaticMarkup(createElement(Button, null, '查看'))
+    expect(label(bare)).toBe('查 看')
+
+    // 显式打开也一样，证明上面那条的差异来自配置，而不是按钮本身不长这样。
+    const forced = renderToStaticMarkup(
+      createElement(ConfigProvider, { button: { autoInsertSpace: true } }, createElement(Button, null, '查看'))
+    )
+    expect(label(forced)).toBe('查 看')
   })
 
   it('两个 ConfigProvider 都引用同一份配置', () => {

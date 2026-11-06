@@ -1,11 +1,7 @@
-import { Steps } from 'antd'
-import { CircleHelp } from 'lucide-react'
-
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
-
+import type { BriefingGenerationWaiting } from '../../../contracts/dailyBriefing'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
+import { DailyBriefingStageSteps, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
   failedStage,
@@ -18,7 +14,6 @@ import {
 } from './dailyBriefingGenerationTrace'
 import { readableFailureDetail } from './dailyBriefingFailureDetail'
 
-type StepStatus = 'finish' | 'error' | 'wait' | 'process'
 
 /**
  * The right rail's first block: the fixed generation stages as a vertical stepper, with the status
@@ -30,56 +25,94 @@ type StepStatus = 'finish' | 'error' | 'wait' | 'process'
  * instead of a paragraph, while the recorded result — timing, failure code and detail — stays in
  * the step's description.
  */
-export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Readonly<{
+export function DailyBriefingGenerationTimeline({ trace, text, formatTime, running = false, waiting }: Readonly<{
   trace: GenerationTrace | undefined
   text: DailyBriefingText
   formatTime: (value: string, precision?: 'minute' | 'second') => string
+  /** The run is still in flight: the same list, with a running word instead of a verdict. */
+  running?: boolean
+  /**
+   * The run exists but has not opened an attempt yet: it is waiting for the market it is about to
+   * read. Said here because "one running, no attempt, no session" is otherwise unreadable.
+   */
+  waiting?: BriefingGenerationWaiting | undefined
 }>): React.ReactElement {
+  const resolveText = useProductTextKey()
   const labels = text.generationTrace
   const failed = trace ? failedStage(trace) : undefined
   const failedLabel = failed ? labels.stages[failed.id] : labels.notRecorded
   const duration = trace ? traceDurationMs(trace) : undefined
   const failedIndex = failed ? generationStageIds.indexOf(failed.id) : -1
-  return <section className="mi-generation-trace" data-generation-trace-state={trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'}>
-    <header className="mi-generation-trace__head">
+  // Collapsed it is one line that still answers "did it finish, where did it fail"; only the detail
+  // folds away. Default: open while running or after a failure, closed once it succeeded.
+  const steps = generationStageIds.length
+  const notStarted = trace ? trace.stages.filter((stage) => !stage.startedAt).length : steps
+  const durationLabel = duration !== undefined ? formatDuration(duration, text) : ''
+  // A failure without a trace still has stages: they are shown as never reached instead of a blank.
+  const emptyTrace: GenerationTrace = {
+    attemptId: '',
+    startedAt: '',
+    finishedAt: '',
+    state: 'success',
+    stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
+  }
+  const rendered = trace ?? emptyTrace
+  const summaryLine = waiting
+    ? labels.waitingSummary
+    : running
+    ? text.generationProgress.running
+    : trace
+      ? trace.state === 'failed'
+        ? `${labels.failedAt.replace('{stage}', failedLabel)} · ${labels.notExecutedCount.replace('{count}', String(notStarted))}`
+        : `${labels.stepsCount.replace('{count}', String(steps))} · ${durationLabel} · ${labels.allCompleted}`
+      : labels.notRecorded
+  // Open by default in every state: the reader asked to see the steps without a click, so the
+  // summary line is the place to collapse from, not the place to start.
+  return <details className="mi-generation-trace" data-generation-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'} open>
+    <summary className="mi-generation-trace__head">
       <h3>{labels.title}</h3>
-      <span data-trace-state={trace?.state ?? 'missing'}>{trace ? trace.state === 'failed' ? labels.failed : labels.completed : labels.notRecorded}</span>
-    </header>
-    {trace ? <>
-      <p className="mi-generation-trace__summary">
-        {labels.attempt} · {formatRange(trace.startedAt, trace.finishedAt, formatTime)}
-        {duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
+      <span data-trace-state={running ? 'running' : trace?.state ?? 'missing'} data-stage-summary="true">{summaryLine}</span>
+    </summary>
+    {waiting
+      ? <p className="mi-generation-trace__summary" data-generation-waiting="true">
+        {labels.notStartedYet} · {labels.waitingElapsed.replace('{seconds}', String(Math.round(waiting.waitedMs / 1_000)))}
       </p>
-      {trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
+      : trace
+      ? <p className="mi-generation-trace__summary">
+        {labels.attempt} · {labels.startedAt.replace('{time}', formatInstant(trace.startedAt, formatTime))}
+        {!running && duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
+      </p>
+      : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
+    {waiting ? <p className="mi-generation-trace__waiting-hint" data-generation-waiting-hint="true">{labels.waitingHint}</p> : null}
+    <>
+      {trace && trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}
       </p> : null}
-      <Steps
-        className="mi-generation-trace__steps"
-        direction="vertical"
-        size="small"
-        items={generationStageIds.map((id) => {
-          const stage = trace.stages.find((entry) => entry.id === id)
-          const state = stage?.state ?? 'pending'
-          const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
-          const failure = failed?.id === id ? stage : undefined
-          return {
-            status: stepStatus(stage, skipReason),
-            title: <span className="mi-generation-trace__stage-title" data-stage={id} data-stage-state={state} data-stage-skip={skipReason ?? 'none'}>
-              <span className="mi-generation-trace__stage-name">{labels.stages[id]}</span>
-              <StageHelp id={id} text={text} />
-            </span>,
-            description: <span className="mi-generation-trace__stage-result" data-stage-result={id} data-stage-result-state={state}>
-              <span className="mi-generation-trace__stage-time">{stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded}</span>
-              {failure?.failureCode ? <span className="mi-generation-trace__stage-failure" data-stage-failure-code={failure.failureCode}>
-                {failureLabel(failure.failureCode, text)}
-                {failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}
-              </span> : null}
-            </span>
-          }
-        })}
-      />
-    </> : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
-  </section>
+      {/* One stepper for every state: the live run draws the same container, so "generating" and
+          "finished/failed" cannot drift apart in spacing, indentation or connector placement. */}
+      <DailyBriefingStageSteps rows={generationStageIds.map((id) => {
+        const stage = rendered.stages.find((entry) => entry.id === id)
+        const state = stage?.state ?? 'pending'
+        const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
+        const failure = failed?.id === id ? stage : undefined
+        return {
+          id,
+          // A stage that ran more than once says so: the row keeps the last segment's time, so without
+          // the count a run that checked four times reads exactly like a run that checked once.
+          name: stage && (stage.runs ?? 1) > 1 ? `${labels.stages[id]} ×${stage.runs}` : labels.stages[id],
+          state: rowStateFor(stage, skipReason),
+          detail: stage ? stageResult(stage, id, skipReason, text, formatTime, running) : running ? text.generationTrace.states.notStarted : labels.notRecorded,
+          ...(labels.stageHelp?.[id]?.trim()
+            ? { help: { labelKey: STAGE_HELP_KEYS[id], triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel', triggerLabelParams: { stage: labels.stages[id] }, dataAttributes: { 'data-stage-help': id } } }
+            : {}),
+          attributes: { 'data-stage-skip': skipReason ?? 'none' },
+          ...(failure?.failureCode
+            ? { failure: { code: failure.failureCode, label: `${failureLabel(failure.failureCode, text)}${failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}` } }
+            : {})
+        }
+      })} resolveText={resolveText} />
+    </>
+  </details>
 }
 
 type SkipReason = 'not-needed' | 'blocked'
@@ -93,12 +126,12 @@ function skipReasonFor(index: number, failedIndex: number): SkipReason {
 }
 
 /** Not needed is a finished stage; blocked and absent stages wait; a started, unended stage is in process. */
-function stepStatus(stage: GenerationTraceStage | undefined, skipReason: SkipReason | undefined): StepStatus {
-  if (!stage) return 'wait'
-  if (stage.state === 'success') return 'finish'
-  if (stage.state === 'failed') return 'error'
-  if (stage.state === 'pending') return stage.startedAt ? 'process' : 'wait'
-  return skipReason === 'blocked' ? 'wait' : 'finish'
+function rowStateFor(stage: GenerationTraceStage | undefined, skipReason: SkipReason | undefined): DailyBriefingStageRowState {
+  if (!stage) return 'waiting'
+  if (stage.state === 'success') return 'done'
+  if (stage.state === 'failed') return 'failed'
+  if (stage.state === 'pending') return stage.startedAt ? 'running' : 'waiting'
+  return skipReason === 'blocked' ? 'waiting' : 'not-needed'
 }
 
 /**
@@ -117,87 +150,51 @@ const STAGE_HELP_KEYS: Record<GenerationStageId, string> = {
   store: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.store'
 }
 
-/**
- * The fixed logic of one stage, behind the question mark: it is a paragraph, so it opens as a
- * popover — hover and focus preview it, a click pins it, Escape closes it and returns the focus.
- * The sentence is the stage's own copy, taken by key; a stage the locale has no line for renders no
- * icon, so an empty bubble cannot appear.
- */
-function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBriefingText }>): React.ReactElement | null {
-  const labels = text.generationTrace
-  const resolveProductText = useProductTextKey()
-  if (!labels.stageHelp[id]?.trim()) return null
-  return <Popover
-    labelKey={STAGE_HELP_KEYS[id]}
-    resolveText={resolveProductText}
-    trigger={(triggerProps) => (
-      <IconButton
-        {...triggerProps}
-        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel"
-        ariaLabelParams={{ stage: labels.stages[id] }}
-        dataAttributes={{ 'data-stage-help': id }}
-        icon={CircleHelp}
-        resolveText={resolveProductText}
-        size="sm"
-        variant="plain"
-      />
-    )}
-  />
-}
-
 function stageResult(
   stage: GenerationTraceStage,
   id: GenerationStageId,
   skipReason: SkipReason | undefined,
   text: DailyBriefingText,
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
+  formatTime: (value: string, precision?: 'minute' | 'second') => string,
+  running: boolean
 ): string {
-  const range = formatRange(stage.startedAt, stage.finishedAt, formatTime)
-  const duration = stageDurationMs(stage)
-  const parts = [range, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
+  // The start instant, not a range: the duration beside it already says how long the stage took,
+  // and "07:21:26 → 07:21:27" answers a question the reader did not ask.
+  const instant = formatInstant(stage.startedAt ?? stage.finishedAt, formatTime)
+  // No end, no duration: a step still running must not print "0 ms" as if it had taken no time.
+  const duration = stage.finishedAt ? stageDurationMs(stage) : undefined
+  const parts = [instant, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
+  // A step that is executing says so; without the word its row is only a clock, and the reader
+  // cannot tell "working on it" from "finished at that moment".
+  if (running && stage.state === 'pending' && stage.startedAt) parts.push(text.generationProgress.running)
   if (parts.length > 0) return parts.join(' · ')
   if (stage.state === 'skipped') {
     if (skipReason === 'blocked') return text.generationTrace.states.notRun
     // Only the repair stages mean "no repair was needed"; any other clean skip just says skipped.
     return id === 'repair-1' || id === 'repair-2' ? text.generationTrace.states.notNeeded : text.generationTrace.states.skipped
   }
-  return text.generationTrace.notRecorded
+  // A step the run has not reached yet has not started; "not recorded" is what a finished run says
+  // about a step that left no row behind.
+  return running ? text.generationTrace.states.notStarted : text.generationTrace.notRecorded
 }
 
 /**
- * A generation run rarely crosses midnight, so the date is noise on almost every row: print
- * `20:56:53 → 20:58:31` and only add `MM-DD` on the side that falls on another day.
+ * One instant per stage: the moment it started. A stage's end is not printed — the duration next to
+ * it says how long it took — so a row never reads as "from this time to that time".
+ *
+ * The shell formatter writes `YYYY-MM-DD HH:mm:ss`; the date is dropped here because an attempt
+ * lives inside one edition and the reader is looking at one day.
  */
-function formatRange(
-  startedAt: string | undefined,
-  finishedAt: string | undefined,
+function formatInstant(
+  value: string | undefined,
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 ): string {
-  const start = startedAt ? timePoint(startedAt, formatTime) : undefined
-  const finish = finishedAt ? timePoint(finishedAt, formatTime) : undefined
-  if (start && finish) {
-    const sameDay = !start.date || !finish.date || start.date === finish.date
-    return `${sameDay ? start.time : withDate(start)} → ${sameDay ? finish.time : withDate(finish)}`
-  }
-  const only = start ?? finish
-  return only ? only.time : ''
-}
-
-function timePoint(
-  value: string,
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
-): Readonly<{ date?: string; time: string }> {
-  // The shell formatter writes `YYYY-MM-DD HH:mm:ss GMT±n`; a test double may pass the clock alone.
+  if (!value) return ''
   const [first, second] = formatTime(value, 'second').split(' ')
-  if (second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '')) return { date: first, time: second }
-  return { time: first ?? '' }
+  return second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '') ? second : first ?? ''
 }
 
-function withDate(point: Readonly<{ date?: string; time: string }>): string {
-  return point.date ? `${point.date.slice(5)} ${point.time}` : point.time
-}
-
-function formatDuration(milliseconds: number, text: DailyBriefingText): string {
+export function formatDuration(milliseconds: number, text: DailyBriefingText): string {
   const units = text.generationTrace.durationUnits
   if (milliseconds < 1_000) return units.milliseconds.replace('{count}', String(Math.round(milliseconds)))
   const seconds = milliseconds / 1_000

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BriefingGenerationStageId, BriefingGenerationTrace, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { factSnapshotFromPacket } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingService, type DailyBriefingSource, type DailyBriefingStore, type DailyBriefingStoredEdition } from './dailyBriefingService'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 
@@ -26,7 +27,6 @@ const emptyPacket = (): DailyBriefingFactPacket => ({
   enabled: { fearGreed: false, funding: false, stablecoin: false, etf: false, calendar: false }
 })
 
-type AttemptRow = Readonly<{ date: string; locale: DailyBriefingLocale; trace: BriefingGenerationTrace }>
 
 function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefingStore & {
   rows: Map<string, DailyBriefingStoredEdition>
@@ -34,6 +34,7 @@ function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefing
 } {
   const rows = new Map<string, DailyBriefingStoredEdition>()
   const attempts = new Map<string, BriefingGenerationTrace>()
+  const attemptCounts = new Map<string, number>()
   const key = (date: string, locale: string): string => `${date}:${locale}`
   return {
     rows,
@@ -44,15 +45,21 @@ function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefing
       return [...rows.values()].filter((row) => row.locale === locale && row.date >= from && row.date <= to)
     },
     async prune() {},
-    async putAttempt(attempt: AttemptRow) { attempts.set(key(attempt.date, attempt.locale), attempt.trace) },
+    async beginAttempt(attempt) {
+      const no = (attemptCounts.get(key(attempt.date, attempt.locale)) ?? 0) + 1
+      attemptCounts.set(key(attempt.date, attempt.locale), no)
+      return no
+    },
+    async finishAttempt(attempt) {
+      if (attempt.trace) attempts.set(key(attempt.date, attempt.locale), attempt.trace)
+    },
     async getAttempt(date, locale) { return attempts.get(key(date, locale)) },
-    async clearAttempt(date, locale) { attempts.delete(key(date, locale)) },
     ...overrides
   }
 }
 
 function source(packet: () => DailyBriefingFactPacket = emptyPacket): DailyBriefingSource {
-  return { async buildPacket() { return packet() } }
+  return { async readFacts() { return factSnapshotFromPacket(packet()) }, async renderPacket(facts, locale, timeZone) { return Object.freeze({ ...packet(), locale, timeZone }) } }
 }
 
 const validSelection = JSON.stringify({ stage: 'select', news: [], macro: [], next: [] })
@@ -154,7 +161,7 @@ describe('daily briefing generation trace', () => {
   it('locates a source failure and persists the failed trace beside the edition key', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
-      source: { async buildPacket() { throw new Error('query failed') } },
+      source: { async readFacts() { throw new Error('query failed') }, async renderPacket() { throw new Error('query failed') } },
       store, now: () => asOf
     })
 
@@ -185,10 +192,9 @@ describe('daily briefing generation trace', () => {
     expect(trace.state).toBe('failed')
     expect(stage(trace, 'selection')).toMatchObject({ state: 'failed', failureCode: 'invalid-shape' })
     expect(stage(trace, 'writing')?.state).toBe('skipped')
-    expect(result.state).toBe('available')
-    if (result.state === 'available') {
-      expect(result.document.provenance.editorialFailure).toBe('invalid-shape')
-    }
+    // 写作没出来 -> 不发布（用户 2026-11-06），失败码就是选择阶段的原因码。
+    expect(result.state).toBe('unavailable')
+    if (result.state === 'unavailable') expect(result.failureCode).toBe('invalid-shape')
   })
 
   it('records a truncated writing stage instead of calling every throw a timeout', async () => {
@@ -211,7 +217,7 @@ describe('daily briefing generation trace', () => {
     }
   })
 
-  it('locates a validation failure that exhausted both repairs', async () => {
+  it('locates a validation failure that exhausted all three repairs', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
       source: source(), store, now: () => asOf,
@@ -225,6 +231,8 @@ describe('daily briefing generation trace', () => {
     expect(stage(trace, 'validation')).toMatchObject({ state: 'failed', failureCode: expect.any(String) })
     expect(stage(trace, 'repair-1')?.state).toBe('success')
     expect(stage(trace, 'repair-2')?.state).toBe('success')
+    expect(stage(trace, 'repair-3')?.state).toBe('success')
+    // 校验没通过、写作没出来：**不落库**（用户 2026-11-06），阶段表也如实记成跳过。
     expect(stage(trace, 'store')?.state).toBe('skipped')
   })
 
@@ -232,7 +240,7 @@ describe('daily briefing generation trace', () => {
     const attempts = new Map<string, BriefingGenerationTrace>()
     const store = memoryStore({
       async put() { throw new Error('disk full') },
-      async putAttempt(attempt: AttemptRow) { attempts.set(`${attempt.date}:${attempt.locale}`, attempt.trace) }
+      async finishAttempt(attempt) { if (attempt.trace) attempts.set(`${attempt.date}:${attempt.locale}`, attempt.trace) }
     })
     const service = createDailyBriefingService({ source: source(), store, now: () => asOf, agentRunner: runner() })
 
@@ -259,5 +267,62 @@ describe('daily briefing generation trace', () => {
     expect(trace.state).toBe('failed')
     expect(stage(trace, 'selection')).toMatchObject({ state: 'failed', failureCode: 'model-unavailable' })
     expect(stage(trace, 'writing')?.state).toBe('skipped')
+  })
+})
+
+/**
+ * A stage that runs twice reports its latest segment.
+ *
+ * Validation runs, fails, hands off to a repair, then runs again. If the second begin were ignored
+ * (the old behaviour), the validation row's window would swallow the repair's seconds and two rows
+ * would show one set of numbers — the reader cannot tell which one actually spent the time.
+ */
+describe('a repeated stage reports its last segment', () => {
+  it('gives the second segment its own start, and drops the first window', () => {
+    let clock = Date.parse('2026-11-04T00:00:00.000Z')
+    const recorder = createDailyBriefingGenerationRecorder({ attemptId: 'a', now: () => new Date(clock).toISOString() })
+
+    recorder.begin('validation')
+    clock += 1_000
+    recorder.end('validation', 'failed', { failureCode: 'schema-validation-failed' })
+    recorder.begin('repair-1')
+    clock += 8_000
+    recorder.end('repair-1', 'success')
+    clock += 100
+    recorder.begin('validation')
+    clock += 500
+    recorder.end('validation', 'success')
+
+    const stages = recorder.snapshot().stages
+    const validation = stages.find((stage) => stage.id === 'validation')
+    const repair = stages.find((stage) => stage.id === 'repair-1')
+
+    expect(validation?.startedAt).toBe('2026-11-04T00:00:09.100Z')
+    expect(validation?.durationMs).toBe(500)
+    // The repair keeps the seconds it spent, and the two rows no longer share a window.
+    expect(repair?.startedAt).toBe('2026-11-04T00:00:01.000Z')
+    expect(repair?.durationMs).toBe(8_000)
+    expect(Date.parse(validation!.startedAt!)).toBeGreaterThan(Date.parse(repair!.finishedAt!))
+  })
+})
+
+describe('a stage that runs more than once', () => {
+  it("counts its segments and keeps the last one's timing", () => {
+    // A clock that advances a second per read: the last segment's own start and end are then known
+    // apart from every other read the recorder makes (the constructor reads it once too).
+    let tick = Date.parse('2026-11-05T00:00:00.000Z')
+    const recorder = createDailyBriefingGenerationRecorder({ attemptId: 'a', now: () => new Date((tick += 1_000)).toISOString() })
+    // Validation ran, failed, ran again, failed again, ran a third time.
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    recorder.begin('validation'); recorder.end('validation', 'failed')
+    const trace = recorder.complete('failed')
+    const validation = trace.stages.find((stage) => stage.id === 'validation')!
+    // Three runs, one row, the last segment's own second: the count is what makes "it retried" visible
+    // instead of implied by a timestamp the reader has to compare against someone else's.
+    expect(validation.runs).toBe(3)
+    expect(validation.durationMs).toBe(1_000)
+    // A stage that ran once carries no count, so every existing trace keeps its shape.
+    expect(trace.stages.find((stage) => stage.id === 'writing')?.runs).toBeUndefined()
   })
 })

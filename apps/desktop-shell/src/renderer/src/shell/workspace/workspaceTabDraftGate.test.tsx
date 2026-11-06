@@ -49,9 +49,10 @@ afterEach(() => {
 
 describe('P2-10③ AppShell 草稿门接线（D2）', { timeout: SHELL_RENDER_TIMEOUT_MS }, () => {
   it('关闭当前 Tab 前出现真实草稿门（[data-draft-gate]），保存后才真正关闭', async () => {
-    const page = await renderShell()
+    const page = await renderShell({ extraTabs: ['assistants'] })
     await enterApiKey(page.container, apiKeyFixture)
     const settingsKey = page.settingsKey()
+    const otherKey = page.tabKeys().find((key) => key !== settingsKey)!
 
     await clickTabClose(page.container, settingsKey)
 
@@ -59,10 +60,10 @@ describe('P2-10③ AppShell 草稿门接线（D2）', { timeout: SHELL_RENDER_TI
     await vi.waitFor(() => expect(page.container.querySelector('[data-draft-gate]')).not.toBeNull(), { timeout: CONDITION_TIMEOUT_MS })
     expect(page.container.querySelector('[data-draft-gate]')?.getAttribute('data-draft-gate')).toBe('sensitive-draft')
     expect(page.api.tabsCommand).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'closeTab' }))
-    expect(page.tabKeys()).toEqual([settingsKey])
+    expect(page.tabKeys()).toEqual([otherKey, settingsKey])
 
     await clickLabel(page.container, labels.draftGateSave)
-    await vi.waitFor(() => expect(page.tabKeys()).toEqual([]), { timeout: CONDITION_TIMEOUT_MS })
+    await vi.waitFor(() => expect(page.tabKeys()).toEqual([otherKey]), { timeout: CONDITION_TIMEOUT_MS })
     expect(page.container.querySelector('[data-draft-gate]')).toBeNull()
     expect(page.api.upsert).toHaveBeenCalledTimes(1)
 
@@ -130,16 +131,17 @@ describe('P2-10③ AppShell 草稿门接线（D2）', { timeout: SHELL_RENDER_TI
   })
 
   it('保存失败 ⇒ 保留原窗与草稿，并给出可见失败提示（绝不静默关闭）', async () => {
-    const page = await renderShell({ upsertError: new Error('provider-secret-vault-write-failed') })
+    const page = await renderShell({ upsertError: new Error('provider-secret-vault-write-failed'), extraTabs: ['assistants'] })
     await enterApiKey(page.container, apiKeyFixture)
     const settingsKey = page.settingsKey()
+    const otherKey = page.tabKeys().find((key) => key !== settingsKey)!
 
     await clickTabClose(page.container, settingsKey)
     await vi.waitFor(() => expect(page.container.querySelector('[data-draft-gate]')).not.toBeNull(), { timeout: CONDITION_TIMEOUT_MS })
     await clickLabel(page.container, labels.draftGateSave)
 
     await vi.waitFor(() => expect(page.container.textContent).toContain(labels.draftGateSaveFailed), { timeout: CONDITION_TIMEOUT_MS })
-    expect(page.tabKeys()).toEqual([settingsKey])
+    expect(page.tabKeys()).toEqual([otherKey, settingsKey])
     // 草稿仍在：再次关闭依然过门（保存失败绝不静默丢弃）
     await clickTabClose(page.container, settingsKey)
     await vi.waitFor(() => expect(page.container.querySelector('[data-draft-gate]')).not.toBeNull(), { timeout: CONDITION_TIMEOUT_MS })
@@ -150,18 +152,25 @@ describe('P2-10③ AppShell 草稿门接线（D2）', { timeout: SHELL_RENDER_TI
   })
 
   it('干净（无草稿）时静默关闭：不弹门、不保存', async () => {
-    const page = await renderShell()
+    const page = await renderShell({ extraTabs: ['assistants'] })
     const settingsKey = page.settingsKey()
+    const otherKey = page.tabKeys().find((key) => key !== settingsKey)!
 
     await clickTabClose(page.container, settingsKey)
 
-    await vi.waitFor(() => expect(page.tabKeys()).toEqual([]), { timeout: CONDITION_TIMEOUT_MS })
+    await vi.waitFor(() => expect(page.tabKeys()).toEqual([otherKey]), { timeout: CONDITION_TIMEOUT_MS })
     expect(page.container.querySelector('[data-draft-gate]')).toBeNull()
     expect(page.api.upsert).not.toHaveBeenCalled()
 
     await act(async () => page.root.unmount())
   })
 })
+
+/*
+ * 2026-11-06 起：**没有可恢复的活动页时，壳层会自己打开声明了「首页」的那一页**（默认首页契约，口径 A）。
+ * 所以「零页签」不再是这些夹具的现实起点：不预置一页，壳层会先补开首页，页签集合就不再只有本用例关心的那个。
+ * 需要「只有设置页」的用例改成 `extraTabs: ['assistants']`（＝用户上次停在别处），这正是真机的常态。
+ */
 
 /* ────────────────────────── 真实 AppShell + 受控 .tabs.* 桥 ────────────────────────── */
 

@@ -17,6 +17,7 @@ import { createTaskIpcScheduleValidationOptions } from '../taskScheduleValidatio
 import { createMainWindowHost } from '../window/mainWindow'
 import { createMainWindow, loadMainWindowRenderer } from '../../window/createMainWindow'
 import { ensureWritableTempDirectory } from '../ensureWritableTempDirectory'
+import { markTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
 import { getPanelWorkspaceForDisposal } from './slots'
 
 export type PlatformCorePorts = Readonly<{
@@ -38,6 +39,8 @@ const writableTempDirectory = ensureWritableTempDirectory({
   environment: process.env,
   setPath: (name, value) => app.setPath(name, value)
 })
+// 闸门在这里打开：此后才允许任何 SQLite 打开（见 openSqliteDatabase 里那段注释）。
+markTempDirectoryVerified()
 const platformDataDirectory = join(userDataPath, 'platform')
 mkdirSync(platformDataDirectory, { recursive: true })
 const settingsStore = createSettingsStore(

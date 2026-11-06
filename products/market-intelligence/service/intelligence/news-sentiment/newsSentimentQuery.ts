@@ -22,13 +22,15 @@ type TranslationReader = {
   resolveDisplayTexts: (input: {
     itemIds: string[]
     textMode?: 'translated' | 'original'
-  }) => Promise<Record<string, { title?: string; status?: string } | undefined>>
+  }) => Promise<Record<string, { title?: string; status?: string; titleLocale?: string } | undefined>>
 }
 
 export type NewsSentimentItemView = {
   itemId: string
   title: string
   displayTitle?: string
+  /** The language `displayTitle` was translated into; absent means unknown, never "same as the edition". */
+  titleLocale?: string
   sourceId: string
   sourceName: string
   url?: string
@@ -161,7 +163,7 @@ export function createNewsSentimentQuery(deps: {
           const body = deps.bodyTranslation?.get(row.itemId, displayLocale)
           return {
             ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
-            ...(body?.titleText ? { displayTitle: body.titleText } : {}),
+            ...(body?.titleText ? { displayTitle: body.titleText, titleLocale: displayLocale } : {}),
             bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
@@ -217,7 +219,7 @@ export function createNewsSentimentQuery(deps: {
       const bodyTitle = body?.titleText
       return {
         ...toItemView(row, item, translations[input.itemId]),
-        ...(bodyTitle ? { displayTitle: bodyTitle } : {}),
+        ...(bodyTitle ? { displayTitle: bodyTitle, titleLocale: displayLocale } : {}),
         ...(document?.state === 'available' && document.bodyText
           ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
           : {}),
@@ -275,13 +277,19 @@ function toSignal(
 function toItemView(
   row: NewsSentimentRecord,
   item: { itemId: string; title: string; url?: string; sourceId: string } | undefined,
-  translation: { title?: string; status?: string } | undefined
+  translation: { title?: string; status?: string; titleLocale?: string } | undefined
 ): NewsSentimentItemView {
   const definition = getIntelligenceSourceDefinition(row.sourceId)
   return {
     itemId: row.itemId,
     title: item?.title ?? '',
-    ...(translation?.status === 'translated' && translation.title ? { displayTitle: translation.title } : {}),
+    ...(translation?.status === 'translated' && translation.title
+      ? {
+        displayTitle: translation.title,
+        // 只接受这一版认识的两种语言；别的一律不标，调用方按"不等于本期语言"处理。
+        ...(translation.titleLocale === 'zh-CN' || translation.titleLocale === 'en-US' ? { titleLocale: translation.titleLocale } : {})
+      }
+      : {}),
     sourceId: row.sourceId,
     sourceName: definition?.displayName ?? row.sourceId,
     ...(item?.url ? { url: item.url } : {}),
@@ -322,7 +330,7 @@ async function readReadiness(
 async function readTranslations(
   reader: TranslationReader | undefined,
   itemIds: string[]
-): Promise<Record<string, { title?: string; status?: string } | undefined>> {
+): Promise<Record<string, { title?: string; status?: string; titleLocale?: string } | undefined>> {
   if (!reader) return {}
   try {
     return await reader.resolveDisplayTexts({ itemIds, textMode: 'translated' })

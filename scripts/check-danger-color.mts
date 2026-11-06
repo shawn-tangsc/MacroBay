@@ -8,7 +8,7 @@
  * 不做用途分类：分类是基线里的另一列，人工填；闸门只管「有没有在基线之外多出来」。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 import {
   compareWithBaseline,
@@ -42,7 +42,8 @@ for (const root of SCAN_ROOTS) {
 
 const uses: DangerColorUse[] = []
 for (const file of files) {
-  uses.push(...scanDangerColor(readFileSync(file, 'utf8'), relative(ROOT, file)))
+  // 基线键一律正斜杠：见 check-file-size / check-hex-color 同一条注释。
+  uses.push(...scanDangerColor(readFileSync(file, 'utf8'), relative(ROOT, file).split(sep).join('/')))
 }
 
 const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, number>

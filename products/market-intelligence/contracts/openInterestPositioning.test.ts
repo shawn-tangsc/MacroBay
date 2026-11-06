@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { openInterestBucketPolicy } from './openInterestHistory'
+
 import {
   liquidationHintPolicy,
   positioningPolicy,
@@ -120,5 +122,17 @@ describe('liquidation mark anchoring', () => {
   it('carries the notional value of the bucket it marks', () => {
     const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120) })
     expect(result.hints[0]).toMatchObject({ notionalUsd: 8_000_000_000 * 0.98 })
+  })
+})
+
+describe('liquidation lookback', () => {
+  it('is a duration, so its bar count follows the judgement bucket', () => {
+    expect(liquidationHintPolicy.lookbackMs).toBe(24 * 3_600_000)
+    expect(liquidationHintPolicy.lookbackBars).toBe(96)
+    // Counted on the judgement bucket, not the storage bucket: while storage gets finer, the
+    // baseline must stay one day, so 96 — never 288.
+    expect(openInterestBucketPolicy.signalBucketMs).toBe(900_000)
+    expect(Math.round(liquidationHintPolicy.lookbackMs / openInterestBucketPolicy.signalBucketMs)).toBe(96)
+    expect(Math.round(liquidationHintPolicy.lookbackMs / 300_000)).toBe(288)
   })
 })

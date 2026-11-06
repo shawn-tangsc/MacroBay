@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createTaskFailureNotifier } from './taskFailureNotifier'
 
 function run(overrides: Partial<JobRunRecord> = {}): JobRunRecord {
@@ -26,13 +26,16 @@ function run(overrides: Partial<JobRunRecord> = {}): JobRunRecord {
   }
 }
 
+const SNAPSHOT = { 'zh-CN': '央行利率决议采集', 'en-US': 'Central bank rate decision' }
+
 function notifier(overrides: {
-  resolveTaskName?: (input: { definitionId: string; productId?: string }) => string | null
+  taskNameSnapshot?: (input: { definitionId: string; productId?: string }) =>
+    { 'zh-CN': string; 'en-US': string } | undefined
 } = {}) {
-  const submit = vi.fn<(request: NotificationRequest) => Promise<unknown>>(async () => undefined)
+  const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<unknown>>(async () => undefined)
   const notify = createTaskFailureNotifier({
     submit,
-    resolveTaskName: overrides.resolveTaskName ?? (() => '央行利率决议采集'),
+    taskNameSnapshot: overrides.taskNameSnapshot ?? (() => SNAPSHOT),
     dayToken: (instant) => instant.slice(0, 10)
   })
   return { submit, notify }
@@ -44,15 +47,28 @@ describe('task failure notifier', () => {
     await notify({ run: run(), cause: 'executed' })
 
     expect(submit).toHaveBeenCalledTimes(1)
-    const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    // 记录里存的是键 + 参数，不是句子：句子由解析器按读者语言产出。
-    expect(request.titleKey).toBe('notification.taskFailed.title')
-    expect(request.titleParams).toEqual({ taskName: '央行利率决议采集' })
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 契约 §3.2：事件 id、参数、去重变量；标题/正文键在 P1 声明里，不在这里。
+    expect(request.eventTypeId).toBe('platform.job.failed-terminal')
+    expect(request.producerId).toBe('handler-1')
+    expect(request.dedupeVars).toEqual({
+      builder: 'template',
+      vars: { definitionId: 'definition-1', date: '2026-11-02' }
+    })
+    // 句子在源头拼好（契约 v2.56）：两种语言各一份，记录里**不再挂文案键与参数**。
+    expect(request.rendered?.['zh-CN']).toEqual({
+      title: '任务失败：央行利率决议采集',
+      body: '这一次没有跑完。',
+      reason: '这个任务不会再自动重试。'
+    })
+    expect(request.rendered?.['en-US']?.title).toBe('Task failed: Central bank rate decision')
+    expect(request).not.toHaveProperty('titleParams')
+    expect(request).not.toHaveProperty('titleKey')
     // 不是 run.title：那是任务标识（`Collect 央行`），不是给人看的标题。
     expect(JSON.stringify(request)).not.toContain('Collect 央行')
-    expect(request.dedupeKey).toBe('task-failed:definition-1:2026-11-02')
-    expect(request.requestedChannels).toContain('center')
+    expect(request.actions).toHaveLength(1)
     expect(request.deeplink).toMatchObject({ entityType: 'job-definition', entityId: 'definition-1' })
+    expect(request.occurredAt).toBe('2026-11-02T01:00:05.000Z')
   })
 
   it('stays silent when the run succeeded: a quiet day produces nothing', async () => {
@@ -69,18 +85,28 @@ describe('task failure notifier', () => {
   })
 
   it('stays silent when no readable task name exists, rather than falling back to the identifier', async () => {
-    const { submit, notify } = notifier({ resolveTaskName: () => null })
+    const { submit, notify } = notifier({ taskNameSnapshot: () => undefined })
     await notify({ run: run(), cause: 'executed' })
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('truncates a long failure reason instead of pasting a stack trace into the notification', async () => {
+  it('keeps the raw error out of the notification: no internal codes, no stack traces (requirement §4)', async () => {
     const { submit, notify } = notifier()
-    await notify({ run: run({ lastError: 'x'.repeat(500) }), cause: 'executed' })
-    const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    // 长错误不进记录：正文只留键，原因细节留给运行记录。
-    expect(request.bodyKey).toBe('notification.taskFailed.body')
-    expect(request.titleParams?.taskName).toBe('央行利率决议采集')
-    expect(JSON.stringify(request)).not.toContain('xxxxxxxx')
+    await notify({ run: run({ lastError: `upstream returned 503 ${'x'.repeat(500)}` }), cause: 'executed' })
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 正文里没有 {reason} 这一格：原始错误只留在运行日志，不进记录也不进推送。
+    expect(request.rendered?.['zh-CN']?.body).toBe('这一次没有跑完。')
+    expect(request.reasonParams).toBeUndefined()
+    expect(JSON.stringify(request)).not.toContain('503')
+    expect(JSON.stringify(request)).not.toContain('x'.repeat(200))
+  })
+
+  it('uses the handler id as producerId: the ownership table claims handlers, not period-bearing definition ids', async () => {
+    const { submit, notify } = notifier()
+    await notify({ run: run({ owner: 'product', productId: 'market-intelligence' }), cause: 'executed' })
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 让渡表是 manifest 里的静态表：definitionId 天天新一期就 claim 不上，handler 才稳定。
+    expect(request.producerId).toBe('handler-1')
+    expect(request.producerId).not.toBe('definition-1')
   })
 })

@@ -1,6 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer, type Server } from 'node:http'
 
+import {
+  AGENT_MODEL_GATEWAY_FALLBACK_TIMEOUT_MS,
+  AGENT_MODEL_REQUEST_TIMEOUT_HEADER,
+  parseAgentModelRequestTimeoutHeader
+} from '../../../ai/agent-platform/runtime/agentModelRequestBudget'
 import type { AgentModelGatewayProviderConfig } from './agentModelGatewayTypes'
 import type { AgentModelGatewayProviderAdapter } from './AgentModelGatewayProviderAdapter'
 
@@ -12,15 +17,22 @@ export type AgentModelGatewayHttpServerOptions = {
   adapter: AgentModelGatewayProviderAdapter
   fetch: typeof fetch
   getUpstreamApiKey: () => string | null | Promise<string | null>
+  /**
+   * The budget used for a request that declares none. Tests shrink it so the fallback can be
+   * observed without waiting a real minute; production keeps `AGENT_MODEL_GATEWAY_FALLBACK_TIMEOUT_MS`.
+   */
+  fallbackTimeoutMs?: number
   now?: () => Date
 }
 
 export class AgentModelGatewayHttpServer {
   private server: Server | null = null
   private readonly host: string
+  private readonly fallbackTimeoutMs: number
 
   constructor(private readonly options: AgentModelGatewayHttpServerOptions) {
     this.host = options.host ?? '127.0.0.1'
+    this.fallbackTimeoutMs = options.fallbackTimeoutMs ?? AGENT_MODEL_GATEWAY_FALLBACK_TIMEOUT_MS
   }
 
   getBaseUrl(): string {
@@ -79,6 +91,21 @@ export class AgentModelGatewayHttpServer {
       return
     }
 
+    const declaredTimeout = parseAgentModelRequestTimeoutHeader(
+      request.headers[AGENT_MODEL_REQUEST_TIMEOUT_HEADER]
+    )
+    if (declaredTimeout.state === 'invalid') {
+      // A caller that declares a budget we cannot honor must not silently be timed by the fallback:
+      // that is exactly how a request ends up cut at a budget nobody chose.
+      writeJson(response, 400, {
+        error: 'invalid_request_timeout_budget',
+        message: `"${AGENT_MODEL_REQUEST_TIMEOUT_HEADER}" must be an integer number of milliseconds.`
+      })
+      return
+    }
+    const requestTimeoutMs =
+      declaredTimeout.state === 'declared' ? declaredTimeout.timeoutMs : this.fallbackTimeoutMs
+
     const config = this.options.getProviderConfig()
     if (!config) {
       writeJson(response, 503, { error: 'gateway_config_missing' })
@@ -105,7 +132,8 @@ export class AgentModelGatewayHttpServer {
         body,
         upstreamApiKey,
         fetch: this.options.fetch,
-        abortSignal: abortController.signal
+        abortSignal: abortController.signal,
+        timeoutMs: requestTimeoutMs
       })
 
       response.statusCode = upstreamResponse.status

@@ -93,7 +93,11 @@ wrapping a picker in an explanation panel is a classification error, not a migra
 - **A click elsewhere closes it, without stealing focus.** The place the reader clicked is where
   they want to be; moving focus back to the trigger would fight them.
 - **Esc closes it and returns focus to the trigger.** Otherwise focus lands on `body` and a keyboard
-  reader loses their place.
+  reader loses their place. **It closes only the popover**: the settings panel or dialog underneath
+  has its own Esc handler, and one keypress must not close both — the reader pressed "close this
+  explanation" and would lose the panel they were in. The popover handles the key in the capture
+  phase, before the outer handler sees it; with no popover open it registers nothing and Escape
+  passes through.
 - **Maximum width 320 px**, text wraps, the page never widens.
 - **An empty sentence renders no bubble.** Reading a key name aloud is worse than saying nothing;
   the same rule as `Tooltip`. With `lines`, a line that resolves to nothing is dropped, and when every

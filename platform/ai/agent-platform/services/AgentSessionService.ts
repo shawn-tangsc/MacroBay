@@ -5,6 +5,7 @@ import type {
   ListAgentSessionsQuery,
   UpdateAgentSessionDto
 } from '../schemas/sessionSchemas'
+import { normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
 import type { AgentSessionWorkspaceSource } from '../schemas/workspaceSchemas'
 import {
   createAgentSession,
@@ -14,6 +15,7 @@ import {
   deleteAgentWorkspace,
   listAgentSessions,
   reorderAgentSessions,
+  selectAgentSession,
   toggleSessionPin,
   upsertAgentWorkspace,
   updateAgentSessionAgent,
@@ -122,6 +124,41 @@ export class AgentSessionService {
 
   async reorderBatch(orderedSessionIds: readonly string[]): Promise<void> {
     await this.store.update((state) => reorderAgentSessions(state, orderedSessionIds))
+  }
+
+  /**
+   * 「按会话选中」（IPC 与频道入口共用这一个入口）。
+   *
+   * 和 IPC handler 里原来那一行逐字一致：同一个纯函数 `selectAgentSession`、同一个写口
+   * `activeSelectionRowOnly`（只写选中那一行，不把整棵树写一遍）。**两份写法必然漂**，
+   * 所以合成一处；未知 id 原样返回状态，不抛错——与 handler 的行为一致。
+   */
+  async select(id: string) {
+    return this.store.update((state) => selectAgentSession(state, id), { activeSelectionRowOnly: true })
+  }
+
+  /**
+   * 按「智能体 + **自动会话幂等键**」取一条会话（例如分析的 `runId`）。
+   *
+   * **键是 `originRef`，既不是 `originGroup` 也不是 `description`**：
+   * `originGroup` 是侧栏分组的键（这些会话属于同一类），拿它当幂等键，每次运行都会变成
+   * 侧栏里的一个独立分组；`description` 是给人看的自由文本（可选、可改、内置会话还按语言各存一份），
+   * 拿它当身份会在改描述或切语言时静默失效。
+   * 命中多条时窄查询会抛错——那是数据已经不一致，不许悄悄挑一条继续跑。
+   *
+   * 有窄查询适配器时只读一行；没有时退回扫内存状态（那条路会读全量，只有内存桩会走到）。
+   */
+  async findByAutomationRef(agentId: string, originRef: string): Promise<AgentSessionEntity | null> {
+    const narrow = this.queries.sessions?.findByAutomationRef
+    if (narrow) return narrow(agentId, originRef)
+    const state = await this.store.getState()
+    return (
+      state.sessions.find(
+        (session) =>
+          session.agentId === agentId &&
+          normalizeSessionOriginRef(session.originRef) === normalizeSessionOriginRef(originRef)
+      ) ?? null
+    )
   }
 
   async togglePin(id: string) {

@@ -12,8 +12,8 @@ import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from '../../../contracts/intelligen
 import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
-import type { MacroMarketSnapshot } from '../../macro-market/macroMarketSnapshotQuery'
-import type { MacroRatesSnapshot } from '../../macro-rates/macroRatesSnapshotQuery'
+import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
+import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import {
   buildMarketAnalysisDomainAccessMatrix,
   buildMarketAnalysisContext,

@@ -15,6 +15,8 @@ import type { JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
  * and after this migration they are the only timers left in the channel subsystem.
  */
 
+import { CHANNEL_DISPLAY_NAME, CHANNEL_TYPE_BY_ADAPTER_KEY } from '../../../channels/channelDisplayNames'
+
 export const channelAdapterMaintenanceTypes = ['telegram', 'slack', 'lark', 'qq', 'discord', 'wechat'] as const
 export type ChannelAdapterMaintenanceType = (typeof channelAdapterMaintenanceTypes)[number]
 
@@ -68,7 +70,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.deliveryCleanup,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryCleanup,
-      title: 'Channel delivery cleanup',
+      title: { 'zh-CN': '清理通道投递记录', 'en-US': 'Channel delivery cleanup' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
@@ -77,7 +79,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.deliveryRetry,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryRetry,
-      title: 'Channel delivery retry',
+      title: { 'zh-CN': '重试失败的通道投递', 'en-US': 'Channel delivery retry' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelDeliveryRetryIntervalMs, anchor: 'lastComplete' },
       payload: {}
@@ -86,7 +88,7 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.inboundRecovery,
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.inboundRecovery,
-      title: 'Channel inbound recovery',
+      title: { 'zh-CN': '恢复通道入站消息', 'en-US': 'Channel inbound recovery' },
       audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
@@ -95,7 +97,9 @@ export function channelMaintenanceJobDefinitions(
       id: channelMaintenanceJobIds.adapterMaintenance(type),
       owner: 'platform' as const,
       handlerId: channelMaintenanceJobIds.adapterMaintenance(type),
-      title: `${type} runtime maintenance`,
+      // 标题里的通道名取**对外名**（飞书），不是适配器键（lark）：作业名是给人看的。
+      title: { 'zh-CN': '{channel} 运行时维护', 'en-US': '{channel} runtime maintenance' },
+      titleParams: { channel: CHANNEL_DISPLAY_NAME[CHANNEL_TYPE_BY_ADAPTER_KEY[type]] },
       audience: 'internal' as const,
       trigger: {
         kind: 'interval' as const,

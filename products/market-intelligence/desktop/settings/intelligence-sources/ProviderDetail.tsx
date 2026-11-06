@@ -11,6 +11,7 @@ import { TranslationPreferencesSection } from './TranslationPreferencesSection'
 import { isNetworkConnectionFailure, testSourceConnection } from '../../shared/intelligenceSourceTest'
 import { openProxySettings } from '../../shared/navigation/productShellNavigation'
 import { NetworkProxyBanner } from '../../shared/NetworkProxyBanner'
+import { useProxyConfigured } from '../../shared/useProxyConfigured'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import { SOURCE_REPEATED_FAILURE_THRESHOLD, type ProviderView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -109,6 +110,8 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
   const resolveText = useProductTextKey()
+  // 读者已经配好自定义代理时，不再把「需要连接 VPN」当成他还没做的事（MI-11-R196）。
+  const proxyConfigured = useProxyConfigured()
   /** Set only by a transport-level refusal, so a rejected key never points at the proxy setting. */
   const [networkFailure, setNetworkFailure] = useState(false)
 
@@ -227,9 +230,10 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
   const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
   return <section className="source-provider-detail">
-    {/* The requirement is stated up front; a refused probe only sharpens the wording. */}
-    {hasProxySource ? <NetworkProxyBanner
+    {/* 要求在前、探测只把措辞收紧；读者配好代理后不再显示「去配代理」，只在真失败时回来。 */}
+    {hasProxySource && (!proxyConfigured || networkFailure) ? <NetworkProxyBanner
       tone={networkFailure ? 'failed' : 'requires'}
+      configured={proxyConfigured}
       onOpenProxySettings={openProxySettings}
     /> : null}
     <header className="source-provider-detail__header">
@@ -296,7 +300,7 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
             <strong>{name}</strong>
             <span className="intelligence-source-tags">
               {[...new Set(tags)].map((tag) => <em key={tag}>{tag}</em>)}
-              {source.requiresProxy ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
+              {source.requiresProxy && !proxyConfigured ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
               {needsJob(source) ? <em className={`source-provider-detail__job${source.jobRegistered ? ' is-on' : ''}`}>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</em> : null}
               {(() => {
                 // A source with no generic adapter is collected by the product's own job; the

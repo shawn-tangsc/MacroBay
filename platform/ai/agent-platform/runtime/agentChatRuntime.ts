@@ -78,6 +78,8 @@ export type AgentChatRuntime = {
 }
 
 export type AgentChatRuntimeDependencies = {
+  /** 凭据判定信号（进程级依赖，由组合根注入一次）；不注入时行为与之前完全一致。 */
+  onProviderCredentialSignal?: (input: { providerId: string; state: 'ok' | 'invalid' }) => void
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState, options?: { mergeSessionId?: string }) => Promise<void>
   getProviderState: ProviderStateAccessor
@@ -272,6 +274,9 @@ async function executeTurn(input: {
       text: buildRuntimePromptText(input.request.text, mentionedModels),
       signal: controller.signal,
       fetch: input.deps.fetch,
+      ...(input.deps.onProviderCredentialSignal
+        ? { onProviderCredentialSignal: input.deps.onProviderCredentialSignal }
+        : {}),
       onDelta: async (partialText) => {
         streamingState = await patchRuntimeAssistantMessage(input.deps, input.session.id, assistantMessageId, {
           status: 'pending',
@@ -373,6 +378,7 @@ async function runProviderChatCompletion(input: {
   text: string
   signal?: AbortSignal
   fetch: typeof fetch
+  onProviderCredentialSignal?: (input: { providerId: string; state: 'ok' | 'invalid' }) => void
   onDelta?: (partialText: string) => Promise<void> | void
 }): Promise<{
   text: string
@@ -408,6 +414,7 @@ async function runProviderChatCompletion(input: {
     temperature: 0.2,
     ...(input.signal ? { signal: input.signal } : {}),
     fetch: input.fetch,
+    ...(input.onProviderCredentialSignal ? { onProviderCredentialSignal: input.onProviderCredentialSignal } : {}),
     ...(input.onDelta ? { onDelta: input.onDelta } : {})
   })
   if (configuredProtocol) {

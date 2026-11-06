@@ -151,8 +151,9 @@ describe('registerMacroEconomicCalendarIpc', () => {
       listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
     } as never, importService as never)
 
-    // 10 read methods plus the two release-time writes the reader's editor uses.
-    expect([...handlers]).toHaveLength(12)
+    // 11 read methods (one of them the calendar's freshness read) plus the two release-time
+    // writes the reader's editor uses.
+    expect([...handlers]).toHaveLength(14)
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.queryMonth)?.({ month: '2026-08' })).resolves.toEqual({ state: 'unavailable', failureCode: 'query-input-invalid' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getEventDetail)?.({ eventKey: 'US.FOMC.2026-12-09', asOf: '2026-08-04T00:00:00.000Z' })).resolves.toEqual({ state: 'unavailable', failureCode: 'event-not-found' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.previewManualBlsIcs)?.({ body: 'bad', truncated: false })).resolves.toEqual({ state: 'failed', failureCode: 'invalid-file' })
@@ -170,7 +171,7 @@ describe('registerMacroEconomicCalendarIpc', () => {
       getProviderHealth: () => ({ state: 'available', providers: [] })
     } as never)
 
-    expect([...handlers]).toHaveLength(17)
+    expect([...handlers]).toHaveLength(19)
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getProviderPageState)?.({})).resolves.toEqual({ state: 'unavailable', failureCode: 'provider-settings-unavailable' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.saveProviderProfile)?.({ providerId: 'macro-calendar-fed', enabled: true, sourceUrl: 'https://secret.example.test' })).resolves.toEqual({ state: 'failed', failureCode: 'provider-settings-unavailable' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.runProviderNow)?.({ providerId: 'macro-calendar-fed' })).resolves.toEqual({ state: 'failed', failureCode: 'provider-settings-unavailable' })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultAppSettings } from '../settings/schema/appSettings'
 
+import { shouldBypass } from './proxyBypass'
 import {
   buildSessionProxyConfig,
   normalizeProxyBypassRules,
@@ -17,6 +18,22 @@ describe('proxyConfig', () => {
     expect(buildSessionProxyConfig({ ...createDefaultAppSettings().network, proxyMode: 'none' })).toEqual({
       mode: 'direct'
     })
+  })
+
+  it('routes telegram through the local http proxy and never bypasses it', () => {
+    // 用户 2026-11-04 的真实设置：本机 HTTP 代理 + 只绕过本机与两个 BLS 源。
+    // 这份配置必须产出「http/https 都走 127.0.0.1:7888」，且 api.telegram.org 不在绕过清单里。
+    const config = buildSessionProxyConfig({
+      proxyMode: 'custom',
+      proxyUrl: 'http://127.0.0.1:7888',
+      proxyBypassRules: 'localhost,127.0.0.1,api.bls.gov,www.bls.gov'
+    })
+    expect(config).toEqual({
+      mode: 'fixed_servers',
+      proxyRules: 'http=127.0.0.1:7888;https=127.0.0.1:7888',
+      proxyBypassRules: 'localhost,127.0.0.1,api.bls.gov,www.bls.gov'
+    })
+    expect(shouldBypass('api.telegram.org', config.proxyBypassRules ?? '')).toBe(false)
   })
 
   it('maps custom socks5 urls to chromium proxy rules', () => {

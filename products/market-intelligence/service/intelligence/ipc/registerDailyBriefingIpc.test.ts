@@ -1,76 +1,142 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { registerDailyBriefingIpc, DAILY_BRIEFING_IPC_METHODS } from './registerDailyBriefingIpc'
-
-const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
-const register = ((_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
-  handlers.set(method, handler)
-}) as never
+import { DAILY_BRIEFING_IPC_METHODS, registerDailyBriefingIpc } from './registerDailyBriefingIpc'
 
 const service = {
-  getToday: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
-  list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } })),
-  get: vi.fn(async () => ({ state: 'missing' as const })),
-  regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never }))
+  getToday: vi.fn(), list: vi.fn(), regenerate: vi.fn(), getProgress: vi.fn(), get: vi.fn(),
+  listAttempts: vi.fn(), getStorageState: vi.fn(() => ({ state: 'ready' })), retryUpgrade: vi.fn(() => ({ state: 'ready' }))
+} as never
+
+function registerAll(deletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: string }>) => Promise<never>) {
+  const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+  registerDailyBriefingIpc((( _product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+    handlers.set(method, handler)
+  }) as never, service, undefined, deletePeriod as never)
+  return handlers
 }
 
-const settings = {
-  getView: vi.fn(async () => ({
-    settings: { editorialEnabled: true, providerId: '', modelId: '' },
-    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
-  })),
-  save: vi.fn(async (patch: { editorialEnabled?: boolean }) => ({
-    settings: { editorialEnabled: patch.editorialEnabled ?? true, providerId: '', modelId: '' },
-    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
-  }))
-}
+describe('the regenerate payload keeps the run\'s identity', () => {
+  // 用户报的「选 8 点、跑成 7 点」：这一层曾把 periodId 与 generation 一起丢掉，服务看到的是
+  // `periodId: undefined`，于是落回 default，覆盖了读者正在看的那一版。这条用例防的就是这个。
+  it('passes the period, language and chosen cutoff through unchanged', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
 
-registerDailyBriefingIpc(register, service, settings)
+    await handler({
+      locale: 'en-US',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'period_18ce8fe5-781d-490a-a5e4-689390f1e6cf',
+      generation: { asOf: '2026-11-05T00:00:00.000Z', windowHours: 24 }
+    })
 
-describe('daily briefing IPC', () => {
-  it('forwards a valid query', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(service.getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.list)!({ locale: 'en-US', timeZone: 'UTC' })
-    expect(service.list).toHaveBeenCalledWith({ locale: 'en-US', timeZone: 'UTC' })
+    expect(regenerate).toHaveBeenCalledWith({
+      locale: 'en-US',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'period_18ce8fe5-781d-490a-a5e4-689390f1e6cf',
+      generation: { asOf: '2026-11-05T00:00:00.000Z', windowHours: 24 }
+    })
   })
 
-  it('reads and saves the editorial settings with a strict patch', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getSettings)!({})
-    expect(settings.getView).toHaveBeenCalledTimes(1)
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ editorialEnabled: false })
-    expect(settings.save).toHaveBeenCalledWith({ editorialEnabled: false })
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ providerId: 'p', extra: true }))
+  // 用户 2026-11-06：点「重新生成」又变回 07:00——服务端只能回落到期配置第一项。重跑这一版要
+  // 把它自己的截止与窗口带过去；这一层同样不许在半路弄丢。
+  it('passes the on-screen edition\'s own cutoff and window through unchanged', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
+
+    await handler({
+      locale: 'zh-CN',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+
+    expect(regenerate).toHaveBeenCalledWith({
+      locale: 'zh-CN',
+      timeZone: 'Asia/Shanghai',
+      periodId: 'manual-0800',
+      rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 12 }
+    })
+  })
+
+  it('refuses a rerun whose cutoff or window cannot be read', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
+
+    // 一个读不懂的截止如果被悄悄丢掉，服务端就会退回默认期——正是这次的事故形态。
+    await expect(handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', rerun: { periodTime: '2026-11-05 08:00' } }))
       .rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', rerun: { periodTime: '2026-11-05T00:00:00.000Z', windowHours: 6 } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    expect(regenerate).not.toHaveBeenCalled()
   })
 
-  it('forwards the generation setting and rejects a malformed one', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation: { generationTime: '07:30', windowHours: 48 } })
-    expect(settings.save).toHaveBeenLastCalledWith({ generation: { generationTime: '07:30', windowHours: 48 } })
+  it('refuses a malformed cutoff instead of silently dropping it', async () => {
+    const regenerate = vi.fn(async () => ({ state: 'available' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), regenerate } as never)
+    const handler = handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!
 
-    for (const generation of [{}, { generationTime: 730 }, { windowHours: '48' }, { generationTime: '07:30', extra: true }, 'soon']) {
-      await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation }))
-        .rejects.toThrow('daily-briefing-invalid-request')
-    }
+    // 静默丢弃正是这次的事故形态：读者选的时刻不见了，跑出来的还是别的期。
+    await expect(handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', generation: { asOf: 'tomorrowish' } }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    expect(regenerate).not.toHaveBeenCalled()
+  })
+})
+
+describe('daily briefing delete channel', () => {
+  it('registers the delete method under its own name', () => {
+    expect(DAILY_BRIEFING_IPC_METHODS.deletePeriod).toBe('intelligence.dailyBriefing.deletePeriod')
+    expect(registerAll().has('intelligence.dailyBriefing.deletePeriod')).toBe(true)
   })
 
-  it('regenerates today from a strict query', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-    expect(service.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+  it('forwards "read only, do not generate" and nothing else', async () => {
+    const getToday = vi.fn(async () => ({ state: 'unavailable' }))
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), getToday } as never)
+    const handler = handlers.get('intelligence.dailyBriefing.getToday')!
+
+    await handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', generate: false })
+    expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', generate: false })
+    // An ordinary open keeps the old shape: the flag exists only to suppress a run.
+    await handler({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(getToday).toHaveBeenLastCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
   })
 
-  it('forwards a valid dated read', async () => {
-    await handlers.get(DAILY_BRIEFING_IPC_METHODS.get)!({ date: '2026-10-30', locale: 'zh-CN' })
-    expect(service.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN' })
+  it('passes the validated date, period and edition language to the delete handler', async () => {
+    const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 3, allDone: true }))
+    const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
+    // 入口必填：操作记录要能回答"从哪删的"（用户 2026-11-06），缺了直接拒。
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US', entry: 'toolbar' })).resolves.toMatchObject({ editions: 1, allDone: true })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default', locale: 'en-US', entry: 'toolbar' })
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })).rejects.toThrow('daily-briefing-invalid-request')
   })
 
-  it('rejects an unknown locale, a missing zone or a non-canonical date', async () => {
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'en-GB', timeZone: 'UTC' }))
-      .rejects.toThrow('daily-briefing-invalid-locale')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({ locale: 'zh-CN' }))
-      .rejects.toThrow('daily-briefing-invalid-time-zone')
-    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.get)!({ date: '2026-02-30', locale: 'zh-CN' }))
-      .rejects.toThrow('daily-briefing-invalid-date')
-    expect(service.get).toHaveBeenCalledTimes(1)
+  it('refuses a payload that could delete another issue', async () => {
+    const deletePeriod = vi.fn()
+    const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
+    // Every field is required: a missing period or language would delete another edition's rows.
+    await expect(handler({ date: '2026-11-03' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-13-40', periodId: 'default', locale: 'zh-CN' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: '   ', locale: 'zh-CN' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: 'default' })).rejects.toThrow('daily-briefing-invalid-request')
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'fr-FR' })).rejects.toThrow('daily-briefing-invalid-request')
+    expect(deletePeriod).not.toHaveBeenCalled()
   })
 })

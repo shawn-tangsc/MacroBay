@@ -16,7 +16,7 @@ describe('macro economic calendar public query contracts', () => {
     const released: MacroEconomicCalendarEventView = {
       eventKey: 'US.CPI.RELEASE.2026-M07', releaseGroupKey: 'US.CPI.RELEASE.2026-M07', eventFamily: 'consumer-price-index', titleKey: 'cpi',
       countryCode: 'US', importance: 'high', periodKey: '2026-M07', lifecycleState: 'released', coverage: 'available',
-      scheduledDate: '2026-08-12', officialReleaseDate: '2026-08-12', detectedAt: '2026-08-12T13:00:00.000Z',
+      scheduledDate: '2026-08-12', releaseTimeSource: 'date-only', officialReleaseDate: '2026-08-12', detectedAt: '2026-08-12T13:00:00.000Z',
       actual: { displayValue: '3.4%', numericValue: 3.4, unit: 'percent' }, consensus: null,
       consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: ['bls-python-schedule']
     }
@@ -33,7 +33,7 @@ describe('macro economic calendar public query contracts', () => {
     const response: MacroEconomicCalendarEventView = {
       eventKey: 'US.FOMC.2026-12-09', releaseGroupKey: 'US.FOMC.2026-12-09', eventFamily: 'fomc', titleKey: 'fomc',
       countryCode: 'US', importance: 'high', periodKey: '2026-12-09', lifecycleState: 'scheduled', coverage: 'available',
-      scheduledDate: '2026-12-09', detectedAt: '2026-08-04T00:00:00.000Z', consensus: null,
+      scheduledDate: '2026-12-09', releaseTimeSource: 'date-only', detectedAt: '2026-08-04T00:00:00.000Z', consensus: null,
       consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-fed'], caveats: []
     }
     expect(JSON.stringify(response)).not.toMatch(/evidenceRefs|sourceUrl|evidenceHash|rawRecordId/)

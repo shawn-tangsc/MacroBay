@@ -152,6 +152,7 @@ export function NewsSentimentCard(props: {
         </div>
       ) : emptyState && !causeUnknown ? (
         <EmptyCause
+          failedSourceIds={view?.readiness?.failedSourceIds ?? []}
           neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
           onEnableSources={props.onEnableSources}
           onRefresh={props.onRefresh}
@@ -184,7 +185,7 @@ export function NewsSentimentCard(props: {
             // panel would throw away a reading that is still true, only older.
             <p className="mi-news-sentiment__stale-read" data-news-sentiment-stale-read role="status">
               <span>{text.staleRead}</span>
-              <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+              <button type="button" className="text-action" onClick={props.onRefresh}>{text.retry}</button>
             </p>
           ) : null}
           <div
@@ -212,13 +213,6 @@ export function NewsSentimentCard(props: {
           {outOfDate && view?.latestKnownItemAt
             ? <p className="mi-news-sentiment__updated" data-news-sentiment-updated>{text.updatedAt.replace('{time}', formatTime(view.latestKnownItemAt, 'minute'))}</p>
             : null}
-          {/* The footer used to carry a card-wide "Rules" badge whenever any visible item was
-              scored by the rule engine. It named no item, looked like a dead control, and the
-              drawer already reports each item's engine, so only the caveat remains — and the
-              footer disappears entirely when there is nothing to say. */}
-          {view?.caveats.includes('news-body-limited')
-            ? <footer className="mi-news-sentiment__footer"><span>{text.bodyLimited}</span></footer>
-            : null}
         </>
       )}
     </section>
@@ -243,6 +237,7 @@ function EmptyCause(props: {
   onRunSources: (sourceIds: readonly string[]) => void
   onRefresh: () => void
   onWidenWindow: () => void
+  failedSourceIds: readonly string[]
   neverRanSourceIds: readonly string[]
   timeText: string
 }): React.ReactElement {
@@ -267,7 +262,9 @@ function EmptyCause(props: {
     case 'collection-failed':
       return wrap(
         <StateView
-          action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
+          // "Try again" here has to collect again: a plain re-read of the store would show the same
+          // empty window, so the button would name an action it cannot perform.
+          action={{ labelKey: 'ui.state.action.retry', onSelect: () => props.onRunSources(props.failedSourceIds) }}
           productReason={{ key: 'mi.newsSentiment.collection-failed', resolve: (key, params) => props.resolve(key, params) }}
           reasonCode="unreadable"
           resolveText={resolveStateText}

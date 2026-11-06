@@ -18,8 +18,8 @@
  * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 9,
-  policyVersion: 'daily-briefing.v20',
+  schemaVersion: 14,
+  policyVersion: 'daily-briefing.v24',
   /** The default statistical window. The reader's generation settings may override it per edition. */
   windowHours: 24,
   maximumBytes: 256 * 1024,
@@ -31,6 +31,11 @@ export const dailyBriefingPolicy = Object.freeze({
   maximumGaps: 3,
   maximumCaveats: 3,
   retentionDays: 14,
+  /**
+   * 手动生成（含历史缺版页的重试、对已有这一版的重跑）只允许**今天往前 3 天内**（用户 2026-11-06）。
+   * 今天是读者设置时区的今天；超窗一律不生成——每次都是一次模型调用，界面挡不住 bug 与直接调接口。
+   */
+  manualGenerationWindowDays: 3,
   editionDatePattern: /^\d{4}-\d{2}-\d{2}$/
 })
 
@@ -38,22 +43,24 @@ export const dailyBriefingPolicy = Object.freeze({
  * When the brief is generated and what it covers.
  *
  * The generation time is a local wall-clock time: it is both the scheduler trigger and the edition
- * cutoff, so the two can never drift apart. Only whole and half hours in the morning window are
- * accepted, which keeps the cron expression readable and the cutoff reviewable.
+ * cutoff, so the two can never drift apart. A period may run at any half hour of the day (00:00 …
+ * 23:30): the morning-only table could not express an evening issue at all. The default stays 07:00,
+ * and every value the old nine-slot table allowed is still in the table.
  */
 export const dailyBriefingGenerationPolicy = Object.freeze({
-  defaultGenerationTime: '08:00',
-  earliestGenerationHour: 6,
-  latestGenerationHour: 10,
+  defaultGenerationTime: '07:00',
+  earliestGenerationHour: 0,
+  latestGenerationHour: 23,
   generationMinuteStep: 30,
   defaultWindowHours: 24,
   windowHoursOptions: Object.freeze([12, 24, 48] as const)
 })
 
-/** Local generation times a reader may choose, in order: 06:00 … 10:00. */
+/** Local generation times a reader may choose, in order: 00:00 … 23:30, one per half hour. */
 export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
   Array.from(
-    { length: ((dailyBriefingGenerationPolicy.latestGenerationHour - dailyBriefingGenerationPolicy.earliestGenerationHour) * (60 / dailyBriefingGenerationPolicy.generationMinuteStep)) + 1 },
+    // Both ends of the last hour are usable (23:00 and 23:30), so the count covers whole hours.
+    { length: (dailyBriefingGenerationPolicy.latestGenerationHour + 1 - dailyBriefingGenerationPolicy.earliestGenerationHour) * (60 / dailyBriefingGenerationPolicy.generationMinuteStep) },
     (_, index) => {
       const minutes = dailyBriefingGenerationPolicy.earliestGenerationHour * 60 + index * dailyBriefingGenerationPolicy.generationMinuteStep
       return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
@@ -64,6 +71,20 @@ export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
 export function isDailyBriefingGenerationTime(value: unknown): value is string {
   return typeof value === 'string' && dailyBriefingGenerationTimes.includes(value)
 }
+
+/**
+ * The choice grid as one fact, so the form's hint and the form's options cannot disagree.
+ *
+ * The dialog used to name the grid in prose ("06:00–10:00") while the list behind it had already
+ * moved to the whole day; a hint that is typed out separately always becomes a second source. These
+ * four numbers are read from the table itself.
+ */
+export const dailyBriefingGenerationGrid = Object.freeze({
+  first: dailyBriefingGenerationTimes[0]!,
+  last: dailyBriefingGenerationTimes.at(-1)!,
+  count: dailyBriefingGenerationTimes.length,
+  stepMinutes: dailyBriefingGenerationPolicy.generationMinuteStep
+})
 
 export type DailyBriefingWindowHours = (typeof dailyBriefingGenerationPolicy.windowHoursOptions)[number]
 

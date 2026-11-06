@@ -1,0 +1,345 @@
+.channel-settings-page {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+  padding: 24px;
+}
+
+.channel-platform-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 12px;
+  /* 列间分隔用 --border（规范里「三列底 --bg、列间 --border」）；行间才是 --border-subtle。 */
+  border-right: 1px solid var(--border);
+}
+
+.channel-platform-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  /* 选中态靠左侧 2px 竖条：位置差异与颜色差异同时存在，不只靠底色。 */
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-platform-item:hover {
+  background: var(--surface-2);
+}
+
+.channel-platform-item[aria-current='true'] {
+  background: var(--surface-raised);
+  border-left-color: var(--accent);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.channel-platform-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  /* 未接入的平台：图标走次级文字色（不靠降低不透明度——那会灰到看不清）。 */
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.channel-platform-logo svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* 已接入：图标用主文字色；选中行再把块底浮起一层。 */
+.channel-platform-item[data-implemented='true'] .channel-platform-logo {
+  color: var(--text-strong);
+}
+
+.channel-platform-item[aria-current='true'] .channel-platform-logo {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+.channel-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 内容容器：固定上限、左对齐（居中会让切页时内容基线随窗口宽度漂移）。 */
+  justify-self: start;
+  /* 卡片高度跟着内容走：只有一行时下面不该拖出一大片空白。 */
+  align-self: start;
+  height: fit-content;
+  width: 100%;
+  max-width: 960px;
+  min-width: 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* 说明句再窄一档；行（频道行 / 日志行）撑满容器，不再各自限宽。 */
+.channel-detail-purpose {
+  max-width: 620px;
+}
+
+/* 窄窗：内边距收一档；说明句允许换行到两行，绝不省略号截断（截断会吃掉关键信息）。 */
+@media (max-width: 1280px) {
+  .channel-detail {
+    padding: 16px;
+  }
+}
+
+.channel-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.channel-detail-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.channel-detail-purpose {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.channel-detail-reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 「＋ 添加」：强调色底 + 对比色字，高 30（与规范一致）。用组合选择器压过 antd 的 primary。 */
+.channel-add-button,
+.channel-add-button.ant-btn-primary {
+  height: 30px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.channel-add-button:hover,
+.channel-add-button.ant-btn-primary:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 12px;
+  /* 一行一条分隔线，横跨卡片的可用宽度；最后一行不画，避免底部多出一条悬空的线。 */
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.channel-row:last-child {
+  border-bottom: none;
+}
+
+.channel-row:hover {
+  background: var(--surface-2);
+}
+
+.channel-row-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.channel-row-dot--ok {
+  background: var(--success);
+}
+
+.channel-row-dot--bad {
+  background: var(--danger);
+}
+
+.channel-row-dot--muted {
+  background: var(--muted);
+}
+
+.channel-row-name {
+  color: var(--text-strong);
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.channel-row-mask {
+  color: var(--muted);
+  /* 掩码不可选中：没有任何复制入口，选中拖拽也算入口。 */
+  user-select: none;
+  letter-spacing: 1px;
+  /* 等宽字体栈与壳层其余 8 处一致；不为它新造 token（收敛成 token 是另一笔）。 */
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.channel-row-error {
+  /* 正文不用红色：红只落在点、边框、图标上；失败这个结论由状态点表达。 */
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.channel-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  /* 四个动作**常显**：原型里它们一直在，hover 只是加强图标底色。
+     收成 60% 透明等于让读者看不见有这些操作。 */
+}
+
+.channel-row-actions .ant-btn:hover {
+  background: var(--surface-2);
+}
+
+/* 开关用强调色（原型是实心强调色开关），不是默认灰。 */
+.channel-row .ant-switch.ant-switch-checked {
+  background: var(--accent);
+}
+
+.channel-row .ant-switch.ant-switch-checked .ant-switch-handle::before {
+  background: var(--accent-contrast);
+}
+
+/* 允许的会话 ID：空列表时的当前状态与风险。整块可见，不是小字；左侧用 --caution 提醒，
+   但不给正文上红色（红只属于状态点与错误图标）。 */
+.channel-allowed-chats-status {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--caution);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+/* 日志面板：等宽、按级别上色，但红只落在 `[LEVEL]` 几个字符上。 */
+.channel-log-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.channel-log-tz {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.channel-log-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 4px 8px;
+  border-top: 1px solid var(--border-subtle);
+  /* 级别只落在左侧 2px 竖条：INFO 用 transparent 占位，三档文字左边缘对齐不跳。 */
+  border-left: 2px solid transparent;
+}
+
+.channel-log-row[data-log-level='WARN'] {
+  border-left-color: var(--caution);
+}
+
+.channel-log-row[data-log-level='ERROR'] {
+  border-left-color: var(--danger);
+}
+
+.channel-log-time {
+  color: var(--muted);
+  flex: none;
+}
+
+.channel-log-level {
+  /* 三档统一中性色 + 600：级别词本身读得出来，颜色只做辅助；
+     正文红字在深色下对比度 3.25–3.94 低于 4.5，所以红不上字。 */
+  color: var(--muted-strong);
+  font-weight: 600;
+  flex: none;
+}
+
+.channel-log-text {
+  color: var(--text);
+}
+
+.channel-log-footer {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-log-state {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.channel-log-hint {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* 中列标题：跟左导航分组标题同级的「频道」，不是页面大标题。 */
+.channel-platform-heading {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 编辑弹层里「当前已存」的掩码：与行内一样的等宽、不可选中（没有任何复制入口）。 */
+.channel-edit-current {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 页面与弹层共用的就地报错：红色只落在左侧 2px 竖条上，句子用中性色——
+   --danger 在这一档对比度只有 3.25–3.94，落在字上读不清。 */
+.channel-inline-error {
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--danger);
+  color: var(--muted-strong);
+  font-size: 12.5px;
+}
+
+/* Token 输入框 + 显示切换：按钮在框右侧同一行，不挤掉输入宽度。 */
+.channel-field-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

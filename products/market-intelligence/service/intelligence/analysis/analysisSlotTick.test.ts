@@ -8,7 +8,7 @@ import type { SessionSlotInstant } from './analysisSlotCoverage'
 const local = (day: number, hour: number) => new Date(2026, 9, day, hour)
 
 const tick = (overrides: Record<string, unknown> = {}) => {
-  const requestSlotAnalysis = vi.fn(async () => undefined)
+  const requestSlotAnalysis = vi.fn(async (_instant: SessionSlotInstant) => undefined)
   const log = vi.fn(async () => undefined)
   const instance = createAnalysisSlotTick({
     now: () => local(14, 9).toISOString(),
@@ -26,7 +26,7 @@ const tick = (overrides: Record<string, unknown> = {}) => {
 const slotsOf = (calls: readonly unknown[]) => (calls as readonly [SessionSlotInstant][]).map(([instant]) => instant.slot)
 
 it('declares its period from the schedule policy', () => {
-  expect(analysisSlotTickPolicy.version).toBe('marketAnalysisSlotTickPolicy.v1')
+  expect(analysisSlotTickPolicy.version).toBe('marketAnalysisSlotTickPolicy.v2')
   expect(analysisSlotTickPolicy.intervalMs).toBe(15 * 60 * 1_000)
   expect(analysisSlotTickPolicy.intervalMs).toBe(analysisSchedulePolicy.tickIntervalMs)
   expect(Object.isFrozen(analysisSlotTickPolicy)).toBe(true)
@@ -46,7 +46,7 @@ it('serves the newest open that is owed, and only that one', async () => {
 it('serves the US open when the app opens just after it, not the European one it missed', async () => {
   // The reader's own case: 01:21 local, the European open (16:00) long gone, the US open (00:00) just
   // passed. Only the US session is analysed.
-  const requestSlotAnalysis = vi.fn(async () => undefined)
+  const requestSlotAnalysis = vi.fn(async (_instant: SessionSlotInstant) => undefined)
   const instance = createAnalysisSlotTick({
     now: () => local(14, 1).toISOString(), timeZone: () => 'Asia/Shanghai',
     isDelivered: () => false, hasEligibleAnchor: () => true,
@@ -90,4 +90,26 @@ it('treats any item as an anchor, because the schedule is not the anchor eligibi
   expect(hasSlotAnchor([])).toBe(false)
   expect(hasSlotAnchor([{ sourceTrust: 'low', processingLabelsJson: null }])).toBe(true)
   expect(hasSlotAnchor([{ publishedAt: null }])).toBe(true)
+})
+
+it('stops retrying an open once the day has spent its two attempts, and says why', async () => {
+  // Observed without the cap: one failing open was retried on every fifteen-minute tick for the
+  // whole coverage window — six calls for the same open and the same failure.
+  const { instance, requestSlotAnalysis, log } = tick({ attemptsToday: () => 2 })
+  const result = await instance.run()
+
+  expect(requestSlotAnalysis).not.toHaveBeenCalled()
+  expect(result.requested).toEqual([])
+  expect(result.exhausted).toEqual(['asia'])
+  expect(log).toHaveBeenCalledWith(
+    'Market analysis session slot skipped: attempts exhausted.',
+    expect.objectContaining({ slot: 'asia', reasonCode: 'slot-attempts-exhausted', attempts: 2 })
+  )
+})
+
+it('still spends the second attempt while one is left', async () => {
+  const { instance, requestSlotAnalysis } = tick({ attemptsToday: () => 1 })
+  const result = await instance.run()
+  expect(requestSlotAnalysis).toHaveBeenCalledOnce()
+  expect(result.exhausted).toEqual([])
 })

@@ -209,6 +209,39 @@ describe('TaskAutomationResourceJobsSection error states', () => {
   })
 })
 
+describe('TaskAutomationResourceJobsSection source names', () => {
+
+  afterEach(() => {
+    document.body.replaceChildren()
+  })
+
+  it('shows a human fallback instead of the internal product id when the product is not in the summary', async () => {
+    // 契约 v2.41 第三档：内部标识任何情况下都不许当文案。
+    const container = await renderSection(controllerWith([
+      job({ id: 'job-1', productId: 'retired-product-module' })
+    ]))
+
+    const sourceCell = Array.from(container.querySelectorAll('tbody tr td'))[1]
+    expect(sourceCell.textContent).toBe(labels.product)
+    expect(text(container)).not.toContain('retired-product-module')
+  })
+
+  it('the filter dropdown names that same product with the same fallback', async () => {
+    const container = await renderSection(controllerWith([
+      job({ id: 'job-1', productId: 'retired-product-module' })
+    ]))
+
+    // 点开来源下拉、选中那一项：选项文案与「来源」列必须是同一个说法。
+    await chooseOption(
+      container.querySelector(`.${TASK_AUTOMATION_CONTROL_CLASSES.source}`) as HTMLElement,
+      labels.product
+    )
+
+    expect(rows(container)).toHaveLength(1)
+    expect(text(container)).not.toContain('retired-product-module')
+  })
+})
+
 function jobs18(): JobScheduleView[] {
   return Array.from({ length: 18 }, (_, index) => job({
     id: `job-${index + 1}`,

@@ -64,16 +64,35 @@ describe('notification producer boundary', () => {
       // 删除已读是**数据操作**，不是生产者：它只能删掉已存在的记录，不能凭空造一条。
       'deleteRead',
       'dismiss',
+      // 投递设置：读写的是「读者要不要」，不是「谁可以产生一条通知」。
+      // 订阅层撤销后只剩两个总开关 + 情报三条的频道开关（契约 §5.1 / §5.4）。
+      'getChannelEvents',
+      'getDeliverySettings',
       'getUnreadState',
       'list',
+      'listEventCatalog',
       'markAllRead',
       'markRead',
       // 两条订阅都是只读：事件由 Main 推，渲染层不能借此写入任何东西。
       'onChanged',
       'onDelivered',
       'readDesktopPermission',
+      // 读者的显式「再推一次」：只重投这一条的手机一面，不是生产者。
+      'redeliverPush',
       'sendTest',
+      'setChannelEvent',
+      'setDesktopEnabled',
+      'setToastEnabled',
       'snooze'
     ])
+  })
+
+  it('never lets an automatic producer take the "record but do not deliver" door', () => {
+    // `deliver: false` 只给读者动作（手动重新生成）用。自动路径带上它，等于给所有生产者一个
+    // 「静默改写记录、什么都没发」的口子——记录在、投递没了，读者会看到一条谁都没收到过的通知。
+    const producers = listSourceFiles(join(repoRoot, 'platform', 'notifications', 'producers'))
+    expect(producers.length).toBeGreaterThan(0)
+    const offenders = producers.filter((filePath) => /deliver\s*:\s*false/.test(readFileSync(filePath, 'utf8')))
+    expect(offenders.map(relativePath)).toEqual([])
   })
 })

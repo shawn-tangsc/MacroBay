@@ -7,6 +7,7 @@ import {
   isModuleSignal,
   moduleSignalPolicy,
   signalCooldown,
+  signalTriggerKey,
   signalWindow,
   type ModuleSignal,
   type SignalCadence
@@ -179,5 +180,20 @@ describe('coverage', () => {
     expect(isCoverageComplete({ dropPct: -1.8 })).toBe(false)
     expect(isCoverageComplete({ coveredDays: 3 })).toBe(false)
     expect(isCoverageComplete({ requiredDays: 3 })).toBe(false)
+  })
+})
+
+describe('the analysis trigger key a signal asks for', () => {
+  // 一条规则一个键：资产不进键，否则同一条规则会在预算里长成两个身份。
+  it('builds one key per rule, with no asset in it', () => {
+    expect(signalTriggerKey('etf-flows', 'etf-outflow-3d')).toBe('signal.etf-flows.etf-outflow-3d')
+    expect(signalTriggerKey('open-interest', 'oi-liquidation-proxy')).toBe('signal.open-interest.oi-liquidation-proxy')
+  })
+
+  // 拼不出合规的键就不拼：让一个坏键漏进预算，等于匿名花掉一次事件线额度。
+  it('refuses a rule id that is not a kebab token', () => {
+    expect(signalTriggerKey('etf-flows', 'etf_outflow_3d')).toBeUndefined()
+    expect(signalTriggerKey('etf-flows', 'etf.outflow')).toBeUndefined()
+    expect(signalTriggerKey('etf-flows', '')).toBeUndefined()
   })
 })

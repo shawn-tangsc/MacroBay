@@ -30,7 +30,8 @@ import {
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
 import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
-import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
+import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
+import type { ModuleSignalRead } from '../../../contracts/moduleSignalRead'
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestHistoryResult,
@@ -129,14 +130,23 @@ export function registerIntelligencePublicQueryIpc(
     } catch { return divergenceUnavailable('query-failed') }
   })
 
-  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, async (payload) => {
+  /**
+   * The signals with each one's analysis state beside them — the one read the two cards use.
+   *
+   * It was a separate method while the callers switched over; the old plain-signal method is gone
+   * now, so there is exactly one door and no second shape to keep in step. Registered here means it
+   * must also be in the startup baseline in the same change — a registered method missing from that
+   * list is an app that refuses to start.
+   */
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignalRead, async (payload) => {
+    if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) {
+      return { state: 'unavailable', failureCode: 'invalid-as-of' } satisfies ModuleSignalRead
+    }
     try {
-      // The page reads signals, so the payload is one instant and nothing else.
-      if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) return []
-      const signals = await publicQueryService().queryModuleSignals({ asOf: payload.asOf })
-      // A malformed signal is dropped here rather than handed to a chip that would render half of it.
-      return signals.filter(signal => isModuleSignal(signal))
-    } catch { return [] }
+      return await publicQueryService().queryModuleSignalRead({ asOf: payload.asOf })
+    } catch {
+      return { state: 'unavailable', failureCode: 'query-failed' } satisfies ModuleSignalRead
+    }
   })
 
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {

@@ -16,12 +16,14 @@ import {
 type LiveQuote = { state: 'live' | 'stale'; price: string; tradedAtMs: number; receivedAtMs: number } | { state: 'missing' }
 type Live = { state: 'disabled' | 'connecting' | 'live' | 'stale' | 'limited' | 'unavailable'; quotes: Record<CrossAssetId, LiveQuote>; priceDecimals?: Partial<Record<CrossAssetId, number>> }
 type Analysis = ReturnType<typeof analyzeCrossAssetHistory>
-type ClosePoint = Readonly<{ atMs: number; close: string }>
+type ClosePoint = Readonly<{ atMs: number; close: string; high?: string; low?: string }>
 type Presence = Readonly<{ real: boolean; proxy: boolean }>
 type Snapshot = {
   schemaVersion: 1; mode: 'current' | 'historical'; servedAt: string; asOf: string; range: CrossAssetRange
   analysisEnd: string; windowStart: string; historyCoverage: Analysis['historyCoverage']
   curves: Record<CrossAssetId, { at: string; returnPercent: number | null }[]>
+  /** The window's travel and the close it is stated against; null when the window cannot answer. */
+  extremes: Analysis['extremes']
   /** Written only when this build has a macro store to read, exactly as the wire contract says. */
   macroCurves?: Record<CrossAssetMacroProxyId, { at: string; returnPercent: number | null }[]>
   /** The cross-market reading (design 142), stated only in `current` mode and never for a past instant. */
@@ -100,7 +102,7 @@ export function createCrossAssetSnapshotQuery(deps: {
     return Object.fromEntries(crossAssetPolicy.storedSymbols.map(symbol => [symbol,
       bounds.slice(0, -1).flatMap((start, index) => deps.store.queryAt({
         symbol: symbol as StoredSymbol, fromMs: start, toMs: bounds[index + 1] as number, asOfMs: knowledgeMs
-      }) as readonly ClosedBar[]).map(bar => ({ atMs: bar.barEndMs, close: bar.close }))])) as Record<string, ClosePoint[]>
+      }) as readonly ClosedBar[]).map(bar => ({ atMs: bar.barEndMs, close: bar.close, high: bar.high, low: bar.low }))])) as Record<string, ClosePoint[]>
   }
   return {
     query(value: CrossAssetQueryInput): Snapshot {
@@ -118,7 +120,12 @@ export function createCrossAssetSnapshotQuery(deps: {
        * ingested by the next poll, so asking "what was known at +35" routinely loses the right end, and
        * a window backfilled after downtime is invisible in its entirety.
        */
-      const knowledgeMs = input.knowledge === 'latest' ? now : asOfMs
+      // `knowledgeAt` names the version cutoff on its own: the window still ends at `asOf`, but the
+      // read admits what had arrived by that later instant. It exists for readings that must include
+      // a poll landing shortly after their window end, without admitting the rest of the day.
+      const knowledgeMs = input.knowledgeAt
+        ? Date.parse(input.knowledgeAt)
+        : input.knowledge === 'latest' ? now : asOfMs
       const end = Math.floor(asOfMs / crossAssetPolicy.intervalMs) * crossAssetPolicy.intervalMs
       const feedState: CrossAssetIndexFeedState = deps.indexFeed?.().state ?? 'pending'
       // The live runtime state is read once, and only for a current snapshot: a historical observation
@@ -163,6 +170,9 @@ export function createCrossAssetSnapshotQuery(deps: {
         historyCoverage: analysis.historyCoverage,
         curves: Object.fromEntries(assets.map(asset => [asset, analysis.curves[asset].map(point => ({ at: iso(point.atMs), returnPercent: point.returnPercent }))])) as Snapshot['curves'],
         closedReturns: analysis.closedReturns, correlations: analysis.correlations, relativeReturns: analysis.relativeReturns,
+        // The window's travel, with the close it is stated against: the document's amplitude is a
+        // subtraction of two numbers that must share one anchor, and the anchor is read here, once.
+        extremes: Object.fromEntries(assets.map(asset => [asset, analysis.extremes[asset]])) as Snapshot['extremes'],
         indexSource
       }
       /**
@@ -189,6 +199,15 @@ export function createCrossAssetSnapshotQuery(deps: {
         snapshot.macroCurves = { dxy: wire(curves.dxy), gold: wire(curves.gold) }
       }
       const safeCopy = structuredClone(snapshot)
+      // The last bar each row actually closed on, written in **both** modes. It used to be a current-mode
+      // fact only, and that is what left a historical reader with a level nobody could read: the daily
+      // brief always asks with a cutoff, so it is always historical, and its row had no `at`/`close` to
+      // print. `null` per asset means that market closed nothing at or before the window end — stated,
+      // never filled in from the curve's last point, which is a return rather than a price.
+      safeCopy.lastClosed = Object.fromEntries(assets.map(asset => {
+        const latest = analysis.latestClosed[asset]
+        return [asset, latest === null ? null : { at: iso(latest.atMs), close: latest.close }]
+      })) as Snapshot['lastClosed']
       // `live` is read exactly once per query and only in current mode; the condition narrows it.
       if (mode === 'current' && live) {
         // The session of each row is stated, never inferred from a missing bar: the Nasdaq 100 row is
@@ -196,10 +215,6 @@ export function createCrossAssetSnapshotQuery(deps: {
         // trade around the clock. What the row has to show in either case is its last closed bar.
         safeCopy.marketState = Object.fromEntries(assets.map(asset => [asset,
           crossAssetRowMarketState(asset, indexSource, asOfMs, analysis.latestClosed[asset] !== null)])) as Snapshot['marketState']
-        safeCopy.lastClosed = Object.fromEntries(assets.map(asset => {
-          const latest = analysis.latestClosed[asset]
-          return [asset, latest === null ? null : { at: iso(latest.atMs), close: latest.close }]
-        })) as Snapshot['lastClosed']
         if (now - end > crossAssetAnalyticsPolicy.missingGraceMs) {
           const missing = (asset: CrossAssetId) => !analysis.latestClosedPresent[asset]
           for (const asset of assets.filter(missing)) {

@@ -10,7 +10,7 @@
  * 不是待修项；把它算进基线，等于让一半条目永远减不掉。将来出现第二个导出件，加一行白名单即可。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 import {
   compareWithBaseline,
@@ -45,7 +45,8 @@ for (const root of SCAN_ROOTS) {
 
 const uses: DangerColorUse[] = []
 for (const file of files) {
-  const path = relative(ROOT, file)
+  // 基线键一律正斜杠：Windows 的 relative() 给反斜杠，直接查表会把每个基线文件当成新违规。
+  const path = relative(ROOT, file).split(sep).join('/')
   if (EXCLUDED_FILES.has(path)) continue
   uses.push(...scanHexColorLiteral(readFileSync(file, 'utf8'), path))
 }

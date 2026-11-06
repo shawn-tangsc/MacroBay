@@ -21,6 +21,8 @@ export type AssistantChatRuntimeEventSink = {
 }
 
 export type AssistantChatRuntimeDependencies = {
+  /** 凭据判定信号（进程级依赖，由组合根注入一次）；不注入时行为与之前完全一致。 */
+  onProviderCredentialSignal?: (input: { providerId: string; state: 'ok' | 'invalid' }) => void
   repos: AssistantPlatformRepositories
   getProviderState: ProviderStateAccessor
   /** 出网通道，必传；由组合根注入 `platformFetch`。 */

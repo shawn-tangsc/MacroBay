@@ -17,6 +17,19 @@ import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './daily
  * cutoff; the data cards read the current snapshot and printed `—`. These tests build the real
  * packet from the real as-of readers and assert the document's data rows.
  */
+
+/** Tests keep calling one packet builder; the source itself now reads facts once, then renders. */
+const makeSource = (deps: Parameters<typeof createDailyBriefingSource>[0]) => {
+  const source = createDailyBriefingSource(deps)
+  return {
+    ...source,
+    async buildPacket(input: Readonly<{ asOf: string; windowHours?: number; locale: Parameters<typeof source.renderPacket>[1]; timeZone: string }>) {
+      const facts = await source.readFacts({ asOf: input.asOf, ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours }) })
+      return source.renderPacket(facts, input.locale, input.timeZone)
+    }
+  }
+}
+
 const CUTOFF = '2026-10-31T00:00:00.000Z'
 const DATE = '2026-10-31'
 const TIME_ZONE = 'Asia/Shanghai'
@@ -97,10 +110,10 @@ async function packetWith(input: Readonly<{
         btc: [{ observedAt: '2026-10-30T20:00:00.000Z', ratePercent: 0.01 }],
         eth: [{ observedAt: '2026-10-30T20:00:00.000Z', ratePercent: -0.004 }]
       }),
-      queryCapitalConditionsSnapshot: (query) => capitalQuery.query(query),
+      queryCapitalConditionsSnapshot: (query: Parameters<typeof capitalQuery.query>[0]) => capitalQuery.query(query),
       queryOpenInterestHistory: async () => ({ state: 'unavailable' }),
       queryCrossAssetSnapshot: async () => undefined,
-      queryMacroHistoryAsOf: (query) => macroHistory.read(query),
+      queryMacroHistoryAsOf: (query: Parameters<typeof macroHistory.read>[0]) => macroHistory.read(query),
       queryMacroRatesSnapshot: () => undefined,
       queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }),
       queryMarketCalendarMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' })
@@ -115,7 +128,7 @@ async function packetWith(input: Readonly<{
       ]
     } as never
   }
-  return createDailyBriefingSource(deps).buildPacket({ asOf: CUTOFF, locale: 'zh-CN', timeZone: TIME_ZONE })
+  return makeSource(deps).buildPacket({ asOf: CUTOFF, locale: 'zh-CN', timeZone: TIME_ZONE })
 }
 
 const points: readonly Point[] = [
@@ -151,11 +164,13 @@ describe('daily briefing document data as-of rows', () => {
     // The current 21:00 values (105 / 4200 / 900 / the 10-30 ETF row) never reach the document.
     expect(row(document, 'dxy')).toMatchObject({
       state: 'available', observedAt: '2026-10-30T23:45:00.000Z',
-      value: { number: (104 / 103 - 1) * 100, format: 'percent' }
+      value: { number: 104, format: 'level' },
+      change: { value: (104 / 103 - 1) * 100, unit: 'percent', window: '24h' }
     })
     expect(row(document, 'gold')).toMatchObject({
       state: 'available', observedAt: '2026-10-30T23:50:00.000Z',
-      value: { number: (4_150 / 4_100 - 1) * 100, format: 'percent' }
+      value: { number: 4_150, format: 'level' },
+      change: { value: (4_150 / 4_100 - 1) * 100, unit: 'percent', window: '24h' }
     })
     expect(row(document, 'stablecoin')).toMatchObject({
       state: 'available', observedAt: '2026-10-30T23:00:00.000Z', value: { number: 300, format: 'usd' }
@@ -202,7 +217,8 @@ describe('daily briefing document data as-of rows', () => {
     expect(row(document, 'dxy')).toMatchObject({
       labelKey: 'dailyBriefing.row.dxySynthetic',
       observedAt: '2026-10-30T23:45:00.000Z',
-      value: { number: (100.5 / 100 - 1) * 100, format: 'percent' }
+      value: { number: 100.5, format: 'level' },
+      change: { value: (100.5 / 100 - 1) * 100, unit: 'percent', window: '24h' }
     })
   })
 })

@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from '../ChannelManagementPredicates'
+import { isChannelRuntimeFailureMirrorCode, mirrorRuntimeFailure } from '../channelRuntimeFailureMirror'
 
-const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
+// 不能在模块加载时算死：支持判定里含进程内的「取证放行」（setChannelAcceptanceOverride），
+// 算死的常量会让运行时这一侧永远判「未支持」，用户点启用必然失败。
+const RUNTIME_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 /** Metadata-only polling cursor. It never stores a Telegram update body or token. */
 export class TelegramOffsetRepository {
@@ -23,7 +26,7 @@ export class TelegramOffsetRepository {
         `select 1 from channel_runtime_generations g join agent_channels c on c.id = g.channel_id
          join agent_entities a on a.id = c.agent_id
          where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
-           and c.adapter_key = 'telegram' and ${RUNTIME_CHANNEL_C_SQL}
+           and c.adapter_key = 'telegram' and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
       ).get(channelId, generation)
       if (!current) return false
@@ -44,20 +47,29 @@ export class TelegramOffsetRepository {
 
   /** Bootstrap-only terminal audit after the caller has fenced this channel; poll callbacks use auditIfCurrent. */
   auditBootstrapFenced(channelId: string, code: string, now = new Date()): void {
-    this.database.connection.prepare(
-      'insert into channel_telegram_runtime_audits(id, channel_id, code, created_at) values (?, ?, ?, ?)'
-    ).run(randomUUID(), channelId, code, now.toISOString())
+    this.database.transact(() => {
+      this.database.connection.prepare(
+        'insert into channel_telegram_runtime_audits(id, channel_id, code, created_at) values (?, ?, ?, ?)'
+      ).run(randomUUID(), channelId, code, now.toISOString())
+      // 启动期失败没有代际，留给面板按频道看即可。
+      if (isChannelRuntimeFailureMirrorCode(code)) mirrorRuntimeFailure(this.database, channelId, null, code, now)
+    })
   }
 
   /** Poll callbacks write audit metadata only while their exact Telegram runtime remains active. */
   auditIfCurrent(channelId: string, generation: number, code: string, now = new Date()): boolean {
-    return this.database.connection.prepare(
+    return this.database.transact(() => {
+      const inserted = this.database.connection.prepare(
       `insert into channel_telegram_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active'
-           and c.adapter_key='telegram' and ${RUNTIME_CHANNEL_C_SQL}
+           and c.adapter_key='telegram' and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1)`
-    ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
+      ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
+      // 同一事务里镜像：主表写了、面板表没写，就等于诊断有记录而读者看不见。
+      if (inserted && isChannelRuntimeFailureMirrorCode(code)) mirrorRuntimeFailure(this.database, channelId, generation, code, now)
+      return inserted
+    })
   }
 
   /** Terminal metadata audit retention: one bounded page, never part of a poll hot path. */

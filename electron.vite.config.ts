@@ -47,6 +47,8 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'apps/desktop-shell/src/renderer'),
+    // `@resources` 在 renderer root 之外：dev server 要显式允许读这一段，否则 import 会被挡。
+    server: { fs: { allow: [resolve(__dirname)] } },
     plugins: [react()],
     resolve: {
       alias: {
@@ -54,6 +56,8 @@ export default defineConfig({
         '@renderer': resolve(__dirname, 'apps/desktop-shell/src/renderer/src'),
         '@platform': resolve(__dirname, 'platform'),
         '@products': resolve(__dirname, 'products'),
+        // 打包用的图标只有一份：渲染层直接引它，不复制第二份（两份必然有一天不一致）。
+        '@resources': resolve(__dirname, 'resources'),
         antd: resolve(__dirname, 'apps/desktop-shell/node_modules/antd'),
         dayjs: resolve(__dirname, 'apps/desktop-shell/node_modules/dayjs'),
         'lucide-react': resolve(__dirname, 'apps/desktop-shell/node_modules/lucide-react')

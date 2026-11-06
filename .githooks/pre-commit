@@ -1,0 +1,11 @@
+#!/bin/sh
+# 提交前预检：只拦「自己这一笔」的类型错与四条组件守卫。
+#
+# 安装（每台机器一次）：git config core.hooksPath .githooks
+# 跳过一次（紧急回滚等）：SKIP_PRE_COMMIT=1 git commit …
+#   跳过后必须自己补跑 pnpm typecheck——钩子只是补「单跑定向用例抓不到」的那一半。
+# 规则与边界见 AGENTS.md「提交前的预检钩子」。
+set -e
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+exec ./node_modules/.bin/tsx scripts/pre-commit.mts

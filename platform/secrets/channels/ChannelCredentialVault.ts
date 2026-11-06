@@ -11,6 +11,7 @@ export type {
   ChannelCredentialReservedInspection,
   ChannelCredentialReservedDelete,
   ChannelCredentialReservedPutInput,
+  ChannelCredentialReservedSettlement,
   ChannelCredentialSafeView,
   ChannelCredentialVault,
   ChannelPayloadCipher,

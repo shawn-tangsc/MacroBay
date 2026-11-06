@@ -1,15 +1,51 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const intelligenceSourcesText = {
   'zh-CN': {
-  viewSources: '来源',
-  viewRuns: '运行记录',
   syncRun: {
-    title: '运行记录',
+    title: '运行日志',
     window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部（含每日汇总）' },
     outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
-    columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
+    columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', analysis: '分析结果', duration: '耗时', detail: '说明' },
     actions: { collect: '定时采集', refresh: '手动运行', analysis: '分析', configure: '配置变更', test: '测试连接', import: '导入文件', other: '其他' },
     outcomes: { succeeded: '成功', failed: '失败', cancelled: '已取消', running: '进行中' },
+    /**
+     * The analysis side of a task row.
+     *
+     * 任务成功 ≠ 分析成功：分析任务会以 completed 收尾，而分析本身可能被拒绝发布。所以这一列
+     * 单列、不合并；"没成"沿用产品既有的"未发布"说法，不另造一套词。
+     */
+    analysis: {
+      states: {
+        succeeded: '已发布',
+        failed: '未发布',
+        'invalid-output': '未发布',
+        cancelled: '已取消',
+        running: '进行中',
+        queued: '排队中',
+        stale: '已过期',
+        superseded: '已被取代'
+      },
+      notApplicable: '—',
+      notApplicableHint: '这个任务不产生分析记录',
+      unlinked: '关联没记录',
+      unlinkedHint: '这条任务找不到对应的分析记录；分析侧的关联回写还没到',
+      unavailable: '分析结果没拿到',
+      unavailableHint: '这条运行记录没有带上分析结果，重试后仍如此请报错',
+      reasonFallback: '这次分析没有发布',
+      open: '查看这次分析',
+      close: '收起这次分析',
+      recordTitle: '分析记录',
+      fields: { runId: '记录号', started: '开始', completed: '结束', model: '模型', reason: '原因', code: '错误码', detailCode: '细分码' },
+      notRecorded: '没有记录'
+    },
+    /**
+     * 通知按 id 找一条记录。找不到时要说出来，而且不能把它说成"这条分析就是没生成"——那两件事
+     * 对读者完全不同。
+     */
+    focus: {
+      missing: '没找到这条记录',
+      missingHint: '它可能比这一页能读到的最近 500 条运行更早（更早的只保留每日汇总），或者这条链接不是本机生成的。'
+    },
     /**
      * Failure codes reach this table as the first hyphenated token of a job's error text. A
      * reader sees the sentence; the code itself stays in the element's title, never on screen.
@@ -71,9 +107,7 @@ export const intelligenceSourcesText = {
       'market-intelligence.retain-market-history': '历史保留'
     },
     joiner: ' · ',
-    empty: '这段时间没有运行记录。采集任务在来源启用后才会出现。',
-    unavailable: '运行记录暂时不可用。',
-    loading: '正在读取运行记录…',
+    loading: '正在读取…',
     exportCsv: '复制 CSV',
     exported: '已复制到剪贴板',
     exportFailed: '无法写入剪贴板，请重试',
@@ -81,10 +115,41 @@ export const intelligenceSourcesText = {
     allSourcesNote: '—',
     noSourceHint: '该任务不直接读取某个来源：它读已存记录，或一次读全部来源',
     allSources: '全部来源',
+    sourceFilterNone: '无来源',
+    truncatedNotice: '已取回最近 {count} 条，本窗口还有更多',
+    exportTruncated: '已导出最近 {count} 条；本窗口还有更多没有导出',
     showing: '显示 {shown} 条，共 {total} 条',
     retention: '明细保留 30 天，更早的只留每日汇总',
     page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页',
-    csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
+    csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明', '总数', '成功', '失败', '跳过'],
+    // 每批自己的结论：这一行跑了几条、成了几条。没有计数时整格不写，写 0 会变成另一件事。
+    counts: '{total} 条中成功 {succeeded}',
+    countsFailed: '失败 {failed}',
+    countsReasons: '失败 {failed}（{reasons}）',
+    countsSkipped: '跳过 {skipped}',
+    countsSeparator: '、',
+    oldRecordNote: '旧记录，没有条数',
+    // 按平台真实闭集建，一条码一句：多一句就是一条永远不出现的文案，少一句读者看到空白。
+    resultReasons: {
+      'model.timeout': '这次超时了，没在时限内跑完',
+      'model.rate-limited': '模型服务正在限流，这批没跑成',
+      'model.not-configured': '还没有可用的模型，去「设置 → 模型服务」配一个',
+      'model.output-invalid': '模型这次的返回不合格式，这批没有采用',
+      'translation.undetermined': '这次没能判断原因',
+      // 跳过不是失败：这句话里不许出现「失败」，否则和计数里的「跳过 N 条」自相矛盾。
+      'translation.auto-off': '自动翻译关着，这批没翻'
+    },
+    // 分布需要短标签：上面那几句是「读给一个人听」的句子，塞进括号会读成半句话。
+    // 键与 `resultReasons` 必须一一对应（有用例断言两表键集相等，防一边加一边漏）。
+    resultReasonTags: {
+      'model.timeout': '超时',
+      'model.rate-limited': '限流',
+      'model.not-configured': '模型没配好',
+      'model.output-invalid': '输出不合法',
+      'translation.undetermined': '原因不明',
+      'translation.auto-off': '自动翻译关着'
+    },
+    resultReasonUnknown: '这次没能判断原因',
     aggregates: {
       title: '每日汇总',
       note: '每日汇总只记一天一个任务的运行次数与失败次数（按 UTC 日界），不记原因与耗时；最多显示最近 60 条（日 × 任务）。',
@@ -137,10 +202,14 @@ export const intelligenceSourcesText = {
   sourceFilterLabel: '来源筛选',
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
   proxyNotice: {
-    title: '这个来源需要连接 VPN（本地代理）才能采集。',
+    title: '这个来源要走本地代理才能连',
     failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
-    body: '没走代理时「测试连接」和自动采集会一直失败，与 API Key 是否正确无关。请先打开能访问境外网络的 VPN 或本地代理（也就是常说的翻墙），再到「设置 → 基础设置 → 代理模式」选择「自定义代理」并填入同一个本地地址（例如 http://127.0.0.1:7888），保存后回来重试。浏览器能打开不代表应用能连——应用请求只走这里的代理。',
-    action: '去设置代理'
+    // 已配好代理却仍连不上：不让他去「打开 VPN」，而是查地址/端口/代理是否在跑。
+    configuredFailedTitle: '代理没通：这次没连上',
+    configuredFailedBody: '检查代理地址与端口是否正确、代理程序是否正在运行，然后回来重试。',
+    body: '去「设置 → 基础设置 → 代理模式」选「自定义代理」，填入本地地址（例如 http://127.0.0.1:7888），保存后回来重试。',
+    action: '去设置代理',
+    configuredFailedAction: '检查代理地址'
   },
   agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
   panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
@@ -405,15 +474,42 @@ export const intelligenceSourcesText = {
   }
 },
   'en-US': {
-  viewSources: 'Sources',
-  viewRuns: 'Run record',
   syncRun: {
-    title: 'Run record',
+    title: 'Run log',
     window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All (with daily totals)' },
     outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
-    columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },
+    columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', analysis: 'Analysis', duration: 'Duration', detail: 'Detail' },
     actions: { collect: 'Scheduled run', refresh: 'Manual run', analysis: 'Analysis', configure: 'Configuration', test: 'Connection test', import: 'File import', other: 'Other' },
     outcomes: { succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled', running: 'Running' },
+    /** 任务成功 ≠ 分析成功：分析任务会以 completed 收尾，而分析本身可能被拒绝发布。 */
+    analysis: {
+      states: {
+        succeeded: 'Published',
+        failed: 'Not published',
+        'invalid-output': 'Not published',
+        cancelled: 'Cancelled',
+        running: 'Running',
+        queued: 'Queued',
+        stale: 'Stale',
+        superseded: 'Superseded'
+      },
+      notApplicable: '—',
+      notApplicableHint: 'This task does not produce an analysis',
+      unlinked: 'No link recorded',
+      unlinkedHint: 'No analysis record is linked to this task run; the link write-back has not arrived yet',
+      unavailable: 'Analysis result unavailable',
+      unavailableHint: 'This run record carried no analysis result; if a retry still shows this, report it',
+      reasonFallback: 'This analysis was not published',
+      open: 'View this analysis',
+      close: 'Hide this analysis',
+      recordTitle: 'Analysis record',
+      fields: { runId: 'Record', started: 'Started', completed: 'Ended', model: 'Model', reason: 'Reason', code: 'Error code', detailCode: 'Detail code' },
+      notRecorded: 'Not recorded'
+    },
+    focus: {
+      missing: 'That record was not found',
+      missingHint: 'It may be older than the newest 500 runs this page can read (older runs are only kept as daily totals), or the link did not come from this machine.'
+    },
     /** The reader sees the sentence; the code itself stays in the element's title. */
     failureCodes: {
       'analysis-timeout': 'Analysis timed out before the model answered',
@@ -472,9 +568,7 @@ export const intelligenceSourcesText = {
       'market-intelligence.retain-market-history': 'History retention'
     },
     joiner: ' · ',
-    empty: 'No runs in this window. Collection appears once a source is enabled.',
-    unavailable: 'The run record is unavailable.',
-    loading: 'Reading the run record…',
+    loading: 'Reading…',
     exportCsv: 'Copy CSV',
     exported: 'Copied to the clipboard',
     exportFailed: 'Could not write to the clipboard',
@@ -482,10 +576,36 @@ export const intelligenceSourcesText = {
     allSourcesNote: '—',
     noSourceHint: 'This task names no single source: it reads stored records or all sources at once',
     allSources: 'All sources',
+    sourceFilterNone: 'No source',
+    truncatedNotice: 'Loaded the latest {count} runs; this window holds more',
+    exportTruncated: 'Exported the latest {count} runs; the rest of this window was not exported',
     showing: 'Showing {shown} of {total}',
     retention: 'Details are kept 30 days; older runs only survive as daily counts',
     page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next',
-    csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
+    csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail', 'Total', 'Succeeded', 'Failed', 'Skipped'],
+    counts: '{succeeded} of {total} succeeded',
+    countsFailed: '{failed} failed',
+    countsReasons: '{failed} failed ({reasons})',
+    countsSkipped: '{skipped} skipped',
+    countsSeparator: ', ',
+    oldRecordNote: 'Older record — no item count was stored',
+    resultReasons: {
+      'model.timeout': 'This timed out before it finished',
+      'model.rate-limited': 'The model service was rate-limiting, so this batch did not run',
+      'model.not-configured': 'No usable model is configured — set one up in Settings.',
+      'model.output-invalid': 'The model returned something that did not fit the expected format, so it was not used',
+      'translation.undetermined': 'We could not tell why this time',
+      'translation.auto-off': 'Automatic translation is off, so nothing was translated'
+    },
+    resultReasonTags: {
+      'model.timeout': 'timeout',
+      'model.rate-limited': 'rate limited',
+      'model.not-configured': 'model not configured',
+      'model.output-invalid': 'invalid output',
+      'translation.undetermined': 'cause unknown',
+      'translation.auto-off': 'auto-translation off'
+    },
+    resultReasonUnknown: 'We could not tell why this time',
     aggregates: {
       title: 'Daily totals',
       note: 'A daily total keeps one day of one task: how many times it ran and how many failed (UTC day boundaries). No reasons, no durations; at most the newest 60 day-and-task rows are shown.',
@@ -538,10 +658,13 @@ export const intelligenceSourcesText = {
   sourceFilterLabel: 'Filter sources',
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
   proxyNotice: {
-    title: 'This source needs a VPN (local proxy) to collect.',
+    title: 'This source needs a local proxy to connect',
     failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
-    body: 'Without a proxy, “Test connection” and automatic collection keep failing — the API key is not the problem. Open a VPN or local proxy that can reach overseas networks, then set “Proxy mode” to “Custom proxy” under Settings → Basic settings with the same local address (for example http://127.0.0.1:7888) and try again. A browser reaching the site does not mean this app can: app requests only use the proxy configured here.',
-    action: 'Open proxy settings'
+    configuredFailedTitle: 'The proxy is not reachable: this attempt did not connect',
+    configuredFailedBody: 'Check the proxy address and port, and that the proxy program is running, then try again.',
+    body: 'Set “Proxy mode” to “Custom proxy” under Settings → Basic settings and enter your local address (for example http://127.0.0.1:7888), then try again.',
+    action: 'Open proxy settings',
+    configuredFailedAction: 'Check the proxy address'
   },
   agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },
   panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },

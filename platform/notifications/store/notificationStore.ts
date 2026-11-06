@@ -1,14 +1,20 @@
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+import type { NotificationCopyParam, NotificationCopyParamRef } from '../contracts/notificationCopyPort'
+import type { NotificationCopyNumber } from '../contracts/notificationNumberFormat'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
   SEVERITY_RANK,
   type NotificationChannel,
+  type NotificationContentByLanguage,
+  type NotificationDeliveryState,
   type NotificationPriority,
+  type NotificationPushBackoff,
   type NotificationRecord,
   type NotificationRequest,
   type NotificationRuntimeSettings,
   type NotificationSeverity,
+  type NotificationSignalSeverity,
   type NotificationState
 } from '../contracts/notificationContracts'
 
@@ -22,13 +28,25 @@ export type NotificationDailyCounters = Record<string, number>
 
 export type NotificationStoreState = {
   records: NotificationRecord[]
-  dailyCounters?: NotificationDailyCounters
+  dailyCounters: NotificationDailyCounters
+  /** 通道熔断：每个 channelId 一条；只由 runtime 写，端口只返回结果（runtime §8）。 */
+  pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+  /**
+   * 供应商凭据的**判定状态**（P4a/P4b 用）：`ok` / `invalid` 两值，没有第三态。
+   *
+   * - 只存两值：读不到就说不知道，那就不发事件，不许用 `unknown` 占位；
+   * - 只有**翻转**才发事件（invalid→invalid 不重复发）；
+   * - 它是判定状态、不是记录：**剪枝不许抹掉**，否则重启后会再发一遍失效。
+   */
+  providerCredentialHealth: Readonly<Record<string, 'ok' | 'invalid'>>
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
     records: [],
-    dailyCounters: {}
+    dailyCounters: {},
+    pushBackoff: {},
+    providerCredentialHealth: {}
   }
 }
 
@@ -53,12 +71,23 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
     owner: candidate.owner === 'platform' ? 'platform' : 'product',
     productId: candidate.productId ? String(candidate.productId) : undefined,
     sourceId: String(candidate.sourceId),
-    // 存储里读回来的键不做闭集校验（旧记录可能带已删除的键）；解析器解析不到会保留占位，
-    // 而不是把键名当句子显示。
-    titleKey: String(candidate.titleKey) as NotificationCopyKey,
+    // 旧记录没有事件类型：归一化成保留值，**不回写**（契约 §6）。
+    eventTypeId: candidate.eventTypeId ? String(candidate.eventTypeId) : 'legacy.untyped',
+    mergedEventTypes: normalizeStringList(candidate.mergedEventTypes),
+    delivery: normalizeDelivery(candidate.delivery),
+    // 双形状（契约 v2.56）：有成品就直接用；没有才读老形状的键。两者都没有的记录按老形状空键处理，
+    // 读取时落到兜底句——不认识就说不清，不假装读过。
+    ...(normalizeRendered(candidate.rendered) === undefined
+      ? {}
+      : { rendered: normalizeRendered(candidate.rendered) }),
+    ...(candidate.titleKey === undefined
+      ? {}
+      : { titleKey: String(candidate.titleKey) as NotificationCopyKey }),
     titleParams: normalizeTextParams(candidate.titleParams),
     bodyKey: candidate.bodyKey ? String(candidate.bodyKey) as NotificationCopyKey : undefined,
     bodyParams: normalizeTextParams(candidate.bodyParams),
+    reasonKey: candidate.reasonKey ? String(candidate.reasonKey) as NotificationCopyKey : undefined,
+    reasonParams: normalizeTextParams(candidate.reasonParams),
     severity: normalizeSeverity(candidate.severity),
     priority: normalizePriority(candidate.priority),
     channels: normalizeChannels(candidate.channels),
@@ -93,7 +122,63 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   const records = Array.isArray(candidate.records)
     ? candidate.records.map(normalizeNotificationRecord).filter((record): record is NotificationRecord => Boolean(record))
     : []
-  return { records, dailyCounters: normalizeDailyCounters(candidate.dailyCounters) }
+  return {
+    records,
+    dailyCounters: normalizeDailyCounters(candidate.dailyCounters),
+    pushBackoff: normalizePushBackoff(candidate.pushBackoff),
+    // 只认两个值：别的（含旧文件里的脏数据）一律丢掉——没有「unknown」这个状态。
+    providerCredentialHealth: normalizeCredentialHealth(candidate.providerCredentialHealth)
+  }
+}
+
+/** 合并进来的事件类型：只收短字符串、去重；空列表等于没有。 */
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const list = [...new Set(value.filter((item): item is string => typeof item === 'string' && item.length > 0))]
+  return list.length > 0 ? list : undefined
+}
+
+/** 投递证据按表面各一条；坏形状整条丢掉，不猜一个状态（契约 §8）。 */
+function normalizeDelivery(value: unknown): NotificationRecord['delivery'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const delivery: NotificationRecord['delivery'] = {}
+  for (const surface of ['toast', 'popup', 'desktop', 'push'] as const) {
+    const raw = (value as Record<string, unknown>)[surface]
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const state = (raw as Record<string, unknown>).state
+    if (state !== 'queued' && state !== 'sent-accepted' && state !== 'failed') continue
+    const at = (raw as Record<string, unknown>).at
+    if (typeof at !== 'string' || at.length === 0) continue
+    const reason = (raw as Record<string, unknown>).reason
+    const messageId = (raw as Record<string, unknown>).messageId
+    delivery[surface] = {
+      state,
+      at,
+      ...(typeof reason === 'string' && reason.length > 0 ? { reason } : {}),
+      ...(typeof messageId === 'string' && messageId.length > 0 ? { messageId } : {})
+    }
+  }
+  return delivery
+}
+
+/** 熔断状态：只收合法 channelId + 非负整数失败数 + null/UTC 时刻；坏条目丢掉。 */
+function normalizePushBackoff(value: unknown): Readonly<Record<string, NotificationPushBackoff>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const backoff: Record<string, NotificationPushBackoff> = {}
+  for (const [channelId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^[a-zA-Z0-9._:-]{1,200}$/.test(channelId)) continue
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const failures = (raw as Record<string, unknown>).failures
+    if (typeof failures !== 'number' || !Number.isFinite(failures) || failures < 0) continue
+    const pausedUntil = (raw as Record<string, unknown>).pausedUntil
+    if (pausedUntil !== null && (typeof pausedUntil !== 'string' || !Number.isFinite(Date.parse(pausedUntil)))) continue
+    backoff[channelId] = {
+      channelId,
+      failures: Math.floor(failures),
+      pausedUntil: pausedUntil as string | null
+    }
+  }
+  return backoff
 }
 
 /**
@@ -111,15 +196,96 @@ function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
   return counters
 }
 
-/** 文案参数只收短字符串：这里进的是任务名之类的实体名，不是日志正文。 */
-function normalizeTextParams(value: unknown): Record<string, string> | undefined {
+/**
+ * 文案参数：字面串，或一个**不带参数**的引用（契约 v2.40）。
+ *
+ * 两条边界都在这里守：字面量必须短（进的是任务名这类实体名，不是日志正文）；引用只收三种
+ * scope 且**只带标识**——带 params 或再嵌一层就整条丢掉，不让「多一层」从数据里溜进解析器。
+ */
+function normalizeTextParams(value: unknown): Record<string, NotificationCopyParam> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const params: Record<string, string> = {}
+  const params: Record<string, NotificationCopyParam> = {}
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof raw !== 'string' || raw.length > 200) continue
-    params[key] = raw
+    if (typeof raw === 'string') {
+      if (raw.length <= 200) params[key] = raw
+      continue
+    }
+    const number = normalizeParamNumber(raw)
+    if (number !== undefined) {
+      params[key] = number
+      continue
+    }
+    const ref = normalizeParamRef(raw)
+    if (ref !== undefined) params[key] = { ref }
   }
   return Object.keys(params).length > 0 ? params : undefined
+}
+
+/**
+ * 成品句子（契约 v2.56）：两种语言、三段都必须是**非空字符串**，否则整份丢弃——
+ * 半份成品比没有更危险：平台会以为读到了，读者却看到空句子。
+ */
+function normalizeRendered(value: unknown): NotificationContentByLanguage | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  const pick = (language: 'zh-CN' | 'en-US'): { title: string; body: string; reason: string } | undefined => {
+    const entry = candidate[language]
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined
+    const parts = entry as Record<string, unknown>
+    const title = typeof parts.title === 'string' ? parts.title : undefined
+    const body = typeof parts.body === 'string' ? parts.body : undefined
+    const reason = typeof parts.reason === 'string' ? parts.reason : undefined
+    if (title === undefined || body === undefined || reason === undefined) return undefined
+    if (title.trim() === '' || body.trim() === '' || reason.trim() === '') return undefined
+    return { title, body, reason }
+  }
+  // 单语言是**合法状态**（那一期只有一种语言）：有哪种留哪种，一种都没有才算没读到成品。
+  const zh = pick('zh-CN')
+  const en = pick('en-US')
+  if (zh === undefined && en === undefined) return undefined
+  return { ...(zh === undefined ? {} : { 'zh-CN': zh }), ...(en === undefined ? {} : { 'en-US': en }) }
+}
+
+/** 信号严重度：只认三档闭集（契约 v2.45）。其它值一律当作「没有这个状态」。 */
+function normalizeSignalSeverity(value: unknown): NotificationSignalSeverity | undefined {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined
+}
+
+/**
+ * 参数位置上的数字：只认 `{ number, kind }`，`kind` 落在闭集里、数值有限。
+ * 其它形状（少字段、多字段、单位自造）一律丢掉——半懂的引用比没有更危险。
+ */
+function normalizeParamNumber(value: unknown): NotificationCopyNumber | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  const keys = Object.keys(candidate)
+  if (keys.length !== 2 || !('number' in candidate) || !('kind' in candidate)) return undefined
+  const { number, kind } = candidate
+  if (typeof number !== 'number' || !Number.isFinite(number)) return undefined
+  if (kind !== 'usd' && kind !== 'pct' && kind !== 'multiple' && kind !== 'count') return undefined
+  return { number, kind }
+}
+
+/** 参数位置上的引用：只认 `{ ref: { scope, …标识 } }`，多一个字段都不要。 */
+function normalizeParamRef(value: unknown): NotificationCopyParamRef | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const holder = value as { ref?: unknown }
+  if (!holder.ref || typeof holder.ref !== 'object' || Array.isArray(holder.ref)) return undefined
+  const ref = holder.ref as Record<string, unknown>
+  const keys = Object.keys(ref)
+  const exactly = (...allowed: string[]): boolean =>
+    keys.length === allowed.length && allowed.every((field) => field in ref)
+  if (ref.scope === 'platform' && exactly('scope', 'key') && typeof ref.key === 'string') {
+    return { scope: 'platform', key: ref.key }
+  }
+  if (ref.scope === 'product' && exactly('scope', 'productId', 'key') &&
+    typeof ref.productId === 'string' && typeof ref.key === 'string') {
+    return { scope: 'product', productId: ref.productId, key: ref.key }
+  }
+  if (ref.scope === 'job-title' && exactly('scope', 'definitionId') && typeof ref.definitionId === 'string') {
+    return { scope: 'job-title', definitionId: ref.definitionId }
+  }
+  return undefined
 }
 
 export function createNotificationFromRequest(request: NotificationRequest, now = new Date().toISOString()): NotificationRecord {
@@ -128,10 +294,14 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
     owner: request.owner,
     productId: request.productId,
     sourceId: request.sourceId,
+    eventTypeId: request.eventTypeId ?? 'legacy.untyped',
+    delivery: {},
     titleKey: request.titleKey,
     titleParams: request.titleParams,
     bodyKey: request.bodyKey,
     bodyParams: request.bodyParams,
+    reasonKey: request.reasonKey,
+    reasonParams: request.reasonParams,
     severity: request.severity,
     priority: request.priority,
     channels: request.requestedChannels.includes('center') ? request.requestedChannels : ['center', ...request.requestedChannels],
@@ -145,23 +315,6 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
     createdAt: now,
     updatedAt: now,
     expiresAt: request.expiresAt
-  }
-}
-
-export function mergeDuplicateNotification(existing: NotificationRecord, incoming: NotificationRequest, now: string): NotificationRecord {
-  return {
-    ...existing,
-    titleKey: incoming.titleKey,
-    titleParams: incoming.titleParams ?? existing.titleParams,
-    bodyKey: incoming.bodyKey ?? existing.bodyKey,
-    bodyParams: incoming.bodyParams ?? existing.bodyParams,
-    severity: strongerSeverity(existing.severity, incoming.severity),
-    priority: strongerPriority(existing.priority, incoming.priority),
-    channels: uniqueChannels([...existing.channels, ...incoming.requestedChannels]),
-    updatedAt: now,
-    occurrenceCount: existing.occurrenceCount + 1,
-    expiresAt: incoming.expiresAt ?? existing.expiresAt,
-    safeMetadata: incoming.safeMetadata ?? existing.safeMetadata
   }
 }
 
@@ -268,17 +421,26 @@ function normalizeChannels(value: unknown): NotificationChannel[] {
   if (!Array.isArray(value)) return ['center']
   const allowed: NotificationChannel[] = ['center', 'toast', 'popup', 'desktop']
   const channels = value.filter((item): item is NotificationChannel => allowed.includes(item as NotificationChannel))
-  return channels.length > 0 ? uniqueChannels(channels) : ['center']
+  return channels.length > 0 ? [...new Set(channels)] : ['center']
 }
 
-function strongerSeverity(left: NotificationSeverity, right: NotificationSeverity): NotificationSeverity {
-  return SEVERITY_RANK[left] >= SEVERITY_RANK[right] ? left : right
+
+
+
+/** 只留 `ok` / `invalid` 两值；其余丢弃，不发明第三态。 */
+function normalizeCredentialHealth(
+  value: unknown
+): Readonly<Record<string, 'ok' | 'invalid'>> {
+  if (!value || typeof value !== 'object') return {}
+  const out: Record<string, 'ok' | 'invalid'> = {}
+  for (const [providerId, state] of Object.entries(value as Record<string, unknown>)) {
+    if (state === 'ok' || state === 'invalid') out[providerId] = state
+  }
+  return out
 }
 
-function strongerPriority(left: NotificationPriority, right: NotificationPriority): NotificationPriority {
-  return PRIORITY_RANK[left] >= PRIORITY_RANK[right] ? left : right
-}
-
-function uniqueChannels(channels: NotificationChannel[]): NotificationChannel[] {
-  return [...new Set(channels)]
-}
+/**
+ * 合并规则已抽到 `notificationMerge.ts`（store 只留读写；抽出去因为本文件超了体积线）。
+ * 这里**只转出口**，规则本身不在这份文件里——一处实现，别处引用。
+ */
+export { mergeDuplicateNotification } from './notificationMerge'

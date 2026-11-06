@@ -4,7 +4,7 @@
 
 **Turn market information into analysis you can check.**
 
-![MacroBay market intelligence dashboard](./assets/screenshots/demo-en.gif)
+![MacroBay daily brief: one page, every number with its source and cutoff](./assets/screenshots/brief-hero-en.png)
 
 MacroBay is a local desktop app for reading markets with evidence. Open the dashboard, ask the
 analyst agent what changed, and see the source and time boundary behind each number. It is not a
@@ -26,7 +26,8 @@ Full walkthrough: **[Quick start](./getting-started/quick-start.md)**.
    model for agents.
 2. **Settings → Intelligence Sources**: enable the sources you have access to and add any required
    credentials.
-3. Open the **intelligence portal** → **Crypto Market Analyst** → **Open dashboard**.
+3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard. The agent portal is not
+   the first screen; reach it with **Back to Agents** on the dashboard.
 4. Ask the analyst agent a question, for example: *What changed in the last macro release, and
    which assets does it affect?*
 
@@ -105,6 +106,34 @@ part of this release. See [Status and limitations](./reference/status-and-limita
 - [Architecture](./platform/architecture.md)
 - [Roadmap](../ROADMAP.md)
 - [Git workflow](./development/git-workflow.md)
+
+### Building on the platform
+
+- [Development setup](./development/setup.md)
+- [Testing](./development/testing.md)
+- [Packaging and release](./development/packaging.md)
+- [Adding a product](./development/adding-a-product.md)
+
+### Components and UI standards
+
+- [State components](./development/ui-state-components.md)
+- [Loading Standard](./development/loading-standard.md)
+- [Icon buttons](./development/icon-button.md)
+- [Status pills](./development/status-pill.md)
+- [Filter chips](./development/filter-chip.md)
+- [Tabs](./development/tabs.md)
+- [Segmented](./development/segmented.md)
+- [Drawers](./development/drawer.md)
+- [Side panels](./development/side-panel.md)
+- [Modals](./development/modal.md)
+- [Confirmation dialogs](./development/confirm.md)
+- [Toasts](./development/toast.md)
+- [Tooltips](./development/tooltip.md)
+- [Popovers](./development/popover.md)
+- [Menus](./development/menu.md)
+- [Structured text](./development/structured-text.md)
+- [Disabled controls and their reason](./development/disabled-hint.md)
+- [Closing a container that holds unsaved input](./development/unsaved-changes.md)
 
 ## License
 

@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { macroEconomicCalendarCaveatPolicy } from '../../../shared/macroEconomicCalendarCaveatPolicy'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { EconomicCalendar } from './index'
@@ -47,7 +48,6 @@ vi.mock('antd', async () => {
 
 let root: Root | null = null
 let restorePlatform: (() => void) | undefined
-let confirmSpy: ReturnType<typeof vi.spyOn> | undefined
 
 
 afterEach(async () => {
@@ -55,8 +55,6 @@ afterEach(async () => {
   root = null
   restorePlatform?.()
   restorePlatform = undefined
-  confirmSpy?.mockRestore()
-  confirmSpy = undefined
   document.body.replaceChildren()
 })
 
@@ -551,9 +549,8 @@ describe('macro economic calendar', () => {
     expect(row.dataset.eventStatus).toBe(source === 'bls' ? 'upcoming' : 'time-pending')
     instant = '2026-08-12T12:00:35.000Z'
     await act(async () => row.click())
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, source === 'bls' ? '刷新 BLS 数据' : '获取官方值').click())
+    await acceptConfirm()
     await settleCalendar()
     // The re-read starts from a loading state, so the row that carries the released value is the
     // one on screen now; what matters is that it already says so, without waiting for a clock tick.
@@ -811,9 +808,8 @@ describe('macro economic calendar', () => {
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
       getEventDetail: async () => ({ state: 'available', asOf, event }), refreshFedFomcDecision: async () => ({ state: 'unavailable' }) })
     await act(async () => eventButton(container, event.eventKey).click())
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.fomcRefresh.action).click())
+    await acceptConfirm()
     const inspector = container.querySelector('.mi-economic-calendar__inspector')!
     if (hasValue) {
       expect(inspector.textContent).toContain('显示上次官方值')
@@ -894,9 +890,8 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => button(container, registeredEventName('fomc')).click())
     await flush()
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '获取官方值').click())
+    await acceptConfirm()
     await flush()
 
     expect(client.refreshFedFomcDecision).toHaveBeenCalledWith({ eventKey: event.eventKey, confirmed: true })
@@ -934,9 +929,8 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => eventButton(container, bls.eventKey).click())
     await flush()
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '刷新 BLS 数据').click())
+    await acceptConfirm()
     await flush()
     expect(container.textContent).toContain('对应完整 BLS 发布组的数据已是最新。')
 
@@ -960,9 +954,8 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => eventButton(container, bls.eventKey).click())
     await flush()
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '刷新 BLS 数据').click())
+    await acceptConfirm()
     await act(async () => eventButton(container, fomc.eventKey).click())
     await flush()
 
@@ -998,9 +991,8 @@ describe('macro economic calendar', () => {
       await flush()
       await act(async () => button(container, registeredEventName(titleKey)).click())
       await flush()
-      Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-      confirmSpy = window.confirm as ReturnType<typeof vi.fn>
       await act(async () => button(container, '刷新 BLS 数据').click())
+      await acceptConfirm()
       await flush()
       expect(client.refreshBlsEmploymentRelease).toHaveBeenCalledWith({ eventKey, confirmed: true })
       expect(client.queryMonth).toHaveBeenCalledTimes(6)
@@ -1049,9 +1041,8 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => button(container, registeredEventName(titleKey)).click())
     await flush()
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '刷新 BLS 数据').click())
+    await acceptConfirm()
     await flush()
 
     expect(client.refreshBlsEmploymentRelease).toHaveBeenCalledWith({ eventKey, confirmed: true })
@@ -1087,9 +1078,8 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => button(container, 'CPI').click())
     await flush()
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '刷新 BLS 数据').click())
+    await acceptConfirm()
 
     expect(button(container, '正在刷新 BLS 数据…').disabled).toBe(true)
     expect(client.queryMonth).toHaveBeenCalledTimes(3)
@@ -1114,9 +1104,8 @@ describe('macro economic calendar', () => {
     await flush()
     expect(container.querySelector('.mi-economic-calendar__inspector')?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.sources.blsAutomaticSchedule)
     expect(container.querySelector('.mi-economic-calendar__inspector')?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.details.scheduledDateOnly)
-    Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-    confirmSpy = window.confirm as ReturnType<typeof vi.fn>
     await act(async () => button(container, '刷新 BLS 数据').click())
+    await acceptConfirm()
     await flush()
     expect(client.queryMonth).toHaveBeenCalledTimes(3)
   })
@@ -1940,9 +1929,25 @@ async function renderCalendar(client: {
   }
   root = localRoot
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
-  const calendar = <ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} text={productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider>
+  // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；
+  // 没有宿主时组件按契约直接抛错，测试也会跟着炸——这正是我们要的。
+  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} text={productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
   await act(async () => localRoot.render(client.strict ? <StrictMode>{calendar}</StrictMode> : calendar))
   return { container, root: localRoot, client: input }
+}
+
+/**
+ * 接受刷新确认。确认框由 `ConfirmProvider` 的树内实例渲染（不再是 `window.confirm`），
+ * 所以它经 portal 挂在 `document.body` 上，并且要点下之后一个 tick 才挂得上。
+ */
+async function acceptConfirm(): Promise<void> {
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+  const ok = document.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
+  if (!ok) throw new Error('Expected the refresh confirmation dialog.')
+  await act(async () => {
+    ok.click()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
 }
 
 async function flush(): Promise<void> {

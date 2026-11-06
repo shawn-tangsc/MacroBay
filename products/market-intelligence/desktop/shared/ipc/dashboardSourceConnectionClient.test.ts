@@ -23,7 +23,9 @@ describe('dashboardSourceConnectionClient', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.dashboardSourceConnection.test', { sourceId: 'defillama-stablecoins' })
   })
 
-  it.each([
+  // 表格里显式声明元组类型：否则 it.each 把首列推成 string，传进 testConnection 就与
+  // 那张来源字面量联合对不上——这是夹具类型问题，不是产品行为问题。
+  it.each<[Parameters<typeof dashboardSourceConnectionClient.testConnection>[0], unknown, unknown]>([
     ['binance-futures-positioning', { state: 'failed', failureCode: 'request-timeout' }, { state: 'failed', failureCode: 'request-timeout' }],
     ['alternative-fear-greed', { state: 'failed', failureCode: 'credential-not-configured' }, { state: 'failed', failureCode: 'response-unavailable' }],
     ['alternative-fear-greed', { state: 'succeeded', exception: 'secret' }, { state: 'failed', failureCode: 'response-unavailable' }],

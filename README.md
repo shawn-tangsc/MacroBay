@@ -41,17 +41,29 @@ what changed, with the source and the cutoff time attached to every number.
 A claim that cannot be traced to a source record and a timestamp is supposed to be reported as a gap.
 That is the whole product: **not a paragraph you have to take on faith.**
 
-A daily briefing collects the same evidence into one page: what the market is pricing, what changed
-overnight, and what to watch today. It can be generated on a schedule or on demand, and every item
-keeps its source and its cutoff time.
+### The daily briefing
+
+One page a morning, about three minutes: what the market is pricing, what changed overnight, and what
+to watch today. Every number carries its source and its cutoff time, so you can check it yourself —
+and whatever could not be collected is reported as a gap instead of being quietly filled in.
 
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
+  <img src="./docs/assets/screenshots/brief-hero-en.png" alt="MacroBay daily brief: one-sentence lede, the past 24 hours of news, macro events, and the numbers behind them, each with its source and cutoff time" width="100%">
 </p>
 
 <p align="center">
-  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
+  <sub>One page a morning. <a href="./docs/assets/screenshots/brief-page-en.png">See the full page</a> — every item, its source and its cutoff.</sub>
 </p>
+
+### Why you can trust it
+
+- **Every number points back.** A claim carries its source record and the cutoff it was read at, so
+  you can go and check it instead of taking the paragraph on faith.
+- **A gap is reported as a gap.** What could not be collected is named and grouped, never filled with
+  a neutral value that reads like data.
+- **The data lands before the analysis.** Sources are collected into a local store, frozen into a
+  snapshot, and only that snapshot is analysed — so a conclusion has a record behind it, and the
+  numbers stay on your machine.
 
 ## Download
 
@@ -113,6 +125,17 @@ So the desk is built around three habits: read the whole picture on one screen, 
 time on every reading, and make the AI show its work.
 
 ## What's on the desk
+
+The desk is where a briefing's evidence lives. Open any claim on the page and you land here: the same
+reading, its window, its source and its cutoff — plus the panels the brief draws from.
+
+<p align="center">
+  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
+</p>
+
+<p align="center">
+  <sub>The desk behind the page — conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column..</sub>
+</p>
 
 - **Funding and positioning.** BTC and ETH perpetual funding, who pays whom, and the history behind
   today's print instead of a single number.
@@ -200,7 +223,8 @@ Full walkthrough: **[Quick start](./docs/getting-started/quick-start.md)**.
    for agents.
 2. **Settings → Intelligence Sources**: enable the sources you have access to and add any required
    credentials.
-3. Open the **intelligence portal** → **Crypto Market Analyst** → **Open dashboard**.
+3. Open **Intelligence** in the sidebar: it lands on the crypto dashboard. The agent portal is not
+   the first screen; reach it with **Back to Agents** on the dashboard.
 4. Ask the analyst: *What changed in the last macro release, and which assets does it affect?*
 
 The answer should show what is known, what is missing, where the evidence came from, and the time
@@ -208,7 +232,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.3.1`). macOS is the verified platform. A **sample mode** ships with the app:
+MacroBay is **alpha** (`0.4.0`). macOS is the verified platform. A **sample mode** ships with the app:
 with no key and no network you can open the full dashboard and one published analysis, replayed from a
 real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified

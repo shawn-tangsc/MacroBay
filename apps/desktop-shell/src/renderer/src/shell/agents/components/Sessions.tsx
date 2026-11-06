@@ -7,9 +7,7 @@ import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/ses
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'
 
-import { reorderSessions } from '../agentStateActions'
 import { createSessionSeenState, getSessionBadgeStatus, reconcileSessionSeenState } from '../agentSessionSeenState'
-import { reorderSessionsViaApi } from '../agentSessionDataApi'
 import {
   buildSessionRuntimeStatusById,
   getLatestAssistantMessageUpdatedAt,
@@ -17,10 +15,14 @@ import {
 } from '../agentSessionViewModel'
 import { useAgentText } from '../agentTextProvider'
 import { buildSessionChannelRuntimeBadgeBySessionId } from '../agentChannelRuntimeViewModel'
+import AutomationSessions from './AutomationSessions'
 import SessionItem from './SessionItem'
 
 type SessionsProps = {
+  /** 读者自己的会话（`origin` 非 automation）；自动会话走 `automationSessions`。 */
   sessions: AgentSessionEntity[]
+  /** 自动会话：单独一块，默认收起。空数组时那块整块不出现。 */
+  automationSessions: readonly AgentSessionEntity[]
   activeSessionId: string | null
   pinnedSessionIds: Set<string>
   messagesBySessionId: Record<string, AgentSessionMessageEntity[]>
@@ -35,6 +37,7 @@ type SessionsProps = {
 
 export default function Sessions({
   sessions,
+  automationSessions,
   activeSessionId,
   pinnedSessionIds,
   messagesBySessionId,
@@ -47,8 +50,6 @@ export default function Sessions({
   onStateChange
 }: SessionsProps): React.ReactElement {
   const t = useAgentText()
-  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null)
-  const [dragOverSessionId, setDragOverSessionId] = useState<string | null>(null)
   const [seenState, setSeenState] = useState(createSessionSeenState)
   const groups = groupAgentSessions(sessions, pinnedSessionIds, t.common)
   const statusBySessionId = buildSessionRuntimeStatusById(sessions, runtimeStateBySessionId)
@@ -76,31 +77,17 @@ export default function Sessions({
     )
   }, [activeSessionId, latestAssistantUpdatedAtBySessionId, sessionIds])
 
-  function reorderWithinGroup(groupSessions: AgentSessionEntity[], targetSessionId: string): void {
-    if (!draggingSessionId || draggingSessionId === targetSessionId) return
-    const draggedIndex = groupSessions.findIndex((session) => session.id === draggingSessionId)
-    const targetIndex = groupSessions.findIndex((session) => session.id === targetSessionId)
-    if (draggedIndex < 0 || targetIndex < 0) return
-
-    const nextGroupSessionIds = groupSessions.map((session) => session.id)
-    const [draggedId] = nextGroupSessionIds.splice(draggedIndex, 1)
-    nextGroupSessionIds.splice(targetIndex, 0, draggedId)
-    const nextSessionIds = sessions.map((session) => session.id)
-    const groupSessionIds = new Set(groupSessions.map((session) => session.id))
-    let groupIndex = 0
-    const orderedSessionIds = nextSessionIds.map((sessionId) =>
-      groupSessionIds.has(sessionId) ? nextGroupSessionIds[groupIndex++] : sessionId
-    )
-
-    void reorderSessionsViaApi(window.platform, orderedSessionIds).catch(() => {
-      onStateChange((current) => reorderSessions(current, orderedSessionIds))
-    })
-  }
-
   return (
     <section className="agent-sessions">
       <div className="agent-session-list">
-        {sessions.length === 0 ? <p className="agent-empty-copy">{t.sidePanel.emptySessions}</p> : null}
+        {/* 只有自动会话时，说明的是「你还没发起过」，不是「没有会话」——两件事的下一步不同。 */}
+        {sessions.length === 0 ? (
+          <p className="agent-empty-copy">
+            {automationSessions.length > 0
+              ? t.sidePanel.automationSessions.readerOnlyEmpty
+              : t.sidePanel.emptySessions}
+          </p>
+        ) : null}
         {groups.map((group) => (
           <div key={group.key} className="agent-session-group">
             <div className="agent-session-group-title">
@@ -122,30 +109,6 @@ export default function Sessions({
                 channelType={channelTypeBySessionId[session.id]}
                 channelRuntime={channelRuntimeBySessionId[session.id]}
                 sessionPanelPosition={sessionPanelPosition}
-                dragging={draggingSessionId === session.id}
-                dragOver={dragOverSessionId === session.id && draggingSessionId !== session.id}
-                draggable
-                onDragStart={(event) => {
-                  setDraggingSessionId(session.id)
-                  event.dataTransfer.effectAllowed = 'move'
-                  event.dataTransfer.setData('text/plain', session.id)
-                }}
-                onDragOver={(event) => {
-                  if (!draggingSessionId || draggingSessionId === session.id) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'move'
-                  setDragOverSessionId(session.id)
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  reorderWithinGroup(group.sessions, session.id)
-                  setDraggingSessionId(null)
-                  setDragOverSessionId(null)
-                }}
-                onDragEnd={() => {
-                  setDraggingSessionId(null)
-                  setDragOverSessionId(null)
-                }}
                 onUpdateSessionPanelPosition={onUpdateSessionPanelPosition}
                 onPress={() => {
                   onSelectSession(session.id)
@@ -156,6 +119,7 @@ export default function Sessions({
           </div>
         ))}
       </div>
+      <AutomationSessions onSelectSession={onSelectSession} sessions={automationSessions} />
     </section>
   )
 }

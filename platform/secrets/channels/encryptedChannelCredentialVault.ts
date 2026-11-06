@@ -1,5 +1,24 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 
+import {
+  buildReservedArchiveRef,
+  buildReservedCredentialRef,
+  calculateSourceFingerprint,
+  canonicalMigrationInput,
+  compareCredentialFieldNames,
+  isArchiveRef,
+  isCanonicalBase64Key,
+  isMigrationFingerprintKey,
+  isMigrationIdentity,
+  migrationIdentityFrom,
+  normalizeArchiveCandidates,
+  sameMigrationIdentity,
+  signMigrationPermit,
+  verifyMigrationPermit,
+  type MigrationFingerprintKey,
+  type MigrationIdentity
+} from './channelCredentialMigration'
+import { unavailable } from './channelCredentialVaultError'
 import type {
   ChannelCredentialPutInput,
   ChannelCredentialArchiveMigrationInput,
@@ -12,6 +31,7 @@ import type {
   ChannelCredentialReservedDelete,
   ChannelCredentialReservedCleanupClaim,
   ChannelCredentialReservedPutInput,
+  ChannelCredentialReservedSettlement,
   ChannelCredentialSafeView,
   ChannelCredentialVault,
   ChannelPayloadCipher,
@@ -37,8 +57,6 @@ type ReservedCredentialRecord = CredentialRecord & {
 type PayloadKeyRecord = { channelId: string; keyRef: string; revision: number; key: string }
 type PayloadKeyState = { currentKeyRef: string | null; currentRevision: number | null; nextRevision: number; knownKeyRefs: string[] }
 type PayloadHashKeyRecord = { channelId: string; key: string }
-type MigrationFingerprintKey = { keyId: string; key: string }
-type MigrationIdentity = Omit<ChannelCredentialMigrationReservation, 'migrationPermit'>
 
 const payloadStatePrefix = 'channel-payload-state:'
 const payloadKeyPrefix = 'channel-payload-key:'
@@ -46,14 +64,7 @@ const payloadHashKeyPrefix = 'channel-payload-hash-key:'
 const payloadDestroyedPrefix = 'channel-payload-destroyed:'
 const migrationFingerprintKeyRef = 'channel-migration-fingerprint-key'
 const migrationFingerprintKeyMarkerRef = 'channel-migration-fingerprint-key-marker'
-const migrationFormatVersion = 'channel-credential-migration-v1'
 
-export class ChannelCredentialVaultError extends Error {
-  constructor() {
-    super('Channel credential vault is unavailable.')
-    this.name = 'ChannelCredentialVaultError'
-  }
-}
 
 export function createEncryptedChannelCredentialVault(input: {
   safeStorage: SafeStorageAdapter
@@ -72,6 +83,7 @@ export function createEncryptedChannelCredentialVault(input: {
     prepareMigration: (input) => vault.prepareMigration(input),
     putReserved: (input) => vault.putReserved(input),
     inspectReserved: (input) => vault.inspectReserved(input),
+    settleReserved: (input) => vault.settleReserved(input),
     claimReservedCleanup: (input) => vault.claimReservedCleanup(input),
     deleteReservedIfCleanupClaim: (input) => vault.deleteReservedIfCleanupClaim(input),
     deleteReservedIfRevision: (input) => vault.deleteReservedIfRevision(input),
@@ -232,6 +244,36 @@ class EncryptedChannelCredentialVaultImplementation {
     if (!existing) return null
     this.assertStoredReservedRecord(key, existing, input.channelId, input.type, identity)
     return toSafeView(identity.credentialRef, existing)
+  }
+
+  /**
+   * 把预留记录**原地**改成普通记录（`revision + 1`，去掉 `migrationIdentity` / `cleanupToken` / `purpose`）。
+   *
+   * 为什么必须原地落定、不能只把内存里的对象当普通记录：同一个 ref 下次还要被 `inspectSafe`、
+   * `rotateIfRevision`、`get` 读到，落库的形态才是事实；内存里换个语法糖，下次启动照样读不出来。
+   * 记录是**重建**而不是 spread 后删字段：多一个 `purpose: 'legacy-discovery-archive'` 之类的旧字段
+   * 不会跟着漏过来，落定后的形态只有 `channelId/type/value/revision` 四项。
+   */
+  async settleReserved(input: ChannelCredentialReservedSettlement): Promise<ChannelCredentialSafeView> {
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || isArchiveRef(input.credentialRef)) throw unavailable()
+    return this.serializeMutation(async () => {
+      const identity = migrationIdentityFrom(input)
+      const key = await this.getMigrationFingerprintKey(identity.fingerprintKeyId)
+      const normalized = normalizeCredentialInput({ channelId: input.channelId, type: input.type, value: {} })
+      if (!verifyMigrationPermit(key, normalized.channelId, normalized.type, identity, input.migrationPermit)) throw unavailable()
+      const current = await this.readProtected<CredentialRecord | ReservedCredentialRecord>(identity.credentialRef)
+      if (!current) throw unavailable()
+      this.assertStoredReservedRecord(key, current, input.channelId, input.type, identity)
+      if (current.revision !== input.expectedRevision) throw unavailable()
+      const record: CredentialRecord = {
+        channelId: current.channelId,
+        type: current.type,
+        value: current.value,
+        revision: current.revision + 1
+      }
+      await this.writeProtected(identity.credentialRef, record)
+      return toSafeView(identity.credentialRef, record)
+    })
   }
 
   async deleteReservedIfRevision(input: ChannelCredentialReservedDelete): Promise<boolean> {
@@ -603,63 +645,6 @@ function normalizeStringRecord(value: Record<string, string>): Record<string, st
   return result
 }
 
-function migrationIdentityFrom(input: ChannelCredentialMigrationReservation): MigrationIdentity {
-  if (!input.credentialRef || !input.sourceFingerprint || !input.fingerprintKeyId) throw unavailable()
-  return {
-    credentialRef: input.credentialRef,
-    sourceFingerprint: input.sourceFingerprint,
-    fingerprintKeyId: input.fingerprintKeyId
-  }
-}
-
-function calculateSourceFingerprint(key: MigrationFingerprintKey, input: ChannelCredentialPutInput & { purpose?: string }): string {
-  return createHmac('sha256', Buffer.from(key.key, 'base64'))
-    .update(canonicalMigrationInput(input))
-    .digest('base64url')
-}
-
-function canonicalMigrationInput(input: ChannelCredentialPutInput & { purpose?: string }): string {
-  return JSON.stringify({
-    format: migrationFormatVersion,
-    channelId: input.channelId,
-    type: input.type,
-    purpose: input.purpose ?? 'provider-credential',
-    value: Object.entries(input.value).sort(([left], [right]) => compareCredentialFieldNames(left, right))
-  })
-}
-
-function buildReservedCredentialRef(channelId: string, sourceFingerprint: string): string {
-  return `channel-migration:${channelId}:${sourceFingerprint}`
-}
-
-function signMigrationPermit(
-  key: MigrationFingerprintKey,
-  channelId: string,
-  type: string,
-  identity: MigrationIdentity,
-  purpose = 'provider-credential'
-): string {
-  return createHmac('sha256', Buffer.from(key.key, 'base64'))
-    .update(JSON.stringify({ format: migrationFormatVersion, channelId, type, purpose, ...identity }))
-    .digest('base64url')
-}
-
-function verifyMigrationPermit(
-  key: MigrationFingerprintKey,
-  channelId: string,
-  type: string,
-  identity: MigrationIdentity,
-  permit: string,
-  purpose = 'provider-credential'
-): boolean {
-  try {
-    const expected = Buffer.from(signMigrationPermit(key, channelId, type, identity, purpose), 'base64url')
-    const received = Buffer.from(permit, 'base64url')
-    return received.length === expected.length && timingSafeEqual(received, expected)
-  } catch {
-    return false
-  }
-}
 
 function isCredentialRecord(value: unknown): value is CredentialRecord {
     return Boolean(
@@ -693,58 +678,9 @@ function isReservedCredentialRecord(value: unknown): value is ReservedCredential
     (!('purpose' in value) || value.purpose === 'legacy-discovery-archive')
 }
 
-function isArchiveRef(value: string): boolean {
-  return value.startsWith('channel-migration-archive:')
-}
 
-function buildReservedArchiveRef(channelId: string, sourceFingerprint: string): string {
-  return `channel-migration-archive:${channelId}:${sourceFingerprint}`
-}
 
-function normalizeArchiveCandidates(value: string[]): string[] {
-  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item.length > 0)) throw unavailable()
-  const candidates = [...new Set(value)].sort()
-  if (Buffer.byteLength(JSON.stringify(candidates), 'utf8') > 1024 * 1024) throw unavailable()
-  return candidates
-}
 
-function isMigrationFingerprintKey(value: unknown): value is MigrationFingerprintKey {
-  if (!value || typeof value !== 'object') return false
-  const key = value as MigrationFingerprintKey
-  return isMigrationFingerprintKeyId(key.keyId) && isCanonicalBase64Key(key.key)
-}
-
-function isMigrationFingerprintKeyId(value: unknown): value is string {
-  return typeof value === 'string' && /^channel-fingerprint-key:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-}
-
-function isCanonicalBase64Key(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) return false
-  try {
-    const decoded = Buffer.from(value, 'base64')
-    return decoded.length === 32 && decoded.toString('base64') === value
-  } catch {
-    return false
-  }
-}
-
-function isMigrationIdentity(value: unknown): value is MigrationIdentity {
-  return Boolean(
-    value && typeof value === 'object' && typeof (value as MigrationIdentity).credentialRef === 'string' &&
-      typeof (value as MigrationIdentity).sourceFingerprint === 'string' &&
-      typeof (value as MigrationIdentity).fingerprintKeyId === 'string'
-  )
-}
-
-function sameMigrationIdentity(left: MigrationIdentity, right: MigrationIdentity): boolean {
-  return left.credentialRef === right.credentialRef &&
-    left.sourceFingerprint === right.sourceFingerprint &&
-    left.fingerprintKeyId === right.fingerprintKeyId
-}
-
-export function compareCredentialFieldNames(left: string, right: string): number {
-  return left === right ? 0 : left < right ? -1 : 1
-}
 
 function sameStringRecord(left: Record<string, string>, right: Record<string, string>): boolean {
   const leftEntries = Object.entries(left).sort(([leftKey], [rightKey]) => compareCredentialFieldNames(leftKey, rightKey))
@@ -844,8 +780,8 @@ function emptyPayloadState(): PayloadKeyState {
   return { currentKeyRef: null, currentRevision: null, nextRevision: 1, knownKeyRefs: [] }
 }
 
-function unavailable(): ChannelCredentialVaultError {
-  return new ChannelCredentialVaultError()
-}
-
 export type { ChannelSecretBlobStore, SafeStorageAdapter } from './channelCredentialContracts'
+
+// 拆出迁移身份与错误类之后，测试与调用方仍从 vault 这一个入口取。
+export { ChannelCredentialVaultError } from './channelCredentialVaultError'
+export { compareCredentialFieldNames } from './channelCredentialMigration'

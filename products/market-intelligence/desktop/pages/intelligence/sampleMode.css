@@ -27,6 +27,30 @@
 .mi-sample-surface {
   position: relative;
   /*
+   * 门户级语义色：看板与日报页共用同一套（描边、正文、静音、强调、正负、警示）。
+   *
+   * 这组值原来只定义在 `.mi-crypto-dashboard` 上，而日报页与看板是门户下的**兄弟分支**——
+   * 于是 `dailyBriefing.css` 里 58 处 `var(--mi-dashboard-*)` 在日报页上一个都解析不到：
+   * 颜色退回继承、间距回到初始值，不报错、测试也不红。名字里的 `dashboard` 是历史遗留，
+   * 语义是“门户内容区的色板”，两个页面指的是同一件事，所以只挪定义、不改名。
+   */
+  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
+  --mi-dashboard-surface: #15191d;
+  --mi-dashboard-text: #edf0ed;
+  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
+  --mi-dashboard-lime: #d4ff58;
+  --mi-dashboard-positive: #55d69b;
+  --mi-dashboard-caution: #e5ae43;
+  --mi-dashboard-negative: #f16d73;
+  /*
+   * Chart series colours. They live with the rest of the portal palette because the dialog portals
+   * to <body>: a value declared on the dashboard page never reaches it, and the bars came out with
+   * a transparent background — present in the DOM, invisible on screen.
+   */
+  --mi-dashboard-etf-funds: #63c9ff;
+  --mi-dashboard-etf-btc: #e5ae43;
+  --mi-dashboard-etf-eth: #b994ff;
+  /*
    * 页面根必须把宿主给出的确定高度继续往下传。
    *
    * 约束链（见 `workspaceLayout.css`）：`.workspace-page-body (100%)` → `.settings-contribution-host (100%)`
@@ -38,6 +62,28 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+}
+
+/*
+ * 浅色主题：门户级语义色映射到平台 token。只有这一处 remap，看板与日报页都从它取值。
+ */
+:root[data-theme='light'] .mi-sample-surface {
+  --mi-dashboard-line: var(--border);
+  --mi-dashboard-surface: var(--surface);
+  --mi-dashboard-text: var(--text);
+  --mi-dashboard-muted: var(--muted);
+  --mi-dashboard-lime: color-mix(in srgb, var(--accent) 30%, var(--text-strong));
+  /*
+   * 语义三色也要重映射：漏了它们，浅色下仍拿深色值——绿 #55d69b 对白底 1.83:1、
+   * 红 #f16d73 2.93:1、警示黄 2 出头，字是发白的。这组值不只有资金流卡在用，
+   * 帮它落在平台 token 上，浅色下所有消费点一起变清楚。
+   */
+  --mi-dashboard-positive: var(--success);
+  --mi-dashboard-caution: var(--caution);
+  --mi-dashboard-negative: var(--danger);
+  /* The chart's BTC series used to borrow `--mi-dashboard-caution`, so it turned brown the moment
+     that semantic colour was remapped. It has its own value now: same hue, darker, 3.72:1 on white. */
+  --mi-dashboard-etf-btc: #b07a1a;
 }
 
 /* 示例水印是覆盖层，不参与布局。 */

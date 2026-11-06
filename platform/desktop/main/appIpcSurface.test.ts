@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { IpcChannels } from '../ipc/channels'
+import type { PlatformApi } from '../preload'
 
 /**
  * Source-text assertions below spell out multi-line snippets with `\n`. A Windows checkout
@@ -15,6 +16,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+// 产品可见的智能体会话面（含 `invokeProductIpc` 的接线）已搬到这个模块，断言跟着实现走。
+const productAgentWiringSource = readSource('productAgentPlatformWiring.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
@@ -24,6 +27,8 @@ const repositoriesSource = readSource('composition/repositories.ts')
 const agentRuntimeSource = readSource('composition/agentRuntime.ts')
 // 通道与任务作业的构造已搬到 composition/channelsAndJobs.ts（退出链仍留在 app.ts）。
 const channelsAndJobsSource = readSource('composition/channelsAndJobs.ts')
+// 助手与智能体运行时驱动的构造已搬到 composition/assistantsAndRuntimes.ts（退出链与槽位仍在 app.ts）。
+const assistantsAndRuntimesSource = readSource('composition/assistantsAndRuntimes.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 const agentIpcSource = readSource('ipc/agentIpc.ts')
 const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
@@ -39,7 +44,18 @@ const windowIpcSource = readSource('ipc/windowIpc.ts')
 const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, ' ')
 const looseIndexOf = (source: string, needle: string): number =>
   collapseWhitespace(source).indexOf(collapseWhitespace(needle))
-const preloadSource = readSource('../preload/index.ts')
+/**
+ * preload 已按命名空间分片：`index.ts` 只留装配，`agentNamespaces.ts` 装 Agent/Assistant 两个受保护面。
+ *
+ * 这些断言必须读**合并文本**：读单文件的话，搬一次文件就会被判成「接缝丢了接线」，
+ * 而删掉断言让它绿才是真的丢证据。分片列表就是这条接缝的清单，新增分片要加在这里。
+ */
+const PRELOAD_SHARDS = [
+  '../preload/index.ts',
+  '../preload/agentNamespaces.ts',
+  '../preload/namespaces/notifications.ts'
+] as const
+const preloadSource = PRELOAD_SHARDS.map(readSource).join('\n')
 /**
  * 删除已读是**破坏性**通道，必须能一眼看出它落在哪一层：
  * 渲染层只经 preload → 主进程 handler → 运行时，不许绕过去直接写文件。
@@ -85,6 +101,42 @@ describe('desktop main IPC surface', () => {
     expect(appSource).not.toMatch(/from ['"][^'"]*products\//)
     expect(appSource).toContain('options.productAgentSeedFactories')
   })
+  it('keeps the read-only delivery-target projection wired on both halves of the seam', () => {
+    // 两半都要判：只有 handler 没有 preload 方法，渲染层拿不到；只有 preload 没有 handler，
+    // 调用会 reject。少一半都能悄悄丢，所以两条分开写、都指向同一个通道常量。
+    expect(channelIpcSource).toContain(
+      'ipcMain.handle(IpcChannels.channelsListDeliveryTargets, () => channelManagementService.listDeliveryTargets())'
+    )
+    expect(preloadSource).toContain('listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets)')
+    // 只读面：这条投影不许长出现在时之外的写入入口。
+    expect(preloadSource).not.toContain('channelsListDeliveryTargets, write')
+  })
+  it('keeps the channel test message wired on both halves of the seam', () => {
+    // 「发一条测试消息」必须真的走一次投递：只留 preload 方法或只留 handler，就是假按钮。
+    expect(channelIpcSource).toContain('IpcChannels.channelsSendTestMessage')
+    expect(channelIpcSource).toContain('channelManagementService.sendTestMessage(')
+    // 载荷是**有类型的**（`ChannelIdPayload & { text }`）：判别键写进类型，传错字段编译期就红。
+    expect(preloadSource).toContain('sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input)')
+  })
+  it('keeps the read-only runtime-audit page wired on both halves of the seam', () => {
+    // 设置页日志面板的「运行异常」全靠这一条；两半缺一条，面板只会诚实地说「没读出来」。
+    expect(channelIpcSource).toContain('IpcChannels.channelsListRuntimeAudits')
+    expect(channelIpcSource).toContain('channelManagementService.listRuntimeAudits(')
+    expect(preloadSource).toContain('listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input)')
+    // 只读：这条面不许出现写通道配置的调用。
+    expect(preloadSource).not.toContain('channelsListRuntimeAudits, write')
+  })
+
+  it('keeps "open this channel conversation" on both halves of the seam, without returning the session id', () => {
+    // 「怎么没有会话」那一条的修法：渲染层只发频道 id + 对话 id，会话 id 由主进程查、主进程用。
+    // 两半缺一条：只有 handler 渲染层调不到，只有 preload 调用会 reject。
+    expect(channelIpcSource).toContain('IpcChannels.channelsOpenConversation')
+    expect(channelIpcSource).toContain('channelInboundService.openConversation(')
+    expect(preloadSource).toContain('openConversation: (input: ChannelIdPayload & { conversationId: string }) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input)')
+    // 会话 id 不许从这里回给渲染层：会话 DTO 上那条「session IDs never leave this repository」还钉着。
+    expect(channelIpcSource).not.toMatch(/channelsOpenConversation[\s\S]{0,400}sessionId/)
+  })
+
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
@@ -99,8 +151,8 @@ describe('desktop main IPC surface', () => {
     expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(repositoriesSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
     expect(agentRuntimeSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
-    expect(appSource).toContain('taskManagementToolBridge: {')
-    expect(appSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
+    expect(assistantsAndRuntimesSource).toContain('taskManagementToolBridge: {')
+    expect(assistantsAndRuntimesSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
     expect(appSource).toContain('await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()')
     expect(appSource).toContain('taskAutomationMaintenance.recoverAfterRestart()')
     expect(appSource).toContain('scheduleTaskAutomationMaintenance(taskAutomationMaintenance)')
@@ -157,7 +209,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
     expect(appSource).toContain('getScheduleValidationOptions: taskIpcScheduleValidationOptions')
     expect(appSource).toContain('afterCommit: refreshTaskStateAfterCommit')
-    expect(appSource).toContain('retryTaskDelivery: (agentId, runLogId, attemptId)')
+    expect(assistantsAndRuntimesSource).toContain('retryTaskDelivery: (agentId, runLogId, attemptId)')
   })
 
   it('keeps the task smoke fixture launch-only before normal persistence composition', () => {
@@ -172,13 +224,13 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('app.setPath(\'userData\''))
       .toBeLessThan(appSource.indexOf('createPlatformCore({'))
     expect(repositoriesSource).toContain('createTaskAutomationSmokeSeed(')
-    expect(appSource).toContain('createTaskAutomationSmokeDriver(')
-    expect(appSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
+    expect(assistantsAndRuntimesSource).toContain('createTaskAutomationSmokeDriver(')
+    expect(assistantsAndRuntimesSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
     // 构造点搬进 channelsAndJobs 片：adapter 与 supervisor 都在那里，退出链仍在 app.ts。
     expect(channelsAndJobsSource).toContain('new ChannelRuntimeSupervisor({')
-    expect(appSource).toContain('getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot()')
+    expect(assistantsAndRuntimesSource).toContain('getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot()')
     expect(appSource).not.toContain('channelRuntimeService')
-    expect(appSource).toContain('if (taskAutomationSmokeProfile.enabled)')
+    expect(assistantsAndRuntimesSource).toContain('if (taskAutomationSmokeProfile.enabled)')
     expect(appSource).toContain('resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled)')
     expect(collapseWhitespace(appSource)).toContain(
       collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
@@ -281,7 +333,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('productIds: productManifests.map((manifest) => manifest.id)')
     expect(appSource).toContain("`[product-acceptance] products: ${input.productIds.join(',') || '(none)'}`")
     expect(appSource).toContain('`[product-acceptance] product IPC handlers: ${input.productIpcMethodCount}`')
-    expect(appSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
+    expect(productAgentWiringSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
     expect(appSource).toContain(registerIpcHandlersCall)
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     expect(storageIpcSource).toContain('IpcChannels.productSummaries')
@@ -775,5 +827,123 @@ describe('notification delete-read surface', () => {
     expect(readSource('../preload/namespaces/notifications.ts')).toContain(
       'deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)'
     )
+  })
+})
+
+/**
+ * 拆分 preload 不许改形状：`agents` / `assistants` 两个命名空间的成员集合逐字锁死。
+ *
+ * 两向都查：`satisfies` 保证「列出的名字都真的存在」，`Exclude<keyof …, 列出的>` 保证「没有漏掉任何一个」。
+ * 谁把方法搬丢、或改了名字，这里编译期就红——比逐个断言 `IpcChannels.*` 更早一步。
+ *
+ * 为什么不用手写返回类型标注去「保住」形状：那会把命名空间整体退化成 `any`，
+ * 正好抵消「跨进程返回值必须有类型」这条（今晚 8 条重复频道就是这么来的）。
+ */
+const AGENT_API_KEYS = [
+  'getState',
+  'getRuntimeSnapshot',
+  'getChannelRuntimeSnapshot',
+  'restartChannelRuntime',
+  'listToolApprovals',
+  'resolveToolApproval',
+  'listAgents',
+  // 频道设置页「选择文件夹…」：路径 → 工作区编号（没有就先登记一条）。
+  'ensureWorkspace',
+  'createAgent',
+  'listTasks',
+  'getTaskLogs',
+  'previewTaskSchedule',
+  'listTaskPage',
+  'getTaskDeliveryAttempts',
+  'retryTaskDelivery',
+  'listTaskMutationAudits',
+  'getTaskAutomationPolicy',
+  'updateTaskAutomationPolicy',
+  'getTaskDeliveryReadiness',
+  'createTask',
+  'updateTask',
+  'deleteTask',
+  'runTask',
+  'cancelTaskRun',
+  'listSessions',
+  'listSessionMessages',
+  'createSession',
+  'updateAgent',
+  'deleteAgent',
+  'reorderAgents',
+  'selectAgent',
+  'updateSession',
+  'deleteSessions',
+  'reorderSessions',
+  'setSessionAgent',
+  'setSessionWorkspace',
+  'setSessionWorkspaceByPath',
+  'switchSessionPinState',
+  'selectSession',
+  'clearSessionMessages',
+  'deleteSessionMessage',
+  'replaceState',
+  'sendMessage',
+  'cancelMessage',
+  'cancelSession',
+  'refreshMcpTools',
+  'getRuntimeCompatibility',
+  'probeRuntimeCompatibility',
+  'getModelGatewayStatus',
+  'startModelGateway',
+  'stopModelGateway',
+  'setModelGatewayEnabled',
+  'executeRuntimeCommand',
+  'productTools',
+  'skills',
+  'onStateChanged',
+  'onRuntimeStateChanged',
+  'onChannelRuntimeStateChanged'
+] as const satisfies readonly (keyof PlatformApi['agents'])[]
+const ASSISTANT_API_KEYS = [
+  'list',
+  'get',
+  'create',
+  'update',
+  'delete',
+  'reorder',
+  'listTopics',
+  'createTopic',
+  'updateTopic',
+  'deleteTopic',
+  'pinTopic',
+  'unpinTopic',
+  'listTopicMessages',
+  'setActiveNode',
+  'renameTopic',
+  'createMessageSibling',
+  'editAndResendUserMessage',
+  'clearTopicMessages',
+  'searchTopicMessages',
+  'deleteMessage',
+  'streamOpen',
+  'streamAttach',
+  'streamAbort',
+  'streamGetStatus',
+  'library',
+  'onStreamChunk',
+  'onStreamDone',
+  'onStreamError',
+  'onStreamStatusChanged'
+] as const satisfies readonly (keyof PlatformApi['assistants'])[]
+
+type MissingAgentKey = Exclude<keyof PlatformApi['agents'], (typeof AGENT_API_KEYS)[number]>
+type MissingAssistantKey = Exclude<keyof PlatformApi['assistants'], (typeof ASSISTANT_API_KEYS)[number]>
+const agentsShapeComplete: MissingAgentKey extends never ? true : never = true
+const assistantsShapeComplete: MissingAssistantKey extends never ? true : never = true
+
+describe('preload 分片后的形状', () => {
+  it('keeps every agents and assistants member, and the shard that carries them', () => {
+    expect(agentsShapeComplete).toBe(true)
+    expect(assistantsShapeComplete).toBe(true)
+    expect(preloadSource).toContain('agents: createAgentsNamespace(ipcRenderer)')
+    expect(preloadSource).toContain('assistants: createAssistantsNamespace(ipcRenderer)')
+    expect(AGENT_API_KEYS.length).toBe(58)
+    expect(ASSISTANT_API_KEYS.length).toBe(29)
   })
 })

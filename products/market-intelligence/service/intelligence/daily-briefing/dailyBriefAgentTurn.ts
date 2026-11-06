@@ -1,10 +1,13 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
-import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
-import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
+import { applyDailyBriefingEditorial, hasBriefingNextTransmission } from './dailyBriefingValidation'
+import { describeFailures } from './dailyBriefingValidationFailures'
+import { validateEditorialForPeriod, type DailyBriefingPeriodFacts } from './dailyBriefingPeriodFactsValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
-import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
+import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
+import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
@@ -38,7 +41,16 @@ export type DailyBriefDataGap = Readonly<{
 /** The product's historical backfill tool, already bound to the edition cutoff. */
 export type DailyBriefBackfillExecutor = (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult>
 
-export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2'
+export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2' | 'repair-3'
+
+/**
+ * How many times the editor may rewrite after a failed check.
+ *
+ * Three, so a run makes four checks in all. The number was hard-coded as `attempt < 3` with a repair
+ * when `attempt < 2` — which reads like three rounds and is two, and nobody could tell without counting
+ * the loop's bounds. One constant, and a case that counts them.
+ */
+export const maximumRepairRounds = 3
 
 export type DailyBriefTurnStageEvent = Readonly<{
   stage: DailyBriefTurnStage
@@ -50,7 +62,7 @@ export type DailyBriefTurnStageEvent = Readonly<{
 export type DailyBriefAgentTurnInput = Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
-  locale: DailyBriefingLocale
+  locale: DailyBriefingLocale; periodFacts?: DailyBriefingPeriodFacts
   /**
    * The window's earlier AI conclusions, oldest first. The editor synthesizes them into a new
    * conclusion instead of copying the analysis page's verdict.
@@ -117,7 +129,6 @@ function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
   let document = input.document
   const priorConclusions = input.priorConclusions ?? []
-  const editionKey = dailyBriefEditionKey(document.edition.date, input.locale)
   const copy = dailyBriefSessionCopy(input.locale)
   const summary = factSummary(document, input.locale)
   const gaps = collectDataGaps(document)
@@ -130,7 +141,9 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   ].join('\n\n')
   throwIfAborted(input.signal)
   stage({ stage: 'selection', state: 'begin' })
-  const started = await input.runner.start({ editionKey, date: document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
+  // The session key includes the period: two periods of one day must not share (and overwrite) one
+  // writing session.
+  const started = await input.runner.start({ date: document.edition.date, periodId: document.edition.periodId ?? DEFAULT_PERIOD_ID, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
   const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]
@@ -179,14 +192,17 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   stage({ stage: 'writing', state: 'success' })
-  stage({ stage: 'validation', state: 'begin' })
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let lastFailures: readonly Readonly<{ code: string; detail?: string }>[] | undefined
+  for (let attempt = 0; attempt <= maximumRepairRounds; attempt++) {
+    // Each check times itself. A check that fails closes before the repair it triggers, so the repair
+    // row owns the seconds it spends and the validation row does not silently include them.
+    stage({ stage: 'validation', state: 'begin' })
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
-      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations, priorConclusions)
+      const validation = validateEditorialForPeriod(selectedDocument, parsed, input.locale, toolInvocations, priorConclusions, input.periodFacts)
       if (validation.ok) {
         stage({ stage: 'validation', state: 'success' })
         const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions)
@@ -195,64 +211,36 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       }
       failureCode = validation.failureCode
       failureDetail = validation.detail
+      lastFailures = validation.failures
     }
-    if (attempt < 2) {
+    // Every defect, not just the first: the code names the kind of problem, the detail names the fields,
+    // and a reader who only ever sees the kind cannot act on it.
+    const described = lastFailures ? describeFailures(lastFailures) : undefined
+    stage({ stage: 'validation', state: 'failed', failureCode, ...(described ? { failureDetail: described } : failureDetail ? { failureDetail } : {}) })
+    if (attempt < maximumRepairRounds) {
       throwIfAborted(input.signal)
-      const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
+      const repairStage = `repair-${attempt + 1}` as DailyBriefTurnStage
       stage({ stage: repairStage, state: 'begin' })
-      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail), undefined, input.signal)
+      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail, lastFailures), undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })
     }
   }
-  stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
+  const finalDetail = lastFailures ? describeFailures(lastFailures) ?? failureDetail : failureDetail
+  stage({ stage: 'validation', state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}) })
   await input.runner.finish(started.sessionId, 'failed')
-  return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
+  return { state: 'failed', failureCode, ...(finalDetail ? { failureDetail: finalDetail } : {}), sessionId: started.sessionId, toolInvocations }
 }
 
-const MARKET_GAP_METRICS: Readonly<Record<string, readonly [string, string]>> = Object.freeze({
-  dxy: Object.freeze(['dxy', 'dxy-level'] as const),
-  gold: Object.freeze(['gold', 'gold-level-usd'] as const),
-  us10y: Object.freeze(['treasury', 'us10y-yield-percent'] as const),
-  'us10y-real': Object.freeze(['treasury', 'us10y-real-yield-percent'] as const)
-})
+/**
+ * Reading gaps this document cannot fill, per row. Extracted from the agent turn: it reads a finished
+ * document and knows nothing about prompts, and the turn had grown past its size baseline with it.
+ */
+import { collectDataGaps } from './dailyBriefCollectDataGaps'
 
-const FUNDS_GAP_METRICS: Readonly<Record<string, readonly [string, string]>> = Object.freeze({
-  stablecoin: Object.freeze(['stablecoin', 'core-stablecoin-supply-usd'] as const),
-  'etf-btc': Object.freeze(['etf', 'etf-net-flow-btc'] as const),
-  'etf-eth': Object.freeze(['etf', 'etf-net-flow-eth'] as const),
-  'funding-btc': Object.freeze(['funding', 'funding-rate-percent-btc'] as const),
-  'funding-eth': Object.freeze(['funding', 'funding-rate-percent-eth'] as const)
-})
+export { collectDataGaps }
 
-export function collectDataGaps(document: DailyBriefingDocument): readonly DailyBriefDataGap[] {
-  const asOf = document.edition.windowEnd
-  const gaps = new Map<string, DailyBriefDataGap>()
-  const add = (source: string, metric: string, state: DailyBriefingReadingState, reason: string): void => {
-    if (!isDailyBriefBackfillMetric(source, metric)) return
-    const id = `${source}:${metric}`
-    if (gaps.has(id)) return
-    gaps.set(id, Object.freeze({ id, source, metric, asOf, state, reason, requestable: state !== 'source-disabled' }))
-  }
-  for (const row of document.data.market) {
-    if (row.state === 'available') continue
-    const pair = MARKET_GAP_METRICS[row.id]
-    if (pair) add(pair[0], pair[1], row.state, row.reason ?? row.state)
-  }
-  for (const row of document.data.funds) {
-    if (row.state === 'available') continue
-    const pair = FUNDS_GAP_METRICS[row.id]
-    if (pair) add(pair[0], pair[1], row.state, row.reason ?? row.state)
-  }
-  const leverage = document.data.leverage
-  if (!leverage || leverage.state !== 'available') {
-    const state: DailyBriefingReadingState = leverage?.state ?? 'unavailable'
-    add('open-interest', 'open-interest-usd-btc', state, 'open-interest row missing')
-    add('open-interest', 'open-interest-usd-eth', state, 'open-interest row missing')
-  }
-  return Object.freeze([...gaps.values()])
-}
 
 function backfillProtocol(gaps: readonly DailyBriefDataGap[], document: DailyBriefingDocument): string {
   if (gaps.length === 0) return ''
@@ -374,7 +362,10 @@ function factSummary(document: DailyBriefingDocument, locale: DailyBriefingLocal
   const copy = dailyBriefSessionCopy(locale)
   const fill = dailyBriefSessionCopyText
   const short = (title: string) => title.length > 54 ? `${title.slice(0, 54)}…` : title
-  const macro = (document.news.macroCandidates ?? document.news.macro).slice(0, 8).map((item) => short(item.title))
+  // 这一份是模型读到的候选：无值事件不在里面（`A0.12` ⑤）——它们由版面按确定性规则显示，
+  // 不需要模型挑，也不该让模型读到"没拿到"再写成判断。
+  const macro = selectMacroAnalysisCandidates(document.news.macroCandidates ?? document.news.macro)
+    .slice(0, 8).map((item) => short(item.title))
   const news = document.news.items.slice(0, 8).map((item) => short(item.translatedTitle ?? item.title))
   const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 6).map((item) => short(item.title))
   const details = [
@@ -410,7 +401,11 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; focusWhy?: unknown; data?: unknown; hiddenData?: unknown }
   const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
   const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
-  const macroCandidates = document.news.macroCandidates ?? document.news.macro
+  const allMacroCandidates = document.news.macroCandidates ?? document.news.macro
+  // 候选集合这一层就分开（`02` `A0.12` ⑤）：写作模型只拿有实际值的事件；没有值的事件照常显示，
+  // 由下方按确定性顺序补回版面——它们不参与选材，也不进模型读到的任何一份素材。
+  const macroCandidates = selectMacroAnalysisCandidates(allMacroCandidates)
+  const displayOnlyMacro = document.news.macro.filter((item) => item.actual === undefined)
   const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
   const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
   // The editor may move the focus off the default relevance leader, but only by naming a BTC/ETH
@@ -434,7 +429,11 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   // missing consensus only removes "no consensus" as a hiding reason, it does not make the event
   // shown. The cap keeps the section at four candidates; when a selection is missing altogether the
   // single most surprising release is the deterministic floor instead of every high-impact print.
-  const macro = selectBriefingMacroItems(selectedMacro, macroIds ? undefined : selectMacroFloorItem(selectedMacro))
+  // 无值事件不参与选材，但**不因此消失**（`A0.12`）：按确定性顺序接在选中的那几条后面，同受四条上限。
+  const macro = selectBriefingMacroItems(
+    [...selectedMacro, ...displayOnlyMacro],
+    macroIds ? undefined : selectMacroFloorItem(allMacroCandidates)
+  )
   const macroCapOmitted = new Set(selectedMacro
     .filter((item) => !macro.some((chosen) => chosen.eventKey === item.eventKey))
     .map((item) => `macro:${item.eventKey}`))
@@ -501,7 +500,7 @@ function unknownSelection(selection: unknown, document: DailyBriefingDocument): 
   const value = selection as { news?: unknown; macro?: unknown; next?: unknown; data?: unknown; hiddenData?: unknown }
   const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
-  const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
+  const macroIds = new Set(selectMacroAnalysisCandidates(document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
   const dataIds = new Set(briefingDataFactIds(document))
   for (const key of ['news', 'macro', 'next', 'data'] as const) {
     const list = value[key]

@@ -36,6 +36,13 @@ export const supportedProxyModes = ['system', 'custom', 'none'] as const
  * 一律由 `resolveShellTimeZone` 解析本值后传入；已存的调度保留它们自己的时区，改设置不重算历史。
  * 在此之前，任何把这个值描述成「只影响显示」或「已经影响调度」的文档都是错的。
  *
+ * **2026-11-05 决定反转（上方口径作废，原文保留以便对照）**：用户定的是「改动尽量小——我改时区，
+ * 任务定义不变，只是触发的实际时刻跟着变」。所以**不再要求注册时必填 `trigger.timezone`**，改为：
+ * 注册时留空表示「跟随读者设置」，由**排程那一步**按当前设置解析，且**不写回**任务。
+ * 理由一句：把注册那一刻的设置物化进任务，等于让「建任务时我人在哪」变成了任务的一部分，
+ * 而那从来不是读者的决定（契约：`docs-private/10-development/task-timezone-scheduling-contract.md`）。
+ * 显式指定过时区的任务仍然用存的值、不跟随——那是用户明确表达过的承诺。
+ *
  * 校验不用固定枚举：历史/别名时区（`Asia/Chongqing`）也必须可用，因此以运行时能否格式化这段字符串为准。
  */
 export const systemTimeZoneSetting = 'system' as const
@@ -106,6 +113,20 @@ export type NotificationSettings = NotificationRuntimeSettings
 export type ObservabilitySettings = AgentObservabilitySettings
 export type PlatformWebSearchSettings = WebSearchSettings
 
+/**
+ * 更新提示（「知道有新版本」）的平台设置。
+ *
+ * 只有一个开关，而且它管的是**自动查**：关掉后启动阶段一个请求都不发，但设置页那个
+ * 「检查更新」按钮仍然可点——把手动一起禁掉，等于用户想查时被拦住还要多解释一句。
+ */
+export type UpdateSettings = {
+  checkEnabled: boolean
+}
+
+export function createDefaultUpdateSettings(): UpdateSettings {
+  return { checkEnabled: true }
+}
+
 export type AppSettings = {
   language: AppLanguage
   themeMode: ThemeMode
@@ -128,6 +149,7 @@ export type AppSettings = {
   notifications: NotificationSettings
   observability: ObservabilitySettings
   webSearch: PlatformWebSearchSettings
+  updates: UpdateSettings
 }
 
 export type AppSettingsPatch = Partial<Record<keyof AppSettings, unknown>>
@@ -192,7 +214,8 @@ export function createDefaultAppSettings(): AppSettings {
     },
     notifications: createDefaultNotificationRuntimeSettings(),
     observability: createDefaultAgentObservabilitySettings(),
-    webSearch: createDefaultWebSearchSettings()
+    webSearch: createDefaultWebSearchSettings(),
+    updates: createDefaultUpdateSettings()
   }
 }
 
@@ -291,7 +314,24 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     chat: normalizeChatSettings(candidate.chat, defaults.chat),
     notifications: normalizeNotificationSettings(candidate.notifications, defaults.notifications),
     observability: normalizeAgentObservabilitySettings(candidate.observability, defaults.observability),
-    webSearch: normalizeWebSearchSettings(candidate.webSearch, defaults.webSearch)
+    webSearch: normalizeWebSearchSettings(candidate.webSearch, defaults.webSearch),
+    updates: normalizeUpdateSettings(candidate.updates, defaults.updates)
+  }
+}
+
+/**
+ * 更新设置的归一化。**这里是本功能唯一的静默失败点**：写数据的地方不漏（否则存了读不回），
+ * 旧 `settings.json` 根本没有这一组时补默认（默认开），脏值（字符串、`null`、`{}`）回落默认。
+ * 三条都有测试兜着，`appSettings.test.ts` 与 `settingsStore.test.ts` 各守一半。
+ */
+export function normalizeUpdateSettings(
+  value: unknown,
+  defaults: UpdateSettings = createDefaultAppSettings().updates
+): UpdateSettings {
+  if (!value || typeof value !== 'object') return defaults
+  const candidate = value as Partial<Record<keyof UpdateSettings, unknown>>
+  return {
+    checkEnabled: typeof candidate.checkEnabled === 'boolean' ? candidate.checkEnabled : defaults.checkEnabled
   }
 }
 
@@ -322,9 +362,16 @@ export function normalizeNotificationSettings(
     desktopEnabled: typeof candidate.desktopEnabled === 'boolean' ? candidate.desktopEnabled : defaults.desktopEnabled,
     toastEnabled: typeof candidate.toastEnabled === 'boolean' ? candidate.toastEnabled : defaults.toastEnabled,
     popupEnabled: typeof candidate.popupEnabled === 'boolean' ? candidate.popupEnabled : defaults.popupEnabled,
+    // 通道选择：空字符串视为未选（null 即关，不另加 enabled 布尔，契约 §2）。
+    push: {
+      channelId:
+        typeof candidate.push?.channelId === 'string' && candidate.push.channelId.length > 0
+          ? candidate.push.channelId
+          : null
+    },
     retentionDays:
       typeof candidate.retentionDays === 'number' && candidate.retentionDays > 0
-        ? Math.round(candidate.retentionDays)
+        ? Math.min(90, Math.round(candidate.retentionDays))
         : defaults.retentionDays,
     defaultSnoozeMinutes:
       typeof candidate.defaultSnoozeMinutes === 'number' && candidate.defaultSnoozeMinutes > 0

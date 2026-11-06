@@ -11,6 +11,7 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { isSoulModeEnabled } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import { AgentChatComposer } from '@platform/ui/agent-chat'
+import { useConfirm } from '@platform/ui/components/confirm'
 
 import { clearSessionMessages, setAgentToolEnabled } from '../agentStateActions'
 import { supportsVisionAttachments } from '../agentAttachmentPolicy'
@@ -35,6 +36,7 @@ import {
   toggleAgentInputExpanded
 } from './agentInputbarControls'
 import { isSendShortcut, resizeTextarea } from './agentInputbarHelpers'
+import { useQuotedToComposer } from './useQuotedToComposer'
 import AgentQuickPanel, { getAgentQuickPanelNextActiveId } from './AgentQuickPanel'
 import AgentSessionInputbarFooter from './AgentSessionInputbarFooter'
 import AgentComposerModelMenu from './AgentComposerModelMenu'
@@ -77,10 +79,12 @@ export default function AgentSessionInputbar({
   disabled = false
 }: AgentSessionInputbarProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const draftStorageKey = draftStorageKeyOverride ?? `agent-session-draft:${agent.id}`
   const { draft, setDraft, draftRef } = useAgentDraftBuffer(draftStorageKey)
   const [files, setFiles] = useState<AgentAttachedFile[]>([])
-  const [pasteError, setPasteError] = useState<string | null>(null)
+  /** 只存「有没有失败」：句子留到渲染那一刻取，否则界面会冻结在失败当时的语言。 */
+  const [pasteFailed, setPasteFailed] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -106,21 +110,7 @@ export default function AgentSessionInputbar({
   }, [agent.disabledTools, builtinTools, t.input])
   const footerLabels = useMemo(() => inputbarFooterLabels(t), [t])
 
-  useEffect(() => {
-    return window.platform.app.onQuotedToMain((selectedText) => {
-      const insertion = buildAgentQuoteInsertion(draftRef.current, selectedText)
-      if (!insertion) return
-
-      const nextDraft = `${draftRef.current}${insertion}`
-      draftRef.current = nextDraft
-      setDraft(nextDraft)
-      requestAnimationFrame(() => {
-        if (textareaRef.current) resizeTextarea(textareaRef.current, maxTextareaHeight)
-        textareaRef.current?.focus()
-        textareaRef.current?.setSelectionRange(nextDraft.length, nextDraft.length)
-      })
-    })
-  }, [maxTextareaHeight])
+  useQuotedToComposer({ draftRef, setDraft, textareaRef, maxTextareaHeight })
 
   const quickPanel = useAgentInputQuickPanel({
     text: t,
@@ -134,11 +124,18 @@ export default function AgentSessionInputbar({
     onToggleExpanded: toggleExpanded,
     onOpenTools: () => setToolsOpen(true),
     onClearMessages: () => {
-      if (window.confirm(t.input.confirmClearMessages(session.name))) {
-        void clearSessionMessagesViaApi(window.platform, session.id).catch(() => {
-          onStateChange((current) => clearSessionMessages(current, session.id))
-        })
-      }
+      confirm({
+        title: t.chatNavbar.clearMessages,
+        description: t.input.confirmClearMessages(session.name),
+        confirmLabel: t.chatNavbar.clearMessages,
+        cancelLabel: t.common.cancel,
+        tone: 'danger',
+        onConfirm: () => {
+          void clearSessionMessagesViaApi(window.platform, session.id).catch(() => {
+            onStateChange((current) => clearSessionMessages(current, session.id))
+          })
+        }
+      })
     },
     mentionItems: mentionModels.mentionItems,
     onToggleMentionModel: mentionModels.toggleByItemId,
@@ -214,12 +211,12 @@ export default function AgentSessionInputbar({
   }
 
   async function attachClipboardImage(file: File): Promise<void> {
-    setPasteError(null)
+    setPasteFailed(false)
     try {
       const attached = await readClipboardImageAttachment(file, allowImageAttachments)
       setFiles((current) => [...current, attached])
     } catch {
-      setPasteError(t.input.clipboardImageFailed)
+      setPasteFailed(true)
     }
   }
 
@@ -258,7 +255,7 @@ export default function AgentSessionInputbar({
         files={files}
         mentionedModels={mentionModels.mentionedModels}
         sendError={sendError}
-        pasteError={pasteError}
+        pasteError={pasteFailed ? t.input.clipboardImageFailed : null}
         text={t.input}
         onRemoveFile={(path) => setFiles((current) => current.filter((item) => item.path !== path))}
         onRemoveMentionedModel={mentionModels.removeByValue}

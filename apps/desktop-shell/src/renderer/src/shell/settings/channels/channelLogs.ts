@@ -1,0 +1,150 @@
+import { describeChannelManagementAudit } from '@platform/ai/agent-platform/channels/channelManagementAuditActions'
+import {
+  describeChannelRuntimeAudit,
+  describeChannelRuntimeLifecycle,
+  describeChannelTelegramFailure
+} from '@platform/ai/agent-platform/channels/channelRuntimeAuditDescriptors'
+import type { PlatformText } from '../../../i18n/platformText'
+
+import { channelFailureReason } from './channelSettingsPresentation'
+
+/**
+ * 日志面板的行模型：三类来源合并成一条时间线，**每条正文都带类别前缀**。
+ *
+ * 三类是读者关心的三种问题：谁改了什么（操作）、为什么停了（运行异常）、为什么没发出去
+ * （发送失败）。级别词固定大写——它们是日志术语，不翻译、也不换成图标。
+ *
+ * 码 → 人话只查闭集；查不到统一写「没有更多说明」，**原始码一个都不上屏**。
+ */
+export type ChannelLogLevel = 'INFO' | 'WARN' | 'ERROR'
+
+export type ChannelLogRow = {
+  id: string
+  at: string
+  level: ChannelLogLevel
+  text: string
+}
+
+type Labels = PlatformText['settings']
+
+/** 管理审计一行：启用失败时带 `code`（原因码），成功时没有。 */
+export type ChannelLogOperationInput = { id: string; action: string; code?: string | null; createdAt: string }
+/** 运行审计一行：必带一个码。 */
+export type ChannelLogCodeInput = { id: string; code: string; createdAt: string }
+
+/**
+ * 投递审计一行。`detail` 是平台（如 Telegram）的原话，**只作补充说明**：
+ * 主句永远是「码 → 人话」，detail 跟在后面括注，不许它取代原因。
+ */
+export type ChannelLogDeliveryInput = ChannelLogCodeInput & { detail?: string | null }
+
+export type ChannelLogSources = {
+  /** 管理审计：`code` 在这一类里只在「启用失败」时有值（写的是原因码）。 */
+  operations?: readonly ChannelLogOperationInput[]
+  runtime?: readonly ChannelLogCodeInput[]
+  /** 发送失败的来源是**投递审计**（不是投递尝试）：一条审计一行，code 是闭集。 */
+  deliveries?: readonly ChannelLogDeliveryInput[]
+}
+
+const MAX_ROWS = 50
+
+/**
+ * 投递审计里**不属于「发送失败」**的码，一条都不画。两种：
+ * - 成功（`channel-delivery-delivered`）：画出来就是「发送失败：没有更多说明」；
+ * - 按规则没发（`channel-delivery-skipped`：未订阅、被抑制、免打扰之类）：这不是通道坏了，
+ *   放进失败类会让读者以为通道故障——和把成功说成失败是同一类错。
+ *
+ * 用「不显示名单」而不是「失败名单」：把不认识的成功码画成失败，正是用户今晚看到
+ * 「四条发送失败全是成功」的原因；失败侧另有文案表兜着（表里没有的码一律不显示）。
+ * 边界：**码表覆盖守卫必须一直在**，否则「不显示」会变成掩盖遗漏的办法。
+ */
+export const DELIVERY_NOT_SHOWN_CODES: ReadonlySet<string> = new Set([
+  'channel-delivery-delivered',
+  'channel-delivery-skipped'
+])
+
+export function buildChannelLogRows(sources: ChannelLogSources, labels: Labels): ChannelLogRow[] {
+  const rows: ChannelLogRow[] = []
+
+  for (const entry of sources.operations ?? []) {
+    // 动作码也只走闭集表；查不到才有兜底句，常用动作一个都不许落到它。
+    const copyKey = describeChannelManagementAudit(entry.action)
+    // 启用失败和启用成功是同一个动作码，区别只在 `code`：不把原因写进这一行，日志里就只剩
+    // 「操作：启用了推送」，读者看不出这次其实没开成、更看不出为什么。
+    const failedEnable = entry.action === 'request-enable' && typeof entry.code === 'string' && entry.code !== ''
+    rows.push({
+      id: `op-${entry.id}`,
+      at: entry.createdAt,
+      level: 'INFO',
+      text: failedEnable
+        ? `${labels.channelLogOperationPrefix}${labels.channelLogEnableFailedPrefix}${
+            channelFailureReason(entry.code, labels) ?? labels.channelFailureReasonUnknown
+          }`
+        : `${labels.channelLogOperationPrefix}${
+            copyKey === undefined ? labels.channelLogsUnknownCode : labels.channelLogActionText[copyKey]
+          }`
+    })
+  }
+  for (const entry of sources.runtime ?? []) {
+    // 起停不是异常：走 INFO + 「运行：」前缀，与「运行异常：」分开。
+    const lifecycle = describeChannelRuntimeLifecycle(entry.code)
+    if (lifecycle !== undefined) {
+      rows.push({
+        id: `lifecycle-${entry.id}`,
+        at: entry.createdAt,
+        level: 'INFO',
+        text: `${labels.channelLogLifecyclePrefix}${labels.channelLogLifecycleText[lifecycle.copyKey]}`
+      })
+      continue
+    }
+    // 镜像来的 Telegram 运行失败：先查这张表，否则会落到「没有更多说明」。
+    const telegramFailure = describeChannelTelegramFailure(entry.code)
+    if (telegramFailure !== undefined) {
+      rows.push({
+        id: `run-${entry.id}`,
+        at: entry.createdAt,
+        level: telegramFailure.level,
+        text: `${labels.channelLogRuntimePrefix}${labels.channelLogTelegramFailureText[telegramFailure.copyKey]}`
+      })
+      continue
+    }
+    // 其余运行审计：级别与文案都由平台那张表决定：**查不到的码给 WARN + 兜底句**，宁可当提醒，不许当故障。
+    const descriptor = describeChannelRuntimeAudit(entry.code)
+    rows.push({
+      id: `run-${entry.id}`,
+      at: entry.createdAt,
+      level: descriptor?.level ?? 'WARN',
+      text: `${labels.channelLogRuntimePrefix}${
+        descriptor === undefined ? labels.channelLogsUnknownCode : labels.channelLogRuntimeText[descriptor.copyKey]
+      }`
+    })
+  }
+  for (const entry of sources.deliveries ?? []) {
+    // 这一类的标题是「最近一次发送失败」，所以**只有失败才进来**。
+    // 成功码（`channel-delivery-delivered` 这类）一条都不画：画出来就是「发送失败：没有更多说明」，
+    // 用户看到的失败一半其实是成功——今晚就是这么失去信任的。
+    if (DELIVERY_NOT_SHOWN_CODES.has(entry.code)) continue
+    // 「交出去了、拿不到回执」既不是成功也不是失败：它是「不确定」，不进「发送失败」那一类。
+    // 面板上仍要能看见它，所以单独用 WARN 行，前缀也说「不确定」。
+    const uncertain = entry.code === 'unknown-after-send'
+    // 主句：码 → 人话。平台的原始说明（已脱敏截断）只跟在后面括注——**它是补充，不是原因**，
+    // 所以既不进前缀、也不许在没有主句时单独立着。
+    const sentence = uncertain
+      ? labels.channelLogDeliveryText.unknownAfterSend
+      : (labels.channelLogDeliveryText[entry.code] ?? labels.channelLogsUnknownCode)
+    const detail = typeof entry.detail === 'string' && entry.detail.trim() !== '' ? entry.detail.trim() : null
+    // 不认识的码：**不许画成失败**（宁可不显示）。只有表里有话的失败码才上屏，
+    // 不确定归属的码上屏也只能靠猜，而猜错的方向恰好是「把成功说成失败」。
+    if (!uncertain && labels.channelLogDeliveryText[entry.code] === undefined) continue
+    rows.push({
+      id: `delivery-${entry.id}`,
+      at: entry.createdAt,
+      level: uncertain ? 'WARN' : 'ERROR',
+      text: `${uncertain ? labels.channelLogUncertainPrefix : labels.channelLogDeliveryPrefix}${sentence}${
+        detail === null ? '' : `（${detail}）`
+      }`
+    })
+  }
+
+  return rows.sort((left, right) => right.at.localeCompare(left.at)).slice(0, MAX_ROWS)
+}

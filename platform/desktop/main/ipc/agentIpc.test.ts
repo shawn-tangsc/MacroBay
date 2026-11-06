@@ -20,6 +20,8 @@ const EXPECTED_CHANNELS = [
   'platform:agents-resolve-tool-approval',
   'platform:agents-list-agents',
   'platform:agents-create-agent',
+  // 频道设置页「选择文件夹…」：路径 → 工作区编号（没有就先登记一条）。
+  'platform:agents-ensure-workspace',
   'platform:agents-list-sessions',
   'platform:agents-list-session-messages',
   'platform:agents-create-session',
@@ -83,7 +85,7 @@ function listenersOf(given: AgentIpcPorts) {
 }
 
 describe('agent ipc surface', () => {
-  it('registers exactly the thirty-six session/runtime channels, in order', () => {
+  it('registers exactly the thirty-seven session/runtime channels, in order', () => {
     const { channels, ipcMain } = record()
     registerAgentIpc(ipcMain as never, ports())
 

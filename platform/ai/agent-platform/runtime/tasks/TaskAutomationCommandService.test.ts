@@ -85,7 +85,7 @@ describe('TaskAutomationCommandService', () => {
     expect((await store.getState()).taskRunLogs).toHaveLength(60)
   })
 
-  it('creates an autonomous Agent task with default timezone materialized and user provenance', async () => {
+  it('creates an autonomous Agent task that stores no timezone, so it follows the reader setting', async () => {
     const service = createService(createAgentStoreState({ agents: [agent], workspaces: [workspace] }))
 
     const result = await service.execute({
@@ -93,14 +93,17 @@ describe('TaskAutomationCommandService', () => {
       task: { name: 'Daily report', prompt: 'Date: {date}', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
     })
 
+    // 2026-11-05 反转：保存时不写回时区（空 = 跟随读者设置，排程时解析）。
+    // 预览仍按当前设置算出落点，所以 nextRun 不变——变的只是「这个设置没有被固化进任务」。
     expect(result.task).toMatchObject({
-      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'Asia/Shanghai' },
+      trigger: { kind: 'cron', expr: '0 9 * * *' },
       provenance: { createdBy: 'user' }, revision: 1
     })
+    expect((result.task as { trigger: { timezone?: string } }).trigger.timezone).toBeUndefined()
     expect(result.nextRun).toBe('2026-01-02T01:00:00.000Z')
   })
 
-  it('falls back to UTC, not the machine zone, when no reader is injected', async () => {
+  it('stores no timezone even when no reader is injected, instead of freezing UTC into the task', async () => {
     const service = new TaskAutomationCommandService({
       store: createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
       now: () => new Date('2026-01-01T10:30:00.000Z'),
@@ -114,10 +117,13 @@ describe('TaskAutomationCommandService', () => {
       task: { name: 'Untitled zone', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
     })
 
-    expect(created.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'UTC' } })
+    // 没有读者来源时旧行为是把 'UTC' 写进任务；那正是让「建任务那一刻」变成任务一部分的写法。
+    // 现在无论有没有读者，任务里都不留时区——解析推迟到排程那一步。
+    expect(created.task).toMatchObject({ trigger: { kind: 'cron', expr: '0 9 * * *' } })
+    expect((created.task as { trigger: { timezone?: string } }).trigger.timezone).toBeUndefined()
   })
 
-  it('follows the shell time zone instead of reading the machine zone once at construction', async () => {
+  it('stores the same untimed Cron trigger under two different reader settings', async () => {
     let zone = 'Asia/Tokyo'
     const service = new TaskAutomationCommandService({
       store: createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
@@ -132,9 +138,9 @@ describe('TaskAutomationCommandService', () => {
       agentId: agent.id,
       task: { name: 'Tokyo run', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
     })
-    expect(first.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'Asia/Tokyo' } })
+    expect((first.task as { trigger: { timezone?: string } }).trigger.timezone).toBeUndefined()
 
-    // 用户在设置里换了时区：新建任务的默认时区当场跟着变，不需要重启。
+    // 用户在设置里换了时区：**任务定义一个字都不变**，只有解析出的落点会变（见 planner 的反向用例）。
     zone = 'America/New_York'
     const second = await service.execute({
       type: 'create',
@@ -142,7 +148,9 @@ describe('TaskAutomationCommandService', () => {
       agentId: agent.id,
       task: { name: 'New York run', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
     })
-    expect(second.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'America/New_York' } })
+    expect((second.task as { trigger: { timezone?: string } }).trigger.timezone).toBeUndefined()
+    // 两条任务的触发器逐字相同——这是这次改动的核心断言。
+    expect((second.task as { trigger: unknown }).trigger).toEqual((first.task as { trigger: unknown }).trigger)
   })
 
   it('rejects non-autonomous Agents and foreign channels before mutation', async () => {

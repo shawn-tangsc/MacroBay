@@ -1,0 +1,7 @@
+{
+  "--injected-width": {
+    "injectedBy": "injected.tsx:1",
+    "file": "apps/demo/injected.tsx",
+    "reason": "样本：内联 style 注入，用来证明「真有注入点」的白名单条目能过。"
+  }
+}

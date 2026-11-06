@@ -1,6 +1,10 @@
-import { Check, CircleAlert, Loader, Minus } from 'lucide-react'
+import { CircleHelp } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 
 import { briefingGenerationDisplayRows, type BriefingGenerationProgress, type BriefingGenerationStage } from '../../../contracts/dailyBriefing'
+import { DailyBriefingStageSteps, type DailyBriefingStageRowState } from './DailyBriefingStageList'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 /**
@@ -15,38 +19,66 @@ import type { DailyBriefingText } from './dailyBriefingText'
  * are single model calls, so a percentage would be invented rather than measured.
  */
 
-type RowState = 'done' | 'not-needed' | 'running' | 'waiting' | 'failed'
+type RowState = DailyBriefingStageRowState
 
 export type DailyBriefingLiveStepsProps = Readonly<{
   progress: BriefingGenerationProgress
   text: DailyBriefingText
   /** Milliseconds, so the running row can show the time it has been running. */
   nowMs: number
+  /** Resolves the help popover's labels and body; absent means no help trigger is rendered. */
+  resolveText?: (key: string) => string
 }>
 
-export function DailyBriefingLiveSteps({ progress, text, nowMs }: DailyBriefingLiveStepsProps): React.ReactElement {
+export function DailyBriefingLiveSteps({ progress, text, nowMs, resolveText }: DailyBriefingLiveStepsProps): React.ReactElement {
   const byId = new Map(progress.stages.map((stage) => [stage.id, stage]))
   const copy = text.generationProgress
+  const rows = briefingGenerationDisplayRows.map((row) => {
+    const stages = row.stages.map((id) => byId.get(id)).filter((stage) => stage !== undefined)
+    const state = rowState(stages)
+    const startedAt = stages.find((stage) => stage.startedAt)?.startedAt
+    const elapsed = state === 'running' && startedAt ? nowMs - Date.parse(startedAt) : undefined
+    return { id: row.id, name: rowName(row.id, text, copy.repair), state, detail: detail(state, elapsed, copy, text) }
+  })
   return <div className="mi-brief-steps" role="status" data-live-steps="true">
-    <ol className="mi-brief-steps__list">
-      {briefingGenerationDisplayRows.map((row) => {
-        const stages = row.stages.map((id) => byId.get(id)).filter((stage) => stage !== undefined)
-        const state = rowState(stages)
-        const startedAt = stages.find((stage) => stage.startedAt)?.startedAt
-        const elapsed = state === 'running' && startedAt ? nowMs - Date.parse(startedAt) : undefined
-        return <li key={row.id} className="mi-brief-steps__row" data-step={row.id} data-step-state={state}>
-          <StepIcon state={state} />
-          <span className="mi-brief-steps__name">{rowName(row.id, text, copy.repair)}</span>
-          <span className="mi-brief-steps__detail">{detail(state, elapsed, copy, text)}</span>
-        </li>
-      })}
-    </ol>
-    {/* Says out loud what the rows cannot: a row that holds still is still working. */}
-    <p className="mi-brief-steps__note" data-live-steps-note="true">{copy.note}</p>
+    <div className="mi-brief-steps__head">
+      {/* The trigger comes before the title it explains, and before the list in DOM order, so the
+          keyboard reaches it in the same order the eye does. */}
+      {resolveText ? <Popover
+        labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationProgress.note"
+        resolveText={resolveText}
+        trigger={(triggerProps) => <IconButton
+          {...triggerProps}
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.help.progress"
+          dataAttributes={{ 'data-steps-help': 'true' }}
+          icon={CircleHelp}
+          resolveText={resolveText}
+          size="sm"
+          variant="plain"
+        />}
+      /> : null}
+      <h3 className="mi-brief-steps__title">{copy.title}</h3>
+    </div>
+    <DailyBriefingStageSteps rows={rows} />
   </div>
 }
 
 /** The name the rail uses for "generating now": the row that is actually running. */
+/**
+ * How long this run has been going, for the row that says where it is.
+ *
+ * While the run is still waiting for the market it has not opened an attempt, and the wait itself
+ * knows its own elapsed time; after that the attempt's start is the reference. `undefined` when
+ * neither can answer — the row then says only "generating" rather than inventing a number.
+ */
+export function runningElapsedMsFor(progress: BriefingGenerationProgress, now = Date.now()): number | undefined {
+  if (progress.waiting) return progress.waiting.waitedMs
+  const startedAt = Date.parse(progress.startedAt)
+  if (!Number.isFinite(startedAt)) return undefined
+  const elapsed = now - startedAt
+  return Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : undefined
+}
+
 export function runningRowName(progress: BriefingGenerationProgress, text: DailyBriefingText): string | undefined {
   const byId = new Map(progress.stages.map((stage) => [stage.id, stage]))
   for (const row of briefingGenerationDisplayRows) {
@@ -86,12 +118,4 @@ function formatElapsed(ms: number): string {
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-function StepIcon({ state }: Readonly<{ state: RowState }>): React.ReactElement {
-  const size = 12
-  if (state === 'done') return <Check aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  if (state === 'failed') return <CircleAlert aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  if (state === 'not-needed') return <Minus aria-hidden="true" className="mi-brief-steps__icon" size={size} />
-  return <Loader aria-hidden="true" className="mi-brief-steps__icon" size={size} />
 }

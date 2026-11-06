@@ -32,7 +32,18 @@ export type EmptyReasonCode =
   | 'older-than-window'
   | 'nothing-in-window'
 
-export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' | 'page-load-failed'
+/**
+ * 「拿不到」有两种：`unreadable` 是读失败、知道重试；`notification-unknown` 是连「读失败还是本来就为空」
+ * 都判不出来（读接口既没回成功，也没给可判定的错误）。后者必须如实说「原因还没查清」，并写明
+ * 「这不代表没有通知」——不许退成 `empty`（那是在说没有），也不许推到 `permission`（权限查不到≠没给）。
+ */
+export type ErrorReasonCode =
+  | 'unreadable'
+  | 'unavailable'
+  | 'operation-failed'
+  | 'needs-restart'
+  | 'page-load-failed'
+  | 'notification-unknown'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
@@ -87,6 +98,8 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'error.needs-restart': 'required',
   // 页面自己没加载出来：重载页面能恢复，所以不给动作就是缺陷。
   'error.page-load-failed': 'required',
+  // 通知中心「状态不明」：读者只能再试一次；不给动作就把人丢在一个没有出路的页面里。
+  'error.notification-unknown': 'required',
   'disabled.capability-not-wired': 'forbidden',
   'disabled.target-disabled': 'required',
   'disabled.precondition-unsaved': 'required',
@@ -129,6 +142,8 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   'error.needs-restart': ['ui.state.action.restart-app'],
   // 页面级：重载页面，不是「这次操作重试」，也不是「重启应用」——三种代价完全不同。
   'error.page-load-failed': ['ui.state.action.reload-page'],
+  // 「状态不明」不是页面没加载、也不是来源不可用：只允许重试，不提供别的出口。
+  'error.notification-unknown': ['ui.state.action.retry'],
   'disabled.target-disabled': ['ui.state.action.enable'],
   'disabled.precondition-unsaved': ['ui.state.action.save'],
   'permission.not-granted': ['ui.state.action.open-system-settings']

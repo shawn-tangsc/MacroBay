@@ -169,6 +169,27 @@ describe('ChannelDeliveryService', () => {
     expect(JSON.stringify(database.connection.prepare('select * from channel_delivery_attempts').all())).not.toContain('provider raw')
   })
 
+  it('keeps the specific failure code and the redacted channel detail in the audit', async () => {
+    const { database, transport, service } = harness()
+    transport.send.mockResolvedValueOnce({
+      kind: 'failed',
+      code: 'delivery-provider-rejected',
+      detail: 'Bad Request: chat not found'
+    } as never)
+
+    const result = await service.deliver({ channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a', source: 'task-result', sourceId: 'detail-1', text: 'result' })
+
+    expect(result).toEqual({ status: 'failed', attemptId: expect.any(String), errorCode: 'delivery-provider-rejected' })
+    // 审计记**具体码**而不是状态码：以前永远写 `channel-delivery-failed`，界面只能说「没有更多说明」。
+    expect(database.connection.prepare(
+      'select code, detail from channel_delivery_audits where channel_id = ? order by created_at desc limit 1'
+    ).get('channel-a')).toEqual({ code: 'delivery-provider-rejected', detail: 'Bad Request: chat not found' })
+    // 尝试行仍然只存稳定码：自由文本只进审计那一列。
+    expect(database.connection.prepare(
+      'select stable_error_code from channel_delivery_attempts order by created_at desc limit 1'
+    ).get()).toEqual({ stable_error_code: 'delivery-provider-rejected' })
+  })
+
   it('gives one retry owner the opaque idempotency key and rejects its concurrent peer', async () => {
     const { database, service, transport } = harness()
     transport.send.mockRejectedValueOnce(new Error('raw provider failure'))

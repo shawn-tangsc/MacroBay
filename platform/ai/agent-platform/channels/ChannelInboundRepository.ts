@@ -2,21 +2,30 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
+import {
+  countChannelConversations,
+  deleteUnboundChannelConversation,
+  findDispatchConversation,
+  insertChannelConversation,
+  readChannelConversation,
+  recordConversationSwitchedAudit,
+  fillChannelConversationTitle,
+  releaseChannelConversationOperation,
+  replaceChannelConversationSession,
+  reserveChannelConversationOperation
+} from './channelConversationBindings'
+import { recordRuntimeAudit } from './channelRuntimeAuditRetention'
+import { channelHasAnyAllowPolicy, isAllowedByPolicy, readChannelAllowList } from './channelAllowList'
 import type { ChannelConversationKind } from './channelContracts'
 import type { ChannelDispatchAdmission, ChannelDispatchFinalStatus, ChannelExecutionClaim } from './ChannelInboundContracts'
 
-export type ChannelInboundAuditCode =
-  | 'channel-policy-denied'
-  | 'channel-mention-required'
-  | 'channel-content-rejected'
-  | 'channel-receipt-without-work-item'
-  | 'channel-stale-generation'
-  | 'channel-agent-missing'
-  | 'channel-work-capacity-exhausted'
-  | 'channel-lifecycle-fenced'
-  | 'channel-inbound-failed'
+// 闭集搬到 `channelRuntimeAuditCodes`（与它的数组同源），这里只做再导出，调用方不用改。
+import type { ChannelInboundAuditCode } from './channelRuntimeAuditCodes'
+export type { ChannelInboundAuditCode }
 
 export type ChannelConversationRecord = {
+  /** 创建时算好的会话名（`Telegram · 贾维斯`），用于投递回执「已发给谁」。 */
+  sessionTitle?: string | null
   id: string
   channelId: string
   keyCiphertext: Uint8Array
@@ -73,7 +82,9 @@ export type ChannelWorkItemRecord = {
 
 type ReceiptRow = { id: string; status: string }
 
-const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
+// 不能在模块加载时算死：支持判定里含进程内的「取证放行」（setChannelAcceptanceOverride），
+// 算死的常量会让运行时这一侧永远判「未支持」，用户点启用必然失败。
+const SUPPORTED_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 export class ChannelInboundRepository {
   private readonly database: AgentPlatformDatabase
@@ -116,7 +127,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId, generation) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -128,7 +139,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -146,7 +157,7 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.conversation_id = ? and w.dispatch_id = ?
          and w.status = 'dispatching' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
-         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and v.agent_session_id is not null`
     ).get(
       input.claim.workItemId, input.claim.receiptId, input.claim.channelId, input.conversationId, input.claim.dispatchId,
@@ -163,6 +174,16 @@ export class ChannelInboundRepository {
     return this.getCurrentAgentId(channelId, generation) !== null
   }
 
+  /** 这条 dispatch 属于哪个对话：同会话排队要用它当键。 */
+  dispatchConversationId(dispatchId: string): string | null {
+    return findDispatchConversation(this.database, dispatchId)
+  }
+
+  /** 读者换了频道绑定的助手：这个对话已切到新助手的会话（旧会话留着当历史）。 */
+  recordConversationSwitched(channelId: string, generation: number, now = new Date()): void {
+    recordConversationSwitchedAudit(this.database, channelId, generation, now)
+  }
+
   recordRejectedLifecycle(channelId: string, generation: number, code: 'channel-agent-missing' | 'channel-stale-generation', now = new Date()): void {
     this.database.transact(() => this.audit(channelId, generation, code, now))
   }
@@ -171,13 +192,13 @@ export class ChannelInboundRepository {
     this.database.transact(() => this.audit(channelId, generation, 'channel-inbound-failed', now))
   }
 
+  countConversations(channelId: string): number {
+    return countChannelConversations(this.database, channelId)
+  }
+
   getConversation(channelId: string, keyHash: string): ChannelConversationRecord | null {
-    const row = this.database.connection.prepare(
-      `select id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
-              conversation_key_hash, conversation_kind, agent_session_id
-       from channel_conversations where channel_id = ? and conversation_key_hash = ?`
-    ).get(channelId, keyHash) as ConversationRow | undefined
-    return row ? mapConversation(row) : null
+    const row = readChannelConversation(this.database, channelId, keyHash)
+    return row === null ? null : { ...row, kind: row.kind as ChannelConversationRecord['kind'], keyCiphertext: row.keyCiphertext }
   }
 
   existingReceiptOutcome(channelId: string, eventHash: string, now = new Date()): 'duplicate' | 'retry' | null {
@@ -205,7 +226,7 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where r.channel_id = ? and r.provider_event_key_hash = ? and r.status = 'processing'
          and w.status = 'processing' and w.lease_token is not null and w.lease_expires_at > ?
-         and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+         and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(channelId, eventHash, now.toISOString()) as InitialClaimRow | undefined
     return row ? {
       workItemId: row.id,
@@ -227,7 +248,7 @@ export class ChannelInboundRepository {
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
          and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
          and r.generation = ? and g.lifecycle_state = 'active'
-         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+         and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(
       claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
       claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -235,52 +256,35 @@ export class ChannelInboundRepository {
   }
 
   reserveConversationOperation(channelId: string, keyHash: string, generation: number, agentId: string, now = new Date()): string | null {
-    return this.database.transact(() => {
-      if (this.getCurrentAgentId(channelId, generation) !== agentId) return null
-      // A restart advances generation, so only a same-generation reservation can block it.
-      this.database.connection.prepare(
-        'delete from channel_conversation_session_operations where channel_id = ? and conversation_key_hash = ? and generation <> ?'
-      ).run(channelId, keyHash, generation)
-      const operationId = randomUUID()
-      const inserted = this.database.connection.prepare(
-        `insert or ignore into channel_conversation_session_operations (
-          channel_id, conversation_key_hash, operation_id, generation, agent_id, created_at
-        ) values (?, ?, ?, ?, ?, ?)`
-      ).run(channelId, keyHash, operationId, generation, agentId, now.toISOString()).changes === 1
-      return inserted ? operationId : null
-    })
+    return reserveChannelConversationOperation(
+      this.database,
+      { channelId, keyHash, generation, agentId, now },
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration)
+    )
   }
 
   releaseConversationOperation(channelId: string, keyHash: string, operationId: string): void {
-    this.database.connection.prepare(
-      'delete from channel_conversation_session_operations where channel_id = ? and conversation_key_hash = ? and operation_id = ?'
-    ).run(channelId, keyHash, operationId)
+    releaseChannelConversationOperation(this.database, channelId, keyHash, operationId)
   }
 
   createConversation(record: ChannelConversationRecord, generation: number, agentId: string, now = new Date()): { record: ChannelConversationRecord; created: boolean } | null {
-    try {
-      return this.database.transact(() => {
-        if (this.getCurrentAgentId(record.channelId, generation) !== agentId) return null
-        this.database.connection.prepare(
-          `insert into channel_conversations (
-            id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
-            conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(record.id, record.channelId, record.keyCiphertext, record.keyRef, record.keyRevision, record.keyHash, record.kind, record.sessionId, now.toISOString(), now.toISOString())
-        return { record, created: true }
-      })
-    } catch {
-      const existing = this.getConversation(record.channelId, record.keyHash)
-      if (!existing) throw new Error('Channel conversation persistence failed.')
-      return { record: existing, created: false }
-    }
+    return insertChannelConversation(
+      this.database,
+      record as Parameters<typeof insertChannelConversation>[1],
+      generation,
+      agentId,
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration),
+      now
+    ) as { record: ChannelConversationRecord; created: boolean } | null
+  }
+
+  /** 只补空名字；已有名字（含读者改过的）不动。 */
+  fillConversationTitle(channelId: string, keyHash: string, title: string): boolean {
+    return fillChannelConversationTitle(this.database, { channelId, keyHash, title })
   }
 
   deleteUnboundConversation(channelId: string, keyHash: string, sessionId: string): boolean {
-    return this.database.connection.prepare(
-      `delete from channel_conversations where channel_id = ? and conversation_key_hash = ? and agent_session_id = ?
-       and not exists (select 1 from channel_inbound_work_items where conversation_id = channel_conversations.id)`
-    ).run(channelId, keyHash, sessionId).changes === 1
+    return deleteUnboundChannelConversation(this.database, channelId, keyHash, sessionId)
   }
 
   reserveAdmission(channelId: string, generation: number, now = new Date()): string | null {
@@ -312,13 +316,20 @@ export class ChannelInboundRepository {
     this.database.connection.prepare('delete from channel_inbound_admission_reservations where id = ?').run(id)
   }
 
-  replaceConversationSession(channelId: string, keyHash: string, sessionId: string, generation: number, agentId: string, now = new Date()): boolean {
-    return this.database.transact(() => {
-      if (this.getCurrentAgentId(channelId, generation) !== agentId) return false
-      return this.database.connection.prepare(
-        `update channel_conversations set agent_session_id = ?, updated_at = ? where channel_id = ? and conversation_key_hash = ?`
-      ).run(sessionId, now.toISOString(), channelId, keyHash).changes === 1
-    })
+  replaceConversationSession(
+    channelId: string,
+    keyHash: string,
+    sessionId: string,
+    generation: number,
+    agentId: string,
+    sessionTitle?: string,
+    now = new Date()
+  ): boolean {
+    return replaceChannelConversationSession(
+      this.database,
+      { channelId, keyHash, sessionId, generation, agentId, ...(sessionTitle === undefined ? {} : { sessionTitle }), now },
+      (id, currentGeneration) => this.getCurrentAgentId(id, currentGeneration)
+    )
   }
 
   setDeliveryTarget(channelId: string, conversationId: string, enabled: boolean, now = new Date()): boolean {
@@ -336,7 +347,7 @@ export class ChannelInboundRepository {
 
   managedChannelExists(channelId: string): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
+      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL()}`
     ).get(channelId))
   }
 
@@ -480,15 +491,12 @@ export class ChannelInboundRepository {
     ).run(randomUUID(), channelId, input.subjectType, input.keyCiphertext, input.keyRef, input.keyRevision, input.keyHash, input.conversationKind ?? null, now.toISOString())
   }
 
+  /** 实现在 `channelAllowList`（三条口径见那里）。 */
+  allowList(channelId: string): string[] { return readChannelAllowList(this.database, channelId) }
+  hasAnyAllowPolicy(channelId: string): boolean { return channelHasAnyAllowPolicy(this.database, channelId) }
+
   isAllowed(channelId: string, userHash: string, conversationHash: string, kind: ChannelConversationKind): boolean {
-    const row = this.database.connection.prepare(
-      `select 1 from channel_allow_policies
-       where channel_id = ? and (
-         (subject_type = 'user' and subject_key_hash = ? and (conversation_kind is null or conversation_kind = ?))
-         or (subject_type = 'conversation' and subject_key_hash = ? and (conversation_kind is null or conversation_kind = ?))
-       ) limit 1`
-    ).get(channelId, userHash, kind, conversationHash, kind)
-    return Boolean(row)
+    return isAllowedByPolicy(this.database, channelId, userHash, conversationHash, kind)
   }
 
   handleClaim(input: {
@@ -594,7 +602,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = ? and r.generation = ? and g.lifecycle_state = 'active'
-               and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
         ).run(leaseToken, lease, now.toISOString(), row.id, row.receipt_id, row.generation).changes
         if (updated === 1) {
@@ -628,7 +636,7 @@ export class ChannelInboundRepository {
                join agent_channels c on c.id = g.channel_id
                join agent_entities a on a.id = c.agent_id
                where g.channel_id = channel_inbound_work_items.channel_id and g.lifecycle_state = 'active'
-                 and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+                 and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
              )`
         ).run(now.toISOString(), row.id).changes
         if (quarantined === 1) {
@@ -654,7 +662,7 @@ export class ChannelInboundRepository {
          where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
            and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
            and r.generation = ? and g.lifecycle_state = 'active'
-           and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
+           and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
       ).get(
         claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
         claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -696,7 +704,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where g.channel_id = channel_inbound_work_items.channel_id
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.leaseToken, claim.generation).changes
       if (quarantined === 1) {
@@ -722,7 +730,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         leaseExpiresAt, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -744,7 +752,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         status, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -862,7 +870,7 @@ export class ChannelInboundRepository {
            join agent_channels c on c.id = g.channel_id
            join agent_entities a on a.id = c.agent_id
            where g.channel_id = w.channel_id and g.lifecycle_state = 'active'
-             and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+             and ${SUPPORTED_CHANNEL_C_SQL()} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          )
        order by w.lease_expires_at asc, w.id asc limit ?`
     ).all(now.toISOString(), Math.max(1, Math.min(limit, 500))) as Array<{ id: string; receipt_id: string; channel_id: string; generation: number }>
@@ -879,17 +887,12 @@ export class ChannelInboundRepository {
     this.database.connection.prepare('update channel_receipts set status = ?, updated_at = ? where id = ?').run(status, now.toISOString(), receiptId)
   }
 
+  /** 写一条运行审计；插入与裁到 500 行在同一个事务里（见 `channelRuntimeAuditRetention`）。 */
   private audit(channelId: string, generation: number, code: ChannelInboundAuditCode, now: Date): void {
-    this.database.connection.prepare(
-      'insert into channel_runtime_audits (id, channel_id, generation, code, created_at) values (?, ?, ?, ?, ?)'
-    ).run(randomUUID(), channelId, generation, code, now.toISOString())
+    recordRuntimeAudit(this.database, channelId, generation, code, now)
   }
 }
 
-type ConversationRow = {
-  id: string; channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string
-  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string | null
-}
 type WorkRow = {
   id: string; receipt_id: string; channel_id: string; conversation_id: string; dispatch_id: string; payload_ciphertext: Uint8Array
   payload_key_ref: string; payload_key_revision: number; status: ChannelWorkItemRecord['status']; lease_token: string | null; lease_expires_at: string | null; attempt_count: number
@@ -902,9 +905,6 @@ type InitialClaimRow = {
   id: string; receipt_id: string; channel_id: string; dispatch_id: string; lease_token: string; lease_expires_at: string; generation: number
 }
 
-function mapConversation(row: ConversationRow): ChannelConversationRecord {
-  return { id: row.id, channelId: row.channel_id, keyCiphertext: row.conversation_key_ciphertext, keyRef: row.conversation_key_ref, keyRevision: row.conversation_key_revision, keyHash: row.conversation_key_hash, kind: row.conversation_kind, sessionId: row.agent_session_id }
-}
 function encodeCleanupCursor(value: { kind: 'work' | 'receipt'; id: string; sort_at: string }): string {
   return Buffer.from(JSON.stringify({ sortAt: value.sort_at, kind: value.kind, id: value.id })).toString('base64url')
 }

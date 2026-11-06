@@ -3,11 +3,11 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { NotificationUnreadState, SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterItem, NotificationUnreadState } from '@platform/notifications/contracts/notificationContracts'
 
 import { platformText } from '../../i18n/platformText'
 
-import { NotificationCenterDrawer } from './NotificationCenterDrawer'
+import { NOTIFICATION_CENTER_PANEL_ID, NotificationCenterDrawer } from './NotificationCenterDrawer'
 import type { NotificationCenterSource } from './notificationCenterSource'
 
 const labels = platformText['zh-CN'].notifications
@@ -20,12 +20,16 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-function record(overrides: Partial<SafeNotificationRecord> & { id: string }): SafeNotificationRecord {
+/**
+ * 渲染层拿到的那一份：**句子里已经解析好**，没有 `titleKey`、没有参数表。
+ * 工厂照这个形状造，捏不出一个「带键的记录」——这正是这条约束想要的效果。
+ */
+function record(overrides: Partial<NotificationCenterItem> & { id: string }): NotificationCenterItem {
   return {
     owner: 'platform',
     sourceId: 'platform.test',
-    titleKey: 'notification.taskFailed.title',
-    titleParams: { taskName: overrides.id },
+    title: `任务失败：${overrides.id}`,
+    body: '',
     severity: 'warning',
     priority: 'normal',
     channels: ['center'],
@@ -35,7 +39,7 @@ function record(overrides: Partial<SafeNotificationRecord> & { id: string }): Sa
     createdAt: '2026-11-02T00:00:00.000Z',
     updatedAt: '2026-11-02T00:00:00.000Z',
     ...overrides
-  } as SafeNotificationRecord
+  } as NotificationCenterItem
 }
 
 const deeplink = { scope: 'platform' as const, entityType: 'job', entityId: 'job-1' }
@@ -53,7 +57,11 @@ function fakeSource(overrides: Partial<NotificationCenterSource> = {}): Notifica
   }
 }
 
-async function mount(source: NotificationCenterSource, onOpenDeeplink: (d: unknown) => void = () => undefined): Promise<void> {
+async function mount(
+  source: NotificationCenterSource,
+  onOpenDeeplink: (d: unknown) => void = () => undefined,
+  language: 'zh-CN' | 'en-US' = 'zh-CN'
+): Promise<void> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -62,8 +70,7 @@ async function mount(source: NotificationCenterSource, onOpenDeeplink: (d: unkno
       <NotificationCenterDrawer
         open
         onClose={() => undefined}
-        labels={labels}
-        language="zh-CN"
+        labels={platformText[language].notifications}
         onOpenDeeplink={onOpenDeeplink}
         source={source}
       />
@@ -114,6 +121,8 @@ describe('通知中心的分组与空态', () => {
     // 界面设计退回项：通用 `not-yet` 只说「还没到」，说不出这个页面等的是什么事件。
     const hint = document.body.querySelector('.notification-center-empty-hint')
     expect(hint?.textContent).toBe(labels.centerEmptyHint)
+    // 铃铛的 `aria-controls` 指向这个 id：打开时它必须真的存在（指向空处比不写更糟）。
+    expect(document.getElementById(NOTIFICATION_CENTER_PANEL_ID)).not.toBeNull()
     // 说明必须挂在 `StateView` 之外：改平台键会让另外七处 `not-yet` 说别人的话。
     expect(hint?.closest('.state-view')).toBeNull()
   })
@@ -162,6 +171,35 @@ describe('通知中心的分组与空态', () => {
 
     expect(attempts).toBe(2)
     expect(rows()).toHaveLength(1)
+  })
+
+  it('回了个不是列表的东西时说「原因没查清」，不说「没有通知」', async () => {
+    // 既没成功、也没给出可判定的错误：这既不是空，也不该承诺「重试就好」。
+    const source = fakeSource({ list: async () => ({ nope: true }) as never })
+    await mount(source)
+
+    const view = document.body.querySelector('[data-state="error"]')
+    expect(view).not.toBeNull()
+    // 两态靠原因码与原因句区分，标题共用「读取失败」是允许的。
+    expect(document.body.textContent).toContain('这不代表没有通知')
+    expect(document.body.textContent).not.toContain('没有需要你处理的事')
+    // 批量动作这时禁用，原因写在面板里一次。
+    expect(document.body.querySelector('[data-center-unknown-hint]')).not.toBeNull()
+  })
+
+  it('读取失败与原因不明用两个原因码，句子也不同', async () => {
+    const failing = fakeSource({ list: async () => Promise.reject(new Error('bridge gone')) })
+    await mount(failing)
+    const failureText = document.body.textContent
+
+    document.body.innerHTML = ''
+    const unknown = fakeSource({ list: async () => ({ nope: true }) as never })
+    await mount(unknown)
+    const unknownText = document.body.textContent
+
+    // 同一句就说明两个态没分开。
+    expect(failureText).not.toBe(unknownText)
+    expect(unknownText).toContain('这不代表没有通知')
   })
 })
 
@@ -234,21 +272,34 @@ describe('清空与删除是两件事', () => {
   })
 })
 
-describe('记录里存的是键，句子在展示时解析', () => {
-  it('句子按当前语言解析，缺的参数原样留下', async () => {
+describe('句子由主进程解析，渲染层只负责画', () => {
+  it('画的就是载荷里那两句：这里没有表可查，也没有参数要填', async () => {
     const source = fakeSource({
       list: async () => ({
         items: [
-          record({ id: 'zh', deeplink, titleParams: { taskName: '央行' } }),
-          record({ id: 'missing-param', deeplink, titleParams: {} })
+          record({ id: 'zh', deeplink, title: '任务失败：央行', body: '这一次没有跑完。' })
         ]
       })
     })
     await mount(source)
 
-    expect(document.body.textContent).toContain('央行')
-    // 缺参不许静默消失：`{taskName}` 留在句子里，看得见才会被修。
-    expect(document.body.textContent).toContain('{taskName}')
+    expect(document.body.textContent).toContain('任务失败：央行')
+    expect(document.body.textContent).toContain('这一次没有跑完。')
+  })
+
+  it('解析失败时界面上只有那一句兜底句，不留 {taskName}（N24①）', async () => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({ id: 'degraded', deeplink, title: '有一条新通知', body: '' })
+        ]
+      })
+    })
+    await mount(source)
+
+    expect(document.body.textContent).toContain('有一条新通知')
+    // 占位符原样打出来与露键同罪：读者看到 `{taskName}` 就是在看我们的内部形状。
+    expect(document.body.textContent).not.toContain('{')
   })
 
   it('主位行的动作是通知自己要做的事，点击真的把 deeplink 交出去', async () => {
@@ -259,7 +310,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't1',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -284,7 +335,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't2',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -303,7 +354,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
           record({
             id: 't3',
             deeplink,
-            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+            actions: [{ id: 'open-task', label: '打开任务', kind: 'open', deeplink }]
           })
         ]
       })
@@ -324,7 +375,7 @@ describe('记录里存的是键，句子在展示时解析', () => {
 
 describe('首次进入不闪错误或空态', () => {
   it('读数还没回来时只画加载中：既不画错误，也不画「没有」', async () => {
-    let resolveList: ((page: { items: SafeNotificationRecord[] }) => void) | undefined
+    let resolveList: ((page: { items: NotificationCenterItem[] }) => void) | undefined
     const source = fakeSource({
       list: () =>
         new Promise((resolve) => {
@@ -375,7 +426,6 @@ describe('首次进入不闪错误或空态', () => {
         open,
         onClose: () => undefined,
         labels,
-        language: 'zh-CN',
         onOpenDeeplink: () => undefined,
         source
       })
@@ -389,8 +439,43 @@ describe('首次进入不闪错误或空态', () => {
     })
 
     expect(rows()).toHaveLength(1)
-    expect(document.body.querySelector('[data-center-stale]')?.textContent).toContain(labels.centerStaleNotice)
+    const stale = document.body.querySelector('[data-center-stale]')
+    expect(stale?.textContent).toContain(labels.centerStaleNotice)
+    // 「重试」是把刚失败的操作再做一次；这个按钮只是重新读一遍列表，名字必须说对。
+    expect(stale?.querySelector('button')?.textContent).toBe(labels.centerReload)
+    expect(stale?.textContent).not.toContain('重试')
     // 有旧数据时不许整块换成页面级错误。
     expect(document.body.querySelector('[data-state="error"]')).toBeNull()
   })
+})
+
+describe('长正文的展开/收起', () => {
+  it('tells assistive tech whether the body is open, and flips it on click', async () => {
+    // 用英文那句（超过 90 字）触发收起形态：中文正文都太短，测不出这个分支。
+    const english = platformText['en-US'].notifications
+    const source = fakeSource({
+      list: async () => ({
+        items: [record({
+          id: 'n-long',
+          body: 'If you can read this line, the notification pipeline is wired end to end, and this sentence is long enough to be clamped before the reader expands it.'
+        })]
+      })
+    })
+    await mount(source, () => undefined, 'en-US')
+
+    const toggle = document.body.querySelector<HTMLButtonElement>('.notification-center-link')
+    expect(toggle).not.toBeNull()
+    // 收起时读屏要听到「收起状态」，并且按钮说的是「展开」。
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle?.textContent).toBe(english.centerExpand)
+
+    await act(async () => {
+      toggle!.click()
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle?.textContent).toBe(english.centerCollapse)
+  })
+
 })

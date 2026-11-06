@@ -1,4 +1,8 @@
-import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../../contracts/etfFlows'
+import { computeEtfCumulativeFlow, etfFlowPolicy, etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../../contracts/etfFlows'
+import type { ModuleSignal, SignalSeverity } from '../../../../contracts/moduleSignal'
+import type { ModuleSignalRead, ModuleSignalReadFailureCode } from '../../../../contracts/moduleSignalRead'
+import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
+import type { SignalAnalysisStateView } from '../../../../service/intelligence/analysis/signalAnalysisState'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -7,6 +11,7 @@ import {
   isVisibleEtfPublicSnapshot,
   type EtfPublicAssetSnapshot
 } from '../../../../contracts/intelligenceQueryContracts'
+import { selectVisibleFlowRows, type FlowChartRow } from './capitalFlowRows'
 
 export const dashboardCapitalConditionsPresentationPolicy = {
   usd: {
@@ -33,9 +38,41 @@ export type DashboardEtfCumulativeWindow = { windowDays: number; coveredDays: nu
 export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; cumulative: readonly DashboardEtfCumulativeWindow[]; rows: readonly DashboardEtfFlowRow[] }
 /** BTC/ETH rows are date-aligned by contract, so the table header can state one coverage per window. */
 export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
-type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
+type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[]; verifiedAt: string }
+/**
+ * The chip the capital-conditions card may draw beside its title.
+ *
+ * Only one per card, and only from the module's own rule: the amount is read out of the signal's
+ * `values`, never summed here. A rule that could not judge (window not complete, or the read
+ * failed) is `insufficient` — a grey chip with no number, because a missing reading must not be
+ * dressed as a small one. `hidden` is the normal state: nothing happened, so nothing is drawn.
+ * `unreadable` is the fourth: the read itself did not happen, which the reader can retry and a quiet
+ * market cannot.
+ */
+export type DashboardEtfSignalChip =
+  | Readonly<{ state: 'hidden' }>
+  | Readonly<{ state: 'insufficient' }>
+  | Readonly<{ state: 'unreadable'; failureCode: ModuleSignalReadFailureCode }>
+  | Readonly<{
+      state: 'alert'
+      asset: 'btc' | 'eth'
+      /** The three-day outflow, as an unsigned amount: the chip's own word already says which way. */
+      amountUsd: string
+      /** The same sum signed, for the detail: `-$488.7M`, never a second total. */
+      cumulativeUsd: string
+      coveredDays: number
+      requiredDays: number
+      /** The trading day the flows belong to, not the instant this was read. */
+      observedAt: string
+    }>
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
-type DashboardFlowHistory = { state: 'available'; rows: readonly { tradingDate: string; funds: number; btc: number; eth: number }[] }
+/**
+ * "No chart today" has two meanings and they must not read the same: the sources did not answer
+ * (`unavailable`), or they answered with too few aligned days (`not-yet`, with the count).
+ */
+export type DashboardFlowHistory =
+  | { state: 'available'; rows: readonly FlowChartRow[] }
+  | { state: 'not-yet'; availableDays: number }
 
 export type DashboardCapitalConditionsState =
   | { state: 'loading' }
@@ -50,6 +87,13 @@ export type DashboardCapitalConditionsState =
       stale?: true
       conclusion: 'partial' | 'unavailable'
       etf: DashboardEtfFlow | 'unavailable'
+      /** Absent when the card could not read at all; `hidden` when the rule had nothing to say. */
+      etfSignal?: DashboardEtfSignalChip
+      /**
+       * 这条信号的分析到哪一步。**与信号并列**，不塞进 `etfSignal`：信号是规则的产物，分析状态
+       * 是运行的产物，嵌套进去以后信号一变这两处就得一起改。
+       */
+      etfSignalAnalysis?: SignalAnalysisStateView
       flowHistory?: DashboardFlowHistory
       observedAt: string
       currentUsd: string
@@ -123,7 +167,7 @@ function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailab
   const eth = projectEtfAsset(value.eth)
   if (!btc || !eth) return dashboardCapitalConditionsPresentationPolicy.etfState
   const coverage = projectEtfCoverage(btc, eth)
-  return coverage ? { state: 'available', btc, eth, coverage } : dashboardCapitalConditionsPresentationPolicy.etfState
+  return coverage ? { state: 'available', btc, eth, coverage, verifiedAt: value.verifiedAt } : dashboardCapitalConditionsPresentationPolicy.etfState
 }
 
 function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAsset): readonly DashboardEtfCumulativeCoverage[] | undefined {
@@ -153,9 +197,9 @@ function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[
     const ether = eth.get(btc.tradingDate)
     return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
   })
-  return rows.length >= capitalConditionsDailyFlowPolicy.minimumRows
-    ? { state: 'available', rows: rows.slice(-dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
-    : 'unavailable'
+  if (rows.length === 0) return { state: 'not-yet', availableDays: 0 }
+  if (rows.length < capitalConditionsDailyFlowPolicy.minimumChartRows) return { state: 'not-yet', availableDays: rows.length }
+  return { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
 }
 
 function projectEtfAsset(value: EtfPublicAssetSnapshot): DashboardEtfFlowAsset | undefined {
@@ -190,6 +234,58 @@ function projectEtfCumulativeWindows(value: EtfPublicAssetSnapshot): readonly Da
     projected.push({ windowDays: window.windowDays, coveredDays: window.coveredDays, netFlowUsd, complete: window.complete })
   }
   return projected
+}
+
+const signalSeverityRank: Readonly<Record<SignalSeverity, number>> = Object.freeze({ high: 3, medium: 2, low: 1 })
+
+/**
+ * Picks the one chip this card may draw, from the module's own rule.
+ *
+ * The rule already decided everything: which asset, how much, over how many complete trading days.
+ * This projection only formats what it was handed — a three-day sum computed here would be a second
+ * implementation of the threshold, and the card would start disagreeing with the notification.
+ *
+ * The panel switch is the master switch: while it is closed nothing is drawn, not even the grey
+ * chip, because there is no outlet yet. A signal that could not judge is `insufficient` and carries
+ * no number: "we could not look" is not "a small outflow".
+ */
+/** The state that belongs to the chip this card draws: the loudest etf-flows signal, same rule as the chip. */
+export function etfChipAnalysisOf(read: ModuleSignalAnalysisRead | ModuleSignalRead | undefined): SignalAnalysisStateView | undefined {
+  if (!read || read.state !== 'available') return undefined
+  const mine = read.signals.filter(entry => entry.signal.moduleId === 'etf-flows')
+  if (mine.length === 0) return undefined
+  const loudest = mine.reduce((best, entry) =>
+    signalSeverityRank[entry.signal.severity] > signalSeverityRank[best.signal.severity] ? entry : best)
+  const analysis = (read as { analysis?: Readonly<Record<string, SignalAnalysisStateView>> }).analysis
+  return analysis?.[loudest.signal.dedupeKey]
+}
+
+export function projectEtfOutflowChip(
+  read: ModuleSignalRead | undefined,
+  switchState: EtfOutflowOutletSwitch = etfOutflowOutletPolicy
+): DashboardEtfSignalChip {
+  if (!isEtfOutflowOutletOpen(switchState, 'panel')) return { state: 'hidden' }
+  // No read yet is "not yet"; a failed read is its own state — the reader retries one and waits for
+  // the other.
+  if (read === undefined) return { state: 'hidden' }
+  if (read.state === 'unavailable') return { state: 'unreadable', failureCode: read.failureCode }
+  const mine = read.signals.map(entry => entry.signal).filter(signal => signal.moduleId === 'etf-flows')
+  if (mine.length === 0) return { state: 'hidden' }
+  // One chip per card: the loudest speaks, the rest stay in its detail. Two chips side by side
+  // invite a comparison the product says is meaningless.
+  const loudest = mine.reduce((best, signal) => signalSeverityRank[signal.severity] > signalSeverityRank[best.severity] ? signal : best)
+  if (loudest.readiness !== 'available' || loudest.asset === null) return { state: 'insufficient' }
+  const netFlowUsd = loudest.values.cumulativeNetFlowUsd
+  const coveredDays = loudest.values.coveredDays
+  const requiredDays = loudest.values.requiredDays
+  // An outflow is negative; a zero or positive reading is not this rule's event, and a window
+  // without its denominator cannot be read. Either way: no number on the chip.
+  if (typeof netFlowUsd !== 'number' || !Number.isFinite(netFlowUsd) || netFlowUsd >= 0) return { state: 'insufficient' }
+  if (!Number.isInteger(coveredDays) || !Number.isInteger(requiredDays) || coveredDays < 1 || requiredDays < 1 || coveredDays > requiredDays) return { state: 'insufficient' }
+  const amountUsd = formatUsd(-netFlowUsd, false)
+  const cumulativeUsd = formatUsd(netFlowUsd, true)
+  if (!amountUsd || !cumulativeUsd) return { state: 'insufficient' }
+  return { state: 'alert', asset: loudest.asset, amountUsd, cumulativeUsd, coveredDays, requiredDays, observedAt: loudest.observedAt }
 }
 
 function isDisplayNumber(value: unknown): value is number {

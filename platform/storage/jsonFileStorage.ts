@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 
 export type JsonFileStorage<T> = {
@@ -36,18 +37,36 @@ export async function writeFileAtomically(
   encoding: BufferEncoding = 'utf8'
 ): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  const temporaryPath = `${filePath}.${process.pid}.tmp`
-  if (typeof data === 'string') await writeFile(temporaryPath, data, encoding)
-  else await writeFile(temporaryPath, data)
-  await rename(temporaryPath, filePath)
+  // 临时名必须**同进程内也唯一**：只按 PID 命名时，同一次钩子里的两次并发写会写同一个 tmp，
+  // 一个刚 truncate、另一个写到一半，谁先 rename 谁就把半成品发布成正式文件——产出的正是
+  // 「一份完整文档 + 一份从中间开始的残片」。唯一名让两笔写各自成形，rename 只换自己的那个。
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    if (typeof data === 'string') await writeFile(temporaryPath, data, encoding)
+    else await writeFile(temporaryPath, data)
+    await rename(temporaryPath, filePath)
+  } catch (error) {
+    // rename 之后 tmp 已经不存在；反过来的失败要清掉自己的残留，别把目录越积越脏。
+    await unlink(temporaryPath).catch(() => undefined)
+    throw error
+  }
 }
 
 /** 同步版本，供只读快照/同步写入的存储使用；语义与 `writeFileAtomically` 相同。 */
 export function writeFileAtomicallySync(filePath: string, data: string, encoding: BufferEncoding = 'utf8'): void {
   mkdirSync(dirname(filePath), { recursive: true })
-  const temporaryPath = `${filePath}.${process.pid}.tmp`
-  writeFileSync(temporaryPath, data, encoding)
-  renameSync(temporaryPath, filePath)
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temporaryPath, data, encoding)
+    renameSync(temporaryPath, filePath)
+  } catch (error) {
+    try {
+      unlinkSync(temporaryPath)
+    } catch {
+      // 残留清理失败不改变原始错误：那才是调用方要读的那条。
+    }
+    throw error
+  }
 }
 
 export async function writeJsonFileAtomically(filePath: string, value: unknown): Promise<void> {

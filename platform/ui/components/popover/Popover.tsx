@@ -136,15 +136,22 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
   }
 
   // Esc 关闭，焦点回到触发器。只在开着的时候挂监听。
+  //
+  // **只关浮层，不关它所在的面板**：设置抽屉、弹窗自己也监听 Esc，一次按键会被两层同时处理。
+  // 真窗口实测（2026-11-03，`5fd4737` 那台）：浮层开着时按 Esc，浮层关了、设置面板也一起关了，
+  // 焦点落回页面上那颗「生成设置」——读者按的是「关掉这段说明」，丢的却是「刚才那个设置页」。
+  // 所以在**捕获阶段**拦下来：注册在同一 document 上的外层处理器（冒泡）收不到这次按键。
+  // 浮层没开时不注册监听，Esc 照常传给外层，不会一直吞键。
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
+      event.stopPropagation()
       close()
       trigger.current?.focus()
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [open])
 
   // 点别处关闭。点进浮层自己不算别处（长说明里将来放链接也一样）。

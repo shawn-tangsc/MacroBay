@@ -65,7 +65,7 @@ function routerProvider(requiresProxy = true): ProviderView {
   }
 }
 
-function stubPlatform(connectionResult: unknown) {
+function stubPlatform(connectionResult: unknown, network?: { proxyMode: string; proxyUrl: string }) {
   const invoke = vi.fn(async (_productId: string, method: string) => {
     if (method === 'intelligenceSources.getPageState') {
       return { detail: { credentialStatus: { hasCredential: true, maskedPreview: 'us*****Of' } } }
@@ -73,9 +73,14 @@ function stubPlatform(connectionResult: unknown) {
     if (method === 'intelligenceSources.testConnection') return connectionResult
     return undefined
   })
-  ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+  ;(window as unknown as { platform: unknown }).platform = {
+    products: { invoke },
+    ...(network === undefined ? {} : { settings: { get: async () => ({ network }) } })
+  }
   return invoke
 }
+
+const configuredProxy = { proxyMode: 'custom', proxyUrl: 'http://127.0.0.1:7888' }
 
 async function flush(): Promise<void> {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
@@ -108,7 +113,8 @@ describe('ProviderDetail proxy notice', () => {
     expect(before).not.toBeNull()
     expect(before?.getAttribute('data-tone')).toBe('requires')
     expect(before?.textContent).toContain(settingsText.proxyNotice.title)
-    expect(before?.compareDocumentPosition(document.body.querySelector('h2')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const heading = document.body.querySelector('h2')
+    expect(before && heading && before.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     await act(async () => button(settingsText.testConnection).click())
     await flush()
@@ -167,6 +173,51 @@ describe('ProviderDetail proxy notice', () => {
 
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligenceSources.testConnection', { sourceId: '0xrouter-aggregate-provider' })
     expect(document.body.textContent).not.toContain(settingsText.connectionUnsupported)
+  })
+})
+
+describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', () => {
+  it('drops the standing requirement and the proxy tag when a custom proxy is saved', async () => {
+    stubPlatform({ state: 'succeeded' }, configuredProxy)
+    await render(routerProvider())
+    await flush()
+
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).toBeNull()
+  })
+
+  it('comes back as “configured but still not connected” when the probe fails anyway', async () => {
+    stubPlatform({ sourceId: '0xrouter-aggregate-provider', state: 'failed', failureCode: 'response-unavailable' }, configuredProxy)
+    await render(routerProvider())
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+
+    await act(async () => button(settingsText.testConnection).click())
+    await flush()
+
+    const banner = document.body.querySelector('[data-network-proxy-banner]')
+    expect(banner?.getAttribute('data-tone')).toBe('failed')
+    expect(banner?.getAttribute('data-proxy-configured')).toBe('yes')
+    expect(banner?.textContent).toContain(settingsText.proxyNotice.configuredFailedTitle)
+    // 不许再让他「先打开 VPN 或本地代理」——那件事他已经做了。
+    expect(banner?.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
+  })
+
+  it('does not call a custom mode with an unparsable address "configured"', async () => {
+    stubPlatform({ state: 'succeeded' }, { proxyMode: 'custom', proxyUrl: '127.0.0.1:7888 is my proxy' })
+    await render(routerProvider())
+    await flush()
+
+    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
+  })
+
+  it('treats a custom mode with an empty address as not configured yet', async () => {
+    stubPlatform({ state: 'succeeded' }, { proxyMode: 'custom', proxyUrl: '   ' })
+    await render(routerProvider())
+    await flush()
+
+    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
   })
 })
 

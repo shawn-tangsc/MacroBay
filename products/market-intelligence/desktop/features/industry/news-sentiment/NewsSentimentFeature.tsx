@@ -37,7 +37,12 @@ export function NewsSentimentFeature(props: {
   const client = props.client ?? newsSentimentClient
   const sourcesClient = props.sourcesClient ?? intelligenceSourcesClient
   const now = props.now ?? (() => new Date())
-  const state = useNewsSentiment({ client, now, ...(props.readDeadlineMs === undefined ? {} : { readDeadlineMs: props.readDeadlineMs }) })
+  const state = useNewsSentiment({
+    client,
+    now,
+    language: props.language ?? 'zh-CN',
+    ...(props.readDeadlineMs === undefined ? {} : { readDeadlineMs: props.readDeadlineMs })
+  })
   const refresh = state.refresh
   // The `older-than-window` state advertises "widen the time window"; this is that action, and it must
   // really change the window (a plain re-read would leave the same emptiness on screen).

@@ -116,7 +116,7 @@
 .mi-economic-calendar__header, .mi-economic-calendar__heading, .mi-economic-calendar__tools, .mi-economic-calendar__workspace, .mi-economic-calendar__month, .mi-economic-calendar__inspector { min-width: 0; }
 .mi-economic-calendar__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--mi-market-status-gap); margin-bottom: var(--mi-market-status-gap); }
 .mi-economic-calendar h1, .mi-calendar-detail h1 { font-size: var(--mi-calendar-date-size); font-weight: 650; line-height: 1.2; }
-.mi-economic-calendar__import.ant-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-top: 12px; border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; }
+.mi-economic-calendar__import.ant-btn { display: inline-flex; align-items: center; gap: 6px; border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; }
 .mi-economic-calendar__import.ant-btn:hover { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 17%, var(--mi-economic-surface)); color: var(--mi-economic-text); }
 .mi-economic-calendar__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .mi-economic-calendar__tools > span,

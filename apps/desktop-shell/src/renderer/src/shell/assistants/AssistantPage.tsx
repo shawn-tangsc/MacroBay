@@ -16,12 +16,13 @@ import { AssistantSidePanel } from './AssistantSidePanel'
 import { AssistantChatPane } from './AssistantChatPane'
 import { AssistantSettingsDrawer } from './AssistantSettingsDrawer'
 import { platformText } from '../../i18n/platformText'
+import { isAssistantChatReady, isTerminalAssistantComposerSnapshot } from './assistantPageReadiness'
 import {
-  isAssistantChatReady,
-  isTerminalAssistantComposerSnapshot,
-  normalizeAssistantStatusMessage,
-  resolveAssistantStreamErrorText
-} from './assistantPageReadiness'
+  assistantStatusFromError,
+  assistantStatusFromResponse,
+  assistantStatusText,
+  type AssistantsStatus
+} from './assistantStatusText'
 import type { AssistantBranchEntry } from './assistantMessageRendering'
 import type { AssistantInputbarToolId } from './inputbar/assistantInputbarRegistry'
 import { useAssistantMentionModels } from './useAssistantMentionModels'
@@ -91,7 +92,8 @@ export function AssistantPage({
   /** 提及选择器不可用时，把读者送到顶部的模型选择器。 */
   const [focusModelPickerTick, setFocusModelPickerTick] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  /** 只存「哪一种提示」，句子在渲染那一刻取；运行时消息单独一档（`text`）。 */
+  const [statusMessage, setStatusMessage] = useState<AssistantsStatus | null>(null)
   const deletingTopicIds = useRef(new Set<string>())
   const activeTopicIdRef = useRef<string | null>(null)
   /** 发送归属状态机（纯函数，见 `assistantSendFence.ts`）：只让属于本次执行的事件解锁输入框。 */
@@ -268,7 +270,7 @@ export function AssistantPage({
       const topicId = streamError.topicId
       if (topicId && topicId !== activeTopicIdRef.current) return
       if (!topicId) return
-      setStatusMessage(resolveAssistantStreamErrorText(streamError.error, t))
+      setStatusMessage({ kind: 'stream-error', error: streamError.error })
       void refreshMessages(topicId)
       if (streamError.isTopicDone !== false) finishSendingTopic(topicId, streamError.executionId)
     })
@@ -350,7 +352,7 @@ export function AssistantPage({
       })) as AssistantStreamOpenResponse
       if (response.mode !== 'started' && response.mode !== 'injected') {
         setDraft(text)
-        setStatusMessage(response.message ?? t.modelNotReady)
+        setStatusMessage(assistantStatusFromResponse(response.message))
         clearSendingTopic(topicId)
         return
       }
@@ -359,7 +361,7 @@ export function AssistantPage({
       await refreshTopics(activeAssistantId)
     } catch (error) {
       setDraft(text)
-      setStatusMessage(normalizeAssistantStatusMessage(error, t.modelNotReady))
+      setStatusMessage(assistantStatusFromError(error))
       clearSendingTopic()
     }
   }
@@ -382,7 +384,7 @@ export function AssistantPage({
     try {
       const deleted = await window.platform.assistants.deleteMessage(messageId, { cascade: true, activeNodeStrategy: 'parent' })
       if (!deleted) {
-        setStatusMessage(t.conversationOperationFailed)
+        setStatusMessage({ kind: 'operation-failed' })
         return
       }
       await refreshMessages(activeTopicId)
@@ -391,7 +393,7 @@ export function AssistantPage({
       }
       setStreamSnapshot(attached.snapshot)
     } catch {
-      setStatusMessage(t.conversationOperationFailed)
+      setStatusMessage({ kind: 'operation-failed' })
     }
   }
 
@@ -403,7 +405,7 @@ export function AssistantPage({
       const previousTopics = topics
       const deleted = await window.platform.assistants.deleteTopic(topicId)
       if (!deleted) {
-        setStatusMessage(t.conversationOperationFailed)
+        setStatusMessage({ kind: 'operation-failed' })
         return
       }
       const result = (await window.platform.assistants.listTopics({ assistantId: activeAssistantId })) as {
@@ -414,7 +416,7 @@ export function AssistantPage({
         setCurrentTopicId(selectTopicAfterDeletion(previousTopics, result.topics, topicId))
       }
     } catch {
-      setStatusMessage(t.conversationOperationFailed)
+      setStatusMessage({ kind: 'operation-failed' })
     } finally {
       deletingTopicIds.current.delete(topicId)
     }
@@ -435,14 +437,14 @@ export function AssistantPage({
           : {})
       })) as AssistantStreamOpenResponse
       if (response.mode !== 'started' && response.mode !== 'injected') {
-        setStatusMessage(response.message ?? t.modelNotReady)
+        setStatusMessage(assistantStatusFromResponse(response.message))
         clearSendingTopic(activeTopicId)
         return
       }
       recordSendingExecutions(activeTopicId, response)
       await refreshMessages(activeTopicId)
     } catch (error) {
-      setStatusMessage(normalizeAssistantStatusMessage(error, t.modelNotReady))
+      setStatusMessage(assistantStatusFromError(error))
       clearSendingTopic(activeTopicId)
     }
   }
@@ -462,14 +464,14 @@ export function AssistantPage({
           : {})
       })) as AssistantStreamOpenResponse
       if (response.mode !== 'started' && response.mode !== 'injected') {
-        setStatusMessage(response.message ?? t.modelNotReady)
+        setStatusMessage(assistantStatusFromResponse(response.message))
         clearSendingTopic(activeTopicId)
         return
       }
       recordSendingExecutions(activeTopicId, response)
       await refreshMessages(activeTopicId)
     } catch (error) {
-      setStatusMessage(normalizeAssistantStatusMessage(error, t.modelNotReady))
+      setStatusMessage(assistantStatusFromError(error))
       clearSendingTopic(activeTopicId)
     }
   }
@@ -497,7 +499,7 @@ export function AssistantPage({
       }
       setStreamSnapshot(attached.snapshot)
     } catch {
-      setStatusMessage(t.conversationOperationFailed)
+      setStatusMessage({ kind: 'operation-failed' })
     }
   }
 
@@ -616,7 +618,7 @@ export function AssistantPage({
             assistantSelected={Boolean(activeAssistant)}
             composerEnabled={composerEnabled}
             modelReady={modelReady}
-            statusMessage={statusMessage}
+            statusMessage={statusMessage === null ? null : assistantStatusText(platformText[language].assistants, statusMessage)}
             confirmDeleteMessage={chatSettings.confirmDeleteMessage}
             chatSettings={chatSettings}
             onDraftChange={handleDraftChange}

@@ -262,8 +262,8 @@ describe('PLAT-60 provider drawer', () => {
       })
     )
     await clickButton(labels.checkProvider, drawer())
+    // 「当前已保存 N 位」是这句模板的一部分：模板按键生成即可，不要把那半句中文抄进期望值。
     expect(drawer().textContent).toContain(labels.invalidApiKeyWithLength(401, 58))
-    expect(drawer().textContent).toContain('当前已保存 58 位')
     expect(drawer().querySelector('.web-search-form-control .web-search-drawer-error')).not.toBeNull()
     expect(drawer().textContent).not.toContain('Bearer')
 

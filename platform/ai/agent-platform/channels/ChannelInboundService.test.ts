@@ -10,6 +10,8 @@ import type { ChannelPayloadCipher } from '../../../secrets/channels/channelCred
 import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelContentGuard, ChannelInboundFacts } from './ChannelInboundContracts'
 import { createChannelInboundContentGuard } from './ChannelInboundContentGuard'
+import { autoBindDeliveryTarget } from './channelAutoTargetBinding'
+import { readChannelConversationSession, touchChannelConversation } from './channelConversationBindings'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
 import { seedChannelAdapterSupport } from './channelTestSupport'
@@ -41,6 +43,173 @@ describe('ChannelInboundService', () => {
     expect(cipher.encrypt).toHaveBeenCalled()
   })
 
+  it('fills a missing conversation title without touching one that already exists', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { conversationTitle?: (input: { displayLabel?: string }) => Promise<string> } })
+      .deps.conversationTitle = async (input) => `Telegram · ${input.displayLabel ?? '8768'}`
+
+    await receive(service, 'channel-a', { providerEventKey: 'title-1', providerUserLabel: '贾维斯' })
+    const first = database.connection.prepare('select session_title from channel_conversations').get() as { session_title: string }
+    expect(first.session_title).toBe('Telegram · 贾维斯')
+
+    // 已经写了名字：后续消息不许改它（只有 /new 才会换新会话与新名字）。
+    await receive(service, 'channel-a', { providerEventKey: 'title-2', providerUserLabel: '别人' })
+    expect(database.connection.prepare('select session_title from channel_conversations').get()).toEqual(first)
+  })
+
+  it('opens the exact bound session for a conversation, and never hands the session id back', async () => {
+    const { service, database, selectedSessionIds } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'open-1' })
+    const row = database.connection.prepare('select id, agent_session_id from channel_conversations').get() as
+      { id: string; agent_session_id: string }
+
+    const opened = await service.openConversation({ channelId: 'channel-a', conversationId: row.id })
+    // 成功时**不带**会话 id：那个值不出主进程。
+    expect(opened).toEqual({ ok: true })
+    // 选中的是这条对话绑着的**那一条**，不是「这个助手的第一个会话」。
+    expect(selectedSessionIds).toEqual([row.agent_session_id])
+  })
+
+  it('names why it cannot open a conversation instead of pretending it did', async () => {
+    const missing = createHarness()
+    await expect(missing.service.openConversation({ channelId: 'channel-a', conversationId: 'missing' }))
+      .resolves.toEqual({ ok: false, code: 'conversation-session-missing' })
+
+    const { service, database, selectedSessionIds } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'open-2' })
+    const row = database.connection.prepare('select id from channel_conversations').get() as { id: string }
+    // 会话侧没有选中能力时必须报原因：假装成功会让界面跳到一个其实没换过去的页面。
+    ;(service as unknown as { deps: { selectSession?: unknown } }).deps.selectSession = undefined
+    await expect(service.openConversation({ channelId: 'channel-a', conversationId: row.id }))
+      .resolves.toEqual({ ok: false, code: 'session-selection-unavailable' })
+    expect(selectedSessionIds).toEqual([])
+  })
+
+  it('refreshes the conversation updated_at on every inbound, without adding a second row', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'touch-1' })
+    const before = database.connection.prepare('select id, updated_at from channel_conversations').get() as
+      { id: string; updated_at: string }
+    expect(before.updated_at).toBe('2026-07-18T00:00:00.000Z')
+
+    // 同一对话再收一条：行不新增，但「最近活跃」要跟着消息走（以前停在建会话那一刻，是假数据）。
+    ;(service as unknown as { deps: { now: () => Date } }).deps.now = () => new Date('2026-07-18T00:05:00.000Z')
+    await receive(service, 'channel-a', { providerEventKey: 'touch-2' })
+    const after = database.connection.prepare('select id, updated_at from channel_conversations').all() as
+      Array<{ id: string; updated_at: string }>
+    expect(after).toHaveLength(1)
+    expect(after[0]!.id).toBe(before.id)
+    expect(after[0]!.updated_at).toBe('2026-07-18T00:05:00.000Z')
+  })
+
+  it('auto-registers the first conversation that talks to the channel as its delivery target', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void } })
+      .deps.bindAutoTarget = ({ channelId, conversationId }) => { autoBindDeliveryTarget(database, { channelId, conversationId }) }
+
+    await receive(service, 'channel-a', { providerEventKey: 'auto-bind-1' })
+    const first = database.connection.prepare('select conversation_id, enabled from channel_delivery_targets').all()
+    expect(first).toHaveLength(1)
+    expect(first[0]).toMatchObject({ enabled: 1 })
+
+    // 第二条消息不许再建/覆盖目标。
+    await receive(service, 'channel-a', { providerEventKey: 'auto-bind-2' })
+    expect(database.connection.prepare('select conversation_id from channel_delivery_targets').all())
+      .toEqual([{ conversation_id: (first[0] as { conversation_id: string }).conversation_id }])
+    // 审计里留了 auto 那一行，读者查得到目标是谁加的。
+    expect(database.connection.prepare(
+      "select actor_id, summary_json from channel_management_audits where action = 'target-set'"
+    ).get()).toEqual({ actor_id: 'channel-auto-bind', summary_json: '{"auto":"true"}' })
+  })
+
+  it('keeps one session per (channel, provider conversation) across messages', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+
+    await receive(service, 'channel-a', { providerEventKey: 'event-one' })
+    const first = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    await receive(service, 'channel-a', { providerEventKey: 'event-two' })
+    const second = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    expect(database.connection.prepare('select count(*) as count from channel_conversations').get()).toEqual({ count: 1 })
+    expect(second.agent_session_id).toBe(first.agent_session_id)
+  })
+
+  it('keeps two bots apart even when the same person talks to both', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await allow(service, 'channel-b', 'user-a')
+
+    await receive(service, 'channel-a', { providerEventKey: 'event-a-1' })
+    await receive(service, 'channel-b', { providerEventKey: 'event-b-1' })
+
+    const rows = database.connection.prepare(
+      'select channel_id, agent_session_id from channel_conversations order by channel_id'
+    ).all() as Array<{ channel_id: string; agent_session_id: string }>
+    expect(rows).toHaveLength(2)
+    expect(new Set(rows.map((row) => row.agent_session_id)).size).toBe(2)
+  })
+
+  it('keeps the same session for the same chat after the service is rebuilt', async () => {
+    const { service, database, repository, cipher } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'event-before-restart' })
+    const before = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    const rebuilt = new ChannelInboundService({
+      repository,
+      encryption: { cipher },
+      sessions: {
+        // 重启后 Agent 会话还在：exists 必须回答「在」，否则会被当成未绑定并重建一条。
+        createForConversation: async () => 'must-not-be-used',
+        discardUnbound: async () => {},
+        exists: async () => true
+      },
+      contentGuard: passthroughGuard,
+      now: () => new Date('2026-07-18T00:00:00.000Z')
+    })
+    await receive(rebuilt, 'channel-a', { providerEventKey: 'event-after-restart' })
+
+    expect(database.connection.prepare('select agent_session_id from channel_conversations').get()).toEqual(before)
+  })
+
+  it('rebinds a conversation when the reader switched the channel to another assistant', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    await receive(service, 'channel-a', { providerEventKey: 'before-agent-switch' })
+    const before = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+
+    // 读者在界面里把频道换给另一个助手：旧会话属于上一个助手，继续用它会在运行时第一毫秒抛错。
+    const discarded: string[] = []
+    ;(service as unknown as {
+      deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean>; discardUnbound: (sessionId: string) => Promise<void> } }
+    }).deps.sessions.belongsToAgent = async () => false
+    ;(service as unknown as { deps: { sessions: { discardUnbound: (sessionId: string) => Promise<void> } } })
+      .deps.sessions.discardUnbound = async (sessionId: string) => { discarded.push(sessionId) }
+    expect((await receive(service, 'channel-a', { providerEventKey: 'after-agent-switch' })).disposition).toBe('acknowledged')
+
+    const after = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(after.agent_session_id).toBeTruthy()
+    expect(after.agent_session_id).not.toBe(before.agent_session_id)
+    // 旧会话**不许删**：读者要能翻历史（换的是绑定，不是历史）。
+    expect(discarded).not.toContain(before.agent_session_id)
+    // 切换要留痕：日志/审计里能查到这一个对话换过会话。
+    expect(database.connection.prepare(
+      "select count(*) as count from channel_runtime_audits where code = 'channel-conversation-switched'"
+    ).get()).toEqual({ count: 1 })
+
+    // 同一个助手重复改（A→A）：会话仍然属于它，**不许重建**。
+    ;(service as unknown as { deps: { sessions: { belongsToAgent?: (sessionId: string, agentId: string) => Promise<boolean> } } })
+      .deps.sessions.belongsToAgent = async () => true
+    await receive(service, 'channel-a', { providerEventKey: 'same-agent-again' })
+    expect(database.connection.prepare('select agent_session_id from channel_conversations').get()).toEqual(after)
+  })
+
   it('rebinds a conversation to a fresh session after its agent session is deleted', async () => {
     const { service, database } = createHarness()
     await allow(service, 'channel-a', 'user-a')
@@ -54,6 +223,45 @@ describe('ChannelInboundService', () => {
     const rebound = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
     expect(rebound.agent_session_id).toBeTruthy()
     expect(rebound.agent_session_id).not.toBe(first.agent_session_id)
+  })
+
+  it('answers an unauthorized conversation once, and never leaks internals in the refusal', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { deniedReplyText?: () => Promise<string> } }).deps.deniedReplyText =
+      async () => '你没有权限使用这个机器人，请联系管理员开放访问。'
+    const replies: string[] = []
+    const request = {
+      ...baseFacts({ providerConversationKey: 'conversation-denied', providerUserKey: 'stranger', providerEventKey: 'denied-1' }),
+      channelId: 'channel-a',
+      acknowledge: async () => {},
+      reply: async (text: string) => { replies.push(text) }
+    }
+
+    await service.receive(request)
+    await service.receive({ ...request, providerEventKey: 'denied-2' })
+
+    // 十分钟内同一个未授权会话只回一次。
+    expect(replies).toEqual(['你没有权限使用这个机器人，请联系管理员开放访问。'])
+    // 正文里不许出现频道 id 这类内部信息。
+    expect(replies[0]).not.toContain('channel-a')
+    // 审计照旧记 channel-policy-denied。
+    expect(database.connection.prepare(
+      "select count(*) as count from channel_runtime_audits where channel_id = 'channel-a' and code = 'channel-policy-denied'"
+    ).get()).toEqual({ count: 2 })
+  })
+
+  it('answers a different unauthorized conversation separately', async () => {
+    const { service } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    ;(service as unknown as { deps: { deniedReplyText?: () => Promise<string> } }).deps.deniedReplyText = async () => 'no access'
+    const replies: string[] = []
+    const base = { ...baseFacts(), channelId: 'channel-a', acknowledge: async () => {}, reply: async (text: string) => { replies.push(text) } }
+
+    await service.receive({ ...base, providerConversationKey: 'conversation-x', providerUserKey: 'stranger-x', providerEventKey: 'denied-x' })
+    await service.receive({ ...base, providerConversationKey: 'conversation-y', providerUserKey: 'stranger-y', providerEventKey: 'denied-y' })
+
+    expect(replies).toHaveLength(2)
   })
 
   it('requires explicit allow policy and structured mention for groups and channels, without turning discovery into targets', async () => {
@@ -76,6 +284,8 @@ describe('ChannelInboundService', () => {
 
   it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {
     const { service, database } = createHarness()
+    // 有一条显式策略的频道仍按老规则：只放行列表里的，陌生人进候选表（空白频道现在是「允许所有」）。
+    await allow(service, 'channel-a', 'user-a')
     const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerUserLabel: 'Alice', providerConversationKey: 'conversation-x' })
     expect(denied.disposition).toBe('ignored')
 
@@ -88,13 +298,48 @@ describe('ChannelInboundService', () => {
       channelId: 'channel-a', candidateId: candidates[0].id, enableTarget: true
     })
     expect(conversationId).toBeTruthy()
-    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 1 })
+    // 一条是上面为「陌生人被拒」预置的策略，另一条是这次放行候选写进来的。
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 2 })
     expect(database.connection.prepare('select count(*) as count from channel_delivery_targets where enabled=1').get()).toEqual({ count: 1 })
 
     const accepted = await receive(service, 'channel-a', {
       providerEventKey: 'event-after-allow', providerUserKey: 'user-x', providerConversationKey: 'conversation-x'
     })
     expect(accepted.disposition).toBe('acknowledged')
+  })
+
+  // 新口径（需求 v7）：「允许的会话 ID」留空 = 允许所有。老数据里有策略行的频道行为不变。
+  it('allows every conversation when the channel has neither an allowlist nor a policy', async () => {
+    const { service, database } = createHarness()
+    const result = await receive(service, 'channel-a', { providerEventKey: 'event-allow-all', providerUserKey: 'stranger', providerConversationKey: 'conversation-stranger' })
+    expect(result.disposition).not.toBe('ignored')
+    expect(database.connection.prepare('select count(*) as count from channel_runtime_audits where code = ?').get('channel-policy-denied')).toEqual({ count: 0 })
+  })
+
+  it('keeps allowing later messages while the allowlist stays empty, so it cannot silently tighten', async () => {
+    const { service, database } = createHarness()
+    for (const [index, user] of ['user-1', 'user-2', 'user-3'].entries()) {
+      const result = await receive(service, 'channel-a', {
+        providerEventKey: `event-allow-all-${index}`,
+        providerUserKey: user,
+        providerConversationKey: `conversation-${user}`
+      })
+      expect(result.disposition).not.toBe('ignored')
+    }
+    // 自动记录只进候选表：允许列表与策略表都不许被写。
+    const row = database.connection.prepare('select active_chat_ids_json from agent_channels where id = ?').get('channel-a') as { active_chat_ids_json: string | null }
+    expect(row.active_chat_ids_json).toBeNull()
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 0 })
+    expect((database.connection.prepare('select count(*) as count from channel_inbound_candidates').get() as { count: number }).count).toBeGreaterThan(0)
+  })
+
+  it('allows only the listed conversations once the reader fills the allowlist', async () => {
+    const { service, database } = createHarness()
+    database.connection.prepare('update agent_channels set active_chat_ids_json = ? where id = ?').run(JSON.stringify(['conversation-a']), 'channel-a')
+    const listed = await receive(service, 'channel-a', { providerEventKey: 'event-listed', providerUserKey: 'user-a', providerConversationKey: 'conversation-a' })
+    expect(listed.disposition).toBe('acknowledged')
+    const other = await receive(service, 'channel-a', { providerEventKey: 'event-other', providerUserKey: 'user-b', providerConversationKey: 'conversation-b' })
+    expect(other.disposition).toBe('ignored')
   })
 
   it('claims concurrent duplicates once, acknowledges both, and never creates a second dispatch', async () => {
@@ -803,7 +1048,10 @@ function createHarness(
   seed = true,
   contentGuard: ChannelContentGuard = passthroughGuard
 ): {
-  database: AgentPlatformDatabase; repository: ChannelInboundRepository; service: ChannelInboundService; cipher: ChannelPayloadCipher & { encrypt: ReturnType<typeof vi.fn> }
+  database: AgentPlatformDatabase; repository: ChannelInboundRepository; service: ChannelInboundService
+  cipher: ChannelPayloadCipher & { encrypt: ReturnType<typeof vi.fn> }
+  /** 「打开会话」选中了哪一条：会话 id 只在主进程里出现，用例在这里核对。 */
+  selectedSessionIds: string[]
 } {
   if (seed) seedRuntimeReadyChannel(database, 'channel-a')
   if (seed) seedRuntimeReadyChannel(database, 'channel-b')
@@ -811,15 +1059,23 @@ function createHarness(
   const repository = new ChannelInboundRepository(database)
   if (seed) { repository.start('channel-a'); repository.start('channel-b') }
   let sequence = 0
+  const selectedSessionIds: string[] = []
   return {
     database,
     repository,
     cipher,
+    selectedSessionIds,
     service: new ChannelInboundService({
       repository,
       encryption: { cipher },
       sessions: { createForConversation: async ({ agentId }) => `${agentId}-session-${++sequence}`, discardUnbound: async () => {} },
       contentGuard,
+      // 与组合根同一形状的注入：SQL 那一层不在服务里。
+      touchConversation: ({ channelId, conversationId, now }) => {
+        touchChannelConversation(database, { channelId, conversationId, now })
+      },
+      conversationSessionId: ({ channelId, conversationId }) => readChannelConversationSession(database, { channelId, conversationId }),
+      selectSession: async (sessionId) => { selectedSessionIds.push(sessionId) },
       now: () => new Date('2026-07-18T00:00:00.000Z')
     })
   }

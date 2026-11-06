@@ -96,13 +96,11 @@ async function exportSpans(endpoint: string, spans: ReadableSpan[], fetchImpl: t
   const payload = {
     resourceSpans: [
       {
+        // 资源从 span 自己那份取：名字只在 recorder 里设一次，这里不再硬编码第二份。
         resource: {
-          attributes: [
-            {
-              key: 'service.name',
-              value: { stringValue: 'desktop-agent-runtime' }
-            }
-          ]
+          attributes: Object.entries(spans[0]?.resource.attributes ?? {})
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => ({ key, value: attributeValue(value) }))
         },
         scopeSpans: [
           {

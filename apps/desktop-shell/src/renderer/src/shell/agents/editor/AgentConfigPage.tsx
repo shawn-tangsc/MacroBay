@@ -14,6 +14,7 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 import type { AgentSkillBinding } from '@platform/ai/agent-platform/store/agentStore'
 import { setAgentSkillEnabled } from '@platform/ai/agent-platform/store/agentRelationsStore'
 import { buildAgentToolCatalog } from '@platform/ai/agent-platform/tools/agentToolCatalog'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Drawer } from '@platform/ui/components/drawer'
 import { normalizePermissionMode } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentRuntimeCompatibilityResult } from '@platform/ai/agent-platform/runtime/compatibility/agentRuntimeCompatibilityTypes'
@@ -62,6 +63,7 @@ export default function AgentConfigPage({
   onClose
 }: AgentConfigPageProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const editingAgent = mode.type === 'edit' ? state.agents.find((agent) => agent.id === mode.agentId) ?? null : null
   const [activeSection, setActiveSection] = useState<AgentConfigSection>('basic')
   const baseline = useMemo(
@@ -131,11 +133,20 @@ export default function AgentConfigPage({
 
   function deleteCurrentAgent(): void {
     if (!editingAgent) return
-    if (!window.confirm(t.editor.confirmDeleteAgent(editingAgent.name))) return
-    void deleteAgentViaApi(window.platform, editingAgent.id).catch(() => {
-      onStateChange((current) => deleteAgentConfig(current, editingAgent.id))
+    const { id, name } = editingAgent
+    confirm({
+      title: t.editor.deleteAgent,
+      description: t.editor.confirmDeleteAgent(name),
+      confirmLabel: t.editor.deleteAgent,
+      cancelLabel: t.common.cancel,
+      tone: 'danger',
+      onConfirm: () => {
+        void deleteAgentViaApi(window.platform, id).catch(() => {
+          onStateChange((current) => deleteAgentConfig(current, id))
+        })
+        onClose()
+      }
     })
-    onClose()
   }
 
   async function toggleSkillDraft(skillId: string, checked: boolean): Promise<void> {

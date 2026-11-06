@@ -6,9 +6,10 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { AgentEvidenceRef, AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
-import type { BriefingPriorConclusion } from '../../../contracts/dailyBriefing'
+import type { BriefingPriorConclusion, DailyBriefingPeriodKind, DailyBriefingRunTrigger } from '../../../contracts/dailyBriefing'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
+import type { BriefingCalendarFreshnessReading } from './dailyBriefingCalendarCatchUp'
 
 /**
  * The frozen inputs of one edition, before selection and rendering.
@@ -57,6 +58,17 @@ export type DailyBriefingFactPacket = Readonly<{
   windowHours: number
   locale: 'zh-CN' | 'en-US'
   timeZone: string
+  /**
+   * Which period this run is for, and why it ran. Carried on the packet so the document builder does
+   * not have to guess: after periods got their own ids, a literal `default` here would file every
+   * edition under the wrong period. Absent on older callers/fixtures, and then the builder's
+   * fallback applies.
+   */
+  periodId?: string
+  /** The nominal cutoff of this period; absent means the window end. */
+  periodTime?: string
+  periodKind?: DailyBriefingPeriodKind
+  runTrigger?: DailyBriefingRunTrigger
   conclusion: DailyBriefingConclusionInput | null
   /**
    * Every earlier AI conclusion inside the window, oldest first. These are claims the editor may
@@ -71,6 +83,22 @@ export type DailyBriefingFactPacket = Readonly<{
     state: DailyBriefingCalendarState
     events: readonly DailyBriefingCalendarEvent[]
   }>
+  /**
+   * How old the calendar was when this run judged it, plus the catch-up it ran first (`A0.8`).
+   *
+   * Read once, before the month query, so the empty section's reason comes from the same reading the
+   * run used. Absent on older callers and fixtures: then the section may only say "not readable".
+   */
+  calendarFreshness?: BriefingCalendarFreshnessReading
+  /**
+   * 两级取值的计数（`A0.12`）：第一级回查了几条事件、第二级真的发了几次搜索。
+   * 留在 fact 层供用例与排查读，不进文档、不呈现给读者。
+   */
+  macroValueCounts?: Readonly<{ calendarCalls: number; webCalls: number }>
+  /** 这些事件的实际值是联网取到的（`02` v2.128）：文档据此在值后标「（网页）」。 */
+  macroWebValueKeys?: readonly string[]
+  /** 两个来源说两个数的事件键：值格整格不渲染，右列留一条冲突缺口。 */
+  macroValueConflicts?: readonly string[]
   readings: Readonly<{
     fearGreed: FearGreedSnapshotResult
     funding: FundingRateHistoryResult
@@ -80,6 +108,12 @@ export type DailyBriefingFactPacket = Readonly<{
   policyPath?: import('../policy-path/policyPathQueryService').PolicyPathReading
   market: Readonly<{
     crossAsset?: CrossAssetSnapshot
+    /**
+     * Why the cross-asset read came back empty, when it did: `not-wired`, `threw:<message>` or
+     * `rejected:<field>`. In-memory only — it reaches the agent's gap sentence, never the stored
+     * document, so no schemaVersion moves.
+     */
+    crossAssetFailure?: string
     macroMarket?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroMarketSnapshot']>>
     macroRates?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroRatesSnapshot']>>
   }>

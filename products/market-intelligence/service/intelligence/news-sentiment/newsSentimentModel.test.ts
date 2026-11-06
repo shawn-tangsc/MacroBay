@@ -61,6 +61,48 @@ describe('newsSentimentModel', () => {
     if (parsed.ok) expect(parsed.value.symbols).toEqual(['ETH', 'BTC'])
   })
 
+  it('keeps a normalised entity set so the same event merges across sources', () => {
+    const parsed = parseNewsPolarityModelOutput(
+      output({
+        entities: [
+          { name: 'U.S. SEC', kind: 'org' },
+          { name: 'u.s. sec', kind: 'org' },
+          { name: 'Clarity Act', kind: 'bill' }
+        ]
+      }),
+      BODY
+    )
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.value.entities).toEqual([
+      { name: 'clarity act', kind: 'bill' },
+      { name: 'u.s. sec', kind: 'org' }
+    ])
+  })
+
+  it('rejects an entity kind outside the closed set instead of silently merging on it', () => {
+    const parsed = parseNewsPolarityModelOutput(
+      output({ entities: [{ name: 'sec', kind: 'regulator' }] }),
+      BODY
+    )
+    expect(parsed).toMatchObject({ ok: false, errorCode: 'news-model-invalid-output' })
+  })
+
+  it('stores why at most 40 characters and rejects a longer one rather than cutting it', () => {
+    const ok = parseNewsPolarityModelOutput(output({ why: '规则投票失败，亚洲市场可能抢走业务。' }), BODY)
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.value.why).toBe('规则投票失败，亚洲市场可能抢走业务。')
+
+    const tooLong = parseNewsPolarityModelOutput(output({ why: 'x'.repeat(41) }), BODY)
+    expect(tooLong.ok).toBe(false)
+  })
+
+  it('treats a missing entity field as no entities, not as a broken answer', () => {
+    const parsed = parseNewsPolarityModelOutput(output(), BODY)
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) expect(parsed.value.entities).toBeUndefined()
+  })
+
   it('builds a prompt that carries the body as data and caps it', () => {
     const messages = buildNewsSentimentMessages({
       sourceName: 'CoinDesk',
@@ -70,6 +112,9 @@ describe('newsSentimentModel', () => {
     })
     expect(messages[0]?.content).toContain('JSON')
     expect(messages[0]?.content).toContain('data')
+    // 归并键的素材必须向模型要，否则抽取只能靠猜；`why` 同批要、但本版不上屏。
+    expect(messages[0]?.content).toContain('entities')
+    expect(messages[0]?.content).toContain('why')
     const user = messages[1]?.content ?? ''
     expect(user).toContain('<article>')
     expect(user.length).toBeLessThan(7_000)

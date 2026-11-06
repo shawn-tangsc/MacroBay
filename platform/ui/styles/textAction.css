@@ -1,0 +1,42 @@
+/*
+ * 行内文字动作：句子里的一个动作（错误提示里的「重试」、说明里的「查看详情」）。
+ *
+ * 为什么不是按钮：这类动作长在**一句话里面**，换成描边按钮等于把一句提示拆成两个并列控件，
+ * 读者读到一半被一个盒子打断。所以它是一条**带下划线的文字**，只在交互上像按钮。
+ *
+ * 三条硬约束：
+ * - 颜色只取 `--accent`（全仓唯一的交互色）。antd 的默认链接色 `colorLink` 不在 token 里，
+ *   用它会在一页上冒出第二个交互色；
+ * - 键盘聚焦必须有可见环，沿用现有规格：`2px` accent 描边、`offset 2`；
+ * - **字号、字重、行高一律继承正文**——它属于那句话，不属于另一套排版。
+ */
+.text-action {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.text-action:hover:not(:disabled) {
+  text-decoration-thickness: 2px;
+}
+
+/* 焦点环是全仓统一的一处：2px accent、offset 2。不许 outline:none 而无替代。 */
+.text-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.text-action:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}

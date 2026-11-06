@@ -269,7 +269,7 @@ describe('StateView', () => {
     for (const reasonCode of ['never-created', 'filtered-out', 'no-target-bound', 'nothing-enabled', 'not-yet']) {
       expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('empty', reasonCode).reason)
     }
-    for (const reasonCode of ['unreadable', 'unavailable']) {
+    for (const reasonCode of ['unreadable', 'unavailable', 'notification-unknown']) {
       expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('error', reasonCode).reason)
     }
     for (const reasonCode of ['capability-not-wired', 'target-disabled']) {
@@ -388,6 +388,22 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
     expect(html).toContain('ui.state.disabled')
   })
 
+  it('renders the page-load-failed code with the reload action it must carry', () => {
+    const html = markup({
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.reload-page', onSelect: () => undefined }
+    })
+
+    // 句子走键：界面上要看到键解析出来的结果，而不是 `{page-load-failed}` 这种裸码。
+    expect(html).toContain('ui.state.error.reason.page-load-failed')
+    expect(html).not.toContain('{page-load-failed}')
+    // 恢复动作是重载页面，不是重试那次操作，也不是重启应用。
+    expect(html).toContain('ui.state.action.reload-page')
+    expect(html).toContain('role="status"')
+  })
+
   it('falls back to the platform sentence when the product asks for a missing key', () => {
     const html = markup({
       state: 'empty',
@@ -430,6 +446,103 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
 
     expect(html).toContain('data-reason-source="platform"')
     expect(html).toContain('ui.state.error.reason.unreadable')
+  })
+
+  it('keeps diagnostic text inside the folded detail, never in title, reason or action', () => {
+    const body = 'TypeError: fetch failed\n    at readSources (sources.ts:42)'
+    const html = markup({
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.reload-page', onSelect: () => undefined },
+      details: { bodyText: body }
+    })
+
+    // ① 原文只出现一次，且落在折叠区里。
+    expect(html.split('TypeError: fetch failed').length - 1).toBe(1)
+    const detailsIndex = html.indexOf('state-view__details')
+    expect(detailsIndex).toBeGreaterThan(-1)
+    expect(html.indexOf('TypeError: fetch failed')).toBeGreaterThan(detailsIndex)
+
+    // ② 标题、原因句、动作位都不含它。
+    const title = /<strong class="state-view__title">([^<]*)<\/strong>/.exec(html)?.[1] ?? ''
+    const reason = /<span class="state-view__reason"[^>]*>([^<]*)<\/span>/.exec(html)?.[1] ?? ''
+    const action = /<button[^>]*class="state-view__action"[^>]*>([^<]*)<\/button>/.exec(html)?.[1] ?? ''
+    expect([title, reason, action].join('')).not.toContain('TypeError')
+  })
+
+  it('renders the diagnostic area closed, named, and keyboard reachable', () => {
+    const html = markup({
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      resolveText: key,
+      details: { bodyText: 'boom' }
+    })
+
+    // 默认收起（没有 open 属性）。
+    expect(html).toMatch(/<details class="state-view__details"(?![^>]*\bopen\b)/)
+    // 有可读名：摘要文字来自现成键。
+    expect(html).toContain('<summary>ui.state.error.details</summary>')
+    // 原生 <summary> 就是键盘可达的展开控件，不再自造一个按钮。
+    expect(html).toContain('<summary>')
+    expect(html).not.toContain('role="button"')
+  })
+
+  it('styles the diagnostic text monospace and selectable', () => {
+    // 样式断言落在规则上：等宽 + 可选中是「读者要复制它」的唯一保障。
+    expect(css).toMatch(/\.state-view__details-text\s*\{[^}]*font-family:\s*ui-monospace/)
+    expect(css).toMatch(/\.state-view__details-text\s*\{[^}]*user-select:\s*text/)
+  })
+
+  it('never announces the diagnostic text', () => {
+    const body = 'secret-ish stack line'
+    const html = markup({
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      resolveText: key,
+      details: { bodyText: body }
+    })
+
+    // 先证明这段原文真的出现了：否则「不在播报里」在两个分支都不渲染时也成立，等于空转。
+    expect(html).toContain(body)
+    expect(html).toContain('state-view__details')
+
+    const live = /<span class="state-view__live"[^>]*>([\s\S]*?)<\/span>\s*(?:<details|<button)/.exec(html)?.[1] ?? ''
+    expect(live).not.toContain(body)
+    // 折叠区自己在 live region 外面，也不带 aria-live / role=status。
+    const detailsTag = /<details[^>]*>/.exec(html)?.[0] ?? ''
+    expect(detailsTag).not.toContain('aria-live')
+    expect(detailsTag).not.toContain('role="status"')
+  })
+
+  it('renders no detail box at all when the diagnostic text is empty', () => {
+    // 先证明非空时**会**渲染，否则「空时不渲染」在两个分支都不靠时也成立。
+    expect(
+      markup({ state: 'error', reasonCode: 'page-load-failed', resolveText: key, details: { bodyText: 'boom' } })
+    ).toContain('state-view__details')
+
+    for (const bodyText of ['', '   ', '\n\t']) {
+      const html = markup({
+        state: 'error',
+        reasonCode: 'page-load-failed',
+        resolveText: key,
+        details: { bodyText }
+      })
+
+      expect(html).not.toContain('state-view__details')
+    }
+  })
+
+  it('leaves the old bodyKey path exactly as it was', () => {
+    const html = markup({
+      state: 'error',
+      reasonCode: 'unreadable',
+      resolveText: key,
+      details: { summaryKey: 'ui.state.error.details', bodyKey: 'ui.state.error.details' }
+    })
+
+    expect(html).toContain('<p>ui.state.error.details</p>')
+    expect(html).not.toContain('state-view__details-text')
   })
 
   it('only offers the entry on the four states that have a reason sentence', () => {

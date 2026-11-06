@@ -183,6 +183,101 @@ describe('agent platform services', () => {
     expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
   })
 
+  it('finds an automation session by its run key through the narrow adapter', async () => {
+    let state: AgentStoreState = createAgentStoreState({ agents: [agent], workspaces: [workspace] })
+    const store: AgentPlatformStateStore = {
+      getState: async () => {
+        throw new Error('the narrow adapter must answer without materialising the whole store')
+      },
+      update: async (updater) => {
+        state = updater(state)
+        return state
+      },
+      replace: async (nextState) => {
+        state = nextState
+        return state
+      }
+    }
+    const found = { ...session, id: 'session-from-adapter', originRef: 'market-analysis-run:run-7' }
+    const services = createAgentPlatformServices(store, {
+      queries: {
+        sessions: {
+          listByCursor: () => ({ items: [] }),
+          findByAutomationRef: (agentId, originRef) =>
+            agentId === agent.id && originRef === found.originRef ? found : null
+        }
+      }
+    })
+
+    await expect(services.sessions.findByAutomationRef(agent.id, 'market-analysis-run:run-7')).resolves.toMatchObject({
+      id: 'session-from-adapter'
+    })
+    await expect(services.sessions.findByAutomationRef(agent.id, 'missing')).resolves.toBeNull()
+  })
+
+  it('falls back to the store when no narrow adapter is wired', async () => {
+    // 内存存储/测试桩没有窄查询；这时只能力所能及地扫一遍——组合根必须装上适配器，否则这条就是两千行的老路。
+    const state: AgentStoreState = createAgentStoreState({
+      agents: [agent],
+      sessions: [{ ...session, originRef: 'market-analysis-run:run-8' }],
+      workspaces: [workspace]
+    })
+    // 这条只读，不需要写回：给它一个不可变的状态源，写操作直接拒绝。
+    const store: AgentPlatformStateStore = {
+      getState: async () => state,
+      update: async () => {
+        throw new Error('not expected to write')
+      },
+      replace: async () => {
+        throw new Error('not expected to write')
+      }
+    }
+    const services = createAgentPlatformServices(store)
+
+    await expect(services.sessions.findByAutomationRef(agent.id, 'market-analysis-run:run-8')).resolves.toMatchObject({
+      id: session.id
+    })
+  })
+
+  it('selects a session through the same focused write the IPC path uses', async () => {
+    // 「按会话选中」只能有一个入口：IPC handler 与频道入口都调这一个方法。
+    // 这条用例钉住两件事：选中真的落到 activeSessionId，且写口仍是「只写选中那一行」。
+    const otherSession: AgentSessionEntity = {
+      ...session,
+      id: 'session-2',
+      name: 'Second Session',
+      orderKey: 'session-2'
+    }
+    const optionsSeen: unknown[] = []
+    let state = createAgentStoreState({
+      agents: [agent],
+      sessions: [session, otherSession],
+      workspaces: [workspace]
+    })
+    const store: AgentPlatformStateStore = {
+      getState: async () => state,
+      update: async (updater, options) => {
+        optionsSeen.push(options)
+        state = updater(state)
+        return state
+      },
+      replace: async (nextState) => {
+        state = nextState
+        return state
+      }
+    }
+    const services = createAgentPlatformServices(store)
+
+    await services.sessions.select(otherSession.id)
+    expect(state.activeSessionId).toBe(otherSession.id)
+    expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
+
+    // 未知 id 不抛错、状态原样（与 handler 的行为一致）。
+    const before = state
+    await services.sessions.select('session-missing')
+    expect(state.activeSessionId).toBe(before.activeSessionId)
+  })
+
   it('hydrates agent get/list/search from query adapters instead of scanning store order', async () => {
     const repoAgent: AgentEntity = {
       ...agent,
@@ -299,6 +394,34 @@ describe('agent platform services', () => {
     expect(nextState.sessions.map((item) => item.id)).toEqual([second.id, session.id])
     expect(deleted.deletedIds).toEqual([first.id])
     expect(await services.sessions.exists(first.id)).toBe(false)
+  })
+
+  it('defaults a new session to the reader origin and keeps automation sessions out of that list', async () => {
+    const store = createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] }))
+    const services = createAgentPlatformServices(store)
+
+    const mine = await services.sessions.create({ agentId: agent.id, name: 'Mine', workspace: { type: 'system' } })
+    const automatic = await services.sessions.create({
+      agentId: agent.id,
+      name: '2026-11-06 19:00 · Market analysis',
+      workspace: { type: 'system' },
+      origin: 'automation',
+      originGroup: 'market-analysis'
+    })
+
+    // 缺省落 reader（老行与新行同一个值），自动会话带自己的分组。
+    expect(mine.origin).toBe('reader')
+    expect(mine.originGroup).toBeUndefined()
+    expect(automatic.origin).toBe('automation')
+    expect(automatic.originGroup).toBe('market-analysis')
+
+    // 默认列表（读者自己的）只有自己那条；「自动」视图反过来。
+    const readerPage = await services.sessions.listByCursor({ origin: 'reader' })
+    const automationPage = await services.sessions.listByCursor({ origin: 'automation' })
+    expect(readerPage.items.map((item) => item.id)).toEqual([mine.id])
+    expect(automationPage.items.map((item) => item.id)).toEqual([automatic.id])
+    // 不传来源就不筛（调用方决定看哪一栏，平台不替它藏）。
+    expect((await services.sessions.listByCursor({})).items).toHaveLength(2)
   })
 
   it('marks session pin toggle as a focused session-pin persistence update', async () => {
@@ -709,7 +832,7 @@ describe('agent platform services', () => {
     expect(optionsSeen.filter((options) => JSON.stringify(options) === JSON.stringify({ taskRowsOnly: true }))).toHaveLength(3)
   })
 
-  it('routes compatibility task mutations through automation commands and materializes the default timezone', async () => {
+  it('routes compatibility task mutations through automation commands without stamping the reader timezone', async () => {
     const services = createAgentPlatformServices(
       createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
       { taskAutomation: { timeZone: () => 'Asia/Shanghai' } }
@@ -726,8 +849,27 @@ describe('agent platform services', () => {
       patch: { name: 'Updated review' }
     })
 
-    expect(created.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *', timezone: 'Asia/Shanghai' })
+    // `2135055` 起：保存时**不再**把读者当前时区盖进 `trigger.timezone`。
+    // 空的时区表示「跟随设置」，由规划时按当时的设置解析；写死进任务里的只会是读者自己指定的那个。
+    expect(created.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *' })
     expect(updated).toMatchObject({ name: 'Updated review', revision: 2 })
+
+    // 显式给了时区就是任务自己的承诺：保存后原样保留，不被读者设置改写。
+    const explicit = await services.tasks.create(agent.id, {
+      name: 'New York review',
+      prompt: 'Review in New York time',
+      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'America/New_York' },
+      workspace: { type: 'system' }
+    })
+    expect(explicit.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *', timezone: 'America/New_York' })
+
+    // 校验没有跟着一起丢：显式写了一个不存在的时区，保存时就该失败，而不是等到跑起来。
+    await expect(services.tasks.create(agent.id, {
+      name: 'Bad zone',
+      prompt: 'Review',
+      trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'Mars/Olympus' },
+      workspace: { type: 'system' }
+    })).rejects.toMatchObject({ code: 'task-timezone-invalid' })
   })
 
   it('applies the current platform task automation preset to future create and update commands', async () => {

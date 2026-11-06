@@ -17,13 +17,19 @@ import { useInUseModelPatrol } from './useInUseModelPatrol'
  */
 const labels = platformText['en-US'].models
 
-function retiredItem(modelName: string, lastObservedAt = '2026-11-01T08:00:00.000Z'): InUseModelRetiredItem {
+/**
+ * 「刚发现下线」的夹具：时间**相对当前时刻**生成。
+ *
+ * 曾经写死 `2026-11-01T08:00:00Z`，而组件拿真实时间算「结论有多旧」——于是这条用例
+ * 在写下的那天是绿的，过了阈值那天自己变红。夹具不许跟日历绑定。
+ */
+function retiredItem(modelName: string, lastObservedAt = new Date(Date.now() - 60 * 60_000).toISOString()): InUseModelRetiredItem {
   return {
     providerId: 'silicon',
     modelId: modelName,
     modelName,
     reason: 'retired',
-    firstObservedAt: '2026-10-31T08:00:00.000Z',
+    firstObservedAt: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
     lastObservedAt
   }
 }
@@ -132,6 +138,37 @@ describe('in-use model retired banner', () => {
     )
 
     expect(markup).toContain(labels.inUseModelRetiredStale('chat-a', 12))
+    expect(markup).not.toContain(labels.inUseModelRetired('chat-a'))
+  })
+})
+
+describe('the banner keeps the two wordings apart, with an injected clock', () => {
+  const now = new Date('2026-11-10T12:00:00.000Z')
+
+  it('says "retired" while the conclusion is fresh', () => {
+    const markup = renderToStaticMarkup(
+      createElement(InUseModelRetiredBanner, {
+        labels,
+        items: [retiredItem('chat-a', '2026-11-10T11:00:00.000Z')],
+        onChangeModel: () => undefined,
+        now
+      })
+    )
+    expect(markup).toContain(labels.inUseModelRetired('chat-a'))
+    expect(markup).not.toContain(labels.inUseModelRetiredStale('chat-a', 3))
+  })
+
+  it('downgrades to the stale wording exactly on the threshold day', () => {
+    const markup = renderToStaticMarkup(
+      createElement(InUseModelRetiredBanner, {
+        labels,
+        items: [retiredItem('chat-a', '2026-11-07T12:00:00.000Z')],
+        onChangeModel: () => undefined,
+        now
+      })
+    )
+    // 阈值当天（3 天）起改口：旧结论不能当现在时说。
+    expect(markup).toContain(labels.inUseModelRetiredStale('chat-a', 3))
     expect(markup).not.toContain(labels.inUseModelRetired('chat-a'))
   })
 })

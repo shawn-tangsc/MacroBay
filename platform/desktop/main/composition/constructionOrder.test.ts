@@ -16,6 +16,34 @@ describe('composition call site', () => {
     expect(appSource.indexOf("app.setName(")).toBeLessThan(appSource.indexOf('createPlatformCore({'))
   })
 
+  it('calls the five slice factories once each, in dependency order, after the seam', () => {
+    const callSites = {
+      platformCore: 'createPlatformCore({',
+      repositories: 'createRepositories({',
+      agentRuntime: 'createAgentRuntime({',
+      channelsAndJobs: 'createChannelsAndJobs({',
+      assistantsAndRuntimes: 'createAssistantsAndRuntimes({'
+    } as const
+    const indexes = Object.fromEntries(
+      Object.entries(callSites).map(([name, marker]) => {
+        const matches = appSource.match(new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []
+        expect(matches, `${name} must be called exactly once`).toHaveLength(1)
+        return [name, appSource.indexOf(marker)]
+      })
+    ) as Record<keyof typeof callSites, number>
+    // 接缝之后：应用名与 userData 先定，再建任何会读路径的东西。
+    const seam = appSource.indexOf("app.setPath('userData'")
+    expect(seam).toBeGreaterThan(-1)
+    for (const [name, index] of Object.entries(indexes)) {
+      expect(index, `${name} must run after the userData seam`).toBeGreaterThan(seam)
+    }
+    // 依赖方向：后一片可以拿先一片的产出，反过来不行。
+    const order: (keyof typeof callSites)[] = ['platformCore', 'repositories', 'agentRuntime', 'channelsAndJobs', 'assistantsAndRuntimes']
+    for (let i = 1; i < order.length; i += 1) {
+      expect(indexes[order[i]]).toBeGreaterThan(indexes[order[i - 1]])
+    }
+  })
+
   it('keeps app-level facts out of the composition modules', () => {
     const offenders: string[] = []
     for (const name of readdirSync(__dirname)) {

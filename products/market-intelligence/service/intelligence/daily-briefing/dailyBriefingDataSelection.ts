@@ -8,12 +8,11 @@ import type {
 import type { MarketPulseRow } from '../../../contracts/marketPulse'
 
 /**
- * Thresholds that decide whether a data fact is allowed into the brief at all.
+ * Thresholds that decide how much a data fact is emphasised — never whether it appears.
  *
  * They are product decisions, not display tuning: a 0.4% DXY move or a 4bp ten-year move is context,
- * not a reason to add a line to a three-minute read. Leverage and the policy path are stricter
- * still: below their threshold the row is hidden even if the model asks for it, because a flat open
- * interest or an unchanged rate path has no explanatory power.
+ * and context is what these thresholds shape. Presence is a fact about the data: a reading with a
+ * value is on the page, and a quiet day simply says so.
  */
 export const briefingDataMaterialityPolicy = Object.freeze({
   marketPercent: 1,
@@ -102,8 +101,8 @@ export function policyPathMateriality(input: Readonly<{
 }
 
 /**
- * Open interest that moved 5% in a day or funding that flipped or ran hot is a leverage story; a
- * flat read is not, and the row must not appear just because the fields exist.
+ * Open interest that moved 5% in a day or funding that flipped or ran hot is a leverage story worth
+ * emphasising; a flat read is a quiet row, still a row — the block is shown either way.
  */
 export function leverageMateriality(input: Readonly<{
   funding: readonly BriefingPulseRow[]
@@ -136,19 +135,21 @@ function fundingFlip(value: number | undefined, change: number | undefined): boo
 }
 
 /**
- * Baseline visibility before the editor speaks.
+ * Whether a reading appears at all: it does when it has a value to print.
  *
- * The floor shows by itself; every other data fact is a candidate that the editor must include. An
- * immaterial fact keeps a hidden baseline with its rule reason, so it can never appear just because
- * a value exists.
+ * The threshold used to decide this, and the result was readings vanishing on a quiet day — data the
+ * reader could not find, with nothing on the page saying it existed. Emphasis and detail are what a
+ * threshold may decide now; presence is a fact about the data.
+ *
+ * The first parameter is "is there a reading", not a verdict, so an implementation cannot drift back
+ * into "material or not" without changing every caller.
  */
 export function baselineVisibility(
-  verdict: BriefingMateriality,
+  hasReadings: boolean,
   floor = false
 ): Readonly<{ visibility: 'shown' | 'hidden'; visibilityReason?: string }> {
-  if (floor) return Object.freeze({ visibility: 'shown' as const })
-  if (!verdict.material) return Object.freeze({ visibility: 'hidden' as const, visibilityReason: 'no-material-change' })
-  return Object.freeze({ visibility: 'hidden' as const, visibilityReason: 'not-selected' })
+  if (floor || hasReadings) return Object.freeze({ visibility: 'shown' as const })
+  return Object.freeze({ visibility: 'hidden' as const, visibilityReason: 'no-readings' })
 }
 
 /** The include/hide decision one editorial pass made for the data region. */
@@ -163,50 +164,34 @@ export function briefingDataFactIds(document: DailyBriefingDocument): readonly s
 }
 
 /**
- * Applies an include/hide decision to the data region.
+ * The editor's selection, applied to the data region.
  *
- * The floor is deterministic: BTC/ETH 24h and every gap/stale/disabled row stay shown. Outside the
- * floor the editor decides, but the rule layer keeps its veto: leverage and the policy path can be
- * included only when their materiality threshold was met, and a hidden row always keeps a reason.
+ * Presence is already decided by the rows themselves (a reading is shown when it has a value), so this
+ * pass no longer adds or removes rows: the editor's list names what to emphasise and how. It used to
+ * suppress rows — leverage and the policy path could not appear below their thresholds even when the
+ * editor named them, which is how a block with real data vanished from the page.
  */
 export function selectBriefingDataFacts(
   document: DailyBriefingDocument,
   selection: BriefingDataSelection
 ): DailyBriefingDocument {
-  const include = new Set(selection.include ?? [])
-  const hidden = new Map((selection.hidden ?? []).map((entry) => [entry.factId, entry.reason]))
-  const rows = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
-    const factId = `data:${row.id}`
-    return {
-      ...row,
-      ...decide(factId, row.importance.tier === 'must', row.materiality, row.visibility, row.visibilityReason, include, hidden, false)
-    } as T
-  }
-  const fearGreed = document.data.sentiment.fearGreed
-  const leverage = document.data.leverage
-    ? {
-        ...document.data.leverage,
-        ...decide('data:leverage', document.data.leverage.materiality?.reasonCode === 'gap', document.data.leverage.materiality, document.data.leverage.visibility, document.data.leverage.visibilityReason, include, hidden, true)
-      }
-    : undefined
-  const policyPath = document.data.policyPath
-    ? {
-        ...document.data.policyPath,
-        ...decide('data:policy-path', false, document.data.policyPath.materiality, document.data.policyPath.visibility, document.data.policyPath.visibilityReason, include, hidden, true)
-      }
-    : undefined
+  // The editorial pass still produces a list; it can no longer hide a row. Presence is restated here
+  // from the rows themselves, so a document built under the old rule cannot carry a stale "hidden"
+  // into the page — "有数却没写" was the failure, and a stored flag is how it would come back.
+  void selection
+  const shown = (..._row: readonly unknown[]): Readonly<{ visibility: 'shown' }> => Object.freeze({ visibility: 'shown' as const })
   return Object.freeze({
     ...document,
     data: Object.freeze({
       ...document.data,
-      market: Object.freeze(document.data.market.map(rows)),
-      funds: Object.freeze(document.data.funds.map(rows)),
+      market: Object.freeze(document.data.market.map((row) => ({ ...row, ...shown(row) }))),
+      funds: Object.freeze(document.data.funds.map((row) => ({ ...row, ...shown(row) }))),
       sentiment: Object.freeze({
         ...document.data.sentiment,
-        fearGreed: fearGreed ? rows(fearGreed) : null
+        fearGreed: document.data.sentiment.fearGreed ? { ...document.data.sentiment.fearGreed, ...shown(document.data.sentiment.fearGreed) } : null
       }),
-      ...(leverage ? { leverage } : {}),
-      ...(policyPath ? { policyPath } : {})
+      ...(document.data.leverage ? { leverage: { ...document.data.leverage, ...shown(document.data.leverage) } } : {}),
+      ...(document.data.policyPath ? { policyPath: { ...document.data.policyPath, ...shown(document.data.policyPath) } } : {})
     })
   })
 }
@@ -228,26 +213,6 @@ export function briefingDataVisibilityAudit(
     shown: Object.freeze(shown),
     hidden: Object.freeze(hidden.map((entry) => Object.freeze(entry)))
   })
-}
-
-function decide(
-  factId: string,
-  floor: boolean,
-  verdict: BriefingMateriality | undefined,
-  visibility: 'shown' | 'hidden' | undefined,
-  visibilityReason: string | undefined,
-  include: ReadonlySet<string>,
-  hidden: ReadonlyMap<string, string>,
-  hardGate: boolean
-): Readonly<{ visibility?: 'shown' | 'hidden'; visibilityReason?: string }> {
-  if (floor) return Object.freeze({ visibility: 'shown' as const })
-  if (hidden.has(factId)) return Object.freeze({ visibility: 'hidden' as const, visibilityReason: hidden.get(factId)! })
-  // An editor may lift an immaterial context row when it explains the day. Leverage and the policy
-  // path are the exception: below their threshold they are not selectable at all.
-  const selectable = !hardGate || verdict?.material !== false
-  if (include.has(factId) && selectable) return Object.freeze({ visibility: 'shown' as const })
-  if (visibility === undefined) return Object.freeze({})
-  return Object.freeze({ visibility, ...(visibilityReason ? { visibilityReason } : {}) })
 }
 
 function briefingDataFactRecords(document: DailyBriefingDocument): ReadonlyArray<{
@@ -274,4 +239,15 @@ function briefingDataFactRecords(document: DailyBriefingDocument): ReadonlyArray
       ...(document.data.policyPath.visibilityReason ? { visibilityReason: document.data.policyPath.visibilityReason } : {})
     }] : [])
   ]
+}
+
+/**
+ * The audit keeps the editorial pass's own reasons even though they no longer hide anything: the pass
+ * still states why it would have left a row out, and that statement is worth recording.
+ */
+export function withEditorialReasons(
+  audit: ReturnType<typeof briefingDataVisibilityAudit>,
+  hiddenData: readonly Readonly<{ factId: string; reason: string }>[]
+): ReturnType<typeof briefingDataVisibilityAudit> {
+  return { shown: audit.shown, hidden: [...audit.hidden, ...hiddenData] }
 }

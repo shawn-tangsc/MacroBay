@@ -1,9 +1,12 @@
 /**
  * The reader time zone the brief schedule, its cutoff and the "today" it reads all use.
- * Comes from the platform hook (the shell's single time zone reader); fixed UTC when a host
- * has not injected one, never the machine's zone.
+ *
+ * It comes from the platform hook (the shell's single time zone reader) and there is no fallback:
+ * a missing hook used to resolve to UTC, which quietly put every reader in UTC while the interface
+ * said otherwise. A missing hook is now a loud failure instead of a plausible-looking value.
  */
-export function resolveBriefingTimeZone(hooks: Readonly<{ getTimeZone?: () => string }> | undefined): string {
-  return hooks?.getTimeZone?.() ?? 'UTC'
+export function resolveBriefingTimeZone(hooks: Readonly<{ getTimeZone: () => string }> | undefined): string {
+  if (!hooks?.getTimeZone) throw new Error('reader-time-zone-hook-missing')
+  return hooks.getTimeZone()
 }
 

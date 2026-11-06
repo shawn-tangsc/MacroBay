@@ -14,12 +14,11 @@ import {
   findProductSettingsEntry,
   groupShellSettingsPanels
 } from '../navigation/mergeShellNavigation'
-import { resolveLocalizedTitle } from '../navigation/shellIconRegistry'
 import {
   PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId
 } from '../modelPins'
 import { AssistantLibrarySettingsPage } from '../settings/assistants/AssistantLibrarySettingsPage'
-import { NotificationSettingsPane } from '../settings/NotificationSettingsPane'
+import { NotificationSettingsScreen } from '../settings/NotificationSettingsScreen'
 import { StorageCacheSettingsPage } from '../settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from '../settings/task-automation/TaskAutomationSettingsPage'
 import { ChannelSettingsPage } from '../settings/channels/ChannelSettingsPage'
@@ -225,7 +224,6 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
         <ProductContributionHost
           language={language}
           load={productEntry.load}
-          title={resolveLocalizedTitle(productEntry.title, language)}
         />
       ) : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'assistant-library'
@@ -235,13 +233,7 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'task-automation' ? <TaskAutomationSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'channels' ? <ChannelSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'notifications' ? (
-        <NotificationSettingsPane
-          title={text.settings.notifications}
-          notice={null}
-          settings={settings.notifications}
-          labels={text.notifications}
-          onChange={(patch) => void data.updateSettings({ notifications: patch })}
-        />
+        <NotificationSettingsScreen title={text.settings.notifications} notice={null} language={language} />
       ) : null}
       {HOST_ONLY_SETTINGS_PANELS.includes(panelKey) ? (
         // 明确边界：正文由主窗 shell 持有，页窗不复制、不伪造；文案复用既有成对 i18n 安全壳键
@@ -292,7 +284,7 @@ export function createWorkspacePageContentProvider(options: {
       if (entry === undefined) return null
       return (
         <div className="workspace-page-body" data-page-body={pageId}>
-          <ProductContributionHost language={language} load={entry.load} title={resolveLocalizedTitle(entry.title, language)} />
+          <ProductContributionHost language={language} load={entry.load} />
         </div>
       )
     },

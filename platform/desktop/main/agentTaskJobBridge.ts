@@ -33,7 +33,8 @@ export function createAgentTaskJobBridge(deps: AgentTaskJobBridgeDependencies): 
         handlerId: agentTaskJobHandlerId,
         // The run record carries the task's own name: a prefixed English label here would be the
         // string a notification shows, and it would leak into every non-English locale.
-        title: input.taskName,
+        // 读者自己写的字：永不翻译。类型上是 `{ literal }`，不是「两种语言填同一句」。
+    title: { literal: input.taskName },
         trigger: { kind: 'manual' },
         payload: {
           ...input.payload,

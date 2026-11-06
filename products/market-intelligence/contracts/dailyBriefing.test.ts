@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  briefingEditionPeriod,
+  dailyBriefingGenerationGrid,
+  dailyBriefingGenerationPolicy,
+  dailyBriefingGenerationTimes,
+  isDailyBriefingGenerationTime,
   briefingGenerationDisplayRows,
   briefingGenerationStageIds,
   dailyBriefingPolicy,
@@ -161,11 +166,81 @@ describe('generation display rows', () => {
     expect(new Set(flattened).size).toBe(flattened.length)
   })
 
-  it('folds both repair rounds into one row', () => {
+  it('folds the three repair rounds into one row', () => {
     const repair = briefingGenerationDisplayRows.filter((row) => (row.stages as readonly string[]).includes('repair-1'))
     expect(repair).toHaveLength(1)
-    expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2'])
+    expect(repair[0]!.stages).toEqual(['repair-1', 'repair-2', 'repair-3'])
     // Eight rows for the reader, nine stages in the pipeline.
     expect(briefingGenerationDisplayRows).toHaveLength(8)
+  })
+})
+
+describe('edition period identity', () => {
+  it('reads an edition written before schema 13 as the default period of its day', () => {
+    // Old rows have no period fields, were the one fixed period of the day, and predate manual runs.
+    expect(briefingEditionPeriod({ generatedAt: '2026-10-30T00:30:00.000Z' })).toEqual({
+      periodId: 'default',
+      periodTime: '2026-10-30T00:30:00.000Z',
+      periodKind: 'scheduled',
+      // Those editions recorded no trigger: they read as running on schedule, never as "补跑".
+      runTrigger: 'scheduled'
+    })
+  })
+
+  it('keeps the identity a new edition wrote, manual kind included', () => {
+    expect(briefingEditionPeriod({
+      generatedAt: '2026-11-03T07:00:12.345Z',
+      periodId: 'period_01J8Z6Q4T3',
+      periodTime: '2026-11-03T07:00:00.000Z',
+      periodKind: 'manual',
+      runTrigger: 'manual'
+    })).toEqual({
+      periodId: 'period_01J8Z6Q4T3',
+      periodTime: '2026-11-03T07:00:00.000Z',
+      periodKind: 'manual',
+      runTrigger: 'manual'
+    })
+  })
+
+  it('never derives the id from the cutoff, and a deleted period stays scheduled', () => {
+    // Two periods may legitimately share a cutoff; identity is the stored id. And a scheduled
+    // edition whose configuration row was deleted still reads as scheduled — the kind travels with
+    // the edition, not with a lookup that can come back empty.
+    const first = briefingEditionPeriod({ generatedAt: '2026-11-03T07:00:01.000Z', periodId: 'period_a', periodTime: '2026-11-03T07:00:00.000Z', periodKind: 'scheduled' })
+    const second = briefingEditionPeriod({ generatedAt: '2026-11-03T07:00:02.000Z', periodId: 'period_b', periodTime: '2026-11-03T07:00:00.000Z', periodKind: 'scheduled' })
+    expect(first.periodTime).toBe(second.periodTime)
+    expect(first.periodId).not.toBe(second.periodId)
+    expect(first.periodKind).toBe('scheduled')
+    expect(first.runTrigger).toBe('scheduled')
+  })
+})
+
+describe('generation times a period may run at', () => {
+  it('offers every half hour of the day, and keeps the old morning slots valid', () => {
+    expect(dailyBriefingGenerationTimes).toHaveLength(48)
+    expect(dailyBriefingGenerationTimes[0]).toBe('00:00')
+    expect(dailyBriefingGenerationTimes.at(-1)).toBe('23:30')
+    // The default is unchanged, and values an older install may have saved are still accepted.
+    expect(dailyBriefingGenerationPolicy.defaultGenerationTime).toBe('07:00')
+    for (const time of ['06:00', '07:00', '09:30', '10:00']) expect(isDailyBriefingGenerationTime(time)).toBe(true)
+    // Evening slots the morning-only table could not express.
+    expect(isDailyBriefingGenerationTime('12:00')).toBe(true)
+    expect(isDailyBriefingGenerationTime('21:30')).toBe(true)
+    // Still a closed set: no odd minutes, nothing outside the day.
+    expect(isDailyBriefingGenerationTime('12:15')).toBe(false)
+    expect(isDailyBriefingGenerationTime('24:00')).toBe(false)
+    // Named directly, not inferred from "48 slots + half-hour step": a table that later collapses to
+    // whole hours keeps that count-derived reasoning alive while the behaviour is already wrong.
+    expect(isDailyBriefingGenerationTime('12:30')).toBe(true)
+    expect(isDailyBriefingGenerationTime('12:45')).toBe(false)
+  })
+
+  it('states the grid the forms print from those same numbers', () => {
+    // The dialog's hint and the dialog's options are one fact: first, last, count and step are read
+    // from the table, so a widened or narrowed grid cannot leave the sentence behind.
+    expect(dailyBriefingGenerationGrid).toEqual({ first: '00:00', last: '23:30', count: 48, stepMinutes: 30 })
+    expect(dailyBriefingGenerationGrid.first).toBe(dailyBriefingGenerationTimes[0])
+    expect(dailyBriefingGenerationGrid.last).toBe(dailyBriefingGenerationTimes.at(-1))
+    expect(dailyBriefingGenerationGrid.count).toBe(dailyBriefingGenerationTimes.length)
   })
 })

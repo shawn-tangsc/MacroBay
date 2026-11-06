@@ -11,6 +11,7 @@ vi.mock('electron', () => ({
 import { SECURE_WINDOW_PREFERENCE_BASELINE, createSecureWindowSecurity } from '../../window/createMainWindow'
 import { APP_DISPLAY_NAME } from '../../appIdentity'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
+import { APP_ROOT, ENTRY } from './__fixtures__/appEntry'
 
 /**
  * Owner: platform/desktop/main/workspace（PLAT-41 RED）。
@@ -25,8 +26,6 @@ import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
  *    `preventDefault()` 并强制回已解析标题；
  *  - `closed` 后移除监听（零残留监听器）。
  */
-const APP_ROOT = 'file:///app/renderer'
-const ENTRY = 'file:///app/renderer/index.html'
 const PRELOAD = '/app/preload/index.js'
 const APP_ENTRY_TITLE = APP_DISPLAY_NAME
 

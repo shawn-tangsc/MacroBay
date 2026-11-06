@@ -16,7 +16,7 @@
  * 用法：`pnpm exec tsx scripts/boot-failure-layout.mts`
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -24,7 +24,20 @@ import { formatBootFailureLogPath, renderBootFailurePage } from '../platform/des
 import { presentBootFailure } from '../platform/desktop/main/failurePresentation'
 
 const WIDTHS = [350, 420, 472, 473, 520] as const
-const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const DEFAULT_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const CHROME = process.env.CHROME_BIN ?? DEFAULT_CHROME
+
+/**
+ * 找不到浏览器时**只打一句人话、退出码 2**。
+ *
+ * 为什么这一句值得单独写：它是这个脚本唯一能跑到它的地方——没有 `CHROME_BIN`、默认路径也不存在时，
+ * 原来的写法会在这里抛 `execFileSync` 的 ENOENT 堆栈，读的人看不出要设什么；而"跑不起来时的那条报错"
+ * 正是它变成孤儿的第 0 天。退出码 2 也和"布局真的溢出"（1）分开：一个是环境缺件，一个是页面坏了。
+ */
+if (!existsSync(CHROME)) {
+  console.error('check:boot-page: set CHROME_BIN to a Chrome/Chromium binary')
+  process.exit(2)
+}
 
 const { profile, pagePath, harnessDir } = (() => {
   const root = mkdtempSync(join(tmpdir(), 'boot-failure-layout-'))

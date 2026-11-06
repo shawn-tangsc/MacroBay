@@ -9,6 +9,7 @@ import type {
 } from '../contracts/jobTypes'
 import type { CreateRunInput, JobRunStore } from './jobRunStore'
 import { QUEUED_AT_RESTART_ERROR } from './jobRunStore'
+import { assertJobRunOutcome } from '../contracts/jobRunOutcome'
 import { createJobRunSqliteRepository, type JobRunSqliteRepository } from './jobRunSqliteRepository'
 
 export type JobRunSqliteStore = JobRunStore & {
@@ -112,6 +113,11 @@ export function createJobRunSqliteStore(path: string): JobRunSqliteStore {
         ...run,
         progress
       }))
+    },
+    setResult(runId, result) {
+      // 与内存 store 同一处校验：**写坏数据不如炸一次**，两个 store 不许一个严一个松。
+      assertJobRunOutcome(result)
+      return updateRun(repository, runId, (run) => ({ ...run, result }))
     },
     recoverStaleRunningRuns() {
       const recovered: JobRunRecord[] = []

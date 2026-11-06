@@ -6,7 +6,7 @@ import {
 } from './marketAnalysisJobIds'
 import { analysisSlotTickPolicy } from '../analysis/analysisSlotTick'
 import { analysisTriggerPolicy } from '../analysis/analysisTriggerPolicy'
-import { analysisTriggerSourcePolicy } from '../analysis/analysisTriggerSourcePolicy'
+import { analysisTriggerSourcePolicy, isSignalTriggerKey } from '../analysis/analysisTriggerSourcePolicy'
 
 export const marketAnalysisJobPolicy = Object.freeze({
   productId: 'market-intelligence',
@@ -29,6 +29,14 @@ type Dependencies = Readonly<{
   verifyPredictions: Stage
   recoverRuns: Stage
   runSessionSlots: (context: JobContext) => Promise<void>
+  /**
+   * Stores the job run id on the analysis run it executes.
+   *
+   * Called right after `enqueueDefinition` answers, because that is the first moment the id exists.
+   * Without it the analysis row has no way back to the job that ran it, and the run log — the page
+   * built to explain a missing analysis — cannot reach one from the other.
+   */
+  linkAnalysisRunToJob?: (analysisRunId: string, jobRunId: string) => void
 }>
 
 const canonicalUtc = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
@@ -53,7 +61,11 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // at the payload boundary so no caller can enqueue this work without the id it needs.
     // `assertPayload` proved both fields are strings when present.
     const attemptTriggerKey = payload.triggerKey as string
-    if ((analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(attemptTriggerKey) && typeof payload.attemptLedgerId !== 'string') {
+    // Item keys and module signals both write their attempt row before the freeze; without its id a
+    // refusal cannot be recorded against that attempt, so the work is refused instead of running and
+    // counting unmarked. Calendar keys have no attempt row and keep their own decision path.
+    const ownsAttemptRow = (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(attemptTriggerKey) || isSignalTriggerKey(attemptTriggerKey)
+    if (ownsAttemptRow && typeof payload.attemptLedgerId !== 'string') {
       throw new Error('analysis-missing-attempt-ledger-row')
     }
     const result = await deps.freezeSnapshot(payload, context)
@@ -64,7 +76,10 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // place to keep the gate's reasoning.
     const carried = typeof result.significanceSignals === 'string' && result.significanceSignals.length > 0
       ? { significanceSignals: result.significanceSignals } : {}
-    await enqueue(jobRuntime, RUN_MARKET_ANALYSIS_JOB, { analysisRunId: result.analysisRunId, ...carried }, `run:${result.analysisRunId}`, result.eventGroupId)
+    const jobRunId = await enqueue(jobRuntime, RUN_MARKET_ANALYSIS_JOB, { analysisRunId: result.analysisRunId, ...carried }, `run:${result.analysisRunId}`, result.eventGroupId)
+    // The analysis row and the job that runs it must point at each other: the run log links out from
+    // the job and the analysis page links back, and neither can guess the other's id.
+    deps.linkAnalysisRunToJob?.(result.analysisRunId, jobRunId)
   })
   jobRuntime.registerHandler(RUN_MARKET_ANALYSIS_JOB, async (payload, context) => {
     assertPayload(payload, ['analysisRunId'], ['significanceSignals'])
@@ -83,7 +98,8 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // frozen snapshot, so the run job is the whole remaining chain. Without this the
     // compensated row stayed `queued` for good and blocked the group's manual requests.
     for (const entry of readRecoveryDispatch(result)) {
-      await enqueue(jobRuntime, RUN_MARKET_ANALYSIS_JOB, { analysisRunId: entry.analysisRunId }, `run:${entry.analysisRunId}`, entry.eventGroupId)
+      const jobRunId = await enqueue(jobRuntime, RUN_MARKET_ANALYSIS_JOB, { analysisRunId: entry.analysisRunId }, `run:${entry.analysisRunId}`, entry.eventGroupId)
+      deps.linkAnalysisRunToJob?.(entry.analysisRunId, jobRunId)
     }
   })
   // The schedule is a clock, not a data question: an open must be served even when nothing moved.
@@ -155,9 +171,9 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
   return Object.freeze({ applySchedules })
 }
 
-async function enqueue(jobRuntime: JobRuntime, handlerId: string, payload: Record<string, unknown>, id: string, eventGroupId?: string): Promise<void> {
+async function enqueue(jobRuntime: JobRuntime, handlerId: string, payload: Record<string, unknown>, id: string, eventGroupId?: string): Promise<string> {
   if (handlerId === RUN_MARKET_ANALYSIS_JOB && !eventGroupId) throw new Error('analysis-invalid-job-result')
-  await jobRuntime.enqueueDefinition({
+  const run = await jobRuntime.enqueueDefinition({
     id: `${marketAnalysisJobPolicy.definitionIdPrefix}${id}`, owner: 'product', productId: marketAnalysisJobPolicy.productId, handlerId,
     title: handlerId.split('.').pop() ?? handlerId, trigger: { kind: 'manual' }, payload,
     redact: value => redactMarketAnalysisPayload(handlerId, value),
@@ -167,6 +183,7 @@ async function enqueue(jobRuntime: JobRuntime, handlerId: string, payload: Recor
       retryPolicy: marketAnalysisJobPolicy.runRetryPolicy,
     } : {})
   })
+  return run.id
 }
 
 /**

@@ -520,12 +520,64 @@ button {
 
 .topbar-actions {
   display: flex;
+  /* **垂直位置由容器决定，不由控件自己给 margin**：42 高的顶栏里，任何高度的控件都落在
+     `(42 − h) / 2`。高 26 的按钮就是 y = 8、上下各 8；铃铛仍是 24 高、y = 9。
+     为什么不给按钮写 margin-top：那样铃铛和它各有一套数，下一个控件插进来又要凭感觉再定一次。 */
+  align-items: center;
+  gap: 4px;
   height: 100%;
-  /* 右侧光学留白由容器给，不由按钮给：原来最后一颗是 38px 按钮（15px 图标居中，天然留 11.5px），
-     换成 24px 的铃铛后自身只留 4px，若不再补这一笔，图标会贴到窗口边。
-     差值按「图标右缘到窗口右缘与改前相等」算：11.5 − 4 ≈ 7.5px，取 7px 让光学重量与相邻按钮一致。 */
-  padding-right: 7px;
+  /* 顶栏右端留白：**由容器一处给**，不给最后一颗按钮加 margin。
+     2026-11-03 定：最右那颗动作按钮的右缘到「下一个东西」至少 24px（一颗图标按钮宽）——
+     macOS 上是窗口右缘，Windows 上是窗口控件块左缘，两种镶边共用这一句。
+     为什么改：原来 7px 比一颗按钮还窄，铃铛看着贴边；而且「给按钮加 margin」的写法在下一颗按钮
+     插进来时继承不到任何值，那个 24 就得凭感觉再定一次。 */
+  padding-right: 24px;
   -webkit-app-region: no-drag;
+}
+
+/*
+ * 顶栏「更新到 {版本}」按钮：**实心强调色 + 图标 + 文字**。
+ *
+ * 用户的话是「一点都不醒目」——之前它和铃铛一样是灰色纯图标，排在两个图标之间自然看不出来。
+ * 没有新版时整颗不渲染（`.topbar-actions` 的列宽是 `auto`，所以它出现/消失不会推动铃铛）。
+ *
+ * 数值都是定稿给的：高 26、内边距 10、圆角 7、12px/600、单行不换行、图标 14。
+ * 焦点环用**双环**——强调色环直接套在强调色按钮上等于没有环。
+ */
+.topbar-actions .update-action__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--motion-feedback, 120ms) ease;
+}
+
+.topbar-actions .update-action__button:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--bg));
+}
+
+.topbar-actions .update-action__button:active {
+  background: color-mix(in srgb, var(--accent) 78%, var(--bg));
+}
+
+.topbar-actions .update-action__button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.update-action__glyph {
+  flex: none;
 }
 
 .topbar-actions button {
@@ -2911,7 +2963,7 @@ h1 {
   padding: 12px 14px;
   border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
   border-radius: 16px;
-  background: var(--surface-elevated, var(--surface));
+  background: var(--surface);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 3%, transparent);
   overflow: visible;
 }
@@ -3402,7 +3454,7 @@ h1 {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--surface-elevated, var(--surface));
+  background: var(--surface);
   box-shadow: 0 10px 30px color-mix(in srgb, #000 8%, transparent);
   display: grid;
   gap: 6px;
@@ -3748,21 +3800,6 @@ h1 {
 .agent-session-item.active {
   background: var(--surface);
   box-shadow: 0 1px 2px color-mix(in srgb, #000 4%, transparent);
-}
-
-.agent-session-item.dragging {
-  opacity: 0.48;
-}
-
-.agent-session-item.drag-over::after {
-  position: absolute;
-  right: 8px;
-  bottom: 0;
-  left: 12px;
-  height: 1px;
-  border-radius: 999px;
-  background: var(--accent);
-  content: "";
 }
 
 .agent-row-avatar {
@@ -6975,7 +7012,7 @@ h1 {
   padding: 12px 14px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--panel-elevated, var(--panel));
+  background: var(--panel);
   text-align: left;
 }
 
@@ -7931,6 +7968,15 @@ h1 {
   overflow: hidden;
 }
 
+.contribution-error {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 260px;
+  padding: 24px;
+}
+
 .settings-contribution-host {
   min-height: 0;
   height: 100%;
@@ -8146,8 +8192,14 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   box-shadow: none;
 }
 
-.ant-secondary-button.ant-btn:hover,
-.ant-secondary-button.ant-btn:focus-visible {
+/*
+ * 特异性必须高于 antd 的 `.ant-btn-default:not(:disabled):hover`（0,3,0）。
+ * 原来我们也是 (0,3,0)，而 antd 走 CSS-in-JS、后注入，于是悬停时字与边被染成强调色
+ * （实测 rgb(209, 232, 126)）——全站 32 处次按钮都是这个结果。加 :not(:disabled) 与
+ * .ant-btn 提到 (0,4,0)，一处生效，不写任何页面局部样式。
+ */
+.ant-btn.ant-secondary-button:not(:disabled):hover,
+.ant-btn.ant-secondary-button:not(:disabled):focus-visible {
   border-color: var(--border-strong);
   background: var(--surface-soft);
   color: var(--text-strong);
@@ -9054,6 +9106,20 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * 分段器应该和它的内容一样宽。
+ *
+ * `.preference-section` 是 grid，子项默认按 `justify-items: stretch` 拉伸，而 `.segmented` 自己写的
+ * `inline-flex` 会被块化——结果就是「两三个短项 + 右边一整条空底色」，看起来像背景被拉长了。
+ * 同一个根因今天已经出过一次：铃铛角标被 `.topbar-actions` 的 flex 默认值拉到 42px 高。
+ *
+ * 只放回这一个子项：给 `.preference-section` 加 `justify-items: start` 会连带把时区下拉和
+ * 代理地址输入框一起缩成短的，那是修一处坏三处。
+ */
+.preference-section > .segmented {
+  justify-self: start;
+}
+
 .preference-heading {
   display: inline-flex;
   align-items: center;
@@ -9068,6 +9134,282 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .preference-hint {
   margin: 6px 0 0;
   font-size: 12px;
+  color: var(--muted);
+}
+
+/*
+ * 设置 → 关于我们。
+ *
+ * 只锁这一页：内容列 720、正文列 480。**不要动基础设置的 820**——那是另一页的密度，
+ * 一起改会把里面所有条目都连累（设计稿 2026-11-03 明确写了这条）。
+ */
+.about-page {
+  display: grid;
+  /* 卡片之间 12：比原来的 36 紧，因为卡片自己还各有一圈 16 内边距（18+18 的「分段呼吸」换成卡片间距）。 */
+  gap: 12px;
+  max-width: 720px;
+  /* 不设高度、不设 overflow：滚动由外层 `.settings-detail-pane` 的 `overflow: auto` 负责。
+     任何一层写出 `overflow: hidden` 或固定高度，长正文就滚不到底。 */
+  align-content: start;
+}
+
+/*
+ * 关于页用**圆角卡片分块**（用户 11-03 定；Chief 拍「这页例外」）。
+ *
+ * 为什么这页可以例外：其它设置页是纯表单（几行开关、几个下拉），没有分组需求；这页是三段实内容
+ * 加一整块长正文，**有**分组需求。这不代表设置页整体改版——那件事单独排期。
+ *
+ * 为什么只写 `.about-page` 作用域：语言、时区、通知仍然是「平铺 + 下边框」，一行都不动。
+ *
+ * 数值：卡底 `--surface`、描边 `--border-strong`、圆角 8、内边距 16、卡片间距 12（见 `.about-page`）。
+ * **没有新造 token**——深色下 `--border-strong` 对页面底只有 1.59:1，凑近才看得出；用户要是说
+ * 「还是看不出」，那要走「新增一档更亮的描边」，得架构师批，不在这一笔里偷偷加。
+ */
+.about-page > .preference-section {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.about-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-mark {
+  /* 图标本身是深色圆角方块：容器**不裁圆角**（图片自带），只加 1px 描边——
+     不描边的话它在深色页面底上几乎同色，只剩一条悬着的波形线。 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  /* 内容区 = 36 − 4 − 2（padding 2 + 描边 1）→ 图片按内容区填满，**不许盖住描边**。 */
+  padding: 2px;
+  border-radius: 9px;
+  /* `--border` 对页面底只有 1.35:1，等于没画；这个元素唯一的存在理由就是「看得出是个图标」。 */
+  border: 1px solid var(--muted);
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.about-mark-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.about-mark-fallback {
+  /* 同尺寸占位：布局不塌，也不写「图标加载失败」——装饰不是信息。 */
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9px;
+  background: var(--surface-strong);
+}
+
+.about-identity-text {
+  display: grid;
+  gap: 2px;
+}
+
+.about-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.about-tagline {
+  margin: 0;
+  max-width: 480px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/*
+ * 链接块：**一行一项**（图标 / 名称 / 右侧动作词），行间一条细线。
+ *
+ * 为什么不是表格：这里是一串同类去处，不是数据；给了表头或列宽就会读成表格，而它没有第二列语义。
+ * 三条细节：**最后一行不画线**（线是分隔，不是边框）；图标只是扫读锚点；动作词右对齐。
+ */
+.about-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /* **不设宽度**：这一列铺满卡片内宽（720 − 两侧各 16 = 688）。480 是给**正文**的阅读宽度
+     （长文章一行 480 左右最好读），用它管链接列表会让每行只到一半、右边空出一大片。 */
+}
+
+.about-link-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* 线是分隔不是边框：最后一行没有下一条要分开，就不画。 */
+.about-link-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.about-link-row:first-child {
+  padding-top: 0;
+}
+
+.about-link-icon {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.about-link-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.about-link-failed {
+  max-width: 480px;
+}
+
+.about-section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-strong);
+}
+
+/*
+ * 设置 → 关于我们 · 更新说明块：**固定高度 + 块内滚动**（界面设计 11-03 定）。
+ *
+ * 为什么改：先前是「展开 + 靠页面滚」，读者滚到「链接」那段就以为到头了；
+ * 现在正文收在自己的框里，整页高度不随正文长度变。
+ *
+ * 三条硬要求缺一条就变成「能用鼠标、键盘滚不动」：
+ * - 块高封顶 360；窗口矮（46vh < 360）时按 46vh 收，保证下面的链接块仍在首屏；
+ * - 能聚焦（`tabindex=0` + `role="region"` + 可读名在组件里），焦点环用平台默认，这里不画；
+ * - `overscroll-behavior-y: auto`：块内到底后继续滚**带动外层页面**，不卡在框里。
+ */
+.about-notes-viewport {
+  position: relative;
+  min-width: 0;
+}
+
+.about-notes-scroller {
+  max-height: min(360px, 46vh);
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+/*
+ * 底边渐隐：只表达「还有」，不加颜色、**不吃点击**（`pointer-events: none`，否则最底下那行字点不到）。
+ * 显隐由页面按滚动位置控制——到底就不再渲染它；所以这里没有「内容超出就常显」的第二套规则
+ * （那会让读者看完了还暗示「下面还有」）。
+ */
+.about-notes-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 16px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+}
+
+/* 正文列：说明句与失败句都收在 480 以内（长串由 overflow-wrap 兜底，不出横向滚动条）。 */
+.about-page .about-tagline,
+.about-page .version-notice,
+.about-page .version-open-failed,
+.about-page .preference-hint {
+  max-width: 480px;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 设置 → 基础设置 · 版本那一行。
+ *
+ * 只有排版，没有颜色判断：状态色由 StatusPill 的档位决定，这里不按状态写第二套颜色。
+ * 版本号用等宽数字（`tabular-nums`），换版本时数字不跳位。
+ */
+.version-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-key {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.version-value {
+  /* 值就是值：字号、字重、行高与「未知」占位**完全一致**，只靠颜色区分真假。
+     版本 11-03 的教训：占位值被单独压了一档字重（500 对 600），读起来就是「小一号」，
+     同一个位置两个值必须同基线同号。改这条之前先看 `.version-value-unknown` 里**没有**
+     font-size / font-weight / line-height——那三条一旦出现，就是又犯一次。 */
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+/* 「未知」不是另一种字号，只是「这不是真值」：只改颜色，其余一切继承 `.version-value`。 */
+.version-value-unknown {
+  color: var(--muted-strong);
+}
+
+.version-sep {
+  color: var(--muted);
+}
+
+.version-spacer {
+  flex: 1 1 auto;
+}
+
+.version-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+/* 开关和它的说明是一组：组内 6（说明从属于开关，必须比行距紧），组与组之间由区块 gap 12 管。 */
+.version-auto-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* **不换行**：右边那句「每天最多一次」必须跟开关标签同行；一换行它就成了另一行孤零零的小字，
+     而那正是这一笔要治的毛病。 */
+  flex-wrap: nowrap;
+}
+
+/* 开关行右端那句短事实：弱化色、右对齐、不折行。 */
+.version-auto-frequency {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.version-checked-line {
+  /* 「上次检查：{时刻} · 这不代表没有新版本」合成一行：时间在前，数字等宽，不跳位。 */
+  color: var(--muted);
+}
+
+.version-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.version-open-failed {
+  /* 失败句不着色、不加重：它是说明，不是第二个结论。 */
   color: var(--muted);
 }
 
@@ -9722,8 +10064,8 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .chat-markdown-table { margin: 6px 0; overflow-x: auto; }
 .chat-markdown-table table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .chat-markdown-table th, .chat-markdown-table td { padding: 4px 8px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
-.chat-markdown-table th { background: color-mix(in srgb, var(--surface-raised, var(--surface)) 70%, transparent); color: var(--muted-strong); font-weight: 700; }
-.chat-markdown-table tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-raised, var(--surface)) 35%, transparent); }
+.chat-markdown-table th { background: color-mix(in srgb, var(--surface-raised) 70%, transparent); color: var(--muted-strong); font-weight: 700; }
+.chat-markdown-table tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-raised) 35%, transparent); }
 
 /* PLAT-64 — 整段结构化 JSON：卡片摘要（标题 + 正文）加一段代码块。
    JSON 一律一次显示完整：固定高度的可视区里左右上下滚动，不做折叠、不给「展开 / 查看原始」入口。 */
@@ -9751,7 +10093,7 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 55%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
 .chat-markdown-json-card-title { color: var(--text-strong); font-weight: 700; font-size: 12.5px; }
 .chat-markdown-json-card-body {
@@ -10616,13 +10958,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   border-bottom: 1px solid var(--border);
 }
 
-/* 默认模型条底部一行说明：哪些默认值是平台入口直接用、哪些只供产品功能读取。 */
-.model-service-default-consumer-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 /* 每行 = 可横向滚动的选择器区 + 右侧固定不动的展开按钮：
    窗口再窄也不会裁掉选择器，也不会让按钮滚出可视区域。 */
 .model-service-default-row {
@@ -11268,7 +11603,7 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   margin: 0 0 12px;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--warning, #c48a1a) 38%, var(--border));
-  border-radius: var(--radius-control, 6px);
+  border-radius: 6px;
   background: color-mix(in srgb, var(--warning, #c48a1a) 12%, transparent);
   color: color-mix(in srgb, var(--warning, #c48a1a) 82%, var(--text));
   font-size: 11.5px;
@@ -11763,7 +12098,7 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 .model-service-model-row:hover {
-  background: var(--hover, var(--surface-strong));
+  background: var(--surface-strong);
 }
 
 .model-service-model-name {
@@ -13279,3 +13614,10 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .agent-message-context-card__copy { display: flex; flex-direction: column; min-width: 0; gap: 0; line-height: 1.35; }
 .agent-message-context-card__copy strong { overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11.5px; font-weight: 600; }
 .agent-message-context-card__copy small { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; }
+
+/* 通知点进来要定位的那一行：描边+底色，不新增 token。 */
+.task-automation-row-focused {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--surface-raised);
+}

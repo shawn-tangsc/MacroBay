@@ -1,0 +1,30 @@
+/* The reading block behind a module chip: a bordered footnote under the card's title row, opened on
+   purpose and closed by the same control. The four chips share this shape so a reader learns it
+   once; only the rows change. */
+.mi-signal-detail {
+  display: grid;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 4px;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.mi-signal-detail__group { display: grid; gap: 3px; }
+
+/* A group is a leg, not a section heading: same size as the rows it names, only brighter. */
+.mi-signal-detail__group-title {
+  margin: 0;
+  color: var(--mi-dashboard-text);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.mi-signal-detail__rows { display: grid; gap: 3px; margin: 0; }
+.mi-signal-detail__rows div { display: flex; gap: 4px; }
+.mi-signal-detail__rows dt { margin: 0; white-space: nowrap; }
+.mi-signal-detail__rows dd { margin: 0; color: var(--mi-dashboard-text); }
+
+.mi-signal-detail__note { margin: 0; }

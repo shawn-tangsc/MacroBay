@@ -9,10 +9,11 @@ import { parseCrossAssetSnapshot } from '../../../../contracts/crossAssetObserva
 import { createCrossAssetSnapshotQuery } from '../../../../service/intelligence/cross-asset/crossAssetSnapshotQuery'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props))
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
 
 /**
  * 同一个面板，但**壳层语言**是英文。
@@ -21,8 +22,10 @@ const ScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObs
  * 所以「读者语言」由壳层语言决定，而不是由传入的 `text` 决定——写用例也得按这条来。
  */
 const EnglishScopedCrossAssetObservationPanel = (props: Parameters<typeof CrossAssetObservationPanel>[0]): React.ReactElement =>
-  createElement(ShellLanguageProvider, { language: 'en-US' },
-    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CrossAssetObservationPanel, props)))
+  createElement(ShellLanguageProvider, {
+    language: 'en-US',
+    children: createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children: createElement(CrossAssetObservationPanel, props) })
+  })
 
 /** The real daily closes: 5.24 after 5.22 on 10-09 (+2bp), 2.91 after 2.87 (+4bp), 2Y 4.80, breakeven 2.33. */
 function ratesView(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -61,6 +64,9 @@ describe('cross-asset observation workspace', () => {
     expect(css).toContain(".mi-cross-asset__status-table thead th + th, .mi-cross-asset__status-table tbody td + td { border-left: 1px solid")
     expect(css).toMatch(/\.mi-cross-asset__status-table tbody td \{[^}]*font-size: 9\.5px/)
     expect(css).toMatch(/\.mi-cross-asset__status-table th, \.mi-cross-asset__status-table td \{ padding: 3px 2px/)
+    // 说明图标与「日频」之间要留一格：22px 的按钮紧贴 9.5px 的标题会读成同一个词（读者 2026-11-06）。
+    expect(panel).toContain('className="mi-cross-asset__section-hint"')
+    expect(css).toMatch(/\.mi-cross-asset__section-hint \{[^}]*margin-left: 6px/)
   })
 
   it('prints the inputs it does not have as missing, with no figure anywhere in those rows', async () => {
@@ -83,9 +89,22 @@ describe('cross-asset observation workspace', () => {
       // rather than showing the number a row with data would show.
       const missing = rows.filter(row => row.dataset.connected === 'false')
       expect(missing.map(row => row.dataset.statusRow)).toEqual(['dxy', 'gold', 'index', 'us10y', 'realRate'])
-      // The daily section announces itself instead of borrowing the window headings above it.
-      expect(host.querySelector('[data-status-section="daily"] .mi-cross-asset__section')?.textContent)
-        .toBe(`${text.dailyFrequency}${text.dailyCadence}`)
+      // The daily section announces itself instead of borrowing the window headings above it — and
+      // its rhythm sentence is now a hint on an icon beside the title (reader, 2026-11-06): the heading
+      // reads only 日频, the sentence is the icon's name, so a mouse and a keyboard both reach it.
+      const dailyHeading = host.querySelector('[data-status-section="daily"] .mi-cross-asset__section')
+      expect(dailyHeading?.textContent).toBe(text.dailyFrequency)
+      const cadenceTrigger = dailyHeading?.querySelector<HTMLButtonElement>('button')!
+      expect(cadenceTrigger.getAttribute('aria-label')).toBe(text.dailyCadence)
+      // 尺寸钉成最小档：这一行标题 9.5px，24 那档挂上去像一枚徽章（读者 2026-11-06 现场）。
+      // 22 是平台最小的触发器，改回 24 必须是一次有理由的显式决定，不该被顺手改掉。
+      expect(cadenceTrigger.style.width).toBe('22px')
+      // 「悬停才显示」不是把句子藏起来：句子不在标题里，落在按钮的提示上，焦点到位也开，
+      // 所以键盘用户与读屏拿到的是同一句，不是只有鼠标才看得到的装饰。
+      await act(async () => { cadenceTrigger.focus() })
+      await vi.waitFor(() => {
+        expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(text.dailyCadence)
+      })
       for (const row of missing) {
         // The honesty guard, stated structurally: a planned row has no price and no return cell at
         // all, and its one value cell names the gap instead of filling it. A label may contain a
@@ -186,9 +205,12 @@ describe('cross-asset observation workspace', () => {
       for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
       expect(host.textContent).toContain(text.contractMismatch)
       // 版本不一致时重试没有意义（重读同一份契约），所以这一态的出口是「重启应用」，不是「重试」。
+      // 比的是两条平台动作句，不是 `text.retry`——那个键在跨资产文案里根本不存在，比 undefined
+      // 永远成立，等于没断言（2026-11-06 预检钩子把它抓出来）。
       const action = host.querySelector('.state-view__action') as HTMLButtonElement
       expect(action).not.toBeNull()
-      expect(action.textContent).not.toBe(text.retry)
+      expect(action.textContent).toBe(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.restart_app))
+      expect(action.textContent).not.toBe(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
       await act(async () => { action.click() })
       expect(relaunch).toHaveBeenCalledTimes(1)
       // 反过来：点它不该去重读，那正是这一处被改掉的原因。
@@ -219,7 +241,7 @@ describe('cross-asset observation workspace', () => {
     // The licensed index leg has no history in this fixture, so the row is answered by the tokenised
     // proxy — which is the only leg that carries a live trade, and the one this test reads.
     const proxyBars = Array.from({ length: 289 }, (_, index) => ({
-      symbol: 'QQQUSDT', barOpenMs: now - (289 - index) * 300_000, barEndMs: now - (288 - index) * 300_000,
+      symbol: 'QQQUSDT' as const, barOpenMs: now - (289 - index) * 300_000, barEndMs: now - (288 - index) * 300_000,
       open: '700', high: '720', low: '690', close: String(700 + index / 100), volume: '1'
     }))
     const snapshot = createCrossAssetSnapshotQuery({ now: () => now,
@@ -231,7 +253,10 @@ describe('cross-asset observation workspace', () => {
       expect(host.querySelector('[data-asset-price="index"]')?.textContent).toBe('712.30')
       expect(host.querySelector('[data-status-row="index"]')?.getAttribute('data-index-source')).toBe('proxy')
       expect(host.querySelector('[data-index-proxy="true"]')?.textContent).toBe(text.proxyTag)
-      expect(host.querySelector('[data-source-state="limited"]')?.textContent).toBe(text.states.limited)
+      // 整块的来源药丸已撤掉（读者 2026-11-03）：曲线是收盘存档，实时流断了照样画，
+      // 而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产那行仍在，且只说这一只的情况。
+      expect(host.querySelector('[data-source-state]')).toBeNull()
+      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.states.missing}`)
       for (const asset of ['index', 'btc', 'eth']) expect(host.querySelector(`[data-status-row="${asset}"][data-connected="true"]`)).not.toBeNull()
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')

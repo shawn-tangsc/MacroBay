@@ -15,17 +15,21 @@ const PRODUCT_ID = 'market-intelligence'
 export const marketHistoryRetentionPolicy = Object.freeze({
   intervalMs: 24 * 3_600_000,
   /** The stores this pass owns, and the note prefix each ledger line is filed under. */
-  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis', news: 'news-sentiment' } as const)
+  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis', news: 'news-sentiment', analysisIo: 'analysis-io' } as const)
 })
 
 type StoreId = keyof typeof marketHistoryRetentionPolicy.stores
 /**
  * What one store's pass did. `ledgerDeleted` is optional because only the analysis store has a second
  * clock: its verdicts outlive their conclusions, so the pass reports two counts and the bar stores
- * report one. `capped` says the pass hit its own row budget and more is waiting — without it a capped
- * store would look finished.
+ * report one. `triggerLedgerDeleted` is the analysis store's third count — the signal ledger's own
+ * fifteen days — and stays absent when that segment could not run. `bytesBefore` / `bytesAfter` are
+ * the call record's occupancy: a pass that reports only a deletion count cannot say how close the
+ * hundred-megabyte ceiling it is, and one that reports only the current size cannot say whether the
+ * pass ran at all. `capped` says the pass hit its own row budget and more is waiting — without it a
+ * capped store would look finished.
  */
-export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null; capped?: boolean }>
+export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; triggerLedgerDeleted?: number; bytesBefore?: number; bytesAfter?: number; oldestKeptAtMs: number | null; capped?: boolean }>
 /**
  * What a store has to offer to be retained: the pass itself, and somewhere to write its own ledger.
  *
@@ -68,6 +72,9 @@ export function createMarketHistoryRetention(deps: Readonly<{
           store.note(`${prefix}.lastThinned`, String(result.thinned))
           store.note(`${prefix}.lastDeleted`, String(result.deleted))
           if (result.ledgerDeleted !== undefined) store.note(`${prefix}.lastLedgerDeleted`, String(result.ledgerDeleted))
+          if (result.triggerLedgerDeleted !== undefined) store.note(`${prefix}.lastTriggerLedgerDeleted`, String(result.triggerLedgerDeleted))
+          if (result.bytesBefore !== undefined) store.note(`${prefix}.lastBytesBefore`, String(result.bytesBefore))
+          if (result.bytesAfter !== undefined) store.note(`${prefix}.lastBytesAfter`, String(result.bytesAfter))
           if (result.capped) store.note(`${prefix}.lastCapped`, 'true')
           store.note(`${prefix}.oldestKeptAtMs`, result.oldestKeptAtMs === null ? 'none' : String(result.oldestKeptAtMs))
           results[storeId] = result

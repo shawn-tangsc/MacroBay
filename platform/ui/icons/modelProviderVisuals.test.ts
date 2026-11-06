@@ -19,6 +19,21 @@ describe('model and provider visual identities', () => {
     })
   })
 
+  it('未知供应商没有名字时用调用方给的兜底词，绝不退到 id（契约 v2.41 第三档）', () => {
+    // 自建供应商的 id 是我们生成的 `provider-<时间戳>`，不是读者填的字；它印到屏幕上就是内部标识。
+    const visual = resolveProviderVisual('provider-1730000000000', '', '供应商')
+    expect(visual.label).toBe('供应商')
+    expect(visual.label).not.toContain('provider-')
+    expect(visual.shortLabel).toBe('供应')
+    expect(visual.isFallback).toBe(true)
+
+    // 有名字时照旧：名字优先，兜底词不抢。
+    expect(resolveProviderVisual('custom-local', 'Local Router', '供应商')).toMatchObject({
+      label: 'Local Router',
+      shortLabel: 'LR'
+    })
+  })
+
   it('resolves every preset system provider to a concrete provider icon key', () => {
     const providers = createSystemProviderPresets()
 

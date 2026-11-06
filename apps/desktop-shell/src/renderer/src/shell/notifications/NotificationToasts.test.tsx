@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterItem } from '@platform/notifications/contracts/notificationContracts'
 
 import { platformText } from '../../i18n/platformText'
 
@@ -27,12 +27,12 @@ afterEach(async () => {
   Reflect.deleteProperty(window, 'platform')
 })
 
-function record(overrides: Partial<SafeNotificationRecord> & { id: string }): SafeNotificationRecord {
+function record(overrides: Partial<NotificationCenterItem> & { id: string }): NotificationCenterItem {
   return {
     owner: 'platform',
     sourceId: 'platform.test',
-    titleKey: 'notification.taskFailed.title',
-    titleParams: { taskName: overrides.id },
+    title: `任务失败：${overrides.id}`,
+    body: '',
     severity: 'warning',
     priority: 'normal',
     channels: ['center', 'toast'],
@@ -42,7 +42,7 @@ function record(overrides: Partial<SafeNotificationRecord> & { id: string }): Sa
     createdAt: '2026-11-02T00:00:00.000Z',
     updatedAt: '2026-11-02T00:00:00.000Z',
     ...overrides
-  } as SafeNotificationRecord
+  } as NotificationCenterItem
 }
 
 /** 手动推送投递事件：横幅只认事件，不轮询列表。 */
@@ -57,7 +57,6 @@ async function mount(): Promise<void> {
     root!.render(
       <NotificationToasts
         labels={labels}
-        language="zh-CN"
         onOpen={onOpen}
         subscribe={(callback) => {
           emit = callback
@@ -73,17 +72,18 @@ function toasts(): HTMLElement[] {
 }
 
 describe('右上角横幅', () => {
-  it('投递事件一到就出现，句子按当前语言解析', async () => {
+  it('投递事件一到就出现，画的是主进程已解析的那一句', async () => {
     await mount()
     expect(toasts()).toHaveLength(0)
 
     await act(async () => {
-      emit({ channel: 'toast', record: record({ id: 't1', titleParams: { taskName: '央行采集' } }) })
+      emit({ channel: 'toast', record: record({ id: 't1', title: '任务失败：央行采集' }) })
     })
 
     expect(toasts()).toHaveLength(1)
-    // 记录里只有键与参数，句子在展示时解析——这是「切语言后历史通知跟着变」的同一套机制。
+    // 载荷里就是句子：横幅没有表可查，也就印不出 `notification.taskFailed.title`。
     expect(document.body.textContent).toContain('央行采集')
+    expect(document.body.textContent).not.toContain('notification.')
   })
 
   it('读屏区是 polite 的：横幅不抢当前焦点', async () => {

@@ -5,12 +5,12 @@ import { Popover } from '@platform/ui/components/popover'
 import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useId, useState } from 'react'
 
 import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { SignalDetail, useSignalDetail } from '../shared'
 import type { DivergencePanelText } from './divergenceText'
 
 import './DivergencePanel.css'
@@ -53,25 +53,54 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   // 长笔记留在读者主动打开的地方：默认收起，打开后是卡片下方一块限高的区域，不盖住要解释的图。
   const [helpOpen, setHelpOpen] = useState(false)
   const helpDetailsId = useId()
-  /**
-   * The product's own sentence for the reason line, and only that line.
-   *
-   * `StateView` owns the title, the icon and the announcement; the one thing it cannot know is
-   * which reading failed and what the reader can do about it. That sentence stays ours, resolved
-   * from the text table by key, never passed as a literal.
-   */
-  const productReason = (spec: Readonly<{ key: string; params?: Record<string, string> }>) => ({
-    ...spec,
-    resolve: (key: string, params?: Record<string, string>) => {
-      const sentence = resolveProductKey(key)
-      if (!sentence || !params) return sentence
-      return Object.entries(params).reduce((line, [name, value]) => line.split(`{${name}}`).join(value), sentence)
-    }
+  // The rule's chip: only the intraday pair gets one, and it prints no numbers — those stay on the
+  // row below, once. "Data insufficient" is not a chip here: the card's own state already says why
+  // the pair was withheld, and a second badge saying the same thing would read as a second failure.
+  const intraday = state.state === 'available' ? state.rows.find(row => row.pairId === 'liquidity-leverage') : undefined
+  const chipDetail = useSignalDetail('mi-divergence-chip-detail')
+  /** One group per leg the pair is built from; a leg the row does not carry is simply not named. */
+  const legGroups = (['stablecoin', 'open-interest'] as const).flatMap(legId => {
+    const leg = intraday?.legs.find(entry => entry.id === legId)
+    if (!leg) return []
+    return [{
+      labelKey: legId === 'stablecoin'
+        ? 'pages.intelligence.portal.dashboard.divergence.legs.stablecoin'
+        : 'pages.intelligence.portal.dashboard.divergence.legs.open-interest',
+      rows: [{
+        labelKey: 'pages.intelligence.portal.dashboard.divergence.chipFreshLabel',
+        value: `${text.chipFresh} · ${text.chipAsOf.replace('{at}', when(leg.observedAt))}`
+      }]
+    }]
   })
+
+  // Two different facts, two different treatments — merging them was the first version's mistake.
+  //
+  // "Nothing could be compared" means we DID read and every pair was short a leg: the card above
+  // already carries 数据已滞后, so a constant apology here is noise. Hidden, per the reader's
+  // request (168 §16). "The read failed" means WE could not look: hiding that would let a failure
+  // pass for "nothing here", so it keeps one assertable line — no numbers, no block.
+  if (nothingCompared) return <></>
+  if (state.state === 'unavailable') {
+    return (
+      <section className="mi-divergence" aria-label={text.title} data-state="unavailable" data-divergence-unavailable>
+        <p role="status" className="mi-divergence__unavailable">{text.unavailableTrace}</p>
+      </section>
+    )
+  }
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <div className="mi-divergence__lead">
+        {/* The chip sits ahead of the help entries, where a card's title would be: it is the one
+            thing on this line that says "something happened", and the readings stay below it. */}
+        {intraday ? (
+          <Tooltip labelKey="pages.intelligence.portal.dashboard.divergence.chipTip" resolveText={resolveProductKey}>
+            <button type="button" className="mi-divergence__chip" data-state="alert"
+              {...chipDetail.triggerProps}
+              aria-label={`${text.chip} · ${text.chipDetailsOpen}`}
+              onClick={chipDetail.toggle}>{text.chip}</button>
+          </Tooltip>
+        ) : null}
         {/* Four lines are four keys, one per line: arrays are the semantic shape here, and a
             joined sentence with newlines would be lost the first time the copy is translated. */}
         <Popover
@@ -89,36 +118,24 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           className="mi-divergence__help-toggle" onClick={() => setHelpOpen(open => !open)}
           type="button">{text.helpDetailsLabel}</button>
       </div>
+      {intraday && chipDetail.open ? (
+        <SignalDetail
+          id="mi-divergence-chip-detail"
+          titleKey="pages.intelligence.portal.dashboard.divergence.chipDetailsTitle"
+          groups={legGroups}
+          rows={[{ labelKey: 'pages.intelligence.portal.dashboard.divergence.chipWhyLabel', value: text.chipWhy }]} />
+      ) : null}
       <div className="mi-divergence__content">
+        {/* state-ternary: reviewed — 这一枝只画「正在读」这一块，不藏任何内容；扫描窗口里看到的列表属于下面 available 分支，与它无关。 */}
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
-        {state.state === 'unavailable' ? (
-          <StateView state="error" size="md"
-            // A failed read is retryable; "six sources said nothing" is the same read failing one
-            // layer earlier, so both keep the same next step instead of sending the reader to
-            // settings that may be perfectly configured.
-            reasonCode={unavailableReasonCode(state.reason)}
-            // The action is not conditional: the same state must give the reader the same next
-            // step wherever it appears. A button that sometimes disappears teaches nothing.
-            action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
-            productReason={productReason(state.missing.length > 0
-              ? { key: 'pages.intelligence.portal.dashboard.divergence.missingLegs',
-                  params: { legs: state.missing.map(leg => text.legs[leg]).join(text.withheldListSep) } }
-              : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
-        ) : null}
-        {state.state === 'empty' && !nothingCompared ? (
+        {/* state-ternary: reviewed — 这一枝只输出一行「今天没有背离」，不渲染列表；列表见下面 available 分支。 */}
+        {state.state === 'empty' ? (
           // One line, no block: a card with nothing to report must not take half a screen to say so,
           // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
           <p className="mi-divergence__quiet">{text.empty}</p>
         ) : null}
-        {nothingCompared ? (
-          <>
-            <StateView state="error" reasonCode="unavailable" size="md"
-              action={{ labelKey: 'ui.state.action.retry', onSelect: onRetry }}
-              productReason={productReason({ key: 'pages.intelligence.portal.dashboard.divergence.nothingCompared' })} />
-            {/* Which pairs were withheld is data, not a state: it stays one line under the state. */}
-            <p className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</p>
-          </>
-        ) : null}
+        {/* state-ternary: reviewed — 仍是迁移前自己那套三态：`available` 才带 `rows`，读失败由上面的 error 分支单独处理。
+            R161 迁到 `AsyncState` 时连同「按 rows.length 判」一起改，那时这条注释随之删掉。 */}
         {state.state === 'available' ? (
           <div className="mi-divergence__conclusion" data-tone="conclusion">
             <ul className="mi-divergence__rows">
@@ -202,16 +219,7 @@ export function groupWithheld(entries: readonly DivergenceWithheldView[]): reado
 }
 
 /**
- * Which platform error code this failure belongs to.
- *
- * "Nothing arrived from any source" and "the answer was too large" are the read failing from the
- * outside; a rejected payload or an unreadable clock is the read failing inside. Both are retried
- * the same way, so the split is about the sentence the reader gets, not about the next step.
+ * The one line a reader gets on the row: what invalidates this reading.
  */
-/** The one line a reader gets on the row: what invalidates this reading. */
 const invalidationLine = (pairId: string, text: DivergencePanelText): string =>
   `${text.invalidationLabel}${text.labelSep}${text.pairs[pairId as keyof DivergencePanelText['pairs']].invalidation}`
-
-function unavailableReasonCode(reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'): 'unreadable' | 'unavailable' {
-  return reason === 'all-legs-missing' || reason === 'too-large' ? 'unavailable' : 'unreadable'
-}

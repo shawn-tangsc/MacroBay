@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { MarketCalendarPage, MarketCalendarRefreshAttempt } from './marketCalendarQueryContracts'
 
 async function contracts() {
   expect(existsSync(new URL('./marketCalendarQueryContracts.ts', import.meta.url))).toBe(true)
   return import('./marketCalendarQueryContracts')
 }
-const input = { month: '2026-09', locale: 'zh', asOf: '2026-09-10T00:00:00.000Z' }
+const input = { month: '2026-09', locale: 'zh', asOf: '2026-09-10T00:00:00.000Z' } as const
 const event = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived event', countryCode: null,
   eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-09-11T00:00:00.000Z',
   consensus: { displayValue: '0' }, providerPrevious: null, providerActual: { displayValue: '3' },
@@ -74,6 +75,23 @@ describe('market calendar exact safe contracts', () => {
     expect(c.isMarketCalendarEvent({ ...event, countryCode: 'CHN', countryName: '中国\u0000' })).toBe(false)
     expect(c.isMarketCalendarEvent({ ...event, countryCode: 'CHN', countryName: 'x'.repeat(513) })).toBe(false)
     expect(c.isMarketCalendarEvent({ ...event, countryCode: 'US', countryName: undefined })).toBe(false)
+  })
+  it('keeps the batch verdict out of the layer the reader is shown', async () => {
+    const c = await contracts()
+    const page = { state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, events: [event],
+      sources: c.marketCalendarPublicPolicy.kinds.map((eventType, index) => ({ eventType,
+        status: index === 0 ? 'success' : 'success-empty', sourceObservedAt: input.asOf })) }
+    expect(c.isMarketCalendarPage(page, input)).toBe(true)
+    // `partial` is the verdict of one batch. It is not a page state and not something a single source
+    // attempt can be, so neither road into the reader-visible layer accepts it. Loosening either one
+    // is how the internal word would end up in front of a reader.
+    expectTypeOf<MarketCalendarRefreshAttempt['state']>().toEqualTypeOf<'succeeded' | 'failed'>()
+    expectTypeOf<MarketCalendarPage['state']>().toEqualTypeOf<'available' | 'unavailable'>()
+    expect(c.isMarketCalendarPage({ ...page, state: 'partial' }, input)).toBe(false)
+    expect(c.isMarketCalendarPage({ ...page, sources: page.sources.map((source, index) => index === 0
+      ? { ...source, latestAttempt: { state: 'partial', attemptedAt: input.asOf } } : source) }, input)).toBe(false)
+    // The batch result still carries it, because that is where the reader's sentence comes from.
+    expect(c.isMarketCalendarRefreshResult({ state: 'partial', sources: page.sources })).toBe(true)
   })
   it('rejects sparse, accessor-backed, or extended public arrays', async () => {
     const c = await contracts()

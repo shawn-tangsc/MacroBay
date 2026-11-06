@@ -1,4 +1,4 @@
-import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
+import { analysisTriggerSourcePolicy, isSignalTriggerKey } from './analysisTriggerSourcePolicy'
 import { analysisSchedulePolicy, slotForTriggerKey } from './analysisSchedulePolicy'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 
@@ -59,6 +59,17 @@ export const triggerStatusPolicy = Object.freeze({
     providerSurpriseConfirmed: 'provider-surprise-confirmed',
     semanticNoOp: 'semantic-no-op',
     intervalActive: 'interval-active',
+    /**
+     * The item path's own merge: another indicator of the same release was already analysed, so
+     * this item did not get a run of its own. Without it the reader saw a row that was skipped for
+     * "significant change" and could not tell it apart from a row nobody judged.
+     */
+    sameReleaseCoalesced: 'same-release-coalesced',
+    /**
+     * The release's attempts are all spent and none succeeded: there is no analysis to point at.
+     * The opposite of the code above, and the reason they must never be merged into one.
+     */
+    sameReleaseAbandoned: 'same-release-abandoned',
     hourBudgetExhausted: 'hour-budget-exhausted',
     dayBudgetExhausted: 'day-budget-exhausted',
     scheduleReserveExhausted: 'schedule-reserve-exhausted',
@@ -77,7 +88,16 @@ export const triggerStatusPolicy = Object.freeze({
     mediumScoreConfirmed: 'medium-score-confirmed',
     marketReactionConfirmed: 'market-reaction-confirmed',
     restartInitialCompensated: 'restart-initial-compensated',
-    restartReviewCompensated: 'restart-review-compensated'
+    restartReviewCompensated: 'restart-review-compensated',
+    // The module signal path's own reasons. Registered here because a code the panel cannot
+    // translate is dropped on the way out — the timeline would then show a run with no reason at
+    // all, which is exactly the "why did this not get analysed" question this list answers.
+    signalHighTriggered: 'signal-high-triggered',
+    signalMediumTriggered: 'signal-medium-triggered',
+    signalCooldownActive: 'signal-cooldown-active',
+    signalLowMarkerOnly: 'signal-low-marker-only',
+    signalCalendarOwned: 'signal-calendar-owned',
+    signalFreezeUnavailable: 'signal-freeze-unavailable'
   }),
   /** Reasons that describe a moment rather than a condition the gate keeps re-observing. */
   oneOffReasonCodes: Object.freeze([
@@ -88,12 +108,21 @@ export const triggerStatusPolicy = Object.freeze({
    * Keys this plan introduced, judged by the significance gate, plus the one historical key the
    * schedule replaced: `startup.refresh` was the 6-hour catch-up's key, and rows recorded under it
    * would lose their explanation line if it were dropped here as well as from the gate.
+   *
+   * Module signals are not listed: there is one key per rule, so `isExplainableTriggerKey` accepts
+   * the `signal.` prefix as well. Leaving them out of this array is what keeps "unknown key stays
+   * unexplained" true for every other key.
    */
   explainableTriggerKeys: Object.freeze([...analysisTriggerSourcePolicy.gateEligibleTriggerKeys, 'startup.refresh']),
   /** The item path's keys: judged by `analysisTriggerPolicy`, reported from its own ledger row. */
   itemTriggerKeys: analysisTriggerSourcePolicy.itemTriggerKeys,
   manualTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[]
 })
+
+/** True for a key whose decision this panel can explain: a registered key, or any module signal. */
+export function isExplainableTriggerKey(triggerKey: string): boolean {
+  return isSignalTriggerKey(triggerKey) || triggerStatusPolicy.explainableTriggerKeys.includes(triggerKey)
+}
 
 export function projectTriggerStatus(
   rows: readonly TriggerStatusRow[] | undefined,
@@ -108,7 +137,7 @@ export function projectTriggerStatus(
   // Gate keys and item keys are both explainable, each from its own ledger rows: the gate writes
   // them for the data-driven sources, `analysisTriggerPolicy` and the restart compensation write
   // them for the item path.
-  if (!triggerStatusPolicy.explainableTriggerKeys.includes(run.triggerKey) && !triggerStatusPolicy.itemTriggerKeys.includes(run.triggerKey)) return null
+  if (!isExplainableTriggerKey(run.triggerKey) && !triggerStatusPolicy.itemTriggerKeys.includes(run.triggerKey)) return null
   const decidedBy = run.completedAt ?? run.queuedAt
   const explainable = (rows ?? []).filter(row =>
     row.triggerKey === run.triggerKey &&

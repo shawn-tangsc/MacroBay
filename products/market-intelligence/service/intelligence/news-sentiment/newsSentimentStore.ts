@@ -7,14 +7,22 @@ import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import type {
   NewsBodyTranslationRecord,
   NewsDocumentRecord,
+  NewsSentimentEntity,
   NewsSentimentRecord,
   NewsSentimentSymbol
 } from '../schema/newsSentiment'
-import { isNewsPolarity, isNewsSymbol } from '../schema/newsSentiment'
+import { NEWS_SENTIMENT_LIMITS, isNewsPolarity, isNewsSymbol } from '../schema/newsSentiment'
 
 export const newsSentimentStoragePolicy = Object.freeze({
   fileName: 'intelligence-news-sentiment.sqlite',
-  schemaVersion: 2
+  /**
+   * 升版即重建：这个库没有迁移路径（见 `openOrReset` 与下面的 `drop table`）。
+   *
+   * v3 加了 `entities_json` / `story_key` / `why_text`。重建的代价是 377 篇正文与 427 条评分
+   * 重跑一轮——**推送账本因此不能放在这里**，独立存在 `intelligence-news-push-ledger.sqlite`，
+   * 否则一次重建就把「推过没有」抹掉，历史会被整批重推。
+   */
+  schemaVersion: 3
 })
 
 export type NewsSentimentStore = ReturnType<typeof createNewsSentimentSqliteStore>
@@ -61,9 +69,13 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       prompt_version text,
       rule_id text,
       caveats_json text not null,
+      entities_json text not null default '[]',
+      story_key text,
+      why_text text,
       primary key (item_id, scored_at)
     );
     create index if not exists idx_news_sentiment_published on news_sentiment(published_at);
+    create index if not exists idx_news_sentiment_story on news_sentiment(story_key, published_at);
     create table if not exists news_body_translation (
       item_id text primary key,
       body_hash text not null,
@@ -145,8 +157,9 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       db.prepare(`
         insert into news_sentiment (
           item_id, source_id, published_at, scored_at, polarity, strength, confidence,
-          symbols_json, reason_code, evidence_quote, engine, model_ref, prompt_version, rule_id, caveats_json
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          symbols_json, reason_code, evidence_quote, engine, model_ref, prompt_version, rule_id, caveats_json,
+          entities_json, story_key, why_text
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         record.itemId,
         record.sourceId,
@@ -162,7 +175,10 @@ export function createNewsSentimentSqliteStore(filePath: string) {
         record.modelRef ?? null,
         record.promptVersion ?? null,
         record.ruleId ?? null,
-        JSON.stringify(record.caveats)
+        JSON.stringify(record.caveats),
+        JSON.stringify(record.entities ?? []),
+        record.storyKey ?? null,
+        record.why ?? null
       )
       return 'inserted'
     },
@@ -305,8 +321,25 @@ function toSentiment(row: Record<string, unknown>): NewsSentimentRecord {
     ...(row.model_ref == null ? {} : { modelRef: String(row.model_ref) }),
     ...(row.prompt_version == null ? {} : { promptVersion: String(row.prompt_version) }),
     ...(row.rule_id == null ? {} : { ruleId: String(row.rule_id) }),
-    caveats: parseJsonArray(row.caveats_json) as string[]
+    caveats: parseJsonArray(row.caveats_json) as string[],
+    ...(row.entities_json == null ? {} : { entities: parseEntities(row.entities_json) }),
+    ...(row.story_key == null ? {} : { storyKey: String(row.story_key) }),
+    ...(row.why_text == null ? {} : { why: String(row.why_text) })
   }
+}
+
+/** 存进去的是规范化后的实体集；读回来的形状不认识就退回空集，绝不让坏数据变成归并依据。 */
+function parseEntities(value: unknown): NewsSentimentEntity[] {
+  const parsed = parseJsonArray(value)
+  const entities: NewsSentimentEntity[] = []
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    if (typeof record.name !== 'string' || typeof record.kind !== 'string') continue
+    if (!['person', 'org', 'bill', 'asset', 'event'].includes(record.kind)) continue
+    entities.push({ name: record.name, kind: record.kind as NewsSentimentEntity['kind'] })
+  }
+  return entities
 }
 
 function parseJsonArray(value: unknown): unknown[] {
@@ -339,6 +372,17 @@ function assertSentiment(record: NewsSentimentRecord): void {
   }
   if (record.symbols.some((symbol) => !isNewsSymbol(symbol))) throw new Error('invalid-news-sentiment')
   if (record.engine !== 'model' && record.engine !== 'rules') throw new Error('invalid-news-sentiment')
+  for (const entity of record.entities ?? []) {
+    if (!entity.name.trim()) throw new Error('invalid-news-sentiment')
+    if (!['person', 'org', 'bill', 'asset', 'event'].includes(entity.kind)) throw new Error('invalid-news-sentiment')
+  }
+  // 键的形状由 `storyKeyOf` 独占；写进来的东西不符合这个形状，就是有人绕过了合成函数。
+  if (record.storyKey !== undefined && !/^story:\d{4}-\d{2}-\d{2}:.+$/.test(record.storyKey)) {
+    throw new Error('invalid-news-sentiment')
+  }
+  if (record.why !== undefined && (record.why.trim().length === 0 || record.why.length > NEWS_SENTIMENT_LIMITS.whyChars)) {
+    throw new Error('invalid-news-sentiment')
+  }
 }
 
 function assertIso(value: string): void {

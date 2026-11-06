@@ -46,3 +46,24 @@ it('keeps the one-off wording list in step with the service policy', () => {
   expect([...oneOffTriggerReasons].sort()).toEqual([...triggerStatusPolicy.oneOffReasonCodes].sort())
   for (const code of oneOffTriggerReasons) expect(Object.values(triggerStatusPolicy.explainableReasonCodes)).toContain(code)
 })
+
+it('keeps the signal reasons free of scheduling vocabulary and severity tiers', () => {
+  const zh = reasons('zh-CN')
+  const en = reasons('en-US')
+  const signalCodes = ['signal-high-triggered', 'signal-medium-triggered', 'signal-cooldown-active',
+    'signal-low-marker-only', 'signal-calendar-owned', 'signal-freeze-unavailable']
+  // Severity never reaches the interface: the two codes differ so the ledger can be reconciled, the
+  // sentence must not — writing "高频档" back into the copy puts the tier on the reader's screen.
+  expect(zh['signal-high-triggered']).toBe(zh['signal-medium-triggered'])
+  expect(en['signal-high-triggered']).toBe(en['signal-medium-triggered'])
+  for (const code of signalCodes) {
+    for (const word of ['档', '冷却', '牌子', '那条线', '额度']) expect(zh[code]!, `${code} leaks ${word}`).not.toContain(word)
+    for (const word of ['severity', 'high-severity', 'mid-severity', 'low-severity', 'cooldown', 'budget']) {
+      expect(en[code]!.toLowerCase(), `${code} leaks ${word}`).not.toContain(word)
+    }
+  }
+  // "Did not run" and "ran and failed" are different facts; this code may only claim the first, or
+  // the reader goes looking for a failure that never happened.
+  expect(zh['signal-freeze-unavailable']).not.toContain('失败')
+  expect(en['signal-freeze-unavailable']).not.toContain('fail')
+})

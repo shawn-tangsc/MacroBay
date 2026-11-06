@@ -24,6 +24,15 @@ export const analysisTriggerSourcePolicy = Object.freeze({
    * a data change (running at an open is the trigger).
    */
   gateEligibleTriggerKeys: ['calendar.refresh', ...analysisSessionSlots.map(triggerKeyForSlot)] as readonly string[],
+  /**
+   * Module signals are one key per rule (`signal.<moduleId>.<ruleId>`), so they are registered by
+   * the shape of the key instead of by listing rules that do not exist yet. Two registrations read
+   * this one pattern: the gate judges the key, and the budget line spends the event line — a signal
+   * that skipped the gate would spend a model call without a decision, and one left on the default
+   * line would eat the calendar's nine a day.
+   */
+  /** `signal.<moduleId>.<ruleId>`, both kebab tokens: exactly two segments, no third. */
+  signalTriggerKeyPattern: /^signal\.[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/,
   gateExemptTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[],
   itemTriggerKeys: ['macro.actual.first-confirmed', 'market-reaction.15m'] as readonly string[],
   correctionPhase: 'correction' as AnalysisPhase,
@@ -58,7 +67,23 @@ export function isGateExempt(triggerKey: string): boolean {
 
 /** Only the data-driven sources are judged by the gate; everything else passes through. */
 export function isGateEligible(triggerKey: string): boolean {
-  return analysisTriggerSourcePolicy.gateEligibleTriggerKeys.includes(triggerKey)
+  return isSignalTriggerKey(triggerKey) || analysisTriggerSourcePolicy.gateEligibleTriggerKeys.includes(triggerKey)
+}
+
+/**
+ * One key per module rule: `signal.<moduleId>.<ruleId>`.
+ *
+ * Shape rather than an enumerated list, because the rule set is the module's own policy and this
+ * file must not grow a copy of it. The pattern is narrow on purpose — `signal.debug` (no rule),
+ * `signal.open-interest` (no rule), `signal.a.b.c` (a third segment) and a bare `signal` all stay
+ * unregistered instead of silently spending the event line.
+ */
+export function isSignalTriggerKey(triggerKey: string): boolean {
+  // Two segments, one key per rule: `signal.<moduleId>.<ruleId>`. A key such as `signal.debug` is a
+  // typo, not a registration: letting it through spends the event line on a rule that does not
+  // exist, and nothing in the panel would say where it went. Both segments are kebab tokens, so a
+  // third segment (`signal.a.b.c`) fails too instead of being read as "some rule under some module".
+  return analysisTriggerSourcePolicy.signalTriggerKeyPattern.test(triggerKey)
 }
 
 /**
@@ -74,7 +99,8 @@ export function phaseForNewTriggerKey(triggerKey: string): AnalysisPhase {
  * cannot disagree about the same attempt:
  *
  * - `scheduled` — the three session opens, which carry their own daily reserve.
- * - `event` — the item line's two keys, registered in `itemTriggerKeys`.
+ * - `event` — the item line's two keys, registered in `itemTriggerKeys`, plus every module signal
+ *   (`signal.*`), which shares that allowance rather than the calendar's.
  * - `calendar` — everything else, including any future key. The default is the stricter line:
  *   a new source must be registered explicitly to get the event line's larger allowance.
  */
@@ -82,6 +108,7 @@ export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
 
 export function analysisRunLineOf(triggerKey: string): AnalysisRunLine {
   if (isScheduledSlotTriggerKey(triggerKey)) return 'scheduled'
+  if (isSignalTriggerKey(triggerKey)) return 'event'
   return (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(triggerKey) ? 'event' : 'calendar'
 }
 

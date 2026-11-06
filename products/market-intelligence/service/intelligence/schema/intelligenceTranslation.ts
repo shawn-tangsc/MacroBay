@@ -65,6 +65,11 @@ export type SafeTranslationStatus = {
 
 export type SafeTranslationDisplayText = {
   title: string
+  /**
+   * 这条 `title` 是哪种语言。译文必须带上来，否则调用方只能靠"有没有译文"去猜——日报就是这么把
+   * 中文标题丢掉的（`titleLocale` 未设，判断 `titleLocale === 本期语言` 永远不成立）。
+   */
+  titleLocale?: string
   summary?: string
   body?: string
   originalTitle: string
@@ -90,6 +95,17 @@ export type TranslateIntelligenceItemsJobInput = {
   targetLocale?: IntelligenceTranslationTargetLocale
   reason: 'new-item' | 'manual-selection' | 'settings-change' | 'retry-failed' | 'replay'
   translationIds?: string[]
+  /**
+   * 这一批属于哪个来源。按来源拆批时由入队处写入；运行记录按来源筛选读的就是它
+   * （`sourcesOf` 读 `payload.sourceId`），缺了它整批在来源筛选下会消失。
+   * 入队时算不出来源的批（只带筛选条件、候选留到执行时才选的）没有这个字段。
+   */
+  sourceId?: string
+  /**
+   * 同一次动作派生出的多批共用这一个标记。拆批是为了让定义 id 稳定到来源级；
+   * 不给一个标记的话，一次动作会显示成 N 次互不相干的任务。
+   */
+  groupId?: string
 }
 
 export type SafeTranslationJobSummary = {

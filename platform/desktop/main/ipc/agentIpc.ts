@@ -80,6 +80,10 @@ ipcMain.handle(IpcChannels.agentsCreateAgent, async (_event: IpcMainInvokeEvent,
   await syncAfterMutation(previousState)
   return created
 })
+// 频道设置页选文件夹：路径 → 工作区编号。写入由 `AgentWorkspaceService` 负责，这里不复制一份。
+ipcMain.handle(IpcChannels.agentsEnsureWorkspace, (_event: IpcMainInvokeEvent, path: unknown) =>
+  agentIpcHandlers.ensureWorkspace(path)
+)
 ipcMain.handle(IpcChannels.agentsListSessions, (_event: IpcMainInvokeEvent, query?: unknown) =>
   agentIpcHandlers.listSessions((query as Parameters<typeof agentIpcHandlers.listSessions>[0]) ?? {})
 )

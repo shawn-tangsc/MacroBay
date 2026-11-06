@@ -30,7 +30,10 @@ describe('proxy requirement bar', () => {
   it('renders the platform Alert with the proxy action', () => {
     expect(component).toContain('<Alert')
     expect(component).toContain('type="warning"')
-    expect(component).toContain('description={text.body}')
+    // 句面只来自文案表：失败档在「已配好代理」时换另一句，但仍是表里的键，不是硬编码。
+    expect(component).toContain('text.body')
+    expect(component).toContain('text.configuredFailedBody')
+    expect(component).toContain('description={')
     expect(component).toContain('data-network-proxy-settings')
   })
 

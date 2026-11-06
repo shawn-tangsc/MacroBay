@@ -1,54 +1,42 @@
 
-.mi-daily-briefing__state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px 12px;
-  color: var(--mi-dashboard-muted);
-}
-
-.mi-daily-briefing__state h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 20px; }
-.mi-daily-briefing__state p { margin: 0; }
-.mi-daily-briefing__state button {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid #3c4a2a;
-  border-radius: 7px;
-  background: #1c2418;
-  color: var(--mi-dashboard-lime);
-  cursor: pointer;
-}
 
 
 
-
-.mi-daily-briefing__rail { min-height: 0; overflow-y: auto; padding-right: 12px; border-right: 1px solid var(--mi-dashboard-line); }
-.mi-daily-briefing__rail-title { margin: 0 0 8px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
-.mi-daily-briefing__rail-list { display: grid; gap: 2px; }
-.mi-daily-briefing__rail-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; width: 100%; padding: 5px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail { min-height: 0; overflow-x: hidden; overflow-y: auto; padding-right: 12px; border-right: 1px solid var(--mi-dashboard-line); }
+/* The rail's own heading ("过去 14 天"): mono, letterspaced, 10px above the first day — the prototype
+   measured 10px, and the shorthand below is the one place that sets all four type values. */
+.mi-daily-briefing__rail-title { margin: 0 0 10px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+.mi-daily-briefing__rail-list { display: grid; gap: 0; min-width: 0; }
+/* One definition only: this row used to be declared twice (a horizontal one near the rail, and a
+   column one further down), so "what shape is a rail row" had two answers in the same file. */
+/* A row is two lines — facts, then the title — so its height comes from its content. The old
+   `height: 27px` is exactly what made a second line impossible; the measured row is 39.69px
+   (40.69px selected), and every generated row must land on that same pitch. */
+.mi-daily-briefing__rail-row { display: block; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
-.mi-daily-briefing__rail-row[aria-current="true"] { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-text); }
+/* Selection changes the surface, the edge and the 2px bar — never the ink. The prototype's
+   `[aria-current]` rule carries no colour for a reason: brightening the whole row makes a selected
+   row read as a different kind of row instead of the same row with a marker, and it pushes every
+   secondary word (faint facts, chips, title) up a step the drawing does not have. */
+/* Selection: a 4% lime wash, a 22% lime edge, the 2px bar, and the row's own 6px radius. Four
+   properties and no ink — the ink rule above is the same rule, stated once. Both tints are tokens
+   because a literal cannot be re-derived when the lime changes. 4% is not a taste: at 5% the source
+   chip drops to 4.46:1 on a selected row, at 4% it is 4.59:1 — the small text floor is 4.5. The
+   radius stays 6 so selection does not change the row's shape. */
+.mi-daily-briefing__rail-row[aria-current="true"] { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 22%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--mi-dashboard-lime) 4%, transparent); box-shadow: inset 2px 0 var(--mi-dashboard-lime); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
 .mi-daily-briefing__rail-date { font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-daily-briefing__rail-row i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-row i[data-direction="bullish"] { background: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-row i[data-direction="bearish"] { background: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-row i[data-direction="range"], .mi-daily-briefing__rail-row i[data-direction="mixed"] { background: var(--mi-dashboard-caution); }
-@media (max-width: 980px) {
-  .mi-daily-briefing__rail { max-height: 112px; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--mi-dashboard-line); }
-  .mi-daily-briefing__rail-list { display: flex; gap: 3px; overflow-x: auto; }
-  .mi-daily-briefing__rail-row { width: auto; flex: none; }
-}
+/* Narrow windows keep the rail vertical. It used to lie down and scroll sideways — a shape from the
+   days when a row was one date and a horizontal strip still read as a list. Now a row is an edition and
+   the days are grouped, so sideways means scrolling half a screen to reach yesterday. Squeezing the
+   document instead is the lesser cost, and the rail never scrolls horizontally. */
 
 
-.mi-daily-briefing__copy { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__copy:hover { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
 
-/* Two settings in one panel: the section heading is what keeps "when it runs" from reading as a
-   model preference, and it is the only thing the merge added to the markup. */
-.mi-daily-briefing__settings-section { margin: 16px 0 2px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
-.mi-daily-briefing__settings-section:first-child { margin-top: 0; }
 .mi-daily-briefing__settings-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__settings-row strong { display: block; color: var(--mi-dashboard-text); font-size: 12px; }
 .mi-daily-briefing__settings-row small { display: block; margin-top: 3px; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
@@ -57,6 +45,7 @@
    is the platform's own spelling so it never becomes a second way to write a zone. */
 .mi-daily-briefing__settings-zone { padding: 1px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: var(--mi-dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Not an error box: the setting can still be saved, and a modal inside a modal would read as a crash. */
+.mi-daily-briefing__clock-note { margin: 0; color: var(--caution); font-size: 10.5px; line-height: 1.45; }
 .mi-daily-briefing__settings-warning { margin: 10px 0 0; padding: 8px 10px; border-left: 2px solid var(--mi-dashboard-caution, var(--mi-dashboard-line)); border-radius: 4px; color: var(--mi-dashboard-text); font-size: 11.5px; line-height: 1.55; }
 .mi-daily-briefing__settings-link { margin: 10px 0 0; }
 .mi-daily-briefing__settings-link button { border: 0; background: transparent; color: var(--mi-dashboard-lime); font-size: 11px; cursor: pointer; padding: 0; }
@@ -64,71 +53,130 @@
 .mi-daily-briefing__settings-note { margin: 12px 0 0; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
 
 
-.mi-daily-briefing__regenerate { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__regenerate:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__regenerate:disabled { opacity: .55; cursor: default; }
 
 .mi-daily-briefing-page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 16px 24px 22px; overflow: hidden; }
 .mi-daily-briefing-page__bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing-page__back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: var(--mi-dashboard-surface); color: var(--mi-dashboard-muted); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__back:hover { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
+/* Toolbar: one shape for every action, and exactly one primary in the row.
+   Before this, five actions grew in five separate changes and each copied its own 28px/10.5px —
+   the row ended up with two filled buttons (reader cannot tell which is the main path) and a fifth
+   that fell back to the plain button default. Values here are lifted from those copies, no new colour. */
+.mi-briefing-tool__btn { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
+.mi-briefing-tool__btn:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
+.mi-briefing-tool__btn:disabled { opacity: .55; cursor: default; }
+/* Scoped so the token actually wins. A single-class rule ties with antd's injected `.ant-btn`, and the
+   injected sheet comes later, so antd's colour was the one that landed — four buttons rendered as empty
+   boxes while the destructive one kept its word, because that colour came from a compound selector.
+   The button's text is not decoration: at the wrong colour it disappears completely. */
+.mi-daily-briefing-page__bar .mi-briefing-tool__btn,
+.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn { color: var(--mi-dashboard-muted); }
+.mi-daily-briefing-page__bar .mi-briefing-tool__btn:disabled,
+.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn:disabled { color: var(--mi-dashboard-muted); }
+.mi-daily-briefing-page__bar .mi-briefing-tool__btn:hover:not(:disabled),
+.mi-daily-briefing-page__report-bar .mi-briefing-tool__btn:hover:not(:disabled) { color: var(--mi-dashboard-lime); }
+.mi-briefing-tool__btn--primary { border-color: #3c4a2a; background: #1c2418; color: var(--mi-dashboard-lime); }
+/* The destructive action keeps the group's 28px skeleton and takes only the danger ink: red word, red
+   edge, no fill. The antd `danger` prop alone would colour it from antd's own palette, which is not
+   the dashboard's red — a compound selector keeps the token in charge. Disabled, it fades with the
+   rest of the row of buttons instead of turning into a second, different disabled look. */
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger { border-color: color-mix(in srgb, var(--mi-dashboard-negative) 45%, var(--mi-dashboard-line)); color: var(--mi-dashboard-negative); }
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger:hover:not(:disabled) { border-color: var(--mi-dashboard-negative); color: var(--mi-dashboard-negative); }
+.mi-briefing-tool__btn.mi-briefing-tool__btn--danger:disabled { opacity: .55; color: var(--mi-dashboard-negative); }
+.mi-briefing-tool__btn--primary:hover:not(:disabled) { background: #26301f; }
+
 .mi-daily-briefing-page__actions { display: flex; align-items: center; gap: 7px; }
-.mi-daily-briefing-page__body { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 20px; flex: 1; min-height: 0; padding-top: 14px; }
-.mi-daily-briefing-page__content { min-height: 0; overflow-y: auto; padding: 20px 22px; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
-.mi-daily-briefing-page__failure { max-width: 650px; margin: 56px auto; padding: 24px; border: 1px dashed #3c4a2a; border-radius: 12px; background: rgba(255, 255, 255, .02); }
+/* `minmax(0, 1fr)` on the row is part of the height chain, not decoration: an auto row grows with its
+   content, so the card inside it grows too and the sheet's scroll area never becomes shorter than what
+   it holds — which looks exactly like "the report cannot scroll". */
+.mi-daily-briefing-page__body { display: grid; grid-template-columns: 268px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 20px; flex: 1; min-height: 0; padding-top: 14px; }
+/* One definition. It used to be two — a scrolling surface near the top of the sheet and a later rule
+   that stripped its padding, border and background — which is how its own padding ended up at 0 and
+   the card ended up flush against the scrollbar. It no longer scrolls: the card inside it owns the
+   height, and the sheet's own area owns the scrolling. */
+.mi-daily-briefing-page__content { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0; border: 0; background: transparent; }
+/* The card the reader sees: it holds the action row and the paper together, so the buttons belong to
+   the card while the paper keeps its own edge. The paper is the only exported surface — the card is
+   interface, the paper is the document, and keeping them in two boxes is what keeps the difference
+   visible. The paper takes the card's inner width: a fit-content sheet would shrink to the buttons and
+   the export boundary would move with them. */
+/* Card = fixed action row + a scroll area that contains only the sheet. The row cannot scroll away and
+   the scrollbar cannot reach it, because they are not in the same scroll container. */
+.mi-daily-briefing-page__report-card { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--mi-dashboard-line); border-radius: 14px; background: var(--mi-dashboard-surface); }
+/* The action row is part of the card and never moves: it is outside the scroll area, so it needs no
+   sticky offset and no stuck state to know when to paint itself. It looks the same before and during a
+   scroll — a surface with a faint seam under it, which is the edge of the sheet's area rather than a
+   second section. */
+.mi-daily-briefing-page__report-bar { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px; background: var(--mi-dashboard-surface); border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+/* The sheet's own scroll area. Equal 12px insets on both sides: the sheet is centred inside the card,
+   and an overlay scrollbar floats in the right-hand dark band instead of over the cream sheet — a dark
+   bar on the paper reads as the page having been cut. */
+/* Three conditions hold the scroll open: the parent is a column flex with `min-height: 0`, the row is
+   `flex: none`, and this box is `flex: 1 1 auto` with `min-height: 0`. A flex child defaults to
+   `min-height: auto`, so leaving that out makes it grow with its content and never scroll. */
+.mi-daily-briefing-page__report-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; }
+/* The stage list starts at the same inset in the body panel and in the right column: both containers
+   used to inset their own contents differently (24px vs 16px), which moved every row by 8px between
+   the generating state and the finished one. The inset belongs to the list, not to each shell. */
+.mi-daily-briefing-page__failure { max-width: 650px; margin: 56px auto; padding: 24px 24px 24px 16px; border: 1px dashed #3c4a2a; border-radius: 12px; background: rgba(255, 255, 255, .02); }
 .mi-daily-briefing-page__failure h2 { margin: 0 0 8px; color: var(--mi-dashboard-text); font-size: 17px; }
 .mi-daily-briefing-page__failure p { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.65; }
 .mi-daily-briefing-page__failure-actions { display: flex; gap: 8px; margin-top: 16px; }
 .mi-daily-briefing-page__failure-actions button { height: 30px; padding: 0 12px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-text); font-size: 11px; cursor: pointer; }
 .mi-daily-briefing-page__failure-actions .mi-daily-briefing-page__primary { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
-.mi-daily-briefing__rail-row { flex-direction: column; align-items: stretch; gap: 2px; padding: 8px 7px; }
-.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; }
+/* Line one, and its order is fixed: moment → window → direction → source → · → language. Nothing
+   else belongs on it: item count, gap count and "this issue" all left the row on purpose. */
+.mi-daily-briefing__rail-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex-wrap: nowrap; white-space: nowrap; }
+/* The row's own title is `__rail-row-title`: `__rail-title` is already the rail's heading ("过去 14
+   天"), and one name for two elements is how a heading picks up a row's clipping and sizes.
+   Line two is the title, one line: it is what tells the reader whether to open the issue, so it may
+   shorten but never wrap — a wrapped title makes the pitch of the list uneven. The waiting row puts
+   the platform spinner in this same box (14px inside a 14.7px line box) so the height does not move
+   when the title arrives in place. */
+.mi-daily-briefing__rail-row-title { display: block; margin: 1px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.4; }
+.mi-daily-briefing__rail-row-title[data-rail-title="running"] { display: flex; align-items: center; gap: 6px; }
 .mi-daily-briefing__rail-line em { color: var(--mi-dashboard-lime); font-size: 9px; font-style: normal; }
 .mi-daily-briefing__rail-line small { color: #5f686e; font-size: 9px; }
-.mi-daily-briefing__rail-direction { font-size: 9.5px; }
+.mi-daily-briefing__rail-direction { font-size: 9.5px; white-space: nowrap; }
 .mi-daily-briefing__rail-direction[data-direction="bullish"] { color: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-direction[data-direction="bearish"] { color: var(--mi-dashboard-negative); }
 .mi-daily-briefing__rail-direction[data-direction="range"], .mi-daily-briefing__rail-direction[data-direction="mixed"] { color: var(--mi-dashboard-caution); }
-.mi-daily-briefing__rail-summary { display: -webkit-box; overflow: hidden; color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.mi-daily-briefing__rail-meta { color: #5f686e; font-size: 9px; }
-.mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; }
+
+.mi-daily-briefing__rail-missing { color: #5f686e; font-size: 9.5px; white-space: nowrap; }
 @media (max-width: 980px) {
   .mi-daily-briefing-page { padding: 10px; }
   .mi-daily-briefing-page__body { grid-template-columns: 1fr; gap: 10px; }
-  .mi-daily-briefing-page__content { padding: 14px; }
 }
 
-.mi-daily-briefing__export { height: 28px; padding: 0 10px; border: 1px solid #3c4a2a; border-radius: 7px; background: #1c2418; color: var(--mi-dashboard-lime); font-size: 10.5px; cursor: pointer; }
-.mi-daily-briefing__export:hover:not(:disabled) { background: #26301f; }
-.mi-daily-briefing__export:disabled { opacity: .55; cursor: default; }
 
 .mi-daily-briefing-page__body { grid-template-columns: 248px minmax(0, 1040px); justify-content: center; }
 .mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }
 
 
-.mi-daily-briefing-page__content { padding: 0; border: 0; background: transparent; }
-.mi-daily-briefing-page__paper { border: 1px solid var(--mi-dashboard-line); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .28); }
-.mi-daily-briefing-page__paper .mi-brief-poster { width: 100%; min-height: 0; padding: 30px 30px 24px; }
+/* The content column no longer scrolls: the card inside it does. Keeping one scroller on the sheet's
+   own box is what keeps the action row out of the scroll — and what keeps the scrollbar off the
+   buttons without measuring anything. */
+/* The paper is the shell; the sheet inside keeps its printed width and is scaled to fit. The border,
+   radius and shadow stay out here so they are not scaled down with the sheet. */
+/* The sheet keeps its own radius and shadow and takes the card's inner width; it carries no border of
+   its own — the cream sheet already separates from the dark card, and a second edge here would draw a
+   line that is not part of the document. */
+.mi-daily-briefing-page__paper { position: relative; width: 100%; border: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .28); }
+.mi-daily-briefing-page__paper-scale { position: absolute; top: 0; left: 0; width: 1080px; transform-origin: top left; will-change: transform; }
 
 .mi-daily-briefing-page__ai-failure { margin: 8px 0 0; padding: 6px 9px; border: 1px solid #4a3d24; border-radius: 6px; background: rgba(255, 196, 0, .05); color: var(--mi-dashboard-caution); font-size: 10px; }
 
 /* The rail is a stage-by-stage audit, so it gets a readable column and the report fills the rest. */
 .mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(240px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px); justify-content: stretch; }
 .mi-daily-briefing-page__appendix { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 14px 0 0 16px; border-left: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
-.mi-daily-briefing-page__appendix-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.mi-daily-briefing-page__appendix-head h2 { margin: 0; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
-.mi-daily-briefing-page__appendix-toggle { flex: none; padding: 2px 6px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; background: transparent; color: var(--mi-dashboard-muted); font-size: 9px; cursor: pointer; }
-.mi-daily-briefing-page__appendix-counts { margin: 0 0 10px; color: #7d8790; font-size: 9.5px; line-height: 1.45; }
-.mi-daily-briefing-page__groups { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; }
-.mi-daily-briefing-page__group { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; width: 100%; padding: 5px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.mi-daily-briefing-page__groups { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-daily-briefing-page__group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
 .mi-daily-briefing-page__group:hover, .mi-daily-briefing-page__group:focus-visible { border-color: var(--mi-dashboard-line); background: rgba(255, 255, 255, .025); outline: none; }
-.mi-daily-briefing-page__group-tags { grid-column: 1; display: flex; gap: 4px; }
-.mi-daily-briefing-page__group-tags span { padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: #8d979f; font-size: 8px; line-height: 1.5; }
-.mi-daily-briefing-page__group-tags span[data-severity="blocking"] { border-color: #8b3a3a; color: #f0a3a3; }
-.mi-daily-briefing-page__group-tags span[data-severity="warning"] { border-color: #8b6d2e; color: #e7c98f; }
-.mi-daily-briefing-page__group-label { grid-column: 1; color: #c4ccd2; font-size: 9.5px; line-height: 1.35; }
-.mi-daily-briefing-page__group-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: #a7b0b7; font-size: 8.5px; line-height: 1.5; white-space: nowrap; }
-.mi-daily-briefing-page__group-example { grid-column: 1 / -1; overflow: hidden; color: #7d8790; font-size: 8.5px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.mi-daily-briefing-page__group-severity { color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
+.mi-daily-briefing-page__group-severity[data-issue-severity="blocking"] { color: var(--mi-dashboard-negative); }
+.mi-daily-briefing-page__group-severity[data-issue-severity="warning"] { color: var(--mi-dashboard-caution); }
+.mi-daily-briefing-page__group-label { overflow: hidden; color: var(--mi-dashboard-text); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.mi-daily-briefing-page__group-count { color: var(--mi-dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; text-align: right; white-space: nowrap; }
 
 .mi-issue-drawer__tags { display: flex; gap: 5px; }
 .mi-issue-drawer__tags span { padding: 1px 5px; border: 1px solid var(--mi-dashboard-line); border-radius: 999px; color: #8d979f; font-size: 8.5px; line-height: 1.4; }
@@ -140,8 +188,10 @@
 .mi-issue-drawer__title { margin: 0 0 3px; color: #d7dde1; font-size: 10.5px; line-height: 1.5; }
 .mi-issue-drawer__meta, .mi-issue-drawer__advice { margin: 0; color: #8d979f; font-size: 9px; line-height: 1.5; }
 .mi-issue-drawer__advice { margin-top: 2px; color: #7d8790; }
-@media (max-width: 1450px) { .mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); } .mi-daily-briefing-page__appendix { grid-column: 1 / -1; max-height: 220px; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--mi-dashboard-line); } }
-@media (max-width: 980px) { .mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(0, 1fr); } }
+/* Three columns stay three columns on a desktop window. Collapsing at 1450px meant most real
+   windows had no right-hand column at all: it fell below the report, full width and a few pixels
+   tall — which reads as "the column is gone", not as a reuse. Only a genuinely narrow window stacks. */
+@media (max-width: 980px) { .mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(0, 1fr); } .mi-daily-briefing-page__appendix { grid-column: 1 / -1; max-height: 240px; padding: 8px 0 0; border-left: 0; border-top: 1px solid var(--mi-dashboard-line); } }
 
 .mi-generation-trace { margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-generation-trace__head { display: flex; align-items: center; gap: 6px; }
@@ -152,24 +202,27 @@
 .mi-generation-trace__summary, .mi-generation-trace__failed, .mi-generation-trace__missing { margin: 4px 0 0; color: #7d8790; font-size: 9px; line-height: 1.5; }
 .mi-generation-trace__failed { color: #e7c98f; }
 .mi-generation-trace__missing { color: #7d8790; font-style: italic; }
-/* Vertical antd Steps, compressed to the rail's 10px scale: the stage name and its help share the
-   title row, and the recorded time/error is the description. The stepper draws the rail itself. */
-.mi-generation-trace__steps { margin-top: 8px; }
-.mi-generation-trace__steps .ant-steps-item { padding-bottom: 5px; }
-.mi-generation-trace__steps .ant-steps-item:last-child { padding-bottom: 0; }
-.mi-generation-trace__steps .ant-steps-item-tail { inset-inline-start: 5.5px; }
-.mi-generation-trace__steps .ant-steps-item-tail::after { width: 1px; background: var(--mi-dashboard-line) !important; }
-.mi-generation-trace__steps .ant-steps-item-icon { width: 12px; height: 12px; margin-inline-start: 0; font-size: 7px; line-height: 10px; }
-.mi-generation-trace__steps .ant-steps-item-icon .ant-steps-icon { font-size: 8px; line-height: 1; }
-.mi-generation-trace__steps .ant-steps-item-finish .ant-steps-item-icon { background: #6f9e7b; border-color: #6f9e7b; }
-.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-icon { background: #d16a6a; border-color: #d16a6a; }
-.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon { background: transparent; border-color: #4d555c; }
-.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon { color: #4d555c; }
-.mi-generation-trace__steps .ant-steps-item-content { min-height: 12px; }
-.mi-generation-trace__steps .ant-steps-item-title { padding-inline-end: 0; color: #c4ccd2; font-size: 9.5px; line-height: 1.35; }
-.mi-generation-trace__steps .ant-steps-item-title::after { display: none; }
-.mi-generation-trace__steps .ant-steps-item-description { padding-bottom: 0; color: #7d8790; font-size: 8.5px; line-height: 1.35; }
-.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
+.mi-generation-trace__waiting-hint { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 9px; line-height: 1.5; }
+/* One stepper for every state: the live run in the body and the finished or failed trace in the
+   rail. The circle and its connector are the stepper's; the name, its help and the recorded time
+   are one row from the shared row implementation. Type size and rhythm are stated once here rather
+   than per surface, which is what keeps "generating" and "finished" from drifting apart again. */
+.mi-brief-steps__stepper { margin-top: 4px; }
+.mi-brief-steps__stepper .ant-steps-item { padding-bottom: 4px; }
+.mi-brief-steps__stepper .ant-steps-item:last-child { padding-bottom: 0; }
+.mi-brief-steps__stepper .ant-steps-item-tail { inset-inline-start: 7.5px; }
+.mi-brief-steps__stepper .ant-steps-item-tail::after { width: 1px; background: var(--mi-dashboard-line) !important; }
+.mi-brief-steps__stepper .ant-steps-item-icon { width: 16px; height: 16px; margin-inline-start: 0; font-size: 11px; line-height: 14px; }
+.mi-brief-steps__stepper .ant-steps-item-icon .ant-steps-icon { font-size: 11px; line-height: 14px; }
+.mi-brief-steps__stepper .ant-steps-item-finish .ant-steps-item-icon { background: #6f9e7b; border-color: #6f9e7b; }
+.mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-icon { background: #d16a6a; border-color: #d16a6a; }
+.mi-brief-steps__stepper .ant-steps-item-wait .ant-steps-item-icon { background: transparent; border-color: #4d555c; }
+.mi-brief-steps__stepper .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon { color: #4d555c; }
+.mi-brief-steps__stepper .ant-steps-item-content { min-height: 22px; }
+.mi-brief-steps__stepper .ant-steps-item-title { display: block; padding-inline-end: 0; color: #c4ccd2; font-size: 12px; font-weight: 600; line-height: 18px; }
+.mi-brief-steps__stepper .ant-steps-item-title::after { display: none; }
+.mi-brief-steps__stepper .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
+.mi-brief-steps__stepper .mi-brief-steps__row-content { display: flex; align-items: center; gap: 6px; }
 .mi-generation-trace__stage-title { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .mi-generation-trace__stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-generation-trace__stage-time { font-variant-numeric: tabular-nums; }
@@ -181,14 +234,181 @@
 .mi-daily-briefing-page__websearch-warning button { flex: none; height: 26px; padding: 0 9px; border: 1px solid #8b6d2e; border-radius: 6px; background: transparent; color: #f2d59a; font-size: 10px; cursor: pointer; }
 
 
-/* Live generation steps: eight rows from the contract's mapping, no percentage anywhere. */
+/* The live run's own block: eight rows from the contract's mapping, no percentage anywhere. */
 .mi-brief-steps { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-.mi-brief-steps__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.mi-brief-steps__row { display: flex; align-items: baseline; gap: 8px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
-.mi-brief-steps__row[data-step-state='done'] { color: var(--mi-dashboard-text); }
-.mi-brief-steps__row[data-step-state='running'] { color: var(--mi-dashboard-text); }
-.mi-brief-steps__row[data-step-state='failed'] { color: var(--mi-dashboard-negative); }
-.mi-brief-steps__icon { flex: none; align-self: center; }
-.mi-brief-steps__name { flex: 1 1 auto; min-width: 0; }
-.mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; }
+/* A stage name is one word, never a two-line cell: it keeps one line and truncates if the rail is
+   narrower than the name, so the connector column and the times stay where they are. */
+.mi-brief-steps__name { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
+
+/* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
+.mi-daily-briefing__rail-item { display: block; min-width: 0; }
+.mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
+.mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
+.mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }
+
+/* 行内三段各不断行：宽度修好后，事实段只保证自己不被折断。 */
+/* One row per edition, one line of facts: the row is not a grid, because a second column would let a
+   label push the facts into a column of their own — which is how a 27px row became five lines. */
+.mi-daily-briefing__rail-meta { display: flex; align-items: baseline; gap: 6px; flex: 1 1 auto; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #5f686e; font-size: 10px; }
+/* Colour is inherited from the container on purpose: the rail keeps one faint ink, and repeating it
+   here would make a second place to change it — and a second literal for the colour gate to count. */
+/* Facts give way before the language does: `0 1 auto` lets the moment shorten with an ellipsis, so a
+   long row loses characters of its own tail instead of pushing the language column out of line. */
+.mi-daily-briefing__rail-fact { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+/* The moment leads: bold and in the body ink, because it is what the reader scans the rail for. */
+.mi-daily-briefing__rail-fact:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 600; line-height: 14px; color: var(--mi-dashboard-text); font-variant-numeric: tabular-nums; }
+/* The window is a qualifier of the moment, not a fact beside it: a chip keeps it from reading as one. */
+/* The window badge and the source badge are one shape: geometry is declared once, here, and the two
+   only differ in colour. Two sizes of the same small marker side by side read as an accident. */
+.mi-daily-briefing__rail-fact[data-window-hours],
+.mi-daily-briefing__rail-source { flex: none; padding: 1px 4px; border-radius: 3px; white-space: nowrap; font-size: 9px; font-weight: 600; line-height: 13px; }
+.mi-daily-briefing__rail-fact[data-window-hours] { background: color-mix(in srgb, var(--mi-dashboard-lime) 10%, transparent); color: var(--mi-dashboard-muted); }
+/* Both badges are mixed at the same 10% for a measured reason: at 14% the muted word on a chip
+   sits at 4.26:1 against a selected row and misses the 4.5 small-text floor, while 10% clears it
+   (5.11 / 4.58 on a row, 5.32 / 4.79 for the failure tone). Geometry equal is not enough — tint
+   equal is what makes them one marker, and the tint is set by contrast, not by taste.
+   The source badge answers "did the machine produce this, or did I?": one of
+   scheduled / manual / catch-up / not-run / failed, exactly one per row. Only a failure is red;
+   the other four are neutral, because a source is not a verdict. */
+.mi-daily-briefing__rail-source { background: color-mix(in srgb, var(--mi-dashboard-muted) 10%, transparent); color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-source[data-run-source="failed"] { background: color-mix(in srgb, var(--mi-dashboard-negative) 10%, transparent); color: var(--mi-dashboard-negative); }
+/* The language is pushed to the row's trailing edge by its own auto margin: facts on the left, the
+   language on the right, and the gap between them is the alignment rather than a defect to bridge.
+   There is no separator element in the row at all — the span that used to hold a dot was removed, and
+   the rule that merely hid it went with it. */
+/* 失败那一行的出路：没有正文可开，所以它就在行里，尺寸跟着第一行那一档，不另起一个按钮高度。
+   它**不在行按钮内部**（`<button>` 里不能套 `<button>`），而是同一条目里的第二个控件，
+   绝对定位到第二行右侧；行按钮用 `data-has-retry` 在第二行右端让出这段宽度。 */
+.mi-daily-briefing__rail-retry { position: absolute; right: 6px; bottom: 4px; padding: 0 2px; border: 0; background: transparent; color: var(--mi-dashboard-lime); font-size: 9.5px; line-height: 14px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.mi-daily-briefing__rail-row[data-has-retry="true"] .mi-daily-briefing__rail-row-title { padding-right: 38px; }
+.mi-daily-briefing__rail-direction--none { display: inline-block; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-muted); }
+/* 「N 次」落在行尾，而不是和语言胶囊抢一列。 */
+
+/* 回退到英语是状态，不是说明：一行灰字、无边框、无图标，常驻可见（规范 §7 第三档）。 */
+.mi-daily-briefing-page__language-fallback { margin: 0 0 10px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.5; }
+
+/* 步骤面板：问号在标题前、同一行最左；它是标题的帮助，不是列表的孤儿。 */
+.mi-brief-steps__head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mi-brief-steps__title { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
+
+/* The right-hand detail column: one scroll container, three sections in order
+   (generation stages → data gaps & limits → attempts), and three text sizes. Sizes below 11px are
+   gone from this column on purpose: seven fragments between 7px and 10.5px read as "uneven". */
+[data-briefing-detail] { font-size: 12px; line-height: 1.5; }
+[data-briefing-detail] h2, [data-briefing-detail] h3 { margin: 0; color: var(--mi-dashboard-muted); font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 18px; }
+/* One gap between every pair of blocks in this column. Naming the blocks instead of counting
+   elements is what keeps the spacing equal now that the middle one is a wrapper and the last one
+   is a details: a sibling rule silently gave the first gap the treatment and the second none. */
+[data-briefing-detail] > [data-briefing-stages],
+[data-briefing-detail] > [data-briefing-attempts] { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
+[data-briefing-detail] .mi-generation-trace { margin: 0; padding-bottom: 0; border-bottom: 0; }
+[data-briefing-detail] .mi-generation-trace__head > span,
+[data-briefing-detail] .mi-generation-trace__summary,
+[data-briefing-detail] .mi-generation-trace__failed,
+[data-briefing-detail] .mi-generation-trace__missing,
+[data-briefing-detail] .mi-generation-trace__stage-time,
+[data-briefing-detail] .mi-generation-trace__stage-failure,
+[data-briefing-detail] .mi-briefing-attempts__row em,
+[data-briefing-detail] .mi-briefing-attempts__row small { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 400; line-height: 16px; }
+[data-briefing-detail] .mi-briefing-attempts__row span { font-size: 12px; font-weight: 600; line-height: 18px; }
+[data-briefing-detail] .mi-briefing-attempts__list p { font-size: 12px; font-weight: 400; line-height: 18px; }
+[data-briefing-detail] .mi-daily-briefing-page__group { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 32px; padding: 0 0 0 18px; }
+[data-briefing-detail] .mi-daily-briefing-page__group-severity { flex: none; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
+[data-briefing-detail] .mi-daily-briefing-page__group-severity[data-issue-severity="blocking"] { color: var(--mi-dashboard-negative); }
+[data-briefing-detail] .mi-daily-briefing-page__group-severity[data-issue-severity="warning"] { color: var(--mi-dashboard-caution); }
+[data-briefing-detail] .mi-daily-briefing-page__group-label { overflow: hidden; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+[data-briefing-detail] .mi-daily-briefing-page__group-count { flex: none; color: var(--mi-dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; text-align: right; white-space: nowrap; }
+[data-briefing-detail] .mi-briefing-attempts__row { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0; padding: 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); }
+[data-briefing-detail] .mi-briefing-attempts__list { display: flex; flex-direction: column; padding-left: 18px; }
+
+/* One disclosure shape for the three blocks (stages, gaps, attempts): native details, the whole
+   summary line is the target, the arrow sits on the left and turns down when open. The arrow is a
+   pseudo-element so the summary holds one heading and nothing focusable. */
+.mi-generation-trace__head, .mi-briefing-gaps__head, .mi-briefing-detail__head { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0; cursor: pointer; list-style: none; }
+.mi-generation-trace__head::-webkit-details-marker, .mi-briefing-gaps__head::-webkit-details-marker, .mi-briefing-detail__head::-webkit-details-marker { display: none; }
+.mi-generation-trace__head::before, .mi-briefing-gaps__head::before, .mi-briefing-detail__head::before { content: ''; flex: none; width: 5px; height: 5px; border-right: 1.5px solid var(--mi-dashboard-muted); border-bottom: 1.5px solid var(--mi-dashboard-muted); transform: rotate(-45deg); transition: transform .12s ease; }
+details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing-gaps__head::before, details[open] > .mi-briefing-detail__head::before { transform: rotate(45deg); }
+.mi-briefing-gaps > summary > h2, .mi-briefing-detail__head h3 { flex: none; }
+.mi-briefing-gaps__head { justify-content: flex-start; }
+.mi-briefing-gaps__counts { overflow: hidden; color: var(--mi-dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Which languages an issue has: a fact, not a control — flat, muted, never in Tab order. */
+.mi-daily-briefing__rail-edition-lang { display: block; margin-top: 2px; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 16px; }
+
+/* 发布频道：与「重新生成」同一组，按钮用平台默认样式，这里只负责它和那句成功回执怎么排。
+   成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
+.mi-daily-briefing__push-slot { display: inline-flex; align-items: center; gap: 8px; }
+.mi-daily-briefing__push-toast { color: var(--mi-dashboard-muted); font-size: 12px; line-height: 18px; }
+
+/* The two period dialogs: one row per choice, the verdict under them. The conflict sentence is a
+   warning (the button is already disabled), not an error state — the reader has not done anything
+   wrong yet, they have picked values that collide with a row they already have. */
+.mi-briefing-period-dialog { display: flex; flex-direction: column; gap: 12px; }
+.mi-briefing-period-dialog__field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* A field's label and the question that explains it are one unit: the question comes first, 6px from
+   the title, vertically centred, never on a line of its own — the same shape the settings form gives
+   its labels. This dialog reuses that class, but the settings form's rule is scoped to its own form,
+   so without this the question sat flush against the title with no gap.
+   The question is a real trigger and may not be painted faint: at the faint tone it measured 2.6:1,
+   and a control the reader cannot see is not a control. The hit area and the focus ring stay the
+   platform icon button's — nothing here enlarges them. */
+.mi-briefing-period-dialog .mi-daily-briefing__field-label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.mi-briefing-period-dialog .mi-daily-briefing__field-label .icon-button { color: var(--mi-dashboard-muted); }
+.mi-briefing-period-dialog__field strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 600; }
+.mi-briefing-period-dialog__hint, .mi-briefing-period-dialog__note { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
+/* The refusal line, one class for both tiers. 10.5px is the dialog's own label size: a hint larger than
+   the label it explains is read before the field itself, and the reader gets the explanation first.
+   "Temporarily unavailable" (generating, deleted, replacing) is neutral text with a caution dot — it is
+   not a mistake, and a red sentence would tell the reader they did something wrong. Only a value that is
+   genuinely invalid (a moment in the future, a language this issue does not have) is red.
+   The dot is not decoration and not the only carrier: the sentence already states the reason, and the
+   dot is what separates a hint from a paragraph of explanation at a glance. */
+.mi-briefing-period-dialog__conflict { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
+.mi-briefing-period-dialog__conflict::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-caution); }
+.mi-briefing-period-dialog__conflict[data-tone="invalid"] { color: var(--mi-dashboard-negative); }
+.mi-briefing-period-dialog__conflict[data-tone="invalid"]::before { background: var(--mi-dashboard-negative); }
+
+/* The day grouping arrived in the multi-period list and shipped with no stylesheets at all — the
+   markup used `__rail-day-*` while the CSS only knew `__rail-summary`, so every day rendered as one
+   unstyled paragraph: no divider, no clamp, the summary running five lines. These are the missing
+   rules; values follow the period list design (day head 11.5, summary one line, 1px divider between
+   periods, one language chip per row). */
+/* 8px above and below each day, 1px between days: those are the drawing's numbers, and the first day
+   keeps its 8px or the heading sits on top of it. */
+.mi-daily-briefing__rail-day { display: block; padding: 8px 0; border-top: 1px solid var(--mi-dashboard-line); }
+.mi-daily-briefing__rail-day:first-child { border-top: 0; }
+.mi-daily-briefing__rail-day-head { display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 0 6px 6px; border: 0; background: none; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-day-head:hover { color: var(--mi-dashboard-text); }
+.mi-daily-briefing__rail-day-date { font-size: 11.5px; font-weight: 600; letter-spacing: .03em; color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-day-today { font-style: normal; font-size: 10.5px; line-height: 14px; color: var(--mi-dashboard-muted); letter-spacing: .02em; }
+.mi-daily-briefing__rail-day-count { margin-left: auto; font-size: 10.5px; color: #5f686e; white-space: nowrap; }
+.mi-daily-briefing__rail-day-rows { display: grid; gap: 0; }
+.mi-daily-briefing__rail-item + .mi-daily-briefing__rail-item { border-top: 1px solid var(--mi-dashboard-line); }
+/* The item is a positioning context for the one control that is not the row itself: the retry button
+   of a failed edition, which sits at the row's lower right. The row keeps its own click target, so the
+   two never nest — a button inside a button is invalid markup, and every click on it would select the
+   row first.
+   There is no ⋯ trigger any more: the row's menu is the context menu, and its one item is explained
+   there. The rules for a hover-revealed icon at the row's trailing edge were deleted with it. */
+.mi-daily-briefing__rail-item { position: relative; }
+/* A day that has no edition yet. One line with a trailing ›, and deliberately none of the edition row's
+   rhythm: same insets and the same 27px pitch would make it read as an edition that happens to be
+   empty. Its ink is the faint tier — quieter than a title — because "not yet" is not a warning: no red,
+   no dot, no retry affordance. The caret is what says it can be clicked, and the hover brightening is
+   the one the edition rows already use.
+   The faint ink has no token in this stylesheet: it is a literal that already went into the colour
+   baseline against several selectors. A second literal for the same value would be a second entry for
+   one colour, and the next reader would have to decide which of the two faint inks is the real one. So
+   this row derives it from the muted ink at the same strength instead — same rendered tone, no second
+   ledger line, and a value that follows the muted ink if that ever moves.
+   When the faint ink becomes a token of its own, this line reads that token and the derivation goes. */
+.mi-daily-briefing__rail-fallback { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 0; padding: 8px 6px; border: 0; border-radius: 6px; background: transparent; color: color-mix(in srgb, var(--mi-dashboard-muted) 62%, transparent); font-size: 11px; line-height: 1.45; text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-fallback:hover { background: rgba(255, 255, 255, .04); color: var(--mi-dashboard-muted); }
+.mi-daily-briefing__rail-fallback-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mi-daily-briefing__rail-fallback-caret { flex: none; color: var(--mi-dashboard-muted); }
+/* One language label per row, and it is a label: the row's own language. No hover, no focus ring, no
+   pressed state — a reader who could click it would expect it to change what the row shows, and it does
+   not. It is also the row's only language cue now that titles no longer fit in a 252px rail. */
+.mi-daily-briefing__rail-lang { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; line-height: 14px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-muted) 30%, transparent); border-radius: 9px; color: var(--mi-dashboard-muted); white-space: nowrap; cursor: default; user-select: none; }

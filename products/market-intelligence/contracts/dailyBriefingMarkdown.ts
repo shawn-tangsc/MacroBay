@@ -1,14 +1,25 @@
-import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, BriefingRowChange, DailyBriefingDocument } from './dailyBriefing'
+import { editionNewsTitle } from './dailyBriefing/readings'
+import { briefingMacroValueLabel } from './dailyBriefingMacroValueText'
+import { briefingEditionPeriod, type BriefingMacroItem, type BriefingMarketRow, type BriefingNewsItem, type BriefingNextItem, type BriefingPulseRow, type BriefingRowChange, type DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
+import { briefingDataGroups, briefingDataRowsFromGroups } from './dailyBriefingDataGroups'
+import { briefRowFigures, formatRowMove } from './dailyBriefingRowFigures'
 
 export type DailyBriefingMarkdownLabels = Readonly<{
   title: string
   window: string
   edition: string
-  readings: string
+  /** The period this edition belongs to, e.g. `期 {time}（定期）`; omitted for the `default` period. */
+  periodScheduled: string
+  periodManual: string
+  /**
+   * The edition language, so a copied brief says which version it is. Optional: a caller that has no
+   * name table prints the locale tag rather than a blank, and the screen's own copy is not affected.
+   */
+  languageNames?: Readonly<Record<string, string>>
   readingsAllMissing: string
   noValue: string
-  sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string }>
+  sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string; leverage: string; policyPath: string }>
   tiers: Readonly<{ must: string; support: string; reference: string }>
   states: Readonly<Record<string, string>>
   reasons: Readonly<Record<string, string>>
@@ -27,11 +38,13 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   rowTotal: string
   rowCurrent: string
   rows: Readonly<Record<string, string>>
-  empty: Readonly<{ news: string; macro: string; next: string; conclusion: string }>
+  empty: Readonly<{ news: string; next: string; conclusion: string }>
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
   nextEmptyCodes: Readonly<Record<string, string>>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>> }>
+  /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
+  macroWebValue: string
   conclusion: Readonly<{ invalidation: string; conditions: string; counter: string; gaps: string; caveats: string }>
   next: Readonly<{ category: Readonly<Record<string, string>> }>
   citations: string
@@ -59,7 +72,17 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const lines: string[] = []
   lines.push(`# ${escapeMarkdown(labels.title)} — ${document.edition.date}`)
   lines.push('')
-  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))} · ${readingsLabel(document, labels)}`)
+  // The header says when this edition covers, not how many items it holds: the body lists them, so a
+  // count here repeated a fact the reader can already see (and named no unit).
+  const allMissing = document.status.readingsAvailable === 0 ? ` · ${labels.readingsAllMissing}` : ''
+  // 一天多期之后，「日期 + 窗口」不足以说明这是哪一份：同一天可以是 07:00 的 24h 与 07:00 的 4h，
+  // 也可以同刻同窗口只是语言不同。头部因此把这一期自己的身份写全——截止时刻、窗口、期、语言。
+  const period = briefingEditionPeriod(document.edition)
+  const periodLabel = period.periodId === 'default'
+    ? ''
+    : ` · ${(period.periodKind === 'manual' ? labels.periodManual : labels.periodScheduled).replace('{time}', options.formatTime(period.periodTime))}`
+  const language = labels.languageNames?.[document.edition.locale] ?? document.edition.locale
+  lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))}${periodLabel} · ${language}${allMissing}`)
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
@@ -70,7 +93,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     for (const item of visibleMacro) lines.push('', macroLine(item, options))
   }
 
-  const rows = dataRows(document)
+  const rows = briefingDataRows(document)
   if (rows.length > 0) {
     lines.push('', `## ${labels.sections.data}`)
     for (const tier of ['must', 'support', 'reference'] as const) {
@@ -78,6 +101,25 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
       if (tierRows.length === 0) continue
       lines.push('', `### ${labels.tiers[tier]}`)
       for (const row of tierRows) lines.push(dataLine(row, options))
+    }
+    // The card prints these two blocks; the copied text is the same edition, so it prints them too.
+    // Their absence here was the "page one thing, export another" defect reported on 2026-11-04.
+    if (document.data.leverage && document.data.leverage.visibility !== 'hidden') {
+      const leverage = document.data.leverage
+      lines.push('', `### ${labels.sections.leverage}`)
+      for (const [asset, key, entry] of [['BTC', 'btc', leverage.btc], ['ETH', 'eth', leverage.eth]] as const) {
+        const openInterest = entry.openInterestUsd === undefined ? labels.noValue : `$${(entry.openInterestUsd / 1e9).toFixed(2)}B`
+        const day = entry.change24hPct === undefined ? labels.noValue : `${entry.change24hPct.toFixed(1)}%`
+        // The rate travels with the block that explains it, exactly as on the card.
+        const rate = briefingDataGroups(document).funding.find((row) => row.id === `funding-${key}`)?.value?.number
+        const fee = rate === undefined ? labels.noValue : `${rate > 0 ? '+' : ''}${rate.toFixed(4)}%`
+        lines.push(`- ${asset} · ${fee} · ${openInterest} · ${day}`)
+      }
+    }
+    if (document.data.policyPath && document.data.policyPath.visibility !== 'hidden') {
+      const path = document.data.policyPath
+      lines.push('', `### ${labels.sections.policyPath}`)
+      lines.push(`${Math.round(path.probability)}% · ${path.meetingDate}${path.targetLower !== undefined ? ` · ${path.targetLower}–${path.targetUpper}%` : ''}`)
     }
   }
 
@@ -111,15 +153,22 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   return `${lines.join('\n').trimEnd()}\n`
 }
 
-function dataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
-  // The copy must agree with the screen: hidden data rows are audited, not rendered.
-  return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
-    .filter((row) => row.visibility !== 'hidden' && hasChangeToShow(row))
-}
-
-/** A change-led row with no comparable earlier value is omitted, never shown as a bare level. */
-export function hasChangeToShow(row: BriefingMarketRow | BriefingPulseRow): boolean {
-  return row.id !== 'stablecoin' && row.id !== 'fear-greed' ? true : row.change !== null
+/**
+ * The rows the data region shows, for both exports.
+ *
+ * One function, because the exported image and the copied text are the same edition: two renderers
+ * each deciding what to print is how the leverage block and the rate path came to exist in the card
+ * and be missing from the markdown. Readiness already decided presence; nothing here filters on "does
+ * this row have a change", which silently dropped stablecoin and fear-and-greed on quiet days.
+ */
+/**
+ * The data region's rows, derived from the one partition.
+ *
+ * Derived, not re-walked: a second traversal of `document.data.*` is how the funding rate came to be
+ * printed twice — once in the funds block and once in the leverage card.
+ */
+export function briefingDataRows(document: DailyBriefingDocument): readonly (BriefingMarketRow | BriefingPulseRow)[] {
+  return briefingDataRowsFromGroups(briefingDataGroups(document))
 }
 
 /**
@@ -133,7 +182,9 @@ export function hasChangeToShow(row: BriefingMarketRow | BriefingPulseRow): bool
 export function changeLedRowCopy(
   row: BriefingMarketRow | BriefingPulseRow,
   labels: BriefingRowCopyLabels,
-  locale = 'en-US'
+  locale = 'en-US',
+  /** The poster's cell has ~190px: it keeps the headline change and drops the longer windows. */
+  options: Readonly<{ compact?: boolean }> = {}
 ): Readonly<{ primary: string; secondary: string }> | null {
   if (row.id !== 'stablecoin' && row.id !== 'fear-greed') return null
   // Without a level there is no caption, and the normal "no value" row is the honest rendering.
@@ -142,7 +193,9 @@ export function changeLedRowCopy(
   const caption = (row.id === 'stablecoin' ? labels.rowTotal : labels.rowCurrent).replace('{value}', level)
   const reason = row.changeReason ? labels.changeReasons[row.changeReason] ?? '' : ''
   if (!row.change) return Object.freeze({ primary: reason || caption, secondary: reason ? caption : '' })
-  const secondary = row.id === 'stablecoin'
+  // A cell shows one comparison; the 7d/30d windows stay in the copied text, where there is room and
+  // where the reader can read them as a sentence.
+  const secondary = row.id === 'stablecoin' && !options.compact
     ? [caption, ...(row.auxiliaryChanges ?? []).map((change) => rowChangeText(change, labels, locale))].join(' · ')
     : caption
   return Object.freeze({ primary: rowChangeText(row.change, labels, locale, row), secondary })
@@ -191,21 +244,27 @@ function publicationSpan(
   return labels.changeBaselineSpan.replace('{from}', from).replace('{to}', to)
 }
 
-function readingsLabel(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
-  return document.status.readingsAvailable === 0
-    ? labels.readingsAllMissing
-    : labels.readings.replace('{available}', String(document.status.readingsAvailable)).replace('{total}', String(document.status.readingsTotal))
-}
-
 function newsLine(item: BriefingNewsItem, options: DailyBriefingMarkdownOptions): string {
-  const title = escapeMarkdown(item.translatedTitle ?? item.title)
+  const title = escapeMarkdown(editionNewsTitle(item, options.locale))
   return `- **${title}** — ${escapeMarkdown(item.sourceName)} · ${options.formatTime(item.publishedAt)} · ${item.polarity}`
 }
 
 function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOptions): string {
   const title = escapeMarkdown(options.eventTitle ? options.eventTitle(item) : item.title)
   const surprise = options.labels.macro.surprise[item.surprise.direction] ?? item.surprise.direction
-  return `- **${title}** — ${options.formatTime(item.scheduledAt)} · ${options.labels.macro.actual} ${item.actual ?? '—'} · ${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus} · ${options.labels.macro.previous} ${item.previous ?? '—'} · ${surprise}`
+  // 值那一段与正文同一份拼法（`02` v2.128）：没有值就**整段不出现**（不印破折号，也不说"没拿到"），
+  // 网页取到的值带同一个来源后缀——图上标的、复制出来的必须是同一句话。
+  const value = briefingMacroValueLabel(
+    { actual: options.labels.macro.actual, webValue: options.labels.macroWebValue },
+    item
+  )
+  return [
+    `- **${title}** — ${options.formatTime(item.scheduledAt)}`,
+    ...(value === undefined ? [] : [value]),
+    `${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus}`,
+    `${options.labels.macro.previous} ${item.previous ?? '—'}`,
+    surprise
+  ].join(' · ')
 }
 
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
@@ -217,8 +276,15 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
         .filter(Boolean).join(' · ')
       return `- ${label}: ${copy.primary}${meta ? ` (${meta})` : ''}`
     }
-    const value = formatBriefingValue(row.value, options.labels.noValue, options.locale)
-    const change = row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
+    // 点位与涨跌幅都走同一个读取函数（卡片也走它）：价格行把百分比放在 `value` 里、`change` 恒为
+    // `null`，只读 `change` 会让复制出来的文本只剩一个百分比、连点位都没了。
+    const figures = briefRowFigures(row)
+    const value = figures.level === undefined
+      ? formatBriefingValue(row.value, options.labels.noValue, options.locale)
+      : formatBriefingValue({ number: figures.level, format: 'level' }, options.labels.noValue, options.locale)
+    const change = figures.move === undefined
+      ? row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
+      : formatRowMove(figures.move, options.labels.noValue)
     const reason = row.changeReason ? options.labels.changeReasons[row.changeReason] ?? '' : ''
     const suffix = [change, reason].filter(Boolean).join(' · ')
     return `- ${label}: ${value}${suffix ? ` (${suffix})` : ''}`

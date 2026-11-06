@@ -7,13 +7,14 @@ import { createRawRecordStore } from '../../application/rawRecordStore'
 import { createSourceRequestGovernanceQueue } from '../../application/sourceRequestGovernance'
 import { createMacroCalendarEvidenceArchive } from '../macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from '../macroCalendarEvidenceStore'
+import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
 const disposals: (() => void)[] = []
 afterEach(() => { disposals.splice(0).reverse().forEach(dispose => dispose()) })
 const scope = { month: '2026-09', locale: 'zh' } as const
 const time = '2026-09-10T01:00:00.000Z'
 async function setup(options: { enabled?: boolean; hasCredential?: boolean; evidenceReady?: boolean;
-  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean } = {}) {
+  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean; monotonicNow?: () => number } = {}) {
   expect(existsSync(new URL('./zeroXRouterCalendarManualRuntime.ts', import.meta.url)), 'manual composition is implemented').toBe(true)
   const { createZeroXRouterCalendarManualRuntime } = await import('./zeroXRouterCalendarManualRuntime')
   const directory = mkdtempSync(join(tmpdir(), 'mc-v1-manual-'))
@@ -38,10 +39,15 @@ async function setup(options: { enabled?: boolean; hasCredential?: boolean; evid
     requestGovernanceQueue: queue, requestJsonBody, getApiKey: async () => 'derived-safe-key',
     readReadiness: async () => ({ enabled: options.enabled ?? true, hasCredential: options.hasCredential ?? true }),
     readCapacity: () => ({ marketBytes: 0, walBytes: 0, freeBytes: 10 * 1024 ** 3, archiveAvailable: !options.pressure }),
-    now: () => new Date(clock), createCollectionId: () => `derived-${++sequence}`, cursorKey: Buffer.alloc(32, 1) })
+    now: () => new Date(clock), monotonicNow: options.monotonicNow,
+    createCollectionId: () => `derived-${++sequence}`, cursorKey: Buffer.alloc(32, 1) })
   disposals.push(() => { database.close(); queue.close(); rmSync(directory, { recursive: true, force: true }) })
   return { runtime, database, archive, requestJsonBody, queue, rawRecords, setTime: (value: string) => { clock = value } }
 }
+// One month's worth of provider rows, shared by the two write-budget cases: one proves the rows
+// survive, the other proves what happens when the budget runs out halfway through them.
+const largeMonthData = () => Array.from({ length: 600 }, (_, id) => ({ id: id + 1, calendarId: `derived-${id}`, locale: 'zh', star: 3, calendarName: 'Derived '.repeat(60),
+  pubTimestamp: Date.parse(time), estimateValue: '0', preValue: '2', pubValue: '3' }))
 
 describe('MC-V1 manual archive and SQLite composition', () => {
   it('keeps per-endpoint attempts distinct from stored success and clears a failure only after that source succeeds', async () => {
@@ -60,7 +66,44 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(await h.runtime.refreshManual(scope)).toMatchObject({ state: 'completed' })
     expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({ state: 'succeeded', attemptedAt: time, trigger: 'manual' })
     await h.runtime.dispose()
-    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toBeUndefined()
+    // The verdict is durable now: an outage's reason must survive the restart that used to
+    // erase every attempt record, otherwise "why is the calendar old" is unanswerable again.
+    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({ state: 'succeeded', attemptedAt: time, trigger: 'manual' })
+  })
+
+  // The briefing's catch-up path. "Stored" is the only proof that matters: the same query the
+  // page reads must see the batch, not merely that the request returned.
+  it('collects the three feeds in one bounded call and stores what the page will read', async () => {
+    const h = await setup()
+    const result = await h.runtime.refreshNow({})
+    expect(result).toMatchObject({ state: 'collected' })
+    expect(result.state === 'collected' ? result.sources : []).toEqual([
+      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'
+    ])
+    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n).toBeGreaterThan(0)
+    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(6)
+  })
+
+  it('reports a deadline as timeout, never as a collection failure', async () => {
+    // The gate never opens, so the batch cannot finish inside the budget. `timeout` is its own
+    // answer: "not finished in time" and "the collection failed" lead to different sentences.
+    const h = await setup({ gate: new Promise<void>(() => undefined) })
+    const result = await h.runtime.refreshNow({ timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
+    expect(result).toEqual({ state: 'timeout', timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
+  })
+
+  it('names the refusal when every asked source failed', async () => {
+    const h = await setup({ failEndpoint: 'economic-data' })
+    const result = await h.runtime.refreshNow({ sourceIds: ['macro-calendar-0xrouter-economic-data'] })
+    expect(result).toEqual({ state: 'failed', failureCode: 'response-unavailable' })
+  })
+
+  it('refuses a source set or budget it does not own', async () => {
+    const h = await setup()
+    expect(await h.runtime.refreshNow({ sourceIds: ['macro-calendar-fed'] })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ sourceIds: [] })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ timeoutMs: 10 })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
+    expect(await h.runtime.refreshNow({ unknown: true })).toEqual({ state: 'failed', failureCode: 'input-invalid' })
   })
 
   it('leaves a visible trace of a refused automatic refresh, with verdict, time and origin', async () => {
@@ -112,16 +155,97 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toEqual({
       state: 'succeeded', attemptedAt: '2026-09-10T03:00:00.000Z', trigger: 'manual' })
   })
+  // Data integrity, not the write budget: the clock is frozen so the one-second deadline cannot
+  // decide this case's colour on a busy machine. What it proves is that 600 rows above 256 KiB are
+  // all stored with their values intact; the deadline has its own case below.
   it('archives and stores a complete 600-row month above 256 KiB without dropping economic values', async () => {
-    const data = Array.from({ length: 600 }, (_, id) => ({ id: id + 1, calendarId: `derived-${id}`, locale: 'zh', star: 3, calendarName: 'Derived '.repeat(60),
-      pubTimestamp: Date.parse(time), estimateValue: '0', preValue: '2', pubValue: '3' }))
-    const h = await setup({ data })
+    const h = await setup({ data: largeMonthData(), monotonicNow: () => 0 })
     expect((await h.runtime.refreshManual(scope)).state).toBe('completed')
     expect(h.archive.inspect().committedBytes).toBeGreaterThan(256 * 1024)
     expect(h.archive.inspect().activeReservations).toBe(0)
     const row = h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'economic-indicator' and consensus_json = ? and provider_actual_json = ?")
       .get('{"displayValue":"0"}', '{"displayValue":"3"}')
     expect(row?.n).toBe(600)
+  })
+  // The clock is the only judge of the deadline, so this case jumps past it once instead of waiting
+  // a real second: whatever the machine is doing, the first source trips the budget and the two the
+  // batch reaches afterwards start their own window and finish. That is the reader's `partial` -
+  // one source failed, the other two are new - not a case that did not wait long enough.
+  it('spends the write budget mid-batch, stores nothing for that source and reports partial', async () => {
+    let ticks = 0
+    const h = await setup({ data: largeMonthData(), monotonicNow: () => { ticks += 1; return ticks < 20 ? ticks : 5_000 } })
+    const result = await h.runtime.refreshManual(scope)
+    expect(result.state).toBe('partial')
+    const failed = result.items.filter(item => item.state === 'unavailable')
+    expect(failed).toHaveLength(1)
+    // The deadline verdict is folded into `storage-unavailable` at the collection boundary. Whether
+    // the panel should tell "too slow" from "storage is down" is a separate question, not this case's.
+    expect(failed[0]).toMatchObject({ descriptorId: 'macro-calendar-0xrouter-economic-data', failureCode: 'storage-unavailable' })
+    expect(h.runtime.readRefreshAttempt(scope, 'economic-indicator')).toMatchObject({ state: 'failed', failureCode: 'storage-unavailable' })
+    expect(h.archive.inspect().activeReservations).toBe(0)
+    expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'economic-indicator'").get()?.n).toBe(0)
+    expect(h.database.prepare("select count(*) as n from mi_macro_calendar_market_event_observations where event_kind = 'financial-event'").get()?.n).toBe(600)
+  })
+  // 触发点在采集侧，不在分析闸门里：这条用例**没有装配任何分析运行时**，刷新一次就该说一次。
+  // 如果有人把提交点挪回分析闸门，这条会变红——这就是「把解耦丢掉」的反向用例。
+  it('announces a release as soon as the calendar collects it, with no analysis run at all', async () => {
+    const { createStoredManualCalendar } = await import('./zeroXRouterCalendarManualRuntime')
+    const directory = mkdtempSync(join(tmpdir(), 'mc-v1-landed-'))
+    const filePath = join(directory, 'calendar.sqlite')
+    const database = new DatabaseSync(filePath)
+    const archive = createMacroCalendarEvidenceArchive({ rawRecords: createRawRecordStore(), archiveDirectory: join(directory, 'evidence') })
+    const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse(time) })
+    const submitNotification = vi.fn(async () => ({ kind: 'recorded' } as never))
+    // US + 高重要性 + 经济指标，且实际值 3 对预期 2（相对 +50%）：这是签字表里「超出预期」的那一类。
+    const body = JSON.stringify({ code: 200, msg: '', data: [{ calendarId: 'derived', id: 1, calendarName: 'Derived event',
+      countryCode: 'US', locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '2', pubValue: '3' }] })
+    const calendar = createStoredManualCalendar({
+      storage: { database, filePath, close: () => database.close() }, archive, evidenceReady: true, requestGovernanceQueue: queue,
+      getApiKey: async () => 'derived-safe-key',
+      requestJsonBody: async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }),
+      readReadiness: async () => ({ enabled: true, hasCredential: true }),
+      now: () => new Date(time),
+      submitNotification
+    })
+    disposals.push(() => { void calendar.dispose().then(() => database.close()); queue.close(); rmSync(directory, { recursive: true, force: true }) })
+    expect(await calendar.refresh(scope)).toMatchObject({ state: 'completed' })
+    const requests = submitNotification.mock.calls.map(call => (call as unknown as [Record<string, unknown>])[0])
+    // 一次刷新、一条发布 = 一条通知；事件身份取稳定键（`observationKey`），不是每批都会变的 HMAC。
+    expect(requests).toHaveLength(1)
+    for (const request of requests) {
+      expect(request.eventTypeId).toBe('market-intelligence.macro.event-landed')
+      expect(request).toMatchObject({ dedupeVars: { builder: 'template', vars: { releaseAt: time } }, actions: [] })
+      expect(request).not.toHaveProperty('deeplink')
+    }
+    // 一次发布只出一条：同一个事件再采集一次，本进程里不再推，平台那边键也没有变。
+    await calendar.refresh(scope)
+    expect(submitNotification).toHaveBeenCalledTimes(1)
+    expect((submitNotification.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({
+      dedupeVars: { builder: 'template', vars: requests[0]!.dedupeVars && (requests[0]!.dedupeVars as { vars: unknown }).vars }
+    })
+  })
+  // 只挪触发点、不放松筛选：到点了、也有公布值，但跟预期一致 —— 签字表里这是「常规发布」，不发。
+  it('stays quiet for a planned release that landed on consensus', async () => {
+    const { createStoredManualCalendar } = await import('./zeroXRouterCalendarManualRuntime')
+    const directory = mkdtempSync(join(tmpdir(), 'mc-v1-quiet-'))
+    const filePath = join(directory, 'calendar.sqlite')
+    const database = new DatabaseSync(filePath)
+    const archive = createMacroCalendarEvidenceArchive({ rawRecords: createRawRecordStore(), archiveDirectory: join(directory, 'evidence') })
+    const queue = createSourceRequestGovernanceQueue({ now: () => Date.parse(time) })
+    const submitNotification = vi.fn(async () => ({ kind: 'recorded' } as never))
+    const body = JSON.stringify({ code: 200, msg: '', data: [{ calendarId: 'derived', id: 1, calendarName: 'Derived event',
+      countryCode: 'US', locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: '2', preValue: '2', pubValue: '2.05' }] })
+    const calendar = createStoredManualCalendar({
+      storage: { database, filePath, close: () => database.close() }, archive, evidenceReady: true, requestGovernanceQueue: queue,
+      getApiKey: async () => 'derived-safe-key',
+      requestJsonBody: async () => ({ state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }),
+      readReadiness: async () => ({ enabled: true, hasCredential: true }),
+      now: () => new Date(time),
+      submitNotification
+    })
+    disposals.push(() => { void calendar.dispose().then(() => database.close()); queue.close(); rmSync(directory, { recursive: true, force: true }) })
+    expect(await calendar.refresh(scope)).toMatchObject({ state: 'completed' })
+    expect(submitNotification).not.toHaveBeenCalled()
   })
   it('rejects calendar over-budget responses before archive or storage and leaves no reservations', async () => {
     const h = await setup({ data: [{ payload: 'x'.repeat(2 * 1024 * 1024) }] })
@@ -185,7 +309,7 @@ describe('MC-V1 manual archive and SQLite composition', () => {
       }
       finally { reopened.close() }
       process.stdout.write(`MC-V1 derived lifecycle: ${JSON.stringify({ cycles: 20, requests: requestJsonBody.mock.calls.length,
-        batchP95Ms: elapsed.toSorted((a, b) => a - b)[18] })}\n`)
+        batchP95Ms: [...elapsed].sort((a, b) => a - b)[18] })}\n`)
     } finally { queue.close(); rmSync(directory, { recursive: true, force: true }) }
   })
   it('stores three fixed endpoints in a real archive and database with independent economic values', async () => {

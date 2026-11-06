@@ -1,10 +1,14 @@
-import { Modal } from 'antd'
+import { currentConfirmInstanceForTest } from './ConfirmProvider'
+import { confirmOptions } from './confirmOptions'
 
 /**
  * 破坏性操作的确认对话框（B0 契约 §8）。
  *
  * 用途单一：用户即将做一件不可撤销的事，先让他确认。它不是消息框、不是回执。
- * 底层用 `Modal.confirm`，不用 `window.confirm`——后者不受主题与 i18n 控制。
+ *
+ * **渲染入口是 `<ConfirmProvider>` + `useConfirm()`**：静态 `Modal.confirm` 站在 React 树外，
+ * 只吃 antd 默认主题——深色界面弹浅色框就是这么来的。确认框必须由 `Modal.useModal()` 的实例渲染，
+ * 才能吃到当前树上的 `ConfigProvider`。
  *
  * 组件内**零文案**：四个字符串字段全部必填、没有一处内部兜底。
  * 有兜底的地方就会长出七种「确定」，之后再也没人统一。
@@ -27,29 +31,21 @@ export type ConfirmProps = {
 }
 
 /**
- * 平台缺口的一行补丁：antd 的 `ModalFuncProps` 没有声明 `isSilent`，但运行时认它。
+ * 遗留入口：**不新增调用点**，新代码用 `useConfirm()`。
  *
- * 显式写出这个形状，而不是 `as any`——`as any` 会在下一次「清理类型」时被安静删掉，
- * 然后 `onOk` 的拒绝又变成未处理拒绝、测试开始偶发红，而没人知道为什么。
+ * 不改签名，是因为还有三处调用点在用；正确做法是它们各自迁到 `useConfirm()` 并删掉这个函数，
+ * 而不是在这里偷偷换成抛错（那会让三处的确认框当场消失）。渲染用的是 `ConfirmProvider` 登记的
+ * 那个实例，所以主题是当前的、深浅色一致。
+ *
+ * **取不到实例就抛错**：静默退回静态方法，就是这条 bug 原来的样子——看起来能用，颜色错了没人报错。
  */
-type ConfirmOptionsWithSilent = Parameters<typeof Modal.confirm>[0] & { isSilent?: () => boolean }
-
 export function confirmAction(props: ConfirmProps): void {
-  const options: ConfirmOptionsWithSilent = {
-    isSilent: () => true,
-    title: props.title,
-    content: props.description,
-    okText: props.confirmLabel,
-    cancelText: props.cancelLabel,
-    okButtonProps: props.tone === 'danger' ? { danger: true } : undefined,
-    // 危险档焦点落在取消上：按住回车连击时，落在确认上就是连续执行破坏性操作。
-    autoFocusButton: props.tone === 'danger' ? 'cancel' : 'ok',
-    centered: true,
-    // 失败时对话框要留在屏幕上（读者得能改完再提交）。antd 的 ActionButton 在 `onOk` 拒绝后
-    // 会再抛一次，于是出现未处理拒绝；`isSilent` 让 antd 吞掉那一次重抛，**关闭时机仍由我们自己
-    // 的 `onOk` 决定**——这是一处平台缺口的一行补丁，不是「让测试变绿」的开关。
-    onOk: () => props.onConfirm(),
-    onCancel: () => props.onCancel?.()
+  const modal = currentConfirmInstanceForTest()
+  if (modal === null) {
+    throw new Error(
+      'confirmAction() needs <ConfirmProvider> above it: the static Modal.confirm renders outside the React tree and ignores the current theme'
+    )
   }
-  Modal.confirm(options)
+  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  modal.confirm(confirmOptions(props, trigger))
 }

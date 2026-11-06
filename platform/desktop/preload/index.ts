@@ -2,7 +2,23 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 import { IpcChannels } from '../ipc/channels'
 import { createNotificationsNamespace } from './namespaces/notifications'
-import { unwrapTaskIpc } from '../ipc/taskIpcEnvelope'
+import { createAgentsNamespace, createAssistantsNamespace } from './agentNamespaces'
+import type {
+  ChannelCandidateSafeView,
+  ChannelConversationSafeView,
+  ChannelDeliveryAttemptSafeView,
+  ChannelDeliveryAuditSafeView,
+  ChannelDeliveryTargetView,
+  ChannelManagementAuditView,
+  ChannelManagementCatalogEntry,
+  ChannelManagementResult,
+  ChannelManagementSafeView,
+  ChannelPolicySafeView,
+  ChannelRuntimeAuditPage,
+  ChannelRuntimeSafeView,
+  ChannelTestMessageReceipt,
+  SecureHandoffBegin
+} from '../../ai/agent-platform/channels'
 import type { ModelDetectionMode, ModelDetectionResult } from '../../ai/providers/modelDetection/types'
 
 type ProductEventPayload = {
@@ -43,6 +59,15 @@ function releaseProductEventBridgeIfIdle(): void {
   productEventBridgeListener = null
 }
 
+/**
+ * 通道 IPC 面上，通道 id 只有一个名字：`channelId`。
+ * 曾经调用方传 `channelId`、handler 读 `value.id`，于是每次调用都抛 `channel-input-invalid`，
+ * 又被调用方 catch 掉，表现成「那个入口永远不出现」——判别键写进类型，传错在编译期就红。
+ */
+type ChannelIdPayload = { channelId: string }
+type ChannelActionPayload = ChannelIdPayload & { actorId?: string }
+type ChannelPagePayload = ChannelIdPayload & { limit?: number; offset?: number }
+
 const api = {
   app: {
     getInfo: () => ipcRenderer.invoke(IpcChannels.appInfo),
@@ -73,32 +98,60 @@ const api = {
     get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
     update: (patch: unknown) => ipcRenderer.invoke(IpcChannels.settingsUpdate, patch)
   },
+  /**
+   * 更新提示：读一个状态、发两个动作。**没有地址参数**——载荷里能传地址，界面就等于能决定打开哪个页面。
+   * 开发态只有 `getState` 在主进程有接收方，另外两个调用会以「没有 handler」reject；界面在开发态不渲染它们。
+   */
+  updates: {
+    getState: () => ipcRenderer.invoke(IpcChannels.updatesGetState),
+    getReleaseNotes: () => ipcRenderer.invoke(IpcChannels.updatesGetReleaseNotes),
+    checkNow: () => ipcRenderer.invoke(IpcChannels.updatesCheckNow),
+    openUpdateLink: (destination: unknown) => ipcRenderer.invoke(IpcChannels.updatesOpenLink, destination),
+    /** 订阅「结论变了」。返回退订函数：拿不到退订等于每次挂载漏一个监听。 */
+    onChanged: (callback: (projection: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, projection: unknown) => callback(projection)
+      ipcRenderer.on(IpcChannels.updatesChanged, listener)
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.updatesChanged, listener)
+      }
+    }
+  },
   channels: {
-    catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),
-    list: () => ipcRenderer.invoke(IpcChannels.channelsList),
-    get: (id: string) => ipcRenderer.invoke(IpcChannels.channelsGet, id),
-    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input),
-    update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input),
-    disable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDisable, input),
-    requestEnable: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input),
-    restart: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRestart, input),
-    remove: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDelete, input),
-    beginCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialBegin, input),
-    submitCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input),
-    rotateCredential: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input),
-    beginPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyBegin, input),
-    createPolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsPolicyCreate, input),
-    listAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListAudits, input),
-    runtimeStatus: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsRuntimeStatus, input),
-    listDeliveryAttempts: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAttempts, input),
-    listDeliveryAudits: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input),
-    listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input),
-    deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
-    listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input),
-    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
-    listCandidates: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input),
-    allowCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
-    ignoreCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
+    catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog) as Promise<readonly ChannelManagementCatalogEntry[]>,
+    // 返回形状写进类型：渲染层若按 `result.id` 去取（真实形状是 `result.channel.id`），typecheck 直接红。
+    list: () => ipcRenderer.invoke(IpcChannels.channelsList) as Promise<readonly ChannelManagementSafeView[]>,
+    /** 通知设置页的只读投影：可投递三档 + 绑定目标（0/1/多），不写任何通道配置。 */
+    listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets) as Promise<{ channels: readonly ChannelDeliveryTargetView[] }>,
+    get: (id: string) => ipcRenderer.invoke(IpcChannels.channelsGet, id) as Promise<ChannelManagementSafeView | null>,
+    // `create` / `update` 的载荷就是通道 DTO 本身（`id` 是 DTO 字段），其余一律 `channelId`。
+    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsCreate, input) as Promise<ChannelManagementResult>,
+    update: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsUpdate, input) as Promise<ChannelManagementResult>,
+    disable: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsDisable, input) as Promise<ChannelManagementResult>,
+    requestEnable: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsRequestEnable, input) as Promise<ChannelManagementResult>,
+    restart: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsRestart, input) as Promise<ChannelManagementResult>,
+    remove: (input: ChannelActionPayload) => ipcRenderer.invoke(IpcChannels.channelsDelete, input) as Promise<ChannelManagementResult>,
+    beginCredential: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsCredentialBegin, input) as Promise<SecureHandoffBegin>,
+    submitCredential: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsCredentialSubmit, input) as Promise<ChannelManagementResult>,
+    rotateCredential: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsCredentialRotate, input) as Promise<ChannelManagementResult>,
+    beginPolicy: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsPolicyBegin, input) as Promise<SecureHandoffBegin>,
+    createPolicy: (input: ChannelActionPayload & { handoff: unknown }) => ipcRenderer.invoke(IpcChannels.channelsPolicyCreate, input),
+    listAudits: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListAudits, input) as Promise<readonly ChannelManagementAuditView[]>,
+    runtimeStatus: (input: ChannelIdPayload) => ipcRenderer.invoke(IpcChannels.channelsRuntimeStatus, input) as Promise<ChannelRuntimeSafeView>,
+    listDeliveryAttempts: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAttempts, input) as Promise<readonly ChannelDeliveryAttemptSafeView[]>,
+    listDeliveryAudits: (input: ChannelPagePayload) => ipcRenderer.invoke(IpcChannels.channelsListDeliveryAudits, input) as Promise<readonly ChannelDeliveryAuditSafeView[]>,
+    /** 运行审计一页（只读）：`{ channelId, limit?, cursor? }`；游标形状 `{ createdAt, id }`。 */
+    listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input) as Promise<ChannelRuntimeAuditPage>,
+    /** 真发一条测试消息：`{ channelId, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
+    sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input) as Promise<ChannelTestMessageReceipt>,
+    listPolicies: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
+    deletePolicy: (input: ChannelActionPayload & { policyId: string }) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
+    listConversations: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,
+    // 只有频道 id + 对话 id；主进程用完会话 id 就丢，回的是成败与原因。
+    openConversation: (input: ChannelIdPayload & { conversationId: string }) => ipcRenderer.invoke(IpcChannels.channelsOpenConversation, input) as Promise<{ ok: true } | { ok: false; code: string }>,
+    setTarget: (input: ChannelActionPayload & { conversationId: string; enabled: boolean }) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
+    listCandidates: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input) as Promise<readonly ChannelCandidateSafeView[]>,
+    allowCandidate: (input: ChannelActionPayload & { candidateId: string; enableTarget: boolean }) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
+    ignoreCandidate: (input: ChannelIdPayload & { candidateId: string }) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
   },
   modelProviders: {
     list: () => ipcRenderer.invoke(IpcChannels.modelProvidersList),
@@ -187,188 +240,8 @@ const api = {
     revealCustomHeaders: (providerId: string) =>
       ipcRenderer.invoke(IpcChannels.modelProvidersRevealCustomHeaders, providerId)
   },
-  agents: {
-    getState: () => ipcRenderer.invoke(IpcChannels.agentsGetState),
-    getRuntimeSnapshot: () => ipcRenderer.invoke(IpcChannels.agentsGetRuntimeSnapshot),
-    getChannelRuntimeSnapshot: (options?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsGetChannelRuntimeSnapshot, options),
-    restartChannelRuntime: (channelId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsRestartChannelRuntime, channelId),
-    listToolApprovals: () => ipcRenderer.invoke(IpcChannels.agentsListToolApprovals),
-    resolveToolApproval: (approvalId: string, decision: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsResolveToolApproval, approvalId, decision),
-    listAgents: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListAgents, query),
-    createAgent: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsCreateAgent, input),
-    listTasks: async (agentId: string, query?: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTasks, agentId, query)),
-    getTaskLogs: async (agentId: string, taskId: string, query?: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskLogs, agentId, taskId, query)),
-    previewTaskSchedule: async (input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsPreviewTaskSchedule, input)),
-    listTaskPage: async (query?: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTaskPage, query)),
-    getTaskDeliveryAttempts: async (agentId: string, runLogId: string, query?: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskDeliveryAttempts, agentId, runLogId, query)),
-    retryTaskDelivery: async (agentId: string, runLogId: string, attemptId: string) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsRetryTaskDelivery, agentId, runLogId, attemptId)),
-    listTaskMutationAudits: async (query: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsListTaskMutationAudits, query)),
-    getTaskAutomationPolicy: async () => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskAutomationPolicy)),
-    updateTaskAutomationPolicy: async (input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsUpdateTaskAutomationPolicy, input)),
-    getTaskDeliveryReadiness: async (agentId: string, taskId: string) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsGetTaskDeliveryReadiness, agentId, taskId)),
-    createTask: async (agentId: string, input: unknown) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsCreateTask, agentId, input)),
-    updateTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsUpdateTask, agentId, taskId, request)),
-    deleteTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsDeleteTask, agentId, taskId, request)),
-    runTask: async (agentId: string, taskId: string, request: unknown) =>
-      unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsRunTask, agentId, taskId, request)),
-    cancelTaskRun: async (runLogId: string) => unwrapTaskIpc(await ipcRenderer.invoke(IpcChannels.agentsCancelTaskRun, runLogId)),
-    listSessions: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListSessions, query),
-    listSessionMessages: (sessionId: string, query?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsListSessionMessages, sessionId, query),
-    createSession: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsCreateSession, input),
-    updateAgent: (agentId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.agentsUpdateAgent, agentId, patch),
-    deleteAgent: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsDeleteAgent, agentId),
-    reorderAgents: (orderedAgentIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsReorderAgents, orderedAgentIds),
-    selectAgent: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsSelectAgent, agentId),
-    updateSession: (sessionId: string, patch: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsUpdateSession, sessionId, patch),
-    deleteSessions: (sessionIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsDeleteSessions, sessionIds),
-    reorderSessions: (orderedSessionIds: string[]) => ipcRenderer.invoke(IpcChannels.agentsReorderSessions, orderedSessionIds),
-    setSessionAgent: (sessionId: string, agentId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionAgent, sessionId, agentId),
-    setSessionWorkspace: (sessionId: string, source: unknown) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionWorkspace, sessionId, source),
-    setSessionWorkspaceByPath: (sessionId: string, path: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetSessionWorkspaceByPath, sessionId, path),
-    switchSessionPinState: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsSwitchSessionPinState, sessionId),
-    selectSession: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsSelectSession, sessionId),
-    clearSessionMessages: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsClearSessionMessages, sessionId),
-    deleteSessionMessage: (sessionId: string, messageId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsDeleteSessionMessage, sessionId, messageId),
-    replaceState: (state: unknown) => ipcRenderer.invoke(IpcChannels.agentsReplaceState, state),
-    sendMessage: (request: unknown) => ipcRenderer.invoke(IpcChannels.agentsSendMessage, request),
-    cancelMessage: (runId: string) => ipcRenderer.invoke(IpcChannels.agentsCancelMessage, runId),
-    cancelSession: (sessionId: string) => ipcRenderer.invoke(IpcChannels.agentsCancelSession, sessionId),
-    refreshMcpTools: (serverId: string) => ipcRenderer.invoke(IpcChannels.agentsRefreshMcpTools, serverId),
-    getRuntimeCompatibility: (providerId: string, modelId: string, runtimeId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsGetRuntimeCompatibility, providerId, modelId, runtimeId),
-    probeRuntimeCompatibility: (providerId: string, modelId: string, runtimeId: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsProbeRuntimeCompatibility, providerId, modelId, runtimeId),
-    getModelGatewayStatus: () => ipcRenderer.invoke(IpcChannels.agentsGetModelGatewayStatus),
-    startModelGateway: (providerId?: string, modelId?: string) =>
-      ipcRenderer.invoke(IpcChannels.agentsStartModelGateway, providerId, modelId),
-    stopModelGateway: () => ipcRenderer.invoke(IpcChannels.agentsStopModelGateway),
-    setModelGatewayEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke(IpcChannels.agentsSetModelGatewayEnabled, enabled),
-    executeRuntimeCommand: (input: unknown) => ipcRenderer.invoke(IpcChannels.agentsExecuteRuntimeCommand, input),
-    productTools: {
-      listPackages: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsListProductToolPackages, agentId),
-      updatePackageBinding: (
-        agentId: string,
-        productId: string,
-        permissionMode: 'allow-read-only' | 'prompt' | 'disabled'
-      ) => ipcRenderer.invoke(IpcChannels.agentsUpdateProductToolPackageBinding, agentId, productId, permissionMode),
-      listCallTracePage: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsListProductToolCallTracePage, query),
-      getCallTrace: (toolCallId: string) => ipcRenderer.invoke(IpcChannels.agentsGetProductToolCallTrace, toolCallId)
-    },
-    skills: {
-      list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsList, query),
-      getRuntime: (agentId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsGetRuntime, agentId),
-      search: (query: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsSearch, query),
-      install: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstall, options),
-      installFromZip: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstallFromZip, options),
-      installFromDirectory: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsInstallFromDirectory, options),
-      uninstall: (skillId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsUninstall, skillId),
-      toggle: (options: unknown) => ipcRenderer.invoke(IpcChannels.agentsSkillsToggle, options),
-      readFile: (skillId: string, filename: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsReadFile, skillId, filename),
-      listFiles: (skillId: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsListFiles, skillId),
-      listLocal: (workdir: string) => ipcRenderer.invoke(IpcChannels.agentsSkillsListLocal, workdir)
-    },
-    onStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsStateChanged, listener)
-      }
-    },
-    onRuntimeStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsRuntimeStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsRuntimeStateChanged, listener)
-      }
-    },
-    onChannelRuntimeStateChanged: (callback: (state: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
-      ipcRenderer.on(IpcChannels.agentsChannelRuntimeStateChanged, listener)
-      return () => {
-        ipcRenderer.removeListener(IpcChannels.agentsChannelRuntimeStateChanged, listener)
-      }
-    }
-  },
-  assistants: {
-    list: () => ipcRenderer.invoke(IpcChannels.assistantsList),
-    get: (assistantId: string) => ipcRenderer.invoke(IpcChannels.assistantsGet, assistantId),
-    create: (input: unknown) => ipcRenderer.invoke(IpcChannels.assistantsCreate, input),
-    update: (assistantId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.assistantsUpdate, assistantId, patch),
-    delete: (assistantId: string) => ipcRenderer.invoke(IpcChannels.assistantsDelete, assistantId),
-    reorder: (orderedIds: string[]) => ipcRenderer.invoke(IpcChannels.assistantsReorder, orderedIds),
-    listTopics: (query?: unknown) => ipcRenderer.invoke(IpcChannels.assistantsListTopics, query),
-    createTopic: (input: unknown) => ipcRenderer.invoke(IpcChannels.assistantsCreateTopic, input),
-    updateTopic: (topicId: string, patch: unknown) => ipcRenderer.invoke(IpcChannels.assistantsUpdateTopic, topicId, patch),
-    deleteTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsDeleteTopic, topicId),
-    pinTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsPinTopic, topicId),
-    unpinTopic: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsUnpinTopic, topicId),
-    listTopicMessages: (topicId: string, nodeId?: string | null) =>
-      ipcRenderer.invoke(IpcChannels.assistantsListTopicMessages, topicId, nodeId),
-    setActiveNode: (topicId: string, nodeId: string | null) =>
-      ipcRenderer.invoke(IpcChannels.assistantsSetActiveNode, topicId, nodeId),
-    renameTopic: (topicId: string, name: string, isNameManuallyEdited?: boolean) =>
-      ipcRenderer.invoke(IpcChannels.assistantsRenameTopic, topicId, name, isNameManuallyEdited),
-    createMessageSibling: (messageId: string, dto: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsCreateMessageSibling, messageId, dto),
-    editAndResendUserMessage: (input: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsEditAndResendUserMessage, input),
-    clearTopicMessages: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsClearTopicMessages, topicId),
-    searchTopicMessages: (topicId: string, query: string, limit?: number) =>
-      ipcRenderer.invoke(IpcChannels.assistantsSearchTopicMessages, topicId, query, limit),
-    deleteMessage: (messageId: string, options?: unknown) =>
-      ipcRenderer.invoke(IpcChannels.assistantsDeleteMessage, messageId, options),
-    streamOpen: (request: unknown) => ipcRenderer.invoke(IpcChannels.assistantsStreamOpen, request),
-    streamAttach: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamAttach, topicId),
-    streamAbort: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamAbort, topicId),
-    streamGetStatus: (topicId: string) => ipcRenderer.invoke(IpcChannels.assistantsStreamGetStatus, topicId),
-    library: {
-      listTemplates: (query?: unknown, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryListTemplates, query, language),
-      getTemplate: (templateId: string, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryGetTemplate, templateId, language),
-      installTemplate: (input: unknown, language?: string) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryInstallTemplate, input, language),
-      listGroups: (language?: string) => ipcRenderer.invoke(IpcChannels.assistantsLibraryListGroups, language),
-      createAssistant: (input: unknown) =>
-        ipcRenderer.invoke(IpcChannels.assistantsLibraryCreateAssistant, input)
-    },
-    onStreamChunk: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamChunk, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamChunk, listener)
-    },
-    onStreamDone: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamDone, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamDone, listener)
-    },
-    onStreamError: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on(IpcChannels.assistantsStreamError, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamError, listener)
-    },
-    onStreamStatusChanged: (callback: (snapshot: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot)
-      ipcRenderer.on(IpcChannels.assistantsStreamStatusChanged, listener)
-      return () => ipcRenderer.removeListener(IpcChannels.assistantsStreamStatusChanged, listener)
-    }
-  },
+  agents: createAgentsNamespace(ipcRenderer),
+  assistants: createAssistantsNamespace(ipcRenderer),
   webSearch: {
     listProviders: () => ipcRenderer.invoke(IpcChannels.webSearchListProviders),
     getSettings: () => ipcRenderer.invoke(IpcChannels.webSearchGetSettings),

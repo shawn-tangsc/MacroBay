@@ -15,9 +15,10 @@ import {
   type TaskAutomationPolicyPreset,
   type UpdateTaskCommand
 } from './taskAutomationContracts'
+import { createCancelRunAudit, createCommandAudit, findAuditTask } from './taskCommandAudit'
 import { getTaskAutomationPolicy, taskMaxStartsPerAgentPerHour, validateTaskAutomationLimits } from './taskAutomationPolicy'
 import {
-  materializeTaskTriggerTimezone,
+  validateTaskTrigger,
   previewNextTaskRun,
   validateTaskSchedule,
   validateTaskTimezone
@@ -142,7 +143,7 @@ export class TaskAutomationCommandService {
       if (countRecentTaskStarts(state.taskRunLogs, command.agentId, input.now) >= taskMaxStartsPerAgentPerHour) {
         throw new TaskAutomationCommandError('task-policy-limit')
       }
-      const task = buildAgentTaskSchedulerSnapshot(state, { now: input.now }).tasksById[command.taskId]
+      const task = buildAgentTaskSchedulerSnapshot(state, { now: input.now, timeZone: this.timeZone() }).tasksById[command.taskId]
       if (!task || !task.isRunnable || state.taskRunLogs.some((log) => log.scheduleId === command.taskId && (log.status === 'queued' || log.status === 'running'))) {
         throw new TaskAutomationCommandError('task-not-runnable')
       }
@@ -401,7 +402,7 @@ export class TaskAutomationCommandService {
     this.assertChannels(state.channels, agentId, dto.channelIds ?? [], policy.maxChannelsPerTask)
     const timeoutMinutes = dto.timeoutMinutes ?? 2
     this.assertPolicy(policy, state.tasks.filter((task) => task.agentId === agentId && task.enabled).length, timeoutMinutes, dto.trigger)
-    const trigger = this.materializeTrigger(dto.trigger)
+    const trigger = this.validatedTrigger(dto.trigger)
     return { ...dto, trigger, timeoutMinutes, channelIds: uniqueIds(dto.channelIds ?? []) }
   }
 
@@ -412,7 +413,7 @@ export class TaskAutomationCommandService {
     policy: ReturnType<typeof getTaskAutomationPolicy>
   ): UpdateTaskDto {
     const requestedPatch = command.type === 'pause' ? { enabled: false } : command.type === 'resume' ? { enabled: true } : command.patch ?? {}
-    const trigger = this.materializeTrigger(requestedPatch.trigger ?? task.trigger)
+    const trigger = this.validatedTrigger(requestedPatch.trigger ?? task.trigger)
     const timeoutMinutes = requestedPatch.timeoutMinutes ?? task.timeoutMinutes
     const channelIds = uniqueIds(requestedPatch.channelIds ?? task.channelIds ?? [])
     this.assertTextBounds(requestedPatch.name ?? task.name, requestedPatch.prompt ?? task.prompt)
@@ -441,22 +442,26 @@ export class TaskAutomationCommandService {
       const limits = validateTaskAutomationLimits(policy, { activeTaskCount: 0, timeoutMinutes: patch.timeoutMinutes })
       if (!limits.ok) throw new TaskAutomationCommandError(limits.code)
     }
-    if (patch.trigger !== undefined) this.materializeTrigger(patch.trigger)
+    if (patch.trigger !== undefined) this.validatedTrigger(patch.trigger)
     return {
       ...patch,
-      ...(patch.trigger === undefined ? {} : { trigger: this.materializeTrigger(patch.trigger) }),
+      ...(patch.trigger === undefined ? {} : { trigger: this.validatedTrigger(patch.trigger) }),
       ...(patch.channelIds === undefined ? {} : { channelIds: uniqueIds(patch.channelIds) }),
       enabled: false
     }
   }
 
-  private materializeTrigger(trigger: Trigger): Trigger {
+  /**
+   * 只校验、不改写：`trigger.timezone` 空就保持空（表示跟随读者设置，排程时解析）。
+   * 名字不再叫 `materializeTrigger`——它不再物化任何东西。
+   */
+  private validatedTrigger(trigger: Trigger): Trigger {
     const options = { now: this.now(), defaultTimezone: this.timeZone() }
     const validation = validateTaskSchedule(trigger, options)
     if (!validation.ok) throw new TaskAutomationCommandError(validation.code)
-    const materialized = materializeTaskTriggerTimezone(trigger, options)
-    if (!materialized.ok) throw new TaskAutomationCommandError(materialized.code)
-    return materialized.trigger
+    const checked = validateTaskTrigger(trigger, options)
+    if (!checked.ok) throw new TaskAutomationCommandError(checked.code)
+    return checked.trigger
   }
 
   private assertPolicy(
@@ -524,8 +529,7 @@ export class TaskAutomationCommandService {
   }
 
   private findAuditTask(state: AgentStoreState, command: TaskAutomationCommand): ScheduledTaskEntity | null {
-    if (command.type === 'create') return null
-    return state.tasks.find((item) => item.id === command.taskId && item.agentId === command.agentId) ?? null
+    return findAuditTask(state, command)
   }
 
   private createAudit(
@@ -534,19 +538,7 @@ export class TaskAutomationCommandService {
     outcome: TaskMutationAuditEntity['outcome'],
     errorCode: string | null
   ): TaskMutationAuditEntity {
-    return {
-      id: randomUUID(),
-      taskId: task?.id ?? (outcome === 'accepted' && command.type !== 'create' ? command.taskId : null),
-      agentId: command.agentId,
-      taskNameSnapshot: task?.name ?? (command.type === 'create' ? command.task.name : null),
-      action: command.type,
-      actor: command.actor,
-      requestHash: createHash('sha256').update(JSON.stringify(command)).digest('hex'),
-      resultRevision: outcome === 'accepted' ? task?.revision ?? null : null,
-      createdAt: this.now().toISOString(),
-      outcome,
-      errorCode
-    }
+    return createCommandAudit({ command, task, outcome, errorCode, createdAt: this.now().toISOString() })
   }
 
   private createCancelRunAudit(
@@ -555,19 +547,7 @@ export class TaskAutomationCommandService {
     outcome: TaskMutationAuditEntity['outcome'],
     errorCode: string | null
   ): TaskMutationAuditEntity {
-    return {
-      id: randomUUID(),
-      taskId: task?.id ?? null,
-      agentId: command.agentId,
-      taskNameSnapshot: task?.name ?? null,
-      action: 'cancel-run',
-      actor: command.actor,
-      requestHash: createHash('sha256').update(JSON.stringify(command)).digest('hex'),
-      resultRevision: outcome === 'accepted' ? task?.revision ?? null : null,
-      createdAt: this.now().toISOString(),
-      outcome,
-      errorCode
-    }
+    return createCancelRunAudit({ command, task, outcome, errorCode, createdAt: this.now().toISOString() })
   }
 
 }

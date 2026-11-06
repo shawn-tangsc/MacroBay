@@ -57,10 +57,31 @@ async function renderPage(): Promise<HTMLElement> {
   return container
 }
 
+async function backToPortal(container: HTMLElement): Promise<void> {
+  const back = container.querySelector<HTMLButtonElement>('.mi-crypto-dashboard__back')
+  expect(back).not.toBeNull()
+  await act(async () => back?.click())
+}
+
 describe('crypto agent card entry flow', () => {
+  // 用户 2026-11-06：点「情报」直接进看板；智能体选择页保留，从看板的「返回 Agent」进。
+  it('lands on the dashboard, with the agent portal one click back', async () => {
+    const text = productText['zh-CN'].pages.intelligence.portal
+    const container = await renderPage()
+
+    expect(container.textContent).toContain(text.dashboard.title)
+    expect(container.querySelectorAll('.mi-agent-card__entry')).toHaveLength(0)
+
+    await backToPortal(container)
+
+    expect(container.textContent).toContain(text.agents.crypto.name)
+    expect(container.querySelectorAll('.mi-agent-card__entry')).toHaveLength(3)
+  })
+
   it('lets the card open the dashboard even before configuration', async () => {
     const text = productText['zh-CN'].pages.intelligence.portal
     const container = await renderPage()
+    await backToPortal(container)
 
     const cardEntries = Array.from(container.querySelectorAll<HTMLButtonElement>('.mi-agent-card__entry'))
     expect(cardEntries).toHaveLength(3)
@@ -89,6 +110,7 @@ describe('crypto agent card entry flow', () => {
     const navigation = vi.fn()
     window.addEventListener('app-shell:navigate', navigation)
     const container = await renderPage()
+    await backToPortal(container)
 
     await act(async () => container.querySelector<HTMLButtonElement>('.mi-agent-card__progress')?.click())
 
@@ -102,6 +124,7 @@ describe('crypto agent card entry flow', () => {
     const text = productText['zh-CN'].pages.intelligence.portal
     mockGetAgentView.mockRejectedValue(new Error('bridge missing'))
     const container = await renderPage()
+    await backToPortal(container)
 
     expect(container.textContent).toContain(text.data.temporarilyUnavailable)
     expect(container.textContent).toContain(text.data.retry)

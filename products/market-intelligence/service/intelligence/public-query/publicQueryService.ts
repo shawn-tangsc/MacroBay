@@ -14,6 +14,7 @@ import {
   normalizeTimeWindow,
   VISIBLE_AT
 } from './asOfVisibility'
+import { crossAssetNotWired, crossAssetRejected, crossAssetThrew, readCrossAssetFailure, recordCrossAssetFailure } from './crossAssetFailureReason'
 import { parseCrossAssetSnapshot, type CrossAssetRange, type CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { buildEvidenceRef } from './evidenceSnapshotBuilder'
 import { buildEvidenceExcerpt } from './evidenceSnapshotBuilder'
@@ -48,13 +49,23 @@ import {
   type SentimentSnapshotData,
   type SourceHealthData
 } from './queryContracts'
+import {
+  buildSentimentSnapshotData,
+  buildSentimentSeriesData,
+  buildRelatedEventsData,
+  buildImpactTimelineData,
+  parseIdList,
+  parseJsonRecord
+} from './publicQueryDataBuilders'
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
-import { attachModuleSignals } from '../signals/attachModuleSignals'
+import { attachModuleSignals, type SignalAnalysisReader } from '../signals/attachModuleSignals'
+import type { ModuleSignalAnalysisRead } from '../analysis/signalAnalysisRead'
+import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import type { ModuleSignalProducer } from '../signals/moduleSignalQuery'
 import { createPriceLegReader } from '../divergence/priceLegReading'
@@ -75,6 +86,8 @@ import type {
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
 import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { MarketCalendarFreshness } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { createMarketCalendarReadSurface, type MarketCalendarBinding } from './marketCalendarReadSurface'
 import type { PolicyPathContextRead } from '../policy-path/policyPathQueryService'
 
 export type MarketIntelligencePublicQueryService = {
@@ -106,14 +119,24 @@ export type MarketIntelligencePublicQueryService = {
    * A list, not a tree: a leg that can answer adds itself here when its wiring lands, so the page
    * reads one shape whether one rule or four can speak today.
    */
-  queryModuleSignals: (input: { asOf: string }) => Promise<readonly ModuleSignal[]>
+  queryModuleSignals: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]>
   /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
+  /**
+   * The analysis state of the signals above, mounted at assembly time for the same reason: the
+   * store is built in the bootstrap. A whole screenful costs two queries — the ledger once, the
+   * runs once — because a lookup per chip would put a query behind every card.
+   */
+  addSignalAnalysisReader: (reader: SignalAnalysisReader) => void
+  /** Signals and their states together, so the page reads one body. */
+  queryModuleSignalRead: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
   queryMarketCalendarMonth: (input: unknown) => MarketCalendarPage
-  setMarketCalendarQuery: (query: Pick<MarketCalendarQuery, 'queryMonth'> | undefined) => void
+  setMarketCalendarQuery: (query: MarketCalendarBinding | undefined) => void
+  /** 日历实际有多旧、最后一次尝试为什么结束（`A0.8`）；语义与两种失败见 `marketCalendarReadSurface`。 */
+  queryMarketCalendarFreshness: () => Promise<MarketCalendarFreshness>
   /**
    * The cross-asset snapshot the analysis reads for price and relative returns.
    *
@@ -121,7 +144,10 @@ export type MarketIntelligencePublicQueryService = {
    * where the cross-asset store and runtime live. The payload is validated with the same
    * parser the renderer uses, so the analysis can never read a shape the panel would reject.
    */
-  queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string }) => Promise<CrossAssetSnapshot | undefined>
+  /** `knowledgeAt` is required: a caller that forgets it silently asks the frozen as-of view. */
+  queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string; knowledgeAt: string }) => Promise<CrossAssetSnapshot | undefined>
+  /** Why the last cross-asset read answered nothing; see `crossAssetFailureReason`. */
+  getCrossAssetQueryFailure?: () => string | null
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
   /** The scored-headline reader the news page and the analysis already share. */
   setNewsSentimentQuery: (query: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined) => void
@@ -166,12 +192,8 @@ type MacroEconomicCalendarQuery = {
   queryMonth: (input: unknown) => MacroEconomicCalendarMonthResult
 }
 
-type MarketCalendarQuery = {
-  queryMonth: (input: unknown) => MarketCalendarPage
-}
-
 type CrossAssetQuery = {
-  query: (input: { range: CrossAssetRange; asOf?: string }) => unknown
+  query: (input: { range: CrossAssetRange; asOf?: string; knowledgeAt?: string }) => unknown
 }
 
 type MacroMarketSnapshotQuery = {
@@ -189,7 +211,7 @@ export type CreateMarketIntelligencePublicQueryServiceInput = {
   fundingRateHistoryStore?: Pick<FundingRateHistoryStore, 'read'>
   perpetualPositioningStore?: Pick<PerpetualPositioningStore, 'read'>
   macroEconomicCalendarQuery?: Pick<MacroEconomicCalendarQuery, 'queryMonth'>
-  marketCalendarQuery?: Pick<MarketCalendarQuery, 'queryMonth'>
+  marketCalendarQuery?: MarketCalendarBinding
 }
 
 export function createMarketIntelligencePublicQueryService(
@@ -197,7 +219,7 @@ export function createMarketIntelligencePublicQueryService(
 ): MarketIntelligencePublicQueryService {
   const listSourceDefinitions = input.listSourceDefinitions ?? listIntelligenceSourceDefinitions
   let macroEconomicCalendarQuery = input.macroEconomicCalendarQuery
-  let marketCalendarQuery = input.marketCalendarQuery
+  const marketCalendar = createMarketCalendarReadSurface(input.marketCalendarQuery)
   let crossAssetQuery: CrossAssetQuery | undefined
   let newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
@@ -331,21 +353,31 @@ export function createMarketIntelligencePublicQueryService(
     setMacroEconomicCalendarQuery(query) {
       macroEconomicCalendarQuery = query
     },
-    queryMarketCalendarMonth: (queryInput) => marketCalendarQuery?.queryMonth(queryInput) ?? ({
-      state: 'unavailable', failureCode: 'query-unavailable'
-    }),
-    setMarketCalendarQuery(query) {
-      marketCalendarQuery = query
-    },
+    queryMarketCalendarMonth: (queryInput) => marketCalendar.queryMonth(queryInput),
+    setMarketCalendarQuery: (query) => marketCalendar.bind(query),
+    queryMarketCalendarFreshness: () => marketCalendar.freshness(),
     async queryCrossAssetSnapshot(queryInput) {
-      // Fail closed to `undefined`: a sparse or unvalidated snapshot must leave the domain
-      // `not-comparable`, which is what the analysis already knows how to explain.
-      try {
-        return parseCrossAssetSnapshot(crossAssetQuery?.query({ range: queryInput.range, asOf: queryInput.asOf }))
-      } catch {
+      // Fail closed, but never silently: the snapshot stays `undefined` (every consumer keeps its
+      // behaviour) and the reason is recorded, because "not wired", "threw" and "failed validation"
+      // have three different fixes and used to be one sentence at every surface.
+      if (!crossAssetQuery) {
+        recordCrossAssetFailure(crossAssetNotWired())
         return undefined
       }
+      let raw: unknown
+      try {
+        // Forwarded whole: dropping `knowledgeAt` reverted every caller to the frozen as-of view.
+        raw = crossAssetQuery.query({ range: queryInput.range, asOf: queryInput.asOf, knowledgeAt: queryInput.knowledgeAt })
+      } catch (error) {
+        recordCrossAssetFailure(crossAssetThrew(error))
+        return undefined
+      }
+      const rejection: { field?: string } = {}
+      const parsed = parseCrossAssetSnapshot(raw, rejection)
+      recordCrossAssetFailure(parsed ? null : crossAssetRejected(rejection.field))
+      return parsed
     },
+    getCrossAssetQueryFailure: () => readCrossAssetFailure(),
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
@@ -411,7 +443,8 @@ export function createMarketIntelligencePublicQueryService(
 }
 
 function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string, newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined): DivergenceLegReader {
-  const readPriceLeg = createPriceLegReader(input => service.queryCrossAssetSnapshot(input))
+  // The divergence legs read the window's own view: the price leg's instant is its knowledge cutoff.
+  const readPriceLeg = createPriceLegReader((input) => service.queryCrossAssetSnapshot({ ...input, knowledgeAt: input.asOf }))
   return {
     stablecoin: async () => {
       const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
@@ -576,271 +609,7 @@ function buildEnvelope<TData>(input: {
   }
 }
 
-function buildSentimentSnapshotData(input: {
-  aggregates: IntelligenceSentimentAggregate[]
-  items: IntelligenceItem[]
-  scope: ResolvedQueryScope
-  filters?: MarketIntelligenceQueryFilters
-  asOf: string
-  caveats: MarketIntelligenceQueryCaveat[]
-}): SentimentSnapshotData {
-  const horizon = input.filters?.horizon ?? '1h'
-  const itemsById = new Map(input.items.map((item) => [item.itemId, item]))
-  const matching = input.aggregates
-    .filter((aggregate) => aggregate.horizon === horizon)
-    .filter((aggregate) => aggregateMatchesScope(aggregate, input.scope))
-    .filter((aggregate) => aggregateMatchesQueryFilters(aggregate, itemsById, input.filters))
-    .sort((left, right) => compareIsoTime(right.updatedAt, left.updatedAt))
 
-  const latest = matching[0]
-  if (!latest) {
-    input.caveats.push(MARKET_INTELLIGENCE_QUERY_CAVEATS.sentimentNotComputedAsOf)
-    return {
-      status: 'unknown',
-      scopeType: resolveScopeType(input.scope),
-      scopeKey: resolveScopeKey(input.scope),
-      horizon,
-      supportingImpactCount: 0,
-      supportingItemCount: 0,
-      supportingClusterCount: 0
-    }
-  }
-
-  return {
-    status: 'available',
-    scopeType: latest.scopeType,
-    scopeKey: latest.scopeKey,
-    horizon: latest.horizon,
-    score: latest.aggregateScore,
-    label: latest.aggregateLabel,
-    computedAt: latest.updatedAt,
-    supportingImpactCount: parseIdList(latest.supportingImpactIdsJson).length,
-    supportingItemCount: parseIdList(latest.supportingItemIdsJson).length,
-    supportingClusterCount: parseIdList(latest.supportingClusterIdsJson).length,
-    layerBreakdown: parseJsonRecord(latest.layerBreakdownJson),
-    directionBreakdown: parseJsonRecord(latest.directionBreakdownJson)
-  }
-}
-
-function buildSentimentSeriesData(input: {
-  aggregates: IntelligenceSentimentAggregate[]
-  items: IntelligenceItem[]
-  scope: ResolvedQueryScope
-  filters?: MarketIntelligenceQueryFilters
-  timeWindow: ReturnType<typeof normalizeTimeWindow>
-  maxItems: number
-  asOf: string
-  caveats: MarketIntelligenceQueryCaveat[]
-}): SentimentSeriesData {
-  const horizon = input.filters?.horizon ?? '1h'
-  const itemsById = new Map(input.items.map((item) => [item.itemId, item]))
-  const points = input.aggregates
-    .filter((aggregate) => aggregate.horizon === horizon)
-    .filter((aggregate) => aggregateMatchesScope(aggregate, input.scope))
-    .filter((aggregate) => aggregateMatchesQueryFilters(aggregate, itemsById, input.filters))
-    .filter((aggregate) => isWithinEventTimeWindow(aggregate.updatedAt, input.timeWindow))
-    .sort((left, right) => compareIsoTime(left.updatedAt, right.updatedAt))
-    .slice(-input.maxItems)
-    .map((aggregate) => ({
-      pointAsOf: aggregate.updatedAt,
-      status: 'available' as const,
-      score: aggregate.aggregateScore,
-      label: aggregate.aggregateLabel,
-      confidence: aggregate.confidence ?? 0.5,
-      supportingImpactCount: parseIdList(aggregate.supportingImpactIdsJson).length,
-      caveats: [] as MarketIntelligenceQueryCaveat[]
-    }))
-
-  if (points.length === 0) {
-    input.caveats.push(MARKET_INTELLIGENCE_QUERY_CAVEATS.sentimentNotComputedAsOf)
-  }
-
-  return { points }
-}
-
-function buildRelatedEventsData(input: {
-  items: IntelligenceItem[]
-  impacts: IntelligenceImpact[]
-  scope: ResolvedQueryScope
-  filters?: MarketIntelligenceQueryFilters
-  timeWindow: ReturnType<typeof normalizeTimeWindow>
-  maxItems: number
-  asOf: string
-  pipeline: IntelligencePipeline
-}): RelatedEventsData {
-  const impactsByItem = groupImpactsByItem(input.impacts)
-  const events = input.items
-    .filter((item) => itemMatchesScope(item, input.scope).matched)
-    .filter((item) => itemMatchesImpactFilters(item, input.impacts, input.filters))
-    .filter((item) => isWithinEventTimeWindow(item.publishedAt ?? item.detectedAt, input.timeWindow))
-    .sort((left, right) => compareIsoTime(right.detectedAt, left.detectedAt))
-    .slice(0, input.maxItems)
-    .map((item) => {
-      const scopeMatch = itemMatchesScope(item, input.scope)
-      const visibleImpacts = (impactsByItem.get(item.itemId) ?? [])
-        .filter((entry) => impactMatchesQueryFilters(entry, input.filters, item))
-        .map((impact) => buildPublicImpactView(impact, item, input.asOf, input.pipeline))
-      const pendingImpacts = input.pipeline
-        .listImpacts()
-        .filter((impact) => impact.itemId === item.itemId)
-        .filter((impact) => !isVisibleAsOf(VISIBLE_AT.impact(impact), input.asOf))
-      const caveats = [...scopeMatch.caveats]
-      if (pendingImpacts.length > 0 && visibleImpacts.length === 0) {
-        caveats.push(MARKET_INTELLIGENCE_QUERY_CAVEATS.impactNotComputedAsOf)
-      }
-      const evidenceRefs = [
-        buildEvidenceRef({ item, asOf: input.asOf }),
-        ...visibleImpacts.flatMap((impact) => impact.evidenceRefs)
-      ].filter((ref): ref is AgentSafeEvidenceRef => Boolean(ref))
-
-      return {
-        eventRefId: item.itemId,
-        itemId: item.itemId,
-        clusterId: item.clusterId,
-        sourceId: item.sourceId,
-        layer: item.sourceCategory,
-        eventType: item.eventType,
-        title: item.title,
-        summary: item.summary,
-        occurredAt: item.publishedAt,
-        publishedAt: item.publishedAt,
-        detectedAt: item.detectedAt,
-        visibleAt: VISIBLE_AT.item(item),
-        impacts: visibleImpacts,
-        evidenceRefs,
-        caveats: [...new Set(caveats)] as MarketIntelligenceQueryCaveat[]
-      }
-    })
-
-  return { events }
-}
-
-function buildImpactTimelineData(input: {
-  items: IntelligenceItem[]
-  impacts: IntelligenceImpact[]
-  scope: ResolvedQueryScope
-  filters?: MarketIntelligenceQueryFilters
-  timeWindow: ReturnType<typeof normalizeTimeWindow>
-  maxItems: number
-  asOf: string
-  pipeline: IntelligencePipeline
-}): ImpactTimelineData {
-  const itemsById = new Map(input.items.map((item) => [item.itemId, item]))
-  const impacts = input.impacts
-    .filter((impact) => {
-      const item = itemsById.get(impact.itemId) ?? input.pipeline.listItems().find((entry) => entry.itemId === impact.itemId)
-      return impactMatchesQueryFilters(impact, input.filters, item)
-    })
-    .filter((impact) => {
-      const item = itemsById.get(impact.itemId) ?? input.pipeline.listItems().find((entry) => entry.itemId === impact.itemId)
-      if (!item || !isVisibleAsOf(VISIBLE_AT.item(item), input.asOf)) return false
-      return impactMatchesScope(impact, item, input.scope).matched
-    })
-    .filter((impact) => {
-      const item = itemsById.get(impact.itemId)
-      return item ? isWithinEventTimeWindow(item.publishedAt ?? item.detectedAt, input.timeWindow) : true
-    })
-    .sort((left, right) => compareIsoTime(right.createdAt, left.createdAt))
-    .slice(0, input.maxItems)
-    .map((impact) => {
-      const item = itemsById.get(impact.itemId) ?? input.pipeline.listItems().find((entry) => entry.itemId === impact.itemId)
-      return buildPublicImpactView(impact, item, input.asOf, input.pipeline)
-    })
-
-  return { impacts }
-}
-
-function buildPublicImpactView(
-  impact: IntelligenceImpact,
-  item: IntelligenceItem | undefined,
-  asOf: string,
-  pipeline: IntelligencePipeline
-): PublicImpactView {
-  const evidenceRef = item ? buildEvidenceRef({ item, impact, asOf }) : null
-  return {
-    impactId: impact.impactId,
-    itemId: impact.itemId,
-    clusterId: impact.clusterId,
-    sourceId: item?.sourceId ?? 'unknown',
-    layer: impact.layer,
-    direction: impact.direction,
-    magnitude: impact.magnitude,
-    confidence: impact.confidence,
-    horizon: impact.horizon,
-    affectedScopes: [{ type: impact.scopeType, id: impact.scopeKey }],
-    reasoning: impact.reasoning,
-    ruleId: impact.ruleId,
-    ruleVersion: impact.ruleVersion,
-    occurredAt: item?.publishedAt,
-    publishedAt: item?.publishedAt,
-    detectedAt: item?.detectedAt ?? impact.createdAt,
-    computedAt: impact.createdAt,
-    visibleAt: VISIBLE_AT.impact(impact),
-    evidenceRefs: evidenceRef ? [evidenceRef] : []
-  }
-}
-
-function aggregateMatchesScope(aggregate: IntelligenceSentimentAggregate, scope: ResolvedQueryScope): boolean {
-  if (scope.isMarketWide) {
-    return ['market-wide', 'crypto-market', 'risk-assets'].includes(aggregate.scopeType)
-  }
-  if (scope.symbol && aggregate.scopeType === 'symbol' && aggregate.scopeKey.toUpperCase() === scope.symbol) {
-    return true
-  }
-  if (
-    scope.canonicalInstrumentId &&
-    aggregate.scopeType === 'symbol' &&
-    aggregate.scopeKey.toUpperCase() === scope.canonicalInstrumentId.toUpperCase()
-  ) {
-    return true
-  }
-  if (scope.asset) {
-    if (aggregate.scopeType === 'symbol' && aggregate.scopeKey.toUpperCase().startsWith(scope.asset)) return true
-  }
-  return false
-}
-
-function resolveScopeType(scope: ResolvedQueryScope): string {
-  if (scope.symbol || scope.canonicalInstrumentId) return 'symbol'
-  if (scope.asset) return 'asset'
-  if (scope.sector) return 'sector'
-  if (scope.market) return 'market'
-  return 'market-wide'
-}
-
-function resolveScopeKey(scope: ResolvedQueryScope): string {
-  return scope.symbol ?? scope.canonicalInstrumentId ?? scope.asset ?? scope.sector ?? scope.market ?? 'market-wide'
-}
-
-function groupImpactsByItem(impacts: IntelligenceImpact[]): Map<string, IntelligenceImpact[]> {
-  const grouped = new Map<string, IntelligenceImpact[]>()
-  for (const impact of impacts) {
-    const current = grouped.get(impact.itemId) ?? []
-    current.push(impact)
-    grouped.set(impact.itemId, current)
-  }
-  return grouped
-}
-
-function parseIdList(value?: string): string[] {
-  if (!value?.trim()) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function parseJsonRecord(value?: string): Record<string, unknown> | undefined {
-  if (!value?.trim()) return undefined
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined
-  } catch {
-    return undefined
-  }
-}
 
 function collectEvidenceRefs(data: unknown): AgentSafeEvidenceRef[] {
   const refs: AgentSafeEvidenceRef[] = []

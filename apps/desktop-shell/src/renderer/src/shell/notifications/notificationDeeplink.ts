@@ -12,6 +12,10 @@ export type NotificationDeeplink = Readonly<{
   settingsSectionId?: string
   pageId?: string
   productId?: string
+  /** 实体类型：例如任务失败的 `job-definition`。没有它就定位不到那一行。 */
+  entityType?: string
+  /** 实体 id：任务定义 id。 */
+  entityId?: string
 }>
 
 /**
@@ -26,24 +30,82 @@ export type ProductMenuEntry = Readonly<{ productId: string; routePath: string }
 export type NotificationNavigationTarget = Readonly<{
   navKey?: string
   settingsPanelKey?: string
+  /** 落进去之后要定位的那一行（任务定义 id）。 */
+  focusEntityId?: string
 }>
 
 /**
- * 优先级是有意的：**设置分区 > 页面 > 产品**。
+ * 实体类型到设置分区：**只放真有生产者的那几条**。
+ *
+ * 任务失败的通知发的是 `entityType: 'job-definition'` + `entityId`（`taskFailureNotifier.ts:44`），
+ * 所以它必须落到任务自动化面板并定位到那一行；只落面板不定位，读者还得自己在一张表里找。
+ *
+ * 分析失败的通知发的是 `entityType: 'analysis-run'` + 分析运行 id：它落到运行日志（排障页），
+ * 并按 id 定位到那条记录。这里登记的是**面板 id**，不是旧的分区名（运行日志已经独立成面板）。
+ */
+const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
+  'job-definition': 'task-automation',
+  'analysis-run': 'intelligence-run-log'
+}
+
+/**
+ * 产品页的 navKey **不是** manifest 里的 pageId，而是注册表里的 `routePath`
+ * （`shellRegistry.ts` 给的是 `/market-intelligence/intelligence`）。
+ *
+ * 早先这里有一张 `PAGE_ID_TO_MENU_KEY = { 'daily-briefing': 'intelligence' }`：键是真的，
+ * 但 `'intelligence'` 不是 navKey，`openTab` 会被主进程按注册表拒掉（`registration-missing`），
+ * 而 `activateNavKey` 的 `.catch` 又把它吞成「侧栏高亮变了」——看起来像跳了，其实没开页。
+ * 所以映射必须来自**注册表本身**，不能来自手写表。
+ */
+function routePathOfProduct(
+  deeplink: NotificationDeeplink,
+  productMenuEntries: readonly ProductMenuEntry[]
+): string | null {
+  if (deeplink.productId === undefined) return null
+  // 恰好一个才跳：同一产品有多个一级菜单页时，「点哪个」是猜，猜错比不跳更糟。
+  const candidates = productMenuEntries.filter((entry) => entry.productId === deeplink.productId)
+  return candidates.length === 1 ? candidates[0]!.routePath : null
+}
+
+/**
+ * 优先级是有意的：**登记过的实体 > 设置分区 > 页面 > 产品**。
  *
  * 一条通知最多带一个真跳转，但载荷可能同时带产品 id 与设置分区（例如「某来源连续失败」）：
  * 这时应当落到设置里的那个分区，而不是产品的首页——读者点它是因为有事要处理。
+ *
+ * **为什么实体能压过分区**（2026-11-06）：分区名会过时。运行日志从情报源页独立成面板之后，
+ * 旧的生产者仍写着 `settingsSectionId: 'intelligence-sources'`，而它指的其实是那次分析记录；
+ * 实体 id 是页面能真的定位到的那一条，分区只是「大概在哪一屏」。只有**在
+ * `ENTITY_SETTINGS_PANEL` 登记过**的实体才享受这个优先级——没登记的实体（例如来源 `source`）
+ * 仍然按分区走，所以既有行为不变。
  */
 export function resolveNotificationNavigation(
   deeplink: NotificationDeeplink,
   productMenuEntries: readonly ProductMenuEntry[]
 ): NotificationNavigationTarget | null {
-  if (deeplink.settingsSectionId !== undefined) {
-    return { navKey: 'settings', settingsPanelKey: deeplink.settingsSectionId }
+  // 能精确定位到某一行的实体：它自己知道自己该落在哪个面板。
+  const panelFromEntity =
+    deeplink.entityType === undefined ? undefined : ENTITY_SETTINGS_PANEL[deeplink.entityType]
+  if (panelFromEntity !== undefined) {
+    return { navKey: 'settings', settingsPanelKey: panelFromEntity, focusEntityId: focusEntityOf(deeplink) }
   }
-  // `pageId` / `productId` 两支今天没有任何生产者（唯一来源是任务失败的
-  // `settingsSectionId: 'task-automation'`）。留着等于提前写一条走不通的指路，
-  // 验收会当假指路退回；等真有通知发这两种载荷时再加回来，并配一条端到端用例。
-  void productMenuEntries
+  if (deeplink.settingsSectionId !== undefined) {
+    return {
+      navKey: 'settings',
+      settingsPanelKey: deeplink.settingsSectionId,
+      focusEntityId: focusEntityOf(deeplink)
+    }
+  }
+  if (deeplink.pageId !== undefined) {
+    // 页面 id 是产品内部的；壳层只认注册表给的 routePath，认不出就不跳。
+    const routePath = routePathOfProduct(deeplink, productMenuEntries)
+    return routePath === null ? null : { navKey: routePath }
+  }
   return null
+}
+
+/** 只有「知道自己要去哪一行」的实体才带定位，避免所有通知都被当成行级跳转。 */
+function focusEntityOf(deeplink: NotificationDeeplink): string | undefined {
+  if (deeplink.entityId === undefined || deeplink.entityType === undefined) return undefined
+  return ENTITY_SETTINGS_PANEL[deeplink.entityType] === undefined ? undefined : deeplink.entityId
 }

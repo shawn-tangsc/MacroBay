@@ -52,6 +52,36 @@ describe('analysisRunService', () => {
     repository.close()
   })
 
+  it('gives every retry of one trigger point its own run row, so attempts can be counted', () => {
+    // A retry re-freezes: the as-of advances, so the snapshot hash and the idempotency key change
+    // and a second row is written. Counting today's rows per trigger key is therefore the attempt
+    // count — no extra column and no extra "attempt row" that would break one-run-per-call.
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    const group: EventGroup = { id: 'mi-eg-retry', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official|US|2026-08|CPI', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 0, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf }
+    repository.appendEventGroup(group)
+    const snapshotFor = (id: string, at: string): EvidenceSnapshot => ({
+      id, schemaVersion: 1, eventGroupId: group.id, asOf: at, dataCutoff: at,
+      snapshotHash: buildAnalysisSnapshotHash({ profileId: 'crypto-market-analysis-v1', asOf: at, dataCutoff: at, facts: [], missingDomains: [], caveats: [], evidenceRefs: [] }),
+      profileId: 'crypto-market-analysis-v1', facts: [], missingDomains: [], caveats: [], evidenceRefs: [], sourceHealth: [], createdAt: at,
+      policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
+    })
+    const first = snapshotFor('mi-es-retry-1', '2026-09-27T00:00:00.000Z')
+    const second = snapshotFor('mi-es-retry-2', '2026-09-27T00:15:00.000Z')
+    repository.appendSnapshot(first)
+    repository.appendSnapshot(second)
+    let index = 0
+    const service = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => `mi-ar-retry-${++index}` })
+    const run = (snapshot: EvidenceSnapshot) => service.enqueue({
+      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisPhase: 'initial', triggerKey: 'schedule.asia.open'
+    })
+    expect(run(first).created).toBe(true)
+    expect(run(second).created).toBe(true)
+    const attempts = repository.listRuns().filter(candidate => candidate.eventGroupId === group.id && candidate.triggerKey === 'schedule.asia.open')
+    expect(attempts).toHaveLength(2)
+    repository.close()
+  })
+
   it('persists an auditable skipped trigger ledger record', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     const eventGroup: EventGroup = { id: 'mi-eg-ledger', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official|US|2026-08|CPI', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 0, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf }

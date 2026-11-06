@@ -27,6 +27,8 @@ describe('notification routing settings boundary', () => {
 
     const settings = {
       ...createDefaultNotificationRuntimeSettings(),
+      // 契约 §5.1：提示是全站开关、新装默认关；这些用例测的是「开关打开时」的路由。
+      toastEnabled: true,
       quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' },
       productPermissions: {
         'sample-product': {
@@ -65,6 +67,7 @@ describe('notification routing settings boundary', () => {
 describe('notification quiet hours follow the reader time zone', () => {
   const settings = {
     ...createDefaultNotificationRuntimeSettings(),
+    toastEnabled: true,
     quietHours: { enabled: true, startLocalTime: '22:00', endLocalTime: '08:00' }
   }
   const request: NotificationRequest = {
@@ -95,6 +98,7 @@ describe('notification quiet hours follow the reader time zone', () => {
     // 修好后「现在几点」算不出来 ⇒ 判定为未知 ⇒ 不做静音，而不是当成某个具体时刻。
     const allDayWindow = {
       ...createDefaultNotificationRuntimeSettings(),
+      toastEnabled: true,
       quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' }
     }
     const clock = { now: () => new Date('2026-11-01T23:30:00.000Z'), timeZone: () => 'Mars/Olympus_Mons' }
@@ -104,7 +108,8 @@ describe('notification quiet hours follow the reader time zone', () => {
 })
 
 describe('notification transient delivery wiring', () => {
-  const settings = createDefaultNotificationRuntimeSettings()
+  // 桌面开关新装默认关（契约 §4.2）；这一组测的是「开关打开时」的接线，所以显式打开。
+  const settings = { ...createDefaultNotificationRuntimeSettings(), toastEnabled: true, desktopEnabled: true }
   const record = createNotificationFromRequest({
     owner: 'platform',
     sourceId: 'job-runtime',

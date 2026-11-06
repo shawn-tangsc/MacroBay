@@ -68,6 +68,8 @@ export function toProductWorkspacePage(productId: string, contribution: ProductM
     icon: contribution.icon,
     module: toWorkspacePageId(productId, contribution.id),
     productId,
+    // 只带着它，不解释它：谁来决定打开哪一页在壳层，这里只负责让声明一路活到注册表。
+    ...(contribution.home === undefined ? {} : { home: contribution.home }),
     supportsDetached: capability.supportsDetached,
     allowMultipleInstances: capability.allowMultipleInstances,
     binding: Object.freeze({
@@ -130,6 +132,10 @@ function validateRegistration(
     requireValid(input.menuKey === toWorkspacePageMenuKey(input.productId, input.pageId.slice(input.productId.length + 1)), 'menuKey')
   }
 
+  // 默认首页：只有 `true` 或「不存在」两种合法取值。落成 `false` 会让「没有页声明首页」与
+  // 「另一页声明了首页」在读取处分不清（契约 §3），所以这里直接拒掉。
+  requireValid(input.home === undefined || input.home === true, 'home')
+
   const binding = record(input.binding, 'binding', ['persistence', 'maxKeyBytes'])
   requireValid((WorkspaceRegistrationPolicy.bindingPersistence as readonly unknown[]).includes(binding.persistence), 'binding')
   requireValid(
@@ -150,6 +156,9 @@ function validateRegistration(
     ...(input.productId === undefined ? {} : { productId: input.productId }),
     supportsDetached: true as const,
     allowMultipleInstances: input.allowMultipleInstances,
+    // 只带着它，不解释它：谁来决定打开哪一页在壳层。**这个字段曾被这张字段表悄悄吃掉一次**
+    // （白名单 + 这里的逐字段挑，两处漏一处就等于没声明），所以它显式出现在两处。
+    ...(input.home === true ? { home: true as const } : {}),
     binding: Object.freeze({ persistence, maxKeyBytes })
   }) as WorkspacePageRegistration
 }

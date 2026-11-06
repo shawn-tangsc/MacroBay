@@ -5,9 +5,69 @@
  * windows. The window is a query parameter rather than a second history: the 7-day view is
  * the 15-minute rows folded to one point per hour, computed at read time and never stored.
  */
+/**
+ * The one bucket width for notional open interest.
+ *
+ * Every count and every name in this domain that used to encode it — the volume lookback, the
+ * kline request limit, the stored period label — is derived from here. A second copy is how the
+ * reference window silently shrinks when the bucket gets finer: `96 bars` is 24 hours at fifteen
+ * minutes and 8 hours at five, and no assertion would notice.
+ */
+export const openInterestBucketPolicy = Object.freeze({
+  /** The width the store keeps, one row per bucket. */
+  storageBucketMs: 900_000,
+  /**
+   * The width the liquidation rule judges one bucket on.
+   *
+   * Never finer than `storageBucketMs`, and always a whole multiple of it: a judgement bucket
+   * narrower than what is stored could only be produced by interpolation, and an interpolated
+   * reading is a made-up number wearing the same clothes as a measured one.
+   */
+  signalBucketMs: 900_000
+})
+
+/**
+ * Why the two widths may differ, and when they may not.
+ *
+ * The storage bucket can get finer without changing what the rule reads; the rule's own bucket
+ * cannot get finer than what is actually stored. Everything else about the pair is arithmetic.
+ */
+export function isBucketPolicyValid(policy: Readonly<{ storageBucketMs: number; signalBucketMs: number }> = openInterestBucketPolicy): boolean {
+  const { storageBucketMs, signalBucketMs } = policy
+  if (!Number.isInteger(storageBucketMs) || !Number.isInteger(signalBucketMs)) return false
+  if (storageBucketMs <= 0 || signalBucketMs <= 0) return false
+  return signalBucketMs >= storageBucketMs && signalBucketMs % storageBucketMs === 0
+}
+
+/**
+ * Buckets that fit in a span. The only division by a bucket width in this domain.
+ *
+ * The width is required: a default here would silently pick one of the two widths, and picking
+ * the wrong one turns a day of volume baseline into eight hours without a single assertion.
+ */
+export function bucketsInSpan(spanMs: number, bucketMs: number): number {
+  return Math.round(spanMs / bucketMs)
+}
+
+/**
+ * How many requests a span needs at a per-request cap.
+ *
+ * Newest first, one request per batch: the batch count is the coverage, so a finer bucket widens
+ * the plan instead of quietly growing a single request past the endpoint's limit.
+ */
+export function batchesForSpan(spanMs: number, perRequestCap: number, bucketMs: number): number {
+  if (!(perRequestCap > 0)) return Number.POSITIVE_INFINITY
+  return Math.ceil(bucketsInSpan(spanMs, bucketMs) / perRequestCap)
+}
+
+/** The provider's period label for a bucket width (`15m`, `5m`), derived rather than spelled twice. */
+export function bucketPeriodLabel(bucketMs: number): string {
+  return `${Math.round(bucketMs / 60_000)}m`
+}
+
 export const openInterestHistoryPolicy = Object.freeze({
   sourceId: 'binance-futures-positioning',
-  storedPeriod: '15m' as const,
+  storedPeriod: bucketPeriodLabel(openInterestBucketPolicy.storageBucketMs),
   windows: Object.freeze({
     '7d': Object.freeze({ spanMs: 7 * 86_400_000, resolution: '1h' as const, maximumPointsPerAsset: 172 }),
     '24h': Object.freeze({ spanMs: 86_400_000, resolution: '15m' as const, maximumPointsPerAsset: 100 })
@@ -23,7 +83,18 @@ export const openInterestHistoryPolicy = Object.freeze({
   endpoint: 'https://fapi.binance.com/futures/data/openInterestHist',
   klinesEndpoint: 'https://fapi.binance.com/fapi/v1/klines',
   /** `openInterestHist` rejects limit > 500, so a cold start is always two requests. */
-  requestLimit: Object.freeze({ openInterest: 500, klines: 672 }),
+  /**
+   * Per-request caps, not a coverage.
+   *
+   * `openInterestHist` refuses limit > 500; the kline endpoint accepts more than we ever ask, so
+   * 1000 is the conservative ceiling. How much history a round covers is a count of batches
+   * (`batchesForSpan`), deliberately not a bigger number here: one field serving both "how many
+   * per request" and "how far back" is what turned a 7-day backfill into a single oversized
+   * request the moment the bucket got finer.
+   */
+  requestLimit: Object.freeze({ openInterest: 500, klines: 1000 }),
+  /** A guard, not a plan: beyond this many batches a round is asking the wrong question. */
+  maximumBatchesPerEndpoint: 6,
   timeoutMs: 15_000,
   maximumResponseBytes: 256 * 1024,
   unavailableFailureCode: 'open-interest-history-query-unavailable' as const,

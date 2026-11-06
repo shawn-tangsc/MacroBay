@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
@@ -77,7 +77,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   /** The 0xRouter month's events, injected by the page: the chart's lines read both calendars. */
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
-  onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void }): React.ReactElement {
+  onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
+}): React.ReactElement {
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, now })
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
@@ -143,6 +144,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
 
   return (
     <main className="intelligence-page mi-crypto-dashboard" aria-label={text.title}>
+      {/* The scroll region owns the padding and the container query; the page root stays a flex
+          column so the runs bar below it never scrolls with the cards. */}
+      <div className="mi-crypto-dashboard__scroll">
       <header className="mi-crypto-dashboard__header">
         <div className="mi-crypto-dashboard__heading">
           <p className="mi-crypto-dashboard__label">{text.workspaceLabel}</p>
@@ -200,6 +204,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       </div>
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
+      </div>
     </main>
   )
 }

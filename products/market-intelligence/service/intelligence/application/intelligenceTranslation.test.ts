@@ -55,7 +55,8 @@ function createService(input?: {
   const jobRuntime = createJobRuntime()
   const structuredModelInvocation = createStructuredModelInvocationService({
     getProviderState: async () => input?.providerState ?? createReadyProviderState(),
-    fetch: input?.fetch
+    // The invocation service requires a fetch; the fixture may not care which one it is.
+    fetch: input?.fetch ?? globalThis.fetch
   })
   const service = createIntelligenceTranslationService({
     storage,
@@ -280,7 +281,9 @@ describe('intelligenceTranslationService', () => {
 
     await service.translateItems({ itemIds: ['item-1'], reason: 'manual-selection' })
     expect(fetch).toHaveBeenCalled()
-    const body = JSON.parse(String((fetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body))
+    // The stub takes no arguments, so its call tuple is empty; read the request through a cast.
+    const firstCall = fetch.mock.calls[0] as unknown as [unknown, RequestInit] | undefined
+    const body = JSON.parse(String(firstCall?.[1]?.body))
     expect(JSON.stringify(body)).not.toContain('x'.repeat(2000))
   })
 
@@ -383,5 +386,92 @@ describe('intelligenceTranslationService', () => {
 
     const stored = await storage.readSettings()
     expect('defaultModelId' in stored).toBe(false)
+  })
+
+  it('reports how the batch concluded, not just how many items it touched', async () => {
+    const fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ title: '标题', summary: '摘要' }) } }]
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+    const { service, pipeline } = createService({ fetch })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'manual-selection' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 1, failed: 0, skipped: 0 })
+    // A clean batch needs no reason: an empty code would read as "something went wrong".
+    expect(result.reasonCode).toBeUndefined()
+  })
+
+  it('counts a model failure as failed and names why', async () => {
+    const { service, pipeline } = createService({
+      fetch: vi.fn(async () => new Response('{}', { status: 503 }))
+    })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'manual-selection' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 0, failed: 1, skipped: 0 })
+    expect(result.reasonCode).toBe('translation.undetermined')
+    expect(result.reasons).toEqual({ 'translation.undetermined': 1 })
+  })
+
+  it('calls an auto-off batch skipped rather than a batch that succeeded zero times', async () => {
+    const { service, pipeline } = createService()
+    await service.saveSettings({ autoTranslateEnabled: false })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    const result = await service.translateItems({ itemIds: ['item-1'], reason: 'new-item' })
+
+    expect(result.counts).toEqual({ total: 1, succeeded: 0, failed: 0, skipped: 1 })
+    expect(result.reasonCode).toBe('translation.auto-off')
+  })
+
+  it('names each queued batch after its source instead of a timestamp', async () => {
+    const { service, pipeline, jobRuntime } = createService()
+    await service.saveSettings({ autoTranslateEnabled: true })
+    pipeline.listItems = () => [
+      { ...sampleItem(), itemId: 'item-1', sourceId: 'coindesk-rss' },
+      { ...sampleItem(), itemId: 'item-2', sourceId: 'federal-reserve-rss' }
+    ]
+    pipeline.listRevisions = () => []
+
+    await service.maybeEnqueueForNewItems(['item-1', 'item-2'])
+
+    // Enabling auto translation also queues one settings-change batch, which has no source.
+    const runs = jobRuntime.listRecentRuns(10)
+      .filter((run) => (run.payload as { reason?: string }).reason === 'new-item')
+    expect(runs.map((run) => run.definitionId).sort()).toEqual([
+      'market-intelligence.translateItems.coindesk-rss',
+      'market-intelligence.translateItems.federal-reserve-rss'
+    ])
+    const payloads = runs.map((run) => run.payload as { sourceId?: string; groupId?: string })
+    expect(payloads.map((payload) => payload.sourceId).sort()).toEqual(['coindesk-rss', 'federal-reserve-rss'])
+    // One reader action produced both batches: without a shared marker the reader reads it as two.
+    expect(new Set(payloads.map((payload) => payload.groupId)).size).toBe(1)
+  })
+
+  it('keeps the definition id identical when the same source runs twice', async () => {
+    const { service, pipeline, jobRuntime } = createService()
+    await service.saveSettings({ autoTranslateEnabled: true })
+    pipeline.listItems = () => [sampleItem()]
+    pipeline.listRevisions = () => []
+
+    await service.maybeEnqueueForNewItems(['item-1'])
+    await service.maybeEnqueueForNewItems(['item-1'])
+
+    const definitionIds = new Set(
+      jobRuntime.listRecentRuns(10)
+        .filter((run) => (run.payload as { reason?: string }).reason === 'new-item')
+        .map((run) => run.definitionId)
+    )
+    expect([...definitionIds]).toEqual(['market-intelligence.translateItems.coindesk-rss'])
   })
 })

@@ -88,10 +88,16 @@ describe('parseStablecoinCapitalSnapshot', () => {
     ['missing day', historyPayload(30).filter((_, index) => index !== 10)],
     ['duplicate day', [...historyPayload(30), historyPayload(30)[29]]],
     ['future day', [...historyPayload(30), historyRow('2026-09-01', 999)]],
-    ['too few complete days', historyPayload(4)],
     ['invalid official USD total', [{ date: '1787875200', totalCirculatingUSD: { peggedUSD: 'invalid' } }]]
   ])('fails closed for %s daily history', (_label, payload) => {
     expect(parseStablecoinDailyHistory(payload, '2026-08-31T12:00:00.000Z')).toBeUndefined()
+  })
+
+  it('keeps one to four complete days: those are real readings, not a malformed payload', () => {
+    for (const count of [1, 4]) {
+      const rows = parseStablecoinDailyHistory(historyPayload(count), '2026-08-31T12:00:00.000Z')
+      expect(rows).toHaveLength(count)
+    }
   })
 })
 

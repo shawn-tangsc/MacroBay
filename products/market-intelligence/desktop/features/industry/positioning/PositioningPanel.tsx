@@ -21,6 +21,8 @@ import {
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
+import { SignalDetail, SignalReadIssue, useSignalDetail } from '../shared'
+import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
 import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
 
@@ -92,7 +94,8 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const resolveProductKey = useProductTextKey()
   // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
   // is one level deeper and is not this button.
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const signalDetail = useSignalDetail('mi-positioning-signal-detail')
+  const analysisSentence = useSignalAnalysisSentence(positioning.state === 'available' ? positioning.signalAnalysis : undefined)
   // The long readings sit behind their own entry: closed by default, so the card stays a card.
   const [helpOpen, setHelpOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
@@ -104,17 +107,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       <h2>{text.pairTitle}</h2>
       {chip ? (chip.state === 'alert' ? (
         <button type="button" className="mi-positioning-panel__signal" data-state="alert"
-          aria-expanded={detailsOpen} aria-controls="mi-positioning-signal-detail"
+          {...signalDetail.triggerProps}
           aria-label={`${text.liquidationChip
             .replace('{asset}', text.assets[chip.asset])
             .replace('{pct}', formatDashboardChange(chip.dropPct))
             .replace('{multiple}', chip.volumeMultiple.toFixed(1))} · ${text.signalDetailsOpen}`}
-          onClick={() => setDetailsOpen(open => !open)}>
+          onClick={signalDetail.toggle}>
           {text.liquidationChip
             .replace('{asset}', text.assets[chip.asset])
             .replace('{pct}', formatDashboardChange(chip.dropPct))
             .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
         </button>
+      ) : chip.state === 'unreadable' ? (
+        // 读不到只留一个标记：一处一个、不占版面、悬停与聚焦都能读到人话。卡片正面没有那行字。
+        <SignalReadIssue failureCode={chip.failureCode} resolveText={resolveProductKey} />
       ) : (
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
@@ -168,15 +174,22 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           ))}
         </div>
       ) : null}
-      {chip?.state === 'alert' && detailsOpen ? (
-        <dl id="mi-positioning-signal-detail" className="mi-positioning-panel__signal-detail" role="region" aria-label={text.signalDetailsTitle}>
-          <div><dt>{text.signalDetailsRule}</dt><dd>{chip.ruleId}</dd></div>
-          <div><dt>{text.signalDetailsWindow}</dt><dd>{text.window15m}</dd></div>
-          <div><dt>{text.signalDetailsDrop}</dt><dd>{formatDashboardChange(chip.dropPct)}</dd></div>
-          <div><dt>{text.signalDetailsVolume}</dt><dd>{chip.volumeMultiple.toFixed(1)}×</dd></div>
-          <div><dt>{text.signalDetailsObservedAt}</dt><dd>{formatTime(chip.observedAt)}</dd></div>
-          <p>{text.signalDetailsNote}</p>
-        </dl>
+      {chip?.state === 'alert' && signalDetail.open ? (
+        <SignalDetail
+          id="mi-positioning-signal-detail"
+          titleKey="pages.intelligence.portal.dashboard.positioning.signalDetailsTitle"
+          rows={[
+            // 第一行回答「这次分析到哪一步」：读者点开牌子最先想知道的是分析会不会来。
+            ...(analysisSentence ? [{ labelKey: 'pages.intelligence.portal.dashboard.signalAnalysis.label', value: analysisSentence }] : []),
+            // The rule's own words, never its internal id: the reader came to check the reading,
+            // not to learn a code name.
+            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsRule', value: text.signalDetailsRuleName },
+            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsWindow', value: text.window15m },
+            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsDrop', value: formatDashboardChange(chip.dropPct) },
+            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsVolume', value: `${chip.volumeMultiple.toFixed(1)}×` },
+            { labelKey: 'pages.intelligence.portal.dashboard.positioning.signalDetailsObservedAt', value: formatTime(chip.observedAt) }
+          ]}
+          noteKey="pages.intelligence.portal.dashboard.positioning.signalDetailsNote" />
       ) : null}
       <div className="mi-positioning-panel__body">
         <div className="mi-positioning-panel__summary">

@@ -20,6 +20,8 @@ export function useNewsSentimentTranslationQueue(input: {
   const [translatedBodies, setTranslatedBodies] = useState<Record<string, string>>({})
   const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({})
   const [translatingAll, setTranslatingAll] = useState(false)
+  /** Present only while a batch is running: no task, no bar. */
+  const [progress, setProgress] = useState<{ done: number; total: number }>()
   const runIdRef = useRef(0)
 
   const translateItem = useCallback(async (itemId: string, force = false) => {
@@ -54,6 +56,7 @@ export function useNewsSentimentTranslationQueue(input: {
     const runId = runIdRef.current + 1
     runIdRef.current = runId
     setTranslatingAll(true)
+    setProgress({ done: 0, total: pending.length })
     const concurrency = Math.min(TRANSLATION_CONCURRENCY, pending.length)
     setTranslationStates((current) => {
       const next = { ...current }
@@ -69,15 +72,19 @@ export function useNewsSentimentTranslationQueue(input: {
         if (!row) continue
         if (translatedBodies[row.itemId]) {
           setTranslationStates((current) => ({ ...current, [row.itemId]: 'translated' }))
+          setProgress((current) => (current ? { ...current, done: current.done + 1 } : current))
           continue
         }
         setTranslationStates((current) => ({ ...current, [row.itemId]: 'translating' }))
         await translateItem(row.itemId)
+        // A failed item still counts as finished: the bar measures the queue, not success.
+        setProgress((current) => (current ? { ...current, done: current.done + 1 } : current))
       }
     })
     await Promise.all(workers)
     if (runIdRef.current === runId) {
       setTranslatingAll(false)
+      setProgress(undefined)
       input.onRefresh()
     }
   }, [input.onRefresh, translateItem, translationStates, translatedBodies])
@@ -85,6 +92,7 @@ export function useNewsSentimentTranslationQueue(input: {
   const cancelTranslation = useCallback(() => {
     runIdRef.current += 1
     setTranslatingAll(false)
+    setProgress(undefined)
     setTranslationStates((current) => {
       const next = { ...current }
       for (const [itemId, state] of Object.entries(next)) if (state === 'waiting') delete next[itemId]
@@ -97,6 +105,7 @@ export function useNewsSentimentTranslationQueue(input: {
     translatedBodies,
     translatedTitles,
     translatingAll,
+    progress,
     translateItem,
     translateAll,
     cancelTranslation

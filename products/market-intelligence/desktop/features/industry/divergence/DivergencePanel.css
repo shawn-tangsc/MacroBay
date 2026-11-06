@@ -10,7 +10,22 @@
    line, so the strip is one text row plus the band's own breathing room. */
 .mi-divergence[data-state='empty'] { padding: 0; }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
-.mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
+.mi-divergence__lead { flex: none; display: flex; align-items: center; gap: 6px; padding-top: 0; }
+/* The rule's chip: the one thing on this line that says something happened. Same shape as the
+   other module chips; the block it opens is the shared `SignalDetail`, on its own row below. */
+.mi-divergence__chip {
+  display: inline-flex; align-items: center;
+  padding: 1px 6px; border-radius: 3px;
+  border: 1px solid var(--mi-dashboard-line);
+  background: none; color: var(--mi-dashboard-text); font: inherit;
+  font-size: 10px; font-weight: 600;
+  line-height: 16px; white-space: nowrap; cursor: pointer;
+}
+.mi-divergence__chip:hover,
+.mi-divergence__chip:focus-visible,
+.mi-divergence__chip[aria-expanded='true'] { border-color: var(--mi-dashboard-text); }
+.mi-divergence__chip:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+.mi-divergence > .mi-signal-detail { flex-basis: 100%; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 /* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
 .mi-divergence__quiet { margin: 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.5; }

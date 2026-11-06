@@ -45,9 +45,17 @@ export const WorkspaceTransferPolicy = Object.freeze({
  * 旧菜单缺扩展字段时按这里的默认值补齐（可分离、单实例、无绑定），既不隐藏也不报错。
  */
 export const WorkspacePageRegistrationPolicy = Object.freeze({
+  /**
+   * 注册项允许出现的字段（白名单，不是建议）：多一个键就整条注册被拒。
+   *
+   * `home` 必须在表里：它是「默认首页」声明（`home?: true`），类型上早就有了，但只加类型不加白名单的
+   * 结果是**整条注册被拒**——而 Main 的组合根对非法贡献是 fail-soft（只跳过该页），于是那一页在菜单上
+   * 看得见、在主进程注册表里不存在：点它 → `registration-missing`，页签开不出来，也没有一行日志。
+   * 这条教训写在这里，因为它不报错、只消失（2026-11-06 情报页真机上踩过）。
+   */
   pageFields: Object.freeze([
     'pageId', 'menuKey', 'title', 'titleKey', 'icon', 'module', 'productId',
-    'supportsDetached', 'allowMultipleInstances', 'binding'
+    'supportsDetached', 'allowMultipleInstances', 'binding', 'home'
   ]),
   menuKeyPattern: /^(?:\/)?[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/,
   maxMenuKeyLength: 200,

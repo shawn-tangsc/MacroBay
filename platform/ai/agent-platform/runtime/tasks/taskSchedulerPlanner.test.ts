@@ -6,7 +6,7 @@ import type { AgentSessionEntity } from '../../schemas/sessionSchemas'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '../../schemas/taskSchemas'
 import type { AgentWorkspaceEntity } from '../../schemas/workspaceSchemas'
 import { createAgentStoreState } from '../../store/agentStore'
-import { materializeTaskTriggerTimezone, previewNextTaskRun } from './taskScheduleValidation'
+import { previewNextTaskRun } from './taskScheduleValidation'
 import { buildAgentTaskSchedulerSnapshot } from './taskSchedulerPlanner'
 
 const createdAt = '2026-01-01T10:00:00.000Z'
@@ -291,23 +291,54 @@ describe('taskSchedulerPlanner', () => {
     })
   })
 
-  it('matches the shared preview after a default timezone is materialized into a Cron task', () => {
-    const trigger = { kind: 'cron' as const, expr: '0 9 * * *' }
-    const options = { now: new Date('2026-01-01T10:20:00.000Z'), defaultTimezone: 'Asia/Shanghai' }
-    const materialized = materializeTaskTriggerTimezone(trigger, options)
-    if (!materialized.ok) throw new Error('expected valid timezone')
-    const preview = previewNextTaskRun({ trigger }, options)
-    if (!preview.ok) throw new Error('expected valid schedule preview')
+  it('resolves an empty Cron timezone to the reader setting at plan time, not at save time', () => {
+    // 契约 task-timezone-scheduling-contract.md：定义不变（还是 09:00），变的只是它落在哪个时区。
+    // 两条反向用例合在一起才钉得住：同一个表达式 + 同一棵树，只有读者设置不同。
+    const task = createTask({
+      id: 'task-follows-reader-zone',
+      name: 'Follows reader zone',
+      // 建在过去：否则 next run 会被推到第二天，两条断言读起来像是时区算错了。
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      trigger: { kind: 'cron', expr: '0 9 * * *' }
+    })
+    const state = createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [task] })
+
+    const shanghai = buildAgentTaskSchedulerSnapshot(state, {
+      now: '2026-01-01T00:30:00.000Z',
+      timeZone: 'Asia/Shanghai'
+    })
+    expect(shanghai.tasksById['task-follows-reader-zone']?.nextRunAt).toBe('2026-01-01T01:00:00.000Z')
+
+    const newYork = buildAgentTaskSchedulerSnapshot(state, {
+      now: '2026-01-01T00:30:00.000Z',
+      timeZone: 'America/New_York'
+    })
+    expect(newYork.tasksById['task-follows-reader-zone']?.nextRunAt).toBe('2026-01-01T14:00:00.000Z')
+
+    // 同一个定义，两个读者设置 → 同一个墙上钟点、两个不同的瞬时。定义本身没有被改写。
+    expect(task.trigger).toEqual({ kind: 'cron', expr: '0 9 * * *' })
+  })
+
+  it('still honours an explicitly stored Cron timezone instead of the reader setting', () => {
     const state = createAgentStoreState({
       agents: [agent],
       workspaces: [workspace],
-      tasks: [createTask({ id: 'task-default-timezone', trigger: materialized.trigger })]
+      tasks: [
+        createTask({
+          id: 'task-explicit-zone',
+          name: 'Explicit zone',
+          trigger: { kind: 'cron', expr: '0 9 * * *', timezone: 'America/New_York' }
+        })
+      ]
     })
 
-    const snapshot = buildAgentTaskSchedulerSnapshot(state, { now: options.now.toISOString() })
-
-    expect(preview).toEqual({ ok: true, nextRunAt: '2026-01-02T01:00:00.000Z' })
-    expect(snapshot.tasksById['task-default-timezone']?.nextRunAt).toBe(preview.nextRunAt)
+    const snapshot = buildAgentTaskSchedulerSnapshot(state, {
+      now: '2026-01-01T00:30:00.000Z',
+      timeZone: 'Asia/Shanghai'
+    })
+    // 显式指定过就不跟随：仍是纽约 09:00，而不是上海 09:00。
+    expect(snapshot.tasksById['task-explicit-zone']?.nextRunAt).toBe('2026-01-01T14:00:00.000Z')
   })
 
   it('skips missed cron startup recovery by advancing to the next future slot', () => {
@@ -632,4 +663,25 @@ describe('taskSchedulerPlanner', () => {
       runtimeBlockReason: 'autonomy-disabled'
     })
   })
+  it('treats a blank stored timezone exactly like a missing one, not as UTC', () => {
+    const base = {
+      id: 'task-blank-zone',
+      name: 'Blank zone',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z'
+    }
+    const withBlank = createTask({ ...base, trigger: { kind: 'cron', expr: '0 9 * * *', timezone: '' } })
+    const withMissing = createTask({ ...base, id: 'task-blank-zone-2', trigger: { kind: 'cron', expr: '0 9 * * *' } })
+
+    const plan = (task: typeof withBlank) =>
+      buildAgentTaskSchedulerSnapshot(
+        createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [task] }),
+        { now: '2026-01-01T00:30:00.000Z', timeZone: 'Asia/Shanghai' }
+      ).tasksById[task.id]?.nextRunAt
+
+    // 当地 09:00，不是 UTC 09:00（后者会是 2026-01-01T09:00:00.000Z）。
+    expect(plan(withBlank)).toBe('2026-01-01T01:00:00.000Z')
+    expect(plan(withBlank)).toBe(plan(withMissing))
+  })
+
 })

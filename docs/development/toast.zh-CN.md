@@ -1,6 +1,6 @@
 [English](./toast.md) | [中文](./toast.zh-CN.md) | [← 文档](../README.md)
 
-# 提示
+# 轻提示
 
 操作之后的一句话走 `@platform/ui/components/toast` 的 `ToastHost` + `useToast()`；
 需要读者做决定的用 `Modal`，不是提示。

@@ -55,9 +55,9 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     ] : []),
     // 利率路径：只在事实存在时出现；这是 contextual 输入，不是结论必须引用的事实。
     ...(policyFacts.length > 0 ? [
-      '输入里有「政策与市场定价」事实：概率是预测市场盘口，不是官方预期。引用概率时必须同时写「市场定价」和截至时刻（该事实的 observedAt，格式 YYYY-MM-DD HH:mm UTC），例如「市场定价 71%，截至 YYYY-MM-DD HH:mm UTC」；不得写成「官方预期」，也不得与联邦基金期货混称。',
+      '输入里有「政策与市场定价」事实：概率是预测市场盘口，不是官方预期。引用概率时必须同时写「市场定价」和截至时刻（该事实的 observedAt，格式 YYYY-MM-DD HH:mm UTC），例如「市场定价 71%，截至 YYYY-MM-DD HH:mm UTC」；引用的百分数必须与输入里的概率事实**同值**，不得自行取整、换档或编造（输入写 65.5% 就写 65.5%，不要写成 66%，也不要写成 70%）；每提到一个不同会议的概率，就要各自写出那条概率自己的截至时刻——两个会议只写一个时刻、或把一个人说的时刻套到另一个概率上，都算不合规；不得写成「官方预期」，也不得与联邦基金期货混称。政策目标区间、SEP 中位数这类读数不是概率，照常写数值即可，不要给它们补「市场定价」或截至时刻。',
       '输入里的 SEP 中位数事实属于最近一次发布预测材料的会议：引用时必须写明该会议日期（observedAt 的日期），例如「SEP 中位 4.1%（YYYY-MM-DD 那场）」，不得当作当前委员会共识或下一次会议的预测。',
-      '输入里有政策路径事实时，conclusion.macro 必须以「政策与市场定价：」开头写一段，逐项给出下次会议日期、概率与档位、24 小时变化、政策目标区间、SEP 中位与会议日、上次票型；缺失的项写明缺口，不得用「政策不确定」「政策中性」带过。',
+      '输入里有政策路径事实时，conclusion.macro 必须以「政策与市场定价：」开头写一段，逐项给出下次会议日期、概率与档位、24 小时变化、政策目标区间、SEP 中位与会议日、上次票型；**至少要写出一条概率**——整段回避概率、只写目标区间和会议日，会被判为不合规；缺失的项写明缺口，不得用「政策不确定」「政策中性」带过。',
       '概率的 24 小时变化缺失时，写「24 小时变化尚未可得」，不得写 0 或省略成没有变化。'
     ] : []),
     ...(policyUnavailable && policyFacts.length === 0 ? [
@@ -67,6 +67,11 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     + directionKeys.join('、') + '；界面会按读者语言取标签，正文里不要再写任何方向标记或段落标签。',
     'conclusion.causalChain 必须按「起因事件 → 中间变量（美元、实际利率、流动性、杠杆或资金流）→ 对该资产的作用方向 → 因此本判断成立的条件」的顺序写清机制。因果链必须用现有证据说明当前最可能的机制与作用方向；不得只写「若…可能…」这类条件句而不给出机制本身，也不得把条件式假设当作唯一解释。',
     'conclusion.summary 必须先写结论（机制与作用方向的判断），conclusion.change 再写本次数据变化；只给方向、没有结论句的输出会被直接拒绝发布。',
+    // The run was triggered by a specific change; citing something else and narrating the backdrop
+    // is the failure mode this rule exists for. Stated in the first answer, not only on retry.
+    ...((snapshot.change?.facts ?? []).length > 0 ? [
+      '本次运行由输入 change 段里的变化触发：结论必须回到那条变化本身——在 supportingEvidence / marketReaction / directions 里引用它的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的原文，不要改写）。只引用不提、或改讲宏观背景，都会被判为「没回答触发的事件」并作废。'
+    ] : []),
     'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change 时，必须写明没有新变化，不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
     'conclusion.conditions 每条写一个成立条件；conclusion.dataGaps 每条写一个数据缺口并说明它如何影响置信度。macro 与 evidenceStrength 没有内容时写 null。当已有证据指向相反方向时，必须在 evidenceStrength 里明确哪一侧证据更强、为什么，不得用「信号冲突」或「置信度有限」笼统收尾。',
     'directions 必须为三个周期各给一条，一条一个周期：'

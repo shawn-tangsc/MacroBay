@@ -1,5 +1,6 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 import type { JobRuntime } from '@platform/jobs'
+import { getNotificationRuntime } from '@platform/notifications'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
@@ -13,10 +14,7 @@ import { app } from 'electron'
 import { createPlatformWebSocketFactory } from '@platform/network/platformWebSocket'
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/cross-asset/crossAssetStore'
-import { analysisConclusionCutoffIso } from './intelligence/retention/analysisConclusionRetention'
-import { predictionLedgerCutoffIso } from './intelligence/retention/predictionLedgerRetention'
-import { createMarketHistoryRetention, registerMarketHistoryRetentionJob } from './intelligence/retention/marketHistoryRetentionJob'
-import { createNewsSentimentRetentionTarget } from './intelligence/news-sentiment/newsSentimentRetention'
+import { registerMarketRetention } from './intelligence/retention/registerMarketRetention'
 import { createCrossAssetRuntime } from './intelligence/cross-asset/crossAssetRuntime'
 import { createBinanceCrossAssetClient } from './intelligence/cross-asset/binanceCrossAssetClient'
 import { createBinanceCrossAssetStream } from './intelligence/cross-asset/binanceCrossAssetStream'
@@ -24,17 +22,23 @@ import { createCrossAssetSourceConfiguration } from './intelligence/cross-asset/
 import { createCrossAssetSnapshotQuery } from './intelligence/cross-asset/crossAssetSnapshotQuery'
 import { createCrossAssetIndexRuntime } from './intelligence/cross-asset/crossAssetIndexRuntime'
 import { crossAssetPolicy } from './intelligence/cross-asset/crossAssetPolicy'
+import { installBriefMarketBackfill } from './intelligence/daily-briefing/dailyBriefMarketBackfill'
 import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossAssetIpc'
 
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
+import { translationRecordsBytes } from './intelligence/application/intelligenceTranslationCache'
+import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
+import type { ProductAgentPlatformDeps } from '@platform/desktop/main/productAgentPlatformWiring'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
+import { createRunSessionPortFromDeps } from './intelligence/jobs/analysisRunSessionWiring'
+import { mountSignalAnalysisReader } from './intelligence/signals/mountSignalAnalysisReader'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
   CrossAssetOps,
@@ -73,34 +77,35 @@ import { createBlsPythonRequestsBridge } from './intelligence/macro-calendar/bls
 import { createBlsScheduleAndLatestValuesSyncWorkflow } from './intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndLatestValuesSyncWorkflow'
 import { createBlsScheduleAndValuesScheduler } from './intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndValuesScheduler'
 import { autoEnrollCalendarProviders } from './intelligence/macro-calendar/macroCalendarProviderAutoEnrollment'
-import { createStoredManualCalendar } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarManualRuntime'
+import { composeStoredManualCalendar } from './intelligence/macro-calendar/0xrouter-calendar/storedCalendarComposition'
 import { createSampleModeRuntime } from './demo/demoModule'
 
 const blsApiCompatibilityHost = createBlsApiCompatibilityHost()
 const blsPythonRequestsBridge = createBlsPythonRequestsBridge({})
 
-export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
+/**
+ * 产品启动依赖 = 宿主注入面 + 产品自己的会话端口 + **平台的智能体会话契约**。
+ *
+ * 第三项过去是这里自己抄的一份（字段相同、名字不同），两次因为两边漂移而红；
+ * 现在形状只有一个出处：`ProductAgentPlatformDeps`。与 `AnalysisSessionDependencies` 的交集是有意的——
+ * 那个端口只关心 `{ sessions }` 与 `SessionRef`，比契约更窄，窄的那一份各自留在自己的模块里。
+ */
+export type ProductBootstrapDependencies = AnalysisSessionDependencies & ProductAgentPlatformDeps & {
   register: ProductIpcRegistrar
   jobRuntime: JobRuntime
   eventBusRuntime: EventBusRuntime
   getProviderState?: () => Promise<ProviderState>
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 模型服务页「默认模型」只读投影（翻译偏好跟随其中的默认翻译模型）。 */
-  getModelDefaults?: () => Promise<ModelDefaultsSettings>
+  getModelDefaults?: () => Promise<ModelDefaultsSettings>; /** Reader zone: schedule and day boundary follow it. */ getTimeZone: () => string
   registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
   registerProductCache: ProductCacheRegistrar
   registerProductDisposer?: ProductServiceDisposerRegistrar
   secretVault?: SecretVault
   platformFetch?: typeof fetch
   getNetworkSettings?: () => Promise<NetworkSettings>
-  createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
-  sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
-  cancelAgentSession?: (sessionId: string) => Promise<void> | void
-  appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
-  updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
-  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<import('@platform/ai/agent-platform/schemas/agentSchemas').AgentEntity>
-  isWebSearchProviderReady?: () => Promise<boolean>; onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -133,14 +138,6 @@ function sampleModeRecorderDirectory(): string | undefined {
   return join(app.getAppPath(), 'products/market-intelligence/demo/raw')
 }
 
-/**
- * The cached volume as the cache page measures it: the JSON payload the store writes on disk.
- * One implementation, so inspect, clear and compact cannot disagree about what a byte is.
- */
-function translationRecordsBytes(records: readonly unknown[]): number {
-  return Buffer.byteLength(JSON.stringify(records), 'utf8')
-}
-
 export function registerServices(deps: ProductBootstrapDependencies): void {
   blsApiCompatibilityHost.initialize(Object.freeze({ platformFetch: deps.platformFetch }))
   /**
@@ -165,9 +162,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const sourceEnableListeners = new Map<string, () => void>()
   const platformFetch = deps.platformFetch ?? (() => { throw new Error('market-intelligence-platform-fetch-required') })
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
+    ...(deps.log ? { log: deps.log } : {}),
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
-    getModelDefaults: deps.getModelDefaults,
+    getModelDefaults: deps.getModelDefaults, getTimeZone: deps.getTimeZone,
     eventBusRuntime: deps.eventBusRuntime,
     platformFetch,
     createAgentSession: deps.createAgentSession,
@@ -178,6 +176,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     deleteAgentSessions: deps.deleteAgentSessions,
     updateAgent: deps.updateAgent,
     isWebSearchProviderReady: deps.isWebSearchProviderReady,
+    // 通知运行时是平台单例，等用的时候再取：装配完成在注册产品服务之后。
+    submitNotification: (request) => getNotificationRuntime().submit(request),
+    // 读者点「推送到手机」时走这条：平台只重投那一条已有记录，不新建、不改内容。
+    redeliverPush: (input) => getNotificationRuntime().redeliverPush(input),
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings
@@ -236,10 +238,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
   try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
   catch { /* Preserve the unavailable feature database; other product capabilities remain usable. */ }
-  const crossAssetClient = createBinanceCrossAssetClient({
-    platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }),
-    requestGovernanceQueue: intelligenceModule.requestGovernanceQueue
-  })
+  const crossAssetClient = createBinanceCrossAssetClient({ platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }), requestGovernanceQueue: intelligenceModule.requestGovernanceQueue })
+  if (crossAssetStore) installBriefMarketBackfill(crossAssetStore, crossAssetClient)
   // The real Nasdaq 100 index is collected by its own five-minute job into the same store the Binance
   // proxy writes to: the row prefers the licensed index and falls back to the labelled proxy, and both
   // legs have to be on disk for that choice to be made from data rather than from hope. One store, one
@@ -283,27 +283,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // that has been kept since the product shipped has months of folding to do, and waiting for the first
   // midnight would leave the reader's disk exactly as it was for a day.
   if (crossAssetStore) {
-    const macroStore = intelligenceModule.macroMarket.store
-    const analysisRepository = intelligenceModule.marketAnalysisRuntime.repository
-    registerMarketHistoryRetentionJob(deps.jobRuntime, createMarketHistoryRetention({
-      stores: {
-        macro: { retention: ({ cutoffs }) => macroStore.retention(cutoffs), note: (key, value) => macroStore.note(key, value) },
-        crossAsset: { retention: ({ cutoffs }) => crossAssetStore.retention(cutoffs), note: (key, value) => crossAssetStore.note(key, value) },
-        // The conclusions keep their own window: fourteen days, then the whole graph goes — except the
-        // verdicts, which keep theirs (a hundred and eighty days) on the same clock. The bar cutoffs are
-        // ignored rather than reinterpreted — several policies, one clock.
-        analysis: {
-          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention({ conclusionCutoffIso: analysisConclusionCutoffIso(atMs), ledgerCutoffIso: predictionLedgerCutoffIso(atMs) }) }),
-          note: (key, value) => analysisRepository.note(key, value)
-        },
-        // The news store keeps its own two windows (30 days of bodies, 365 of judgments) on this same
-        // clock. It joins this job rather than owning a timer of its own: one daily pass, one startup
-        // look, and a store whose database failed to open is simply absent from the pass.
-        ...(intelligenceModule.newsSentiment.store
-          ? { news: createNewsSentimentRetentionTarget(intelligenceModule.newsSentiment.store) }
-          : {})
-      }
-    }).run)
+    const newsStore = intelligenceModule.newsSentiment.store
+    registerMarketRetention({
+      jobRuntime: deps.jobRuntime,
+      macroStore: intelligenceModule.macroMarket.store,
+      crossAssetStore,
+      analysisRepository: intelligenceModule.marketAnalysisRuntime.repository,
+      ...(newsStore ? { newsStore } : {})
+    })
   }
   // One cross-asset source, two readers with two shapes: the analysis context reads through the
   // public query method, which validates with the renderer's own parser, while the prediction
@@ -322,26 +309,26 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     repository: macroCalendarBackend.repository,
     now: () => new Date().toISOString()
   })
-  // A feed is registered with the automatic calendar job only while it is enabled;
-  // an absent profile defaults to enabled so a fresh install keeps collecting.
-  const readEnabledCalendarFeeds = async (): Promise<readonly string[]> => {
-    const ids = [
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
-    ]
-    const profiles = await intelligenceModule.sourceProfileStore.listProfiles()
-    const byId = new Map(profiles.map((profile) => [profile.sourceId, profile.enabled]))
-    return ids.filter((id) => byId.get(id) !== false)
-  }
-  const marketCalendar = createStoredManualCalendar({ storage: macroCalendarBackend.storage,
+  // 只刷读者没关掉的 feed（没建过档案默认开）；规则在日历域的 `enabledCalendarFeeds`。
+  const readEnabledCalendarFeeds = createEnabledCalendarFeeds({
+    listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles()
+  })
+  const marketCalendar = composeStoredManualCalendar({ storage: macroCalendarBackend.storage,
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
     ...intelligenceModule.calendarManualDependencies })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
-  intelligenceModule.publicQueryService.setMarketCalendarQuery({ queryMonth: marketCalendar.queryMonth })
+  // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
+  intelligenceModule.publicQueryService.setMarketCalendarQuery({
+    queryMonth: marketCalendar.queryMonth,
+    readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
+  })
+  // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
+  // A command, not a query — it opens network requests and writes attempts — so it is injected
+  // separately from the read surface above, and the brief never constructs a client of its own.
+  intelligenceModule.bindBriefingCalendarRefresh((input) => marketCalendar.refreshNow(input))
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,
     repository: macroCalendarBackend.repository,
@@ -565,7 +552,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
-  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings)
+  // 自动分析会话：构造留在装配模块，这里只交依赖与时钟（固定智能体下按 runId 幂等）。
+  intelligenceModule.marketAnalysisRuntime.setRunSessionPort(createRunSessionPortFromDeps(deps, {
+    timeZone: () => currentReaderTimeZone(),
+    log: deps.log
+  }))
+  // 「这条信号分析过没有」的读口：装配层这里挂一次，卡片才有状态可显示。漏挂不会报错，只会
+  // 让每张卡都显示「这次没查到」，所以这一处有专门的用例断言它真的被调用。
+  mountSignalAnalysisReader({
+    addReader: reader => intelligenceModule.publicQueryService.addSignalAnalysisReader(reader),
+    repository: intelligenceModule.marketAnalysisRuntime.repository,
+    analysisOffByReader: async () => !(await intelligenceModule.marketAnalysisRuntime.getSettings()).enabled
+  })
+  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings, intelligenceModule.deleteDailyBriefingPeriod, join(getIntelligenceProductDataDir(), 'daily-briefing-periods.json'))
   // Read-only startup diagnostic. The timeline renders the same empty state for "the
   // table is empty" and "the read failed", so the main process states the count it
   // can actually read. Counts only: no row contents and no credentials.
@@ -582,7 +581,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
-  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit)
+  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
+    // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
+    listRuns: () => intelligenceModule.marketAnalysisRuntime.repository.listRuns()
+  })
   registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,

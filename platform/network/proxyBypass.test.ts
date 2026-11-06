@@ -33,6 +33,15 @@ describe('shouldBypass', () => {
     expect(shouldBypass('::1', '[::1],localhost')).toBe(true)
   })
 
+  it('does not bypass api.telegram.org for a typical local-proxy bypass list', () => {
+    // 用户 2026-11-03 的设置：只绕过本机与 BLS 两个源。Telegram 不在其中，必须走代理，
+    // 否则「设了代理却直连」会以「网络连不通」的形式出现。
+    const rules = 'localhost,127.0.0.1,api.bls.gov,www.bls.gov'
+    expect(shouldBypass('api.telegram.org', rules)).toBe(false)
+    expect(shouldBypass('127.0.0.1', rules)).toBe(true)
+    expect(shouldBypass('www.bls.gov', rules)).toBe(true)
+  })
+
   it('reads the host out of a websocket url the same way for every caller', () => {
     expect(hostnameOfUrl('wss://Api.Example.Test:8443/stream')).toBe('api.example.test')
     expect(hostnameOfUrl('not a url')).toBe('')

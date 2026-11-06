@@ -186,6 +186,22 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   // MI-2-R16: the refusal must carry the one thing the model needs to fix — which citation is wrong.
+  it('reports every independent defect in one pass, not only the first', () => {
+    // The 2026-11-04 loop: round one heard "unknown fact", round two heard "forbidden content", and
+    // the field that actually blocked publication was never mentioned. One reply, three defects.
+    const reply = validateDailyBriefingEditorial({
+      ...validOutput,
+      items: [{ factId: 'news:nope', why: 'x' }],
+      lede: 'https://example.com 说 ETF 流入 999 亿美元'
+    }, document(), 'zh-CN')
+
+    expect(reply).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
+    const codes = reply.ok ? [] : (reply.failures ?? []).map((failure) => failure.code)
+    expect(codes).toContain('unknown-fact')
+    expect(codes).toContain('forbidden-content')
+    expect(codes.length).toBeGreaterThan(1)
+  })
+
   it('names the citation it refused and the number it could not find', () => {
     const unknownFact = validateDailyBriefingEditorial({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }, document(), 'zh-CN')
     expect(unknownFact).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
@@ -193,6 +209,31 @@ describe('daily briefing editorial validation and application', () => {
 
     // A well-formed edition is not refused: the reason must not turn into a blanket rejection.
     expect(validateDailyBriefingEditorial(validOutput, document(), 'zh-CN').ok).toBe(true)
+  })
+
+  // Chief 2026-11-06：报错要**点名是哪个 id、它到底在哪**。只说 unknown-fact，模型只能猜，
+  // 猜错就再烧一轮——那 12 条 unknown-fact 正是这么来的。
+  it('says a refused id was hidden by selection, instead of claiming it does not exist', () => {
+    const base = document()
+    const withHidden: DailyBriefingDocument = {
+      ...base,
+      provenance: {
+        ...base.provenance,
+        selectionAudit: {
+          shown: ['news:n1'],
+          hidden: [{ factId: 'news:dropped-1', reason: '与另一条标题重复' }]
+        }
+      } as DailyBriefingDocument['provenance']
+    }
+    const reply = validateDailyBriefingEditorial(
+      { ...validOutput, items: [{ factId: 'news:dropped-1', why: 'x' }] },
+      withHidden, 'zh-CN'
+    )
+    expect(reply).toMatchObject({ ok: false, failureCode: 'unknown-fact' })
+    const detail = reply.ok ? '' : reply.detail ?? ''
+    // 点名这个 id，并说清它为什么不能用：它是被选择阶段隐藏的候选，不是"不存在"。
+    expect(detail).toContain('news:dropped-1')
+    expect(detail).toContain('hidden by selection')
   })
 
   it('rejects an unknown fact, a news id in importance, an unknown number, a URL and an oversized lede', () => {
@@ -213,8 +254,9 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   it('translates only when the conclusion is in the other language', () => {
-    const chinese = document()
-    chinese.conclusion!.summary = '稳定币收缩把买盘推走。'
+    // The document is readonly by contract; a fixture mutates a copy instead of the shared one.
+    const base = document()
+    const chinese = { ...base, conclusion: { ...base.conclusion!, summary: '稳定币收缩把买盘推走。' } }
     expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: '译文' }, chinese, 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'invalid-translation' })
     expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: 'Stablecoin contraction pulls bids away.' }, document(), 'zh-CN'))
@@ -222,10 +264,14 @@ describe('daily briefing editorial validation and application', () => {
   })
 
   it('keeps the must floor even when the model asks to downgrade it', () => {
-    const applied = applyDailyBriefingEditorial(document(), {
+    // Typed by the call's own parameter: the fixture spreads `validOutput`, whose `tier` widens to
+    // string, and this file sits outside the main typecheck so that widening went unnoticed.
+    const downgrade: Parameters<typeof applyDailyBriefingEditorial>[1] = {
       ...validOutput,
+      hiddenData: [],
       importance: [{ factId: 'data:btc', tier: 'reference', reasonText: 'less important' }]
-    }, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    }
+    const applied = applyDailyBriefingEditorial(document(), downgrade, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
   })
 
@@ -242,9 +288,9 @@ describe('daily briefing editorial validation and application', () => {
     expect(validated.ok).toBe(true)
     if (!validated.ok) return
     const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-    expect(applied.data.funds.find((row) => row.id === 'stablecoin')).toMatchObject({
-      visibility: 'hidden', visibilityReason: 'The move is inside the usual noise band.'
-    })
+    // The editor's reason is recorded, but it no longer removes the row: a reading with a value is
+    // on the page, and the threshold decides emphasis, not presence.
+    expect(applied.data.funds.find((row) => row.id === 'stablecoin')?.visibility).not.toBe('hidden')
     expect(applied.provenance.selectionAudit?.hidden).toContainEqual({ factId: 'data:stablecoin', reason: 'The move is inside the usual noise band.' })
   })
 
@@ -257,11 +303,11 @@ describe('daily briefing editorial validation and application', () => {
     expect(validated.ok).toBe(true)
     if (!validated.ok) return
     const applied = applyDailyBriefingEditorial(document(), validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-    expect(applied.data.market.find((row) => row.id === 'btc')?.visibility).toBe('shown')
+    expect(applied.data.market.find((row) => row.id === 'btc')?.visibility).not.toBe('hidden')
     expect(applied.provenance.selectionAudit?.shown).toContain('data:btc')
   })
 
-  it('never shows leverage or the rate path below their materiality threshold, even when included', () => {
+  it('keeps leverage and the rate path in the data region below their threshold, as quiet rows', () => {
     const source = withMaterialData()
     const validated = validateDailyBriefingEditorial({
       ...validOutput,
@@ -274,9 +320,10 @@ describe('daily briefing editorial validation and application', () => {
     expect(validated.ok).toBe(true)
     if (!validated.ok) return
     const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-    expect(applied.data.leverage).toMatchObject({ visibility: 'hidden', visibilityReason: 'no-material-change' })
-    expect(applied.data.policyPath).toMatchObject({ visibility: 'hidden', visibilityReason: 'no-material-change' })
-    expect(applied.provenance.selectionAudit?.hidden).toContainEqual({ factId: 'data:leverage', reason: 'no-material-change' })
+    // Below the threshold is a quiet row, not a missing one: today the whole block vanished and the
+    // reader could not tell "no change" from "no data".
+    expect(applied.data.leverage?.visibility).not.toBe('hidden')
+    expect(applied.data.policyPath?.visibility).not.toBe('hidden')
   })
 
   it('shows a material leverage row the agent includes', () => {
@@ -289,7 +336,7 @@ describe('daily briefing editorial validation and application', () => {
     expect(validated.ok).toBe(true)
     if (!validated.ok) return
     const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-    expect(applied.data.leverage?.visibility).toBe('shown')
+    expect(applied.data.leverage?.visibility).not.toBe('hidden')
     expect(applied.provenance.selectionAudit?.shown).toContain('data:leverage')
   })
 
@@ -320,19 +367,16 @@ describe('daily briefing editorial validation and application', () => {
     expect(validated.value.nextFocus).toBeUndefined()
   })
 
-  it('lifts an immaterial context row only when the agent includes it', () => {
+  it('shows an immaterial context row whether or not the agent names it', () => {
+    // The row used to appear only when the editor included it, so a quiet index vanished with no
+    // trace. Presence now follows the data; the editor's list decides emphasis.
     const source = document()
-    const omitted = validateDailyBriefingEditorial({ ...validOutput, importance: [] }, source, 'zh-CN')
-    expect(omitted.ok).toBe(true)
-    if (omitted.ok) {
-      const applied = applyDailyBriefingEditorial(source, omitted.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-      expect(applied.data.market.find((row) => row.id === 'index')?.visibility).not.toBe('shown')
-    }
-    const included = validateDailyBriefingEditorial(validOutput, source, 'zh-CN')
-    expect(included.ok).toBe(true)
-    if (included.ok) {
-      const applied = applyDailyBriefingEditorial(source, included.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
-      expect(applied.data.market.find((row) => row.id === 'index')?.visibility).toBe('shown')
+    for (const editorial of [{ ...validOutput, importance: [] }, validOutput]) {
+      const validated = validateDailyBriefingEditorial(editorial, source, 'zh-CN')
+      expect(validated.ok).toBe(true)
+      if (!validated.ok) return
+      const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+      expect(applied.data.market.find((row) => row.id === 'index')?.visibility).not.toBe('hidden')
     }
   })
 

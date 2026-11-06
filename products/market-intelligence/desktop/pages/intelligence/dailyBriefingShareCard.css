@@ -24,7 +24,6 @@
 .mi-brief-poster__kicker { margin: 0 0 8px; color: #a5431f; font-size: 12px; font-weight: 700; letter-spacing: .22em; }
 .mi-brief-poster h1 { margin: 0; color: #161812; font-size: 50px; font-weight: 800; line-height: 1.05; letter-spacing: -.04em; }
 .mi-brief-poster__meta { margin: 12px 0 0; color: #6b695f; font-size: 14px; line-height: 1.5; }
-.mi-brief-poster__readings { flex: none; padding: 7px 11px; border: 1px solid #c9c1af; border-radius: 5px; color: #4f4d43; font-size: 12px; }
 /* A fallback reading must not look like a live one on a poster that gets shared: dashed, not solid,
    and in the ink colour so it reads at the poster's print size without a second palette. */
 .mi-brief-poster__stale { display: inline-block; margin-left: 7px; padding: 1px 7px; border: 1px dashed currentColor; border-radius: 3px; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: .04em; line-height: 1.4; opacity: .72; vertical-align: 1px; }
@@ -34,7 +33,7 @@
 .mi-brief-poster__columns { display: grid; grid-template-columns: 1.08fr 1fr; gap: 46px; }
 .mi-brief-poster h2 { margin: 0 0 12px; color: #8a5a35; font-size: 12px; font-weight: 700; letter-spacing: .16em; }
 
-.mi-brief-poster__news { display: grid; grid-template-columns: 112px 1fr auto; gap: 12px; padding: 10px 0; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__news { display: grid; grid-template-columns: 112px 1fr auto; gap: 12px; padding: 10px 0; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__news > span { color: #8a877b; font-size: 10.5px; line-height: 1.5; white-space: pre-line; }
 .mi-brief-poster__news > span[data-polarity="bearish"] { color: #9f2d21; }
 .mi-brief-poster__news > span[data-polarity="bullish"] { color: #2f6b3c; }
@@ -43,7 +42,7 @@
 .mi-brief-poster__empty { margin: 0; color: #777368; font-size: 13px; }
 
 .mi-brief-poster__numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
-.mi-brief-poster__number { padding: 9px 0; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__number { padding: 9px 0; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__number > span { display: block; color: #777368; font-size: 11px; }
 .mi-brief-poster__number strong { display: block; margin-top: 2px; color: #161812; font-size: 26px; font-weight: 750; line-height: 1.15; letter-spacing: -.02em; }
 .mi-brief-poster__number small { display: block; margin-top: 2px; color: #6b695f; font-size: 11px; line-height: 1.45; }
@@ -69,7 +68,7 @@
 .mi-brief-poster__outlook, .mi-brief-poster__overturn { margin: 0; color: #3b382f; font-size: 13px; line-height: 1.6; }
 .mi-brief-poster__watch ul { margin: 0; padding-left: 16px; color: #4e493e; font-size: 12px; line-height: 1.55; }
 .mi-brief-poster__watch li { margin: 0; }
-.mi-brief-poster__overturn { margin-top: 2px; padding-top: 8px; border-top: 1px dashed #ded4c2; }
+.mi-brief-poster__overturn { margin-top: 2px; padding-top: 8px; border-top: 1px dashed #c9bda3; }
 
 /* What the earlier read deserved, as one line rather than two blocks that repeat the same point. */
 .mi-brief-poster__standing { margin: 0 0 9px; color: #4e493e; font-size: 11.5px; line-height: 1.55; }
@@ -77,13 +76,13 @@
 .mi-brief-poster__standing[data-standing="held"] b { color: #2f6b3c; }
 .mi-brief-poster__standing[data-standing="overturned"] b { color: #9f2d21; }
 
-.mi-brief-poster__next { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__next { margin-top: 22px; padding-top: 14px; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__next p { margin: 4px 0; color: #3d3c33; font-size: 13px; }
 .mi-brief-poster__next b { margin-right: 8px; color: #a5431f; font-weight: 600; }
 
-.mi-brief-poster__foot { display: flex; justify-content: space-between; gap: 20px; margin-top: 26px; padding-top: 10px; border-top: 1px solid #d8cfbd; color: #8a877b; font-size: 10px; letter-spacing: .02em; }
+.mi-brief-poster__foot { display: flex; justify-content: space-between; gap: 20px; margin-top: 26px; padding-top: 10px; border-top: 1px solid #c9bda3; color: #8a877b; font-size: 10px; letter-spacing: .02em; }
 
-.mi-brief-poster__basis { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__basis { margin-top: 22px; padding-top: 14px; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__basis-grid { display: grid; grid-template-columns: 1.15fr 1.15fr .9fr; gap: 10px; }
 .mi-brief-poster__basis-card { padding: 10px 11px; border: 1px solid #ded4c2; border-radius: 7px; background: #fffaf1; }
 .mi-brief-poster__basis-card h3 { margin: 0 0 4px; color: #625f55; font-size: 10px; letter-spacing: .06em; }
@@ -92,28 +91,18 @@
 .mi-brief-poster__basis-card.counter { border-left: 3px solid #9f2d21; }
 .mi-brief-poster__basis-card.gaps { border-left: 3px solid #b45309; }
 
-.mi-brief-poster__footnotes { margin-top: 18px; padding-top: 9px; border-top: 1px solid #d8cfbd; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 22px; color: #8b8475; font-size: 8.5px; line-height: 1.5; }
+.mi-brief-poster__footnotes { margin-top: 18px; padding-top: 9px; border-top: 1px solid #c9bda3; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 22px; color: #8b8475; font-size: 8.5px; line-height: 1.5; }
 .mi-brief-poster__footnotes b { margin-right: 3px; color: #a5431f; font-weight: 700; }
 .mi-brief-poster__footnotes span { display: block; }
 
 .mi-brief-poster__head-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .mi-brief-poster__readonly { padding: 3px 7px; border: 1px solid #e0c9a6; border-radius: 4px; color: #8a5a35; font-size: 9.5px; }
 
-.mi-brief-poster__news-section, .mi-brief-poster__data-section { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__news-section, .mi-brief-poster__data-section { margin-top: 22px; padding-top: 14px; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__numbers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .mi-brief-poster__numbers[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mi-brief-poster__numbers[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.mi-brief-poster__leverage { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; padding: 7px 0; border-top: 1px solid #ded4c2; font-size: 10px; color: #6b695f; }
-.mi-brief-poster__leverage b { color: #1b1d18; font-weight: 600; }
-.mi-brief-poster__policy { display: flex; gap: 10px; align-items: baseline; margin-top: 8px; padding: 7px 0; border-top: 1px solid #ded4c2; font-size: 10px; color: #6b695f; }
-.mi-brief-poster__policy b { color: #1b1d18; font-weight: 600; }
-.mi-brief-poster__policy small { color: #8b8475; font-size: 9px; }
-.mi-brief-poster__metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin-top: 10px; border-top: 1px solid #ded4c2; }
-.mi-brief-poster__metrics div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #ebdfcf; color: #6b695f; font-size: 11px; }
-.mi-brief-poster__metrics b { color: #1b1d18; font-weight: 700; }
 /* A change-led metric keeps its level on a second line, right-aligned under the move. */
-.mi-brief-poster__metrics div[data-lead="change"] { flex-wrap: wrap; }
-.mi-brief-poster__metrics div[data-lead="change"] small { flex-basis: 100%; margin-top: -1px; color: #8a877b; font-size: 9.5px; font-weight: 400; text-align: right; }
 .mi-brief-poster__news { grid-template-columns: 112px 1fr auto; }
 .mi-brief-poster__news-source { color: #8b8475; font-size: 9px; text-align: right; white-space: nowrap; }
 .mi-brief-poster__signal { display: flex; align-items: center; gap: 12px; margin: 16px 0 0; padding: 11px 14px; border: 1px solid #e4c58f; border-radius: 7px; background: #fdf0d6; }
@@ -122,11 +111,6 @@
 .mi-brief-poster__signal small { margin-left: auto; color: #8a6633; font-size: 9px; white-space: nowrap; }
 .mi-brief-poster__visuals { display: grid; grid-template-columns: 1.15fr 1fr; gap: 26px; margin-top: 12px; }
 .mi-brief-poster__visual h3 { margin: 0 0 6px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
-.mi-brief-poster__flow { display: grid; grid-template-columns: 56px 1fr 78px; gap: 8px; align-items: center; padding: 2px 0; color: #6b695f; font-size: 9px; }
-.mi-brief-poster__flow b { color: #1b1d18; font-size: 9px; text-align: right; }
-.mi-brief-poster__flow-track { height: 8px; border-radius: 2px; background: #e8dfd0; overflow: hidden; }
-.mi-brief-poster__flow-track i { display: block; height: 100%; background: #be3a2b; }
-.mi-brief-poster__flow-track i[data-positive="true"] { background: #2f7d45; }
 .mi-brief-poster__polarity { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: #e8dfd0; }
 .mi-brief-poster__polarity i { display: block; height: 100%; }
 .mi-brief-poster__visual > small { display: block; margin-top: 4px; color: #8b8475; font-size: 8.5px; }
@@ -144,19 +128,12 @@
 .mi-brief-poster__next-focus p.mi-brief-poster__next-meta { margin: 2px 0 0; }
 .mi-brief-poster__next-soon { position: absolute; top: 12px; right: 14px; color: #8a6633; font-size: 9px; }
 .mi-brief-poster__next-rows { margin-top: 4px; }
-.mi-brief-poster__next-row { display: grid; grid-template-columns: 108px 1fr auto; gap: 12px; align-items: baseline; padding: 7px 2px; border-bottom: 1px solid #ded4c2; }
+.mi-brief-poster__next-row { display: grid; grid-template-columns: 108px 1fr auto; gap: 12px; align-items: baseline; padding: 7px 2px; border-bottom: 1px solid #c9bda3; }
 .mi-brief-poster__next-row time { color: #a5431f; font-size: 9.5px; font-weight: 700; }
 .mi-brief-poster__next-row b { color: #26241c; font-size: 11.5px; font-weight: 600; }
 .mi-brief-poster__next-row small { display: block; margin-top: 1px; color: #8b8475; font-size: 8.5px; }
 .mi-brief-poster__next-row > span { color: #6b695f; font-size: 9px; text-align: right; white-space: nowrap; }
 
-.mi-brief-poster__flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.mi-brief-poster__flow-head small { color: #8b8475; font-size: 8px; }
-.mi-brief-poster__flow-track { position: relative; height: 8px; border-radius: 2px; background: #e8dfd0; overflow: hidden; }
-.mi-brief-poster__flow-zero { position: absolute !important; left: 50%; top: 0; bottom: 0; width: 1px !important; height: 100% !important; background: #a89f8d !important; }
-.mi-brief-poster__flow-bar { position: absolute !important; top: 0; height: 100% !important; display: block; background: #be3a2b; }
-.mi-brief-poster__flow-bar[data-positive="true"] { background: #2f7d45; }
-.mi-brief-poster__flow-axis { display: flex; justify-content: space-between; margin-top: 3px; color: #8b8475; font-size: 8px; }
 
 .mi-brief-poster__key { padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; }
 .mi-brief-poster__key[data-tone="positive"] { background: #e4efe2; border-color: #c9ddc7; }
@@ -168,9 +145,6 @@
 .mi-brief-poster__key[data-tone="positive"] > span { color: #2f6b3c; }
 .mi-brief-poster__key[data-tone="negative"] > span { color: #9f2d21; }
 .mi-brief-poster__key[data-tone="neutral"] > span { color: #8a5a12; }
-.mi-brief-poster__metrics div[data-tone="positive"] b { color: #256c37; }
-.mi-brief-poster__metrics div[data-tone="negative"] b { color: #a82c1f; }
-.mi-brief-poster__metrics div[data-tone="neutral"] b { color: #6b695f; }
 
 .mi-brief-poster__next-why { margin: 6px 0 0 !important; color: #4e3a24 !important; font-size: 10px !important; line-height: 1.5 !important; }
 .mi-brief-poster__next-why b { color: #8a5a12; }
@@ -190,11 +164,34 @@
 
 .mi-brief-poster__news-reason { display: block; margin-top: 3px; color: #5b4a35 !important; font-size: 9.5px !important; line-height: 1.45; }
 
-.mi-brief-poster__macro { display: grid; grid-template-columns: 112px 1fr; gap: 0 18px; padding: 9px 0; border-top: 1px solid #e7ddcd; }
+.mi-brief-poster__macro { display: grid; grid-template-columns: 112px 1fr; gap: 0 18px; padding: 9px 0; border-top: 1px solid #c9bda3; }
 .mi-brief-poster__macro > span { color: #8b8475; font-size: 10.5px; line-height: 1.55; white-space: nowrap; }
 .mi-brief-poster__macro > div > p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
 .mi-brief-poster__macro > div > small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
+/* 「已取消」是排期事实，不是错误：同「重点」小签的几何，换成次级墨色，不刷警示色。 */
+.mi-brief-poster__macro-cancelled { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 3px; background: #efe9dc; color: #625f55; font-size: 8px; font-weight: 700; vertical-align: 1px; }
+/* What the section says when it has nothing to list: it was read, and here is why it is empty — or that
+   there genuinely was nothing. One row in the same rhythm as a macro row (so the block keeps its height
+   and the heading is not orphaned), in the section's secondary ink. No warning colour, no icon, no
+   retry, no left rule: "not read" is not "failed", and both cases look the same because they are the
+   same thing to the reader.
+   It sits beside the macro rows rather than inside their two-column grid, so it already spans the full
+   width; the `grid-column` is stated anyway because the requirement is written that way, and it costs
+   nothing when the parent is not a grid. */
+/* What the section says when it has nothing to list: it was read, and here is why it is empty — or that
+   there genuinely was nothing. Two boxes, split by what each one owns.
+   The row is the grid container's direct child and carries the spacing; it never draws its top line,
+   because it only exists when there are no event rows at all, so it is by definition the first thing
+   under the heading. Stated as a class rather than `:first-of-type`: the section's first div is not
+   necessarily this one, and a positional guess here would draw a line or drop one on the wrong row.
+   The cell inside spans both columns — a line confined to the 112px date column would read as a
+   missing date rather than as a section with nothing in it — and holds the text in the section's
+   secondary ink, the same tier as an event's annotation. No warning colour, no icon, no background,
+   no left rule: "not read" is not "failed", and both empty cases look alike because to the reader they
+   are the same answer to the same question. */
+.mi-brief-poster__macro-row-empty { padding: 9px 0; border-top: 0; }
+.mi-brief-poster__macro-empty { grid-column: 1 / -1; margin: 0; color: #625f55; font-size: 12px; line-height: 1.5; }
 
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 
@@ -204,3 +201,166 @@
 @container (max-width: 640px) {
   .mi-brief-poster__next-watch-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── Data region (v35): one partition feeds this block, in both exports ─────────────────────────
+   Sizes are the design's own: card row 114px, leverage card 87px, gauge 88×54, price area column
+   100 wide (fills the card height), spark 60×26. Nothing here is responsive: the paper is a fixed
+   1080px sheet, so a stacked variant at narrow widths would make the export and the preview differ. */
+/* Blocks are separated by space alone — no line between them. Twelve is the distance the sheet had
+   before it was widened; the row lines inside a block are what separate rows, not blocks. */
+.mi-brief-poster__data { display: flex; flex-direction: column; gap: 12px; }
+/* The card shell, once. Height is the OUTER box: `height` + border-box here means a padding or border
+   change cannot push the card row past 114px, which is what happened when the height lived on the grid
+   row and the shell was missing altogether. Tone drives the colour, so a card with a tone is a card
+   with a background — the two cannot drift apart. */
+.mi-brief-poster__card { box-sizing: border-box; border-radius: 8px; padding: 10px 14px 13px; background: #f8ecd2; border: 1px solid #e8d3a8; }
+.mi-brief-poster__card[data-tone='up'] { background: #e4efe2; border-color: #c9ddc7; }
+.mi-brief-poster__card[data-tone='down'] { background: #f7e2dc; border-color: #ebc9c0; }
+/* The three cards share one row: BTC, ETH, then the rate card. Equal widths, one row, no wrapping. */
+.mi-brief-poster__card-row { display: flex; gap: 8px; align-items: stretch; }
+/* Two columns, both placed: the reading on the left, the plot on the right. Leaving placement to the
+   grid's auto-flow put the number and its amplitude into the 100px plot column, and the implicit rows
+   pushed the card past 114px — the DOM looked right and the paper did not. */
+.mi-brief-poster__price-card { position: relative; height: 114px; padding: 10px 14px 13px; display: grid; grid-template-columns: minmax(0, 1fr) 100px; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; }
+/* Two ends, not the middle: the label sits at the top and the time at the card's foot, matching the
+   approved sheet. `space-between` only spreads inside a column that fills the row, so it stretches. */
+/* Three lines, top-aligned: label, the number, then the amplitude in the row the instant used to take.
+   With two lines the column spread out and left the middle of the card empty. */
+/* Two lines, centred: the label and the figure as one block, the plot beside them filling the row. */
+/* The label is out of the column and pinned to the card's top-left, the same place and the same size
+   the rate card puts its title. It stays in the same DOM position — this is a position change, not a
+   rebuild.
+   The figure rises by the 9px the label used to occupy, and that is the accepted result: padding it
+   back would reserve empty space to keep a position the reader has no memory of. Two price cards rise
+   by the same amount and the card stays 114px. */
+.mi-brief-poster__price-lead { grid-column: 1; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+/* Same tier as the rate card's title: 11px, the sheet's warm label ink, one line with an ellipsis. The
+   right bound stops it at the plot column so a long name can never run under the drawing. */
+.mi-brief-poster__price-label { position: absolute; top: 10px; left: 14px; right: 120px; font-size: 11px; line-height: 1.45; color: #8a5a12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Some editions read the index through a perpetual proxy. The mark sits on the label, in the label's own
+   size and colour and without bold: it qualifies the name, it is not a second name. */
+.mi-brief-poster__price-proxy { font-size: 11px; font-weight: 400; color: #6b695f; }
+/* The proxy mark travels with the label, so it keeps the label's ink and weight and sits beside it in
+   the same corner. */
+/* The number and its amplitude on one baseline row: one reading, not two lines. */
+.mi-brief-poster__price-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+/* The level carries its own ink: it used to inherit the card's tone, so a reader saw the closing level
+   printed in rise-green and read the colour as the move. The move is the only tinted thing in this row. */
+.mi-brief-poster__price-value { font-size: 26px; font-weight: 750; line-height: 1.1; color: #1b1d18; font-variant-numeric: tabular-nums; }
+/* The move beside the level: one step down from it, bold enough to read as a direction, tinted by sign. */
+.mi-brief-poster__price-change { font-size: 14px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__price-change[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__price-change[data-tone='down'] { color: #8f2a1d; }
+/* No stored close: the dash plus the reason, in the card's muted ink — never a zero standing in for it. */
+/* The dash keeps the level's ink — it stands in the level's place; only the reason is a comment, and a
+   comment is small and grey. */
+.mi-brief-poster__price-missing { font-size: 9.5px; line-height: 1.2; color: #6b695f; }
+/* The plot column holds the drawing and its amplitude label; the label is HTML laid over the plot, so the
+   drawing's own svg keeps zero text nodes. It sits on whichever side the filled area is not using. */
+.mi-brief-poster__price-plot { position: relative; grid-column: 2; grid-row: 1; width: 100%; height: 100%; display: block; }
+.mi-brief-poster__price-area { width: 100%; height: 100%; display: block; }
+.mi-brief-poster__price-zero { stroke: #a89f8d; stroke-width: 1; opacity: .5; }
+.mi-brief-poster__price-line { stroke: currentColor; stroke-width: 1.5; }
+.mi-brief-poster__price-card[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__price-card[data-tone='down'] { color: #8f2a1d; }
+/* The window's travel: one size down, the muted ink, and no tone of its own — it is not a direction. */
+/* It sits at the foot of the column, in the row the instant used to take: `margin-top: auto` keeps the
+   label and the number together at the top and pushes this line down, so the empty middle is between
+   them and the plot beside it stays balanced. */
+.mi-brief-poster__amplitude { font-size: 9.5px; line-height: 1; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__price-plot > .mi-brief-poster__amplitude { position: absolute; right: 3px; bottom: 3px; }
+.mi-brief-poster__price-plot > .mi-brief-poster__amplitude[data-side='above'] { bottom: auto; top: 3px; }
+/* The dial and the reading, both placed: the title used to land in the dial's own cell and sit on top
+   of the gauge, because only the svg had an explicit position. */
+/* Three stacked rows, as the sheet has them: heading across the card, dial beside two lines of reading,
+   bottom line across the card. The content box is 89 (114 − 23 padding − 2 border), so the bottom line
+   must stay on one line: 16 + 2 + 54 + 2 + 14 = 88. */
+.mi-brief-poster__policy-card { position: relative; flex: 1 1 0; min-width: 0; height: 114px; padding: 10px 14px 13px; display: flex; flex-direction: column; gap: 2px; background: #f8ecd2; border-color: #e8d3a8; }
+/* The accent bar: inside the shell, inset from both ends, never a border (that would change the height). */
+.mi-brief-poster__policy-card::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #c2410c; }
+.mi-brief-poster__policy-title { flex: 0 0 auto; font-size: 11px; line-height: 1.45; color: #8a5a12; }
+.mi-brief-poster__policy-row { flex: 0 0 54px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mi-brief-poster__policy-dial { position: relative; flex: none; width: 88px; height: 54px; }
+.mi-brief-poster__policy-copy { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.mi-brief-poster__policy-gauge { display: block; width: 88px; height: 54px; }
+.mi-brief-poster__gauge-track { stroke: #a89f8d; stroke-width: 8; opacity: .35; }
+/* Four colours in the palette, at most three on the dial: the event arc takes the lead's own colour
+   (a priced cut is green, not orange), holding is blue, everything else grey. The swatch beside the
+   share uses the same class, so a colour cannot drift between the drawing and its key. */
+.mi-brief-poster__gauge-hike { stroke: #c2410c; stroke-width: 8; }
+.mi-brief-poster__gauge-cut { stroke: #1f5b32; stroke-width: 8; }
+.mi-brief-poster__gauge-hold { stroke: #3f6d8f; stroke-width: 8; }
+.mi-brief-poster__gauge-other { stroke: #8c8474; stroke-width: 8; }
+.mi-brief-poster__policy-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-hike { background: #c2410c; }
+.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-cut { background: #1f5b32; }
+.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-hold { background: #3f6d8f; }
+.mi-brief-poster__policy-swatch.mi-brief-poster__gauge-other { background: #8c8474; }
+/* The ring's own number must clear the inner wall on both sides and still stay above the chord at the
+   bore's bottom — two constraints that fight each other: a wider number has to sit lower, and a lower one
+   drifts past the chord. History: a larger size placed higher overlapped the wall, and the lower placement
+   pushed the baseline below the chord. Measured values live in 07-style-values.md. */
+.mi-brief-poster__policy-probability { position: absolute; left: 0; top: 27px; width: 88px; height: 16px; line-height: 1; text-align: center; font-size: 15px; font-weight: 750; letter-spacing: -0.02em; color: #7a4c10; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__policy-change { font-size: 11px; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__policy-outcome { font-size: 11px; color: #1b1d18; white-space: nowrap; }
+/* The foot carries the shares only — the target range moved to the right column with the meeting,
+   because beside the shares it read as one more share. Values live in 07-style-values.md. */
+/* One line, never wrapped: a second line would push the card past 114 and clip it. */
+.mi-brief-poster__policy-bottom { flex: 0 0 auto; display: flex; align-items: baseline; gap: 0; white-space: nowrap; font-size: 9.5px; line-height: 1.45; color: #6b695f; }
+.mi-brief-poster__policy-range-line { font-size: 9.5px; line-height: 1.3; color: #6b695f; white-space: nowrap; }
+.mi-brief-poster__policy-outcome-item { white-space: nowrap; }
+.mi-brief-poster__policy-outcomes { white-space: nowrap; }
+/* Two blocks, each a titled table of cells: one row of three for the money, three columns by two lines
+   for markets and sentiment. Fixed columns, so a missing cell is a hole rather than a stretched row. */
+.mi-brief-poster__funds-block, .mi-brief-poster__market-block { display: flex; flex-direction: column; gap: 2px; }
+/* A block heading differs from the body by hue and tracking, not by size: 10px/700 with .1em tracking in
+   the card's own brown. At body size and body colour it read as ordinary text. */
+.mi-brief-poster__block-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
+/* The line belongs to the row, never to a cell: a border per cell breaks at every column gap and at a
+   missing cell, which is what made the separators stop halfway. One line per row, full content width,
+   and `column-gap` (not a margin on a cell) so it has no gaps to break at. */
+/* One line per row, on the row container, in a colour dark enough to survive the paper tone — the older
+   hairline was present in the file and invisible on the sheet, which is how "exactly one line" turned into
+   a claim nobody could check. A block's own last row draws none, because the space after it already
+   separates the blocks. Values live in 07-style-values.md. */
+.mi-brief-poster__figure-line { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 32px; border-bottom: 1px solid #c9bda3; }
+.mi-brief-poster__funds-block > .mi-brief-poster__figure-line:last-of-type,
+.mi-brief-poster__market-block > .mi-brief-poster__figure-line:last-of-type { border-bottom: 0; }
+.mi-brief-poster__figure { display: flex; align-items: baseline; gap: 6px; min-height: 20px; padding: 2px 0; white-space: nowrap; font-size: 11px; overflow: hidden; }
+/* The name gives way, the number never does: a truncated label still says which row it is, a clipped
+   number is simply wrong. The value also never wraps — a wrapped cell breaks the grid's line height. */
+.mi-brief-poster__figure-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #6b695f; }
+.mi-brief-poster__figure b { flex: 0 0 auto; margin-left: auto; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure small { color: #6b695f; }
+/* The tone rides on the change, never on the cell: a tinted level reads as a move. */
+.mi-brief-poster__figure-change { flex: 0 0 auto; display: inline-flex; align-items: baseline; gap: 2px; margin-left: 4px; }
+.mi-brief-poster__figure-window { font-size: 9.5px; line-height: 1; color: #6b695f; }
+.mi-brief-poster__figure-change b { font-size: 12px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__figure > b[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__figure > b[data-tone='down'] { color: #8f2a1d; }
+.mi-brief-poster__figure-change b[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__figure-change b[data-tone='down'] { color: #8f2a1d; }
+/* The band word colours a judgement, not a move. The hexes are the move palette on purpose — one red, not a
+   fifth — so the note lives beside them: at this line, 恐惧 red means "fear", not "falling". */
+/* The judgement word is grey unless the band says otherwise: inheriting the score's body ink made
+   "neutral" look like part of the number instead of a judgement. The two tone rules below override it. */
+.mi-brief-poster__figure-band { line-height: 1; color: #6b695f; }
+.mi-brief-poster__figure-band[data-tone='down'] { color: #8f2a1d; }
+.mi-brief-poster__figure-band[data-tone='up'] { color: #1f5b32; }
+.mi-brief-poster__leverage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-height: 87px; }
+.mi-brief-poster__leverage-title { grid-column: 1 / -1; font-size: 10px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; color: #8a5a35; margin: 0 0 2px; }
+.mi-brief-poster__leverage-card { display: grid; grid-template-columns: minmax(0, 1fr) 60px; align-items: center; gap: 6px; min-width: 0; font-size: 11px; border-radius: 7px; padding: 7px 10px 8px; background: #fffaf1; border-color: #ded4c2; }
+/* The positioning card keeps its own warm shell whatever the tone says: its tone belongs to the printed
+   change, not to the card's colour — the green/red shell is the price cards' vocabulary. */
+.mi-brief-poster__leverage-card[data-tone] { background: #fffaf1; border-color: #ded4c2; }
+.mi-brief-poster__leverage-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-brief-poster__leverage-card b { font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-card small { white-space: nowrap; color: #6b695f; overflow: hidden; text-overflow: ellipsis; }
+/* The amount is the trunk: 26px/750 in body colour, never tinted. The change beside it is 14px/600 and
+   carries the colour — the row and the cell follow the same rule, so a reader sees one thing at a time. */
+.mi-brief-poster__leverage-figures { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.mi-brief-poster__leverage-amount { font-size: 26px; font-weight: 750; line-height: 1.1; color: #1b1d18; font-variant-numeric: tabular-nums; }
+.mi-brief-poster__leverage-change { font-size: 14px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-brief-poster__leverage-card[data-tone='up'] .mi-brief-poster__leverage-change { color: #1f5b32; }
+.mi-brief-poster__leverage-card[data-tone='down'] .mi-brief-poster__leverage-change { color: #8f2a1d; }
+.mi-brief-poster__leverage-spark { width: 60px; height: 26px; color: #8a5a35; }

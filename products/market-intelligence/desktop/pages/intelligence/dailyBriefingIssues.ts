@@ -6,6 +6,9 @@ import type {
   DailyBriefingDocument
 } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './dailyBriefingText'
+import { formattedClock, unavailableRowCopy } from './dailyBriefingUnavailableRow'
+import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+import { coreMetricLabel, eventTitle, rowLabel, rowSource } from './dailyBriefingIssueLabels'
 
 /**
  * What limited this edition, derived from the document that was actually generated.
@@ -27,24 +30,25 @@ export type BriefingIssueTemplate =
   | 'row-disabled' | 'row-unavailable' | 'row-stale' | 'row-no-value' | 'etf-no-history' | 'capital-gate'
   | 'no-baseline' | 'no-baseline-last-release' | 'insufficient-window'
   | 'news-disabled' | 'news-unavailable' | 'calendar-disabled' | 'calendar-unavailable'
-  | 'macro-consensus' | 'macro-actual' | 'macro-previous'
+  | 'macro-consensus' | 'macro-actual' | 'macro-previous' | 'macro-value-conflict'
   | 'backfill-done' | 'backfill-generic'
-  | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure'
+  | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
   | 'timing-late'
 
 /** The stable code behind a template; two templates may share a code but never a group. */
-const templateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
+export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
   'row-disabled': 'source-disabled', 'row-unavailable': 'unavailable', 'row-stale': 'stale',
   'row-no-value': 'no-value', 'etf-no-history': 'etf-unavailable', 'capital-gate': 'capital-gate',
   'no-baseline': 'no-baseline', 'no-baseline-last-release': 'no-baseline', 'insufficient-window': 'insufficient-window',
   'news-disabled': 'source-disabled', 'news-unavailable': 'unavailable',
   'calendar-disabled': 'source-disabled', 'calendar-unavailable': 'unavailable',
   'macro-consensus': 'consensus-missing', 'macro-actual': 'actual-missing', 'macro-previous': 'previous-missing',
+  'macro-value-conflict': 'value-conflict',
   'backfill-done': 'backfill', 'backfill-generic': 'backfill',
   'ai-fallback': 'model-fallback', 'ai-websearch': 'websearch-off', 'ai-failure': 'editorial-failure',
   'source-failure': 'source-failed',
-  'system-failure': 'generation-failure',
+  'system-failure': 'generation-failure', 'document-invalid': 'document-invalid',
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
   'timing-late': 'late-generation'
@@ -85,7 +89,7 @@ export function briefingIssues(input: BriefingIssueInput): readonly BriefingIssu
   const add = (issue: Omit<BriefingIssue, 'at' | 'code'> & Readonly<{ at?: string }>): void => {
     const complete = Object.freeze({
       ...issue,
-      code: templateCodes[issue.template],
+      code: briefingIssueTemplateCodes[issue.template],
       at: issue.at || fallbackAt
     })
     if (!issues.has(complete.id)) issues.set(complete.id, complete)
@@ -189,17 +193,13 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
       continue
     }
     if (row.state === 'unavailable') {
-      const etf = row.id === 'etf-btc' || row.id === 'etf-eth'
-      const gated = etf && row.reason === 'capital-gate'
+      const copy = unavailableRowCopy({
+        text, label, rowId: row.id, ...(row.reason ? { reason: row.reason } : {}),
+        cutoff: formattedClock(input.formatTime(input.document.edition.windowEnd, 'minute'))
+      })
       add({
         id: `data:${row.id}:unavailable`, severity: 'warning', category: 'data', source, at,
-        template: etf ? gated ? 'capital-gate' : 'etf-no-history' : 'row-unavailable',
-        title: etf
-          ? fill(gated ? text.limits.row.capitalGate : text.limits.row.etfNoHistory, { row: label })
-          : fill(text.limits.row.unavailable, { row: label }),
-        advice: etf
-          ? gated ? text.limits.advice.restoreCapital : text.limits.advice.etfAfterOpen
-          : row.reason === 'not-collected' ? text.limits.advice.waitCollection : text.limits.advice.checkSource
+        template: copy.template, title: copy.title, advice: copy.advice
       })
       continue
     }
@@ -259,23 +259,55 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   } else if (news === 'unavailable') {
     add({ id: 'data:news:unavailable', severity: 'warning', category: 'data', template: 'news-unavailable', source: text.limits.sources.news, at, title: text.limits.newsUnavailable, advice: text.limits.advice.checkNews })
   }
-  const notes = [document.news.notes.macroEmpty, document.next.note]
-  if (notes.includes('calendar-source-disabled')) {
+  // 宏观那栏为什么空：**与正文共用同一个推导**（`briefingMacroEmptyCopy`），所以读者在两处
+  // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。
+  const macroEmpty = briefingMacroEmptyCopy(document, {
+    macroEmptyCodes: text.macroEmptyCodes,
+    macroUnreadable: text.macroUnreadable
+  })
+  if (macroEmpty?.unreadable) {
+    const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
+    add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice: text.limits.advice.checkCalendar })
+  }
+  // 「接下来 7 日」那一段只由它自己的 note 说明，与上面那栏不是同一件事，照旧单独报。
+  const nextNote = document.next.note
+  if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-source-disabled') {
     add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', template: 'calendar-disabled', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
-  } else if (notes.includes('calendar-unavailable')) {
+  } else if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-unavailable') {
     add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
   }
 }
 
 function collectMacro(input: BriefingIssueInput, add: AddIssue): void {
   for (const item of input.document.news.macro) macroItemIssues(input, add, item)
+  // 两个来源说两个数（`02` v2.128）：值格整格不渲染，右列**恰一条**冲突说明（按事件数合并）。
+  const conflicts = input.document.news.notes.macroValueConflicts ?? []
+  if (conflicts.length > 0) {
+    add({
+      id: 'data:macro:value-conflict', severity: 'warning', category: 'data', template: 'macro-value-conflict',
+      source: input.text.limits.sources.calendar, at: input.document.edition.generatedAt,
+      title: input.text.limits.macro.valueConflict, advice: input.text.limits.advice.checkCalendar
+    })
+  }
   for (const item of [input.document.next.focus, ...input.document.next.items]) {
     if (item) nextItemIssues(input, add, item)
   }
 }
 
+/**
+ * 讲话/声明类事件：**没有数值是设计如此，不是缺口**（`02` v2.133 B 案）。
+ *
+ * 判据放在数据上，不靠事件名：一条既没有实际值、也没有预期值、还没有前值的事件，不是一次数值发布
+ * ——它是"某人在某时说了话"。这类行照常显示（时刻/国家/标题），不写解析，也**不进右列**：
+ * 记成缺口会让读者和排查的人都以为坏了，而它本来就不会有数。
+ */
+function isStatementOnly(item: BriefingMacroItem): boolean {
+  return !item.actual && !item.consensus && !item.previous
+}
+
 function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: BriefingMacroItem): void {
   const { text } = input
+  if (isStatementOnly(item)) return
   const name = eventTitle(item, input.eventTitles)
   if (!item.consensus) {
     add({
@@ -447,45 +479,6 @@ function collectTiming(input: BriefingIssueInput, add: AddIssue): void {
     title: fill(text.limits.timing.late, { interval: intervalText(delay, text) }),
     advice: text.limits.advice.keepRunning
   })
-}
-
-const coreMetricRows: Readonly<Record<string, string>> = {
-  'core-stablecoin-supply-usd': 'stablecoin',
-  'etf-net-flow-btc': 'etfBtc',
-  'etf-net-flow-eth': 'etfEth',
-  'dxy-level': 'dxy',
-  'gold-level-usd': 'gold',
-  'us10y-yield-percent': 'us10y',
-  'us10y-real-yield-percent': 'us10yReal'
-}
-
-function coreMetricLabel(metric: string, text: DailyBriefingText): string {
-  const key = coreMetricRows[metric]
-  return key ? text.rows[key as keyof DailyBriefingText['rows']] ?? metric : ''
-}
-
-function rowLabel(text: DailyBriefingText, labelKey: string): string {
-  return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
-}
-
-function rowSource(id: BriefingMarketRow['id'] | BriefingPulseRow['id'], text: DailyBriefingText): string {
-  switch (id) {
-    case 'stablecoin': return text.limits.sources.stablecoin
-    case 'etf-btc':
-    case 'etf-eth': return text.limits.sources.etf
-    case 'fear-greed': return text.limits.sources.fearGreed
-    case 'funding-btc':
-    case 'funding-eth': return text.limits.sources.funding
-    case 'dxy':
-    case 'gold': return text.limits.sources.macro
-    case 'us10y':
-    case 'us10y-real': return text.limits.sources.rates
-    default: return text.limits.sources.market
-  }
-}
-
-function eventTitle(item: Readonly<{ title: string; titleKey?: string }>, eventTitles: Record<string, string> | undefined): string {
-  return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
 }
 
 function intervalText(elapsedMs: number, text: DailyBriefingText): string {

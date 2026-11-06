@@ -1,6 +1,8 @@
 import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
+import type { NotificationEventDeclaration } from '../notifications/contracts/notificationEventCatalog'
+import { notificationEventReasonKey, notificationEventTitleKey } from '../notifications/contracts/platformNotificationEvents'
 import type {
   ProductManifest,
   ProductAssistantTemplateRegistration,
@@ -88,10 +90,161 @@ export function assertLocalizedText(title: ProductMenuPageContribution['title'],
   }
 }
 
+const NOTIFICATION_REQUESTED_LEVELS = new Set(['toast', 'popup', 'desktop', 'channel'])
+const NOTIFICATION_DEDUPE_UNITS = new Set(['occurrence', 'condition'])
+const NOTIFICATION_TEMPLATE_PLACEHOLDER = /\{[a-zA-Z][a-zA-Z0-9]*\}/
+
+/**
+ * 该产品**声明**的通知事件（契约 §3）。生成期校验五条，缺一条就是「建得成、永远不响」或
+ * 「合并永远合不上」——这两类毛病在运行期都只表现为读者收不到、或者收两条，静默且难查。
+ *
+ * 批准值不在这里校验：生效表面只读平台批准表（契约 §4），产品改了申请、平台没批，行为不变。
+ */
+function assertNotificationEvents(manifest: ProductManifest, productId: string): void {
+  const events = manifest.notificationEvents
+  if (events === undefined) return
+  if (!Array.isArray(events)) {
+    throw new ProductRegistryValidationError(`product "${productId}" notificationEvents must be an array`)
+  }
+
+  const seen = new Set<string>()
+  for (const event of events as readonly NotificationEventDeclaration[]) {
+    const id = typeof event.id === 'string' ? event.id : ''
+    if (!id.startsWith(`${productId}.`) || id !== id.trim()) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notification event id must start with "${productId}.", got "${id}"`
+      )
+    }
+    if (seen.has(id)) {
+      throw new ProductRegistryValidationError(`product "${productId}" declares duplicate notification event: ${id}`)
+    }
+    seen.add(id)
+
+    // 键名只有一个命名空间：`notification.event.<完整 id>.*`。手写的键在事件改名时不会有人同步，
+    // 目录解析出来就落空——所以**生成期**就比对期望值与实际值，不靠记性，也不留到运行期。
+    assertGeneratedEventKey(id, 'titleKey', event.titleKey, notificationEventTitleKey(id))
+    assertGeneratedEventKey(id, 'reasonKey', event.reasonKey, notificationEventReasonKey(id))
+    const bodyBase = `notification.event.${id}.body`
+    if (event.bodyKey !== undefined) {
+      assertGeneratedEventKey(id, 'bodyKey', event.bodyKey, bodyBase)
+    }
+    if (event.bodyKeyByVariant !== undefined) {
+      if (!event.bodyKeyByVariant || typeof event.bodyKeyByVariant !== 'object' || Array.isArray(event.bodyKeyByVariant)) {
+        throw new ProductRegistryValidationError(`notification event "${id}" bodyKeyByVariant must be an object`)
+      }
+      for (const [variant, key] of Object.entries(event.bodyKeyByVariant)) {
+        // 变体键与主键同一前缀：`.body.<variant>`，不开第二个命名空间。
+        assertGeneratedEventKey(id, `bodyKeyByVariant.${variant}`, key, `${bodyBase}.${variant}`)
+      }
+    }
+    if (typeof event.requiresUserAction !== 'boolean') {
+      throw new ProductRegistryValidationError(`notification event "${id}" must declare requiresUserAction as a boolean`)
+    }
+    // 类型标签：必填、只在四个值里取（契约 v2.37）。**不许实现时猜一个**。
+    if (!['failure', 'needs-action', 'completed', 'reminder'].includes(event.category)) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" must declare category as failure | needs-action | completed | reminder`
+      )
+    }
+
+    const levels = event.requestedDisruptionLevels
+    if (!Array.isArray(levels) || levels.some((level) => !NOTIFICATION_REQUESTED_LEVELS.has(level))) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" requestedDisruptionLevels must be a subset of toast/popup/desktop/channel`
+      )
+    }
+    if (new Set(levels).size !== levels.length) {
+      throw new ProductRegistryValidationError(`notification event "${id}" repeats a requested disruption level`)
+    }
+
+    const hasTemplate = typeof event.dedupeKeyTemplate === 'string'
+    const hasBuilder = typeof event.dedupeKeyBuilder === 'string'
+    if (hasTemplate === hasBuilder) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" must declare exactly one of dedupeKeyTemplate or dedupeKeyBuilder`
+      )
+    }
+    if (hasTemplate && !NOTIFICATION_TEMPLATE_PLACEHOLDER.test(event.dedupeKeyTemplate ?? '')) {
+      // 常量模板 = 这个事件永远只有一条：第二次发生会并进第一次，次数也不加。
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeKeyTemplate must contain a variable placeholder`
+      )
+    }
+    if (hasBuilder && event.dedupeKeyBuilder !== 'moduleSignal' && event.dedupeKeyBuilder !== 'sourceIssue') {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeKeyBuilder must be one of the registered builders`
+      )
+    }
+
+    if (!NOTIFICATION_DEDUPE_UNITS.has(event.dedupeUnit)) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeUnit must be "occurrence" or "condition"`
+      )
+    }
+    const window = event.conditionWindowMs
+    const hasWindow = window !== undefined
+    if (event.dedupeUnit === 'condition') {
+      if (!hasWindow || !Number.isInteger(window) || (window ?? 0) <= 0) {
+        throw new ProductRegistryValidationError(
+          `notification event "${id}" condition cadence needs a positive integer conditionWindowMs`
+        )
+      }
+    } else if (hasWindow) {
+      // occurrence 带窗口 = 「一天」被写成了毫秒：两个概念不许挤在一个字段里。
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" occurrence cadence must not declare conditionWindowMs`
+      )
+    }
+    if (event.dedupeKeyTemplate !== undefined && typeof event.dedupeKeyTemplate !== 'string') {
+      throw new ProductRegistryValidationError(`notification event "${id}" dedupeKeyTemplate must be a string`)
+    }
+    if (event.requestedBypassQuietHours !== undefined && typeof event.requestedBypassQuietHours !== 'boolean') {
+      throw new ProductRegistryValidationError(`notification event "${id}" requestedBypassQuietHours must be a boolean`)
+    }
+  }
+}
+
+/** 期望值与实际值都写进消息：红的时候唯一被读到的就是这句话。 */
+function assertGeneratedEventKey(eventTypeId: string, field: string, actual: unknown, expected: string): void {
+  if (actual === expected) return
+  throw new ProductRegistryValidationError(
+    `notification event "${eventTypeId}" ${field} must be "${expected}" (generated from the event id), got "${String(actual)}"`
+  )
+}
+
 /**
  * 该产品**发布**的话题声明（`MI-11-R22` A1）。任务的订阅校验以这份声明为目录，
  * 所以形状错误必须在生成期就报出来，而不是等到读者建任务时才发现订阅永远不命中。
  */
+/**
+ * 通知生产者 claim（契约 §14.1/§14.4）：只能做格式校验，做不到「声明的 id 一定存在」——
+ * job 定义是运行时注册的，manifest 里没有静态清单。存在性靠 `claim-never-registered` 诊断。
+ */
+function assertNotificationProducerClaims(manifest: ProductManifest, productId: string): void {
+  const claims = manifest.notificationProducerClaims
+  if (claims === undefined) return
+  if (!Array.isArray(claims)) {
+    throw new ProductRegistryValidationError(`product "${productId}" notificationProducerClaims must be an array`)
+  }
+  const seen = new Set<string>()
+  for (const claim of claims) {
+    if (typeof claim !== 'string' || claim.trim() === '' || claim !== claim.trim()) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notificationProducerClaims must contain non-empty trimmed strings`
+      )
+    }
+    if (!claim.startsWith(`${productId}.`)) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notificationProducerClaim must start with "${productId}.", got "${claim}"`
+      )
+    }
+    if (seen.has(claim)) {
+      throw new ProductRegistryValidationError(`product "${productId}" declares duplicate notification producer: ${claim}`)
+    }
+    seen.add(claim)
+  }
+}
+
 function assertPublishableEventTopics(manifest: ProductManifest, productId: string): void {
   const topics = manifest.eventTopics
   if (topics === undefined) return
@@ -279,6 +432,8 @@ export function validateDiscoveredProductManifest(
 
   assertLocalizedText(manifest.name, `product "${productId}" name`)
   assertPublishableEventTopics(manifest, productId)
+  assertNotificationEvents(manifest, productId)
+  assertNotificationProducerClaims(manifest, productId)
 
   const reservedProductIds = RESERVED_SHELL_ROUTE_PATHS.map((routePath) => routePath.slice(1))
   if (reservedProductIds.includes(productId)) {

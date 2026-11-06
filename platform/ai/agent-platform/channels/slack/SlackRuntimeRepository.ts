@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto'
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from '../ChannelManagementPredicates'
 
-const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
+// 不能在模块加载时算死：支持判定里含进程内的「取证放行」（setChannelAcceptanceOverride），
+// 算死的常量会让运行时这一侧永远判「未支持」，用户点启用必然失败。
+const RUNTIME_CHANNEL_C_SQL = (): string => supportedChannelSql('c')
 
 /** Metadata-only Socket Mode state: event bodies, thread keys and URLs never enter SQLite. */
 export class SlackRuntimeRepository {
@@ -14,7 +16,7 @@ export class SlackRuntimeRepository {
     return this.database.transact(() => {
       const current = this.database.connection.prepare(
         `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
-         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and c.adapter_key='slack' and ${RUNTIME_CHANNEL_C_SQL}
+         where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and c.adapter_key='slack' and ${RUNTIME_CHANNEL_C_SQL()}
            and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
       if (!current) return false
@@ -42,7 +44,7 @@ export class SlackRuntimeRepository {
          select 1 from channel_runtime_generations g join agent_channels c on c.id = g.channel_id
          join agent_entities a on a.id = c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active'
-           and c.adapter_key='slack' and ${RUNTIME_CHANNEL_C_SQL} and c.lifecycle_state='enabled' and c.requested_enabled=1
+           and c.adapter_key='slack' and ${RUNTIME_CHANNEL_C_SQL()} and c.lifecycle_state='enabled' and c.requested_enabled=1
        )`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }

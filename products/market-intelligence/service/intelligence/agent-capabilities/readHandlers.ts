@@ -136,9 +136,13 @@ export async function handleGetCrossAssetSnapshot(
 ): Promise<unknown> {
   const { range, asOf } = (input ?? {}) as CrossAssetInput
   const interfaceStatus = await readCrossAssetInterface(deps)
+  // This reader wants the window's own point-in-time view; it is not the brief's late-data path.
+  const askedAsOf = asOf ?? new Date().toISOString()
   const snapshot = await deps.intelligenceModule.publicQueryService.queryCrossAssetSnapshot({
     range,
-    asOf: asOf ?? new Date().toISOString()
+    asOf: askedAsOf,
+    // This reader has no late-data grace: what the window end knew is what it reports.
+    knowledgeAt: askedAsOf
   })
   // Even an unavailable snapshot carries the channel state; otherwise the model can only guess
   // whether there is no data or the interface never ran.

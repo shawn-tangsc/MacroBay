@@ -5,7 +5,7 @@ import { useToast } from '@platform/ui/components/toast'
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
 import { configuredModelChatProtocols } from '@platform/ai/providers/providerChatEndpoints'
-import { confirmAction } from '@platform/ui/components/confirm'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
@@ -116,6 +116,9 @@ export function ModelServiceProviderPage({
   onToggleGroup,
   overlays
 }: ModelServiceProviderPageProps): React.ReactElement {
+  // 确认框由本树的宿主渲染（`<ConfirmProvider>` 挂在 AppShell 的 ConfigProvider 里），
+  // 没有宿主就抛错——静默退回 `Modal.confirm` 会渲染到树外、丢掉当前主题。
+  const confirm = useConfirm()
   const autosave = useModelServiceAutosave(statusText.failed)
   const [pendingEnabled, setPendingEnabled] = useState<boolean | null>(null)
   // 摘要态三个入口（地址框 / 齿轮 / 添加端点）都开同一个抽屉。
@@ -186,12 +189,12 @@ export function ModelServiceProviderPage({
   /**
    * 删除供应商的二次确认。
    *
-   * 一句话 + 危险钮，归平台 `confirmAction`：初始焦点落在「取消」上；删除失败仍由 `autosave` 的
+   * 一句话 + 危险钮，归平台 `confirm` 的树内实例（`useConfirm()`）：初始焦点落在「取消」上；删除失败仍由 `autosave` 的
    * 行内错误展示（确认框已经关了，和旧行为一致——失败时页面上那个删除入口还在，读者可以直接再来一次）。
    */
   function confirmRemove(target: SafeModelProvider | null): void {
     if (target === null) return
-    confirmAction({
+    confirm({
       title: labels.removeProvider,
       description: labels.removeProviderConfirm(resolveProviderDisplayName(labels, target)),
       confirmLabel: labels.removeProvider,

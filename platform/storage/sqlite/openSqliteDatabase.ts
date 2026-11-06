@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 
+import { isTempDirectoryVerified } from '@platform/storage/sqlite/tempDirectoryReadiness'
+
 /**
  * 所有本地 SQLite 库共用的等待窗口。
  *
@@ -7,6 +9,8 @@ import { DatabaseSync } from 'node:sqlite'
  * 而不是等对方提交。5 秒是这里所有库的统一值，与产品分析库、供应商库原有的等待窗口一致。
  */
 export const SQLITE_BUSY_TIMEOUT_MS = 5_000
+
+
 
 export type SqliteJournalMode =
   /** 默认：切到 WAL，读写不互相阻塞，崩溃后由 SQLite 自己恢复。 */
@@ -40,6 +44,9 @@ export function openSqliteDatabase(
   path: string,
   options: OpenSqliteDatabaseOptions = {}
 ): DatabaseSync {
+  // 顺序闸门：见 `tempDirectoryReadiness.ts` 的注释（标志单独成文件，因为它要进渲染层测试 setup）。
+  if (!isTempDirectoryVerified()) throw new Error('sqlite-temp-directory-not-verified')
+
   const busyTimeoutMs = normalizeBusyTimeout(options.busyTimeoutMs)
   const pageSizeBytes =
     options.pageSizeBytes === undefined ? undefined : normalizePageSize(options.pageSizeBytes)

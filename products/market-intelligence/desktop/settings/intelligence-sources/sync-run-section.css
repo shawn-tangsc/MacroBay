@@ -20,7 +20,8 @@
 /* One grid template for the header and every row: alignment is structural, not negotiated. */
 .mi-sync-run__grid {
   display: grid;
-  grid-template-columns: 92px 232px 84px 68px 64px minmax(0, 1fr);
+  /* 时间 / 任务 / 来源 / 动作 / 结果 / 分析结果 / 耗时 / 说明 */
+  grid-template-columns: 88px 180px 92px 64px 64px 190px 52px minmax(0, 1fr);
   gap: 8px;
   align-items: baseline;
   padding: 6px 8px;
@@ -31,7 +32,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--surface-1, #0f1116);
+  background: var(--surface-strong);
   border-bottom-color: var(--border, #22252d);
   color: var(--text-secondary, #8b8d94);
   font-size: 10.5px;
@@ -67,3 +68,59 @@
 .mi-sync-run__legend { color: var(--muted); font-size: 11px; margin: 4px 8px 0; }
 /* How many more sources a row touched, as visible text rather than a tooltip. */
 .mi-sync-run__more { color: var(--muted); }
+
+/* The analysis result carries a sentence, so it clamps in place instead of widening the row.
+   The full sentence is the button's accessible name and the record below holds the rest. */
+.mi-sync-run__analysis { min-width: 0; }
+.mi-sync-run__analysis-button {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 3px;
+  margin-left: -3px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mi-sync-run__analysis-button:hover { border-color: var(--border); }
+.mi-sync-run__analysis-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mi-sync-run__analysis-note { color: var(--muted); }
+/* One cell per record row: the analysis result spans the table instead of pretending to be a column. */
+.mi-sync-run__grid--analysis { grid-template-columns: minmax(0, 1fr); padding: 4px 8px 8px; background: var(--surface-2); }
+.mi-sync-run__analysis-record { padding-left: 96px; color: var(--text-secondary); }
+.mi-sync-run__analysis-record-head { margin: 0 0 4px; color: inherit; font-weight: 600; }
+.mi-sync-run__analysis-record-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2px 16px;
+  margin: 0;
+}
+.mi-sync-run__analysis-record-fields div { display: flex; gap: 6px; min-width: 0; }
+.mi-sync-run__analysis-record-fields dt { color: var(--muted); }
+.mi-sync-run__analysis-record-fields dd { margin: 0; overflow-wrap: anywhere; }
+
+/* A notification pointed at one record. The accent bar + tinted row say "this one"; the expanded
+   record and the focused toggle carry the same fact without relying on colour alone. */
+.mi-sync-run__grid[data-focused='true'] {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* A link that could not be honoured: stated above the list, never a silent empty page. */
+.mi-sync-run__focus-missing {
+  margin: 4px 8px 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.mi-sync-run__focus-missing strong { color: inherit; }
+
+/* The batch tally rides in the outcome cell: one sentence, quieter than the status word it follows. */
+.mi-sync-run__tally { color: var(--text-secondary); }

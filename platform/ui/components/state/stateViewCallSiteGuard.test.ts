@@ -236,6 +236,39 @@ describe('StateView call sites match the action rules', () => {
     expect(offenders).toEqual(['ui.state.action.focus-form'])
   })
 
+  it('treats page-load-failed as required: no action is red, reload-page passes', () => {
+    // 这一码落地时只补了码表与文案，props 联合里漏了自己的分支，于是调用点写不出来。
+    // 用例同时钉住两半：规则表是 required，白名单里只有 reload-page，且两者版本一致。
+    const code = 'error.page-load-failed'
+    expect(STATE_VIEW_ACTION_RULES[code]).toBe('required')
+    expect(STATE_VIEW_ACTION_CHOICES[code]).toEqual(['ui.state.action.reload-page'])
+
+    const withoutAction: CallSite = {
+      file: 'fixture.tsx',
+      line: 1,
+      source: '<StateView state="error" reasonCode="page-load-failed" />',
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      actionKeys: [],
+      hasAction: false
+    }
+    const withReload: CallSite = {
+      ...withoutAction,
+      source: '<StateView state="error" reasonCode="page-load-failed" action={{ labelKey: \'ui.state.action.reload-page\' }} />',
+      actionKeys: ['ui.state.action.reload-page'],
+      hasAction: true
+    }
+
+    // 与线上那条判据同一句：required 而没动作 → 报出。
+    const isRed = (site: CallSite): boolean =>
+      STATE_VIEW_ACTION_RULES[`${site.state}.${site.reasonCode}`] === 'required' && !site.hasAction
+
+    expect(isRed(withoutAction)).toBe(true)
+    expect(isRed(withReload)).toBe(false)
+    // 给了 reload-page 时它必须在白名单里，否则换一种红法。
+    expect(withReload.actionKeys.every((key) => (STATE_VIEW_ACTION_CHOICES[code] ?? []).includes(key))).toBe(true)
+  })
+
   it('keeps the key baseline shrinking too', () => {
     const live = new Map<string, number>()
     for (const site of sites) {

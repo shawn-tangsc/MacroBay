@@ -66,8 +66,11 @@ export function DailyBriefingGeneratedBanner({ locale, text, client = dailyBrief
     setAcknowledged(false)
     void client.list({ locale, timeZone }).then((result) => {
       if (!active || result.state !== 'available') return
-      const row = result.result.editions.find((candidate) =>
-        candidate.date === today && candidate.locale === locale)
+      // 一天可以有多期同一种语言（07:00 与 08:00）：横幅讲的是"今天最新出的那一版"，
+      // 所以按生成时刻取最新的那一行；按日期取第一条会拿早上那版冒充刚出的这版。
+      const row = newestEditionOfToday(
+        result.result.editions.filter((candidate) => candidate.date === today && candidate.locale === locale)
+      )
       const next = row ? editionFor(row, locale) : null
       if (!next) return
       setEdition(next)
@@ -107,6 +110,17 @@ export function DailyBriefingGeneratedBanner({ locale, text, client = dailyBrief
       {text.dismiss}
     </button>
   </div>
+}
+
+/**
+ * 今天同语言的多期里挑"最新出的那一版"：有生成时刻的按时刻倒序，没有生成时刻的排后面。
+ * 一天多期之后，"按日期取第一条"会把 08:00 的报说成 07:00 那版。
+ */
+function newestEditionOfToday(rows: readonly DailyBriefingEditionSummary[]): DailyBriefingEditionSummary | undefined {
+  const generated = rows
+    .filter((row) => row.generatedAt !== undefined)
+    .sort((left, right) => (right.generatedAt ?? '').localeCompare(left.generatedAt ?? ''))
+  return generated[0] ?? rows[0]
 }
 
 /**

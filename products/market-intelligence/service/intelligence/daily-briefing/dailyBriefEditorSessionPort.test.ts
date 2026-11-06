@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_PERIOD_ID } from '../../../contracts/dailyBriefing'
 import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
 
@@ -17,6 +18,8 @@ const deps = () => {
   }
 }
 
+const edition = (locale: 'zh-CN' | 'en-US' = 'zh-CN', periodId = DEFAULT_PERIOD_ID) => ({ editionDate: '2026-10-30', periodId, locale, title: 'edition', agentId: 'daily-brief-editor' })
+
 describe('daily brief editor session port', () => {
   it('forwards cancel to the platform runtime session', async () => {
     const d = deps()
@@ -34,29 +37,46 @@ describe('daily brief editor session port', () => {
   it('keeps the first terminal state and ignores every later outcome', async () => {
     const d = deps()
     const port = createDailyBriefEditorSessionPort(d as never)
-    const ensure = () => port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'edition', agentId: 'daily-brief-editor' })
 
-    const first = await ensure()
+    const first = await port.ensure(edition())
     await port.state(first.sessionId, 'abandoned')
     await port.state(first.sessionId, 'accepted')
     await port.state(first.sessionId, 'failed')
     expect((await d.links.findBySession(first.sessionId))?.state).toBe('abandoned')
 
-    const second = await port.ensure({ editionKey: '2026-10-30:en-US', editionDate: '2026-10-30', locale: 'en-US', title: 'edition', agentId: 'daily-brief-editor' })
+    const second = await port.ensure(edition('en-US'))
     await port.state(second.sessionId, 'accepted')
     await port.state(second.sessionId, 'abandoned')
     expect((await d.links.findBySession(second.sessionId))?.state).toBe('accepted')
   })
 
-  it('creates once per edition, reuses the link, renames and deletes', async () => {
+  it('creates a session per attempt, links it to the edition tuple and passes the tools through', async () => {
     const d = deps()
     const port = createDailyBriefEditorSessionPort(d as never)
-    const first = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: '10-30 每日简报 · AI 编辑 · 中文', agentId: 'daily-brief-editor', allowedTools: ['WebSearch', 'WebFetch'] })
-    const second = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'another', agentId: 'daily-brief-editor' })
+    const first = await port.ensure({ ...edition(), title: '10-30 每日简报 · AI 编辑 · 中文', allowedTools: ['WebSearch', 'WebFetch'] })
+    const second = await port.ensure({ ...edition(), title: 'another' })
     expect(first.created).toBe(true)
     expect(second.created).toBe(true)
     expect(second.sessionId).not.toBe(first.sessionId)
     expect(d.createSession).toHaveBeenCalledTimes(2)
     expect(d.createSession).toHaveBeenCalledWith(expect.objectContaining({ allowedTools: ['WebSearch', 'WebFetch'] }))
+    const stored = await d.links.listByEdition('2026-10-30', DEFAULT_PERIOD_ID, 'zh-CN')
+    expect(stored).toHaveLength(2)
+    expect(stored.every((row) => row.state === 'running')).toBe(true)
+  })
+
+  it('takes the attempt ordinal from the store that owns it, and invents none without one', async () => {
+    const allocateAttempt = vi.fn(async () => 2)
+    const d = { ...deps(), allocateAttempt }
+    const port = createDailyBriefEditorSessionPort(d as never)
+    const created = await port.ensure({ ...edition(), title: 'edition' })
+    expect(allocateAttempt).toHaveBeenCalledWith({ editionDate: '2026-10-30', periodId: DEFAULT_PERIOD_ID, locale: 'zh-CN' })
+    expect((await d.links.findBySession(created.sessionId))?.attemptNo).toBe(2)
+    expect(d.createSession).toHaveBeenCalledWith(expect.objectContaining({ name: 'edition · 2' }))
+
+    const bare = deps()
+    const unwired = await createDailyBriefEditorSessionPort(bare as never).ensure({ ...edition(), title: 'edition' })
+    expect((await bare.links.findBySession(unwired.sessionId))?.attemptNo).toBeUndefined()
+    expect(bare.createSession).toHaveBeenCalledWith(expect.objectContaining({ name: 'edition' }))
   })
 })

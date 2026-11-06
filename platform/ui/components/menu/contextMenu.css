@@ -14,7 +14,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / 18%));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
 }
 
 .context-menu .ant-menu {

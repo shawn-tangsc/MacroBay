@@ -5,6 +5,7 @@ import type { AgentSessionEntity } from '../schemas/sessionSchemas'
 import type { AgentWorkspaceEntity } from '../schemas/workspaceSchemas'
 import { createAgentStoreState, type AgentStoreState } from '../store/agentStore'
 import { ToolApprovalRegistry } from './policy'
+import { markChannelSession, resetChannelSessions } from './channelToolApproval'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from './agentChatRuntime'
 import { AgentSessionRuntimeService, MAX_RUNTIME_CHUNKS_PER_SESSION } from './AgentSessionRuntimeService'
 import type { AgentRuntimeComposition } from './AgentRuntimeCompositionService'
@@ -1053,6 +1054,38 @@ describe('agent session runtime service', () => {
       inflightRequestCount: 0,
       lastTerminalStatus: 'success'
     })
+  })
+
+  it('never queues a tool approval for a channel session: questions downgrade to text, actions are refused', async () => {
+    const registry = new RuntimeDriverRegistry()
+    registry.register('claude-code', createDeferredDriver().driver)
+    const approvalRegistry = new ToolApprovalRegistry()
+    const runtime = new AgentSessionRuntimeService({
+      getAgentState: async () => createState(),
+      driverRegistry: registry,
+      toolApprovalRegistry: approvalRegistry
+    })
+    markChannelSession('session-1')
+
+    // 非权限类提问：不弹卡，让模型改成正文里的编号选项。
+    await expect(runtime.requestToolApproval({
+      sessionId: 'session-1', toolCallId: 'tool-call-q', toolName: 'AskUserQuestion'
+    })).resolves.toEqual({
+      behavior: 'deny',
+      message: expect.stringContaining('1/2/3/4')
+    })
+
+    // 权限类动作：直接拒绝，什么都不执行。
+    await expect(runtime.requestToolApproval({
+      sessionId: 'session-1', toolCallId: 'tool-call-bash', toolName: 'Bash'
+    })).resolves.toEqual({ behavior: 'deny', message: '这个操作要在应用里做。' })
+
+    // 两条都没有进「等待确认」队列，也**没有任何待确认的 chunk**——界面上不会出现卡片。
+    expect(approvalRegistry.listPending()).toEqual([])
+    expect(runtime.listToolApprovals()).toEqual([])
+    expect(runtime.getSnapshot().chunksBySessionId['session-1'] ?? []).toEqual([])
+    // 复位：这条标记是进程内状态，不能漏给后面的用例。
+    resetChannelSessions()
   })
 
   it('tracks tool approval requests inside the runtime snapshot and clears them when resolved', async () => {

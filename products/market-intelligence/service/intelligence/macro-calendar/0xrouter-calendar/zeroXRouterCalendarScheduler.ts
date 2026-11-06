@@ -11,7 +11,6 @@ import type { MarketCalendarSource } from '../../../../contracts/macro/marketCal
 export const zeroXRouterCalendarSchedulerPolicy = Object.freeze({
   definitionId: 'market-intelligence.refreshMarketCalendar.automatic',
   handlerId: 'market-intelligence.refreshMarketCalendar',
-  title: 'Refresh 0xRouter market calendar',
   audience: 'user' as const,
   intervalMs: 30 * 60 * 1_000,
   /** One automatic batch is six serial transport requests; this must outlast them. */
@@ -21,10 +20,20 @@ export const zeroXRouterCalendarSchedulerPolicy = Object.freeze({
   unsuccessfulStates: ['unavailable'] as const
 })
 
+/**
+ * 每条 feed 自带一个双语名字（契约 `job-title-localization-contract.md`）。
+ *
+ * 名字由 feed 自己拥有，不由「base 标题 + 内部 key」拼出来：拼出来的那版会把
+ * `central-bank-activities` 这种内部标识直接印到读者面前，也会让中文界面显示英文句子。
+ * 三条与设置页里那三个名字逐字一致，同一个作业不会有两个名字。
+ */
 export const zeroXRouterCalendarSchedulerFeeds = Object.freeze([
-  { key: 'economic-data', sourceId: 'macro-calendar-0xrouter-economic-data' },
-  { key: 'financial-events', sourceId: 'macro-calendar-0xrouter-financial-events' },
-  { key: 'central-bank-activities', sourceId: 'macro-calendar-0xrouter-central-bank-activities' }
+  { key: 'economic-data', sourceId: 'macro-calendar-0xrouter-economic-data',
+    title: { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' } },
+  { key: 'financial-events', sourceId: 'macro-calendar-0xrouter-financial-events',
+    title: { 'zh-CN': '市场日历 · 金融事件', 'en-US': 'Market calendar · financial events' } },
+  { key: 'central-bank-activities', sourceId: 'macro-calendar-0xrouter-central-bank-activities',
+    title: { 'zh-CN': '市场日历 · 央行活动', 'en-US': 'Market calendar · central bank activities' } }
 ] as const)
 
 type CalendarFeed = typeof zeroXRouterCalendarSchedulerFeeds[number]
@@ -47,7 +56,7 @@ function definitionFor(feed: CalendarFeed): ScheduledJobDefinition {
     owner: 'product',
     productId: 'market-intelligence',
     handlerId: `${policy.handlerId}.${feed.key}`,
-    title: `${policy.title}: ${feed.key}`,
+    title: feed.title,
     audience: 'user' as const,
     trigger: { kind: 'interval', intervalMs: policy.intervalMs, anchor: 'lastStart' },
     payload: { sourceId: feed.sourceId },
@@ -97,7 +106,10 @@ export function createZeroXRouterCalendarScheduler(deps: Readonly<{
       const result = await deps.refreshAutomatic([feed.sourceId])
       if (result.failureCode === 'disabled') return
       if (policy.unsuccessfulStates.includes(result.state as typeof policy.unsuccessfulStates[number])) {
-        throw new Error(`Market calendar automatic refresh did not complete for ${feed.sourceId}.`)
+        // The verdict rides into `last_error`: a run that says only "did not complete" cannot be
+        // read afterwards, and 39 hours once passed with no way to tell a dead source from a
+        // refused write. The batch code is often absent while the per-source ones are not.
+        throw new Error(`Market calendar automatic refresh did not complete for ${feed.sourceId} (${batchFailureDetail(result)}).`)
       }
       try {
         await deps.onRefreshCompleted?.(result.items as readonly { state: string; storedRows?: number }[])
@@ -144,6 +156,25 @@ async function readSafe(read: () => { enabled: boolean; hasCredential: boolean }
   } catch {
     return undefined
   }
+}
+
+/**
+ * Why one automatic tick ended without a usable batch, as one short token.
+ *
+ * `Result.failureCode` only carries the batch-level verdict (storage-pressure, storage-unavailable);
+ * when a request was refused or the account was not cleared, the reason sits on the per-source item
+ * instead. Both are read, and the length is bounded because this string lands in `last_error`.
+ */
+function batchFailureDetail(result: { state: string; failureCode?: string; items: readonly unknown[] }): string {
+  if (result.failureCode) return result.failureCode
+  const codes = new Set<string>()
+  for (const item of result.items) {
+    if (!item || typeof item !== 'object') continue
+    const value = item as { state?: unknown; failureCode?: unknown }
+    if (value.state === 'unavailable' && typeof value.failureCode === 'string' && value.failureCode.length > 0) codes.add(value.failureCode)
+    if (codes.size >= 4) break
+  }
+  return codes.size > 0 ? [...codes].join(',') : result.state
 }
 
 /** The three descriptors an automatic tick covers; exported for the acceptance marker. */

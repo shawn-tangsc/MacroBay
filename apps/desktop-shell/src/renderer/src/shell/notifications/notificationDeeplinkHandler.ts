@@ -11,15 +11,26 @@ import { resolveNotificationNavigation, type ProductMenuEntry } from './notifica
  */
 export function createNotificationDeeplinkHandler(deps: {
   productMenuEntries: readonly ProductMenuEntry[]
-  setActiveNavKey: (key: string) => void
+  /**
+   * **切页的唯一入口**：传 `activateNavKey`，不是 `setActiveNavKey`。
+   *
+   * 有受控 Tab 桥时页面由 `WorkspaceTabStrip` / `WorkspacePageHost` 驱动，`setActiveNavKey`
+   * 只改侧栏高亮、不打开页——那正是「通知点了没反应」的形状。`activateNavKey` 在有桥时走
+   * `openTab`，没桥时才回退到直接切页，是这两种情况都成立的那一个。
+   */
+  navigate: (navKey: string) => void
   setSettingsPanelKey: (key: string) => void
   setNotificationCenterOpen: (open: boolean) => void
+  /** 设置面板里要定位的那一行；面板自己负责滚过去并高亮。 */
+  setFocusEntityId?: (id: string | null) => void
 }): (deeplink: NotificationDeeplink) => void {
   return (deeplink) => {
     deps.setNotificationCenterOpen(false)
     const target = resolveNotificationNavigation(deeplink, deps.productMenuEntries)
     if (target === null) return
     if (target.settingsPanelKey !== undefined) deps.setSettingsPanelKey(target.settingsPanelKey)
-    if (target.navKey !== undefined) deps.setActiveNavKey(target.navKey)
+    if (target.navKey !== undefined) deps.navigate(target.navKey)
+    // 定位只在设置面板有意义：换个分区就把上一次的定位清掉，否则下次进面板会莫名其妙高亮一行。
+    deps.setFocusEntityId?.(target.focusEntityId ?? null)
   }
 }

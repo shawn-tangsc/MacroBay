@@ -12,12 +12,12 @@ describe('registerMarketAnalysisJobs', () => {
     const removed: string[] = []
     const runtime = {
       registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler),
-      enqueueDefinition: vi.fn(async (definition: { id: string }) => ({ id: definition.id })),
+      enqueueDefinition: vi.fn(async (definition: { id: string; handlerId: string; payload: Record<string, unknown>; redact?: (value: Record<string, unknown>) => unknown }) => ({ id: definition.id })),
       enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })),
       setSchedule: (definition: { id: string }) => schedules.push(definition.id),
       removeSchedule: (definitionId: string) => removed.push(definitionId)
     } as unknown as JobRuntime
-    const jobs = registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    const jobs = registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) })
 
     // Nothing is armed by default: the capability is off until the reader turns it on, and turning
     // it off removes every definition the capability owns.
@@ -46,9 +46,9 @@ describe('registerMarketAnalysisJobs', () => {
   it('freezes the verification watermark at execution, not registration', async () => {
     const handlers = new Map<string, JobHandler>()
     const verifyPredictions = vi.fn()
-    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler) } as JobRuntime
+    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler) } as unknown as JobRuntime
     const now = () => '2026-09-28T01:00:00.000Z'
-    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions, recoverRuns: vi.fn() }, { now })
+    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions, recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) }, { now })
     const context = { jobRunId: 'test', signal: new AbortController().signal, log: vi.fn(), progress: vi.fn() }
     await handlers.get(VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB)!({}, context)
     expect(verifyPredictions).toHaveBeenLastCalledWith({ asOf: now() }, context)
@@ -61,11 +61,11 @@ describe('registerMarketAnalysisJobs', () => {
     const handlers = new Map<string, JobHandler>()
     const enqueueDefinition = vi.fn(async (definition) => ({ id: definition.id }))
     const enqueueStartup = vi.fn(async (definitionId: string) => ({ id: definitionId }))
-    const schedules: Array<{ id: string; trigger: unknown }> = []
+    const schedules: Array<{ id: string; trigger: unknown; payload?: unknown }> = []
     const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup, setSchedule: (definition: { id: string; trigger: unknown; payload?: unknown }) => schedules.push(definition) } as unknown as JobRuntime
     const groupChange = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', shouldFreeze: true, triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial' as const, asOf: '2026-09-27T00:00:00.000Z' }))
     const freeze = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', analysisRunId: 'mi-ar-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial' as const, asOf: '2026-09-27T00:00:00.000Z' }))
-    registerMarketAnalysisJobs(runtime, { groupChange, freezeSnapshot: freeze, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() }).applySchedules(true)
+    registerMarketAnalysisJobs(runtime, { groupChange, freezeSnapshot: freeze, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) }).applySchedules(true)
     expect([...handlers.keys()]).toEqual(expect.arrayContaining([GROUP_MARKET_ANALYSIS_CHANGE_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB]))
     expect(schedules).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, trigger: { kind: 'interval', intervalMs: 300_000, anchor: 'lastComplete' } }),
@@ -94,7 +94,7 @@ describe('registerMarketAnalysisJobs', () => {
   })
   it('dispatches a recovered run job, because a compensated row is not a running analysis', async () => {
     const handlers = new Map<string, JobHandler>()
-    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId: string; payload: Record<string, unknown>; redact?: (value: Record<string, unknown>) => unknown }) => ({ id: definition.id }))
     const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })), setSchedule: vi.fn() } as unknown as JobRuntime
     const recoverRuns = vi.fn(async () => ({
       dispatch: [
@@ -104,7 +104,7 @@ describe('registerMarketAnalysisJobs', () => {
         { eventGroupId: 'mi-eg-1' }
       ]
     }))
-    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns })
+    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns, runSessionSlots: vi.fn(async () => undefined) })
     const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
     await handlers.get(RECOVER_MARKET_ANALYSIS_RUNS_JOB)!({}, context)
     const dispatched = enqueueDefinition.mock.calls.map(([definition]) => definition).filter(definition => definition.handlerId === RUN_MARKET_ANALYSIS_JOB)
@@ -116,13 +116,34 @@ describe('registerMarketAnalysisJobs', () => {
       timeoutMs: marketAnalysisJobPolicy.runTimeoutMs
     }))
   })
+  it('stores the job run id on the analysis run it will execute, on both dispatch paths', async () => {
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId: string; payload: Record<string, unknown>; redact?: (value: Record<string, unknown>) => unknown }) => ({ id: definition.id }))
+    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })), setSchedule: vi.fn() } as unknown as JobRuntime
+    const linkAnalysisRunToJob = vi.fn()
+    const freeze = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1' }))
+    const recoverRuns = vi.fn(async () => ({ dispatch: [{ analysisRunId: 'mi-ar-orphan', eventGroupId: 'mi-eg-1' }] }))
+    registerMarketAnalysisJobs(runtime, {
+      groupChange: vi.fn(), freezeSnapshot: freeze, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns, linkAnalysisRunToJob,
+      runSessionSlots: vi.fn(async () => undefined)
+    })
+    const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+    await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-1' }, context)
+    // The id is the enqueued job run's own id, not the definition id we chose.
+    expect(linkAnalysisRunToJob).toHaveBeenLastCalledWith('mi-ar-1', 'market-analysis:run:mi-ar-1')
+    await handlers.get(RECOVER_MARKET_ANALYSIS_RUNS_JOB)!({}, context)
+    // A recovered run was written earlier and never dispatched; it needs the link just the same.
+    expect(linkAnalysisRunToJob).toHaveBeenLastCalledWith('mi-ar-orphan', 'market-analysis:run:mi-ar-orphan')
+    expect(linkAnalysisRunToJob).toHaveBeenCalledTimes(2)
+  })
+
   it('carries the gate trigger reasons on the run payload, and still rejects unknown keys', async () => {
     const handlers = new Map<string, JobHandler>()
-    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId: string; payload: Record<string, unknown>; redact?: (value: Record<string, unknown>) => unknown }) => ({ id: definition.id }))
     const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })), setSchedule: vi.fn() } as unknown as JobRuntime
     const freeze = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', significanceSignals: '[{"kind":"actual-changed","eventKey":"US.CPI.RELEASE.2026-M09"}]' }))
     const runAnalysis = vi.fn()
-    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: freeze, runAnalysis, verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot: freeze, runAnalysis, verifyPredictions: vi.fn(), recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) })
     const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
     await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', analysisPhase: 'correction', asOf: '2026-09-27T00:00:00.000Z' }, context)
     const runDefinition = enqueueDefinition.mock.calls.map(([definition]) => definition).find(definition => definition.handlerId === RUN_MARKET_ANALYSIS_JOB)
@@ -140,10 +161,10 @@ describe('registerMarketAnalysisJobs', () => {
 
   it('refuses an item-line freeze that lost its attempt row, rather than running it unaccounted', async () => {
     const handlers = new Map<string, JobHandler>()
-    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler) } as JobRuntime
+    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler) } as unknown as JobRuntime
     // No run id: the handler stops after the freeze, so this test needs no enqueue surface.
     const freezeSnapshot = vi.fn(async () => undefined)
-    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) })
     const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
     for (const triggerKey of ['macro.actual.first-confirmed', 'market-reaction.15m']) {
       await expect(handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey, analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z' }, context))
@@ -158,10 +179,10 @@ describe('registerMarketAnalysisJobs', () => {
 
   it('carries the attempt row id from the trigger stage into the freeze payload', async () => {
     const handlers = new Map<string, JobHandler>()
-    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId: string; payload: Record<string, unknown>; redact?: (value: Record<string, unknown>) => unknown }) => ({ id: definition.id }))
     const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })), setSchedule: vi.fn() } as unknown as JobRuntime
     const groupChange = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', shouldFreeze: true, triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial' as const, asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-9' }))
-    registerMarketAnalysisJobs(runtime, { groupChange, freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    registerMarketAnalysisJobs(runtime, { groupChange, freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn(), runSessionSlots: vi.fn(async () => undefined) })
     const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
     await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({ changeId: 'c1', eventRef: 'e1' }, context)
     const freeze = enqueueDefinition.mock.calls.map(([definition]) => definition).find(definition => definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)

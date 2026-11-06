@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   dashboardCapitalConditionsPresentationPolicy,
-  projectDashboardCapitalConditionsSnapshot
+  projectDashboardCapitalConditionsSnapshot,
+  projectEtfOutflowChip
 } from './capitalConditionsModel'
+import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 
 const asOf = '2026-08-18T08:00:00.000Z'
 
@@ -99,22 +101,49 @@ describe('dashboard capital conditions model', () => {
     expect(result.etf.btc.rows).toHaveLength(30)
     expect(result.etf.eth.rows).toHaveLength(30)
     expect(result.etf.btc.rows.at(-2)).toMatchObject({ direction: 'zero', magnitudePercent: 0 })
-    expect(result.flowHistory?.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
-    expect(result.flowHistory?.rows).toHaveLength(7)
+    if (result.flowHistory?.state !== 'available') throw new Error('expected a readable flow history')
+    expect(result.flowHistory.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
+    expect(result.flowHistory.rows).toHaveLength(7)
   })
 
-  it('does not fabricate chart dates when persisted daily capital history is missing or does not share five dates', () => {
-    const snapshot = etfSnapshot()
+  it('reports too few aligned days as "not yet" instead of "the sources failed"', () => {
+    // Valid stablecoin history, but the ETF window only overlaps its last three days.
     const result = projectDashboardCapitalConditionsSnapshot({
-      state: 'available', asOf, conclusion: 'partial', etf: snapshot,
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-08-15', 5),
       coreStablecoins: {
         observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
         change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
-        dailyFlows: stablecoinRows().slice(0, 4)
+        dailyFlows: stablecoinRows()
       }
     }, asOf)
 
-    expect(result).toMatchObject({ state: 'available', etf: { state: 'available' } })
+    if (result.state !== 'available') throw new Error('expected safe state')
+    expect(result.flowHistory).toEqual({ state: 'not-yet', availableDays: 3 })
+  })
+
+  it('reports zero aligned days as "not yet" with a zero count', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-06-01', 5),
+      coreStablecoins: {
+        observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
+        change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
+        dailyFlows: stablecoinRows()
+      }
+    }, asOf)
+
+    if (result.state !== 'available') throw new Error('expected safe state')
+    expect(result.flowHistory).toEqual({ state: 'not-yet', availableDays: 0 })
+  })
+
+  it('keeps the flow unknown when the stablecoin daily history is missing altogether', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(),
+      coreStablecoins: {
+        observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
+        change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0
+      }
+    }, asOf)
+
     if (result.state !== 'available') throw new Error('expected safe state')
     expect(result.flowHistory).toBeUndefined()
   })
@@ -210,3 +239,88 @@ function stablecoinRows() {
   const dates = Array.from({ length: 30 }, (_, index) => new Date(Date.parse('2026-07-19T00:00:00.000Z') + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
   return dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: index === 0 ? 100 : -index }))
 }
+
+function etfSnapshotStartingAt(start: string, length: number) {
+  const dates = Array.from({ length }, (_, index) => new Date(Date.parse(`${start}T00:00:00.000Z`) + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
+  const observedAt = '2026-08-18T07:00:00.000Z'
+  return {
+    state: 'available' as const, schemaVersion: 1, sourceId: '0xrouter' as const, windowEnd: dates.at(-1)!, verifiedAt: observedAt,
+    btc: { asset: 'BTC' as const, rows: dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: index + 1, observedAt })) },
+    eth: { asset: 'ETH' as const, rows: dates.map((tradingDate, index) => ({ tradingDate, netFlowUsd: -(index + 1), observedAt })) }
+  }
+}
+
+describe('ETF signal chip', () => {
+  const OPEN = { panel: true, notification: true } as const
+  const CLOSED = { panel: false, notification: false } as const
+  const tradingDay = '2026-08-28T00:00:00.000Z'
+
+  const signal = (overrides: Partial<ModuleSignal> = {}): ModuleSignal => ({
+    version: '1',
+    moduleId: 'etf-flows',
+    ruleId: 'etf-outflow-3d',
+    asset: 'btc',
+    severity: 'medium',
+    observedAt: tradingDay,
+    cadence: { kind: 'trading-day' },
+    values: { cumulativeNetFlowUsd: -150_000_000, coveredDays: 3, requiredDays: 3 },
+    dedupeKey: 'etf-flows:etf-outflow-3d:btc:2026-08-28',
+    readiness: 'available',
+    triggerOwner: 'module-signal',
+    ...overrides
+  })
+
+  /** 一次成功的读取：牌子的模型只关心信号本身。 */
+  const read = (signals: readonly ModuleSignal[]) => ({
+    state: 'available' as const,
+    signals: signals.map(signal => ({ signal, window: { unit: 'trading-days' as const, amount: 3, upperBoundMs: null } })),
+    droppedInvalid: 0
+  })
+
+  // 金额只从规则给的 `values` 里读：这里再求和一次，卡片就会和通知各说一个数。
+  it('reads the amount and the coverage out of the rule’s own values', () => {
+    expect(projectEtfOutflowChip(read([signal()]), OPEN)).toEqual({
+      state: 'alert', asset: 'btc', amountUsd: '$150M', cumulativeUsd: '-$150M',
+      coveredDays: 3, requiredDays: 3, observedAt: tradingDay
+    })
+  })
+
+  it('lets the loudest signal speak and keeps the one-chip rule', () => {
+    const chip = projectEtfOutflowChip(read([
+      signal(),
+      signal({ asset: 'eth', severity: 'high', values: { cumulativeNetFlowUsd: -320_000_000, coveredDays: 3, requiredDays: 3 } })
+    ]), OPEN)
+    expect(chip).toMatchObject({ state: 'alert', asset: 'eth', amountUsd: '$320M' })
+  })
+
+  it('shows no number when the rule could not judge, and never calls it quiet', () => {
+    expect(projectEtfOutflowChip(read([signal({ readiness: 'unavailable' })]), OPEN)).toEqual({ state: 'insufficient' })
+    expect(projectEtfOutflowChip(read([signal({ values: { coveredDays: 2, requiredDays: 3 } })]), OPEN)).toEqual({ state: 'insufficient' })
+  })
+
+  it('draws nothing when the rule has nothing to say', () => {
+    expect(projectEtfOutflowChip(read([]), OPEN)).toEqual({ state: 'hidden' })
+    expect(projectEtfOutflowChip(read([signal({ moduleId: 'open-interest' })]), OPEN)).toEqual({ state: 'hidden' })
+  })
+
+  // 读不到 ≠ 没事：读取失败有自己的那一态，读者能重试；没事不能重试。
+  it('marks a failed signal read as its own state, not as insufficient data', () => {
+    expect(projectEtfOutflowChip({ state: 'unavailable', failureCode: 'query-failed' }, OPEN))
+      .toEqual({ state: 'unreadable', failureCode: 'query-failed' })
+    expect(projectEtfOutflowChip({ state: 'unavailable', failureCode: 'invalid-as-of' }, OPEN))
+      .toEqual({ state: 'unreadable', failureCode: 'invalid-as-of' })
+    // 还没有读取时什么都不画：那是「还没到」，不是「读不到」。
+    expect(projectEtfOutflowChip(undefined, OPEN)).toEqual({ state: 'hidden' })
+  })
+
+  // 出厂状态：牌子开着，生产调用不需要传开关就画得出来。
+  it('draws from the shipped switch without being handed one', () => {
+    expect(projectEtfOutflowChip(read([signal()]))).toMatchObject({ state: 'alert', amountUsd: '$150M' })
+  })
+
+  // 牌子是总闸：它关着的时候，卡片连灰牌都不画。
+  it('draws nothing at all while the panel switch is closed', () => {
+    expect(projectEtfOutflowChip(read([signal()]), CLOSED)).toEqual({ state: 'hidden' })
+    expect(projectEtfOutflowChip(undefined, CLOSED)).toEqual({ state: 'hidden' })
+  })
+})

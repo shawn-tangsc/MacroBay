@@ -1,0 +1,94 @@
+/*
+ * 结构化文本的排版。**只管读起来的样子，不管宽度**——宽度由页面容器给。
+ *
+ * 唯一必须写死的规则是换行：远端文字里可能出现 300 字符的连续串（长单词、长网址、base64 片段），
+ * 而「撑破容器 / 出横向滚动条」是这类内容最常见、也最容易被忽略的后果。
+ * `overflow-wrap: anywhere` 是唯一不会把短词也硬拆开的选项（`break-all` 会把英文单词拦腰截断）。
+ */
+.structured-text {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.structured-text__section {
+  margin: 16px 0 6px;
+  color: var(--text-strong);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.structured-text__section:first-child {
+  margin-top: 0;
+}
+
+.structured-text__paragraph {
+  margin: 0 0 8px;
+}
+
+.structured-text__paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.structured-text__list {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.structured-text__item {
+  margin-bottom: 4px;
+}
+
+.structured-text__item:last-child {
+  margin-bottom: 0;
+}
+
+/* 文字里的地址不是链接：不加下划线、不变色，免得读者以为能点。 */
+.structured-text strong {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/*
+ * 代码块。视觉值沿用仓里既有的 markdown 代码块（`.chat-markdown-code`：padding 10/12、圆角 9、
+ * 1px 边框、`--surface-soft` 与 `--surface` 的混合底），**不另造一套观感**。
+ *
+ * 唯一刻意不同的是换行：既有那套是 `overflow: auto` + `white-space: pre`，长行会出横向滚动条；
+ * 本组件的硬约束是「长行换行、不许出横向滚动条」，所以这里用 `pre-wrap` + `overflow-wrap: anywhere`，
+ * 并且**不写 `overflow-x`**。两处差异只有这一条，改之前先读这句话。
+ */
+.structured-text__code {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-soft) 70%, var(--surface));
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* 两个轴都显式 visible：只写 `overflow-x` 时，另一个轴若不是 visible，浏览器会把这一轴也算成 auto。 */
+  overflow: visible;
+}
+
+.structured-text__code code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: inherit;
+}
+
+/* 行内代码：与 `.chat-markdown code` 同一套观感（1px 5px 内边距、圆角 6、混合底、0.92em）。 */
+.structured-text__inline-code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-soft) 76%, var(--surface));
+  color: var(--text-strong);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}

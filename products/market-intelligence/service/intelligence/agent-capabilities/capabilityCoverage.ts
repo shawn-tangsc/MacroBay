@@ -50,6 +50,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
 
   'intelligence.macro.marketCalendar.refreshManual': excluded('destructive'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
+  // The freshness read is what the briefing consumes; an agent asking "how old is the
+  // calendar" is the same read, so it rides the existing calendar query capability.
+  'intelligence.macro.marketCalendar.getCollectionFreshness': exposed('query_macro_calendar'),
+  // Spends provider requests on the reader's behalf; the briefing asks for it, an agent does not.
+  'intelligence.macro.marketCalendar.refreshNow': excluded('destructive'),
   'intelligence.macro.marketSnapshot.query': exposed('get_macro_market_snapshot'),
   'intelligence.macro.dashboardFeedStatus.query': exposed('get_dashboard_feed_status'),
   'intelligence.macro.ratesSnapshot.query': exposed('get_macro_rates_snapshot'),
@@ -92,8 +97,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // The divergence card's own read: the reader sees it on the dashboard; the Agent gets the same
   // judgement as an analysis fact instead of calling the view.
   'intelligence.queryMarketDivergence': excluded('internal-view'),
-  // The chips the dashboard draws; the analysis reads its own facts, not this panel view.
-  'intelligence.queryModuleSignals': excluded('internal-view'),
+  // The chips the dashboard draws, with each signal's analysis state; the analysis reads its own
+  // facts, not this panel view.
+  'intelligence.queryModuleSignalRead': excluded('internal-view'),
+  'intelligence.getNewsPushOutletState': excluded('internal-view'),
+  'intelligence.setNewsPushOutletEnabled': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
   'intelligence.syncRuns.aggregates': excluded('internal-view'),
@@ -115,10 +123,21 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.getToday': excluded('internal-view'),
   'intelligence.dailyBriefing.list': excluded('internal-view'),
   'intelligence.dailyBriefing.get': excluded('internal-view'),
+  'intelligence.dailyBriefing.listAttempts': excluded('internal-view'),
   'intelligence.dailyBriefing.regenerate': excluded('internal-view'),
   'intelligence.dailyBriefing.getProgress': excluded('internal-view'),
   'intelligence.dailyBriefing.getSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.saveSettings': excluded('user-private-data'),
+  'intelligence.dailyBriefing.getStorageState': excluded('internal-view'),
+  'intelligence.dailyBriefing.retryUpgrade': excluded('internal-view'),
+  'intelligence.dailyBriefing.deletePeriod': excluded('user-private-data'),
+  // 期配置的四个写入口与"发到手机"：改的是读者自己的排期、发的是读者自己的渠道，
+  // 都属于用户私有数据，不交给智能体。补齐原先漏登记的五条（路由早已在 manifest 里注册）。
+  'intelligence.dailyBriefing.listPeriods': excluded('user-private-data'),
+  'intelligence.dailyBriefing.createPeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.updatePeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.removePeriod': excluded('user-private-data'),
+  'intelligence.dailyBriefing.publishToPhone': excluded('user-private-data'),
   'intelligence.queryRelatedEvents': exposed('query_related_events'),
   'intelligence.querySentimentSeries': exposed('query_sentiment_series'),
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),

@@ -1,18 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { JobContext, JobRuntime } from '@platform/jobs'
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
 
 import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
-import { crossAssetAnalysisWindowPolicy, type CrossAssetPriceHorizon } from '../cross-asset/crossAssetAnalysisWindows'
+import { buildMarketAnalysisVerificationObservations, readFundingHistory } from '../analysis/verificationObservations'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import { buildMarketAnalysisContext } from '../public-query/marketAnalysisContextQuery'
 import { countAnalysisRuns, lastAutoRunAt } from '../analysis/analysisRunCounter'
 import { createAnalysisSignificanceGate } from '../analysis/analysisSignificanceGate'
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
-import { analysisSchedulePolicy, triggerKeyForSlot } from '../analysis/analysisSchedulePolicy'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
 import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
@@ -20,22 +23,32 @@ import type { SignificanceSignal } from '../analysis/significanceChangeMatcher'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
+import { analysisReleaseCoalescingPolicy } from '../analysis/analysisReleaseCoalescing'
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '../store/marketAnalysisRepository'
+import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
+import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
+import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
+import { createSignalScanRunner } from '../signals/signalScanRunner'
+import { createSessionSlotChecks } from './analysisSessionSlotChecks'
+import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createPredictionVerificationService } from '../analysis/predictionVerificationService'
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
-import { parseCrossAssetSnapshot, type CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
+import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { appendAnalysisEventEvidence } from '../analysis/analysisEventEvidence'
 import { appendAnalysisNewsSentiment, newsSentimentSince } from '../analysis/analysisNewsSentimentEvidence'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
+import { createSignalAnalysisRequest, type SignalAnalysisService } from './requestSignalAnalysis'
+
+export { buildMarketAnalysisVerificationObservations } from '../analysis/verificationObservations'
 
 export type MarketAnalysisRuntime = Readonly<{
   repository: MarketAnalysisRepository
@@ -43,7 +56,11 @@ export type MarketAnalysisRuntime = Readonly<{
   getSettings: () => Promise<MarketAnalysisSettings>
   updateSettings: (patch: MarketAnalysisSettingsPatch) => Promise<MarketAnalysisSettings>
   requestInitialAnalysis: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
+  /** 最后一跳：规则线把一条模块信号交给它（见 `requestSignalAnalysis`）。 */
+  requestSignalAnalysis: SignalAnalysisService
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
+  /** Mounted by the bootstrap: the session ports are injected there, not built here. */
+  setRunSessionPort: (port: RunSessionPort | undefined) => void
   dispose: () => void
 }>
 
@@ -89,115 +106,6 @@ export function resolveMarketAnalysisSeverity(item: import('../schema/intelligen
   return labels.relevanceOutcome === 'full-intelligence' && labels.sentimentEligible === true ? 'high' : 'low'
 }
 
-type FundingHistory = Readonly<{
-  state: 'available'
-  asOf: string
-  btc: readonly Readonly<{ observedAt: string; ratePercent: number }>[]
-  eth: readonly Readonly<{ observedAt: string; ratePercent: number }>[]
-}>
-
-type VerificationObservationInput = Readonly<{
-  funding?: FundingHistory
-  crossAsset?: Readonly<{ query: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => CrossAssetSnapshot | undefined }>
-}>
-
-export function buildMarketAnalysisVerificationObservations(
-  asOf: string,
-  _items: readonly import('../schema/intelligenceRecord').IntelligenceItem[],
-  input: VerificationObservationInput = {}
-): readonly PredictionVerificationObservation[] {
-  const observations: PredictionVerificationObservation[] = []
-  if (input.funding?.state === 'available' && input.funding.asOf === asOf) {
-    for (const [asset, rows] of [['BTC', input.funding.btc], ['ETH', input.funding.eth] ] as const) {
-      for (let index = 1; index < rows.length; index += 1) {
-        const previous = rows[index - 1]!
-        const current = rows[index]!
-        if (!isCanonicalTime(previous.observedAt) || !isCanonicalTime(current.observedAt) || current.observedAt > asOf || Date.parse(current.observedAt) - Date.parse(previous.observedAt) !== 8 * 60 * 60 * 1_000) continue
-        observations.push({
-          asset, interval: '8h', observedAt: current.observedAt, comparable: true,
-          evidenceRefId: `mi-evidence-funding-${asset}-${previous.observedAt}-${current.observedAt}`,
-          fundingDeltaPctPoints: current.ratePercent - previous.ratePercent
-        })
-      }
-    }
-  }
-  if (input.crossAsset) {
-    // Keyed by the contract's own range union: the analysis windows name their range from that union, so a
-    // narrower literal here stops compiling the moment a window is added (which is how `30d` surfaced).
-    const snapshots = new Map<CrossAssetSnapshot['range'], CrossAssetSnapshot>()
-    // 窗口清单归 owner（分析窗口策略），不在这里手抄：加一个窗口时手抄的那份会静默少读一个快照。
-    // 评审指出这里仍手抄了一份窗口清单（owner 是分析窗口策略）。按策略迭代会牵出一处类型不匹配，
-    // 留待与策略类型一起改；保持现状，缺陷已记档。
-    for (const range of ['1h', '24h', '7d'] as const) {
-      try {
-        const snapshot = input.crossAsset.query({ range, asOf })
-        if (!snapshot) continue
-        if (snapshot.mode === 'historical' && snapshot.asOf <= asOf && snapshot.analysisEnd <= asOf && Object.values(snapshot.historyCoverage).every(value => value.complete)) snapshots.set(range, snapshot)
-      } catch { /* one unavailable range must not block other observations */ }
-    }
-    const oneDay = snapshots.get('24h')
-    // Windows come from one policy the analysis context reads too, so the horizon the model is
-    // shown and the horizon the verifier checks can never drift apart.
-    for (const asset of ['BTC', 'ETH'] as const) {
-      for (const window of crossAssetAnalysisWindowPolicy.priceReturns) {
-        const snapshot = snapshots.get(window.range)
-        if (window.kind === 'curve') appendCurveReturn(observations, asset, window.horizon, snapshot, window.lookbackPoints)
-        else appendMetricReturn(observations, asset, window.horizon, snapshot?.closedReturns[asset === 'BTC' ? 'btc' : 'eth'][crossAssetAnalysisWindowPolicy.closedReturnMetric], snapshot)
-      }
-    }
-    const btc2h = findObservation(observations, 'BTC', '2h')
-    const eth2h = findObservation(observations, 'ETH', '2h')
-    if (btc2h?.priceReturnPct !== undefined && eth2h?.priceReturnPct !== undefined && oneDay) {
-      observations.push({
-        asset: 'BTC', relativeToAsset: 'ETH', horizon: '2h', observedAt: oneDay.analysisEnd, comparable: true,
-        evidenceRefId: `mi-evidence-cross-asset-BTC-ETH-2h-${oneDay.analysisEnd}`,
-        relativeReturnPct: btc2h.priceReturnPct - eth2h.priceReturnPct
-      })
-    }
-  }
-  return observations
-}
-
-function appendCurveReturn(
-  observations: PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: CrossAssetPriceHorizon, snapshot: CrossAssetSnapshot | undefined, lookbackPoints: number
-): void {
-  if (!snapshot) return
-  const curve = snapshot.curves[asset === 'BTC' ? 'btc' : 'eth']
-  const end = curve.at(-1)?.returnPercent
-  const start = curve.at(-(lookbackPoints + 1))?.returnPercent
-  if (typeof end !== 'number' || typeof start !== 'number' || !Number.isFinite(end) || !Number.isFinite(start)) return
-  observations.push({ asset, horizon, observedAt: snapshot.analysisEnd, comparable: true,
-    evidenceRefId: `mi-evidence-cross-asset-${asset}-${horizon}-${snapshot.analysisEnd}`, priceReturnPct: end - start })
-}
-
-function appendMetricReturn(
-  observations: PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: CrossAssetPriceHorizon, metric: CrossAssetSnapshot['closedReturns']['btc']['24h'] | undefined, snapshot: CrossAssetSnapshot | undefined
-): void {
-  if (!snapshot || !metric || metric.state !== 'available' || !Number.isFinite(metric.value)) return
-  observations.push({ asset, horizon, observedAt: snapshot.analysisEnd, comparable: true,
-    evidenceRefId: `mi-evidence-cross-asset-${asset}-${horizon}-${snapshot.analysisEnd}`, priceReturnPct: metric.value })
-}
-
-async function readFundingHistory(
-  service: Pick<MarketIntelligencePublicQueryService, 'queryFundingRateHistory'>,
-  asOf: string
-): Promise<FundingHistory | undefined> {
-  try {
-    const result = await service.queryFundingRateHistory({ asOf })
-    return result.state === 'available' ? result : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function findObservation(observations: readonly PredictionVerificationObservation[], asset: 'BTC' | 'ETH', horizon: '2h') {
-  return observations.find(value => value.asset === asset && value.horizon === horizon && value.priceReturnPct !== undefined)
-}
-
-function isCanonicalTime(value: string): boolean {
-  try { return new Date(value).toISOString() === value } catch { return false }
-}
-
 export function registerMarketAnalysisRuntime(input: Readonly<{
   jobRuntime: JobRuntime
   eventBusRuntime?: EventBusRuntime
@@ -223,6 +131,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 固定值比「回落到运行机器的时区」诚实得多。
    */
   timeZone?: () => string
+  /** 通知端口（额度提醒等）；缺省表示未装配运行时，分析与结算照常。日历发布不走这里，见下。 */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {
   const now = input.now ?? (() => new Date().toISOString())
@@ -241,14 +151,24 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const groups = createEventGroupService({ now, idFactory: () => `mi-eg-${randomUUID()}` })
   const snapshots = createEvidenceSnapshotService({ now, idFactory: () => `mi-es-${randomUUID()}` })
   const runs = createAnalysisRunService({ repository, now, idFactory: () => `mi-ar-${randomUUID()}` })
+  // 覆盖查询的接线（这次发布是不是已经有分析在管）：groupChange 是函数声明，可能在下面的装配
+  // 期间就被调用，所以它在任何调用之前初始化。
+  const releaseCoverage = createReleaseCoverageReader({ now, repository, pipeline: input.pipeline })
   const triggerPolicy = createAnalysisTriggerPolicy()
+  const runSession = createRunSessionBinding()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
+    // 原文存档：每次模型调用一行，提示词在调用前落盘、回答在回来后回填。存储那半在
+    // `repository.analysisIo`，这里只是把它交给编排器，不另开一条写路径。
+    ...(repository.analysisIo ? { analysisIo: repository.analysisIo } : {}),
     timeZone,
     structuredModelInvocation: input.structuredModelInvocation,
     now,
     idFactory: () => randomUUID(),
-    ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {})
+    ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
+    ...createAnalysisNoticeDeps(input),
+    ensureRunSession: runSession.ensureRunSession,
+    appendRunSummary: runSession.appendRunSummary
   })
   const predictionVerification = createPredictionVerificationService({
     repository,
@@ -261,7 +181,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     countRuns: (at, excludedRowId) => countAnalysisRuns(repository, at, excludedRowId),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),
     recordDecision: (decision) => { void runs.recordDecision(decision) },
-    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)
+    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode),
+    // P3：当日额度被拒时告诉读者一次；按 UTC 日的键由平台声明展开，同一天重复被拒不会多一条。
+    notifyQuotaExhausted: async ({ used, limit, occurredAt }) => {
+      await notifyAnalysisQuota(input.submitNotification, { used, limit, occurredAt })
+    }
   })
   let crossAssetQuery = input.crossAssetQuery
   let disposed = false
@@ -280,43 +204,42 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * does not cancel the open for the same reason — the open's own analysis is what says what the
    * session looked like.
    */
-  const isSlotDelivered = (instant: SessionSlotInstant): boolean => {
-    const from = instant.atMs
-    const to = from + analysisSchedulePolicy.coverageWindowMs
-    const key = triggerKeyForSlot(instant.slot)
-    return repository.listRuns().some(run => run.triggerKey === key && run.status === 'succeeded' &&
-      Date.parse(run.queuedAt) >= from && Date.parse(run.queuedAt) < to)
-  }
-  /**
-   * An open is abandoned when it was attempted inside its window, nothing came of it, and the window
-   * has closed: without this a failed attempt would be re-requested on every tick for the whole
-   * catch-up window. The open's ledger identity carries the local day (see `sessionSlotChangeHash`),
-   * so a row at or after the open's instant is that open's attempt.
-   */
-  const isSlotAbandoned = (instant: SessionSlotInstant): boolean => {
-    if (Date.parse(now()) - instant.atMs <= analysisSchedulePolicy.coverageWindowMs) return false
-    const key = triggerKeyForSlot(instant.slot)
-    return repository.listEventGroups().flatMap(group => repository.listTriggerLedger(group.id))
-      .some(row => row.triggerKey === key && row.decision === 'queued' && Date.parse(row.createdAt) >= instant.atMs)
-  }
+  const slotChecks = createSessionSlotChecks({
+    now,
+    listRuns: () => repository.listRuns(),
+    listEventGroups: () => repository.listEventGroups(),
+    listTriggerLedger: eventGroupId => repository.listTriggerLedger(eventGroupId)
+  })
+  // The tick's log line is the record a reader/operator can see for "no more retries today"; the
+  // job context that can write it only exists while the job runs.
+  let jobLog: ((input: { level: 'info' | 'warn'; message: string; metadata?: Record<string, unknown> }) => Promise<void>) | undefined
   const slotTick = createAnalysisSlotTick({
     now,
     timeZone,
-    isDelivered: isSlotDelivered,
-    isAbandoned: isSlotAbandoned,
+    isDelivered: slotChecks.isDelivered,
+    isAbandoned: slotChecks.isAbandoned,
+    attemptsToday: slotChecks.attemptsToday,
     // The schedule only needs something to analyse; see `hasSlotAnchor` for why the analysis
     // anchor's eligibility rule must not gate it.
     hasEligibleAnchor: () => hasSlotAnchor(input.pipeline.listItems()),
     // Goes through the ordinary request path, so the gate's budget, interval and ledger apply.
     requestSlotAnalysis: instant => requestInitialAnalysis(undefined, undefined, 'refresh', 'session-slot', instant.slot).then(() => undefined),
-    log: () => undefined
+    log: (message, metadata) => jobLog?.({ level: 'info', message, metadata }) ?? Promise.resolve()
   })
   const analysisJobs = registerMarketAnalysisJobs(input.jobRuntime, {
     runSessionSlots: async (context) => {
       // The schedule is unarmed while the capability is off, and the handler still refuses: a run
       // queued before the switch was turned off must not spend a request either.
       if (!await isEnabled()) return
-      const result = await slotTick.run()
+      jobLog = async input => { await context.log(input) }
+      let result: Awaited<ReturnType<typeof slotTick.run>>
+      try {
+        result = await slotTick.run()
+      } finally {
+        // Keep the logger until the signal phase is done; only then clear it.
+      }
+      // Re-checked after the slot phase: the switch may have been turned off during this tick.
+      if (!await isEnabled()) { jobLog = undefined; return }
       await context.log({
         level: result.outcome === 'no-anchor' ? 'warn' : 'info',
         // The opens are named: "which session was this conclusion for" is the question the reader
@@ -324,6 +247,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
         message: `Market analysis session slots: ${result.outcome}`,
         metadata: { outcome: result.outcome, requested: result.requested, deferred: result.deferred }
       })
+      try {
+        await runSignalScan()
+      } finally {
+        jobLog = undefined
+      }
     },
     groupChange: async (payload) => {
       if (!await isEnabled()) return
@@ -334,6 +262,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       return freezeSnapshot(payload)
     },
     runAnalysis: async (payload, context) => runAnalysis(payload, context),
+    // The job run id only exists once the enqueue answers, so this is the write-back point rather
+    // than the run handler: a queued analysis that never starts must still be reachable from the
+    // run log, which is where a reader looks when a run did not happen.
+    linkAnalysisRunToJob: (analysisRunId, jobRunId) => {
+      repository.linkRunJobRun({ id: analysisRunId, jobRunId })
+    },
     verifyPredictions: async (payload, context) => {
       if (!await isEnabled()) return
       const asOf = readCanonicalAsOf(payload)
@@ -348,6 +282,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
           } } : undefined
         })
       })
+      // 结算本身不发通知：N8 `calibration.result` 已从批准表撤回（编号不复用），结算结果由校准视图呈现。
       await context.log({
         level: 'info',
         message: `Verified ${result.verified} due market prediction(s); skipped ${result.skipped}.`,
@@ -441,6 +376,23 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       }
     })
 
+  // 最后一跳的接收端：规则线把一条信号交给它，它建组、写账本行、入 freeze。额度在闸门里判，
+  // 这里只保证入口认得 `signal.*`（事件线）并把尝试行的 id 带进载荷。
+  const requestSignalAnalysis = createSignalAnalysisRequest({
+    repository,
+    jobRuntime: input.jobRuntime,
+    now,
+    idFactory: () => randomUUID(),
+    isEnabled
+  })
+  // The tick is the only entry that asks for a signal analysis; the push paths were removed with it.
+  const runSignalScan = createSignalScanRunner({
+    now,
+    querySignals: query => input.publicQueryService.queryModuleSignals(query),
+    requestAnalysis: request => requestSignalAnalysis(request),
+    log: async input => { await jobLog?.(input) }
+  })
+
   return {
     repository,
     startRecovery,
@@ -457,6 +409,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       return saved
     },
     requestInitialAnalysis,
+    requestSignalAnalysis,
+    setRunSessionPort: runSession.setPort,
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
@@ -468,6 +422,15 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       repository.close()
     }
   }
+
+  /**
+   * Whether this indicator still has a chance: covered by an attempt that lives or succeeded,
+   * abandoned because both attempts are spent, or uncovered (its own trigger decides).
+   *
+   * The scan and the decision live in `analysisReleaseAttempts`; the runtime only supplies the
+   * sources, so this step stays one call and the runtime file stays on its baseline.
+   */
+
 
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
     const change = resolveChange(payload)
@@ -498,6 +461,28 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       lastTriggeredAt: previousLedger.at(-1)?.createdAt ?? null,
       lastTriggeredPhase: previousLedger.at(-1) ? toTriggerHistory(previousLedger.at(-1)!).phase : undefined
     })
+    // One release, one analysis. The other indicators of a publication the trigger line already
+    // allowed are not a second event: this one records "same release" and opens no run. Checked only
+    // for an attempt that would otherwise be queued, because a skip recorded for another reason is
+    // already explained and must not be relabelled.
+    if (decision.decision === 'queued' && decision.phase) {
+      const coverage = releaseCoverage(change, result.group.id)
+      if (coverage.decision !== 'uncovered') {
+        runs.recordDecision({
+          eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash,
+          decision: 'skipped',
+          // Two codes, never one: merged-into-an-analysis and there-is-no-analysis are different
+          // facts, and collapsing them would report five failed attempts as one successful merge.
+          reasonCode: coverage.decision === 'covered'
+            ? analysisReleaseCoalescingPolicy.reasonCode
+            : analysisReleaseCoalescingPolicy.abandonedReasonCode
+        })
+        if (coverage.decision === 'abandoned') {
+          await notifyAbandonedRelease({ triggerKey: decision.triggerKey, groupId: result.group.id, repository, occurredAt: now(), ...(input.submitNotification ? { submit: input.submitNotification } : {}) })
+        }
+        return
+      }
+    }
     const attemptLedgerId = runs.recordDecision({ eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash, decision: decision.decision, reasonCode: decision.reasonCode })
     if (decision.decision !== 'queued' || !decision.phase) return
     // The row id rides the freeze payload so a later refusal can rewrite this very attempt instead
@@ -514,6 +499,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       ...(value.attemptLedgerId ? { attemptLedgerId: value.attemptLedgerId } : {})
     })
     if (gate.decision === 'skipped') return { eventGroupId: value.eventGroupId }
+    // 日历发布的通知**不在这里**：它跟着采集走（`macroEventLandedNotifier`）。挂在分析闸门上，
+    // 读者就会在「日历已刷新、分析没跑/被跳过」时什么也收不到——一件事发生了，不该由另一个开关
+    // 决定要不要说出来。
     const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,
       { triggeredEventKeys: gate.triggeredEventKeys })
     if (context.state !== 'available') throw new Error(context.errorCode)
@@ -553,7 +541,19 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // orchestrator) keeps "what was chosen" and "what was called" the same fact.
     const settings = await settingsService.getSettings()
     const model = isMarketAnalysisModelSet(settings) ? { providerId: settings.providerId, modelId: settings.modelId } : null
-    const result = runs.enqueue({ eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model })
+    const result = runs.enqueue({
+      eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model,
+      // Decided here, with the snapshot in hand: no change record / cut facts / degraded subject are
+      // all knowable now, so nothing needs a later write-back.
+      validationMode: resolveTriggerFocus(snapshot).mode
+    })
+    // The attempt row was written before this run existed; now that it does, fill it in. The sweep
+    // that decides whether a queued row is still waiting or was never claimed reads this column, so
+    // leaving it null would make a row that does have a run look abandoned.
+    if (value.attemptLedgerId) {
+      repository.linkTriggerLedgerRun({ id: value.attemptLedgerId, analysisRunId: result.run.id, snapshotHash: snapshot.snapshotHash })
+    }
     return {
       eventGroupId: value.eventGroupId, analysisRunId: result.run.id,
       // Carried to the run job so the prompt can say what triggered this analysis.

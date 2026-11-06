@@ -6,6 +6,11 @@
  * 32px。断点算术因此和读代码时的直觉对不上（读者 2026-10-27 的全屏换行就卡在 4px 上）。现在只留一处：
  * 下面这些值就是当时实际生效的值，渲染结果不变。
  */
+/*
+  门户级的语义色（描边、正文、静音、强调、正负、警示）挪到 `.mi-sample-surface`——看板与日报页
+  共用同一套值。名字里的 `dashboard` 是历史遗留（这组值最早只有看板用），语义上是「门户内容区的
+  色板」，两个页面指的是同一件事，所以只挪定义、不改名：改 58 处引用等于制造 58 次挑错词的机会。
+*/
 .mi-crypto-dashboard {
   --mi-dashboard-page-inline: 32px;
   --mi-dashboard-page-block: 32px;
@@ -13,23 +18,13 @@
   --mi-dashboard-compact-gap: 10px;
   --mi-dashboard-context-width: 260px;
   --mi-dashboard-card-radius: 12px;
-  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
-  --mi-dashboard-surface: #15191d;
   --mi-dashboard-surface-muted: #101416;
-  --mi-dashboard-text: #edf0ed;
-  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
-  --mi-dashboard-lime: #d4ff58;
-  --mi-dashboard-positive: #55d69b;
-  --mi-dashboard-caution: #e5ae43;
-  --mi-dashboard-negative: #f16d73;
   --mi-dashboard-band-block-padding: 20px;
   --mi-dashboard-capital-content-column-gap: 32px;
   --mi-dashboard-capital-header-row-gap: 8px;
   --mi-dashboard-capital-header-column-gap: 16px;
   --mi-dashboard-capital-content-row-gap: 14px;
   --mi-dashboard-etf-flow-block-gap: 8px;
-  --mi-dashboard-etf-flow-chart-height: 108px;
-  --mi-dashboard-etf-flow-axis-width: 42px;
   --mi-dashboard-etf-flow-tooltip-width: 176px;
   /*
     「口径说明」这类内联说明的排版口径：**这份文件是唯一 owner**，卡片只引用、不再抄数。
@@ -42,9 +37,6 @@
   --mi-reading-note-size: 11.5px;
   --mi-reading-note-line-height: 1.6;
   --mi-reading-note-max-height: 320px;
-  --mi-dashboard-etf-funds: #63c9ff;
-  --mi-dashboard-etf-btc: var(--mi-dashboard-caution);
-  --mi-dashboard-etf-eth: #b994ff;
   /*
     同起点收益率那张图的五条线：这一份是**唯一 owner**（面板只命名它们，不就地写颜色）。
     五条线必须两两分得清，`crossAssetChartPalette.test.ts` 按色相/明度/饱和度断言——BTC 是饱和的
@@ -70,15 +62,32 @@
   --mi-dashboard-sentiment-extreme-greed: #55d69b;
   height: 100%;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  container-type: inline-size;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+  /*
+   * 页面根是 flex 列：滚动区在上、页脚（本次运行横条）在下。
+   *
+   * 滚动与 padding 一起挪进 `.mi-crypto-dashboard__scroll`，容器查询的声明也跟着它走——
+   * 容器查询量的是内容盒宽度，padding 留在根上会把这层量宽多算 64px，窄屏堆叠的翻转点就会挪位。
+   * 滚动条现在贴着内容区右缘，页脚不随内容移动。
+   */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
     var(--bg);
   color: var(--text);
 }
+
+.mi-crypto-dashboard__scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  container-type: inline-size;
+  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+}
+
+/* 页脚只放一行横条；它不吸顶、不覆盖内容，滚到底时来源状态区整行可见。 */
 
 .mi-crypto-dashboard *,
 .mi-crypto-dashboard *::before,
@@ -133,13 +142,25 @@
 .mi-capital-conditions__refresh { justify-self: start; }
 .mi-capital-conditions__refresh-error { color: var(--mi-dashboard-negative); font-size: 12px; }
 .mi-capital-conditions__etf-col-supply { width: 20%; }
+/* The stablecoin row is named by scope now ("稳定币（USDT + USDC）"), which does not fit the
+   fixed 26% column: `nowrap` pushed it over the numbers. Let this one table size its columns from
+   content — the name wraps inside its own column, the number cells stay `nowrap` and keep their
+   width. The ETF table below keeps the fixed layout: its row names are two words. */
+.mi-capital-conditions__stable-table { table-layout: auto; }
+.mi-capital-conditions__stable-table tbody th { white-space: normal; line-height: 1.25; }
+/* The scope reads as a footnote under the asset name: one size down, muted, and never broken
+   across the brackets — each line stays whole so the numbers keep their column. */
+.mi-capital-conditions__asset-name { display: block; white-space: nowrap; }
+.mi-capital-conditions__asset-scope { display: block; color: var(--mi-dashboard-muted); font-size: 10px; font-weight: 400; white-space: nowrap; }
 .mi-capital-conditions__stable-table thead th,
 .mi-capital-conditions__stable-table tbody th,
 .mi-capital-conditions__stable-table tbody td { padding-top: 7px; padding-bottom: 6px; }
 .mi-capital-conditions__stable-supply { color: var(--mi-dashboard-text); font-size: 13px; font-weight: 600; }
 .mi-capital-conditions__pct { margin-left: 4px; font-size: 9px; font-weight: 400; }
-.mi-capital-conditions [data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
-.mi-capital-conditions [data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
+/* The dialog carries its own root class, not the card's: adding `.mi-capital-conditions` there
+   would drag the card's grid layout in with it. Both scopes get the same direction colours. */
+:is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
+:is(.mi-capital-conditions, .mi-capital-conditions__dialog) [data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
 .mi-capital-conditions__etf-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .mi-capital-conditions__etf-col-asset { width: 26%; }
 .mi-capital-conditions__etf-col-streak { width: 20%; }
@@ -154,7 +175,7 @@
 .mi-capital-conditions__coverage { margin-left: 4px; color: var(--mi-dashboard-caution); font-size: 9px; }
 .mi-capital-conditions__etf-unavailable { color: var(--mi-dashboard-muted); font-family: inherit; font-size: 12px; text-align: left; }
 .mi-capital-conditions__etf-flow { display: grid; align-self: stretch; align-content: stretch; grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr); gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
-.mi-capital-conditions__etf-flow > header { display: flex; align-items: baseline; gap: var(--mi-dashboard-etf-flow-block-gap); }
+.mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__chart-window { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -194,6 +215,44 @@
 .mi-capital-conditions__chart-tooltip i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
 .mi-capital-conditions__chart-tooltip b { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .mi-capital-conditions__chart-ticks { display: flex; justify-content: space-between; min-width: 0; margin: 4px 0 0 var(--mi-dashboard-etf-flow-axis-width); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; }
+/* Bar-top labels ride above the plot. Their box height is fixed here and read back by the
+   placement code, so a measured box and the painted box are the same 14px. */
+.mi-capital-conditions__chart-labels { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+.mi-capital-conditions__chart-label[data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
+.mi-capital-conditions__chart-label[data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
+.mi-capital-conditions__chart-label:focus-visible,
+.mi-capital-conditions__daily-table:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+.mi-capital-conditions__chart-label { position: absolute; height: 14px; padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, var(--mi-dashboard-surface) 86%, transparent); color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 14px; white-space: nowrap; }
+/* The trigger sits at the right end of the title row as a bordered small button: border, hover and
+   focus come from the antd button tokens, so only the geometry and the pushed-right placement are
+   set here. */
+.mi-capital-conditions__daily-button { margin-left: auto; min-height: 24px; padding-inline: 10px; white-space: nowrap; }
+/* The trigger is a bordered button in both themes. antd's default variant reads its surface and
+   border from the window theme, which left a filled block on the light card; these declarations
+   come from the portal tokens instead, so the same button shows in either theme. */
+.mi-capital-conditions__daily-button { border: 1px solid var(--border-strong); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; }
+.mi-capital-conditions__daily-button:hover { border-color: var(--accent); color: var(--text-strong); }
+.mi-capital-conditions__daily-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Dialog interior: the chart, then the numbers it labels. */
+.mi-capital-conditions__dialog { display: grid; gap: 12px; min-width: 0; }
+/* Panel interior: a fixed head (title + unit line) and a scrolling body, so the unit line never
+   slides away from the numbers it explains. */
+.mi-capital-conditions__daily { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mi-capital-conditions__daily-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 12px 7px; border-bottom: 1px solid var(--border-strong); }
+.mi-capital-conditions__daily-head h4 { margin: 0; color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.mi-capital-conditions__daily-units { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.mi-capital-conditions__daily-scroll { min-height: 0; overflow: auto; }
+.mi-capital-conditions__daily-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.mi-capital-conditions__daily-caption { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mi-capital-conditions__daily-table thead th { position: sticky; top: 0; padding: 4px 8px; border-bottom: 1px solid var(--border-strong); background: var(--surface); color: var(--muted); font-size: 10px; font-weight: 500; text-align: right; white-space: nowrap; }
+.mi-capital-conditions__daily-table thead th:first-child,
+.mi-capital-conditions__daily-table tbody th { text-align: left; }
+.mi-capital-conditions__daily-table tbody th { padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 400; white-space: nowrap; }
+.mi-capital-conditions__daily-table tbody td { padding: 5px 8px; border-bottom: 1px solid var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mi-capital-conditions__daily-table tbody tr:last-child th,
+.mi-capital-conditions__daily-table tbody tr:last-child td { border-bottom: 0; }
+.mi-capital-conditions__daily-table tbody tr:hover { background: var(--surface-soft); }
+.mi-capital-conditions__daily-empty { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
 /* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
@@ -487,12 +546,7 @@
  * unreadable as text on white, so the accent is mixed toward `--text-strong`.
  */
 :root[data-theme='light'] .mi-crypto-dashboard {
-  --mi-dashboard-line: var(--border);
-  --mi-dashboard-surface: var(--surface);
   --mi-dashboard-surface-muted: var(--surface-soft);
-  --mi-dashboard-text: var(--text);
-  --mi-dashboard-muted: var(--muted);
-  --mi-dashboard-lime: color-mix(in srgb, var(--accent) 30%, var(--text-strong));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
     var(--bg);
@@ -520,3 +574,28 @@
 }
 .mi-crypto-dashboard__briefing:hover { background: color-mix(in srgb, var(--mi-dashboard-lime) 15%, var(--mi-dashboard-surface)); }
 .mi-crypto-dashboard__briefing:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+
+/* 现货牌子：有事是实线描边的按钮（点开在卡片内展开读数），数据不齐是平台药丸、不可点。
+   字号锁 10px，不随正文字号漂；灰度下靠「虚线/文字/有没有数字」也能分开，不靠颜色。 */
+.mi-capital-conditions__signal {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 3px;
+  background: none;
+  color: var(--mi-dashboard-text);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mi-capital-conditions__signal:hover,
+.mi-capital-conditions__signal:focus-visible { border-color: var(--mi-dashboard-text); }
+.mi-capital-conditions__signal:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+/* 数据不齐是陈述，不是控件；外层只负责把「缺哪一路」挂到悬停与聚焦上。 */
+.mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
+.mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
+

@@ -1,3 +1,5 @@
+import { isDocument, isExact, isRecord, isText } from './dailyBriefingDocument'
+import { DAILY_BRIEFING_DOCUMENT_INVALID, DAILY_BRIEFING_REQUEST_FAILED } from './dailyBriefingFailureCodes'
 import {
   dailyBriefingPolicy,
   isBriefingGenerationTrace,
@@ -12,8 +14,12 @@ import {
   type BriefingGenerationStageState,
   type BriefingGenerationTrace,
   type DailyBriefingDocument,
+  type DailyBriefingEditionLanguage,
+  type DailyBriefingRunTrigger,
+  type DailyBriefingAttemptRecord,
   type DailyBriefingEditionSummary,
-  type DailyBriefingListResult
+  type DailyBriefingListResult,
+  type DailyBriefingLocale
 } from '../../../contracts/dailyBriefing'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -21,17 +27,46 @@ const METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
+  listAttempts: 'intelligence.dailyBriefing.listAttempts',
   regenerate: 'intelligence.dailyBriefing.regenerate',
+  publishToPhone: 'intelligence.dailyBriefing.publishToPhone',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
-  saveSettings: 'intelligence.dailyBriefing.saveSettings'
+  saveSettings: 'intelligence.dailyBriefing.saveSettings',
+  getStorageState: 'intelligence.dailyBriefing.getStorageState',
+  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade',
+  deletePeriod: 'intelligence.dailyBriefing.deletePeriod'
 })
 
-export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
-export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }>
+export type DailyBriefingClientInput = Readonly<{
+  locale: 'zh-CN' | 'en-US'
+  timeZone: string
+  /** `false` opens the page as a read: the stored edition, or "nothing written yet". No run. */
+  generate?: boolean
+  /**
+   * Which period of today to run. Absent keeps the first/only one, which is what the old call meant.
+   * 进度查询读的也是这个期号——**发起这一次跑时记下的那个**，不是界面上当前选中的期。
+   */
+  periodId?: string
+  /** A manual run's own cutoff and window; never written back into a period. */
+  generation?: Readonly<{ asOf: string; windowHours?: 12 | 24 | 48 }>
+  /** 重跑屏幕上那一版：用它自己的截止与窗口，不问期配置第一项（用户 2026-11-06）。 */
+  rerun?: Readonly<{ periodTime: string; windowHours?: 12 | 24 | 48 }>
+}>
+export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-CN' | 'en-US'; periodId?: string }>
+
+export type DailyBriefingClockSource = 'settings' | 'system'
 
 export type DailyBriefingClientTodayResult =
-  | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
+  | Readonly<{
+    state: 'available'
+    document: DailyBriefingDocument
+    /**
+     * `system` means the settings zone was empty or invalid and the machine's zone was used; the
+     * page must say so, otherwise the reader cannot tell why the day starts somewhere else.
+     */
+    timeZoneSource?: DailyBriefingClockSource
+  }>
   | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
 
 export type DailyBriefingClientListResult =
@@ -49,19 +84,37 @@ export type DailyBriefingClientProgressResult =
   | Readonly<{ state: 'running'; progress: BriefingGenerationProgress }>
   | Readonly<{ state: 'unavailable' }>
 
+export type DailyBriefingClientAttemptsResult = Readonly<
+  | { state: 'available'; attempts: readonly DailyBriefingAttemptRecord[] }
+  | { state: 'unavailable' }
+>
+
 export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
   | Readonly<{ state: 'missing' }>
-  | Readonly<{ state: 'unavailable'; failureCode: string }>
-
+  | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
 export type DailyBriefingGenerationSettingsView = Readonly<{
+  /** Every saved period, projected by the service. The list is the view; there is no flat copy. */
+  periods: readonly DailyBriefingPeriodView[]
+}>
+
+export type DailyBriefingPeriodView = Readonly<{
+  id: string
+  name?: string
   generationTime: string
-  /** The zone the time means; null while unknown or unreadable. */
   generationTimeZone: string | null
-  /** The saved value that is not a usable zone; automatic generation is paused while it is set. */
   generationTimeZoneInvalid: string | null
   windowHours: number
   cronExpression: string
+}>
+
+export type DailyBriefingLanguageView = Readonly<{
+  settings: Readonly<{ primary: 'follow-ui'; additional: readonly DailyBriefingLocale[] }>
+  plan: Readonly<{
+    locales: readonly DailyBriefingLocale[]
+    primary: Readonly<{ requested: string; used: DailyBriefingLocale; fallbackReason?: 'ui-language-unsupported' }>
+    writeCount: number
+  }>
 }>
 
 export type DailyBriefingSettingsView = Readonly<{
@@ -69,6 +122,8 @@ export type DailyBriefingSettingsView = Readonly<{
   settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
   /** When the automatic edition runs and what interval it covers. */
   generation: DailyBriefingGenerationSettingsView
+  /** The one global language preference and the plan derived from it (primary, extras, write count). */
+  language: DailyBriefingLanguageView
   /** Whether the editor agent's model can take Anthropic server-side WebSearch/WebFetch. */
   webSearchSupported: boolean
   resolved:
@@ -84,29 +139,69 @@ export type DailyBriefingSettingsPatch = Readonly<{
   webSearchEnabled?: boolean
   webSearchAuthorizedAt?: string
   generation?: Readonly<{ generationTime?: string; windowHours?: number }>
+  language?: Readonly<{ additional?: readonly DailyBriefingLocale[] }>
 }>
 
 export type DailyBriefingSettingsResult =
   | Readonly<{ state: 'available'; view: DailyBriefingSettingsView }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
+/**
+ * Which table shape the brief is running on. `incomplete` is a state the page has to show: the
+ * reader's history is still there, but the upgrade did not finish and can be retried. A read that
+ * failed is `unavailable`, never `ready` — that would report a finished upgrade nobody observed.
+ */
+export type DailyBriefingStorageStateResult =
+  | Readonly<{ state: 'ready' }>
+  | Readonly<{ state: 'incomplete'; reason: 'backup-failed' | 'migration-failed' }>
+  | Readonly<{ state: 'unavailable' }>
+
 export type DailyBriefingClient = Readonly<{
   getToday: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
+  listAttempts: (input: DailyBriefingClientGetInput & Readonly<{ periodId?: string }>) => Promise<DailyBriefingClientAttemptsResult>
   regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
+  /**
+   * 把这一版发布到手机（2026-11-05 口径）：主进程先写/更新当天的完成记录（只记不发，幂等合并），
+   * 再按同一个键重投。结果原样交回——翻成读者的话是发布按钮自己的事，不在这里编。
+   */
+  publishToPhone: (input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<unknown>
   getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
+  getStorageState: () => Promise<DailyBriefingStorageStateResult>
+  retryUpgrade: () => Promise<DailyBriefingStorageStateResult>
+  /** Deletes one edition (one language) across both databases; `allDone` is false when the links could not be removed. */
+  deletePeriod: (input: Readonly<{
+    date: string
+    periodId: string
+    locale: 'zh-CN' | 'en-US'
+    /** 从哪颗入口删的：操作记录要能回答这个（用户 2026-11-06）。 */
+    entry: 'toolbar' | 'row-menu'
+  }>) => Promise<Readonly<{
+    editions: number
+    attempts: number
+    periodRuns: number
+    sessionLinks: number
+    remaining: number | null
+    allDone: boolean
+  }>>
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
+  async publishToPhone(input) {
+    return invoke(METHODS.publishToPhone, input)
+  },
   async getToday(input) {
     try {
       const value = await invoke(METHODS.getToday, input)
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
-        return { state: 'available', document: value.document }
+      if (isRecord(value) && value.state === 'available') {
+        // 读到了、但读不懂：**校验失败**，不是"这一次没读到"（`02` v2.129 G5）。两者必须分开报，
+        // 否则页面只能报"失败"，右列也写不出原因。
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
+        return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       return unavailable()
     } catch {
@@ -136,7 +231,17 @@ export const dailyBriefingClient: DailyBriefingClient = {
       }
       const editions = value.result.editions.map(parseSummary)
       if (editions.some((edition) => edition === undefined)) return unavailable()
-      return { state: 'available', result: { editions: editions as readonly DailyBriefingEditionSummary[] } }
+      const today = typeof value.result.today === 'string' ? value.result.today : undefined
+      // 日期集合是可选的：缺了就是旧服务端，页面退回"天头来自版次"的行为。
+      const dates = Array.isArray(value.result.dates) ? value.result.dates : undefined
+      return {
+        state: 'available',
+        result: {
+          editions: editions as readonly DailyBriefingEditionSummary[],
+          ...(today ? { today } : {}),
+          ...(Array.isArray(dates) ? { dates: dates.filter((entry): entry is string => typeof entry === 'string') } : {})
+        }
+      }
     } catch {
       return unavailable()
     }
@@ -144,8 +249,9 @@ export const dailyBriefingClient: DailyBriefingClient = {
   async regenerate(input) {
     try {
       const value = await invoke(METHODS.regenerate, input)
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
-        return { state: 'available', document: value.document }
+      if (isRecord(value) && value.state === 'available') {
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
+        return { state: 'available', document: value.document, timeZoneSource: readClockSource(value) }
       }
       if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       return unavailable()
@@ -159,13 +265,42 @@ export const dailyBriefingClient: DailyBriefingClient = {
   async saveSettings(patch) {
     return readSettings(() => invoke(METHODS.saveSettings, patch))
   },
+  async getStorageState() {
+    return readStorageState(() => invoke(METHODS.getStorageState, {}))
+  },
+  async deletePeriod(input) {
+    const result = await invoke(METHODS.deletePeriod, input)
+    const record = result as Record<string, unknown> | null
+    // A partial reply must not be read as a full one: every count and the allDone flag are checked.
+    if (record === null || typeof record !== 'object'
+      || !['editions', 'attempts', 'periodRuns', 'sessionLinks'].every((key) => typeof record[key] === 'number')
+      || !(typeof record.remaining === 'number' || record.remaining === null)
+      || typeof record.allDone !== 'boolean') throw new Error('daily-briefing-delete-invalid-result')
+    return result as Readonly<{ editions: number; attempts: number; periodRuns: number; sessionLinks: number; remaining: number | null; allDone: boolean }>
+  },
+  async retryUpgrade() {
+    return readStorageState(() => invoke(METHODS.retryUpgrade, {}))
+  },
+  async listAttempts(input) {
+    try {
+      const value = await invoke(METHODS.listAttempts, input)
+      if (!isRecord(value) || value.state !== 'available' || !Array.isArray(value.attempts)) return { state: 'unavailable' }
+      const attempts = value.attempts.map(parseAttempt)
+      if (attempts.some((attempt) => attempt === undefined)) return { state: 'unavailable' }
+      return { state: 'available', attempts: attempts as readonly DailyBriefingAttemptRecord[] }
+    } catch {
+      return { state: 'unavailable' }
+    }
+  },
   async get(input) {
     try {
       const value = await invoke(METHODS.get, input)
       if (isRecord(value) && value.state === 'missing') return { state: 'missing' }
-      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
+      if (isRecord(value) && value.state === 'available') {
+        if (!isDocument(value.document)) return { state: 'unavailable', failureCode: DAILY_BRIEFING_DOCUMENT_INVALID }
         return { state: 'available', document: value.document }
       }
+      if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       return unavailable()
     } catch {
       return unavailable()
@@ -180,21 +315,40 @@ async function invoke(method: string, payload: unknown): Promise<unknown> {
 }
 
 function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> {
-  return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
+  return { state: 'unavailable', failureCode: DAILY_BRIEFING_REQUEST_FAILED }
 }
 
 /** A failed attempt keeps its readable code and, when the service stored it, its stage trace. */
+/** Only `system` changes what the reader must be told; anything else is the ordinary settings case. */
+function readClockSource(value: Record<string, unknown>): DailyBriefingClockSource {
+  return value.timeZoneSource === 'system' ? 'system' : 'settings'
+}
+
 function unavailableWithTrace(value: Record<string, unknown>): Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }> {
   const failureCode = isText(value.failureCode) ? value.failureCode : 'daily-briefing-request-failed'
   const generationTrace = isBriefingGenerationTrace(value.generationTrace) ? value.generationTrace : undefined
   return { state: 'unavailable', failureCode, ...(generationTrace ? { generationTrace } : {}) }
 }
 
+async function readStorageState(read: () => Promise<unknown>): Promise<DailyBriefingStorageStateResult> {
+  try {
+    const value = await read()
+    if (!isRecord(value)) return { state: 'unavailable' }
+    if (value.state === 'ready') return { state: 'ready' }
+    if (value.state === 'incomplete' && (value.reason === 'backup-failed' || value.reason === 'migration-failed')) {
+      return { state: 'incomplete', reason: value.reason }
+    }
+    return { state: 'unavailable' }
+  } catch {
+    return { state: 'unavailable' }
+  }
+}
+
 async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefingSettingsResult> {
   try {
     const value = await read()
     if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) ||
-      !isGenerationSettings(value.generation) || typeof value.webSearchSupported !== 'boolean' ||
+      !isGenerationSettings(value.generation) || !isLanguageView(value.language) || typeof value.webSearchSupported !== 'boolean' ||
       !isResolvedModel(value.resolved)) {
       return { state: 'unavailable', failureCode: 'daily-briefing-settings-invalid' }
     }
@@ -203,6 +357,7 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
       view: {
         settings: value.settings,
         generation: value.generation,
+        language: value.language,
         webSearchSupported: value.webSearchSupported,
         resolved: value.resolved
       }
@@ -213,18 +368,34 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
 }
 
 function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
-  // Both zone fields are nullable on purpose: an older main process answers without them, and that
-  // must read as "unknown", not as a failed settings read.
-  return isExact(value, ['generationTime', 'windowHours', 'cronExpression'], ['generationTimeZone', 'generationTimeZoneInvalid']) &&
-    isText(value.generationTime) && typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
-    isText(value.cronExpression) &&
-    (value.generationTimeZone === undefined || value.generationTimeZone === null || isText(value.generationTimeZone)) &&
-    (value.generationTimeZoneInvalid === undefined || value.generationTimeZoneInvalid === null || isText(value.generationTimeZoneInvalid))
+  // The list is the only statement of the schedule. A second copy of the first period at this level
+  // is how the page and the schedule start disagreeing without anything breaking.
+  return isExact(value, ['periods']) && Array.isArray(value.periods) &&
+    value.periods.length > 0 && value.periods.every(isPeriodView)
+}
+
+function isPeriodView(value: unknown): value is DailyBriefingPeriodView {
+  return isRecord(value) && isText(value.id) && isText(value.generationTime) && isText(value.cronExpression) &&
+    typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
+    (value.name === undefined || isText(value.name)) &&
+    (value.generationTimeZone === null || isText(value.generationTimeZone)) &&
+    (value.generationTimeZoneInvalid === null || isText(value.generationTimeZoneInvalid))
 }
 
 function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {
   return isExact(value, ['editorialEnabled', 'providerId', 'modelId', 'webSearchEnabled'], ['webSearchAuthorizedAt']) &&
     typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string' && typeof value.webSearchEnabled === 'boolean' && (value.webSearchAuthorizedAt === undefined || typeof value.webSearchAuthorizedAt === 'string')
+}
+
+function isLanguageView(value: unknown): value is DailyBriefingLanguageView {
+  if (!isRecord(value) || !isRecord(value.settings) || !isRecord(value.plan)) return false
+  const settings = value.settings
+  const plan = value.plan
+  if (settings.primary !== 'follow-ui' || !Array.isArray(settings.additional) || !settings.additional.every(isDailyBriefingLocale)) return false
+  if (!Array.isArray(plan.locales) || !plan.locales.every(isDailyBriefingLocale)) return false
+  if (!isRecord(plan.primary) || !isText(plan.primary.requested) || !isDailyBriefingLocale(plan.primary.used)) return false
+  if (plan.primary.fallbackReason !== undefined && plan.primary.fallbackReason !== 'ui-language-unsupported') return false
+  return typeof plan.writeCount === 'number' && Number.isSafeInteger(plan.writeCount) && plan.writeCount === plan.locales.length
 }
 
 function isResolvedModel(value: unknown): value is DailyBriefingSettingsView['resolved'] {
@@ -236,13 +407,31 @@ function isResolvedModel(value: unknown): value is DailyBriefingSettingsView['re
     (value.fallback === undefined || value.fallback === 'custom-unavailable')
 }
 
+function parseAttempt(value: unknown): DailyBriefingAttemptRecord | undefined {
+  if (!isRecord(value) || typeof value.attemptNo !== 'number' || !Number.isSafeInteger(value.attemptNo)) return undefined
+  if (value.state !== 'running' && value.state !== 'succeeded' && value.state !== 'failed') return undefined
+  if (!isText(value.startedAt)) return undefined
+  return Object.freeze({
+    attemptNo: value.attemptNo,
+    state: value.state,
+    ...(isText(value.failureCode) ? { failureCode: value.failureCode } : {}),
+    startedAt: value.startedAt,
+    ...(isText(value.finishedAt) ? { finishedAt: value.finishedAt } : {}),
+    ...(isText(value.cleanedAt) ? { cleanedAt: value.cleanedAt } : {})
+  })
+}
+
 function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
   if (!isRecord(value) || !isText(value.date) || !isDailyBriefingLocale(value.locale) || !Array.isArray(value.availableLocales)) return undefined
-  if (value.state !== 'generated' && value.state !== 'missing') return undefined
+  if (value.state !== 'generated' && value.state !== 'missing' && value.state !== 'partial') return undefined
   if (!value.availableLocales.every(isDailyBriefingLocale)) return undefined
+  // A list of languages this build cannot read is refused with the whole row, not shown half-read.
+  const languages = value.languages === undefined ? undefined : parseSummaryLanguages(value.languages)
+  if (languages === null) return undefined
   if (value.state === 'generated' && (!isText(value.generatedAt) || !isText(value.windowEnd))) return undefined
   return Object.freeze({
     date: value.date,
+    periodId: isText(value.periodId) ? value.periodId : 'default',
     locale: value.locale,
     availableLocales: Object.freeze([...value.availableLocales]) as readonly ('zh-CN' | 'en-US')[],
     state: value.state,
@@ -251,135 +440,40 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
     ...(typeof value.readingsAvailable === 'number' && Number.isSafeInteger(value.readingsAvailable)
       ? { readingsAvailable: value.readingsAvailable }
       : {}),
-    ...(isText(value.windowEnd) ? { windowEnd: value.windowEnd } : {})
+    ...(isText(value.windowEnd) ? { windowEnd: value.windowEnd } : {}),
+    ...(typeof value.attemptCount === 'number' && Number.isSafeInteger(value.attemptCount) ? { attemptCount: value.attemptCount } : {}),
+    ...(isText(value.scheduledTime) ? { scheduledTime: value.scheduledTime } : {}),
+    ...(Array.isArray(value.expectedLocales) && value.expectedLocales.every(isDailyBriefingLocale)
+      ? { expectedLocales: Object.freeze([...value.expectedLocales]) as readonly ('zh-CN' | 'en-US')[] }
+      : {}),
+    ...(isText(value.periodTime) ? { periodTime: value.periodTime } : {}),
+    ...(value.periodKind === 'scheduled' || value.periodKind === 'manual' ? { periodKind: value.periodKind } : {}),
+    ...(RUN_TRIGGERS.includes(value.runTrigger as never) ? { runTrigger: value.runTrigger as DailyBriefingRunTrigger } : {}),
+    ...(typeof value.windowHours === 'number' && Number.isSafeInteger(value.windowHours) ? { windowHours: value.windowHours } : {}),
+    ...(languages ? { languages } : {}),
+    ...(value.periodDeleted === true ? { periodDeleted: true } : {}),
+    ...(value.isCurrent === true ? { isCurrent: true } : {})
   })
 }
 
-function isDocument(value: unknown): value is DailyBriefingDocument {
-  if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20')) return false
-  if (!isEdition(value.edition, value.schemaVersion) || !isStatus(value.status) || !isLede(value.lede)) return false
-  if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
-  if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
-  if (value.editorial !== undefined && !isEditorial(value.editorial)) return false
-  return true
-}
+const RUN_TRIGGERS = ['scheduled', 'catch-up', 'retry', 'manual'] as const
 
-function isEdition(value: unknown, schemaVersion: unknown): boolean {
-  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours'])) return false
-  if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
-  // From schema 7 the edition states the window it actually covered; older rows may omit it.
-  if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
-  return isText(value.date) && isDailyBriefingLocale(value.locale) && isText(value.generatedAt) &&
-    isText(value.windowStart) && isText(value.windowEnd) && isText(value.timeZone)
-}
-
-function isStatus(value: unknown): boolean {
-  if (!isExact(value, ['readings', 'readingsAvailable', 'readingsTotal'])) return false
-  if (!Array.isArray(value.readings) || value.readings.length !== 4) return false
-  if (typeof value.readingsAvailable !== 'number' || !Number.isSafeInteger(value.readingsAvailable) ||
-    value.readingsAvailable < 0 || value.readingsAvailable > 4) return false
-  if (value.readingsTotal !== 4) return false
-  return value.readings.every((entry) => isRecord(entry) &&
-    ['fear-greed', 'funding', 'capital', 'calendar'].includes(String(entry.id)) &&
-    isDailyBriefingReadingState(entry.state))
-}
-
-function isLede(value: unknown): boolean {
-  if (!isRecord(value)) return false
-  if (value.source !== 'template' && value.source !== 'agent') return false
-  return typeof value.text === 'string' && isText(value.generatedAt) &&
-    (value.factCount === undefined || (typeof value.factCount === 'number' && Number.isSafeInteger(value.factCount)))
-}
-
-function isNews(value: unknown): boolean {
-  if (!isExact(value, ['items', 'macro', 'notes'], ['macroCandidates'])) return false
-  if (!Array.isArray(value.items) || value.items.length > dailyBriefingPolicy.maximumNewsItems) return false
-  if (!Array.isArray(value.macro) || value.macro.length > dailyBriefingPolicy.maximumMacroItems) return false
-  if (!Array.isArray(value.items) || !value.items.every(isNewsItem)) return false
-  if (!Array.isArray(value.macro) || !value.macro.every(isMacroItem)) return false
-  return isRecord(value.notes)
-}
-
-function isNewsItem(value: unknown): boolean {
-  return isRecord(value) && isText(value.itemId) && isText(value.title) && isText(value.sourceName) &&
-    isText(value.publishedAt) && ['bullish', 'bearish', 'neutral', 'mixed'].includes(String(value.polarity)) &&
-    typeof value.strength === 'number' && typeof value.confidence === 'number' && Array.isArray(value.symbols)
-}
-
-function isMacroItem(value: unknown): boolean {
-  return isRecord(value) && isText(value.eventKey) && isText(value.title) && isText(value.scheduledAt) &&
-    ['high', 'medium', 'low'].includes(String(value.importance)) && isRecord(value.surprise)
-}
-
-function isData(value: unknown): boolean {
-  if (!isExact(value, ['market', 'funds', 'sentiment'], ['leverage', 'policyPath'])) return false
-  if (!Array.isArray(value.market) || value.market.length > 7) return false
-  if (!Array.isArray(value.funds) || value.funds.length > 5) return false
-  if (!Array.isArray(value.market) || !value.market.every(isMarketRow)) return false
-  if (!Array.isArray(value.funds) || !value.funds.every(isPulseRow)) return false
-  return isRecord(value.sentiment) && (value.sentiment.fearGreed === null || isPulseRow(value.sentiment.fearGreed)) &&
-    isRecord(value.sentiment.news)
-}
-
-function isMarketRow(value: unknown): boolean {
-  return isRecord(value) && isText(value.labelKey) && isImportance(value.importance) &&
-    isDailyBriefingReadingState(value.state) && isText(value.window)
-}
-
-function isPulseRow(value: unknown): boolean {
-  return isRecord(value) && isText(value.labelKey) && isImportance(value.importance) &&
-    isDailyBriefingReadingState(value.state) && isText(value.window)
-}
-
-function isImportance(value: unknown): boolean {
-  return isRecord(value) && isFactImportanceTier(value.tier) && (value.source === 'rule' || value.source === 'agent') &&
-    isText(value.reasonCode)
-}
-
-function isConclusionOrNull(value: unknown): boolean {
-  if (value === null) return true
-  if (!isRecord(value)) return false
-  return isText(value.summaryId) && isText(value.publishedAt) && isText(value.direction) && isText(value.summary) &&
-    Array.isArray(value.directions) && Array.isArray(value.conditions) && Array.isArray(value.invalidations) &&
-    Array.isArray(value.counterEvidence) && Array.isArray(value.dataGaps) && Array.isArray(value.caveats)
-}
-
-function isNext(value: unknown): boolean {
-  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > dailyBriefingPolicy.maximumNextItems) return false
-  if (!value.items.every(isNextItem)) return false
-  return value.focus === undefined || isNextItem(value.focus)
-}
-
-function isNextItem(value: unknown): boolean {
-  if (!isRecord(value) || !isText(value.eventKey) || !isText(value.title) || !isText(value.at)) return false
-  if (!['high', 'medium', 'low'].includes(String(value.importance))) return false
-  if (!['economic-indicator', 'financial-event', 'central-bank-activity'].includes(String(value.category))) return false
-  if (value.countryCode !== undefined && !isText(value.countryCode)) return false
-  if (value.countryName !== undefined && !isText(value.countryName)) return false
-  if (value.consensus !== undefined && !isText(value.consensus)) return false
-  if (value.previous !== undefined && !isText(value.previous)) return false
-  if (value.why !== undefined && !isText(value.why)) return false
-  if (value.watch !== undefined) {
-    if (!Array.isArray(value.watch) || value.watch.length > 3) return false
-    if (!value.watch.every((entry) => isRecord(entry) && isText(entry.condition) && isText(entry.implication))) return false
+/** The per-language three-state, or `null` when one entry is not a value this build understands. */
+function parseSummaryLanguages(value: unknown): readonly DailyBriefingEditionLanguage[] | null {
+  if (!Array.isArray(value)) return null
+  const parsed: DailyBriefingEditionLanguage[] = []
+  for (const entry of value) {
+    if (!isRecord(entry) || !isDailyBriefingLocale(entry.locale)) return null
+    if (entry.state === 'published' || entry.state === 'generating') {
+      parsed.push(Object.freeze({ locale: entry.locale, state: entry.state }))
+      continue
+    }
+    if (entry.state !== 'missing') return null
+    const reason = entry.reason
+    if (reason !== 'not-published' && reason !== 'run-running' && reason !== 'run-failed' && reason !== 'run-interrupted') return null
+    parsed.push(Object.freeze({ locale: entry.locale, state: 'missing' as const, reason }))
   }
-  return true
-}
-
-function isProvenance(value: unknown): boolean {
-  return isRecord(value) && (value.summaryId === null || isText(value.summaryId)) && isText(value.readAt)
-}
-
-function isEditorial(value: unknown): boolean {
-  return isRecord(value) && (value.dataNote === undefined || typeof value.dataNote === 'string') &&
-    (value.invalidationNote === undefined || typeof value.invalidationNote === 'string')
-}
-
-function isExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
-  if (!isRecord(value)) return false
-  const keys = Object.keys(value)
-  return required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+  return Object.freeze(parsed)
 }
 
 const STAGE_STATES: readonly BriefingGenerationStageState[] = ['success', 'failed', 'skipped', 'pending']
@@ -403,19 +497,4 @@ function parseProgressStages(value: unknown): readonly BriefingGenerationStage[]
     }))
   }
   return parsed
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  try {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value) &&
-      Object.getPrototypeOf(value) === Object.prototype &&
-      Object.getOwnPropertySymbols(value).length === 0 &&
-      Object.values(Object.getOwnPropertyDescriptors(value)).every((descriptor) => 'value' in descriptor)
-  } catch {
-    return false
-  }
-}
-
-function isText(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0
 }

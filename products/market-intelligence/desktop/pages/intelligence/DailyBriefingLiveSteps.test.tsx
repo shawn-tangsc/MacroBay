@@ -39,22 +39,22 @@ async function render(input: BriefingGenerationProgress, nowMs: number): Promise
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => { root?.render(createElement(DailyBriefingLiveSteps, { progress: input, text, nowMs })) })
+  await act(async () => { root?.render(createElement(DailyBriefingLiveSteps, { progress: input, text, nowMs, resolveText: (key: string) => key })) })
   return container
 }
 
 const rowState = (container: HTMLElement, step: string): string | null =>
-  container.querySelector(`[data-step="${step}"]`)?.getAttribute('data-step-state') ?? null
+  container.querySelector(`[data-stage="${step}"]`)?.getAttribute('data-stage-state') ?? null
 
 it('shows eight rows from the contract, folding the two repair rounds into one', async () => {
   const container = await render(progress, Date.parse('2026-11-02T01:30:12.000Z'))
-  const rows = container.querySelectorAll('[data-step]')
+  const rows = container.querySelectorAll('[data-briefing-stage-row]')
   expect(rows).toHaveLength(8)
-  expect([...rows].map((row) => row.getAttribute('data-step'))).toEqual([
+  expect([...rows].map((row) => row.getAttribute('data-stage'))).toEqual([
     'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair', 'store'
   ])
   // The two rounds are one row, named by the copy table rather than by the stage id.
-  expect(container.querySelector('[data-step="repair"]')!.textContent).toContain('修正')
+  expect(container.querySelector('[data-stage="repair"]')!.textContent).toContain(text.generationProgress.repair)
 })
 
 it('marks what finished, what is running and what has not started', async () => {
@@ -65,8 +65,8 @@ it('marks what finished, what is running and what has not started', async () => 
   expect(rowState(container, 'selection')).toBe('running')
   expect(rowState(container, 'writing')).toBe('waiting')
   // A started stage shows elapsed time, which is the only "progress" a single model call can report.
-  expect(container.querySelector('[data-step="selection"]')!.textContent).toContain('已用 0:40')
-  expect(container.querySelector('[data-step="writing"]')!.textContent).toContain('等待')
+  expect(container.querySelector('[data-stage="selection"]')!.textContent).toContain(text.generationProgress.elapsed.replace('{duration}', '0:40'))
+  expect(container.querySelector('[data-stage="writing"]')!.textContent).toContain(text.generationProgress.waiting)
 })
 
 it('never invents a duration or a percentage', async () => {
@@ -74,9 +74,20 @@ it('never invents a duration or a percentage', async () => {
   // A stage that has begun without a timestamp cannot claim an elapsed time.
   const noTimestamp = { ...progress, stages: progress.stages.map((stage) => (stage.id === 'selection' ? { id: stage.id, state: 'pending' as const } : stage)) }
   const second = await render(noTimestamp, Date.parse('2026-11-02T01:30:42.000Z'))
-  expect(second.querySelector('[data-step="selection"]')!.textContent).not.toContain('已用')
+  expect(second.querySelector('[data-stage="selection"]')!.textContent).not.toContain(text.generationProgress.elapsed.split('{duration}')[0]!.trim())
   expect(container.textContent).not.toMatch(/\d+%/)
-  expect(container.querySelector('[data-live-steps-note]')!.textContent).toContain('模型调用')
+  // The long explanation moved behind the help trigger: it must not sit on the page.
+  expect(container.querySelector('[data-live-steps-note]')).toBeNull()
+  const help = container.querySelector('[data-steps-help]')
+  expect(help).not.toBeNull()
+  // The trigger sits before the title it explains, and before the list, so the visual order and the
+  // keyboard order are the same one.
+  const head = container.querySelector('.mi-brief-steps__head')!
+  // The popover wraps its trigger in an anchor; the anchor is the first child, the title second.
+  expect(head.firstElementChild!.contains(help)).toBe(true)
+  expect(head.firstElementChild!.nextElementSibling?.tagName.toLowerCase()).toBe('h3')
+  expect(head.textContent).toContain(text.generationProgress.title)
+  expect(head.compareDocumentPosition(container.querySelector('.ant-steps')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('says a skipped-only row was not needed instead of claiming it succeeded', async () => {
@@ -86,5 +97,5 @@ it('says a skipped-only row was not needed instead of claiming it succeeded', as
   }
   const container = await render(skipped, Date.parse('2026-11-02T01:30:12.000Z'))
   expect(rowState(container, 'repair')).toBe('not-needed')
-  expect(container.querySelector('[data-step="repair"]')!.textContent).toContain(text.generationTrace.states.notNeeded)
+  expect(container.querySelector('[data-stage="repair"]')!.textContent).toContain(text.generationTrace.states.notNeeded)
 })

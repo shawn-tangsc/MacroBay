@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createOpenInterestRefreshService, openInterestCollectionPolicy } from './openInterestRefreshService'
+import { coldStartPages, createOpenInterestRefreshService, isColdStartWithinPageCap, openInterestCollectionPolicy } from './openInterestRefreshService'
 
 const now = '2026-10-29T00:00:00.000Z'
 const nowMs = Date.parse(now)
@@ -33,6 +33,20 @@ const service = (deps: { client: ReturnType<typeof client>; store: ReturnType<ty
     now: () => now
   })
 
+describe('cold start planning', () => {
+  it('counts pages from the bucket width, and never clamps them to the guard', () => {
+    expect(coldStartPages(900_000)).toEqual({ openInterest: 2, klines: 1 })
+    expect(coldStartPages(5 * 60_000)).toEqual({ openInterest: 5, klines: 3 })
+    // A one-minute bucket over seven days needs far more pages than the guard allows. The plan
+    // still reports the real number; refusing it is the caller's job, not a silent clamp's.
+    expect(coldStartPages(60_000)).toEqual({ openInterest: 21, klines: 11 })
+    // The refusal is explicit: over the guard the round fails loudly instead of shrinking coverage.
+    expect(isColdStartWithinPageCap(900_000)).toBe(true)
+    expect(isColdStartWithinPageCap(5 * 60_000)).toBe(true)
+    expect(isColdStartWithinPageCap(60_000)).toBe(false)
+  })
+})
+
 describe('open interest refresh', () => {
   it('spends no request when the source is disabled', async () => {
     const c = client(), s = store()
@@ -49,11 +63,39 @@ describe('open interest refresh', () => {
     const calls = (c.requestOpenInterest as unknown as { mock: { calls: Array<[{ limit: number; endTime?: number }]> } }).mock.calls
     expect(calls[0]![0].limit).toBe(500)
     expect(calls[0]![0].endTime).toBeUndefined()
-    expect(calls[1]![0].limit).toBe(172)
+    // The second page asks for a full page again, not for the remainder: coverage is the page
+    // count, and a per-request cap is not a budget to spend down.
+    expect(calls[1]![0].limit).toBe(500)
     expect(calls[1]![0].endTime).toBe(bucket(15) - 1)
     // Two assets, so four requests in total.
     expect(calls).toHaveLength(4)
     expect(s.upsert).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps the pages it already wrote when a later page fails, and says so in the log', async () => {
+    // Page 2 of open interest fails. What page 1 wrote must stay, the round must not be reported
+    // as a failed read, and the missing page must be explainable from the log — a short round that
+    // reads like a quiet one is how a gap goes unnoticed.
+    let page = 0
+    const c = client()
+    c.requestOpenInterest = vi.fn(async () => {
+      page += 1
+      // One page per asset: btc pages 1-2, eth pages 3-4. Fail every second page.
+      if (page % 2 === 0) return undefined
+      return [{ asset: 'btc' as const, observedMs: bucket(15) - page * 15 * 60_000, notionalUsd: 8e9 }]
+    }) as never
+    const s = store(undefined)
+    const log = vi.fn()
+    const result = await service({ client: c, store: s }).refresh({ log })
+    expect(result).toEqual({ state: 'updated' })
+    // The successful page of each asset was written; the failed page was not.
+    expect(s.upsert).toHaveBeenCalledTimes(2)
+    // The failure goes to the job's log channel, not to a console nobody collects.
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+      level: 'warn',
+      message: expect.stringContaining('page=2/2')
+    }))
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('endpoint=open-interest') }))
   })
 
   it('asks only for the gap on the steady state', async () => {

@@ -37,8 +37,17 @@ export const agentTextEn: AgentText = {
     emptyAgents: 'No agents yet. Create one to start.',
     agentSessionCount: (count) => `${count} session${count === 1 ? '' : 's'}`,
     emptySessions: 'No sessions yet. Create one to start.',
+    automationSessions: {
+      title: 'Automated sessions',
+      collapsedMeta: (today, total) => `${today} today · ${total} total`,
+      today: 'Today',
+      yesterday: 'Yesterday',
+      showAll: 'Show all automated sessions',
+      readerOnlyEmpty: 'You have not started a session yet.'
+    },
     newSessionNeedsAgent: 'Pick an agent first to start a session',
-    deleteFilteredNeedsSessions: 'No sessions to delete'
+    deleteFilteredNeedsSessions: 'No sessions to delete',
+    deleteFiltered: 'Delete the filtered sessions'
   },
   sessionItem: {
     rename: 'Rename',

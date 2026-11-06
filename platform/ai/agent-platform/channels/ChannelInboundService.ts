@@ -6,8 +6,10 @@ import {
   createChannelDispatchId,
   encodeChannelInboundPayload,
   type ChannelContentGuard,
+  type ChannelSessionSuggestion,
   type ChannelInboundEncryption,
   type ChannelExecutionClaim,
+  type ChannelConversationOpenResult,
   type ChannelInboundRequest,
   type ChannelInboundResult,
   type ChannelSessionFactory
@@ -25,16 +27,57 @@ export type ChannelInboundServiceDependencies = {
   beforeAcknowledge?: () => Promise<void>
   // Private composition callback: adapters receive only ChannelInboundResult, never a claim.
   onInitialClaimAvailable?: (dispatchId: string) => void
+  /**
+   * 跟这条通道说过话的对话，自动记成投递目标（**已有目标时不许覆盖**）。
+   * 界面上没有绑定入口，所以这一步不能指望读者动手。
+   */
+  bindAutoTarget?: (input: { channelId: string; conversationId: string }) => void
+  /** 读这条对话绑着的 Agent 会话 id（主进程内用，绝不回给渲染层）。 */
+  conversationSessionId?: (input: { channelId: string; conversationId: string }) => string | null
+  /**
+   * 让会话侧把这一条设为当前会话。缺省时「打开会话」返回 `session-selection-unavailable`，
+   * 不假装成功——按钮点了没反应比给一句原因更糟。
+   */
+  selectSession?: (sessionId: string) => Promise<void>
+  /**
+   * 每次入站刷新这条对话的「最近活跃」时间。与 `bindAutoTarget` 同一个注入形状：
+   * SQL 那一层不在这里，服务只报「这条对话刚有消息」。
+   */
+  touchConversation?: (input: { channelId: string; conversationId: string; now: Date }) => void
+  /** 「没有权限」那句人话（按界面语言给）；缺省时只记审计、不回话。 */
+  deniedReplyText?: () => Promise<string>
+  /**
+   * 会话名的拼装（平台名 + 显示名/后四位）。放在组合根是因为它要界面语言与平台目录表；
+   * 服务只把「素材」给它，并把算出来的名字落到 `channel_conversations.session_title`。
+   */
+  conversationTitle?: (suggestion: ChannelSessionSuggestion) => Promise<string>
 }
 
 export class ChannelInboundService {
   private readonly conversationResolutions = new Map<string, Promise<{ record: ChannelConversationRecord; created: boolean }>>()
+  /** 「拒绝回话」的限频：每 (频道, 会话) 十分钟最多一次，免得对方狂发变成我们刷屏。 */
+  private readonly deniedReplies = new Map<string, number>()
   // This queue is main-process-only; provider-facing results never expose execution ownership.
   private readonly initialClaims = new Map<string, ChannelExecutionClaim>()
   private readonly deps: ChannelInboundServiceDependencies
 
   constructor(deps: ChannelInboundServiceDependencies) {
     this.deps = deps
+  }
+
+  /**
+   * 「打开这条频道的会话」：入参只有**频道 id + 对话 id**，会话 id 由主进程自己查、自己用。
+   *
+   * 为什么不把会话 id 交给渲染层：`ChannelManagementQueryRepository` 写着「session IDs never leave
+   * this repository」，会话 DTO 上还有守卫用例钉着。读者要的是「点一下到那条会话」，
+   * 不是「界面拿到一个内部 id」——所以选中动作在这里代做，返回一个只有成败与原因的结果。
+   */
+  async openConversation(input: { channelId: string; conversationId: string }): Promise<ChannelConversationOpenResult> {
+    const sessionId = this.deps.conversationSessionId?.(input)
+    if (!sessionId) return { ok: false, code: 'conversation-session-missing' }
+    if (!this.deps.selectSession) return { ok: false, code: 'session-selection-unavailable' }
+    await this.deps.selectSession(sessionId)
+    return { ok: true }
   }
 
   async receive(request: ChannelInboundRequest): Promise<ChannelInboundResult> {
@@ -69,24 +112,15 @@ export class ChannelInboundService {
         this.deps.encryption.cipher.keyedHash(request.channelId, bytes(request.providerUserKey))
       ])
       const now = this.now()
-      const decision = guarded.rejection ?? this.policyDecision(request, userHash, conversationHash)
+      const decision = guarded.rejection ?? await this.policyDecision(request, userHash, conversationHash)
       if (decision === 'channel-policy-denied') {
-        try {
-          this.deps.repository.upsertCandidate({
-            channelId: request.channelId,
-            kind: request.conversationKind,
-            userKeyCiphertext: encryptedUser.ciphertext,
-            userKeyRef: encryptedUser.keyRef,
-            userKeyRevision: encryptedUser.keyRevision,
-            userKeyHash: userHash,
-            conversationKeyCiphertext: encryptedConversation.ciphertext,
-            conversationKeyRef: encryptedConversation.keyRef,
-            conversationKeyRevision: encryptedConversation.keyRevision,
-            conversationKeyHash: conversationHash,
-            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
-            now
-          })
-        } catch { /* Discovery is best-effort; the denied message must still be acknowledged. */ }
+        this.recordCandidate(request, { encryptedUser, encryptedConversation, userHash, conversationHash, now })
+        // 静默忽略是装死：明确回一句拒绝，但**限频**——同一个人十分钟内只回一次。
+        await this.replyDeniedOnce(request, conversationHash, now)
+      } else if (decision === null && this.deps.repository.allowList(request.channelId).length === 0) {
+        // 「允许所有」时把见过的会话记进**候选表**，方便读者以后照着填允许列表。
+        // 绝不写进允许列表本身：一写，列表就非空，语义会在第一条消息后静默收紧成「只允许这一个」。
+        this.recordCandidate(request, { encryptedUser, encryptedConversation, userHash, conversationHash, now })
       }
       const isNewCommand = request.text?.trim() === '/new'
       const admissionId = decision ? null : this.deps.repository.reserveAdmission(request.channelId, request.generation, now)
@@ -94,6 +128,28 @@ export class ChannelInboundService {
       let conversation: { record: ChannelConversationRecord; created: boolean } | null = null
       try {
         conversation = decision ? null : await this.resolveConversation(request, agentId, conversationHash, encryptedConversation)
+        if (conversation && !conversation.record.sessionTitle) {
+          // 老会话没有名字（名字是这次才落库的）：按入口素材补一个，只补空值，不覆盖任何已有名字。
+          const title = await this.deps.conversationTitle?.({
+            channelId: request.channelId,
+            agentId,
+            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+            providerConversationKey: request.providerConversationKey,
+            disambiguate: this.deps.repository.countConversations(request.channelId) > 1
+          })
+          if (title) {
+            this.deps.repository.fillConversationTitle(request.channelId, conversationHash, title)
+            conversation = { ...conversation, record: { ...conversation.record, sessionTitle: title } }
+          }
+        }
+        if (!decision && conversation && !request.text?.trim().startsWith('/new')) {
+          // 跟这条通道说过话的对话就是投递目标：界面上没有绑定入口，不能指望读者自己去绑。
+          this.deps.bindAutoTarget?.({ channelId: request.channelId, conversationId: conversation.record.id })
+          // 「最近活跃」跟着消息走：同一对话不新增行，但时间必须是真的（以前只在建会话时写一次）。
+          this.deps.touchConversation?.({
+            channelId: request.channelId, conversationId: conversation.record.id, now
+          })
+        }
         // /new is a durable provider event but never Agent work. Replacement remains generation-bound.
         // The first /new creates its initial binding only; replacing that just-created session would orphan it.
         if (!decision && isNewCommand && conversation && !conversation.created) {
@@ -212,8 +268,17 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId })
-      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(input.channelId, keyHash, sessionId, input.generation, agentId, this.now())) {
+      const suggestion: ChannelSessionSuggestion = {
+        channelId: input.channelId,
+        agentId,
+        providerConversationKey: input.providerConversationKey,
+        disambiguate: this.deps.repository.countConversations(input.channelId) > 0
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
+      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
+        input.channelId, keyHash, sessionId, input.generation, agentId, title || undefined, this.now()
+      )) {
         throw new Error('Channel conversation session replacement failed.')
       }
       bound = true
@@ -243,9 +308,67 @@ export class ChannelInboundService {
     return this.deps.repository.setDeliveryTarget(input.channelId, input.conversationId, input.enabled, this.now())
   }
 
-  private policyDecision(request: ChannelInboundRequest, userHash: string, conversationHash: string): ChannelInboundAuditCode | null {
+  /**
+   * 未授权会话的明确拒绝：回一句话、同会话十分钟一次。
+   * 正文由组合根按界面语言给，这里不加频道 id、管理员、配置——拒绝句只回答「你没有权限」。
+   */
+  private async replyDeniedOnce(request: ChannelInboundRequest, conversationHash: string, now: Date): Promise<void> {
+    if (!request.reply || !this.deps.deniedReplyText) return
+    const key = `${request.channelId}:${conversationHash}`
+    const last = this.deniedReplies.get(key)
+    const windowMs = 10 * 60_000
+    if (last !== undefined && now.getTime() - last < windowMs) return
+    this.deniedReplies.set(key, now.getTime())
+    try {
+      await request.reply(await this.deps.deniedReplyText())
+    } catch {
+      // 回不出去不影响审计与准入：拒绝句失败不该把一个被挡的消息变成重试风暴。
+      this.deniedReplies.delete(key)
+    }
+  }
+
+  private recordCandidate(
+    request: ChannelInboundRequest,
+    input: {
+      encryptedUser: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }
+      encryptedConversation: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }
+      userHash: string
+      conversationHash: string
+      now: Date
+    }
+  ): void {
+    try {
+      this.deps.repository.upsertCandidate({
+        channelId: request.channelId,
+        kind: request.conversationKind,
+        userKeyCiphertext: input.encryptedUser.ciphertext,
+        userKeyRef: input.encryptedUser.keyRef,
+        userKeyRevision: input.encryptedUser.keyRevision,
+        userKeyHash: input.userHash,
+        conversationKeyCiphertext: input.encryptedConversation.ciphertext,
+        conversationKeyRef: input.encryptedConversation.keyRef,
+        conversationKeyRevision: input.encryptedConversation.keyRevision,
+        conversationKeyHash: input.conversationHash,
+        ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+        now: input.now
+      })
+    } catch { /* Discovery is best-effort; the message must still be acknowledged. */ }
+  }
+
+  private async policyDecision(request: ChannelInboundRequest, userHash: string, conversationHash: string): Promise<ChannelInboundAuditCode | null> {
     if ((request.conversationKind === 'group' || request.conversationKind === 'channel') && !request.mentionedBot) return 'channel-mention-required'
-    if (!this.deps.repository.isAllowed(request.channelId, userHash, conversationHash, request.conversationKind)) return 'channel-policy-denied'
+    const allowList = this.deps.repository.allowList(request.channelId)
+    if (allowList.length > 0) {
+      // 读者填了列表：**只放行这些会话**。列表与入站用的是同一个 keyedHash，所以能逐字比。
+      const allowed = await Promise.all(
+        allowList.map((id) => this.deps.encryption.cipher.keyedHash(request.channelId, bytes(id)))
+      )
+      return allowed.includes(conversationHash) ? null : 'channel-policy-denied'
+    }
+    // 列表为空：仍然尊重历史策略行（老数据行为不变）；一条策略都没有才是「允许所有」。
+    if (this.deps.repository.hasAnyAllowPolicy(request.channelId)) {
+      return this.deps.repository.isAllowed(request.channelId, userHash, conversationHash, request.conversationKind) ? null : 'channel-policy-denied'
+    }
     return null
   }
 
@@ -262,9 +385,16 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId: input.agentId })
+      const suggestion: ChannelSessionSuggestion = {
+        channelId: input.channelId,
+        agentId: input.agentId,
+        providerConversationKey: input.keyHash,
+        disambiguate: this.deps.repository.countConversations(input.channelId) > 0
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
       if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
-        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, this.now()
+        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, title || undefined, this.now()
       )) {
         throw new Error('Channel conversation session rebind failed.')
       }
@@ -284,6 +414,13 @@ export class ChannelInboundService {
       if (existing.sessionId && this.deps.sessions.exists) {
         const alive = await this.deps.sessions.exists(existing.sessionId)
         if (!alive) return { record: { ...existing, sessionId: null }, created: false }
+      }
+      // 读者换了这条频道绑的助手：旧会话属于上一个助手，继续用它只会在运行时第一毫秒报错。
+      if (existing.sessionId && this.deps.sessions.belongsToAgent &&
+        !(await this.deps.sessions.belongsToAgent(existing.sessionId, agentId))) {
+        // 旧会话属于上一个助手：不删（读者要能翻历史），下次来消息时按未绑定重建并记一行。
+        this.deps.repository.recordConversationSwitched(request.channelId, request.generation, this.now())
+        return { record: { ...existing, sessionId: null }, created: false }
       }
       return { record: existing, created: false }
     }
@@ -307,11 +444,20 @@ export class ChannelInboundService {
     let sessionId: string | null = null
     let bound = false
     try {
-      sessionId = await this.deps.sessions.createForConversation({ channelId: request.channelId, agentId })
+      const suggestion: ChannelSessionSuggestion = {
+        channelId: request.channelId,
+        agentId,
+        ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+        providerConversationKey: request.providerConversationKey,
+        disambiguate: this.deps.repository.countConversations(request.channelId) > 0
+      }
+      const title = (await this.deps.conversationTitle?.(suggestion)) ?? ''
+      sessionId = await this.deps.sessions.createForConversation({ ...suggestion, title })
       if (!sessionId.trim()) throw new Error('Channel session factory returned no session.')
       const created = this.deps.repository.createConversation({
         id: randomUUID(), channelId: request.channelId, keyCiphertext: encrypted.ciphertext, keyRef: encrypted.keyRef,
-        keyRevision: encrypted.keyRevision, keyHash: hash, kind: request.conversationKind, sessionId
+        keyRevision: encrypted.keyRevision, keyHash: hash, kind: request.conversationKind, sessionId,
+        sessionTitle: title || null
       }, request.generation, agentId, this.now())
       if (!created) {
         throw new Error('Channel conversation lifecycle changed.')

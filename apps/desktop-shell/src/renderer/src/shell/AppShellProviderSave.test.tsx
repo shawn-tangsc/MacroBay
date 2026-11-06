@@ -7,10 +7,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ModelProviderInput, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 
+import { platformText } from '../i18n/platformText'
 import { AppShell } from './AppShell'
 
 
 const apiKeyFixture = 'fixture-provider-key-1234567890'
+/** 这一组用例把设置语言钉成 en-US；句子的期望值仍从文案表取，不写字面量（否则改文案就红）。 */
+const en = platformText['en-US']
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -29,7 +32,7 @@ describe('AppShell provider save (PLAT-61: 改动即存 / 失焦保存)', () => 
     await vi.waitFor(() => {
       expect(api.upsert).toHaveBeenCalledTimes(1)
       expect(api.list).toHaveBeenCalledTimes(2)
-      expect(page.container.textContent).toContain('Saved')
+      expect(page.container.textContent).toContain(en.status.saved)
     })
     expect(api.upsert).toHaveBeenCalledWith(expect.objectContaining({
       id: 'provider-local',
@@ -52,13 +55,13 @@ describe('AppShell provider save (PLAT-61: 改动即存 / 失焦保存)', () => 
 
     await vi.waitFor(() => {
       expect(api.upsert).toHaveBeenCalledTimes(1)
-      expect(page.container.querySelector('[data-model-service-key-error]')?.textContent).toContain('Save failed')
+      expect(page.container.querySelector('[data-model-service-key-error]')?.textContent).toContain(en.status.failed)
     })
     expect(api.list).toHaveBeenCalledTimes(1)
     // 失败回滚到原值（原本没有草稿 ⇒ 回到空输入 + 「必填」占位），整页不回退。
     expect(apiKeyInput(page.container).value).toBe('')
     expect(page.container.querySelector('[data-model-service-page]')).not.toBeNull()
-    expect(page.container.textContent).not.toContain('Saved')
+    expect(page.container.textContent).not.toContain(en.status.saved)
 
     await act(async () => page.root.unmount())
   })

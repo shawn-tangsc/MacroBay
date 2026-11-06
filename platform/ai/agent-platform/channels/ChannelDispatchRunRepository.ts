@@ -8,6 +8,10 @@ export type ChannelDispatchRun = {
   workItemId: string
   conversationId: string
   status: ChannelDispatchRunStatus
+  /** 失败码（闭集）；成功与未结束时为 null。 */
+  errorCode: string | null
+  /** 脱敏截断后的一句原始说明，只给排查用。 */
+  errorDetail: string | null
   startedAt: string
   finishedAt: string | null
 }
@@ -43,11 +47,13 @@ export class ChannelDispatchRunRepository {
 
   get(dispatchId: string): ChannelDispatchRun | null {
     const row = this.database.connection.prepare(
-      `select dispatch_id, channel_id, work_item_id, conversation_id, status, started_at, finished_at
+      `select dispatch_id, channel_id, work_item_id, conversation_id, status, started_at, finished_at,
+              error_code, error_detail
        from channel_dispatch_runs where dispatch_id = ?`
     ).get(dispatchId) as {
       dispatch_id: string; channel_id: string; work_item_id: string; conversation_id: string
       status: ChannelDispatchRunStatus; started_at: string; finished_at: string | null
+      error_code: string | null; error_detail: string | null
     } | undefined
     return row ? {
       dispatchId: row.dispatch_id,
@@ -55,6 +61,8 @@ export class ChannelDispatchRunRepository {
       workItemId: row.work_item_id,
       conversationId: row.conversation_id,
       status: row.status,
+      errorCode: row.error_code ?? null,
+      errorDetail: row.error_detail ?? null,
       startedAt: row.started_at,
       finishedAt: row.finished_at
     } : null
@@ -91,12 +99,19 @@ export class ChannelDispatchRunRepository {
     })
   }
 
-  fail(dispatchId: string, status: 'failed' | 'interrupted' = 'failed', now = new Date()): void {
+  /** 失败必须带原因：`code` 进闭集给界面翻人话，`detail` 脱敏截断只给排查。 */
+  fail(
+    dispatchId: string,
+    status: 'failed' | 'interrupted' = 'failed',
+    now = new Date(),
+    reason: { code?: string; detail?: string } = {}
+  ): void {
     const iso = now.toISOString()
     this.database.connection.prepare(
-      `update channel_dispatch_runs set status = ?, finished_at = ?, updated_at = ?
+      `update channel_dispatch_runs set status = ?, finished_at = ?, updated_at = ?,
+         error_code = coalesce(?, error_code), error_detail = coalesce(?, error_detail)
        where dispatch_id = ? and status = 'started'`
-    ).run(status, iso, iso, dispatchId)
+    ).run(status, iso, iso, reason.code ?? null, sanitizeDetail(reason.detail), dispatchId)
   }
 
   getResult(dispatchId: string): ChannelDispatchResult | null {
@@ -120,4 +135,11 @@ export class ChannelDispatchRunRepository {
       'update channel_dispatch_results set status = ?, updated_at = ? where dispatch_id = ?'
     ).run(status, now.toISOString(), dispatchId)
   }
+}
+
+/** 只留一行、最多 200 字：可能含内部路径之类的信息，进库前先收窄。 */
+function sanitizeDetail(detail: string | undefined): string | null {
+  if (typeof detail !== 'string') return null
+  const cleaned = detail.replace(/\s+/g, ' ').trim()
+  return cleaned ? cleaned.slice(0, 200) : null
 }

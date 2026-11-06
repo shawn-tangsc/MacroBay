@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
+import type { Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -22,7 +23,21 @@ beforeAll(() => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
 })
 
+/**
+ * 每个用例渲染的是整页 `AppShell`，而共享 helper 只把 `root` 交回来、不负责卸载。
+ * 不卸载的后果不是"少一次清理"：这一页挂着**延迟探测**（`useModelAvailabilityCheck` 的
+ * 定时器）和一批异步读取，树还活着时它们的续体会在文件结束后继续跑；并行满载时
+ * 环境的 `window` 先被拆掉，调度器再碰它就是 `ReferenceError: window is not defined`
+ * ——**用例全绿、却在 teardown 之后报一条未捕获错误**，vitest 因此把整次全量判红。
+ * 卸载会让 `useEffect` 的清理把定时器掐掉，续体就没有执行的机会。
+ */
+const mountedRoots: Root[] = []
+
 afterEach(() => {
+  // 卸载要走 act()：不包一层，React 会报「更新没有包在 act 里」，这条噪音会盖住真错误。
+  act(() => {
+    for (const root of mountedRoots.splice(0)) root.unmount()
+  })
   document.body.replaceChildren()
   window.localStorage.clear()
   Reflect.deleteProperty(window, 'platform')
@@ -34,6 +49,7 @@ describe('PLAT-61 模型同步可用性', () => {
       provider: { enabled: false, hasApiKey: true },
       previewModelSync: async () => ({ ok: true, added: [], missing: [] })
     })
+    mountedRoots.push(page.root)
 
     const sync = page.container.querySelector<HTMLButtonElement>('[data-models-sync]')
     expect(sync?.disabled).toBe(false)
@@ -50,6 +66,7 @@ describe('PLAT-61 模型同步可用性', () => {
     const page = await renderModelServiceSettings({
       provider: { hasApiKey: false, apiKeyPreview: '' }
     })
+    mountedRoots.push(page.root)
 
     const sync = page.container.querySelector<HTMLButtonElement>('[data-models-sync]')
     const add = page.container.querySelector<HTMLButtonElement>('[data-models-add]')

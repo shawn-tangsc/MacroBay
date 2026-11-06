@@ -41,13 +41,13 @@ const document = (): DailyBriefingDocument => ({
     funds: [
       {
         id: 'etf-btc', group: 'funds', labelKey: 'dailyBriefing.row.etfBtc',
-        importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+        importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
         state: 'available', value: { number: -643_200_000, format: 'flow-usd' }, change: null,
         window: 'trading-day', observedAt: '2026-10-30T00:20:00.000Z'
       },
       {
         id: 'funding-btc', group: 'funds', labelKey: 'dailyBriefing.row.fundingBtc',
-        importance: { tier: 'support', source: 'rule', reasonCode: 'funding-extreme' },
+        importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
         state: 'available', value: { number: 0.0036, format: 'percent' }, change: null,
         window: '24h', observedAt: '2026-10-30T00:20:00.000Z'
       }
@@ -206,6 +206,25 @@ describe('daily briefing conclusion wording', () => {
   it('rejects an outlook without an explicit bias', () => {
     const noStance = chinese({ outlook: 'BTC 弱于 ETH，ETF 流出 -6.43 亿美元尚未收窄。' })
     expect(validate(noStance)).toMatchObject({ ok: false, failureCode: 'missing-outlook' })
+  })
+
+  it('accepts the comparison when the asset sits inside it, as people write it', () => {
+    // The 2026-11-04 failure, verbatim: the model compared the two assets correctly and was rejected
+    // for putting "BTC" between 相对 and 更弱. Three writes, three identical outlooks, no edition.
+    const written = chinese({
+      outlook: '未来一到三个交易日基准情形偏空；BTC 与 ETH 的 24 小时涨跌幅读数缺失，无法从显示值直接比较，但 ETF 流出 -6.43 亿美元尚未收窄，ETH 缺少独立叙事，相对 BTC 更弱。'
+    })
+    expect(validate(written)).toMatchObject({ ok: true })
+    // The same shape in other orders, and the English one.
+    expect(validate(chinese({ outlook: '偏空；未来两到三个交易日里 ETH 比 BTC 更弱，ETF 流出 -6.43 亿美元尚未收窄。' }))).toMatchObject({ ok: true })
+    expect(validate(chinese({ outlook: '偏空；未来两到三个交易日 ETH 跑输 BTC，ETF 流出 -6.43 亿美元尚未收窄。' }))).toMatchObject({ ok: true })
+    expect(validateEnglish(english({ outlook: 'Bearish next two to three sessions: ETH is weaker than BTC.' }))).toMatchObject({ ok: true })
+  })
+
+  it('still rejects an outlook that merely names both assets', () => {
+    // The other direction of the same bug: "BTC and ETH both fell" is not a comparison.
+    const names = chinese({ outlook: '未来两到三个交易日偏空：BTC 与 ETH 都在跌，ETF 流出 -6.43 亿美元。' })
+    expect(validate(names)).toMatchObject({ ok: false, failureCode: 'missing-outlook' })
   })
 
   it('rejects an outlook without BTC-versus-ETH relative strength', () => {

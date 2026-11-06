@@ -12,6 +12,9 @@ import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/compo
 
 import { agentTextEnWorkbench } from '../agentTextEnWorkbench'
 
+// 确认框由 Provider 渲染；这组用例不点删除，只要一个不抛错的实例。
+vi.mock('@platform/ui/components/confirm', () => ({ useConfirm: () => vi.fn() }))
+
 const api = vi.hoisted(() => ({
   getLogs: vi.fn(),
   listJobs: vi.fn(),

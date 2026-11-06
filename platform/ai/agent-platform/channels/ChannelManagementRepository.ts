@@ -2,16 +2,33 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
-import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
+import type { AgentPermissionMode } from '../schemas/agentSchemas'
+import type { ChannelWorkspaceOverride } from './ChannelManagementContracts'
+import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, type ChannelAdapterKey } from './ChannelManagementPredicates'
+import { channelAdapterDescriptor } from './channelAdapterDescriptors'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
+import {
+  activateOwnedChannelRuntime,
+  explainEnableBlock
+} from './channelRuntimeActivation'
+import {
+  abandonCredentialOperation,
+  insertManagedChannel,
+  listManagedCredentialRows,
+  recordCredentialRecoveryFailure,
+  releaseSettledOperationOwner,
+  setManagedCredentialHealth,
+  settleReservedCredentialMetadata,
+  updateManagedChannelRow,
+  type ManagedChannelCreateInput,
+  type ManagedChannelUpdateInput
+} from './channelManagementRepositoryWrites'
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
 const MANAGED_CHANNEL_CH_SQL = managedChannelSql('ch')
-const SUPPORTED_CHANNEL_SQL = supportedChannelSql()
 const ISOLATED_LARK_C_SQL = isolatedLarkSql('c')
 const ISOLATED_WECHAT_C_SQL = isolatedWechatSql('c')
-const BLOCKED_RUNTIME_C_SQL = blockedRuntimeChannelSql('c')
 
 export type ChannelManagementOperation = {
   id: string
@@ -58,16 +75,15 @@ export class ChannelManagementRepository {
     return Boolean(this.database.connection.prepare('select 1 from agent_entities where id = ?').get(agentId))
   }
 
-  create(input: { id: string; type?: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'; name: string; agentId: string; now: string }): boolean {
-    const created = this.database.connection
-      .prepare(
-        `insert into agent_channels (
-          id, adapter_key, name, agent_id, public_config_json, requested_enabled, lifecycle_state, created_at, updated_at
-        ) select ?, ?, ?, ?, ?, 0, 'credential-missing', ?, ?
-          where not exists (select 1 from channel_management_tombstones where channel_id = ?)`
-      )
-      .run(input.id, input.type === 'feishu' ? 'lark' : (input.type ?? 'telegram'), input.name, input.agentId, input.type === 'feishu' ? '{"domain":"lark"}' : '{}', input.now, input.now, input.id).changes === 1
-    return created
+  create(input: ManagedChannelCreateInput): boolean {
+    return insertManagedChannel(this.database, input)
+  }
+
+  update(id: string, input: ManagedChannelUpdateInput): boolean {
+    return updateManagedChannelRow(this.database, id, input, {
+      invalidateLifecycleOwner: (channelId) => this.invalidateLifecycleOwner(channelId),
+      fence: (channelId, at) => this.fence(channelId, at)
+    })
   }
 
   channelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
@@ -94,21 +110,6 @@ export class ChannelManagementRepository {
     return Boolean(this.database.connection.prepare(
       `select 1 from agent_channels where id = ? and adapter_key = 'wechat' and public_config_json = '{}'`
     ).get(id))
-  }
-
-  update(id: string, input: { name: string; agentId: string; now: string }): boolean {
-    return this.database.transact(() => {
-      this.invalidateLifecycleOwner(id)
-      const changed = this.database.connection
-        .prepare(
-          `update agent_channels
-           set name = ?, agent_id = ?, requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ?
-           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
-        )
-        .run(input.name, input.agentId, input.now, id).changes
-      if (changed) this.fence(id, input.now)
-      return changed === 1
-    })
   }
 
   disable(id: string, now: string): boolean {
@@ -413,6 +414,23 @@ export class ChannelManagementRepository {
     ).run(now, id).changes === 1
   }
 
+  /** 把「预留记录已经落定」写进元数据：只推进 revision 与健康度，不碰启用意图与生命周期。 */
+  settleReservedCredentialMetadata(input: {
+    channelId: string; ref: string; expectedRevision: number | null; observedRevision: number; now: string
+  }): boolean {
+    return settleReservedCredentialMetadata(this.database, input)
+  }
+
+  /** 记一次恢复失败并返回累计次数：给「永远好不了的操作」一个上限，而不是无限重试。 */
+  recordRecoveryFailure(id: string): number {
+    return recordCredentialRecoveryFailure(this.database, id)
+  }
+
+  /** 操作收口后放掉它自己的生命周期 owner 行（幂等）；留着会把用户锁在「不能启用」外面。 */
+  releaseSettledOperationOwner(id: string): void {
+    releaseSettledOperationOwner(this.database, id)
+  }
+
   /** An observed rotate revision without this journal's Vault receipt is never adopted. */
   completeUnattributedRotation(operation: ChannelManagementOperation, now: string): boolean {
     return this.database.connection.prepare(
@@ -589,10 +607,9 @@ export class ChannelManagementRepository {
     })
   }
 
+  /** 放弃一条操作：连带清掉它自己的生命周期 owner 行，否则下一次启用会被它挡住。 */
   abandonOperation(id: string, code: string, now: string): void {
-    this.database.connection
-      .prepare(`update channel_management_operations set state = 'abandoned', operation_permit = null, stable_error_code = ?, updated_at = ? where id = ?`)
-      .run(code, now, id)
+    abandonCredentialOperation(this.database, id, code, now)
   }
 
   pendingOperations(): ChannelManagementOperation[] {
@@ -690,35 +707,19 @@ export class ChannelManagementRepository {
     return replaced === 1 ? { token, purpose: 'restart', generation: null } : null
   }
 
-  activateOwnedRuntime(channelId: string, owner: TelegramLifecycleOwner, now: string): TelegramLifecycleOwner | null {
-    return this.database.transact(() => {
-      const current = this.database.connection.prepare(
-        `select 1 from channel_telegram_lifecycle_operations where channel_id = ? and owner_token = ? and purpose = ? and generation is null`
-      ).get(channelId, owner.token, owner.purpose)
-      if (!current) return null
-      if (owner.purpose === 'mutation') return null
-      const states = owner.purpose === 'enable' ? "('ready', 'disabled')" : "('enabled')"
-      const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled = 1, lifecycle_state = 'enabled', updated_at = ?
-         where id = ? and ${SUPPORTED_CHANNEL_SQL} and lifecycle_state in ${states}
-           and credential_ref is not null and credential_revision is not null and credential_health = 'configured'
-           and exists (select 1 from agent_entities a where a.id = agent_channels.agent_id)
-           and not exists (select 1 from channel_management_operations o where o.channel_id = agent_channels.id
-             and o.purpose in ('provision', 'rotate') and o.state in ('reserved', 'needs-recovery'))`
-      ).run(now, channelId).changes
-      if (changed !== 1) return null
-      const prior = this.database.connection.prepare('select generation from channel_runtime_generations where channel_id = ?').get(channelId) as { generation: number } | undefined
-      const generation = (prior?.generation ?? 0) + 1
-      this.database.connection.prepare(
-        `insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,?, 'active',?)
-         on conflict(channel_id) do update set generation=excluded.generation,lifecycle_state='active',updated_at=excluded.updated_at`
-      ).run(channelId, generation, now)
-      const owned = this.database.connection.prepare(
-        `update channel_telegram_lifecycle_operations set generation = ?, updated_at = ? where channel_id = ? and owner_token = ? and purpose = ? and generation is null`
-      ).run(generation, now, channelId, owner.token, owner.purpose).changes
-      return owned === 1 ? { ...owner, generation } : null
-    })
+  activateOwnedRuntime(
+    channelId: string,
+    owner: TelegramLifecycleOwner,
+    now: string
+  ): { owner: TelegramLifecycleOwner; displaced: import('./singleEnabledChannel').DisplacedChannel[] } | null {
+    return activateOwnedChannelRuntime(this.database, channelId, owner, now)
   }
+
+  /** 启用被挡住的**真实**原因：只有助手行真的不在时才允许说「助手不在了」。 */
+  enableBlockReason(channelId: string, owner: TelegramLifecycleOwner) {
+    return explainEnableBlock(this.database, channelId, owner)
+  }
+
 
   ownsLifecycleOwner(channelId: string, owner: TelegramLifecycleOwner): boolean {
     return owner.generation !== null && Boolean(this.database.connection.prepare(
@@ -902,31 +903,20 @@ export class ChannelManagementRepository {
 
 
   managedCredentialRows(): Array<{ channelId: string; ref: string; revision: number }> {
-    return this.database.connection.prepare(
-      `select id, credential_ref, credential_revision from agent_channels
-       where ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and credential_ref is not null and credential_revision is not null
-         and lifecycle_state not in ('deleting')`
-    ).all().map((row) => ({
-      channelId: (row as { id: string }).id,
-      ref: (row as { credential_ref: string }).credential_ref,
-      revision: (row as { credential_revision: number }).credential_revision
-    }))
+    return listManagedCredentialRows(this.database)
   }
 
   setCredentialHealth(channelId: string, health: 'configured' | 'missing' | 'unavailable', now: string): void {
-    this.database.connection.prepare(
-      `update agent_channels set credential_health = ?, updated_at = ?
-       where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
-    ).run(health, now, channelId)
+    setManagedCredentialHealth(this.database, channelId, health, now)
   }
 
-  audit(channelId: string, actorId: string, action: string, code: string | null, now: string): void {
+  audit(channelId: string, actorId: string, action: string, code: string | null, now: string, summary?: Record<string, string>): void {
     this.database.connection
       .prepare(
         `insert into channel_management_audits (id, channel_id, actor_id, action, code, summary_json, created_at)
-         values (?, ?, ?, ?, ?, '{}', ?)`
+         values (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(randomUUID(), channelId, actorId, action, code, now)
+      .run(randomUUID(), channelId, actorId, action, code, JSON.stringify(summary ?? {}), now)
   }
 
   setTarget(channelId: string, conversationId: string, enabled: boolean, now: string): boolean {
@@ -1059,16 +1049,23 @@ export class ChannelManagementRepository {
 
   /** A blocked adapter is manageable metadata, never a durable C03 runtime owner. */
   private fenceBlockedAdapterRuntimes(now: string): string[] {
-    const ids = this.database.connection.prepare(
-      `select distinct c.id from agent_channels c
+    const rows = this.database.connection.prepare(
+      `select distinct c.id, c.adapter_key from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-       where ${BLOCKED_RUNTIME_C_SQL} and (
+       where ${blockedRuntimeChannelSql('c')} and (
          o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
-    ).all().map((row) => (row as { id: string }).id)
-    for (const id of ids) {
+    ).all() as Array<{ id: string; adapter_key: ChannelAdapterKey }>
+    const ids = rows.map((row) => row.id)
+    for (const { id, adapter_key: adapterKey } of rows) {
       this.invalidateLifecycleOwner(id)
+      // **已实现、只是还没拿到验收证据**的适配器：只围栏运行时，不清开启意图。
+      // 这类频道的启用是读者点启用时靠现场自检放行的——`supported` 决定的是平台对外声明，
+      // 不是读者能不能用；清掉 `requested_enabled` 会让他的意图消失，下次启动连恢复候选都没有
+      // （用户 2026-11-04 报的「每次重启都要再点一次启用」）。
+      // 未实现的适配器（微信/飞书/QQ/Discord）仍按原规则收口：它们根本没运行时可跑。
+      if (channelAdapterDescriptor(adapterKey).implemented) { this.fence(id, now); continue }
       this.database.connection.prepare(
         `update agent_channels set requested_enabled = 0,
            lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'disabled' end,

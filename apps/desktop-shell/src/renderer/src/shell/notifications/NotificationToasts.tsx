@@ -2,13 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
-import type { NotificationCopyLanguage } from '@platform/i18n/notificationCopy'
-import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationCenterItem } from '@platform/notifications/contracts/notificationContracts'
 
 import type { PlatformText } from '../../i18n/platformText'
 
 import { createNotificationCenterSource } from './notificationCenterSource'
-import { resolveNotificationText } from './notificationText'
 
 import './notificationToasts.css'
 
@@ -19,7 +17,7 @@ export const TOAST_MAX_STACK = 3
 
 export const TOAST_CLOSE_KEY = 'notifications.toastClose'
 
-export type DeliveredNotification = { channel: 'toast' | 'popup'; record: SafeNotificationRecord }
+export type DeliveredNotification = { channel: 'toast' | 'popup'; record: NotificationCenterItem }
 
 type Subscribe = (callback: (delivery: DeliveredNotification) => void) => () => void
 
@@ -33,12 +31,11 @@ type NotificationToastItem = { id: string; title: string; body: string }
  *
  * 口径：
  * - 只画 `toast`；`popup` 是另一档打断，形态由界面设计定，不在这一笔里冒充；
- * - 文案在这里按**当前语言**解析（记录里只有键与参数），切语言时历史记录跟着变；
+ * - 文案由主进程在投递那一刻解析好（这条载荷里没有键，也没有参数），横幅只负责画；
  * - 自动消失 6 秒，也可手动关；点条体打开通知中心——横幅消失后那条记录仍在铃铛里。
  */
 export function NotificationToasts(props: {
   labels: PlatformText['notifications']
-  language: NotificationCopyLanguage
   onOpen: () => void
   subscribe?: Subscribe
 }): React.ReactElement {
@@ -55,15 +52,14 @@ export function NotificationToasts(props: {
 
     return subscribe((delivery) => {
       if (delivery.channel !== 'toast') return
-      const text = resolveNotificationText(delivery.record, props.language)
       setItems((current) => {
-        const next = { id: delivery.record.id, title: text.title, body: text.body }
+        const next = { id: delivery.record.id, title: delivery.record.title, body: delivery.record.body }
         const deduped = current.filter((item) => item.id !== next.id)
         // 超出上限先丢最旧的一条：后到的更接近用户此刻关心的事。
         return [...deduped, next].slice(-TOAST_MAX_STACK)
       })
     })
-  }, [props.language, props.subscribe])
+  }, [props.subscribe])
 
   /** 点开横幅 = 看过了：先标读再开中心，别让用户「弹过了还得再点开中心才算看过」。 */
   const markToastRead = useCallback(async (id: string): Promise<void> => {

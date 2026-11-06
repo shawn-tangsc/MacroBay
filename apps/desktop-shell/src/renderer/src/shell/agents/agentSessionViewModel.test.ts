@@ -39,6 +39,13 @@ function session(input: { id: string; agentId: string | null; name?: string }): 
   }
 }
 
+function recentSession(input: { id: string; agentId: string | null; updatedAt?: string }): AgentSessionEntity {
+  return {
+    ...session(input),
+    updatedAt: input.updatedAt ?? '2026-01-01T00:00:00.000Z'
+  }
+}
+
 function message(input: {
   id: string
   role: AgentSessionMessageEntity['role']
@@ -88,17 +95,46 @@ function runtimeState(
 }
 
 describe('agent session view model', () => {
-  it('groups sessions into pinned and recent sections without changing order', () => {
+  it('groups sessions into pinned and recent sections, each newest activity first', () => {
+    // 输入故意乱序：断言必须依赖排序，而不是「碰巧本来就是这个顺序」。
     const sessions = [
-      session({ id: 'session-2', agentId: 'agent-2' }),
-      session({ id: 'session-1', agentId: 'agent-1' }),
-      session({ id: 'session-3', agentId: 'agent-3' })
+      recentSession({ id: 'session-1', agentId: 'agent-1', updatedAt: '2026-01-01T00:00:10.000Z' }),
+      recentSession({ id: 'session-3', agentId: 'agent-3', updatedAt: '2026-01-01T00:00:20.000Z' }),
+      recentSession({ id: 'session-2', agentId: 'agent-2', updatedAt: '2026-01-01T00:00:30.000Z' })
     ]
 
+    // 置顶组在上、组内同规则：最近活跃的在最前面。
     expect(groupAgentSessions(sessions, new Set(['session-1']), agentText['zh-CN'].common)).toEqual([
-      { key: 'pinned', title: '置顶', sessions: [sessions[1]] },
-      { key: 'recent', title: '最近', sessions: [sessions[0], sessions[2]] }
+      { key: 'pinned', title: '置顶', sessions: [sessions[0]] },
+      { key: 'recent', title: '最近', sessions: [sessions[2], sessions[1]] }
     ])
+  })
+
+  it('breaks ties by creation time and then by id, so two renders agree', () => {
+    const sessions = [
+      recentSession({ id: 'session-b', agentId: 'agent-1' }),
+      recentSession({ id: 'session-a', agentId: 'agent-1' }),
+      recentSession({ id: 'session-c', agentId: 'agent-1' })
+    ]
+
+    const first = groupAgentSessions(sessions, new Set(), agentText['zh-CN'].common)
+    const second = groupAgentSessions([...sessions].reverse(), new Set(), agentText['zh-CN'].common)
+
+    // 时间全相同：按 id 倒序兜底，且两次渲染逐条相同（并列不许换座位）。
+    expect(first[0]?.sessions.map((item) => item.id)).toEqual(['session-c', 'session-b', 'session-a'])
+    expect(second).toEqual(first)
+  })
+
+  it('sorts pinned sessions by activity too, not by when they were pinned', () => {
+    const sessions = [
+      recentSession({ id: 'session-old', agentId: 'agent-1', updatedAt: '2026-01-01T00:00:01.000Z' }),
+      recentSession({ id: 'session-new', agentId: 'agent-1', updatedAt: '2026-01-01T00:00:09.000Z' })
+    ]
+
+    const groups = groupAgentSessions(sessions, new Set(['session-old', 'session-new']), agentText['zh-CN'].common)
+
+    expect(groups[0]?.key).toBe('pinned')
+    expect(groups[0]?.sessions.map((item) => item.id)).toEqual(['session-new', 'session-old'])
   })
 
   it('picks the active session owner before falling back to first session or first agent', () => {

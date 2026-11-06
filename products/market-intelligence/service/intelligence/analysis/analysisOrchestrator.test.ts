@@ -10,7 +10,7 @@ describe('analysisOrchestrator', () => {
     const invoke = vi.fn()
     const updateRunStatus = vi.fn()
     const repository = createRepository({ getSnapshot: () => ({ snapshotHash: 'snapshot-hash', facts: [], evidenceRefs: [] }), updateRunStatus })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke }, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-missing-evidence' })
     expect(invoke).not.toHaveBeenCalled()
   })
@@ -26,7 +26,7 @@ describe('analysisOrchestrator', () => {
       for (const key of ['bullish', 'bearish', 'range', 'undecided', 'mixed']) expect(system).toContain(key)
       return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } }
     })
-    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
     expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
   })
 
@@ -40,7 +40,7 @@ describe('analysisOrchestrator', () => {
     const orchestrator = createAnalysisOrchestrator({
       repository: createRepository(),
       structuredModelInvocation: { invoke } as never,
-      now: () => asOf,
+      now: () => asOf, timeZone: () => 'UTC',
       idFactory: idFactory(),
       getLanguage
     })
@@ -61,7 +61,7 @@ describe('analysisOrchestrator', () => {
       return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', providerId: 'provider-1', modelId: 'model-1', durationMs: 4 } }
     })
     const repository = createRepository({ commitSuccessfulAnalysis, chatMessagesWritten: () => chatMessagesWritten })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke }, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 
@@ -82,7 +82,13 @@ describe('analysisOrchestrator', () => {
       // names and scaled values, never the machine encoding it would copy verbatim.
       expect(user.change).toContain('宏观 · 实际值：3.2 → 3.4')
       expect(user.change).not.toContain('~actual')
-      return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } }
+      // The trigger rule now applies to this run (it has a change record): the answer must cite the
+      // triggering evidence in a reasoning section and name the fact. `validOutput()` does neither,
+      // so it would be rejected and this test would be measuring the rejection instead.
+      const output = validOutput()
+      output.conclusion.change = 'CPI 从 3.2 升到 3.4。'
+      output.supportingEvidence = [{ statement: 'CPI 实际上升，支持本判断。', evidenceRefId: 'evidence-1' }]
+      return { ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 1 } }
     })
     const repository = createRepository({
       getSnapshot: () => ({
@@ -92,7 +98,7 @@ describe('analysisOrchestrator', () => {
         change: { sequence: 2, previousSnapshotHash: 'h1', facts: [{ factId: 'fact-1', domain: 'macro', metric: 'actual', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [], evidenceRefsAdded: [], evidenceRefsRemoved: [] }
       })
     })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
     expect(invoke).toHaveBeenCalledOnce()
   })
@@ -103,8 +109,8 @@ describe('analysisOrchestrator', () => {
     const repository = createRepository({ commitSuccessfulAnalysis })
     const orchestrator = createAnalysisOrchestrator({
       repository,
-      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output: { ...validOutput(), conclusion: { ...validOutput().conclusion, summary: assessment } }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) },
-      now: () => asOf,
+      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output: { ...validOutput(), conclusion: { ...validOutput().conclusion, summary: assessment } }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) } as never,
+      now: () => asOf, timeZone: () => 'UTC',
       idFactory: idFactory()
     })
 
@@ -124,8 +130,8 @@ describe('analysisOrchestrator', () => {
     const repository = createRepository({ updateRunStatus, commitSuccessfulAnalysis })
     const orchestrator = createAnalysisOrchestrator({
       repository,
-      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: false as const, errorCode: 'model-not-ready' as const, trace: { taskId: 'mi-ar-1', durationMs: 2, errorCode: 'model-not-ready' as const } })) },
-      now: () => asOf,
+      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: false as const, errorCode: 'model-not-ready' as const, trace: { taskId: 'mi-ar-1', durationMs: 2, errorCode: 'model-not-ready' as const } })) } as never,
+      now: () => asOf, timeZone: () => 'UTC',
       idFactory: idFactory()
     })
 
@@ -142,8 +148,8 @@ describe('analysisOrchestrator', () => {
     const repository = createRepository({ updateRunStatus, commitSuccessfulAnalysis })
     const orchestrator = createAnalysisOrchestrator({
       repository,
-      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) },
-      now: () => asOf,
+      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) } as never,
+      now: () => asOf, timeZone: () => 'UTC',
       idFactory: idFactory()
     })
 
@@ -159,7 +165,7 @@ describe('analysisOrchestrator', () => {
       .mockResolvedValueOnce({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
       .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
     const repository = createRepository()
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 
@@ -180,7 +186,7 @@ describe('analysisOrchestrator', () => {
     const invoke = vi.fn()
       .mockResolvedValueOnce({ ok: true as const, output: incomplete, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
       .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
-    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
     expect((invoke.mock.calls[1]![0] as { messages: readonly { content: string }[] }).messages.at(-1)!.content)
@@ -191,7 +197,7 @@ describe('analysisOrchestrator', () => {
     const invoke = vi.fn()
       .mockResolvedValueOnce({ ok: false as const, errorCode: 'invalid-json', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
       .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
-    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
     expect(invoke).toHaveBeenCalledTimes(2)
@@ -202,17 +208,78 @@ describe('analysisOrchestrator', () => {
 
   it('does not spend a second call on a provider error', async () => {
     const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'provider-error' as const, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
-    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
     expect(invoke).toHaveBeenCalledOnce()
+    // A call that died in 2 ms never reached the provider: "connection failed", not "it failed".
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: 'connect-failed' }))
+  })
+
+  it('records why a provider call failed, from the code and the time it took', async () => {
+    const cases = [
+      // The gateway's fallback budget cutting a long attempt: the observed cut lands at 59–61 s.
+      { errorCode: 'provider-error' as const, durationMs: 60_700, detail: 'upstream-aborted' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, detail: 'connect-failed' },
+      // An answer that was an error, not a silent death: neither duration rule may claim it.
+      { errorCode: 'provider-error' as const, durationMs: 20_000, detail: 'provider-other' },
+      { errorCode: 'rate-limited' as const, durationMs: 800, detail: 'http-429' },
+      { errorCode: 'timeout' as const, durationMs: 240_000, detail: 'gateway-timeout' }
+    ]
+    for (const entry of cases) {
+      const invoke = vi.fn(async () => ({ ok: false as const, errorCode: entry.errorCode, trace: { taskId: 'mi-ar-1', durationMs: entry.durationMs } }))
+      const updateRunStatus = vi.fn()
+      const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
+
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+        failureDetailCode: entry.detail, failureCode: expect.any(String)
+      }))
+      // No failed run leaves the detail blank or copies the coarse code back into it.
+      expect(updateRunStatus.mock.calls[0]![0].failureDetailCode).not.toBe(updateRunStatus.mock.calls[0]![0].failureCode)
+    }
+  })
+
+  it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {
+    const runWith = (triggerKey: string): AnalysisRun => ({
+      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
+      modelProviderId: null, modelId: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+      skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
+      failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+    })
+    const cases = [
+      ['manual.initial', 1],
+      ['manual.refresh', 1],
+      // Automatic failures have their own throttled levels; 0′ must not wake the reader for them.
+      ['macro.actual.first-confirmed', 0],
+      ['calendar.refresh', 0]
+    ] as const
+    for (const [triggerKey, expectedCalls] of cases) {
+      const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'provider-error' as const, trace: { taskId: 'mi-ar-1', durationMs: 60_700 } }))
+      const notifyManualFailure = vi.fn(async () => undefined)
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ getRun: () => runWith(triggerKey), updateRunStatus: vi.fn() }),
+        structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+        notifyManualFailure
+      })
+      await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+      expect(notifyManualFailure, triggerKey).toHaveBeenCalledTimes(expectedCalls)
+      if (expectedCalls === 1) {
+        expect(notifyManualFailure).toHaveBeenCalledWith({
+          runId: 'mi-ar-1', failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted', occurredAt: asOf
+        })
+      }
+    }
   })
 
   it('does not spend a second call on a timeout or a cancellation', async () => {
     for (const [errorCode, expected] of [['timeout', 'analysis-timeout'], ['cancelled', 'analysis-cancelled']] as const) {
       const invoke = vi.fn(async () => ({ ok: false as const, errorCode, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
       const updateRunStatus = vi.fn()
-      const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+      const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
       const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 
@@ -247,7 +314,7 @@ describe('analysisOrchestrator', () => {
       .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
       .mockResolvedValueOnce({ ok: true as const, output: cited, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
     const orchestrator = createAnalysisOrchestrator({
-      repository: createRepository({ getSnapshot: () => snapshot }), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory()
+      repository: createRepository({ getSnapshot: () => snapshot }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
     })
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
@@ -287,8 +354,8 @@ describe('analysisOrchestrator', () => {
     }
     const orchestrator = createAnalysisOrchestrator({
       repository,
-      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) },
-      now: () => asOf,
+      structuredModelInvocation: { invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })) } as never,
+      now: () => asOf, timeZone: () => 'UTC',
       idFactory: idFactory()
     })
 
@@ -306,7 +373,7 @@ describe('analysisOrchestrator', () => {
     const updateRunStatus = vi.fn()
     const invoke = vi.fn()
     const repository = createRepository({ updateRunStatus })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke }, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1', signal: controller.signal })
 
@@ -316,7 +383,7 @@ describe('analysisOrchestrator', () => {
   })
 
   it('calls the model recorded on the run, and leaves the choice open for a run without one', async () => {
-    const invoke = vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-9', modelId: 'model-9', trace: { taskId: 'mi-ar-1', durationMs: 1 } }))
+    const invoke = vi.fn(async (_request: unknown) => ({ ok: true as const, output: validOutput(), providerId: 'provider-9', modelId: 'model-9', trace: { taskId: 'mi-ar-1', durationMs: 1 } }))
     const run = {
       id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
@@ -326,7 +393,7 @@ describe('analysisOrchestrator', () => {
     }
     const orchestrator = createAnalysisOrchestrator({
       repository: createRepository({ getRun: () => run }),
-      structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory()
+      structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
     })
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
     expect(invoke.mock.calls[0]?.[0]).toMatchObject({ providerId: 'provider-9', modelId: 'model-9' })
@@ -337,7 +404,7 @@ describe('analysisOrchestrator', () => {
     const commitSuccessfulAnalysis = vi.fn()
     const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'cancelled' as const, trace: { taskId: 'mi-ar-1', durationMs: 4_000 } }))
     const repository = createRepository({ updateRunStatus, commitSuccessfulAnalysis })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 

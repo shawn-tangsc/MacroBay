@@ -1,4 +1,6 @@
 /** `feishu` is a storage carrier; only this exact public preset belongs to the Lark adapter. */
+import { acceptanceOverrideExclusionSql, acceptanceOverrideSql } from './channelAcceptanceOverride'
+
 export const LARK_PUBLIC_CONFIG_JSON = '{"domain":"lark"}'
 
 export const channelAdapterKeys = ['telegram', 'slack', 'lark', 'qq', 'discord', 'wechat'] as const
@@ -25,10 +27,11 @@ export function channelAdapterKeyForType(type: string): ChannelAdapterKey {
  */
 export function supportedChannelSql(alias = ''): string {
   const column = (name: string) => alias ? `${alias}.${name}` : name
-  return `(${managedChannelSql(alias)} and exists (
+  // 取证模式只在本进程内把这个适配器当作已支持（见 `channelAcceptanceOverride`），不写库。
+  return `(${managedChannelSql(alias)} and (exists (
     select 1 from channel_adapter_support s
     where s.adapter_key = ${column('adapter_key')} and s.status = 'supported'
-  ))`
+  )${acceptanceOverrideSql(column('adapter_key'))}))`
 }
 
 /** Managed rows whose adapter is not currently supported; startup/quit must fence them. */
@@ -37,7 +40,7 @@ export function blockedRuntimeChannelSql(alias = ''): string {
   return `(${managedChannelSql(alias)} and not exists (
     select 1 from channel_adapter_support s
     where s.adapter_key = ${column('adapter_key')} and s.status = 'supported'
-  ))`
+  )${acceptanceOverrideExclusionSql(column('adapter_key'))})`
 }
 
 export function qqChannelSql(alias = ''): string {

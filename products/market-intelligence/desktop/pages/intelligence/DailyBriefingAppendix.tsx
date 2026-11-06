@@ -1,0 +1,105 @@
+import { Button } from 'antd'
+import { RefreshCw } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
+
+import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
+import type { DailyBriefingPageViewState } from './dailyBriefingPageViewState'
+import type { DailyBriefingText } from './dailyBriefingText'
+import type { BriefingIssue, BriefingIssueGroup } from './dailyBriefingIssues'
+import type { GenerationTrace } from './dailyBriefingGenerationTrace'
+import { DailyBriefingAttempts } from './DailyBriefingAttempts'
+import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { traceFromProgress } from './DailyBriefingGeneratingStates'
+import { issueCountsText } from './dailyBriefingPageDerived'
+
+/**
+ * The right-hand column: the language switch at its top, then the audit of the edition on screen.
+ *
+ * The column always exists, so the switch can never be taken away with it; the audit blocks below
+ * render only when the issue has an edition. Kept out of the page for size and because it is one
+ * surface with one job: tell the reader what this edition is missing.
+ */
+export function DailyBriefingAppendix({ text, view, contentBlocked, hasArchive, issues, issueCounts, groups, generationTrace, formatTime, editionLocale, issuesOpen, setIssuesOpen, openGroup, setOpenGroup, listAttempts, generating = false, liveProgress, onRetryRead }: Readonly<{
+  text: DailyBriefingText
+  view: DailyBriefingPageViewState
+  contentBlocked: boolean
+  hasArchive: boolean
+  issues: readonly BriefingIssue[]
+  issueCounts: Readonly<Record<'blocking' | 'warning' | 'info', number>>
+  groups: readonly BriefingIssueGroup[]
+  generationTrace: GenerationTrace | undefined
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
+  editionLocale: 'zh-CN' | 'en-US'
+  issuesOpen: boolean
+  setIssuesOpen: (open: boolean) => void
+  openGroup: Readonly<{ key: string; trigger: HTMLElement | null }> | null
+  setOpenGroup: (group: Readonly<{ key: string; trigger: HTMLElement | null }> | null) => void
+  listAttempts?: DailyBriefingClient['listAttempts']
+  /** A run is in flight and this issue already has an edition: the steps report here, live. */
+  generating?: boolean
+  liveProgress?: BriefingGenerationProgress | undefined
+  /**
+   * 重新**读**一次这一版（不是重新生成）。只挂在"读不到"那一类缺口上（用户 2026-11-06：正文不画
+   * 读不到，读不到只在右列说，重试也挂在那一条上）。
+   */
+  onRetryRead?: () => void
+}>): React.ReactElement {
+  const failedHere = view.status === 'no-edition' ? view.failed : view.status === 'unavailable'
+  const stagesShown = hasArchive || failedHere
+  return <aside className="mi-daily-briefing-page__appendix" data-briefing-detail="true" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+        {/* 缺口清单**不再要求"有版次"**：文档读不懂时没有可解析的文档，但"这一版没被渲染"本身
+            就是一条该留痕的事实（`02` v2.129 G5）。以前这块挂在 `hasArchive` 下面，于是那条缺口
+            无处可写，页面只能笼统报"失败"。没有缺口时这块仍然整块不渲染（不留空壳）。 */}
+        {issues.length > 0 ? <section data-briefing-gaps="true">
+        <details className="mi-briefing-gaps" open={issuesOpen}
+          onToggle={(event) => setIssuesOpen((event.currentTarget as HTMLDetailsElement).open)}>
+          {/* The counts are the verdict, not the detail: they stay on the summary line even closed. */}
+          <summary className="mi-briefing-gaps__head">
+            <h2>{text.sections.limits}</h2>
+            <span className="mi-briefing-gaps__counts">{issueCountsText(issueCounts, text)}</span>
+          </summary>
+          <ol className="mi-daily-briefing-page__groups">
+            {groups.map((group) => <li key={group.key}>
+              {/* Three facts on the row: how bad, which kind, how many. The long titles live in the
+                  drawer this opens — keeping them here is what made two of them overlap. */}
+              <Button className="mi-daily-briefing-page__group" aria-haspopup="dialog"
+                aria-label={text.limits.openGroup.replace('{label}', group.label).replace('{count}', String(group.count))}
+                data-group-key={group.key} data-group-severity={group.severity} data-group-category={group.category}
+                onClick={(event) => setOpenGroup({ key: group.key, trigger: event.currentTarget })}>
+                <span data-issue-severity={group.severity} className="mi-daily-briefing-page__group-severity">{text.limits.severity[group.severity]}</span>
+                <span data-issue-label={group.label} className="mi-daily-briefing-page__group-label" title={group.label}>{group.label}</span>
+                <span data-issue-count={group.count} className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
+              </Button>
+              {/* 读不到的重试挂在这一条上：只重新读取，不触发生成（`02` v2.124）。
+                  文档读不懂也是同一种动作——再读一次，读不懂的形状不会因为重试而改变，所以那句
+                  建议里还写着"仍然是这个结果就重新生成这一版"。
+                  不套进那颗 Button 里——按钮里套按钮，键盘与读屏都会碰到两个焦点。 */}
+              {onRetryRead !== undefined && (group.template === 'document-invalid'
+                || (group.category === 'data' && group.template.startsWith('calendar-')))
+                ? <IconButton
+                  ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.limits.retryRead"
+                  dataAttributes={{ 'data-issue-retry': 'true', 'data-issue-retry-key': group.key }}
+                  icon={RefreshCw}
+                  resolveText={(key) => key.endsWith('limits.retryRead') ? text.limits.retryRead : key}
+                  size="sm"
+                  variant="plain"
+                  onSelect={onRetryRead}
+                />
+                : null}
+            </li>)}
+          </ol>
+        </details>
+        </section> : null}
+        {/* 步骤块不要求"有版次"：失败的那一版没有正文，但它的尝试留下了步骤——点开这一行要看得见
+            卡在哪一步（用户 2026-11-06）。从没跑过的期没有尝试，就不出这一块。 */}
+        {stagesShown ? <>
+        <div data-briefing-stages="true">{generating
+          ? <DailyBriefingGenerationTimeline running text={text} formatTime={formatTime} trace={liveProgress ? traceFromProgress(liveProgress) : undefined} waiting={liveProgress?.waiting} />
+          : <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />}</div>
+        {view.status === 'ready' ? <DailyBriefingAttempts date={view.document.edition.date} periodId="default" locale={editionLocale} text={text} loadAttempts={listAttempts ? (date, periodId, language) => listAttempts({ date, locale: language, periodId }) : undefined} /> : null}
+        </> : null}
+      </aside>
+
+}

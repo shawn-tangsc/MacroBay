@@ -1,0 +1,14 @@
+/*
+ * The chart's geometry belongs to the chart, not to the page it happens to sit on.
+ *
+ * These two values used to live on `.mi-crypto-dashboard`. When the chart moved into the platform
+ * dialog — whose content portals to <body> — that ancestor was gone, so both resolved to nothing:
+ * `min-height` collapsed to 12px, the axis width to 0, and the bars shrank to their 2px floor.
+ * Declaring them here means the chart carries its own box wherever it is rendered.
+ */
+.mi-capital-conditions__etf-flow,
+.mi-capital-conditions__chart,
+.mi-capital-conditions__chart-ticks {
+  --mi-dashboard-etf-flow-chart-height: 108px;
+  --mi-dashboard-etf-flow-axis-width: 42px;
+}

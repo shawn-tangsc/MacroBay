@@ -12,7 +12,8 @@ import {
   normalizeChatSettings,
   normalizeAppSettings,
   normalizeNetworkSettings,
-  normalizeNotificationSettings
+  normalizeNotificationSettings,
+  normalizeUpdateSettings
 } from '../schema/appSettings'
 import { normalizeAgentObservabilitySettings } from '../../ai/agent-platform/runtime/agentObservabilitySettings'
 import { normalizeWebSearchSettings } from '../../ai/web-search/contracts/webSearchSettings'
@@ -78,7 +79,9 @@ export function updateAppSettings(current: AppSettings, patch: AppSettingsPatch)
         ? current.observability
         : normalizeAgentObservabilitySettings(patch.observability, current.observability),
     webSearch:
-      patch.webSearch === undefined ? current.webSearch : normalizeWebSearchSettings(patch.webSearch, current.webSearch)
+      patch.webSearch === undefined ? current.webSearch : normalizeWebSearchSettings(patch.webSearch, current.webSearch),
+    updates:
+      patch.updates === undefined ? current.updates : normalizeUpdateSettings(patch.updates, current.updates)
   }
 }
 

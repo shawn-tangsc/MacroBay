@@ -163,9 +163,10 @@
 /* Section label and divider: the daily block states its own frequency rather than inheriting the
    window headings above it. */
 .mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9.5px; padding-top: 6px; border-top: 1px solid var(--mi-cross-asset-line); }
-/* The block's rhythm rides on the same line as its heading: smaller and quieter than the heading,
-   so it explains the block without competing with the figures under it. */
-.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section small { margin-left: 6px; color: var(--mi-cross-asset-muted); font-size: 9px; }
+/* The block's rhythm rides on the same line as its heading, as a hint behind an icon: one gap keeps
+   the 22px trigger from reading as part of the 9.5px word beside it (reader, 2026-11-06), and the
+   icon sits on the text's baseline rather than lifting the row's other cells. */
+.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section-hint { margin-left: 6px; vertical-align: middle; }
 
 /* The daily cell carries two different statements: the move over the day, and the context that makes it
    readable (term spread, inflation expectation). Run together on one line they read as a single

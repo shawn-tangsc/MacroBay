@@ -12,7 +12,7 @@ export const INTELLIGENCE_PUBLIC_QUERY_METHODS = {
   queryFundingRateHistory: 'intelligence.queryFundingRateHistory',
   queryOpenInterestHistory: 'intelligence.queryOpenInterestHistory',
   queryMarketDivergence: 'intelligence.queryMarketDivergence',
-  queryModuleSignals: 'intelligence.queryModuleSignals',
+  queryModuleSignalRead: 'intelligence.queryModuleSignalRead',
   queryCapitalConditionsSnapshot: 'intelligence.queryCapitalConditionsSnapshot',
   getSourceHealth: 'intelligence.getSourceHealth',
   getEvidenceExcerpt: 'intelligence.getEvidenceExcerpt'

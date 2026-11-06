@@ -63,7 +63,7 @@ const conclusionFailureCodes: ReadonlySet<string> = new Set([
   'invalid-conclusion-synthesis', 'missing-conclusion-synthesis', 'missing-conclusion-evidence',
   'missing-conclusion-divergence', 'missing-mechanism', 'data-only-summary', 'missing-outlook',
   'repeated-direction', 'duplicate-statement', 'forbidden-forecast', 'invalid-number-format',
-  'copied-conclusion', 'asset-equality-claim'
+  'copied-conclusion', 'asset-equality-claim', 'direction-conflict', 'row-set-mismatch'
 ])
 
 /** The reader-facing name of a failure: a known code's own sentence, or the class it belongs to. */

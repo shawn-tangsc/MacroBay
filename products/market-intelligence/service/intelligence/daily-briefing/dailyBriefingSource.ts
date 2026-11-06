@@ -1,5 +1,6 @@
 import type { AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
 import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
+import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { MacroHistoryAsOfReading, MacroHistoryAsOfSeries } from '../public-query/macroHistoryAsOf'
@@ -8,19 +9,26 @@ import type { SourceProfileStore } from '../application/sourceProfileStore'
 import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../contracts/macro/marketCalendarSurprise'
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { DailyBriefingFactSnapshot, TimelineItem } from './dailyBriefingFactSnapshot'
 import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSource, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
+import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
+import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
+import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
+import { lookupMissingMacroValues, mergeMacroValues } from './dailyBriefingMacroValueLookup'
+import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
+import { backfillMacroValues } from './dailyBriefingMacroBackfill'
+import type { BriefingMacroWebRead } from './dailyBriefingMacroWebSource'
 import {
   collectAnalysisPriorConclusions,
   collectBriefingPriorConclusions,
   mergePriorConclusions
 } from './dailyBriefingPriorConclusions'
 
-const HOUR_MS = 60 * 60 * 1_000
-const DAY_MS = 24 * 60 * 60 * 1_000
 
-type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
+/** The news port the source reads; exported so a build without a news query can supply the "no news" answer. */
+export type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
 
 export type DailyBriefingSourceDeps = Readonly<{
   repository: Pick<MarketAnalysisRepository, 'listTimeline' | 'getSummary' | 'listPredictions' | 'getRun' | 'getSnapshot'>
@@ -33,15 +41,30 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryMacroHistoryAsOf'
     | 'queryMacroRatesSnapshot'
     | 'queryMacroEconomicCalendarMonth'
-    | 'queryMarketCalendarMonth'>
+    | 'queryMarketCalendarMonth'
+    | 'queryMarketCalendarFreshness'
+    | 'getCrossAssetQueryFailure'>
   news: NewsQuery
   profiles: Pick<SourceProfileStore, 'listProfiles'>
+  /**
+   * The calendar's write commands, injected by the composition root. **Not** part of `publicQuery`:
+   * a catch-up opens network requests and writes attempt rows, and a command that sits next to the
+   * reads gets called as if it were free. The holder is mutable so a late binding stays visible;
+   * `refreshNow` absent means the build never wired it (a wiring gap), which is a different branch
+   * from a bound command that fails when called.
+   */
+  calendarCommands?: Readonly<{ refreshNow?: (input: { timeoutMs: number }) => Promise<unknown> }>
   policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
   /**
    * Stored brief editions, read-only. Optional so a build without a briefing store still produces a
    * packet; the window then carries analysis conclusions only.
    */
   briefEditions?: Pick<DailyBriefingStore, 'list'>
+  /**
+   * 第二级取值：联网。由组装层注入（开关、授权、供应商就绪与平台搜索都在那里合成），
+   * 没注入 = 开关关掉/未授权——这时一次搜索都不发，事件照显示、值格不渲染。
+   */
+  macroWebRead?: BriefingMacroWebRead
 }>
 
 /**
@@ -49,27 +72,50 @@ export type DailyBriefingSourceDeps = Readonly<{
  * stated gap in the document, never a failed generation. The source never triggers a collection.
  */
 export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyBriefingSource {
-  return {
-    async buildPacket(input) {
+  // 一次采集 = 一个 (截止时刻, 统计窗口)。两份同刻同窗口的日报读的是同一条证据链；把语言或期号
+  // 放进这个键会各采一遍（同一批数读两次，还可能两次看到不一样的东西），把窗口拿出去则相反——
+  // 24h 与 4h 会复用同一份，4h 那份拿到的是 24h 的数。键里只放这两样，别的一样都不放。
+  const collected = new Map<string, Promise<DailyBriefingFactSnapshot>>()
+  /**
+   * 读一次数据：`asOf` 是**读数的那一刻**（运行时刻），`windowEnd` 是这一版的**统计截止**。
+   *
+   * 两者不是一回事，而且现在必须分开（用户 2026-11-05 定）：窗口仍卡在截止前 N 小时，但读的是
+   * 跑起来这一刻最新的库——这样"截止后才回补的实际值"重跑就能用上，而不是把时间倒回截止那一刻。
+   */
+  const collect = async (asOf: string, windowEnd: string, windowHours: number): Promise<DailyBriefingFactSnapshot> => {
+      const input = { asOf, windowEnd, windowHours }
       const enabled = await readEnabled(deps)
-      // The reader's statistical window decides the packet's interval; every window-scoped read
-      // below uses it instead of assuming 24 hours.
-      const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
-      const asOfMs = Date.parse(input.asOf)
-      const windowStart = new Date(asOfMs - windowHours * HOUR_MS).toISOString()
+      // The reader's statistical window decides the fact interval; every window-scoped read below
+      // uses it instead of assuming 24 hours. The window ends at the cutoff, never at the read.
+      const windowStart = new Date(Date.parse(input.windowEnd) - windowHours * HOUR_MS).toISOString()
+      // The calendar's catch-up runs here, before any calendar month is read: the section's reason
+      // must come from the reading this run judged, not from a second one taken later.
+      const calendarFreshness = await ensureCalendarFreshForRun({
+        dataAsOf: input.asOf,
+        enabled: enabled.calendar,
+        // Both ports stay optional at the type level: an unwired build lands on "not readable"
+        // instead of crashing, and that is a different branch from a port that fails when called.
+        ...(deps.publicQuery.queryMarketCalendarFreshness
+          ? { readFreshness: () => deps.publicQuery.queryMarketCalendarFreshness() }
+          : {}),
+        ...(deps.calendarCommands?.refreshNow
+          ? { refreshNow: deps.calendarCommands.refreshNow }
+          : {})
+      })
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       // One timeline read feeds both the fact-layer conclusion and the window's prior conclusions:
       // two reads could disagree about which nodes are visible at the cutoff.
       const timeline = readTimeline(deps)
-      const [conclusion, priorConclusions, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
+      const [conclusion, news, fearGreed, funding, capital, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf, timeline),
-        readPriorConclusions(deps, timeline, input.asOf, windowStart, input.locale),
-        readNews(deps, input.asOf, windowStart),
+        readNews(deps, input.asOf, windowStart, input.windowEnd),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        readCalendar(deps, input.asOf, input.locale, enabled.calendar, windowStart),
-        safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
+        // 跨资产是**窗口读**：窗口的末端是这一版的统计截止 `windowEnd`，不是读数那一刻 `asOf`。
+        // 拿运行时刻当窗口末端，版本截止（截止 + 迟到宽限）就落在未来，查询端口按契约拒绝
+        // （`threw:invalid-query`），BTC/ETH/纳指三行整块变成"读不到"。
+        readBriefingMarketSnapshotWithMarker(deps.publicQuery, input.windowEnd),
         buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
@@ -77,22 +123,23 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       return Object.freeze({
         asOf: input.asOf,
         windowStart,
-        windowEnd: input.asOf,
+        windowEnd: input.windowEnd,
         windowHours,
-        locale: input.locale,
-        timeZone: input.timeZone,
+        timeline,
         conclusion,
-        priorConclusions,
         news,
-        calendar,
         readings: Object.freeze({ fearGreed, funding, capital: capitalAsOf(capital, input.asOf) }),
         ...(positioning ? { positioning } : {}),
         ...(policyPath ? { policyPath } : {}),
         market: Object.freeze({
           ...(crossAsset ? { crossAsset } : {}),
+          ...(!crossAsset && deps.publicQuery.getCrossAssetQueryFailure?.()
+            ? { crossAssetFailure: deps.publicQuery.getCrossAssetQueryFailure() ?? undefined }
+            : {}),
           ...(macroMarket ? { macroMarket } : {}),
           ...(macroRates ? { macroRates } : {})
         }),
+        calendarFreshness,
         enabled: Object.freeze({
           fearGreed: enabled.fearGreed,
           funding: enabled.funding,
@@ -101,7 +148,120 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
           calendar: enabled.calendar
         })
       })
+  }
+  return {
+    async readFacts(input) {
+      const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
+      const windowEnd = input.windowEnd ?? input.asOf
+      const key = `${input.asOf}|${windowEnd}|${windowHours}`
+      const cached = collected.get(key)
+      if (cached) return cached
+      // 失败不缓存：一次读挂了不该让同一时刻的重试也拿那次失败。
+      const promise = collect(input.asOf, windowEnd, windowHours).catch((error: unknown) => { collected.delete(key); throw error })
+      collected.set(key, promise)
+      // 有界：只留最近几次，长期运行不会把每次采集都攥在内存里。
+      if (collected.size > 8) {
+        const oldest = collected.keys().next().value
+        if (oldest !== undefined) collected.delete(oldest)
+      }
+      return promise
+    },
+    async renderPacket(facts, locale, timeZone) {
+      // The localized layer: only text and the reader's own prior conclusions come from here. No
+      // number, row order or cutoff is read a second time.
+      const [priorConclusions, calendar] = await Promise.all([
+        readPriorConclusions(deps, facts.timeline, facts.asOf, facts.windowStart, locale),
+        readCalendar(deps, facts.asOf, locale, facts.enabled.calendar)
+      ])
+      const refreshed = await refreshMissingMacroValues(deps, facts, locale, calendar)
+      const counts = refreshed.counts
+      const webKeys = refreshed.webKeys
+      const conflicts = refreshed.conflicts
+      return Object.freeze({
+        ...facts,
+        locale,
+        timeZone,
+        priorConclusions,
+        calendar: refreshed.calendar,
+        ...(counts === undefined ? {} : { macroValueCounts: counts }),
+        ...(webKeys === undefined ? {} : { macroWebValueKeys: webKeys }),
+        ...(conflicts === undefined ? {} : { macroValueConflicts: conflicts })
+      })
     }
+  }
+}
+
+/**
+ * 缺值事件回查日历源（`02` `A0.12` v2.125）：确定性、不经模型、不发 WebSearch。
+ *
+ * 只在窗口里**确实有**缺值事件时才再读一次源；有值的行一条都不回查（判据是可数的次数，不是
+ * 代码意图）。回查失败、源没变，都等于"这一条没有值"——版面不写任何话，值那一格不渲染。
+ */
+async function refreshMissingMacroValues(
+  deps: DailyBriefingSourceDeps,
+  facts: DailyBriefingFactSnapshot,
+  locale: DailyBriefingLocale,
+  calendar: DailyBriefingFactPacket['calendar']
+): Promise<Readonly<{
+  calendar: DailyBriefingFactPacket['calendar']
+  counts?: Readonly<{ calendarCalls: number; webCalls: number }>
+  webKeys?: readonly string[]
+  conflicts?: readonly string[]
+}>> {
+  if (calendar.state !== 'available' || calendar.events.length === 0) return { calendar }
+  const start = Date.parse(facts.windowStart)
+  const end = Date.parse(facts.windowEnd)
+  const inWindow = calendar.events.filter((event) => {
+    const at = Date.parse(event.scheduledAt)
+    return Number.isFinite(at) && at >= start && at < end
+  })
+  if (inWindow.length === 0) return { calendar }
+  const candidates = inWindow.map((event) => ({
+    eventKey: event.eventKey,
+    importance: event.importance,
+    scheduledAt: event.scheduledAt,
+    ...(event.actual === undefined ? {} : { actual: event.actual }),
+    ...(event.lifecycleState === undefined ? {} : { lifecycleState: event.lifecycleState })
+  }))
+  // 两级（`02` v2.127）：先回查日历源；**它答上的事件绝不再联网**；仍未拿到的才走第二级。
+  const backfill = await backfillMacroValues({
+    events: candidates,
+    cutoff: facts.windowEnd,
+    readCalendar: () => readCalendar(deps, facts.asOf, locale, facts.enabled.calendar).then((section) => section.events),
+    ...(deps.macroWebRead === undefined ? {} : { readWeb: deps.macroWebRead })
+  })
+  const counts = Object.freeze({ calendarCalls: backfill.calendarCalls, webCalls: backfill.webCalls })
+  const webKeys = Object.freeze(backfill.resolved.filter((entry) => entry.via === 'web').map((entry) => entry.eventKey))
+  const conflicts = Object.freeze(backfill.conflicts.map((conflict) => conflict.eventKey))
+  if (backfill.resolved.length === 0) {
+    return conflicts.length === 0 ? { calendar, counts } : { calendar, counts, webKeys, ...(conflicts.length === 0 ? {} : { conflicts }) }
+  }
+  return {
+    calendar: Object.freeze({
+      ...calendar,
+      events: mergeMacroValues(calendar.events, backfill.resolved.map((entry) => ({ eventKey: entry.eventKey, actual: entry.actual })))
+    }),
+    counts,
+    ...(webKeys.length === 0 ? {} : { webKeys }),
+    ...(conflicts.length === 0 ? {} : { conflicts })
+  }
+}
+
+export async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string, windowEnd: string = asOf): Promise<DailyBriefingFactPacket['news']> {
+  try {
+    // The query only supports fixed horizons, so ask for the smallest one that covers the window
+    // and keep the configured interval: a 12h brief must not carry yesterday's headlines, and a 48h
+    // brief must not silently shrink back to 24h.
+    const window = Date.parse(windowEnd) - Date.parse(windowStart) > 24 * HOUR_MS ? '7d' as const : '24h' as const
+    // 读出时刻可以晚于截止（重跑读最新库），但**版面上装的是截至那一刻的窗口**：截止之后发的新闻
+    // 不属于这一期的"过去 24 小时"。
+    const view = await deps.news.query({ asOf, window, limit: 100 })
+    return Object.freeze({
+      state: view.state,
+      items: view.items.filter((item) => item.publishedAt >= windowStart && item.publishedAt <= windowEnd)
+    })
+  } catch {
+    return Object.freeze({ state: 'unavailable' as const, items: Object.freeze([]) })
   }
 }
 
@@ -113,7 +273,7 @@ async function readEnabled(deps: DailyBriefingSourceDeps): Promise<DailyBriefing
   }
 }
 
-type TimelineItem = ReturnType<MarketAnalysisRepository['listTimeline']>['items'][number]
+export type { TimelineItem } from './dailyBriefingFactSnapshot'
 
 function readTimeline(deps: DailyBriefingSourceDeps): readonly TimelineItem[] {
   try {
@@ -160,224 +320,6 @@ async function readConclusion(
  * their own `windowEnd`. A failed read is an empty list: a brief without prior conclusions is still
  * valid, and it says `fallback` instead of pretending it synthesized something.
  */
-async function readPriorConclusions(
-  deps: DailyBriefingSourceDeps,
-  timeline: readonly TimelineItem[],
-  asOf: string,
-  windowStart: string,
-  locale: DailyBriefingLocale
-): Promise<readonly import('../../../contracts/dailyBriefing').BriefingPriorConclusion[]> {
-  const analysis = collectAnalysisPriorConclusions({
-    entries: timeline,
-    windowStart,
-    asOf,
-    readSummary: (summaryId) => {
-      try {
-        return deps.repository.getSummary(summaryId)
-      } catch {
-        return undefined
-      }
-    }
-  })
-  let briefs: readonly DailyBriefingStoredEdition[] = Object.freeze([])
-  if (deps.briefEditions) {
-    // One day of slack on the left: the store is keyed by the reader's local edition date, which can
-    // sit a calendar day before the UTC window start. The windowEnd check below is authoritative.
-    const from = new Date(Date.parse(windowStart) - DAY_MS).toISOString().slice(0, 10)
-    const to = asOf.slice(0, 10)
-    briefs = await safe(() => deps.briefEditions!.list(from, to, locale), Object.freeze([]))
-  }
-  return mergePriorConclusions([
-    analysis,
-    collectBriefingPriorConclusions({ editions: briefs, windowStart, asOf })
-  ])
-}
-
-async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string): Promise<DailyBriefingFactPacket['news']> {
-  try {
-    // The query only supports fixed horizons, so ask for the smallest one that covers the window
-    // and keep the configured interval: a 12h brief must not carry yesterday's headlines, and a 48h
-    // brief must not silently shrink back to 24h.
-    const window = Date.parse(asOf) - Date.parse(windowStart) > 24 * HOUR_MS ? '7d' as const : '24h' as const
-    const view = await deps.news.query({ asOf, window, limit: 100 })
-    return Object.freeze({
-      state: view.state,
-      items: view.items.filter((item) => item.publishedAt >= windowStart && item.publishedAt <= asOf)
-    })
-  } catch {
-    return Object.freeze({ state: 'unavailable' as const, items: Object.freeze([]) })
-  }
-}
-
-async function readCalendar(
-  deps: DailyBriefingSourceDeps,
-  asOf: string,
-  locale: DailyBriefingLocale,
-  enabled: boolean,
-  windowStart: string
-): Promise<DailyBriefingFactPacket['calendar']> {
-  if (!enabled) return Object.freeze({ state: 'source-disabled' as const, events: Object.freeze([]) })
-  const months = calendarMonths(asOf)
-  const events = new Map<string, DailyBriefingCalendarEvent>()
-  let available = false
-  for (const month of months) {
-    const official = await safe(
-      () => deps.publicQuery.queryMacroEconomicCalendarMonth({ month, asOf, maxEvents: 100 }),
-      undefined
-    )
-    const market = readMarketCalendar(deps, month, locale, asOf)
-    if (official?.state === 'available') {
-      available = true
-      for (const event of official.events) {
-        if (events.has(event.eventKey)) continue
-        events.set(event.eventKey, officialEvent(event, asOf))
-      }
-    }
-    if (market?.state === 'available') {
-      available = true
-      for (const event of market.events) {
-        const linked = event.officialLink?.officialEventKey
-        if (linked && events.has(linked)) {
-          const official = events.get(linked)!
-          events.set(linked, Object.freeze({
-            ...official,
-            ...(official.consensus ? {} : event.consensus ? { consensus: event.consensus.displayValue } : {}),
-            ...(official.previous ? {} : event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
-            ...(official.countryCode ? {} : event.countryCode ? { countryCode: event.countryCode } : {}),
-            ...(official.countryName ? {} : event.countryName ? { countryName: event.countryName } : {})
-          }))
-          continue
-        }
-        if (events.has(event.eventKey)) continue
-        events.set(event.eventKey, marketEvent(event, asOf))
-      }
-    }
-  }
-  // A later collection can omit the actual value even though an earlier collection in the same
-  // release batch stored it. Ask again at the latest release instant in the window and merge the
-  // actual/previous/consensus fields; no extra month is read.
-  const start = Date.parse(windowStart)
-  const missing = [...events.values()]
-    .filter((event) => event.importance === 'high' && event.actual === undefined)
-    .filter((event) => {
-      const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at >= start && at < Date.parse(asOf)
-    })
-    .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
-  const latest = missing.at(-1)
-  if (latest) {
-    const fallbackAsOf = new Date(Date.parse(latest.scheduledAt) + 60 * 60 * 1000).toISOString()
-    const refreshed = readMarketCalendar(deps, latest.scheduledAt.slice(0, 7), locale, fallbackAsOf)
-    if (refreshed?.state === 'available') {
-      for (const event of refreshed.events) {
-        const existing = events.get(event.eventKey)
-        if (existing && !existing.actual && event.providerActual) events.set(event.eventKey, marketEvent(event, asOf))
-      }
-    }
-  }
-  return Object.freeze({
-    state: available ? 'available' as const : 'unavailable' as const,
-    events: Object.freeze([...events.values()])
-  })
-}
-
-function readMarketCalendar(
-  deps: DailyBriefingSourceDeps,
-  month: string,
-  locale: DailyBriefingLocale,
-  asOf: string
-): Extract<ReturnType<MarketIntelligencePublicQueryService['queryMarketCalendarMonth']>, { state: 'available' }> | undefined {
-  const localeCode = locale === 'en-US' ? 'en' as const : 'zh' as const
-  const first = safeSync(() => deps.publicQuery.queryMarketCalendarMonth({ month, locale: localeCode, asOf }), undefined)
-  if (!first || first.state !== 'available') return undefined
-  const events = [...first.events]
-  let cursor = first.nextCursor
-  for (let page = 0; cursor && page < 8; page++) {
-    const next = safeSync(() => deps.publicQuery.queryMarketCalendarMonth({ month, locale: localeCode, asOf, cursor }), undefined)
-    if (!next || next.state !== 'available') break
-    events.push(...next.events)
-    cursor = next.nextCursor
-  }
-  return Object.freeze({ ...first, events: Object.freeze(events), nextCursor: undefined })
-}
-
-function officialEvent(
-  event: Extract<Awaited<ReturnType<MarketIntelligencePublicQueryService['queryMacroEconomicCalendarMonth']>>, { state: 'available' }>['events'][number],
-  _asOf: string
-): DailyBriefingCalendarEvent {
-  const scheduledAt = event.scheduledAt ?? event.conventionScheduledAt ?? `${event.scheduledDate}T00:00:00.000Z`
-  const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
-  return Object.freeze({
-    eventKey: event.eventKey,
-    title: event.titleKey,
-    titleKey: event.titleKey,
-    countryCode: event.countryCode,
-    scheduledAt,
-    importance: event.importance,
-    lifecycleState: event.lifecycleState,
-    category: 'economic-indicator' as const,
-    ...(event.actual ? { actual: event.actual.displayValue } : {}),
-    ...(event.previous ? { previous: event.previous.displayValue } : {}),
-    ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
-    surprise: surpriseView(surprise)
-  })
-}
-
-function marketEvent(
-  event: Extract<ReturnType<MarketIntelligencePublicQueryService['queryMarketCalendarMonth']>, { state: 'available' }>['events'][number],
-  _asOf: string
-): DailyBriefingCalendarEvent {
-  const surprise = assessMarketCalendarSurprise(event.providerActual, event.consensus)
-  return Object.freeze({
-    eventKey: event.eventKey,
-    title: event.title,
-    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
-    ...(event.countryName ? { countryName: event.countryName } : {}),
-    scheduledAt: event.scheduledAt,
-    importance: event.importance,
-    lifecycleState: event.providerActual ? 'released' as const : 'scheduled' as const,
-    category: 'economic-indicator' as const,
-    ...(event.providerActual ? { actual: event.providerActual.displayValue } : {}),
-    ...(event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
-    ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
-    surprise: surpriseView(surprise)
-  })
-}
-
-function surpriseView(
-  assessment: ReturnType<typeof assessMarketCalendarSurprise>
-): DailyBriefingCalendarEvent['surprise'] {
-  return Object.freeze({
-    direction: toCalendarSurpriseView(assessment),
-    ...(assessment.presentation ? { value: assessment.presentation.value, unit: assessment.presentation.unit } : {}),
-    ...(assessment.reason ? { reason: assessment.reason } : {})
-  })
-}
-
-function calendarMonths(asOf: string): readonly string[] {
-  const month = asOf.slice(0, 7)
-  const [year, index] = month.split('-').map(Number) as [number, number]
-  const previous = index === 1 ? `${year - 1}-12` : `${year}-${String(index - 1).padStart(2, '0')}`
-  const next = index === 12 ? `${year + 1}-01` : `${year}-${String(index + 1).padStart(2, '0')}`
-  return [previous, month, next]
-}
-
-async function safe<T>(read: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await read()
-  } catch {
-    return fallback
-  }
-}
-
-function safeSync<T>(read: () => T, fallback: T): T {
-  try {
-    return read()
-  } catch {
-    return fallback
-  }
-}
-
 function unavailableFearGreed() {
   return { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }
 }
@@ -495,4 +437,25 @@ function ratesAsOf(
     state: readings.length > 0 ? 'available' as const : 'empty' as const,
     readings: Object.freeze(readings)
   })
+}
+
+/**
+ * The brief's own market read, with the one log line that explains an empty row.
+ *
+ * A row that ends up empty has three possible causes — the query params, the snapshot, or the bar's
+ * own absence — and they were only distinguishable by digging through the database. One marker names
+ * all three, on the run that hit it.
+ */
+async function readBriefingMarketSnapshotWithMarker(
+  reader: Readonly<{ queryCrossAssetSnapshot: (input: { range: '24h'; asOf: string; knowledgeAt: string }) => Promise<CrossAssetSnapshot | undefined> }>,
+  asOf: string
+): Promise<CrossAssetSnapshot | undefined> {
+  try {
+    const snapshot = await readBriefingMarketSnapshot(reader, asOf)
+    logBriefingMarketRead({ asOf, knowledgeAt: briefingMarketKnowledgeAt(asOf), snapshot, failure: null })
+    return snapshot
+  } catch (error) {
+    logBriefingMarketRead({ asOf, knowledgeAt: briefingMarketKnowledgeAt(asOf), snapshot: undefined, failure: String(error).slice(0, 160) })
+    return undefined
+  }
 }

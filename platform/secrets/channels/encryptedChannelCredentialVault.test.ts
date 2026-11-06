@@ -541,6 +541,72 @@ describe('encrypted channel credential vault', () => {
 
     await expect(vault.putReserved({ ...input, ...reservation })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
   })
+
+  it('settles a reserved credential into an ordinary record that safe access and rotation can use', async () => {
+    const vault = createEncryptedChannelCredentialVault({ safeStorage: createSafeStorage(), storage: createMemoryBlobStore() })
+    const input = { channelId: 'channel-1', type: 'telegram' as const, value: { botToken: 'migration-secret' } }
+    const reservation = await vault.prepareMigration(input)
+    const reserved = await vault.putReserved({ ...input, ...reservation })
+    const inspectSafe = vault.inspectSafe
+    const rotateIfRevision = vault.rotateIfRevision
+    if (!inspectSafe || !rotateIfRevision) throw new Error('Expected encrypted Channel vault access.')
+    // 预留记录：普通读与轮换一律拒绝——这正是「存了却读不出来、换 Token 永远失败」的来源。
+    await expect(inspectSafe(reserved.credentialRef)).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+    await expect(rotateIfRevision(reserved.credentialRef, 1, { botToken: 'rotated' }, {
+      channelId: 'channel-1', operationId: '1b2e9d0d-b9a4-46ed-8f31-8a35dd0752d2', mutationEpoch: 1
+    })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+
+    const settled = await vault.settleReserved({ ...reservation, channelId: input.channelId, type: input.type, expectedRevision: reserved.revision })
+
+    // 落定 = 普通记录、revision + 1、值还是同一把。
+    expect(settled).toMatchObject({ credentialRef: reserved.credentialRef, revision: 2 })
+    await expect(inspectSafe(reserved.credentialRef)).resolves.toMatchObject({ revision: 2 })
+    expect(await vault.get(reserved.credentialRef)).toEqual(input.value)
+    // 落定之后轮换恢复可用：2 → 3。
+    const rotated = await rotateIfRevision(reserved.credentialRef, 2, { botToken: 'rotated' }, {
+      channelId: 'channel-1', operationId: '2b2e9d0d-b9a4-46ed-8f31-8a35dd0752d2', mutationEpoch: 2
+    })
+    expect(rotated.revision).toBe(3)
+    expect(await vault.get(reserved.credentialRef)).toEqual({ botToken: 'rotated' })
+  })
+
+  it('rejects settling with a stale revision, a wrong permit, or a record that is already ordinary', async () => {
+    const vault = createEncryptedChannelCredentialVault({ safeStorage: createSafeStorage(), storage: createMemoryBlobStore() })
+    const input = { channelId: 'channel-1', type: 'telegram' as const, value: { botToken: 'migration-secret' } }
+    const reservation = await vault.prepareMigration(input)
+    const reserved = await vault.putReserved({ ...input, ...reservation })
+    const base = { ...reservation, channelId: input.channelId, type: input.type }
+
+    // 判读必须用 settle 之前的 revision：写错就是判错，不许「先落定再判」。
+    await expect(vault.settleReserved({ ...base, expectedRevision: reserved.revision + 1 })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+    await expect(vault.settleReserved({ ...base, expectedRevision: 0 })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+    await expect(vault.settleReserved({ ...base, migrationPermit: `${reservation.migrationPermit}tampered`, expectedRevision: reserved.revision })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+    await expect(vault.settleReserved({ ...base, channelId: 'channel-2', expectedRevision: reserved.revision })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+
+    await vault.settleReserved({ ...base, expectedRevision: reserved.revision })
+    // 已经落定过的记录不许再落定一次（否则同一把值会被无限推进 revision）。
+    await expect(vault.settleReserved({ ...base, expectedRevision: 2 })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+    // 落定后它不再是预留记录：预留读法必须拒绝。
+    await expect(vault.inspectReserved(base)).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+  })
+
+  it('keeps the settled record readable across a restart', async () => {
+    const safeStorage = createSafeStorage()
+    const storage = createMemoryBlobStore()
+    const vault = createEncryptedChannelCredentialVault({ safeStorage, storage })
+    const input = { channelId: 'channel-1', type: 'telegram' as const, value: { botToken: 'migration-secret' } }
+    const reservation = await vault.prepareMigration(input)
+    const reserved = await vault.putReserved({ ...input, ...reservation })
+    await vault.settleReserved({ ...reservation, channelId: input.channelId, type: input.type, expectedRevision: reserved.revision })
+
+    const restarted = createEncryptedChannelCredentialVault({ safeStorage, storage })
+    const restartedInspectSafe = restarted.inspectSafe
+    if (!restartedInspectSafe) throw new Error('Expected encrypted Channel vault access.')
+    await expect(restartedInspectSafe(reserved.credentialRef)).resolves.toMatchObject({ revision: 2 })
+    expect(await restarted.get(reserved.credentialRef)).toEqual(input.value)
+    await expect(restarted.inspectReserved({ ...reservation, channelId: input.channelId, type: input.type })).rejects.toBeInstanceOf(ChannelCredentialVaultError)
+  })
+
 })
 
 function createSafeStorage(): SafeStorageAdapter {

@@ -13,6 +13,7 @@ import { deleteSessions, selectAgentById, selectSession } from './agentStateActi
 import { deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi } from './agentSessionDataApi'
 import { getSessionChannelTypeBySessionId } from './agentChannelVisuals'
 import { filterSessionsForAgent, getAgentPrimarySessionId } from './agentSessionViewModel'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
@@ -49,6 +50,7 @@ export default function AgentSidePanel({
   focusAgentListTick = 0
 }: AgentSidePanelProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   // 只有「创建智能体」这一颗能挂提示：另外两颗在禁用时会接不到焦点，提示只剩鼠标能看。
   const tooltipKeys = { createAgent: 'navbar.createAgent' } as const satisfies Record<string, AgentTooltipKey>
   // 键名跟着**按钮的动作**走：那颗按钮删除筛选后的会话，不是「清除筛选」。
@@ -73,17 +75,29 @@ export default function AgentSidePanel({
     () => filterSessionsForAgent(state.sessions, activeAgentId),
     [activeAgentId, state.sessions]
   )
+  // 默认列表只含读者自己的会话；自动会话单独一块。归一方向与平台一致：只有显式 `automation`
+  // 才算自动，脏值留在读者列表里（宁可自动混进来，也不许把读者的历史藏掉）。
+  const readerSessions = useMemo(
+    () => agentSessions.filter((session) => session.origin !== 'automation'),
+    [agentSessions]
+  )
+  const automationSessions = useMemo(
+    () => agentSessions.filter((session) => session.origin === 'automation'),
+    [agentSessions]
+  )
   const filteredSessions = useMemo(() => {
     const value = keyword.trim().toLowerCase()
-    if (!value) return agentSessions
-    return agentSessions.filter((session) => {
+    if (!value) return readerSessions
+    return readerSessions.filter((session) => {
       const agent = state.agents.find((item) => item.id === session.agentId)
       return `${session.name} ${session.description ?? ''} ${agent?.name ?? ''}`.toLowerCase().includes(value)
     })
-  }, [agentSessions, keyword, state.agents])
+  }, [readerSessions, keyword, state.agents])
   const sessionCountByAgentId = useMemo(() => {
     return state.sessions.reduce<Record<string, number>>((counts, session) => {
       if (!session.agentId) return counts
+      // 智能体行上的「N 个会话」只数读者自己的：自动会话不该让读者以为自己聊过这么多。
+      if (session.origin === 'automation') return counts
       counts[session.agentId] = (counts[session.agentId] ?? 0) + 1
       return counts
     }, {})
@@ -166,14 +180,21 @@ export default function AgentSidePanel({
                 type="text"
                 size="small"
                 icon={<Trash2 size={15} />}
+                aria-label={t.sidePanel.deleteFiltered}
                 disabled={filteredSessions.length === 0}
                 onClick={() => {
-                  if (!window.confirm(t.sidePanel.confirmDeleteFilteredSessions(filteredSessions.length))) return
-                  void deleteSessionsViaApi(
-                    window.platform,
-                    filteredSessions.map((session) => session.id)
-                  ).catch(() => {
-                    onStateChange((current) => deleteSessions(current, filteredSessions.map((session) => session.id)))
+                  const ids = filteredSessions.map((session) => session.id)
+                  confirm({
+                    title: t.sidePanel.deleteFiltered,
+                    description: t.sidePanel.confirmDeleteFilteredSessions(ids.length),
+                    confirmLabel: t.sidePanel.deleteFiltered,
+                    cancelLabel: t.common.cancel,
+                    tone: 'danger',
+                    onConfirm: () => {
+                      void deleteSessionsViaApi(window.platform, ids).catch(() => {
+                        onStateChange((current) => deleteSessions(current, ids))
+                      })
+                    }
                   })
                 }}
               />
@@ -207,6 +228,8 @@ export default function AgentSidePanel({
 
             <Sessions
               sessions={filteredSessions}
+              // 搜索只作用于读者自己的列表；自动块不受关键词影响（本批不覆盖搜索，见原型「没覆盖」）。
+              automationSessions={automationSessions}
               activeSessionId={state.activeSessionId}
               pinnedSessionIds={new Set(state.sessionPins.map((pin) => pin.sessionId))}
               messagesBySessionId={state.messagesBySessionId}

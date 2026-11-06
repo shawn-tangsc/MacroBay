@@ -6,50 +6,76 @@ import type { DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import {
   applyDailyBriefingGenerationSettingsPatch,
   dailyBriefingGenerationCronExpression,
+  firstDailyBriefingPeriod,
+  generationTimeZoneIssue,
   isDailyBriefingTimeZoneId,
-  normalizeDailyBriefingGenerationSettings,
-  type DailyBriefingGenerationSettings,
-  type DailyBriefingGenerationSettingsPatch
+  readDailyBriefingPeriodsSettings,
+  type DailyBriefingGenerationSettingsPatch,
+  type DailyBriefingPeriod,
+  type DailyBriefingPeriodsSettings
 } from './dailyBriefingGenerationSettings'
 
-/** The reader-facing shape. `cronExpression` is derived from the time, never stored. */
-export type DailyBriefingGenerationSettingsView = Readonly<{
+/**
+ * One period as the page reads it. The zone verdict is derived here, never stored, and `cronExpression`
+ * is derived from the same time the cutoff uses — so the row and the schedule cannot disagree.
+ */
+export type DailyBriefingPeriodView = Readonly<{
+  id: string
+  name?: string
   generationTime: string
-  /** The zone the time means, or null while it is unknown or unreadable. */
   generationTimeZone: string | null
-  /** The value the reader saved when it was not a usable id; automatic generation is paused. */
   generationTimeZoneInvalid: string | null
   windowHours: DailyBriefingWindowHours
   cronExpression: string
 }>
 
+/**
+ * The reader-facing shape.
+ *
+ * Everything that is *derived* — the cron expression and the "is this zone usable" verdict — lives
+ * only inside `periods[]`: one entry per period, one place per fact. The flat fields are the first
+ * period's plain values for callers that need one period and nothing else; a second copy of a
+ * derived value up here is exactly the "one thing, two statements" this shape refuses.
+ */
+export type DailyBriefingGenerationSettingsView = Readonly<{
+  /** Every saved period, projected, with its own cron and zone verdict. The list is the view. */
+  periods: readonly DailyBriefingPeriodView[]
+}>
+
 export type DailyBriefingGenerationSettingsStorage = Readonly<{
-  read: () => Promise<Partial<DailyBriefingGenerationSettings> | undefined>
-  write: (settings: DailyBriefingGenerationSettings) => Promise<void>
+  /** Whatever is on disk, unparsed: reading is the pure reader's job, not the file's. */
+  read: () => Promise<unknown>
+  write: (settings: DailyBriefingPeriodsSettings) => Promise<void>
 }>
 
 export type DailyBriefingGenerationSettingsService = Readonly<{
-  getSettings: () => Promise<DailyBriefingGenerationSettings>
+  /**
+   * The saved periods, unprojected — what the scheduler consumes.
+   *
+   * Read-only: it never writes, so opening settings or asking for the schedule cannot change what
+   * the reader has on disk.
+   */
+  getPeriods: () => Promise<readonly DailyBriefingPeriod[]>
+  getSettings: () => Promise<DailyBriefingPeriodsSettings>
   getView: () => Promise<DailyBriefingGenerationSettingsView>
   save: (patch: DailyBriefingGenerationSettingsPatch) => Promise<DailyBriefingGenerationSettingsView>
   /**
-   * Move the stored zone to the reader's display zone after they change it.
-   *
-   * The schedule's clock has to follow the reader: 08:05 was meant as their 08:05, and leaving the
-   * old zone behind means the job fires at one boundary while the page counts its day at another —
-   * which is how one real day produced two editions. Returns the settings as they now read; a write
-   * is skipped when the zone already matches.
+   * The period the reader's display zone applies to — the first one, until this version can show
+   * more. It **writes nothing**: a period carries its own zone, and the display zone must not
+   * rewrite the file behind the reader's back (that would upgrade an old file without a save).
    */
-  reanchor: (timeZone: string) => Promise<DailyBriefingGenerationSettings>
+  reanchor: (timeZone: string) => Promise<DailyBriefingPeriod>
+  /** The one zone judgement, exposed so the scheduler and the page share it. */
+  generationTimeZoneIssue: typeof generationTimeZoneIssue
 }>
 
 export function createInMemoryDailyBriefingGenerationSettingsStorage(
-  initial?: DailyBriefingGenerationSettings
+  initial?: unknown
 ): DailyBriefingGenerationSettingsStorage {
-  let settings = initial
+  let stored: unknown = initial
   return {
-    async read() { return settings },
-    async write(next) { settings = next }
+    async read() { return stored },
+    async write(next) { stored = next }
   }
 }
 
@@ -57,7 +83,7 @@ export function createDailyBriefingGenerationSettingsJsonStorage(filePath: strin
   return {
     async read() {
       try {
-        return JSON.parse(await readFile(filePath, 'utf8')) as Partial<DailyBriefingGenerationSettings>
+        return JSON.parse(await readFile(filePath, 'utf8')) as unknown
       } catch {
         return undefined
       }
@@ -72,74 +98,79 @@ export function createDailyBriefingGenerationSettingsJsonStorage(filePath: strin
  * Owns the schedule setting, not the schedule itself. `onSaved` is how the caller re-registers the
  * job: the settings service never touches the job runtime, so a failed reschedule cannot roll back a
  * saved preference, and the next startup applies the stored value anyway.
+ *
+ * **Reading never writes.** The old shape becomes periods in memory only; the file changes shape on
+ * a reader's save and nowhere else. The previous version filled in a missing zone during a read,
+ * which meant simply opening settings rewrote the reader's file — that is the habit this shape
+ * cannot afford, because the same read is also the compatibility upgrade.
  */
 export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
   storage: DailyBriefingGenerationSettingsStorage
   now?: () => string
-  /**
-   * The reader's display zone. It is only read while the stored setting has no zone of its own:
-   * a bare 08:05 was always meant as the reader's 08:05, so that is what it is migrated to.
-   */
+  /** The reader's display zone: the meaning of a period that carries none. Read, never stored. */
   timeZone?: () => string
-  onSaved?: (settings: DailyBriefingGenerationSettings) => void
+  onSaved?: (period: DailyBriefingPeriod) => void
 }>): DailyBriefingGenerationSettingsService {
   const now = deps.now ?? (() => new Date().toISOString())
 
-  function view(settings: DailyBriefingGenerationSettings): DailyBriefingGenerationSettingsView {
+  function project(period: DailyBriefingPeriod): DailyBriefingPeriodView {
+    const storedZone = period.generationTimeZone
+    const issue = generationTimeZoneIssue(storedZone)
+    const readerZone = deps.timeZone?.()
+    // A period with no zone means "the reader's zone", so the page can say which clock it uses
+    // without anything being written. A zone we cannot read is reported as the raw value, not
+    // repaired and not replaced by the reader's zone.
     return Object.freeze({
-      generationTime: settings.generationTime,
-      generationTimeZone: settings.generationTimeZone ?? null,
-      generationTimeZoneInvalid: settings.generationTimeZoneInvalid ?? null,
-      windowHours: settings.windowHours,
-      cronExpression: dailyBriefingGenerationCronExpression(settings)
+      id: period.id,
+      ...(period.name ? { name: period.name } : {}),
+      generationTime: period.generationTime,
+      generationTimeZone: issue ? null : storedZone ?? (isDailyBriefingTimeZoneId(readerZone) ? readerZone! : null),
+      generationTimeZoneInvalid: issue ? storedZone ?? null : null,
+      windowHours: period.windowHours,
+      cronExpression: dailyBriefingGenerationCronExpression(period)
     })
   }
 
-  /**
-   * Read the setting, filling in the missing zone exactly once.
-   *
-   * The write is idempotent by construction: it only happens while the stored file has no zone, and
-   * the next read sees the zone and writes nothing. The moment is never changed — the same 08:05
-   * that used to mean "whatever the display zone currently is" now says which zone that was.
-   */
-  async function load(): Promise<DailyBriefingGenerationSettings> {
-    const stored = await deps.storage.read().catch(() => undefined)
-    const normalized = normalizeDailyBriefingGenerationSettings(stored, now())
-    // A saved value that is not a usable id is reported, not repaired: repairing it would hide the
-    // typo and quietly move the schedule.
-    if (normalized.generationTimeZone || normalized.generationTimeZoneInvalid) return normalized
-    const zone = deps.timeZone?.()
-    if (!isDailyBriefingTimeZoneId(zone)) return normalized
-    const migrated = normalizeDailyBriefingGenerationSettings({ ...normalized, generationTimeZone: zone }, now())
-    // A failed write leaves the setting exactly as stored; the next read tries again.
-    await deps.storage.write(migrated).catch(() => undefined)
-    return migrated
+  function view(settings: DailyBriefingPeriodsSettings): DailyBriefingGenerationSettingsView {
+    const periods = Object.freeze(settings.periods.map(project))
+    return Object.freeze({ periods })
   }
 
-  async function applyReanchor(current: DailyBriefingGenerationSettings, timeZone: string): Promise<DailyBriefingGenerationSettings> {
-    const next = normalizeDailyBriefingGenerationSettings({ ...current, generationTimeZone: timeZone }, now())
-    await deps.storage.write(next).catch(() => undefined)
-    return next
+  async function load(): Promise<DailyBriefingPeriodsSettings> {
+    let raw: unknown
+    try {
+      raw = await deps.storage.read()
+    } catch {
+      raw = undefined
+    }
+    return readDailyBriefingPeriodsSettings(raw, now())
   }
 
   return {
+    async getPeriods() {
+      return (await load()).periods
+    },
     async getSettings() {
       return load()
     },
     async getView() {
       return view(await load())
     },
-    async reanchor(timeZone) {
-      const current = await load()
-      if (!isDailyBriefingTimeZoneId(timeZone) || current.generationTimeZone === timeZone) return current
-      const next = await applyReanchor(current, timeZone)
-      return next
+    async reanchor() {
+      // A period owns its zone; the display zone only decides what a zone-less period means, and
+      // that is decided at the read site. Nothing is persisted here on purpose.
+      return firstDailyBriefingPeriod(await load())
     },
+    generationTimeZoneIssue,
     async save(patch) {
       const current = await load()
-      const next = applyDailyBriefingGenerationSettingsPatch(current, { generationTimeZone: deps.timeZone?.(), ...patch }, now())
+      const next = applyDailyBriefingGenerationSettingsPatch(
+        current,
+        { generationTimeZone: deps.timeZone?.(), ...patch },
+        now()
+      )
       await deps.storage.write(next)
-      deps.onSaved?.(next)
+      deps.onSaved?.(firstDailyBriefingPeriod(next))
       return view(next)
     }
   }

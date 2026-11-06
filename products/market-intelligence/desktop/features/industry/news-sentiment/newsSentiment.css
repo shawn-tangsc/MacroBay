@@ -48,8 +48,7 @@
 .mi-news-sentiment__window button.is-on { background: color-mix(in srgb, var(--accent, #d9f67f) 18%, transparent); color: var(--accent, #d9f67f); }
 .mi-news-sentiment__state { padding: 14px 12px; display: grid; gap: 8px; justify-items: start; }
 .mi-news-sentiment__state p { margin: 0; color: var(--muted, #93a196); font-size: 11.5px; }
-.mi-news-sentiment__state button,
-.mi-news-sentiment__footer button {
+.mi-news-sentiment__state button {
   border: 0; background: transparent; color: var(--accent, #d9f67f); font-size: 10.5px; cursor: pointer; padding: 0;
 }
 
@@ -80,8 +79,6 @@
 .mi-news-sentiment__drivers i.is-bearish { background: var(--mi-news-negative); }
 .mi-news-sentiment__title { white-space: normal; overflow: visible; text-overflow: clip; font-size: 11px; line-height: 1.45; color: var(--text, #e7efe5); }
 .mi-news-sentiment__drivers small { color: var(--muted, #93a196); font-size: 9.5px; white-space: normal; }
-.mi-news-sentiment__footer { display: flex; align-items: center; gap: 8px; padding: 7px 12px 9px; border-top: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent); font-size: 9.5px; color: var(--muted, #93a196); }
-.mi-news-sentiment__footer button { margin-left: auto; }
 /* The age badge sits under the list and reads as a note, not a warning: the rows are real, just old. */
 .mi-news-sentiment__stale-read,
 .mi-news-drawer__stale-read {
@@ -206,10 +203,29 @@
 .mi-news-drawer__body-toggle { margin: 8px 0 6px; }
 /* The segmented control owns its own border and radii; the row only pins the label size. */
 
+.mi-news-drawer__queue {
+  display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent);
+  border-radius: 6px; background: color-mix(in srgb, var(--panel, #171d18) 60%, transparent);
+  font-size: 10.5px; color: var(--muted, #93a196);
+}
+.mi-news-drawer__queue-label { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.mi-news-drawer__queue-track {
+  position: relative; flex: 0 1 168px; height: 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in srgb, var(--border, #2a352b) 60%, transparent);
+}
+.mi-news-drawer__queue-track i {
+  position: absolute; inset: 0 auto 0 0; border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent, #d9f67f) 72%, transparent), var(--accent, #d9f67f));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent, #d9f67f) 28%, transparent);
+  transition: width 200ms ease;
+}
+.mi-news-drawer__queue-percent { min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+.mi-news-drawer__queue-cancel { margin-left: auto; }
+
 .mi-news-drawer__row-waiting { color: var(--muted, #93a196); font-size: 9.5px; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
 
 .mi-news-sentiment__drivers { flex: 1 1 0; min-height: 0; overflow-y: auto; }
-.mi-news-sentiment__footer { margin-top: auto; }
 
 .mi-news-sentiment__header-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .mi-news-sentiment__open-all {

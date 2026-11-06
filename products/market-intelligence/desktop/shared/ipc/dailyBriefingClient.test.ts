@@ -50,10 +50,49 @@ describe('daily briefing client', () => {
     expect(missing.state).toBe('missing')
   })
 
+  it('reads attempts, and reports an unreadable list instead of an empty one', async () => {
+    stubInvoke((method) => {
+      if (method === 'intelligence.dailyBriefing.listAttempts') return { state: 'available', attempts: [
+        { attemptNo: 2, state: 'succeeded', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:05:00.000Z', cleanedAt: '2026-11-02T00:10:00.000Z' },
+        { attemptNo: 1, state: 'failed', failureCode: 'source-failed', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:01:00.000Z' }
+      ] }
+      return {}
+    })
+    const result = await dailyBriefingClient.listAttempts({ date: '2026-11-02', locale: 'zh-CN', periodId: 'default' })
+    expect(result.state).toBe('available')
+    if (result.state === 'available') expect(result.attempts.map((attempt) => attempt.attemptNo)).toEqual([2, 1])
+
+    stubInvoke(() => ({ state: 'available', attempts: [{ attemptNo: 'x' }] }))
+    expect(await dailyBriefingClient.listAttempts({ date: '2026-11-02', locale: 'zh-CN' })).toEqual({ state: 'unavailable' })
+  })
+
+  it('reads the storage upgrade state, and never calls an unread state ready', async () => {
+    stubInvoke((method) => {
+      if (method === 'intelligence.dailyBriefing.getStorageState') return { state: 'incomplete', reason: 'migration-failed' }
+      if (method === 'intelligence.dailyBriefing.retryUpgrade') return { state: 'ready' }
+      return {}
+    })
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'incomplete', reason: 'migration-failed' })
+    expect(await dailyBriefingClient.retryUpgrade()).toEqual({ state: 'ready' })
+
+    stubInvoke(() => ({ state: 'incomplete', reason: 'something-else' }))
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'unavailable' })
+    vi.stubGlobal('window', {})
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'unavailable' })
+  })
+
   it('rejects a malformed document and a failed bridge without throwing', async () => {
     stubInvoke(() => ({ state: 'available', document: { schemaVersion: 1 } }))
+    // 读到了、但读不懂：这是**校验失败**（`02` v2.129 G5），码必须与"这次没读到"分开，
+    // 否则页面只能说"失败"，右列写不出原因。
     expect(await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
-      state: 'unavailable', failureCode: 'daily-briefing-request-failed'
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
+    })
+    expect(await dailyBriefingClient.get({ date: '2026-10-30', locale: 'zh-CN' })).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
+    })
+    expect(await dailyBriefingClient.regenerate({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-document-invalid'
     })
     vi.stubGlobal('window', {})
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
@@ -62,11 +101,18 @@ describe('daily briefing client', () => {
   it('reads and saves the settings view without trusting a malformed resolved state', async () => {
     stubInvoke((method, payload) => {
       if (method === 'intelligence.dailyBriefing.getSettings') {
-        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }, webSearchSupported: false, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+        return {
+          settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
+          generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
+          language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
+          webSearchSupported: false,
+          resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
+        }
       }
       return {
         settings: { editorialEnabled: false, providerId: '', modelId: '', webSearchEnabled: false },
-        generation: { generationTime: '09:30', windowHours: 48, cronExpression: '30 9 * * *' },
+        generation: { periods: [{ id: 'default', generationTime: '09:30', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 48, cronExpression: '30 9 * * *' }] },
+        language: { settings: { primary: 'follow-ui', additional: ['en-US'] }, plan: { locales: ['zh-CN', 'en-US'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 2 } },
         webSearchSupported: true,
         resolved: { state: 'disabled' },
         patch: payload
@@ -75,14 +121,16 @@ describe('daily briefing client', () => {
     const settings = await dailyBriefingClient.getSettings()
     expect(settings.state).toBe('available')
     if (settings.state === 'available') {
-      expect(settings.view.generation).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
+      expect(settings.view.generation.periods[0]).toMatchObject({ generationTime: '08:00', windowHours: 24 })
       expect(settings.view.webSearchSupported).toBe(false)
+      expect(settings.view.language.plan.writeCount).toBe(1)
     }
     const saved = await dailyBriefingClient.saveSettings({ generation: { generationTime: '09:30', windowHours: 48 } })
     expect(saved.state).toBe('available')
     if (saved.state === 'available') {
       expect(saved.view.resolved).toEqual({ state: 'disabled' })
-      expect(saved.view.generation.windowHours).toBe(48)
+      expect(saved.view.generation.periods[0]!.windowHours).toBe(48)
+      expect(saved.view.language.plan.writeCount).toBe(2)
     }
 
     stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent' } }))
@@ -118,6 +166,50 @@ describe('daily briefing client', () => {
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
+  it('accepts a schema-10 edition that carries the stored drawings, and one that predates them', async () => {
+    const briefing = document()
+    const at = '2026-10-30T00:25:00.000Z'
+    const row = {
+      id: 'btc' as const, labelKey: 'dailyBriefing.row.btc',
+      importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'largest-move' as const },
+      state: 'available' as const, value: { number: 1.2, format: 'percent' as const },
+      change: null, window: '24h' as const, observedAt: at
+    }
+    const current = (): DailyBriefingDocument => ({
+      ...briefing,
+      schemaVersion: 12,
+      policyVersion: 'daily-briefing.v23',
+      edition: { ...briefing.edition, windowHours: 24 },
+      data: {
+        ...briefing.data,
+        market: [{ ...row, curve: [[{ at: '2026-10-29T00:30:00.000Z', returnPercent: 0 }, { at, returnPercent: 1.2 }]] }],
+        leverage: {
+          state: 'available',
+          btc: { openInterestUsd: 7_000_000_000, series: [{ at: '2026-10-29T00:30:00.000Z', value: 6_000_000_000 }, { at, value: 7_000_000_000 }] },
+          eth: {}
+        },
+        policyPath: {
+          state: 'available', meetingDate: '2026-12-09', outcome: 'hike-25', probability: 77.5, observedAt: at,
+          distribution: { 'no-change': 0.205, 'hike-25': 0.775, 'hike-50-plus': 0.015, 'cut-25': 0.004, 'cut-50-plus': 0.001 }
+        }
+      }
+    })
+    stubInvoke(() => ({ state: 'available', document: current() }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
+
+    // An edition generated before schema 10 has none of these fields and must still be readable: a
+    // reader opening yesterday's brief must not be told the whole document is malformed.
+    const older: DailyBriefingDocument = {
+      ...briefing,
+      schemaVersion: 9,
+      policyVersion: 'daily-briefing.v20',
+      edition: { ...briefing.edition, windowHours: 24 },
+      data: { ...briefing.data, market: [row] }
+    }
+    stubInvoke(() => ({ state: 'available', document: older }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
+  })
+
   it('lists summaries and rejects one malformed summary', async () => {
     const summary = {
       date: '2026-10-30', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated',
@@ -130,6 +222,30 @@ describe('daily briefing client', () => {
     if (listed.state === 'available') expect(listed.result.editions[0]?.date).toBe('2026-10-30')
 
     stubInvoke(() => ({ state: 'available', result: { editions: [{ date: '2026-10-30' }] } }))
+    expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
+  })
+
+  it('carries the period identity and the per-language three-state through the wire', async () => {
+    const summary = {
+      date: '2026-10-30', periodId: 'period_x', locale: 'zh-CN', availableLocales: ['zh-CN'],
+      state: 'generated' as const, generatedAt: '2026-10-30T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z',
+      readingsAvailable: 4,
+      periodTime: '2026-10-30T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry', windowHours: 24,
+      languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }, { locale: 'zh-CN', state: 'published' }],
+      periodDeleted: true, isCurrent: true
+    }
+    stubInvoke(() => ({ state: 'available', result: { editions: [summary] } }))
+    const listed = await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(listed.state).toBe('available')
+    if (listed.state !== 'available') return
+    expect(listed.result.editions[0]).toMatchObject({
+      periodId: 'period_x', periodTime: '2026-10-30T07:00:00.000Z', periodKind: 'manual', runTrigger: 'retry',
+      windowHours: 24, periodDeleted: true, isCurrent: true,
+      languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }, { locale: 'zh-CN', state: 'published' }]
+    })
+
+    // A language list this build cannot read refuses the row with it: half a three-state is not shown.
+    stubInvoke(() => ({ state: 'available', result: { editions: [{ ...summary, languages: [{ locale: 'en-US', state: 'gone' }] }] } }))
     expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
@@ -152,6 +268,21 @@ describe('daily briefing client', () => {
     stubInvoke(() => ({ state: 'unavailable', failureCode: 'source-failed', generationTrace: { attemptId: 'x', stages: [{ id: 'nope' }] } }))
     const malformed = await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })
     expect(malformed).toEqual({ state: 'unavailable', failureCode: 'source-failed' })
+  })
+})
+
+describe('deleting one edition', () => {
+  it('sends the row identity — date, period and language — never a bare date', async () => {
+    // 服务端按语言删除（`readLanguage`）：少了 locale 就在运行时抛 `daily-briefing-locale-required`，
+    // 读者看到的是"点了删除没反应"。载荷里三者都要在，而且都来自被点中的那一行。
+    let seen: unknown
+    stubInvoke((method, payload) => {
+      expect(method).toBe('intelligence.dailyBriefing.deletePeriod')
+      seen = payload
+      return { editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }
+    })
+    await dailyBriefingClient.deletePeriod({ date: '2026-11-05', periodId: 'default', locale: 'en-US', entry: 'row-menu' })
+    expect(seen).toEqual({ date: '2026-11-05', periodId: 'default', locale: 'en-US', entry: 'row-menu' })
   })
 })
 

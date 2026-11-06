@@ -14,5 +14,5 @@ import { NotificationToasts } from './NotificationToasts'
  */
 export function NotificationBanner(props: { onOpen: () => void }): React.ReactElement {
   const language = useShellLanguage()
-  return <NotificationToasts labels={platformText[language].notifications} language={language} onOpen={props.onOpen} />
+  return <NotificationToasts labels={platformText[language].notifications} onOpen={props.onOpen} />
 }

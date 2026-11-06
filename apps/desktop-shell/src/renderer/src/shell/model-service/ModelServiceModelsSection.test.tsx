@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { modelAvailabilityFingerprint } from '@platform/ai/providers/modelAvailability'
 
 import { platformText } from '../../i18n/platformText'
@@ -97,7 +98,7 @@ async function mountGroups(value: ModelGroup[] = groups): Promise<HTMLElement> {
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ModelServiceModelsSection, {
+    root?.render(createElement(ConfirmProvider, null, createElement(ModelServiceModelsSection, {
       labels,
       provider: providerFixture(value),
       groups: value,
@@ -118,7 +119,7 @@ async function mountGroups(value: ModelGroup[] = groups): Promise<HTMLElement> {
       notice: null,
       syncErrorText: null,
       syncErrorDetail: null
-    }))
+    })))
   })
   return container
 }

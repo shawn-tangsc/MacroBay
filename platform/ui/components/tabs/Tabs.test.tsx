@@ -88,6 +88,15 @@ describe('Tabs', () => {
     expect(onChange).toHaveBeenLastCalledWith('a')
   })
 
+  it('keeps a disabled tab readable: greyed by colour, not by washing it out', async () => {
+    // 界面设计 2026-11-02：禁用靠「灰 + 没有下划线 + 不进 Tab 序列」表达，不靠再压一层透明度。
+    // 实测 `opacity: .5` 把它压成深色 2.43:1 / 浅色 2.04:1——低于 3:1，读者要先费劲认字。
+    const rule = /\.tabs__tab:disabled\s*\{([^}]*)\}/u.exec(css.replace(/\/\*[\s\S]*?\*\//gu, ''))?.[1] ?? ''
+    expect(rule).toContain('color: var(--muted)')
+    expect(rule).toContain('opacity: 1')
+    expect(rule).not.toMatch(/opacity:\s*0\.\d/u)
+  })
+
   it('keeps disabled tabs out of the tab order and out of arrow navigation', async () => {
     const { host, onChange } = await mount('b')
     const disabled = host.querySelector<HTMLButtonElement>('[role="tab"][disabled]')!

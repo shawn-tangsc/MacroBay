@@ -1,3 +1,4 @@
+import { buildTranslationCompactionPlan } from './intelligenceTranslationCache'
 import type { JobRuntime } from '@platform/jobs'
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
@@ -38,12 +39,16 @@ import {
 } from './intelligenceTranslationHelpers'
 import { sanitizeIntelligenceText } from './intelligenceItemLabels'
 import {
+  createTranslationBatchTally,
+  translationAutoOffConclusion
+} from './intelligenceTranslationOutcome'
+import {
   buildTranslationSystemPrompt,
   buildTranslationUserPrompt,
   parseTranslationModelOutput
 } from './intelligenceTranslationPrompt'
 import { resolveTranslationModel } from './intelligenceTranslationModel'
-import { INTELLIGENCE_TRANSLATE_ITEMS_JOB } from '../jobs/intelligenceJobIds'
+import { enqueueTranslationBatches } from './intelligenceTranslationQueue'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -108,33 +113,14 @@ export function createIntelligenceTranslationService(deps: {
     }
   }
 
-  function buildCompactionPlan(
-    records: IntelligenceTranslationRecord[],
-    retentionMode: 'compact' | 'balanced' | 'extended'
-  ): {
-    next: IntelligenceTranslationRecord[]
-    removedCount: number
-  } {
-    const keepDays = retentionMode === 'compact' ? 7 : retentionMode === 'extended' ? 90 : 30
-    const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000
-    const hotItemIds = new Set(deps.pipeline.listItems().map((item) => item.itemId))
-
-    const next = records.filter((record) => {
-      const timestamp = record.translatedAt ? new Date(record.translatedAt).getTime() : 0
-      if (record.status === 'stale' || record.status === 'failed') {
-        return timestamp >= cutoff
-      }
-      if (record.status === 'not-required') return false
-      if (record.status === 'translated' && !hotItemIds.has(record.sourceId)) {
-        return timestamp >= cutoff
-      }
-      return true
+  /** 保留期与字节口径都在 `intelligenceTranslationCache`：预览与真正清理读同一份。 */
+  function planCompaction(records: IntelligenceTranslationRecord[], retentionMode: 'compact' | 'balanced' | 'extended') {
+    return buildTranslationCompactionPlan({
+      records,
+      retentionMode,
+      hotItemIds: new Set(deps.pipeline.listItems().map((item) => item.itemId)),
+      now: Date.now()
     })
-
-    return {
-      next,
-      removedCount: records.length - next.length
-    }
   }
 
   return {
@@ -227,7 +213,7 @@ export function createIntelligenceTranslationService(deps: {
     },
 
     async queueMissing(input: TranslateIntelligenceItemsJobInput): Promise<SafeTranslationJobSummary> {
-      const queuedCount = await enqueueTranslationJob(deps.jobRuntime, input)
+      const queuedCount = await enqueueTranslationBatches(deps.jobRuntime, input, deps.pipeline.listItems())
       lastJobAt = new Date().toISOString()
       lastJobSummary = `Queued ${queuedCount} translation work item(s).`
       return {
@@ -244,10 +230,10 @@ export function createIntelligenceTranslationService(deps: {
     async maybeEnqueueForNewItems(itemIds: string[]): Promise<void> {
       const settings = await deps.storage.readSettings()
       if (!settings.autoTranslateEnabled || itemIds.length === 0) return
-      await enqueueTranslationJob(deps.jobRuntime, {
+      await enqueueTranslationBatches(deps.jobRuntime, {
         itemIds,
         reason: 'new-item'
-      })
+      }, deps.pipeline.listItems())
     },
 
     async resolveDisplayText(input: {
@@ -326,7 +312,20 @@ export function createIntelligenceTranslationService(deps: {
       }
     },
 
-    async translateItems(input: TranslateIntelligenceItemsJobInput): Promise<{ processed: number; failed: number }> {
+    /**
+     * 跑一批翻译。返回值里除了旧的两个计数，还有**这一批的结论**（四计数 + 原因码）：
+     * 运行记录要的是「多少条、成几条、跳过几条、为什么失败」，这些只能在跑完之后算，
+     * 所以由这里给出、由 handler 写进 `ctx.result`。算不出结论的批不给 `counts`——
+     * 补一个 0/0/0/0 会让没量过的批混进成功率。
+     */
+    async translateItems(input: TranslateIntelligenceItemsJobInput): Promise<{
+      processed: number
+      failed: number
+      counts?: { total: number; succeeded: number; failed: number; skipped: number }
+      reasonCode?: string
+      /** 失败按原因拆开的条数；没有失败时不出现。 */
+      reasons?: Readonly<Record<string, number>>
+    }> {
       const [settings, appLanguage, modelDefaults, providers] = await Promise.all([
         deps.storage.readSettings(),
         deps.getAppLanguage(),
@@ -335,7 +334,9 @@ export function createIntelligenceTranslationService(deps: {
       ])
       // 自动翻译关闭时，pipeline 仍会把 new-item 入队；在这里停住，而不是让每个新条目都调用模型。
       if (!shouldTranslateForReason(settings, input.reason)) {
-        return { processed: 0, failed: 0 }
+        // 条数是「跳过」，不是「成功 0 条」：读者点开这一行要看到为什么一条都没翻。
+        const conclusion = translationAutoOffConclusion(input.itemIds?.length ?? 0)
+        return { processed: 0, failed: 0, ...(conclusion ?? {}) }
       }
       // 每次任务开始时解析：显式绑定优先，其次模型服务的默认翻译模型，最后沿用供应商默认聊天模型。
       const model = resolveTranslationModel({ settings, modelDefaults, providers })
@@ -344,6 +345,7 @@ export function createIntelligenceTranslationService(deps: {
       const candidates = selectTranslationCandidates(deps.pipeline, input, settings, targetLocale, records)
       let processed = 0
       let failed = 0
+      const tally = createTranslationBatchTally()
 
       for (const candidate of candidates) {
         if (candidate.kind === 'skip-not-required') {
@@ -358,11 +360,13 @@ export function createIntelligenceTranslationService(deps: {
             promptVersion: INTELLIGENCE_TRANSLATION_PROMPT_VERSION
           })
           processed += 1
+          tally.recordSkipped()
           continue
         }
 
         if (candidate.kind === 'reuse') {
           processed += 1
+          tally.recordSkipped()
           continue
         }
 
@@ -407,6 +411,7 @@ export function createIntelligenceTranslationService(deps: {
 
         if (!modelResult.ok) {
           failed += 1
+          tally.recordFailure(modelResult.errorCode)
           records = upsertRecord(records, {
             ...pendingRecord,
             status: 'failed',
@@ -426,22 +431,23 @@ export function createIntelligenceTranslationService(deps: {
           translatedAt: new Date().toISOString()
         })
         processed += 1
+        tally.recordSuccess()
       }
 
       await writeRecords(records)
-      return { processed, failed }
+      return { processed, failed, ...tally.settle() }
     },
 
     async compactDerivedRecords(input: { retentionMode: 'compact' | 'balanced' | 'extended' }) {
       const records = await readRecords()
-      const { next, removedCount } = buildCompactionPlan(records, input.retentionMode)
+      const { next, removedCount } = planCompaction(records, input.retentionMode)
       await writeRecords(next)
       return { removedCount }
     },
 
     async previewCompaction(input: { retentionMode: 'compact' | 'balanced' | 'extended' }) {
       const records = await readRecords()
-      return buildCompactionPlan(records, input.retentionMode)
+      return planCompaction(records, input.retentionMode)
     }
   }
 }
@@ -488,8 +494,11 @@ function resolveDisplayTextForItem(
   const translatedSummary = active?.summaryTranslated
   const translatedBody = active?.bodyTranslated
 
+  const usingTranslated = useTranslated && active?.status === 'translated' && translatedTitle !== undefined
   return {
-    title: useTranslated && active?.status === 'translated' && translatedTitle ? translatedTitle : originalTitle,
+    title: usingTranslated ? translatedTitle! : originalTitle,
+    // 有译文就把译文语言一起交出去：调用方按"等于本期语言才用"判断，既不串语言，也不丢同语言译文。
+    ...(usingTranslated ? { titleLocale: context.targetLocale } : {}),
     summary: useTranslated && active?.status === 'translated' && translatedSummary ? translatedSummary : originalSummary,
     body: useTranslated && active?.status === 'translated' && translatedBody ? translatedBody : body,
     originalBody: body,
@@ -517,23 +526,6 @@ function upsertRecord(
   const next = [...records]
   next[index] = record
   return next
-}
-
-async function enqueueTranslationJob(
-  jobRuntime: JobRuntime,
-  input: TranslateIntelligenceItemsJobInput
-): Promise<number> {
-  const itemCount = input.itemIds?.length ?? input.clusterIds?.length ?? input.translationIds?.length ?? 1
-  await jobRuntime.enqueueDefinition({
-    id: `${INTELLIGENCE_TRANSLATE_ITEMS_JOB}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-    owner: 'product',
-    productId: PRODUCT_ID,
-    handlerId: INTELLIGENCE_TRANSLATE_ITEMS_JOB,
-    title: 'Translate intelligence items',
-    trigger: { kind: 'manual' },
-    payload: input
-  })
-  return itemCount
 }
 
 type TranslationCandidate =

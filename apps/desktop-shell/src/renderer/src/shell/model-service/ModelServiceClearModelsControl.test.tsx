@@ -2,9 +2,9 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 
 import { platformText } from '../../i18n/platformText'
 
@@ -13,19 +13,15 @@ import { ModelServiceClearModelsControl } from './ModelServiceClearModelsControl
 /**
  * PLAT-72：「清空模型」按钮 + 二次确认。
  *
- * 这一组是平台 `confirmAction` 的**第一个真渲染用例**：不 mock antd——`confirmAction` 包的是
- * `Modal.confirm`，mock 掉就等于只验了自己写的那几个参数。断言的是读者真的能看见、能点到的：
+ * 这一组是平台 `confirm` 的**真渲染用例**：不 mock antd——mock 掉就等于只验了自己写的那几个参数。
+ * 组件用 `useConfirm()` 取本树的实例，所以这里挂真的 `<ConfirmProvider>`（和 AppShell 里那层一样）。
+ * 断言的是读者真的能看见、能点到的：
  * 标题、数量文案、危险钮、取消不提交、确认只提交一次、失败后还能再点一次；
  * 以及界面设计点名的**危险动作初始焦点在「取消」**——焦点落在破坏性按钮上，按住回车就是连续执行。
  */
 const labels = platformText['en-US'].models
 
 let root: Root | undefined
-
-beforeEach(() => {
-  // 与渲染入口 `main.tsx` 同一句：测试里不接这一步，`Modal.confirm` 在 React 19 下什么都不画。
-  installAntdStaticRender()
-})
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -42,7 +38,9 @@ async function mount(
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(ModelServiceClearModelsControl, { labels, modelCount, onConfirm }))
+    root?.render(
+      createElement(ConfirmProvider, null, createElement(ModelServiceClearModelsControl, { labels, modelCount, onConfirm }))
+    )
   })
   return container
 }
@@ -53,7 +51,7 @@ function clearButton(container: HTMLElement): HTMLButtonElement {
   return button
 }
 
-/** 确认框由 `Modal.confirm` 通过 portal 挂到 `document.body`，不在组件的容器里。 */
+/** 确认框由宿主内的实例通过 portal 挂到 `document.body`，不在组件的容器里。 */
 function dialog(): Element | null {
   return document.querySelector('.ant-modal-confirm')
 }

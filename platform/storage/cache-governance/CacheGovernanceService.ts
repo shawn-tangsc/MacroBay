@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
-import type { CacheOperationAuditRepository } from './CacheOperationAuditRepository'
+import type {
+  CacheOperationAuditPruneOptions,
+  CacheOperationAuditPruneResult,
+  CacheOperationAuditRepository
+} from './CacheOperationAuditRepository'
 import { CacheRegistry } from './CacheRegistry'
 import {
   createCacheOperationFailure,
@@ -63,6 +67,14 @@ export class CacheGovernanceService {
 
   async listOperations(query?: CacheOperationQuery): Promise<CacheOperationPage> {
     return this.deps.auditRepository.listPage(query)
+  }
+
+  /**
+   * 审计表的定期裁剪（`MI-11-R16`）。保留期规则只在仓储里实现一次，这里只做转发——
+   * 定时任务拿不到仓储实例，拿得到的是服务，所以需要这一个入口。
+   */
+  async pruneAudit(options?: CacheOperationAuditPruneOptions): Promise<CacheOperationAuditPruneResult> {
+    return this.deps.auditRepository.prune(options)
   }
 
   /**

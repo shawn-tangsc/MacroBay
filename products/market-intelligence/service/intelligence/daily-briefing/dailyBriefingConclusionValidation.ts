@@ -169,10 +169,12 @@ export function validateConclusionSynthesis(
     return fail('data-only-summary', 'summary: a recital of numbers is not a conclusion; add the mechanism that moved BTC/ETH.')
   }
   if (!outlookStancePattern.test(outlook)) {
-    return fail('missing-outlook', 'outlook: state the next-1-3-day bias explicitly (偏多/偏空/震荡 or bullish/bearish/range).')
+    return fail('missing-outlook', `outlook: state the next-1-3-day bias explicitly (偏多/偏空/震荡 or bullish/bearish/range). You wrote: "${quoteForRepair(outlook)}"`)
   }
   if (!relativeStrength(outlook)) {
-    return fail('missing-outlook', 'outlook: compare BTC with ETH (强于/弱于/跑赢/跑输 or outperform/underperform).')
+    // The model's own sentence travels back: without it the repair round rewrites the same phrase,
+    // which is exactly how two repairs produced three identical outlooks in one evening.
+    return fail('missing-outlook', `outlook: say whether BTC is stronger or weaker than ETH (强于/弱于/跑赢/跑输, "相对 BTC 更弱", or outperform/underperform). You wrote: "${quoteForRepair(outlook)}"`)
   }
   for (const entry of counterEvidence) {
     if (!conditionalPattern.test(entry)) return fail('missing-outlook', 'counterEvidence: every falsifier must be a condition ("若/if … then …").')
@@ -475,4 +477,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function fail(failureCode: ConclusionSynthesisFailure, detail?: string): ConclusionSynthesisValidation {
   return Object.freeze({ ok: false as const, failureCode, ...(detail ? { detail } : {}) })
+}
+
+/** What the model wrote, short enough for a repair line and long enough to recognise itself. */
+function quoteForRepair(text: string): string {
+  const trimmed = text.replace(/\s+/g, ' ').trim()
+  return trimmed.length > 120 ? `${trimmed.slice(0, 120)}…` : trimmed
 }

@@ -1,6 +1,6 @@
 import type { AssistantEntity } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { AssistantTopicEntity } from '@platform/ai/assistant-platform/schemas/topicSchemas'
-import { confirmAction } from '@platform/ui/components/confirm'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { LoadingState } from '@platform/ui/components/loading'
 import type { PlatformText } from '../../i18n/platformText'
 import { Button, Dropdown } from 'antd'
@@ -52,6 +52,7 @@ export function AssistantSidePanel({
 }: AssistantSidePanelProps): React.ReactElement {
   const showingAssistants = activeTab === 'assistants'
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null)
+  const confirm = useConfirm()
   const deletingTopicIds = useRef(new Set<string>())
   const panelRef = useRef<HTMLElement | null>(null)
 
@@ -62,7 +63,7 @@ export function AssistantSidePanel({
   }, [focusTopicsTick])
 
   function confirmDeleteTopic(topic: AssistantTopicEntity): void {
-    confirmAction({
+    confirm({
       title: labels.deleteConversation,
       description: labels.deleteConversationConfirm(topic.name || labels.newTopic),
       confirmLabel: labels.deleteConversation,

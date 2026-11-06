@@ -1,0 +1,67 @@
+/*
+ * One grid for the whole settings form.
+ *
+ * The label column is a single fixed width and every value or control is right-aligned to the
+ * same edge, so two rows never look like two different forms. Rows are two columns only:
+ * `title (question first)` and `value/control` — no third column, and no control pushed away from
+ * the right edge.
+ *
+ * A state sentence (unavailable, warning, failed) is not a field: it takes the full row width,
+ * starts at the label column and may wrap. Hiding a state behind a question mark would tell the
+ * reader everything is fine while the control would do nothing.
+ */
+.mi-briefing-settings-form {
+  display: block;
+}
+
+.mi-briefing-settings-form .mi-daily-briefing__settings-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  /* One height for every setting row: the explanations live in their questions now, so a row
+     must not grow taller because a sentence happens to be long. */
+  min-height: 52px;
+}
+
+/* The value/control column: one right edge for text, selects, switches and check boxes. */
+.mi-briefing-settings-form .mi-daily-briefing__settings-row > :nth-child(2) {
+  justify-self: end;
+}
+
+/* A question plus its title, kept as one unit so DOM order and focus order agree. */
+.mi-briefing-settings-form .mi-daily-briefing__field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The group heading row carries the group's own action, right-aligned to the same edge as the
+   values, and on the same line as the heading. */
+.mi-briefing-settings-form .mi-briefing-settings-form__group-heading > :nth-child(2) {
+  justify-self: end;
+}
+
+/* States are rows of their own, not a second line inside a field. */
+.mi-briefing-settings-form .mi-briefing-settings-form__state {
+  grid-column: 1 / -1;
+  justify-self: start;
+  white-space: normal;
+}
+
+/* 期列表：一期一行，时间是它的第一个事实。列表本身不滚动——面板会滚，第二个滚动条只会让人
+   以为自己漏看了几期。 */
+.mi-briefing-periods { display: flex; flex-direction: column; gap: 8px; }
+.mi-briefing-periods__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-briefing-periods__row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 6px 0; border-bottom: 1px solid var(--mi-dashboard-line); font-size: 12px; line-height: 18px; }
+.mi-briefing-periods__row:last-child { border-bottom: 0; }
+.mi-briefing-periods__row strong { color: var(--mi-dashboard-text); font-weight: 600; }
+.mi-briefing-periods__row span { color: var(--mi-dashboard-muted); font-variant-numeric: tabular-nums; }
+.mi-briefing-periods__empty { display: flex; flex-direction: column; gap: 4px; }
+.mi-briefing-periods__empty p { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; line-height: 18px; }
+.mi-briefing-periods__hint { color: var(--mi-dashboard-muted); }
+.mi-briefing-periods__add { align-self: flex-start; }
+/* 整行就是"改这一期"的入口：一个动作不需要菜单，菜单要多一次点击。 */
+.mi-briefing-periods__edit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mi-briefing-periods__edit:hover strong, .mi-briefing-periods__edit:focus-visible strong { text-decoration: underline; }

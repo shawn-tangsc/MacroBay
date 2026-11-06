@@ -43,7 +43,8 @@ check the network and proxy settings before assuming the source is broken.
 
 ## 3. Open the dashboard
 
-Open the **intelligence portal**, choose **Crypto Market Analyst**, and select **Open dashboard**.
+Open **Intelligence** in the sidebar: it lands on the crypto dashboard. To go through the agent portal
+instead, choose **Back to Agents** on the dashboard and then **Open dashboard**.
 
 The dashboard groups:
 
@@ -70,10 +71,11 @@ cutoff time it used.
 
 ## No key yet? Open the sample first
 
-With no API key and no network you can still see the whole desk. On the intelligence portal, switch on
-**Sample mode** (or press *Open sample dashboard*): the dashboard and three published analyses replay a
-recorded week of real observations. It is labelled, it never updates, and it writes nothing — switching it
-off returns you to your own (empty) data. See [Sample data](../reference/status-and-limitations.md#sample-data).
+With no API key and no network you can still see the whole desk. On the agent portal (reach it with
+**Back to Agents** on the dashboard), switch on **Sample mode** (or press *Open sample dashboard*): the
+dashboard and three published analyses replay a recorded week of real observations. It is labelled, it
+never updates, and it writes nothing — switching it off returns you to your own (empty) data. See
+[Sample data](../reference/status-and-limitations.md#sample-data).
 
 ## Next
 

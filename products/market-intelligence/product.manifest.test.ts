@@ -1,8 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+// `registerIntelligenceIpc` 在模块加载时取 `app.getPath`；守卫只跑注册、不碰磁盘。
+vi.mock('electron', () => ({ app: { getPath: () => resolve(process.cwd(), '.tmp-manifest-guard') } }))
+
+import { createProductIpcRegistry } from '@platform/desktop/ipc/productIpcRegistry'
+
+import { DAILY_BRIEFING_IPC_METHODS } from './service/intelligence/ipc/registerDailyBriefingIpc'
+import { registerIntelligenceIpc } from './service/intelligence/ipc/registerIntelligenceIpc'
 import { marketIntelligenceProductManifest } from './product.manifest'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 
@@ -14,6 +21,22 @@ describe('market-intelligence product manifest', () => {
     })
   })
 
+  it('puts the run log between the source settings and the notifications', () => {
+    const sections = marketIntelligenceProductManifest.shellContributions?.settingsSections ?? []
+    expect(sections.map((section) => section.id)).toEqual([
+      'intelligence-sources',
+      'intelligence-run-log',
+      'intelligence-notification'
+    ])
+    // Order is what the shell sorts by; ids alone would let the menu drift apart from the intent.
+    const [sources, runLog, notifications] = sections
+    expect(sources!.order).toBeLessThan(runLog!.order)
+    expect(runLog!.order).toBeLessThan(notifications!.order)
+    // One name for the page and the menu entry: the heading comes from the copy table.
+    expect(runLog!.title).toEqual({ 'zh-CN': '运行日志', 'en-US': 'Run log' })
+    expect(runLog!.module).toBe('./desktop/settings/run-log')
+  })
+
   it('keeps one blank intelligence page without removing existing intelligence capabilities', () => {
     expect(marketIntelligenceProductManifest.shellContributions?.menuPages).toEqual([
       {
@@ -21,6 +44,7 @@ describe('market-intelligence product manifest', () => {
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
         icon: 'radar',
         order: 10,
+        home: true,
         module: './desktop/pages/intelligence'
       }
     ])
@@ -139,5 +163,75 @@ describe('market-intelligence publishable event topics', () => {
     for (const topic of consumers[0].topics) {
       expect(declared.has(topic)).toBe(true)
     }
+  })
+})
+
+/**
+ * 启动自检的那张表：**注册了什么，就必须在清单里登记什么**。
+ *
+ * 2026-11-05 的事故是这条链的反面：期配置的四个方法在代码里注册了，清单里没有，于是
+ * `seal()` 拒绝启动（`product-runtime-method-baseline-mismatch`）——而"启动即崩"只有用户会撞到，
+ * 我们不许自己起应用，所以这条必须由用例替用户撞。
+ */
+describe('market-intelligence product IPC baseline', () => {
+  it('lists every briefing method the runtime registers', () => {
+    const declared = new Set(marketIntelligenceProductManifest.serviceRoutes.map((entry) => entry.method))
+    for (const method of Object.values(DAILY_BRIEFING_IPC_METHODS)) {
+      expect(declared.has(method)).toBe(true)
+    }
+  })
+
+  it('declares no briefing method the runtime does not register', () => {
+    const registered = new Set<string>(Object.values(DAILY_BRIEFING_IPC_METHODS))
+    const declared = marketIntelligenceProductManifest.serviceRoutes
+      .map((entry) => entry.method)
+      .filter((method) => method.startsWith('intelligence.dailyBriefing.'))
+    // 两张表要么一样多，要么一定有一边多出来——多出来的那个方向就是"清单里挂着一个没人注册的名字"。
+    expect(declared.filter((method) => !registered.has(method))).toEqual([])
+  })
+
+  /**
+   * 2026-11-06 22:55 的事故（`3224c49`）：`registerIntelligenceIpc` 里新注册了两个通道，
+   * 清单没同步，`seal()` 拒绝启动——用户看到 `product-runtime-method-baseline-mismatch`。
+   * 上面的用例只核对清单自己的常量，抓不到"注册了但没登记"；这条跑**真实注册**再对清单。
+   */
+  it('declares every method registerIntelligenceIpc actually registers', () => {
+    const registry = createProductIpcRegistry()
+    registerIntelligenceIpc(registry.register, {} as never, {} as never)
+
+    const registered = registry.seal().map(({ method }) => method)
+    const declared = new Set<string>(marketIntelligenceProductManifest.serviceRoutes.map(({ method }) => method))
+    expect(registered.filter((method) => !declared.has(method))).toEqual([])
+  })
+})
+
+/**
+ * 源码守卫：这一族的字符串**只许在契约文件里出现一次**。
+ *
+ * 常量 + manifest spread 仍然能被绕过——下一个人写
+ * `register(PRODUCT_ID, 'intelligence.newThing', …)`，清单照样没有它，运行时比对也就
+ * 只在应用启动那一刻才红；这条让「注册了没登记」在写的当时就红。反向用例证明它真会红。
+ */
+describe('market-intelligence IPC method literals', () => {
+  const registrarPath = resolve(
+    process.cwd(),
+    'products/market-intelligence/service/intelligence/ipc/registerIntelligenceIpc.ts'
+  )
+
+  function handWrittenMethodNames(source: string): string[] {
+    return [...source.matchAll(/['"](intelligence\.[^'"]+)['"]/g)].map((match) => match[1]!)
+  }
+
+  it('keeps every method name in the contract table, not in the registrar', () => {
+    const source = readFileSync(registrarPath, 'utf8')
+    // 先证明读到的是那个真文件：它必须已经在用常量表，空文件或改名都过不了这一关。
+    expect(source).toContain('INTELLIGENCE_IPC_METHODS.getTimeline')
+    expect(handWrittenMethodNames(source)).toEqual([])
+  })
+
+  it('flags a handwritten name put back into the registrar (reverse case)', () => {
+    const source = readFileSync(registrarPath, 'utf8')
+    const withLiteral = `${source}\nregister(PRODUCT_ID, 'intelligence.rogueChannel', async () => undefined)\n`
+    expect(handWrittenMethodNames(withLiteral)).toEqual(['intelligence.rogueChannel'])
   })
 })

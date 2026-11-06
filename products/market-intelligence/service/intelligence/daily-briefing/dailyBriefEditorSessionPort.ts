@@ -2,8 +2,15 @@ import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { DailyBriefSessionLinkStore, DailyBriefSessionState } from './dailyBriefSessionLinks'
 
+/**
+ * The attempt the session belongs to, resolved before the session opens so the attempt row exists
+ * first and the link only points at it. Absent in a build without the attempt store: then no
+ * ordinal is recorded, and nothing is invented to fill the gap.
+ */
+export type DailyBriefAttemptAllocator = (input: Readonly<{ editionDate: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<number | undefined> | number | undefined
+
 export type DailyBriefEditorSessionPort = Readonly<{
-  ensure: (input: Readonly<{ editionKey: string; editionDate: string; locale: 'zh-CN' | 'en-US'; title: string; agentId: string; allowedTools?: readonly string[] }>) => Promise<{ sessionId: string; created: boolean; attempt: number }>
+  ensure: (input: Readonly<{ editionDate: string; periodId: string; locale: 'zh-CN' | 'en-US'; title: string; agentId: string; allowedTools?: readonly string[] }>) => Promise<{ sessionId: string; created: boolean }>
   send: (sessionId: string, request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   /** Stops the runtime session that is still working on a generation that already timed out. */
   cancel: (sessionId: string) => Promise<void>
@@ -16,17 +23,23 @@ export function createDailyBriefEditorSessionPort(deps: Readonly<{
   send: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   /** The platform cancel entry. Absent in builds without a runtime, so cancel is then a no-op. */
   cancelAgentSession?: (sessionId: string) => Promise<void> | void
+  /** Owned by the attempt store; the port never derives its own sequence. */
+  allocateAttempt?: DailyBriefAttemptAllocator
   now?: () => string
 }>): DailyBriefEditorSessionPort {
   const now = deps.now ?? (() => new Date().toISOString())
   return Object.freeze({
     async ensure(input) {
-      const attempt = (await deps.links.listByEdition(input.editionKey)).length + 1
-      const title = `${input.title} · ${attempt}`
-      const session = await deps.createSession({ agentId: input.agentId, name: title, workspace: { type: 'system' }, ...(input.allowedTools && input.allowedTools.length > 0 ? { allowedTools: [...input.allowedTools] } : {}) })
+      const attemptNo = deps.allocateAttempt
+        ? await deps.allocateAttempt({ editionDate: input.editionDate, periodId: input.periodId, locale: input.locale })
+        : undefined
+      // The ordinal is in the session name so two attempts of the same edition are told apart in
+      // the assistant list; without an allocator there is no ordinal to name.
+      const name = attemptNo === undefined ? input.title : `${input.title} · ${attemptNo}`
+      const session = await deps.createSession({ agentId: input.agentId, name, workspace: { type: 'system' }, ...(input.allowedTools && input.allowedTools.length > 0 ? { allowedTools: [...input.allowedTools] } : {}) })
       const at = now()
-      await deps.links.put({ editionKey: input.editionKey, sessionId: session.id, editionDate: input.editionDate, locale: input.locale, state: 'running', createdAt: at, updatedAt: at })
-      return { sessionId: session.id, created: true, attempt }
+      await deps.links.put({ editionDate: input.editionDate, periodId: input.periodId, locale: input.locale, ...(attemptNo === undefined ? {} : { attemptNo }), sessionId: session.id, state: 'running', createdAt: at, updatedAt: at })
+      return { sessionId: session.id, created: true }
     },
     send: (sessionId, request) => deps.send({ ...request, sessionId }),
     async cancel(sessionId) {
