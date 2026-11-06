@@ -221,9 +221,14 @@ const errors = tscOutput
 
 if (errors.length > 0) {
   console.error(`[pre-commit] ✗ 这一笔提交的树里有 ${errors.length} 条类型错（含它依赖的、已进库的那一版）：`)
-  // tsc 是从临时树里报错的，路径会带一串 `../../`；不剥掉的话读者没法照着去改。
+  // tsc 是从临时树里报错的：路径有时是 `../../var/folders/…/macrobay-precommit-xxx/…`，有时是绝对路径。
+  // 两种都要剥成仓库相对形式，否则读者看到一串自己磁盘上没有的路径，只能靠猜这是哪个文件。
   for (const line of errors.slice(0, 20)) {
-    console.error(`  ${line.replace(/^(?:\.\.\/)+/, '').replace(treeRoot + '/', '')}`)
+    console.error(`  ${line
+      .replace(/^(?:\.\.\/)+/, '')
+      .replace(treeRoot + '/', '')
+      .replace(/^var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')
+      .replace(/^private\/var\/folders\/.*?\/macrobay-precommit-[^/]+\//, '')}`)
   }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
