@@ -69,9 +69,7 @@ export const intelligenceSourcesText = {
       'market-intelligence.retain-market-history': '历史保留'
     },
     joiner: ' · ',
-    empty: '这段时间没有运行记录。采集任务在来源启用后才会出现。',
-    unavailable: '运行记录暂时不可用。',
-    loading: '正在读取运行记录…',
+    loading: '正在读取…',
     exportCsv: '复制 CSV',
     exported: '已复制到剪贴板',
     exportFailed: '无法写入剪贴板，请重试',
@@ -472,9 +470,7 @@ export const intelligenceSourcesText = {
       'market-intelligence.retain-market-history': 'History retention'
     },
     joiner: ' · ',
-    empty: 'No runs in this window. Collection appears once a source is enabled.',
-    unavailable: 'The run record is unavailable.',
-    loading: 'Reading the run record…',
+    loading: 'Reading…',
     exportCsv: 'Copy CSV',
     exported: 'Copied to the clipboard',
     exportFailed: 'Could not write to the clipboard',

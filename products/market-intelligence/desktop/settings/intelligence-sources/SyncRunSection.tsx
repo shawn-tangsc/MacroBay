@@ -49,7 +49,7 @@ export type SyncRunText = Readonly<{
   previous: string
   next: string
   csvHeader: readonly string[]
-  empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
+  loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   /** `handlerId` → the reader's name for that job; the service catalogue's own labels are data. */
   tasks: Readonly<Record<string, string>>
