@@ -126,6 +126,19 @@ export function normalizeSessionOriginGroup(value: unknown): string | undefined 
   return trimmed === '' ? undefined : trimmed
 }
 
+/**
+ * 自动会话的**幂等键**：创建它的那一次运行（本处是分析的 run id）。
+ *
+ * 与 `originGroup` 分开是两个含义：分组键说「这些会话属于同一类」（侧栏按它折叠），
+ * 幂等键说「这一次是哪一个」。合成一个字段，每次运行就会变成侧栏里的一个独立分组。
+ * 只接受非空字符串，空串按「没给」处理——不允许用空串当键，那会让所有自动会话撞在一起。
+ */
+export function normalizeSessionOriginRef(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
 export type AgentSessionEntity = {
   id: string
   agentId: string | null
@@ -150,6 +163,8 @@ export type AgentSessionEntity = {
   origin?: AgentSessionOrigin
   /** 自动会话的分组名（调用方给，平台只按它分组）。 */
   originGroup?: string
+  /** 自动会话的幂等键：创建它的那一次运行。**身份，不是描述**。 */
+  originRef?: string
   createdAt: string
   updatedAt: string
 }
@@ -169,6 +184,8 @@ export type CreateAgentSessionDto = {
   origin?: AgentSessionOrigin
   /** 自动会话的分组名；平台不做词表，只按原样存。 */
   originGroup?: string
+  /** 自动会话的幂等键：创建它的那一次运行；平台不做词表，只按原样存。 */
+  originRef?: string
 }
 
 export type UpdateAgentSessionDto = {

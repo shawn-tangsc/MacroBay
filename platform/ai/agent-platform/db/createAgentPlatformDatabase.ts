@@ -1534,7 +1534,16 @@ const migrations: AgentPlatformMigration[] = [
   ...channelCredentialRecovery,
   ...channelDeliveryAuditDetail,
   ...channelConversationSessionTitle,
-  ...channelDispatchFailureReason
+  ...channelDispatchFailureReason,
+  {
+    id: '0048_agent_session_origin_ref',
+    // 自动会话的**幂等键**：哪一次运行创建了这条会话。只追加、可空、不回填。
+    // 与 `origin_group`（侧栏分组名）分开：分组键说「这些属于同一类」，幂等键说「这一次是哪条」。
+    // 合成一个字段的后果是：每次分析变成侧栏里的一个独立分组，一天几十块。
+    up: `
+      alter table agent_sessions add column origin_ref text;
+    `
+  }
 ]
 
 export type AgentPlatformDatabase = {

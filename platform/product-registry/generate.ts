@@ -280,6 +280,14 @@ export type ProductServiceDependencies = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
+  /**
+   * 自动会话的**幂等窄查**：按「智能体 + 幂等键（这一次运行）」取一条会话，只读。
+   *
+   * 产品侧唯一的按身份找会话的入口——**不许再开「按描述查」的第二个口子**：
+   * 描述是给人看、还能改的自由文本，拿它当身份，改一句话就等于换了一条会话。
+   * 只读：不创建、不改写。找不到就是 null，不抛错。
+   */
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
   isWebSearchProviderReady?: () => Promise<boolean>
   /** 只读搜索入口（产品侧缺值时取一次）；宿主透传平台 WebSearchService，产品不自己发请求。 */
   searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>

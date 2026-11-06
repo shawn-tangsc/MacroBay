@@ -648,6 +648,11 @@ export type DesktopAppBootstrapOptions = {
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
     getAgentState?: () => Promise<AgentStoreState>
+    /**
+     * 自动会话的幂等窄查：按「智能体 + 幂等键（这一次运行）」取一条会话，只读。
+     * 产品侧唯一的按身份找会话的入口——不另开「按描述查」的口子；可选，没接时产品侧退回自己的兜底。
+     */
+    findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
     createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
     sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
     cancelAgentSession?: (sessionId: string) => Promise<void> | void
@@ -1067,6 +1072,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               registerProductDisposer: productServiceDisposerRegistry.register,
               getAgentState: () => agentStore.getState(),
               createAgentSession: (input) => agentServices.sessions.create(input),
+              // 自动会话的幂等窄查：只读一条，不扫全量列表（产品侧靠它把「同一次运行一条会话」做成 O(1)）。
+              findAgentSessionByAutomationRef: (agentId, originRef) => agentServices.sessions.findByAutomationRef(agentId, originRef),
               sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
               cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
               appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),

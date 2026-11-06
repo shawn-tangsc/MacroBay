@@ -5,7 +5,7 @@ import type {
   ListAgentSessionsQuery,
   UpdateAgentSessionDto
 } from '../schemas/sessionSchemas'
-import { normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import { normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
 import type { AgentSessionWorkspaceSource } from '../schemas/workspaceSchemas'
 import {
   createAgentSession,
@@ -138,23 +138,25 @@ export class AgentSessionService {
   }
 
   /**
-   * 按「智能体 + 自动会话分组名」取一条会话（幂等键查询，例如 `market-analysis-run:<runId>`）。
+   * 按「智能体 + **自动会话幂等键**」取一条会话（例如分析的 `runId`）。
    *
-   * **键是 `originGroup`，不是 `description`**：描述是给人看的自由文本（可选、可改、
-   * 内置会话还按语言各存一份），拿它当身份会在切语言或改描述时静默失效。
+   * **键是 `originRef`，既不是 `originGroup` 也不是 `description`**：
+   * `originGroup` 是侧栏分组的键（这些会话属于同一类），拿它当幂等键，每次运行都会变成
+   * 侧栏里的一个独立分组；`description` 是给人看的自由文本（可选、可改、内置会话还按语言各存一份），
+   * 拿它当身份会在改描述或切语言时静默失效。
    * 命中多条时窄查询会抛错——那是数据已经不一致，不许悄悄挑一条继续跑。
    *
    * 有窄查询适配器时只读一行；没有时退回扫内存状态（那条路会读全量，只有内存桩会走到）。
    */
-  async findByAutomationGroup(agentId: string, originGroup: string): Promise<AgentSessionEntity | null> {
-    const narrow = this.queries.sessions?.findByAutomationGroup
-    if (narrow) return narrow(agentId, originGroup)
+  async findByAutomationRef(agentId: string, originRef: string): Promise<AgentSessionEntity | null> {
+    const narrow = this.queries.sessions?.findByAutomationRef
+    if (narrow) return narrow(agentId, originRef)
     const state = await this.store.getState()
     return (
       state.sessions.find(
         (session) =>
           session.agentId === agentId &&
-          normalizeSessionOriginGroup(session.originGroup) === normalizeSessionOriginGroup(originGroup)
+          normalizeSessionOriginRef(session.originRef) === normalizeSessionOriginRef(originRef)
       ) ?? null
     )
   }

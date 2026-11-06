@@ -183,7 +183,7 @@ describe('agent platform services', () => {
     expect(optionsSeen).toContainEqual({ activeSelectionRowOnly: true })
   })
 
-  it('finds an automation session by its group through the narrow adapter', async () => {
+  it('finds an automation session by its run key through the narrow adapter', async () => {
     let state: AgentStoreState = createAgentStoreState({ agents: [agent], workspaces: [workspace] })
     const store: AgentPlatformStateStore = {
       getState: async () => {
@@ -198,28 +198,28 @@ describe('agent platform services', () => {
         return state
       }
     }
-    const found = { ...session, id: 'session-from-adapter', originGroup: 'market-analysis-run:run-7' }
+    const found = { ...session, id: 'session-from-adapter', originRef: 'market-analysis-run:run-7' }
     const services = createAgentPlatformServices(store, {
       queries: {
         sessions: {
           listByCursor: () => ({ items: [] }),
-          findByAutomationGroup: (agentId, originGroup) =>
-            agentId === agent.id && originGroup === found.originGroup ? found : null
+          findByAutomationRef: (agentId, originRef) =>
+            agentId === agent.id && originRef === found.originRef ? found : null
         }
       }
     })
 
-    await expect(services.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:run-7')).resolves.toMatchObject({
+    await expect(services.sessions.findByAutomationRef(agent.id, 'market-analysis-run:run-7')).resolves.toMatchObject({
       id: 'session-from-adapter'
     })
-    await expect(services.sessions.findByAutomationGroup(agent.id, 'missing')).resolves.toBeNull()
+    await expect(services.sessions.findByAutomationRef(agent.id, 'missing')).resolves.toBeNull()
   })
 
   it('falls back to the store when no narrow adapter is wired', async () => {
     // 内存存储/测试桩没有窄查询；这时只能力所能及地扫一遍——组合根必须装上适配器，否则这条就是两千行的老路。
     const state: AgentStoreState = createAgentStoreState({
       agents: [agent],
-      sessions: [{ ...session, originGroup: 'market-analysis-run:run-8' }],
+      sessions: [{ ...session, originRef: 'market-analysis-run:run-8' }],
       workspaces: [workspace]
     })
     // 这条只读，不需要写回：给它一个不可变的状态源，写操作直接拒绝。
@@ -234,7 +234,7 @@ describe('agent platform services', () => {
     }
     const services = createAgentPlatformServices(store)
 
-    await expect(services.sessions.findByAutomationGroup(agent.id, 'market-analysis-run:run-8')).resolves.toMatchObject({
+    await expect(services.sessions.findByAutomationRef(agent.id, 'market-analysis-run:run-8')).resolves.toMatchObject({
       id: session.id
     })
   })

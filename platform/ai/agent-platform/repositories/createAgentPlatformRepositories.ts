@@ -2,7 +2,7 @@ import type { AgentEntity } from '../schemas/agentSchemas'
 import type { AgentChannelEntity } from '../schemas/channelSchemas'
 import { stripQuietRuntimeControlParts } from '../schemas/messageDataHelpers'
 import type { McpRuntimeStatus, McpServerEntity } from '../schemas/mcpServerSchemas'
-import { normalizeSessionOrigin, normalizeSessionOriginGroup } from '../schemas/sessionSchemas'
+import { normalizeSessionOrigin, normalizeSessionOriginGroup, normalizeSessionOriginRef } from '../schemas/sessionSchemas'
 import type {
   AgentSessionMessagesListQuery,
   AgentSessionEntity,
@@ -105,6 +105,7 @@ type SessionRow = {
   allowed_tools_json: string
   origin: string | null
   origin_group: string | null
+  origin_ref: string | null
   created_at: string
   updated_at: string
 }
@@ -468,8 +469,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     },
     upsert(entity: AgentSessionEntity): void {
       db.prepare(
-        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(id) do update set
            agent_id = excluded.agent_id,
            name = excluded.name,
@@ -480,6 +481,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
            allowed_tools_json = excluded.allowed_tools_json,
            origin = excluded.origin,
            origin_group = excluded.origin_group,
+           origin_ref = excluded.origin_ref,
            created_at = excluded.created_at,
            updated_at = excluded.updated_at`
       ).run(
@@ -493,6 +495,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         JSON.stringify(normalizeSessionAllowedTools(entity.allowedTools)),
         normalizeSessionOrigin(entity.origin),
         normalizeSessionOriginGroup(entity.originGroup) ?? null,
+        normalizeSessionOriginRef(entity.originRef) ?? null,
         entity.createdAt,
         entity.updatedAt
       )
@@ -500,7 +503,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     listAll(workspacesById: ReadonlyMap<string, AgentWorkspaceEntity>): AgentSessionEntity[] {
       return db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at
            from agent_sessions
            order by order_key asc, id asc`
         )
@@ -513,29 +516,29 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         })
     },
     /**
-     * 窄查询：按「智能体 + 自动会话分组名」取一条会话（幂等键）。
+     * 窄查询：按「智能体 + **幂等键**」取一条会话。
      *
-     * **键是 `origin_group`，不是 `description`**：描述是给人看的自由文本，它可选、可被
-     * `UpdateAgentSessionDto` 改、而且种子里的内置会话按语言各存一份——拿它当身份，
-     * 切一次语言或改一次描述就等于换了一条会话，幂等会静默失效。
-     * `originGroup` 只在创建时由调用方写入、平台不解释、也没有任何更新路径能改它。
+     * 键是 `origin_ref`（这一次运行），不是 `origin_group`（这一个类别），也不是 `description`：
+     * - `origin_group` 是侧栏分组的键：拿它当幂等键，每次运行都会变成侧栏里的一个独立分组；
+     * - `description` 是给人看的自由文本（可选、可改、种子会话按语言各存一份），拿它当身份，
+     *   改一句话就等于换了一条会话。
      *
-     * 命中多条时**不许静默取最旧**：两条同组说明数据已经不一致，这时要吵一声，
-     * 因为悄悄挑一条继续跑，会把「建重复了」这件事一直藏下去。
+     * 命中多条时**不许静默取最旧**：两条同键说明数据已经不一致，要吵一声——悄悄挑一条继续跑，
+     * 会把「建重复了」这件事一直藏下去。
      */
-    findByAutomationGroup(agentId: string, originGroup: string): AgentSessionEntity | null {
+    findByAutomationRef(agentId: string, originRef: string): AgentSessionEntity | null {
       const rows = db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, origin, origin_group, origin_ref, created_at, updated_at
            from agent_sessions
-           where agent_id = ? and origin_group = ?
+           where agent_id = ? and origin_ref = ?
            order by created_at asc, id asc
            limit 2`
         )
-        .all(agentId, originGroup) as SessionRow[]
+        .all(agentId, normalizeSessionOriginRef(originRef) ?? '') as SessionRow[]
       if (rows.length > 1) {
         throw new Error(
-          `duplicate automation sessions for group "${originGroup}" on agent "${agentId}": ${rows.map((row) => row.id).join(', ')}`
+          `duplicate automation sessions for ref "${originRef}" on agent "${agentId}": ${rows.map((row) => row.id).join(', ')}`
         )
       }
       const row = rows[0]
@@ -2219,6 +2222,9 @@ function mapSessionEntity(row: SessionRow, workspace: AgentWorkspaceEntity): Age
     ...(normalizeSessionOriginGroup(row.origin_group) === undefined
       ? {}
       : { originGroup: normalizeSessionOriginGroup(row.origin_group) }),
+    ...(normalizeSessionOriginRef(row.origin_ref) === undefined
+      ? {}
+      : { originRef: normalizeSessionOriginRef(row.origin_ref) }),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
