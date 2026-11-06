@@ -41,3 +41,26 @@ export function decideUpstreamRetry(input: Readonly<{
   }
   return { retry: true }
 }
+
+/**
+ * Waits out the backoff, or gives up the moment the run is cancelled.
+ *
+ * A plain `setTimeout` would keep the process waiting after the reader closed the window or the task
+ * was cancelled, and then spend one more call on a request nobody wants — the cost of a retry paid
+ * for a result that will be thrown away. So the wait races the abort signal, and a cancelled run
+ * never reaches the second call.
+ */
+export function waitForRetry(backoffMs: number, signal: AbortSignal): Promise<'retry' | 'cancelled'> {
+  if (signal.aborted) return Promise.resolve('cancelled')
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve('retry')
+    }, backoffMs)
+    function onAbort(): void {
+      clearTimeout(timer)
+      resolve('cancelled')
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
