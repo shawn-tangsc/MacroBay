@@ -314,6 +314,19 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     async listPeriodRuns(from, to) {
       return statements.listPeriodRuns(from, to)
     },
+    async listAttemptRuns(from, to) {
+      // 旧表没有 `period_id` 列：那一代一天一语言一版，没有"某一期跑了没跑"这回事。
+      if (!tableColumns(db, 'daily_briefing_attempts').includes('period_id')) return Object.freeze([])
+      const rows = db.prepare(`select edition_date, period_id, locale, state from daily_briefing_attempts
+        where edition_date between ? and ? order by edition_date asc, period_id asc, locale asc`)
+        .all(from, to) as Array<Record<string, unknown>>
+      return Object.freeze(rows.map((row) => Object.freeze({
+        date: String(row.edition_date),
+        periodId: String(row.period_id),
+        locale: String(row.locale) as 'zh-CN' | 'en-US',
+        state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const
+      })))
+    },
     async openPeriodRun(run) {
       statements.openPeriodRun(run)
     },

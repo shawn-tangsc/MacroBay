@@ -47,7 +47,13 @@ type RailSourceKind = 'scheduled' | 'manual' | 'catch-up' | 'not-run' | 'failed'
 function sourceKindOf(edition: DailyBriefingEditionSummary): RailSourceKind {
   if (edition.state === 'missing') {
     // An interrupted run did start, so it is neither "failed" nor "never ran": line two says which.
-    return runReasonOf(edition) === 'run-interrupted' ? 'not-run' : edition.attemptCount ? 'failed' : 'not-run'
+    // 第二行说"这次没生成出来"的那一行，第一行必须是「这次失败」——同一行里把一个**跑过并失败**的
+    // 期说成「未运行」，读者会以为它压根没被触发（用户 2026-11-06 就是照这一行来问的）。
+    // 判据取运行记录自己的结论，不取"这一版语言下有几条 attempt"：一期可能只跑了英文那一版。
+    const reason = runReasonOf(edition)
+    if (reason === 'run-interrupted') return 'not-run'
+    if (reason === 'run-failed' || edition.attemptCount) return 'failed'
+    return 'not-run'
   }
   if (edition.periodKind === 'manual') return 'manual'
   if (edition.runTrigger === 'catch-up' || edition.runTrigger === 'retry') return 'catch-up'
@@ -323,8 +329,9 @@ export function DailyBriefingHistoryRail({
                   {/* 一行一期一种语言，所以只有这一枚；它不是可切的东西，只是这一行的语言标识。 */}
                   {/* 语言标签贴行右端：它与来源徽标之间不再有 `·`——两者天各一方，中间那段弹性留白
                       就是右对齐本身（`02` v2.43）。 */}
-                  {missing ? null
-                    : <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>}
+                  {/* 语言徽标每一行都有，包括还没有正文的那一行：一行就是"一期 + 一种语言"，
+                      失败的那次跑的是英文，这一行就该说英文（用户 2026-11-06 问的正是这个）。 */}
+                  <span className="mi-daily-briefing__rail-lang" data-edition-locale={edition.locale}>{text.history.languages[edition.locale] ?? edition.locale}</span>
                 </span>
                 {/* 第二行：这一份在讲什么。标题给全文，裁剪交给 CSS；悬停给完整的一句。
                     没有正文的那两行写**为什么没有**——空行会被读成"还在加载"。 */}
@@ -356,6 +363,7 @@ export function DailyBriefingHistoryRail({
                     void onRegeneratePeriod?.({
                       date: edition.date,
                       periodId: edition.periodId,
+                      // 这一行自己的语言：失败的是英文那一版，重试也重试英文。
                       locale: edition.locale,
                       // 这一行自己的截止与窗口：手动期的 periodTime 就是读者当初选的时刻。
                       ...(edition.periodTime === undefined
@@ -423,6 +431,7 @@ export function DailyBriefingHistoryRail({
 function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
   return (edition.languages ?? []).find((language) => language.reason !== undefined)?.reason
 }
+
 
 /**
  * 没有正文的那一行，第二行写的是**为什么没有**——空行会被读成"还在加载"。

@@ -90,8 +90,9 @@ describe('daily briefing history rail', () => {
     expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-run')
     expect(row.querySelector('[data-run-source]')?.textContent).toBe(text.history.missingRun)
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railNotRun)
-    // 没有版次就没有语言标签，也不画方向点。
-    expect(row.querySelector('[data-edition-locale]')).toBeNull()
+    // 语言标签照标（这一行属于哪种语言），但没有版次就不画方向点。
+    // 用户 2026-11-06：失败/没跑的那一行也要能看出是哪一种语言，否则英文那版失败看着像中文版。
+    expect(row.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('zh-CN')
     expect(row.querySelector('i[data-direction]')).toBeNull()
     // 没结论的那一行画一个灰点，词只在可读名字里。默认只展开今天，先点开那一天。
     const pastHead = [...host.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing__rail-day-head')]
@@ -118,7 +119,8 @@ describe('daily briefing history rail', () => {
         .find((node) => node.closest('.mi-daily-briefing__rail-day')?.getAttribute('data-day') === date)!
       act(() => head.click())
     }
-    expect(chips()).toHaveLength(3)
+    // 没有版次的那一行也带自己的语言标签：一行就是"一期 + 一种语言"。
+    expect(chips()).toHaveLength(4)
     const heads = [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-day-count')].map((node) => node.textContent)
     expect(heads).toEqual(['共 1 期', '共 1 期', '共 1 期', '共 1 期'])
     // A day without an edition has no language to name.
@@ -187,11 +189,13 @@ describe('daily briefing history rail', () => {
     expect(host.querySelectorAll('.mi-daily-briefing__rail-row')).toHaveLength(1)
   })
 
-  it('marks the language on the row itself, and only where an edition exists', () => {
+  it('marks the language on every row, including a row that has no edition yet', () => {
     render({ editions: [edition()] })
     expect(host.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('zh-CN')
+    // 失败或还在跑的那一行同样有语言：读者要能看出"这次跑的是哪一种语言"。
     render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
-    expect(host.querySelectorAll('[data-edition-locale]')).toHaveLength(0)
+    expect(host.querySelectorAll('[data-edition-locale]')).toHaveLength(1)
+    expect(host.querySelector('[data-edition-locale]')?.getAttribute('data-edition-locale')).toBe('zh-CN')
   })
 
   it('keeps readings and gaps off the row entirely', () => {
@@ -211,9 +215,16 @@ describe('daily briefing history rail', () => {
   })
 
   it('offers no edition menu on a row that has no edition to delete', () => {
-    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })] })
-    // 没有版次就没有那一枚语言徽标，版次级菜单也就无从打开——不给读者一个"没有可删的版本"的空项。
-    expect(host.querySelector('[data-edition-locale]')).toBeNull()
+    // 语言徽标照标（它说的是这一行属于哪种语言，不是"有版次"），但版次级菜单不许出现——
+    // 不给读者一个"没有可删的版本"的空项。
+    const onDeletePeriod = vi.fn()
+    render({ editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })], onDeletePeriod })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 1, clientY: 1 }))
+    })
+    expect(document.querySelector('[data-delete-period]')).toBeNull()
+    expect(onDeletePeriod).not.toHaveBeenCalled()
   })
 
   it('keeps a partial issue a data state, not a chip on the row', () => {
@@ -576,6 +587,40 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railFailedReason)
     expect(row.textContent).not.toContain(text.history.railNoTitle)
     expect(host.querySelector('[data-rail-retry]')).not.toBeNull()
+  })
+
+  // 用户 2026-11-06 举着截图问「这个 07:00 未运行是啥意思」：那一行其实是 18:11 一次**英文手动期**
+  // 失败，界面语言是中文，于是按中文数 attempt 是 0，被判成「未运行」，第二行却又写着「这次没生成出来」。
+  // 同一行里这两句不能同时成立：跑过并失败就是失败。
+  it('calls a row failed when its run failed, even if the shown language has no attempt of its own', () => {
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        languages: [{ locale: 'en-US', state: 'missing', reason: 'run-failed' }]
+      })]
+    })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('failed')
+    expect(row.textContent).toContain(text.history.runFailed)
+    expect(row.textContent).not.toContain(text.history.missingRun)
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railFailedReason)
+  })
+
+  it('keeps a row that never ran saying so, with no "this time it did not come out"', () => {
+    // 从没跑过的那一行（有排期、没触发、没记录）：只说没跑过，带上它自己的计划时刻。
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        scheduledTime: '07:00',
+        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'not-published' }]
+      })]
+    })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    expect(row.querySelector('[data-run-source]')?.getAttribute('data-run-source')).toBe('not-run')
+    expect(row.textContent).toContain(text.history.missingRun)
+    expect(row.textContent).toContain('07:00')
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.railNotRun)
+    expect(row.textContent).not.toContain(text.history.railFailedReason)
   })
 
   // #9：行内「重试」以前只交期号与语言，手动期没有期配置可依据，重跑会落回排期时刻。

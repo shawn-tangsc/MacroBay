@@ -39,12 +39,33 @@ export function briefingRailDates(input: Readonly<{
     .reverse())
 }
 
+/**
+ * 某一期的计划生成时刻，按期为键。
+ *
+ * 手动期是随机 UUID、配置表里没有行：它**没有**计划时刻，不许借用默认期那个 07:00——用户
+ * 2026-11-06 看到的「07:00 未运行」就是一次 18:11 的英文手动期失败被贴上了借来的时钟。
+ */
+export function briefingScheduledTimeFor(
+  periods: readonly Readonly<{ id: string; generationTime: string }>[],
+  defaultGenerationTime: string
+): (periodId: string) => string | undefined {
+  return (periodId) => periods.find((period) => period.id === periodId)?.generationTime
+    ?? (periodId === DEFAULT_PERIOD_ID ? defaultGenerationTime : undefined)
+}
+
 export async function readBriefingHistory(input: Readonly<{
-  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'> & Pick<Partial<DailyBriefingStore>, 'listPeriodRuns'>
+  store: Pick<DailyBriefingStore, 'list' | 'getPeriodRun' | 'listAttempts'> & Pick<Partial<DailyBriefingStore>, 'listPeriodRuns' | 'listAttemptRuns'>
   locale: DailyBriefingLocale
   today: string
   retentionDays: number
-  scheduledTime: string
+  /**
+   * 这一期的**计划生成时刻**，按期为键。
+   *
+   * 不给一个全局值：某个期根本没有排期（手动期就是随机 UUID、配置表里没有行），它的行就没有计划
+   * 时刻，而不是借用默认期那个 07:00（用户 2026-11-06 看到的「07:00 未运行」就是借来的时钟，
+   * 那一行其实是一次 18:11 的英文手动期失败）。
+   */
+  scheduledTime: (periodId: string) => string | undefined
   /** Whether the period still has a configuration row; absent means the caller cannot tell. */
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   /** The periods actually running right now, from the process's live registry — not the stored run. */
@@ -60,10 +81,11 @@ export async function readBriefingHistory(input: Readonly<{
   const from = dates[0]!
   const to = dates[dates.length - 1]!
   const [primary, otherLocale] = input.locale === 'zh-CN' ? ['zh-CN', 'en-US'] as const : ['en-US', 'zh-CN'] as const
-  const [primaryRows, otherRows, runs] = await Promise.all([
+  const [primaryRows, otherRows, runs, attemptRuns] = await Promise.all([
     input.store.list(from, to, primary).catch(() => []),
     input.store.list(from, to, otherLocale).catch(() => []),
-    readPeriodRuns(input.store, from, to)
+    readPeriodRuns(input.store, from, to),
+    input.store.listAttemptRuns ? input.store.listAttemptRuns(from, to).catch(() => []) : Promise.resolve([])
   ])
   const editions = await briefingHistorySummaries({
     dates,
@@ -71,6 +93,7 @@ export async function readBriefingHistory(input: Readonly<{
     primaryRows,
     otherRows,
     runs,
+    attemptRuns,
     periodRun: (date, periodId) => input.store.getPeriodRun?.(date, periodId),
     attemptCount: (date, periodId, locale) => {
       const read = input.store.listAttempts
@@ -108,6 +131,10 @@ type PeriodRows = Readonly<{
   date: string
   periodId: string
   rows: ReadonlyMap<DailyBriefingLocale, DailyBriefingStoredEdition>
+  /** 这一期没有版次时，行属于哪些语言；缺省用界面语言。 */
+  locales?: readonly DailyBriefingLocale[]
+  /** 只留下过失败 attempt、没有运行记录：原因照样是"这次失败"。 */
+  attemptFailed?: boolean
 }>
 
 /**
@@ -125,9 +152,11 @@ export async function briefingHistorySummaries(input: Readonly<{
   otherRows: readonly DailyBriefingStoredEdition[]
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
-  scheduledTime?: string
+  scheduledTime?: (periodId: string) => string | undefined
   /** Runs of the window; a run with no edition row is the only trace some periods leave. */
   runs?: readonly DailyBriefingPeriodRun[]
+  /** Attempt rows of the window: a run that has not written its journal yet is still a row. */
+  attemptRuns?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; state: 'running' | 'succeeded' | 'failed' }>[]
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
@@ -164,7 +193,20 @@ export async function briefingHistorySummaries(input: Readonly<{
     for (const [periodId, run] of runsToday) {
       if (known.has(periodId)) continue
       if (run.state !== 'failed' && run.state !== 'running') continue
-      periods.push({ date, periodId, rows: new Map() })
+      known.add(periodId)
+      // 这一行属于**它自己的语言**，不是界面语言：英文那一期失败，就要有一行英文，语言徽标也标英文
+      // （用户 2026-11-06：18:11 那次英文失败在中日文界面下看不见）。
+      periods.push({ date, periodId, rows: new Map(), ...(run.expectedLocales.length > 0 ? { locales: run.expectedLocales } : {}) })
+    }
+    // 只要**开始跑**过就要有一行（用户 2026-11-06）：attempt 在开工前就写了，比运行记录还早一步。
+    // 一次跑在冻结事实之前就挂掉时，只有 attempt、没有运行记录、更没有版次——那一行也不许消失。
+    for (const attempt of input.attemptRuns ?? []) {
+      if (attempt.date !== date || known.has(attempt.periodId)) continue
+      known.add(attempt.periodId)
+      periods.push({
+        date, periodId: attempt.periodId, rows: new Map(), locales: [attempt.locale],
+        ...(attempt.state === 'failed' ? { attemptFailed: true } : {})
+      })
     }
 
     const day: DailyBriefingEditionSummary[] = []
@@ -213,7 +255,7 @@ async function summariesOfPeriod(
   input: Parameters<typeof summaryOfLocale>[1],
   knownRun?: DailyBriefingPeriodRun
 ): Promise<readonly DailyBriefingEditionSummary[]> {
-  const locales = period.rows.size === 0 ? [input.primary] : [...period.rows.keys()]
+  const locales = period.rows.size === 0 ? (period.locales && period.locales.length > 0 ? period.locales : [input.primary]) : [...period.rows.keys()]
   const rows: DailyBriefingEditionSummary[] = []
   for (const locale of locales) rows.push(await summaryOfLocale(period, { ...input, primary: locale }, knownRun))
   return rows
@@ -223,7 +265,7 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
   primary: DailyBriefingLocale
   periodRun?: (date: string, periodId: string) => Promise<DailyBriefingPeriodRun | undefined> | undefined
   attemptCount?: (date: string, periodId: string, locale: DailyBriefingLocale) => Promise<number>
-  scheduledTime?: string
+  scheduledTime?: (periodId: string) => string | undefined
   periodPresence?: (periodId: string) => DailyBriefingPeriodPresence | Promise<DailyBriefingPeriodPresence>
   isRunning?: (date: string, periodId: string) => boolean
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
@@ -279,11 +321,11 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     ...summary,
     languages: languagesOf(availableLocales, run, {
       running: input.isRunning ? input.isRunning(date, periodId) : false,
-      configured: input.configuredLanguages ? input.configuredLanguages(periodId) : undefined
-    }),
+      configured: input.configuredLanguages ? input.configuredLanguages(periodId) : period.locales
+    }, period.attemptFailed),
     ...(expectedLocales ? { expectedLocales } : {}),
     ...(attempts === undefined ? {} : { attemptCount: attempts }),
-    ...(input.scheduledTime ? { scheduledTime: input.scheduledTime } : {}),
+    ...(input.scheduledTime?.(periodId) ? { scheduledTime: input.scheduledTime(periodId)! } : {}),
     // Only a configuration known to be gone marks the row; "could not read it" is not "deleted".
     ...(presence === 'absent' ? { periodDeleted: true } : {}),
     // "Missing one version" only describes an issue that still has a version to compare with.
@@ -323,7 +365,8 @@ function identityOf(row: DailyBriefingStoredEdition | undefined): Readonly<{
 function languagesOf(
   publishedLocales: readonly DailyBriefingLocale[],
   run: DailyBriefingPeriodRun | undefined,
-  live: Readonly<{ running: boolean; configured: readonly DailyBriefingLocale[] | undefined }>
+  live: Readonly<{ running: boolean; configured: readonly DailyBriefingLocale[] | undefined }>,
+  attemptFailed?: boolean
 ): readonly DailyBriefingEditionLanguage[] {
   const published = new Set(publishedLocales)
   // The union of what published, what this run meant to publish, and (once configuration is the
@@ -345,7 +388,10 @@ function languagesOf(
     return Object.freeze({
       locale,
       state: 'missing' as const,
-      reason: interrupted ? 'run-interrupted' as const : run?.state === 'failed' ? 'run-failed' as const : 'not-published' as const
+      reason: interrupted
+        ? 'run-interrupted' as const
+        : run?.state === 'failed' || attemptFailed ? 'run-failed' as const
+        : 'not-published' as const
     })
   })
 }

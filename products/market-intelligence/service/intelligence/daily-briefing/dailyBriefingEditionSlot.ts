@@ -28,3 +28,21 @@ export async function briefingEditionSlotPeriodId(
   const occupant = await store.editionAtCutoff?.(input.date, input.locale, input.asOf).catch(() => undefined)
   return occupant === undefined ? input.periodId : occupant.periodId
 }
+
+/** 一次跑最早留下的痕迹：开工前写下的 attempt 行。 */
+export type BriefingAttemptRun = Readonly<{
+  date: string
+  periodId: string
+  locale: DailyBriefingLocale
+  state: 'running' | 'succeeded' | 'failed'
+}>
+
+/**
+ * 窗口内的 attempt 行，按日期从早到晚。
+ *
+ * 列表按**运行**建行：一次跑在开工前就写下 attempt，所以哪怕它还没冻住事实、没来得及建运行记录、
+ * 更没有版次，这一行也必须出现（用户 2026-11-06：只要开始跑了就要留在 list 里）。
+ */
+export type BriefingAttemptRunStore = Readonly<{
+  listAttemptRuns?: (from: string, to: string) => Promise<readonly BriefingAttemptRun[]>
+}>

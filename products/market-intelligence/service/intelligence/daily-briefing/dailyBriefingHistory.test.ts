@@ -54,6 +54,44 @@ describe('history rows take incompleteness from the run', () => {
     expect(summary?.state).toBe('generated')
   })
 
+  it('keeps a row for a run that already started, even before its journal exists', async () => {
+    // 用户 2026-11-06：只要开始跑了就要留在 list 里。attempt 在开工前就写下了，比运行记录早一步——
+    // 一次跑在冻结事实之前就挂掉时，只有 attempt、没有运行记录、也没有版次，这一行同样必须在。
+    const listed = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      attemptRuns: [{ date: '2026-11-02', periodId: '0faa8e15', locale: 'en-US', state: 'failed' }],
+      scheduledTime: () => undefined
+    })
+    expect(listed).toHaveLength(1)
+    // 这一行属于**它自己的语言**：英文那一期失败，就是一行英文，不是中文那一版没生成。
+    expect(listed[0]).toMatchObject({ date: '2026-11-02', periodId: '0faa8e15', locale: 'en-US', state: 'missing' })
+    expect(listed[0]?.languages).toEqual([{ locale: 'en-US', state: 'missing', reason: 'run-failed' }])
+    // 没有正文就没有正文派生量，也没有借来的计划时刻。
+    expect(listed[0]?.generatedAt).toBeUndefined()
+    expect(listed[0]?.scheduledTime).toBeUndefined()
+  })
+
+  it('does not split one run into two rows once it publishes', async () => {
+    // 失败后重试成功：仍是同一 (日期, 期号, 语言) 的一行，状态从"没有正文"变成版次行。
+    const retried = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN',
+      primaryRows: [edition('zh-CN')], otherRows: [],
+      attemptRuns: [{ date: '2026-11-02', periodId: 'default', locale: 'zh-CN', state: 'succeeded' }],
+      periodRun: vi.fn(async () => ({ ...run(['zh-CN']), state: 'published' as const })),
+      scheduledTime: () => '07:00'
+    })
+    expect(retried).toHaveLength(1)
+    expect(retried[0]).toMatchObject({ periodId: 'default', locale: 'zh-CN', state: 'generated' })
+  })
+
+  it('still makes no row for a period that never ran', async () => {
+    const listed = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      attemptRuns: [], scheduledTime: () => '07:00'
+    })
+    expect(listed).toHaveLength(0)
+  })
+
   it('shows no row at all for a run whose editions were all deleted', async () => {
     // 用户 2026-11-05 拍板：跑成功却没有版次 = 那一版被删了 → **整行不显示**，不解释也不留位。
     // 旧行为留一行"未运行"，读者看到的是"没跑过"，跟他刚删过的那件事对不上。
@@ -65,7 +103,7 @@ describe('history rows take incompleteness from the run', () => {
       runs: [{ ...run(['zh-CN', 'en-US']), state: 'published' as const }],
       periodRun: vi.fn(async () => ({ ...run(['zh-CN', 'en-US']), state: 'published' as const })),
       attemptCount: vi.fn(async () => 5),
-      scheduledTime: '07:00'
+      scheduledTime: () => '07:00'
     })
 
     expect(listed).toHaveLength(0)
@@ -283,6 +321,28 @@ describe('a run that wrote no edition still gets a row', () => {
       ...(isRunning ? { isRunning } : {})
     })
 
+  it('gives a row its own period\'s planned time, and no planned time to a period that has no schedule', async () => {
+    // 用户 2026-11-06 看到的「07:00 未运行」：那是一期 18:11 失败的英文手动期，却被贴上了默认期的
+    // 计划时刻。计划时刻只属于**有排期的期**，手动期（UUID、配置表里没有行）没有。
+    const at = '2026-11-02T00:00:00.000Z'
+    const scheduled = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      runs: [{ ...run(['zh-CN']), periodId: 'default', state: 'failed' as const, startedAt: at }],
+      scheduledTime: (periodId) => periodId === 'default' ? '07:00' : undefined
+    })
+    expect(scheduled[0]?.scheduledTime).toBe('07:00')
+
+    const manual = await briefingHistorySummaries({
+      dates: ['2026-11-02'], primary: 'zh-CN', primaryRows: [], otherRows: [],
+      runs: [{ ...run(['en-US']), periodId: 'period_manual_uuid', state: 'failed' as const, startedAt: at }],
+      scheduledTime: (periodId) => periodId === 'default' ? '07:00' : undefined
+    })
+    // 没有计划时刻，就没有那枚借来的时钟；"这次失败"由原因自己说。
+    expect(manual[0]?.scheduledTime).toBeUndefined()
+    // 语言标签说它当时想写哪一种（英文那版），不是界面语言：这一期没写中文版，不许假装有。
+    expect(manual[0]?.languages).toEqual([{ locale: 'en-US', state: 'missing', reason: 'run-failed' }])
+  })
+
   it('shows a failed run with a reason, and no body-derived number on the row', async () => {
     const [summary] = await onlyRuns([emptyDayRun('failed')])
     expect(summary).toMatchObject({ periodId: 'period_crash', state: 'missing' })
@@ -377,7 +437,7 @@ describe('the history window never cuts off a day that has an edition', () => {
   it('keeps a day filed after "today" and shows its edition', async () => {
     const fixture = store([edition('zh-CN', '2026-11-06')])
     const listed = await readBriefingHistory({
-      store: fixture, locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: '07:00'
+      store: fixture, locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: () => '07:00'
     })
     expect(listed.editions.map((summary) => summary.date)).toContain('2026-11-06')
     expect(listed.dates).toContain('2026-11-06')
@@ -390,7 +450,7 @@ describe('the history window never cuts off a day that has an edition', () => {
     // 多问的那一天只在**有东西**时出现；否则列表每天凭空多一行空日子。
     const listed = await readBriefingHistory({
       store: store([edition('zh-CN', '2026-11-05')]),
-      locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: '07:00'
+      locale: 'zh-CN', today: '2026-11-05', retentionDays: 14, scheduledTime: () => '07:00'
     })
     expect(listed.dates).not.toContain('2026-11-06')
     expect(listed.dates).toContain('2026-11-05')

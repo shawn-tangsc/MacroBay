@@ -41,9 +41,9 @@ import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from 
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
-import { readBriefingHistory } from './dailyBriefingHistory'
+import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
 import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
-import { briefingEditionSlotPeriodId, type BriefingEditionSlotStore } from './dailyBriefingEditionSlot'
+import { briefingEditionSlotPeriodId, type BriefingAttemptRunStore, type BriefingEditionSlotStore } from './dailyBriefingEditionSlot'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
@@ -129,7 +129,7 @@ export type DailyBriefingStorageSurface = Readonly<{
   retryUpgrade: () => Promise<DailyBriefingStorageState>
 }>
 
-export type DailyBriefingStore = BriefingEditionSlotStore & Readonly<{
+export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunStore & Readonly<{
   /** `periodId` defaults to the single issue `default`, so existing callers read their row. */
   get: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<DailyBriefingStoredEdition | undefined>
   /** 哪个期已经占住 (日期, 截止, 语言) 这个槽（见 `briefingEditionSlotPeriodId`）。 */
@@ -656,7 +656,7 @@ export function createDailyBriefingService(deps: Readonly<{
       locale: input.locale,
       today: window.date,
       retentionDays: dailyBriefingPolicy.retentionDays,
-      scheduledTime: schedule.generationTime,
+      scheduledTime: briefingScheduledTimeFor(await (deps.readPeriods?.().catch(() => []) ?? Promise.resolve([])), schedule.generationTime),
       // "Generating" is a live fact: the stored run row outlives the process that wrote it.
       isRunning: (date, periodId) => [...runs.progress.keys()].some((key) => key.startsWith(`${date}:${periodId}:`))
     })
