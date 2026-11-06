@@ -155,6 +155,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const triggerPolicy = createAnalysisTriggerPolicy()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
+    // 原文存档：每次模型调用一行，提示词在调用前落盘、回答在回来后回填。存储那半在
+    // `repository.analysisIo`，这里只是把它交给编排器，不另开一条写路径。
+    ...(repository.analysisIo ? { analysisIo: repository.analysisIo } : {}),
     timeZone,
     structuredModelInvocation: input.structuredModelInvocation,
     now,
