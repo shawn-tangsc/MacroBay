@@ -83,6 +83,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.205",
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/resources": "^2.9.0",
     "@opentelemetry/sdk-trace-base": "^2.2.0",
     "grammy": "^1.44.0",
     "html-to-image": "^1.11.13",

@@ -1,4 +1,4 @@
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentOtlpBridgeService } from './AgentOtlpBridgeService'
@@ -144,6 +144,47 @@ describe('AgentTraceExporterFactory', () => {
     )
     expect(remoteBundle.bridge).toBeNull()
     await remoteBundle.dispose()
+  })
+
+  it('sends the service name on the resource and no local path in the payload', async () => {
+    // 用户报的那条：默认资源把 `unknown_service:<进程完整路径>` 当名字发了出去。
+    // 这里断的是**整份序列化后的报文**，不是某个字段。
+    const bodies: string[] = []
+    const fetchImpl = vi.fn(async (_url: string, init: { body: Uint8Array }) => {
+      bodies.push(gunzipSync(Buffer.from(init.body)).toString('utf8'))
+      return new Response('{}', { status: 200 })
+    })
+    const bundle = await createAgentTraceExporterBundle(
+      {
+        exporterMode: 'remote-otlp',
+        remoteEndpoint: 'https://collector.example/v1/traces',
+        includePrompts: false,
+        includeToolContent: false
+      },
+      { fetch: fetchImpl as unknown as typeof fetch }
+    )
+
+    const span = bundle.recorder.startSpan({
+      operation: 'send-message',
+      traceId: 'trace-1',
+      agentId: 'agent-1',
+      agentType: 'claude-code',
+      sessionId: 'session-1',
+      runId: null,
+      parentResumeToken: null,
+      startedAt: '2026-01-01T00:00:00.000Z'
+    })!
+    span.end({ status: 'success', endedAt: '2026-01-01T00:00:01.000Z', stopReason: null, resumeToken: null })
+    await bundle.dispose()
+
+    expect(bodies).toHaveLength(1)
+    const payload = JSON.parse(bodies[0]!) as {
+      resourceSpans: Array<{ resource: { attributes: Array<{ key: string; value: { stringValue?: string } }> } }>
+    }
+    const attributes = payload.resourceSpans[0]!.resource.attributes
+    expect(attributes.find((item) => item.key === 'service.name')?.value.stringValue).toBe('desktop-agent-runtime')
+    expect(bodies[0]).not.toContain('unknown_service')
+    expect(bodies[0]).not.toMatch(/\/(Users|home)\//)
   })
 
   it('starts a local bridge for local-otlp mode', async () => {
