@@ -112,7 +112,7 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   // 源头没拼完：成品缺语言或某段空串 → **拒收，不落库**（契约 v2.56）。
   // 降级是「发出去了但少一句」，拒收是「根本不该发」；源头没拼完照发，读者拿到的就是半句话。
   if (input.request.rendered !== undefined) {
-    const missing = missingRenderedField(input.request.rendered)
+    const missing = missingRenderedField(input.request.rendered, input.request.edition?.locale)
     if (missing !== undefined) {
       return rejected('copy-missing', `notification event "${entry.id}" submitted incomplete copy: ${missing}`)
     }
@@ -210,9 +210,28 @@ function resolveBodyKey(entry: NotificationEventCatalogEntry, request: Notificat
   return entry.bodyKeyByVariant[variant] ?? null
 }
 
-/** 成品三段、两语言都要非空；返回第一个缺口（给回执与排查用），完整则 `undefined`。 */
-function missingRenderedField(rendered: NonNullable<NotificationSubmitRequest['rendered']>): string | undefined {
-  for (const language of ['zh-CN', 'en-US'] as const) {
+/**
+ * 成品完整性（契约 v2.56 + 首席 2026-11-06 裁定）：
+ *
+ * - **带 `edition.locale`**：只要求**那一份**三段齐全。那一期只有一种语言是合法状态，
+ *   硬凑第二种语言就是「英文成品里塞中文导读」——假齐全，比缺更糟。
+ *   `edition.locale` 不是 `zh-CN`/`en-US` → 拒收（**不许当成「没有 edition」默默走读者语言**，
+ *   那会让一条错数据看着像正常）。
+ * - **不带 `edition`**（信号、宏观、失败、时区）：两语言都要齐，与今天一致。
+ *
+ * 返回第一个缺口（回执与排查都用它），完整则 `undefined`。
+ */
+function missingRenderedField(
+  rendered: NonNullable<NotificationSubmitRequest['rendered']>,
+  editionLocale: string | undefined
+): string | undefined {
+  const requirement: readonly ('zh-CN' | 'en-US')[] = editionLocale === undefined
+    ? ['zh-CN', 'en-US']
+    : editionLocale === 'zh-CN' || editionLocale === 'en-US'
+      ? [editionLocale]
+      : []
+  if (requirement.length === 0) return `edition.locale "${String(editionLocale)}"`
+  for (const language of requirement) {
     const entry = rendered[language]
     if (entry === undefined) return `${language}.title`
     for (const field of ['title', 'body', 'reason'] as const) {

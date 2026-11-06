@@ -79,8 +79,12 @@ export type NotificationPushBackoff = {
  * **动作标签不进来**：那是按钮文案，由界面按 `labelKey` 出。
  */
 export type NotificationContentByLanguage = {
-  'zh-CN': { title: string; body: string; reason: string }
-  'en-US': { title: string; body: string; reason: string }
+  /**
+   * 两种语言**都可缺席**——但至少要有 `edition.locale` 那一份（那一期只有一种语言的例外，
+   * 契约 v2.56）。没有 `edition` 的事件（信号、宏观、失败、时区）**两份都要齐**，由提交期判定把关。
+   */
+  'zh-CN'?: { title: string; body: string; reason: string }
+  'en-US'?: { title: string; body: string; reason: string }
 }
 
 export type NotificationRecord = {

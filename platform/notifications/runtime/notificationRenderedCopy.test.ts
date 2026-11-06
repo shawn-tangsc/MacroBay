@@ -164,7 +164,7 @@ describe('源头没拼完：拒收，不落库', () => {
     return { instance, records: () => state.records }
   }
 
-  it('缺一种语言 → rejected: copy-missing，且一条记录都不写', async () => {
+  it('无 edition 时只交一份 → rejected: copy-missing（老行为没被放松改掉）', async () => {
     const { instance, records } = runtime()
     const outcome = await instance.submit({
       eventTypeId: 'platform.test',
@@ -176,6 +176,76 @@ describe('源头没拼完：拒收，不落库', () => {
     })
 
     expect(outcome).toMatchObject({ kind: 'rejected', reason: 'copy-missing' })
+    expect(records()).toHaveLength(0)
+  })
+
+  it('带 edition.locale 只交那一份 → 通过；英文界面也整条中文', async () => {
+    const { instance, records } = runtime()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.test',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'zh-only' } },
+      rendered: { 'zh-CN': RENDERED['zh-CN'] },
+      edition: { editionId: 'edition-1', locale: 'zh-CN' },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome.kind).toBe('accepted')
+    expect(records()).toHaveLength(1)
+    // 单语言记录读回来仍是单语言（不是在读的时候被丢掉）。
+    expect(records()[0]?.rendered?.['zh-CN']?.title).toBe(RENDERED['zh-CN']?.title)
+    expect(records()[0]?.rendered?.['en-US']).toBeUndefined()
+  })
+
+  it('英文期只交 en-US → 同样通过（放松是对称的，只放开期次语言那一份）', async () => {
+    const { instance, records } = runtime()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.test',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'en-only' } },
+      rendered: { 'en-US': RENDERED['en-US'] },
+      edition: { editionId: 'edition-2', locale: 'en-US' },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome.kind).toBe('accepted')
+    expect(records()[0]?.rendered?.['en-US']?.title).toBe(RENDERED['en-US']?.title)
+    expect(records()[0]?.rendered?.['zh-CN']).toBeUndefined()
+  })
+
+  it('带 edition.locale 但那一份缺段 → copy-missing，且回执点名缺哪个字段', async () => {
+    const { instance, records } = runtime()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.test',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'zh-broken' } },
+      rendered: { 'zh-CN': { title: '标题在', body: '', reason: '原因在' }, 'en-US': RENDERED['en-US'] },
+      edition: { editionId: 'edition-1', locale: 'zh-CN' },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'copy-missing' })
+    expect(JSON.stringify(outcome)).toContain('zh-CN.body')
+    expect(records()).toHaveLength(0)
+  })
+
+  it('edition.locale 不认识 → copy-missing，不许默默当「没有 edition」走读者语言', async () => {
+    const { instance, records } = runtime()
+    const outcome = await instance.submit({
+      eventTypeId: 'platform.test',
+      producerId: 'platform',
+      dedupeVars: { builder: 'template', vars: { id: 'bad-locale' } },
+      rendered: RENDERED,
+      edition: { editionId: 'edition-1', locale: 'ja-JP' },
+      actions: [],
+      occurredAt: '2026-11-06T11:00:00.000Z'
+    })
+
+    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'copy-missing' })
+    expect(JSON.stringify(outcome)).toContain('edition.locale')
     expect(records()).toHaveLength(0)
   })
 })

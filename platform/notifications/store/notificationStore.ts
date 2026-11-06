@@ -239,9 +239,11 @@ function normalizeRendered(value: unknown): NotificationContentByLanguage | unde
     if (title.trim() === '' || body.trim() === '' || reason.trim() === '') return undefined
     return { title, body, reason }
   }
+  // 单语言是**合法状态**（那一期只有一种语言）：有哪种留哪种，一种都没有才算没读到成品。
   const zh = pick('zh-CN')
   const en = pick('en-US')
-  return zh === undefined || en === undefined ? undefined : { 'zh-CN': zh, 'en-US': en }
+  if (zh === undefined && en === undefined) return undefined
+  return { ...(zh === undefined ? {} : { 'zh-CN': zh }), ...(en === undefined ? {} : { 'en-US': en }) }
 }
 
 /** 信号严重度：只认三档闭集（契约 v2.45）。其它值一律当作「没有这个状态」。 */
