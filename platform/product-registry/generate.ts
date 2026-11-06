@@ -94,6 +94,9 @@ export function buildGeneratedProductRegistry(products: readonly DiscoveredProdu
       routePath: toProductRoutePath(product.productId, contribution.id),
       // P2-01：能力默认值只来自平台命名策略（旧贡献缺字段时的唯一补齐点）
       workspace: resolveMenuPageWorkspaceCapability(contribution),
+      // 默认首页：**只有声明过才带上**，未声明时不生成这个键（不是 `home: false`）——
+      // 「没有页声明首页」与「另一页声明了首页」是两个不同的问题，见 `GeneratedProductMenuEntry.home`。
+      ...(contribution.home === true ? { home: true as const } : {}),
       modulePath: contribution.module
     }))
   })
@@ -161,7 +164,7 @@ function renderShellRegistryFile(_products: readonly DiscoveredProduct[], regist
     order: ${entry.order},
     routePath: ${JSON.stringify(entry.routePath)},
     workspace: ${JSON.stringify(entry.workspace)},
-    load: () => import(${JSON.stringify(importPath)})
+${entry.home === true ? '    home: true,\n' : ''}    load: () => import(${JSON.stringify(importPath)})
   }`
     })
     .join(',\n')
