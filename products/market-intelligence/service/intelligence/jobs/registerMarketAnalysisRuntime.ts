@@ -249,6 +249,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       return freezeSnapshot(payload)
     },
     runAnalysis: async (payload, context) => runAnalysis(payload, context),
+    // The job run id only exists once the enqueue answers, so this is the write-back point rather
+    // than the run handler: a queued analysis that never starts must still be reachable from the
+    // run log, which is where a reader looks when a run did not happen.
+    linkAnalysisRunToJob: (analysisRunId, jobRunId) => {
+      repository.linkRunJobRun({ id: analysisRunId, jobRunId })
+    },
     verifyPredictions: async (payload, context) => {
       if (!await isEnabled()) return
       const asOf = readCanonicalAsOf(payload)
@@ -538,6 +544,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const settings = await settingsService.getSettings()
     const model = isMarketAnalysisModelSet(settings) ? { providerId: settings.providerId, modelId: settings.modelId } : null
     const result = runs.enqueue({ eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model })
+    // The attempt row was written before this run existed; now that it does, fill it in. The sweep
+    // that decides whether a queued row is still waiting or was never claimed reads this column, so
+    // leaving it null would make a row that does have a run look abandoned.
+    if (value.attemptLedgerId) {
+      repository.linkTriggerLedgerRun({ id: value.attemptLedgerId, analysisRunId: result.run.id, snapshotHash: snapshot.snapshotHash })
+    }
     return {
       eventGroupId: value.eventGroupId, analysisRunId: result.run.id,
       // Carried to the run job so the prompt can say what triggered this analysis.

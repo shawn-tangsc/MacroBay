@@ -20,6 +20,7 @@ import { canonicalizeMarketAnalysisJson } from '../analysis/analysisHash'
 import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
 import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
 import { createMarketAnalysisSqlite, type MarketAnalysisSqlite } from './marketAnalysisSqlite'
+import { linkRunJobRun as attachRunJobRun, linkTriggerLedgerRun as attachTriggerLedgerRun } from './marketAnalysisRunLinks'
 import {
   fromEventGroup, fromLedger, fromRun, fromSnapshot, fromTimeline, restateAsSkipped,
   stableMergeKey, validateArchiveMetadata, validateEventGroup, validateRun, validateSnapshot,
@@ -334,6 +335,14 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
       const stored = row.evidence_json as string | null
       const evidenceJson = decision === 'skipped' ? restateAsSkipped(stored) : stored
       sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=?, evidence_json=? where id=?').run(decision, reasonCode, evidenceJson, rowId)
+    },
+    // The two write-backs live in `marketAnalysisRunLinks`: each is one statement, and this file's
+    // business is the run row, not the two other rows that must point at it.
+    linkTriggerLedgerRun(value: Readonly<{ id: string; analysisRunId: string; snapshotHash: string }>) {
+      return attachTriggerLedgerRun(sqlite, value)
+    },
+    linkRunJobRun(value: Readonly<{ id: string; jobRunId: string }>) {
+      return attachRunJobRun(sqlite, value)
     },
     listTriggerLedger(eventGroupId: string) {
       // Evidence stays serialized here on purpose: the caller has the decision, and the contract's
