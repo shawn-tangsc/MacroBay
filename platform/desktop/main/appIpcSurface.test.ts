@@ -16,6 +16,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+// 产品可见的智能体会话面（含 `invokeProductIpc` 的接线）已搬到这个模块，断言跟着实现走。
+const productAgentWiringSource = readSource('productAgentPlatformWiring.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
@@ -331,7 +333,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('productIds: productManifests.map((manifest) => manifest.id)')
     expect(appSource).toContain("`[product-acceptance] products: ${input.productIds.join(',') || '(none)'}`")
     expect(appSource).toContain('`[product-acceptance] product IPC handlers: ${input.productIpcMethodCount}`')
-    expect(appSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
+    expect(productAgentWiringSource).toContain('productIpcRegistry.invoke(productId, method, payload)')
     expect(appSource).toContain(registerIpcHandlersCall)
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     expect(storageIpcSource).toContain('IpcChannels.productSummaries')

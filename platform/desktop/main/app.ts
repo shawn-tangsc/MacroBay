@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
 import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/AgentSessionRuntimeService'
 import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/runtime/AgentRuntimeOpenTelemetryTraceRecorder'
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
@@ -91,8 +90,7 @@ import {
   type BuiltinSeedLanguageVariant
 } from '../../ai/agent-platform/seeds'
 import type { ProductAgentSeedFactory } from '../../ai/agent-platform/seeds/mergeAgentSeeds'
-import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
-import type { AgentEntity, UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
+import type { AgentSessionMessageEntity } from '../../ai/agent-platform/schemas/sessionSchemas'
 import type { ProductAgentToolHandlerRegistration } from '../../ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import {
   ProductAgentToolRegistry,
@@ -100,10 +98,6 @@ import {
   buildProductAgentToolPackageEditorView,
   upsertAgentProductToolPackageBinding
 } from '../../ai/agent-platform/productTools'
-import type {
-  ProductAgentToolInvokeInput,
-  ProductAgentToolInvokeResult
-} from '../../ai/agent-platform/productTools/productAgentToolSchemas'
 import { createSqliteProductAgentToolTraceRepository } from '../../ai/agent-platform/productTools/createSqliteProductAgentToolTraceRepository'
 import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSettings } from '../../settings/schema/appSettings'
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
@@ -181,6 +175,7 @@ import { createSkillRuntimeCapabilityResolver, createSkillRuntimeToolsResolver }
 import { createSkillRuntimeToolHost } from './skillRuntimeToolHost'
 import { persistSkillRowChanges } from './skillRowPersistence'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
+import { composeProductAgentPlatformDeps, type ProductAgentPlatformDeps } from './productAgentPlatformWiring'
 import { composeAgentTaskRuntime } from './taskAutomationWiring'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
@@ -647,31 +642,7 @@ export type DesktopAppBootstrapOptions = {
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
-    getAgentState?: () => Promise<AgentStoreState>
-    /**
-     * 自动会话的幂等窄查：按「智能体 + 幂等键（这一次运行）」取一条会话，只读。
-     * 产品侧唯一的按身份找会话的入口——不另开「按描述查」的口子；可选，没接时产品侧退回自己的兜底。
-     */
-    findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
-    createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
-    sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
-    cancelAgentSession?: (sessionId: string) => Promise<void> | void
-    appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
-    updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
-    deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-    updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
-    isWebSearchProviderReady?: () => Promise<boolean>
-    /**
-     * 只读搜索入口：产品侧缺实际值时按平台既定开关/授权/代理去搜一次。
-     * 只读、不写设置、不改变既有 IPC 面。
-     */
-    searchWeb?: (request: import('@platform/ai/web-search').WebSearchSearchKeywordsRequest) => Promise<Pick<import('@platform/ai/web-search').WebSearchResponse, 'results'>>
-    invokeProductAgentTool?: (
-      state: AgentStoreState,
-      input: ProductAgentToolInvokeInput
-    ) => Promise<ProductAgentToolInvokeResult>
-    invokeProductIpc?: (productId: string, method: string, payload?: unknown) => Promise<unknown>
-  }) => void | Promise<void>
+  } & ProductAgentPlatformDeps) => void | Promise<void>
 }
 
 function resolveBootstrapProductManifests(
@@ -1070,22 +1041,16 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               registerProductAgentToolHandler,
               registerProductCache,
               registerProductDisposer: productServiceDisposerRegistry.register,
-              getAgentState: () => agentStore.getState(),
-              createAgentSession: (input) => agentServices.sessions.create(input),
-              // 自动会话的幂等窄查：只读一条，不扫全量列表（产品侧靠它把「同一次运行一条会话」做成 O(1)）。
-              findAgentSessionByAutomationRef: (agentId, originRef) => agentServices.sessions.findByAutomationRef(agentId, originRef),
-              sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
-              cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
-              appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
-              updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
-              deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
-              updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
-              isWebSearchProviderReady: isAgentWebSearchProviderReady,
-              // 只读透传：产品侧（日报）缺实际值时按同一套开关/授权/代理去搜一次。
-              // 不经过它做任何设置写入，也不改变既有 IPC 面。
-              searchWeb: (request) => webSearchService.searchKeywords(request),
-              invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
-              invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
+              // 产品能看到的智能体会话面：形状与绑定都在 `productAgentPlatformWiring`，这里只传服务。
+              ...composeProductAgentPlatformDeps({
+                agentStore,
+                agentServices,
+                agentRuntimeService,
+                webSearchService,
+                productAgentToolRuntimeService,
+                productIpcRegistry,
+                isAgentWebSearchProviderReady
+              }),
             }),
       sealIpcSurface: () => productIpcRegistry.seal(expectedProductIpcMethods(productManifests)),
       reportAcceptance: productAcceptanceProfile.enabled
