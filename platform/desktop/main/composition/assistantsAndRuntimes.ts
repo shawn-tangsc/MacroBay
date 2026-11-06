@@ -326,8 +326,13 @@ export function createAssistantsAndRuntimes(ports: AssistantsAndRuntimesPorts): 
   const assistantChatRuntime = createAssistantChatRuntimeService({
     // 凭据判定信号：进程级依赖，**只在这里注入一次**（AI 运行时不许 import 通知包）。
     // 请求路径上不携带；翻转去重交给 `reportProviderCredential` 自己的 changed。
-    onProviderCredentialSignal: (input) => {
-      void getNotificationRuntime().reportProviderCredential(input)
+    // 名字在组合根取：通知那边只有 id，且**不许印 id**。取不到名字就不发（返回 undefined 即可），
+    // 这一层不编「未知」，也不建第二份 id→名字的映射。
+    onProviderCredentialSignal: async (input) => {
+      const providerName = (await providerStore.getState()).providers.find(
+        (provider) => provider.id === input.providerId
+      )?.name
+      await getNotificationRuntime().reportProviderCredential({ ...input, providerName })
     },
     repos: assistantRepositories,
     getProviderState: providerStore.getState,

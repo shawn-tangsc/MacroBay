@@ -1,4 +1,5 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
@@ -19,14 +20,17 @@ import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
  */
 export const ANALYSIS_MANUAL_FAILURE_EVENT_ID = 'platform.analysis.manual-failed'
 
+/**
+ * The failure itself. It carries **no reader language**: both sentences are composed at submit
+ * time, so a reader who switches language later still reads the sentence in the new language.
+ * (The old shape took the language and froze one sentence into the record.)
+ */
 export type AnalysisManualFailure = Readonly<{
   runId: string
   failureCode: string
   /** Absent when the failure had no finer cause than its coarse code. */
   failureDetailCode: string | null
   occurredAt: string
-  /** The reader's language at submit time: the reason param is a sentence, not a key. */
-  language: 'zh-CN' | 'en-US'
 }>
 
 type ReasonCopy = Readonly<{ 'zh-CN': string; 'en-US': string }>
@@ -96,9 +100,8 @@ const FALLBACK_REASON: ReasonCopy = Object.freeze({
  * The detail code wins over the coarse one: `analysis-provider-error` with `upstream-aborted` should
  * say the connection dropped, not "the provider returned an error".
  */
-export function manualAnalysisFailureReason(input: Pick<AnalysisManualFailure, 'failureCode' | 'failureDetailCode' | 'language'>): string {
-  const copy = REASON_COPY[input.failureDetailCode ?? ''] ?? REASON_COPY[input.failureCode] ?? FALLBACK_REASON
-  return copy[input.language]
+export function manualAnalysisFailureReasonCopy(input: Pick<AnalysisManualFailure, 'failureCode' | 'failureDetailCode'>): ReasonCopy {
+  return REASON_COPY[input.failureDetailCode ?? ''] ?? REASON_COPY[input.failureCode] ?? FALLBACK_REASON
 }
 
 /** The deep link lands on the run-log page, where the code and the record can be read. */
@@ -119,19 +122,32 @@ export function manualAnalysisFailureDeeplink(runId: string) {
  * The dedupe key is the run id, not a day: two failed presses are two distinct attempts and both
  * deserve an answer. The platform expands the key from the declaration.
  */
-export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure): NotificationSubmitRequest {
-  const reason = manualAnalysisFailureReason(input)
+export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure): NotificationSubmitRequest | undefined {
+  const reason = manualAnalysisFailureReasonCopy(input)
+  const deeplink = manualAnalysisFailureDeeplink(input.runId)
+  // Both sentences are composed here, from the product's own cause table; the platform's copy
+  // table only owns the sentence around them. Undefined means the copy is not there, and a
+  // half-composed notice is worse than silence.
+  const rendered = renderPlatformEventCopy({
+    eventTypeId: ANALYSIS_MANUAL_FAILURE_EVENT_ID,
+    paramsByLanguage: { 'zh-CN': { reason: reason['zh-CN'] }, 'en-US': { reason: reason['en-US'] } }
+  })
+  if (rendered === undefined) return undefined
   return {
     eventTypeId: ANALYSIS_MANUAL_FAILURE_EVENT_ID,
     producerId: RUN_MARKET_ANALYSIS_JOB,
     dedupeVars: { builder: 'template', vars: { runId: input.runId } },
-    bodyParams: { reason },
-    // The deep link is what makes the notice open the run record; `actions` stays empty until the
-    // platform copy table carries its label, because the action label is a typed copy key and a key
-    // cannot exist before the approved copy row does. TODO(MI-1-R23): add the labelled action in
-    // the same change as that row.
-    actions: [],
-    deeplink: manualAnalysisFailureDeeplink(input.runId),
+    rendered,
+    // The event declares `requiresUserAction`, so a notice without an action is rejected outright;
+    // the copy row for the label exists now (`…manual-failed.open`), which is what the old TODO
+    // was waiting for. Same deep link as the card: the run record is where the code can be read.
+    actions: [{
+      id: 'open-run-log',
+      labelKey: 'notification.event.platform.analysis.manual-failed.open',
+      kind: 'open',
+      deeplink
+    }],
+    deeplink,
     occurredAt: input.occurredAt
   }
 }
@@ -149,8 +165,10 @@ export async function notifyManualAnalysisFailure(
   input: AnalysisManualFailure
 ): Promise<void> {
   if (!submit) return
+  const request = buildManualAnalysisFailureRequest(input)
+  if (request === undefined) return
   try {
-    await submit(buildManualAnalysisFailureRequest(input))
+    await submit(request)
   } catch {
     // The record is the source of truth; the notice is an addition to it.
   }
@@ -159,17 +177,13 @@ export async function notifyManualAnalysisFailure(
 /**
  * Binds the producer to the wiring the runtime already has.
  *
- * Lives here, not in the runtime: the runtime file is on the file-size baseline and may only
- * shrink, and the language rule is this notice's own ("a sentence is needed, so a missing language
- * reader means no notice rather than the wrong language").
+ * It no longer asks for the reader's language: the notice carries both sentences, so the record
+ * cannot be frozen into the language of the day it was written in.
  */
 export function createManualFailureNotice(deps: Readonly<{
   submitNotification?: AnalysisNotificationSubmit
-  getLanguage?: () => Promise<'zh-CN' | 'en-US'>
-}>): (input: Omit<AnalysisManualFailure, 'language'>) => Promise<void> {
+}>): (input: AnalysisManualFailure) => Promise<void> {
   return async (failure) => {
-    if (!deps.getLanguage) return
-    const language = await deps.getLanguage()
-    await notifyManualAnalysisFailure(deps.submitNotification, { ...failure, language })
+    await notifyManualAnalysisFailure(deps.submitNotification, failure)
   }
 }

@@ -2,6 +2,7 @@ import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { countConsecutiveTerminalFailures, JOB_REPEATED_FAILURE_THRESHOLD } from './jobFailureChain'
+import { renderPlatformEventCopy } from './platformEventCopy'
 
 /**
  * P2：同一个任务**连续 3 次**终态失败时升级一次（平台需求 v2.4 §1 P2、契约 v2.11 §4.1）。
@@ -40,6 +41,12 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
     if (taskName === undefined) return Promise.resolve()
 
     const completedAt = run.completedAt ?? run.startedAt ?? run.createdAt
+    // 源头拼成品（契约 v2.56）：与 P1 同一份双语快照，两种语言各拼一份。
+    const rendered = renderPlatformEventCopy({
+      eventTypeId: 'platform.job.repeated-failed',
+      paramsByLanguage: { 'zh-CN': { taskName: taskName['zh-CN'] }, 'en-US': { taskName: taskName['en-US'] } }
+    })
+    if (rendered === undefined) return Promise.resolve()
     const deeplink = {
       scope: run.owner === 'product' ? ('product' as const) : ('platform' as const),
       ...(run.productId === undefined ? {} : { productId: run.productId }),
@@ -60,8 +67,7 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
         },
-        // 与 P1 同一份快照：同一条作业定义在提交那一刻的名字，中英各一份。
-        bodyParams: { taskName: { snapshot: taskName } },
+        rendered,
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
         deeplink,
         occurredAt: completedAt,

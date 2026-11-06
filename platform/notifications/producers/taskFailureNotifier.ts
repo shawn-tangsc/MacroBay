@@ -1,5 +1,6 @@
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
+import { renderPlatformEventCopy } from './platformEventCopy'
 
 /**
  * P1：任务跑到终态仍失败时记一条（平台需求 v2.4 §1 P1、契约 v2.11 §3.2）。
@@ -53,9 +54,17 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
       entityId: run.definitionId
     }
 
+    // 源头拼成品：作业名是双语快照，两种语言的句子都在这里一次拼好（契约 v2.56）。
+    // 拼不出来就不提交——半句话比不发更糟；快照在，正常不会走到这个分支。
+    const rendered = renderPlatformEventCopy({
+      eventTypeId: 'platform.job.failed-terminal',
+      paramsByLanguage: { 'zh-CN': { taskName: taskName['zh-CN'] }, 'en-US': { taskName: taskName['en-US'] } }
+    })
+    if (rendered === undefined) return Promise.resolve()
+
     return deps
       .submit({
-        // 契约 §3.2：键来自声明，提交只带参数。标题/正文键在 P1 声明里。
+        // 提交只带事实与句子；标题/正文/理由的措辞在文案表，键由声明生成。
         eventTypeId: 'platform.job.failed-terminal',
         // 归属判定只读 producerId，单位是 **handlerId**：让渡表是 manifest 里的静态表，
         // 只有 handler 稳定；`definitionId` 带期号，每天新一期就冒出一个新 id，claim 永远对不上。
@@ -65,8 +74,7 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
         },
-        // 作业名以**双语快照**提交：存的是提交那一刻的名字本身（两份），读时按语言选。
-        titleParams: { taskName: { snapshot: taskName } },
+        rendered,
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
         deeplink,
         occurredAt: completedAt,

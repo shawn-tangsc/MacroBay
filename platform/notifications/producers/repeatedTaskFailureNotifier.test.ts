@@ -60,10 +60,11 @@ describe('repeated task failure notifier (P2)', () => {
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     expect(request.eventTypeId).toBe('platform.job.repeated-failed')
     expect(request.producerId).toBe('handler-1')
-    // 和 P1 一样：名字以引用提交，读的那一刻按读者语言取（契约 v2.40）。
-    expect(request.bodyParams).toEqual({
-      taskName: { snapshot: { 'zh-CN': '央行利率决议采集', 'en-US': 'Central bank rate decision' } }
-    })
+    // 和 P1 一样：两种语言各拼一份，记录里没有文案键（契约 v2.56）。
+    expect(request.rendered?.['zh-CN']?.body).toBe('央行利率决议采集已连续 3 次跑到失败；先看清楚它在哪出错，再决定要不要继续跑。')
+    // 英文这一格以前缺一个空格（名字与 has 粘在一起），拼成品后是读者会直接看到的一行。
+    expect(request.rendered?.['en-US']?.body).toBe('Central bank rate decision has failed three runs in a row; see what it is failing on before it runs again.')
+    expect(request).not.toHaveProperty('bodyParams')
     expect(request.dedupeVars).toEqual({
       builder: 'template',
       vars: { definitionId: 'definition-1', date: '2026-11-02' }

@@ -20,7 +20,11 @@ const RESUMED_TITLE = 'notification.event.platform.channel.push-resumed.title'
 const policy: NotificationEventPolicy = {
   'platform.push-probe': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
   'platform.channel.push-suspended': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+  'platform.channel.push-resumed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  // 凭据翻转两条也要在目录里：不在目录里的提交会被拒成「事件没登记」，
+  // 那就测不到「句子拼没拼出来」这件事本身。
+  'platform.provider.credential-invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  'platform.provider.credential-recovered': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
 }
 
 const catalog = createNotificationEventCatalog({
@@ -61,6 +65,29 @@ const catalog = createNotificationEventCatalog({
     category: 'reminder',
           requestedDisruptionLevels: [],
           dedupeKeyTemplate: 'push-resumed:{channelId}:{day}',
+          dedupeUnit: 'occurrence',
+        },
+        {
+          id: 'platform.provider.credential-invalid',
+          titleKey: 'notification.event.platform.provider.credential-invalid.title',
+          bodyKey: 'notification.event.platform.provider.credential-invalid.body',
+          reasonKey: 'notification.event.platform.provider.credential-invalid.reason',
+          requiresUserAction: true,
+          category: 'needs-action',
+          requestedDisruptionLevels: ['toast', 'desktop'],
+          dedupeKeyTemplate: 'credential-invalid:{providerId}',
+          dedupeUnit: 'condition',
+          conditionWindowMs: 3_600_000
+        },
+        {
+          id: 'platform.provider.credential-recovered',
+          titleKey: 'notification.event.platform.provider.credential-recovered.title',
+          bodyKey: 'notification.event.platform.provider.credential-recovered.body',
+          reasonKey: 'notification.event.platform.provider.credential-recovered.reason',
+          requiresUserAction: false,
+    category: 'completed',
+          requestedDisruptionLevels: [],
+          dedupeKeyTemplate: 'credential-recovered:{providerId}:{day}',
           dedupeUnit: 'occurrence',
         }
       ]
@@ -186,17 +213,45 @@ describe('P4a/P4b: credential health announces only flips', () => {
       })
 
     const runtime = make()
-    expect(await runtime.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: true })
+    expect(await runtime.reportProviderCredential({ providerId: 'silicon', providerName: 'OpenAI', state: 'invalid' })).toEqual({ changed: true })
     // 持续失败不重复发：状态没翻转就什么都不做。
-    expect(await runtime.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: false })
+    expect(await runtime.reportProviderCredential({ providerId: 'silicon', providerName: 'OpenAI', state: 'invalid' })).toEqual({ changed: false })
+
+    const announced = (state as { records: Array<{ eventTypeId?: string; rendered?: Record<string, { title: string }> }> }).records
+      .filter((record) => record.eventTypeId === 'platform.provider.credential-invalid')
+    expect(announced).toHaveLength(1)
+    // 名字是读者看到的那一个：不是 id，也不是「未知」。
+    expect(announced[0]?.rendered?.['zh-CN']?.title).toBe('OpenAI 的密钥失效了')
 
     // 重启：同一份 state 读回来，仍然不重发。
     const restarted = make()
-    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: false })
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', providerName: 'OpenAI', state: 'invalid' })).toEqual({ changed: false })
 
     // 从 invalid 翻回 ok：发一条恢复。
-    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'ok' })).toEqual({ changed: true })
-    expect(await restarted.reportProviderCredential({ providerId: 'silicon', state: 'ok' })).toEqual({ changed: false })
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', providerName: 'OpenAI', state: 'ok' })).toEqual({ changed: true })
+    expect(await restarted.reportProviderCredential({ providerId: 'silicon', providerName: 'OpenAI', state: 'ok' })).toEqual({ changed: false })
+  })
+
+  it('never prints the provider id: no display name means no notice, and the flip is still recorded', async () => {
+    const state = createDefaultNotificationStoreState()
+    const runtime = createNotificationRuntime({
+      storage: {
+        read: async () => JSON.parse(JSON.stringify(state)),
+        write: async (next) => { Object.assign(state, next) }
+      },
+      catalog,
+      getSettings: async () => settings,
+      clock: { now: () => new Date(nowMs), timeZone: () => 'UTC' }
+    })
+
+    // 判定状态照旧翻转（否则下一次真实翻转会被当成「已经报过」而吞掉）。
+    expect(await runtime.reportProviderCredential({ providerId: 'silicon', state: 'invalid' })).toEqual({ changed: true })
+    expect((state as { providerCredentialHealth?: Record<string, string> }).providerCredentialHealth).toEqual({
+      silicon: 'invalid'
+    })
+    // 没有名字 → 不提交：宁可不发，也不把 `silicon` 摆到读者面前。
+    expect((state as { records: unknown[] }).records).toEqual([])
+    expect(JSON.stringify(state)).not.toContain('silicon 的密钥')
   })
 
   it('keeps the health state when records are pruned', async () => {

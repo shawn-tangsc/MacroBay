@@ -5,7 +5,7 @@ import type { NotificationRuntimeSettings } from '@platform/notifications/contra
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
-import { notificationCopyText, resolveNotificationCopyText } from '@platform/i18n/notificationCopy'
+import { notificationCopyText } from '@platform/i18n/notificationCopy'
 
 import { buildAnalysisQuotaRequest, notifyAnalysisQuota, utcDayOf } from './analysisQuotaNotifier'
 
@@ -58,25 +58,24 @@ describe('analysis quota notifier (P3)', () => {
   it('keys the notice by the UTC day and carries today’s used / limit', () => {
     const request = buildAnalysisQuotaRequest({ used: 48, limit: 48, occurredAt: NOW })
 
-    expect(request).toMatchObject({
+    expect(request).toBeDefined()
+    const shaped = request!
+    expect(shaped).toMatchObject({
       eventTypeId: 'platform.analysis.quota-exhausted',
       producerId: 'market-intelligence.runMarketAnalysis',
       // 记账按 UTC 日切，不跟读者时区：同一个「今天」跨时区不能算出两个键。
       dedupeVars: { builder: 'template', vars: { date: '2026-11-03' } },
-      bodyParams: { used: '48', limit: '48' },
       actions: [],
       occurredAt: NOW
     })
-    expect(request).not.toHaveProperty('dedupeKey')
-    // 正文必须真的出现两个数：模板里少了占位符，读者就只看到一句「用完了」。
-    const body = resolveNotificationCopyText(
-      'zh-CN',
-      notificationCopyText('zh-CN', 'notification.event.platform.analysis.quota-exhausted.body'),
-      request.bodyParams
-    )
-    expect(body).toContain('今天已用 48 次')
-    expect(body).toContain('上限 48 次')
-    expect(body).not.toMatch(/\{\w+\}/)
+    expect(shaped).not.toHaveProperty('dedupeKey')
+    // 句子在源头拼好（契约 v2.56）：两种语言各一份，记录里没有文案键。
+    expect(shaped).not.toHaveProperty('bodyParams')
+    // 正文必须真的出现两个数：少了哪一格，读者就只看到一句「用完了」。
+    expect(shaped.rendered?.['zh-CN']?.body).toContain('今天已用 48 次')
+    expect(shaped.rendered?.['zh-CN']?.body).toContain('上限 48 次')
+    expect(shaped.rendered?.['en-US']?.body).toContain('Used 48 of 48 analyses')
+    expect(JSON.stringify(shaped.rendered)).not.toMatch(/\{\w+\}/)
   })
 
   it('takes the day from the instant, so a rejection just after UTC midnight is the next day', () => {
@@ -93,9 +92,9 @@ describe('analysis quota notifier (P3)', () => {
     const firstRecordId = records()[0]?.id
     expect(records()[0]).toMatchObject({
       eventTypeId: 'platform.analysis.quota-exhausted',
-      dedupeKey: 'platform|quota-exhausted:2026-11-03',
-      bodyParams: { used: '47', limit: '48' }
+      dedupeKey: 'platform|quota-exhausted:2026-11-03'
     })
+    expect((records()[0]?.rendered as Record<string, { body: string }>)['zh-CN']?.body).toContain('今天已用 47 次')
     // 第一次被拒时打扰过一次；同一天再被拒不许打扰第二次。
     expect(desktopDeliveries()).toBe(1)
 
@@ -106,10 +105,15 @@ describe('analysis quota notifier (P3)', () => {
     // 但合并若保留第一次的数，读者就会看到过期的「已用」——这里钉的正是「取最新」。
     expect(records()[0]).toMatchObject({
       id: firstRecordId,
-      bodyParams: { used: '48', limit: '48' },
       // `occurrenceCount` 是「这件事发生了几次」，不是「今天被拒了几次」——界面不许拿它当计数展示。
       occurrenceCount: 1
     })
+    // 合并只换正文（标题/理由取第一次），所以「已用」跟着最新这次走。
+    const merged = records()[0]?.rendered as Record<string, { title: string; body: string }>
+    expect(merged['zh-CN']?.body).toContain('今天已用 48 次')
+    expect(merged['zh-CN']?.title).toBe(notificationCopyText('zh-CN', 'notification.event.platform.analysis.quota-exhausted.title'))
+    // 一份记录只有一个正文来源。
+    expect(records()[0]).not.toHaveProperty('bodyKey')
     expect(desktopDeliveries()).toBe(1)
   })
 

@@ -149,7 +149,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.job.failed-terminal.body': "This run did not finish.",
     'notification.event.platform.job.failed-terminal.reason': 'This task will not retry on its own.',
     'notification.event.platform.job.repeated-failed.title': "A task keeps failing",
-    'notification.event.platform.job.repeated-failed.body': "{taskName?}has failed three runs in a row; see what it is failing on before it runs again.",
+    'notification.event.platform.job.repeated-failed.body': "{taskName?} has failed three runs in a row; see what it is failing on before it runs again.",
     'notification.event.platform.job.repeated-failed.reason': 'The same task has failed three times in a row; see what it is failing on before it runs again.',
     'notification.event.platform.analysis.quota-exhausted.title': "Today's analysis quota is used up",
     'notification.event.platform.analysis.quota-exhausted.body': "Used {used} of {limit} analyses today; further requests will be refused and existing reports are unaffected.",

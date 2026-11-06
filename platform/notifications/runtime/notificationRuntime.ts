@@ -43,7 +43,7 @@ import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { countSameEventToday, decideDailyCap, foldSuppressedIntoLatest, withCenterForDisruptiveChannels } from './notificationAggregate'
 import { evaluateProducerGate } from './notificationProducerGate'
 import { emitBackoffEvent } from './notificationBackoffEvents'
-import { reportProviderCredentialFlip } from './notificationCredentialHealth'
+import { reportProviderCredentialFlip, type ProviderCredentialSignal } from './notificationCredentialHealth'
 import { pruneNotificationState } from './notificationRuntimePrune'
 import {
   normalizeRequestedChannels,
@@ -346,7 +346,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   }
 
   /** P4a/P4b 的提交点：抽出到 `notificationCredentialHealth.ts`，这里只接线。 */
-  const reportProviderCredential = (input: { providerId: string; state: 'ok' | 'invalid' }) =>
+  const reportProviderCredential = (input: ProviderCredentialSignal) =>
     reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   const settingsPorts = { catalog: deps.catalog, getSettings: deps.getSettings, updateSettings: deps.updateSettings, getPushTargets: deps.getPushTargets, pushWired: () => deps.deliveryHooks?.push !== undefined }

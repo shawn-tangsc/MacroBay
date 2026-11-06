@@ -55,10 +55,15 @@ describe('task failure notifier', () => {
       builder: 'template',
       vars: { definitionId: 'definition-1', date: '2026-11-02' }
     })
-    // 名字以**引用**提交：存的是「哪一条作业定义」，句子在读的那一刻才按读者语言生成（契约 v2.40）。
-    // 以前这里传的是字面串，于是英文界面读出「Task failed: 市场日历 · 经济数据」。
-    // 名字以**双语快照**提交：提交那一刻存两份，读时按语言选（契约 v2.49）。
-    expect(request.titleParams).toEqual({ taskName: { snapshot: SNAPSHOT } })
+    // 句子在源头拼好（契约 v2.56）：两种语言各一份，记录里**不再挂文案键与参数**。
+    expect(request.rendered?.['zh-CN']).toEqual({
+      title: '任务失败：央行利率决议采集',
+      body: '这一次没有跑完。',
+      reason: '这个任务不会再自动重试。'
+    })
+    expect(request.rendered?.['en-US']?.title).toBe('Task failed: Central bank rate decision')
+    expect(request).not.toHaveProperty('titleParams')
+    expect(request).not.toHaveProperty('titleKey')
     // 不是 run.title：那是任务标识（`Collect 央行`），不是给人看的标题。
     expect(JSON.stringify(request)).not.toContain('Collect 央行')
     expect(request.actions).toHaveLength(1)
@@ -89,8 +94,8 @@ describe('task failure notifier', () => {
     const { submit, notify } = notifier()
     await notify({ run: run({ lastError: `upstream returned 503 ${'x'.repeat(500)}` }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
-    // 正文键在声明里、没有 {reason} 占位：原始错误只留在运行日志，不进记录也不进推送。
-    expect(request.titleParams?.taskName).toEqual({ snapshot: SNAPSHOT })
+    // 正文里没有 {reason} 这一格：原始错误只留在运行日志，不进记录也不进推送。
+    expect(request.rendered?.['zh-CN']?.body).toBe('这一次没有跑完。')
     expect(request.reasonParams).toBeUndefined()
     expect(JSON.stringify(request)).not.toContain('503')
     expect(JSON.stringify(request)).not.toContain('x'.repeat(200))

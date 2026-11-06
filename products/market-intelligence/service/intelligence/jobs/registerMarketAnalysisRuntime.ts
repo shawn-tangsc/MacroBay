@@ -157,8 +157,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now,
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
-    // 0′: a manual failure is always answered; the sentence is rendered in the reader's language.
-    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification, getLanguage: input.getAppLanguage })
+    // 0′：读者点的那次失败必回一条；两种语言的句子在提交时一起拼好，切语言后历史通知跟着变。
+    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification })
   })
   const predictionVerification = createPredictionVerificationService({
     repository,

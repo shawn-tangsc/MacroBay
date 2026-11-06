@@ -2,6 +2,8 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
+import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
+
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
 /**
@@ -29,14 +31,25 @@ export function utcDayOf(occurredAt: string): string {
   return new Date(occurredAt).toISOString().slice(0, 10)
 }
 
-/** 纯函数：同样的用量与时刻永远得到同一份请求，便于逐字段断言。 */
-export function buildAnalysisQuotaRequest(quota: AnalysisQuota): NotificationSubmitRequest {
+/**
+ * 纯函数：同样的用量与时刻永远得到同一份请求，便于逐字段断言。
+ *
+ * 句子在**源头**拼好（契约 v2.56）：两种语言各一份进 `rendered`，平台只挑不改。
+ * 两个数两种语言都一样，所以走同参数；措辞仍在平台的文案表，产品不写字面量。
+ * 拼不出来就返回 `undefined`——调用方不提交（半句话不该发出去）。
+ */
+export function buildAnalysisQuotaRequest(quota: AnalysisQuota): NotificationSubmitRequest | undefined {
+  const rendered = renderPlatformEventCopy({
+    eventTypeId: ANALYSIS_QUOTA_EVENT_ID,
+    params: { used: String(quota.used), limit: String(quota.limit) }
+  })
+  if (rendered === undefined) return undefined
   return {
     eventTypeId: ANALYSIS_QUOTA_EVENT_ID,
     // 判定与提交都在分析编排的同一个 handler 里，producerId 用稳定的 handler id（契约 §14.1）。
     producerId: RUN_MARKET_ANALYSIS_JOB,
     dedupeVars: { builder: 'template', vars: { date: utcDayOf(quota.occurredAt) } },
-    bodyParams: { used: String(quota.used), limit: String(quota.limit) },
+    rendered,
     actions: [],
     occurredAt: quota.occurredAt
   }
@@ -47,8 +60,10 @@ export async function notifyAnalysisQuota(
   quota: AnalysisQuota
 ): Promise<NotificationSubmitOutcome | null> {
   if (!submit) return null
+  const request = buildAnalysisQuotaRequest(quota)
+  if (request === undefined) return null
   try {
-    return await submit(buildAnalysisQuotaRequest(quota))
+    return await submit(request)
   } catch {
     // 拒绝已经发生、ledger 已经写好；通知不是事实来源。
     return null
