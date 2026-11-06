@@ -88,7 +88,6 @@
 }
 
 /* 页脚只放一行横条；它不吸顶、不覆盖内容，滚到底时来源状态区整行可见。 */
-.mi-crypto-dashboard__footer { flex: 0 0 auto; padding: 0 var(--mi-dashboard-page-inline) var(--mi-dashboard-page-block); }
 
 .mi-crypto-dashboard *,
 .mi-crypto-dashboard *::before,

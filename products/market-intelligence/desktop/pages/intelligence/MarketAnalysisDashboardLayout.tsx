@@ -6,7 +6,6 @@ import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
-import { AnalysisRunBar } from './AnalysisRunBar'
 import { MarketCalendarCard } from './MarketCalendarCard'
 import { useCalendarCardData, type CalendarCardReactionReader } from './useCalendarCardData'
 import { AnalysisDetailDrawer } from './AnalysisDetailDrawer'
@@ -35,7 +34,6 @@ export type MarketAnalysisDashboardInjection = Readonly<{
    * the readers' cards, not floating over them. Handed down as a node because its data (the
    * timeline) lives here while its place in the layout belongs to the dashboard.
    */
-  runBar?: ReactNode
   /**
    * The rail slot the page portals its policy card into: the card reads the page's state but lives
    * at the top of the rail, next to the calendar the same numbers are about.
@@ -139,14 +137,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   const detailText = { ...timelineText, ...workspaceText, ...(locale ? { readableLocale: locale } : {}) }
   const openEntry = openEntryId ? timeline.state.entries.find(entry => entry.id === openEntryId) : undefined
   const setOpenEntry = (entry: MarketAnalysisTimelineEntry | undefined) => setOpenEntryId(entry?.id)
-  // 本次运行 reads the same timeline the list and the card do: one fetch, three surfaces. The
-  // reason vocabulary is the timeline's own block, so a decision is never worded two ways.
-  const runBar = <AnalysisRunBar
-    entries={timeline.state.entries}
-    failed={Boolean(timeline.state.failed)}
-    loading={timeline.state.loading}
-    text={{ ...text.analysisRunBar, reasons: text.analysisTimeline.triggerStatus.reasons }}
-  />
   // The dashboard renders this ref as a named mount point directly under the
   // macro release strip; the card is portalled into it so the dashboard stays
   // free of timeline state while the card reads as part of the dashboard.
@@ -195,7 +185,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         {cloneElement(children as React.ReactElement<MarketAnalysisDashboardInjection>, {
           conclusionSlot,
           policySlot: policyHost,
-          runBar,
           onSelectChartEvent: selectChartEvent,
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})

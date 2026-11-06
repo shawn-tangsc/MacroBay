@@ -826,34 +826,13 @@ describe('crypto intelligence dashboard', () => {
     expect(onOpenBriefing).toHaveBeenCalledTimes(1)
   })
 
-  it('renders the runs bar as a footer of the column, outside the scroll region', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
-      runBar: createElement('div', { 'data-testid': 'runs-bar' }, '本次运行')
-    })))
-    await flush()
-
-    const scroll = container.querySelector('.mi-crypto-dashboard__scroll')
-    const footer = container.querySelector('footer.mi-crypto-dashboard__footer')
-    expect(footer).not.toBeNull()
-    // A footer inside the scroll region would travel with the cards; it is a sibling on purpose.
-    expect(scroll?.contains(footer as Node)).toBe(false)
-    expect(container.querySelector('main')?.lastElementChild).toBe(footer)
-    expect(footer?.querySelector('[data-testid="runs-bar"]')).not.toBeNull()
-  })
-
-  it('keeps the dashboard shell constrained so its cards scroll above a footer that does not move', () => {
+  it('keeps the dashboard shell constrained so its cards scroll inside the column', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const scrollRule = cssBlock(styles, '.mi-crypto-dashboard__scroll {')
 
     expect(dashboardRootRule).toContain('height: 100%')
     expect(dashboardRootRule).toContain('min-height: 0')
-    // 根是列：滚动区吃掉剩余高度，页脚自己占一份，滚动条不会伸到页脚上。
+    // 根是列：滚动区吃掉剩余高度（原先分给「本次运行」页脚的那一份，整块下架后归滚动区）。
     expect(dashboardRootRule).toContain('display: flex')
     expect(dashboardRootRule).toContain('flex-direction: column')
     expect(dashboardRootRule).toContain('overflow: hidden')
