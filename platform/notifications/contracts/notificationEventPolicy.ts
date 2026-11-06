@@ -48,9 +48,10 @@ export const NOTIFICATION_EVENT_POLICY: NotificationEventPolicy = Object.freeze(
   'platform.analysis.manual-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   // ── 情报 8 行（情报模块产品经理 2026-11-02 签 7 行；2026-11-04 重签桌面与提示档；2026-11-06 加 N10） ──
   'market-intelligence.briefing.failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  // 完成类：不弹桌面、不弹提示（只在应用内与中心出现），通道是上限，读者在情报页勾了才推。
-  // 用户 2026-11-06：日报生成**成功**也要能桌面弹（以前只有 toast/channel，桌面不弹）。
-  'market-intelligence.briefing.ready': { approvedDisruptionLevels: ['center', 'toast', 'channel', 'desktop'], approvedBypassQuietHours: false },
+  // 完成类：**桌面批准、提示不批**（2026-11-06 用户拍板「日报生成要桌面通知」；11-04 的原话是
+  // 「不弹应用内提示」，今天只说了桌面，没说要提示——那是另一种打扰，不能顺手留下）。
+  // 通道仍是上限，读者在情报页勾了才推。
+  'market-intelligence.briefing.ready': { approvedDisruptionLevels: ['center', 'channel', 'desktop'], approvedBypassQuietHours: false },
   // 信息类：桌面撤档（读者不想被「没打开应用还轰炸」）；通道是上限，读者在情报页勾了才推。
   'market-intelligence.signal.triggered': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
   'market-intelligence.macro.event-landed': { approvedDisruptionLevels: ['center', 'toast', 'channel'], approvedBypassQuietHours: false },
