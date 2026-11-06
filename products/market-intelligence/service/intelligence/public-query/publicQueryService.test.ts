@@ -694,12 +694,14 @@ describe('module signals', () => {
     const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
     // One read for the query, and the signals come out of its hints rather than a second pass.
     expect(read).toHaveBeenCalledTimes(1)
-    const oi = signals.filter(signal => signal.moduleId === 'open-interest')
+    const oi = signals.filter(entry => entry.signal.moduleId === 'open-interest')
     expect(oi.length).toBeGreaterThan(0)
-    expect(oi.every(signal => signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
-    expect(new Set(oi.map(signal => signal.asset))).toEqual(new Set(['btc', 'eth']))
+    expect(oi.every(entry => entry.signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
+    expect(new Set(oi.map(entry => entry.signal.asset))).toEqual(new Set(['btc', 'eth']))
+    // The window travels with the signal: one closed bucket for this rule, never a default.
+    expect(oi.every(entry => entry.window.unit === 'buckets' && entry.window.amount === 1)).toBe(true)
     // 这条服务没有资金面快照读取：ETF 腿如实说读不到，而不是消失成安静。
-    expect(signals.filter(signal => signal.moduleId === 'etf-flows').every(signal => signal.readiness === 'unavailable')).toBe(true)
+    expect(signals.filter(entry => entry.signal.moduleId === 'etf-flows').every(entry => entry.signal.readiness === 'unavailable')).toBe(true)
   })
 
   it('lets another leg join the list without changing the shape the page reads', async () => {
@@ -716,12 +718,13 @@ describe('module signals', () => {
       dedupeKey: 'etf-flows:etf-outflow-3d:btc:2026-07-08',
       readiness: 'available' as const, triggerOwner: 'module-signal'
     }
-    service.addModuleSignalProducer({ query: async () => [later] })
+    const laterWindow = { unit: 'trading-days' as const, amount: 3, upperBoundMs: null }
+    service.addModuleSignalProducer({ query: async () => [{ signal: later, window: laterWindow }] })
 
     const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
-    expect(signals).toContainEqual(later)
+    expect(signals).toContainEqual({ signal: later, window: laterWindow })
     // The open-interest leg could not read, and it says so rather than vanishing.
-    expect(signals.filter(signal => signal.moduleId === 'open-interest').every(signal => signal.readiness === 'unavailable')).toBe(true)
+    expect(signals.filter(entry => entry.signal.moduleId === 'open-interest').every(entry => entry.signal.readiness === 'unavailable')).toBe(true)
   })
 
   it('asks nothing for an instant it cannot read', async () => {

@@ -225,7 +225,8 @@ describe('useCapitalConditions · ETF signal chip', () => {
   }
 
   it('asks the module signal read for the same instant as the snapshot, and draws its chip', async () => {
-    const query = vi.fn(async () => [signal] as never)
+    const window = { unit: 'trading-days' as const, amount: 3, upperBoundMs: null }
+    const query = vi.fn(async () => [{ signal, window }] as never)
     const page = await renderHook({ querySnapshot: async () => available() }, () => new Date(asOf), { query })
     await flush()
 

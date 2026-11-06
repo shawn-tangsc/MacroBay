@@ -4,10 +4,11 @@ import type { IntelligenceCapitalConditionsClient } from '../../../shared/ipc/in
 import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/intelligenceQueryContracts'
 import { moduleSignalClient } from '../../../shared/ipc/moduleSignalClient'
+import type { SignalWithWindow } from '../../../../contracts/moduleSignalEvidence'
 
 import { projectDashboardCapitalConditionsSnapshot, projectEtfOutflowChip, type DashboardCapitalConditionsState } from './capitalConditionsModel'
 
-type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<readonly ModuleSignal[]> }
+type SignalClient = { query: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]> }
 
 type Input = {
   client?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>
@@ -87,7 +88,9 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
 
 async function readSignals(client: SignalClient, asOf: string): Promise<readonly ModuleSignal[] | undefined> {
   try {
-    return await client.query({ asOf })
+    // The window belongs to the chip too, but this hook only needs the signal to pick its state.
+    const entries = await client.query({ asOf })
+    return entries.map(entry => entry.signal)
   } catch {
     return undefined
   }

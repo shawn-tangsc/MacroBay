@@ -5,7 +5,7 @@ import { act } from 'react-dom/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
-import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import type { ModuleSignal, SignalWindow } from '../../../contracts/moduleSignal'
 import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 
@@ -30,7 +30,7 @@ const signal: ModuleSignal = {
 
 let latest: DashboardPositioningViewState | undefined
 
-function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> } }>) {
+function Probe(props: Readonly<{ signalClient: { query: (input: { asOf: string }) => Promise<readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]> } }>) {
   latest = useDashboardOpenInterest({
     client: { query: async () => history },
     signalClient: props.signalClient,
@@ -46,7 +46,7 @@ afterEach(() => {
   latest = undefined
 })
 
-async function renderProbe(signalClient: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> }) {
+async function renderProbe(signalClient: { query: (input: { asOf: string }) => Promise<readonly Readonly<{ signal: ModuleSignal; window: SignalWindow }>[]> }) {
   const container = document.createElement('div')
   const root = createRoot(container)
   roots.push(root)
@@ -54,7 +54,7 @@ async function renderProbe(signalClient: { query: (input: { asOf: string }) => P
   return latest
 }
 
-function ReadProbe(props: Readonly<{ client: { query: (input: { asOf: string; window: '24h' }) => Promise<OpenInterestHistoryResult> } }>) {
+function ReadProbe(props: Readonly<{ client: { query: (input: { asOf: string; window: '24h' | '7d' }) => Promise<OpenInterestHistoryResult> } }>) {
   latest = useDashboardOpenInterest({
     client: props.client,
     signalClient: { query: async () => [] },
@@ -64,7 +64,7 @@ function ReadProbe(props: Readonly<{ client: { query: (input: { asOf: string; wi
   return null
 }
 
-async function renderReadProbe(client: { query: (input: { asOf: string; window: '24h' }) => Promise<OpenInterestHistoryResult> }) {
+async function renderReadProbe(client: { query: (input: { asOf: string; window: '24h' | '7d' }) => Promise<OpenInterestHistoryResult> }) {
   const container = document.createElement('div')
   const root = createRoot(container)
   roots.push(root)
@@ -93,7 +93,7 @@ describe('positioning hook first read', () => {
 
 describe('positioning hook signal wiring', () => {
   it('puts the rule’s chip on the card from the same read the panel already makes', async () => {
-    const query = vi.fn(async () => [signal])
+    const query = vi.fn(async () => [{ signal, window: { unit: 'buckets' as const, amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 } }])
     const state = await renderProbe({ query })
     expect(query).toHaveBeenCalledWith({ asOf })
     expect(state).toMatchObject({ state: 'available', signal: { state: 'alert', dropPct: -2.7 } })

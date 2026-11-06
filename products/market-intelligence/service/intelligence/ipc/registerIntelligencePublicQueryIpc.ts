@@ -31,6 +31,7 @@ import {
 } from '../../../contracts/intelligenceQueryContracts'
 import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
+import { isSignalWindow } from '../../../contracts/moduleSignalEvidence'
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestHistoryResult,
@@ -135,7 +136,7 @@ export function registerIntelligencePublicQueryIpc(
       if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) return []
       const signals = await publicQueryService().queryModuleSignals({ asOf: payload.asOf })
       // A malformed signal is dropped here rather than handed to a chip that would render half of it.
-      return signals.filter(signal => isModuleSignal(signal))
+      return signals.filter(entry => isModuleSignal(entry?.signal) && isSignalWindow(entry?.window))
     } catch { return [] }
   })
 

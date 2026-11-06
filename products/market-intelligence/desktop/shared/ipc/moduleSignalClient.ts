@@ -1,5 +1,6 @@
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
-import { isCanonicalSignalTime, isModuleSignal, type ModuleSignal } from '../../../contracts/moduleSignal'
+import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
+import { isSignalWindow, type SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 
 /**
  * The renderer's door to the module signals the chips read.
@@ -9,7 +10,7 @@ import { isCanonicalSignalTime, isModuleSignal, type ModuleSignal } from '../../
  * a chip without its values is worse than no chip, because it still looks like a statement.
  */
 export const moduleSignalClient = {
-  async query(input: Readonly<{ asOf: string }>): Promise<readonly ModuleSignal[]> {
+  async query(input: Readonly<{ asOf: string }>): Promise<readonly SignalWithWindow[]> {
     try {
       if (!isCanonicalSignalTime(input.asOf)) return []
       const value = await window.platform?.products?.invoke(
@@ -17,7 +18,8 @@ export const moduleSignalClient = {
         INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals,
         { asOf: input.asOf }
       )
-      return Array.isArray(value) ? value.filter(entry => isModuleSignal(entry)) : []
+      // The window now travels with the signal: a chip without it cannot say what period it read.
+      return Array.isArray(value) ? value.filter(entry => isModuleSignal(entry?.signal) && isSignalWindow(entry?.window)) : []
     } catch {
       return []
     }

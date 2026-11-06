@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
+import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
@@ -15,7 +16,7 @@ export function useDashboardOpenInterest(input: Readonly<{
   now: () => Date
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
-  signalClient?: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> }
+  signalClient?: { query: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]> }
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
@@ -54,11 +55,13 @@ export function useDashboardOpenInterest(input: Readonly<{
 
 /** A signal read that failed is no chip, not a fabricated one. */
 async function readSignals(
-  client: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> },
+  client: { query: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]> },
   asOf: string
 ): Promise<readonly ModuleSignal[]> {
   try {
-    return await client.query({ asOf })
+    // The chip reads the signal; the window it was judged over travels beside it.
+    const entries = await client.query({ asOf })
+    return entries.map(entry => entry.signal)
   } catch {
     return []
   }

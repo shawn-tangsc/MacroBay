@@ -14,6 +14,9 @@ const signal = {
   readiness: 'available', triggerOwner: 'module-signal'
 }
 
+const window = { unit: 'buckets' as const, amount: 1, bucketMs: 15 * 60_000, upperBoundMs: 15 * 60_000 }
+const entry = { signal, window }
+
 function bridge(value: unknown) {
   const products = { invoke: vi.fn(async () => value) }
   vi.stubGlobal('window', { platform: { products } })
@@ -24,14 +27,14 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('module signal renderer client', () => {
   it('reads the one IPC method and returns the signals it can trust', async () => {
-    const products = bridge([signal])
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([signal])
+    const products = bridge([entry])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([entry])
     expect(products.invoke).toHaveBeenCalledWith('market-intelligence', INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, { asOf })
   })
 
   it('drops a signal it cannot render instead of drawing half of it', async () => {
-    bridge([signal, { ...signal, severity: 'critical' }, { ...signal, asset: null }])
-    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([signal])
+    bridge([entry, { signal: { ...signal, severity: 'critical' }, window }, { signal: { ...signal, asset: null }, window }, { signal, window: { unit: 'buckets' } }])
+    await expect(moduleSignalClient.query({ asOf })).resolves.toEqual([entry])
   })
 
   it('answers nothing when the bridge is missing or refuses the call', async () => {

@@ -1,6 +1,7 @@
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
-import { isCanonicalSignalTime, type ModuleSignal } from '../../../contracts/moduleSignal'
+import { isCanonicalSignalTime } from '../../../contracts/moduleSignal'
+import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { MacroRouteQuery } from '../public-query/macroRouteQuery'
 import { normalizeMacroRouteMonths, queryMacroRoute } from '../public-query/macroRouteQuery'
 import { createCalendarSignalQuery, createEtfOutflowSignalQuery, createOpenInterestSignalQuery, type ModuleSignalProducer } from './moduleSignalQuery'
@@ -16,7 +17,7 @@ export type ModuleSignalHost = {
   queryOpenInterestHistory: (input: Readonly<{ asOf: string; window: OpenInterestWindow }>) => Promise<OpenInterestHistoryResult>
   /** The panel's own snapshot read: the ETF leg judges the rows the card already draws. */
   queryCapitalConditionsSnapshot: (input: Readonly<{ asOf: string }>) => Promise<CapitalConditionsSnapshotResult>
-  queryModuleSignals: (input: Readonly<{ asOf: string }>) => Promise<readonly ModuleSignal[]>
+  queryModuleSignals: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]>
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
 } & MacroRouteQuery
 

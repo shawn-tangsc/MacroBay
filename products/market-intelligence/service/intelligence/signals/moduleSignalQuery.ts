@@ -1,10 +1,12 @@
 import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
-import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import { signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
+import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
 import { firstSeenReleaseWindowMs } from '../analysis/significanceChangeMatcher'
 import { calendarSurpriseSignals, calendarUnavailableSignals } from './calendarSurpriseSignals'
 import { buildEtfOutflowSignal, etfOutflowUnavailableSignals } from './etfOutflowSignal'
+import { etfFlowPolicy } from '../../../contracts/etfFlows'
 import { openInterestSignalsFromHistory } from './openInterestSignals'
 
 /**
@@ -16,7 +18,7 @@ import { openInterestSignalsFromHistory } from './openInterestSignals'
  * list of signals for one instant, not a per-module tree.
  */
 export type ModuleSignalQuery = Readonly<{
-  query: (input: Readonly<{ asOf: string }>) => Promise<readonly ModuleSignal[]>
+  query: (input: Readonly<{ asOf: string }>) => Promise<readonly SignalWithWindow[]>
 }>
 
 /**
@@ -35,11 +37,11 @@ export function createOpenInterestSignalQuery(deps: Readonly<{
     async query(input) {
       try {
         const reading = await deps.readHistory({ asOf: input.asOf, window: '24h' })
-        return openInterestSignalsFromHistory(reading, input.asOf)
+        return withRuleWindow(openInterestSignalsFromHistory(reading, input.asOf), 1)
       } catch {
         // A thrown read is a failed read, not a quiet market: it must reach the card as `unavailable`
         // instead of an empty list, which is what a reader would read as "nothing happened".
-        return openInterestSignalsFromHistory({ state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }, input.asOf)
+        return withRuleWindow(openInterestSignalsFromHistory({ state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }, input.asOf), 1)
       }
     }
   }
@@ -63,14 +65,16 @@ export function createEtfOutflowSignalQuery(deps: Readonly<{
     async query(input) {
       try {
         const snapshot = await deps.readSnapshot({ asOf: input.asOf })
-        if (snapshot.state !== 'available' || snapshot.etf.state !== 'available') return etfOutflowUnavailableSignals(input.asOf)
+        if (snapshot.state !== 'available' || snapshot.etf.state !== 'available') {
+          return withRuleWindow(etfOutflowUnavailableSignals(input.asOf), etfFlowPolicy.signalWindowDays)
+        }
         const etf = snapshot.etf
-        return (['btc', 'eth'] as const).flatMap(asset => {
+        return withRuleWindow((['btc', 'eth'] as const).flatMap(asset => {
           const signal = buildEtfOutflowSignal({ asset, rows: etf[asset].rows, asOf: input.asOf })
           return signal ? [signal] : []
-        })
+        }), etfFlowPolicy.signalWindowDays)
       } catch {
-        return etfOutflowUnavailableSignals(input.asOf)
+        return withRuleWindow(etfOutflowUnavailableSignals(input.asOf), etfFlowPolicy.signalWindowDays)
       }
     }
   }
@@ -96,10 +100,10 @@ export function createCalendarSignalQuery(deps: Readonly<{
       try {
         const observations = await deps.readObservations({ asOf: input.asOf })
         const recent = observations.filter(observation => isRecentRelease(observation, input.asOf))
-        return calendarSurpriseSignals({ observations: recent, previous: null, previousAsOf: null, asOf: input.asOf })
+        return withRuleWindow(calendarSurpriseSignals({ observations: recent, previous: null, previousAsOf: null, asOf: input.asOf }), 1)
       } catch {
         // A failed read is reported as failed; an empty list would claim the market was quiet.
-        return calendarUnavailableSignals(input.asOf)
+        return withRuleWindow(calendarUnavailableSignals(input.asOf), 1)
       }
     }
   }
@@ -110,4 +114,18 @@ function isRecentRelease(observation: MacroCalendarProviderObservation, asOf: st
   const scheduledAt = Date.parse(observation.scheduledAt ?? '')
   if (!Number.isFinite(scheduledAt)) return false
   return Math.abs(Date.parse(asOf) - scheduledAt) <= firstSeenReleaseWindowMs
+}
+
+/**
+ * Pairs each signal with the window its own rule read.
+ *
+ * The scan never invents a window: a signal whose cadence cannot express the rule's amount is
+ * dropped rather than queued under a default (`?? 这几个桶`), because a default is how the window
+ * silently stops matching the rule that produced it.
+ */
+export function withRuleWindow(signals: readonly ModuleSignal[], amount: number): readonly SignalWithWindow[] {
+  return signals.flatMap(signal => {
+    const window = signalWindow(signal.cadence, amount)
+    return window ? [{ signal, window }] : []
+  })
 }

@@ -56,6 +56,7 @@ import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../.
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
 import { attachModuleSignals } from '../signals/attachModuleSignals'
+import type { SignalWithWindow } from '../../../contracts/moduleSignalEvidence'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import type { ModuleSignalProducer } from '../signals/moduleSignalQuery'
 import { createPriceLegReader } from '../divergence/priceLegReading'
@@ -109,7 +110,7 @@ export type MarketIntelligencePublicQueryService = {
    * A list, not a tree: a leg that can answer adds itself here when its wiring lands, so the page
    * reads one shape whether one rule or four can speak today.
    */
-  queryModuleSignals: (input: { asOf: string }) => Promise<readonly ModuleSignal[]>
+  queryModuleSignals: (input: { asOf: string }) => Promise<readonly SignalWithWindow[]>
   /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
   addModuleSignalProducer: (producer: ModuleSignalProducer) => void
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
