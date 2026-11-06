@@ -72,6 +72,13 @@ export async function readBriefingHistory(input: Readonly<{
   isRunning?: (date: string, periodId: string) => boolean
   /** The language set of the period's configuration, once configuration is the source (post-S8). */
   configuredLanguages?: (periodId: string) => readonly DailyBriefingLocale[] | undefined
+  /**
+   * 今天「该有却没有」的排期期：有配置、是今天、已过计划时刻、零版次零尝试、没被读者删过。
+   *
+   * 用户 2026-11-06 定（`02` v2.149 甲案）：这种期要在列表里留一行说明，否则它悄悄没有，读者
+   * 既看不出缺了，也看不出是没跑还是被跳过。没到点、历史日、手动期、被删过——四种都不给这一行。
+   */
+  missedPeriods?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>[]
 }>): Promise<Readonly<{ editions: readonly DailyBriefingEditionSummary[]; dates: readonly string[] }>> {
   // 窗口右端多留**一天**：`today` 是读者日历上的一天，而版次的日期由截止时刻所在的读者本地
   // 日期决定，两者可以差一天（`02` v2.129 G2：有版次的日期一律不许被窗口截掉）。往后的日子不会
@@ -94,6 +101,7 @@ export async function readBriefingHistory(input: Readonly<{
     otherRows,
     runs,
     attemptRuns,
+    ...(input.missedPeriods === undefined ? {} : { missedPeriods: input.missedPeriods }),
     periodRun: (date, periodId) => input.store.getPeriodRun?.(date, periodId),
     attemptCount: (date, periodId, locale) => {
       const read = input.store.listAttempts
@@ -135,6 +143,8 @@ type PeriodRows = Readonly<{
   locales?: readonly DailyBriefingLocale[]
   /** 只留下过失败 attempt、没有运行记录：原因照样是"这次失败"。 */
   attemptFailed?: boolean
+  /** 排期过了点、今天该有却没有：第二行写「到点时没能生成」，不写内部原因、不带按钮。 */
+  missedAtCutoff?: boolean
   /**
    * 没有版次的那一行，身份来自**它自己那次尝试**：什么时候发起的、怎么触发、覆盖多长。
    * 用户 2026-11-06：列表每一行要自己说清身份，不许拿默认期的 07:00 或当前设置顶上。
@@ -165,6 +175,8 @@ export async function briefingHistorySummaries(input: Readonly<{
   scheduledTime?: (periodId: string) => string | undefined
   /** Runs of the window; a run with no edition row is the only trace some periods leave. */
   runs?: readonly DailyBriefingPeriodRun[]
+  /** 今天「该有却没有」的排期期（甲案）：建一行说明，四种例外不建。 */
+  missedPeriods?: readonly Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>[]
   /** Attempt rows of the window: a run that has not written its journal yet is still a row. */
   attemptRuns?: readonly Readonly<{
     date: string
@@ -215,6 +227,16 @@ export async function briefingHistorySummaries(input: Readonly<{
       // 这一行属于**它自己的语言**，不是界面语言：英文那一期失败，就要有一行英文，语言徽标也标英文
       // （用户 2026-11-06：18:11 那次英文失败在中日文界面下看不见）。
       periods.push({ date, periodId, rows: new Map(), ...(run.expectedLocales.length > 0 ? { locales: run.expectedLocales } : {}) })
+    }
+    // 「到点时没能生成」：排期期今天该有却没有，也要留一行说明（甲案）。它排在建行之前，好让
+    // 下面"有版次/有尝试就不再建"的判断优先——同一期已经有痕迹时，这一行不会被补出来。
+    for (const missed of input.missedPeriods ?? []) {
+      if (missed.date !== date || known.has(missed.periodId)) continue
+      known.add(missed.periodId)
+      periods.push({
+        date, periodId: missed.periodId, rows: new Map(), locales: [missed.locale],
+        missedAtCutoff: true
+      })
     }
     // 只要**开始跑**过就要有一行（用户 2026-11-06）：attempt 在开工前就写了，比运行记录还早一步。
     // 一次跑在冻结事实之前就挂掉时，只有 attempt、没有运行记录、更没有版次——那一行也不许消失。
@@ -367,7 +389,8 @@ async function summaryOfLocale(period: PeriodRows, input: Readonly<{
     // Only a configuration known to be gone marks the row; "could not read it" is not "deleted".
     ...(presence === 'absent' ? { periodDeleted: true } : {}),
     // "Missing one version" only describes an issue that still has a version to compare with.
-    ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {})
+    ...(completeness.state === 'missing-version' && published ? { state: 'partial' as const } : {}),
+    ...(period.missedAtCutoff === true ? { missedAtCutoff: true } : {})
   }
 }
 

@@ -422,7 +422,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       onBack={onBack}
     />
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selected.date} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selected.date}
+        // 这一次在跑的身份：列表据此只让那一行转圈（日期 + 期号 + 语言，与行同一套三元组）。
+        {...(runIntent === null ? {} : { runningIdentity: { date: runIntent.date === '' ? todayDate : runIntent.date, periodId: runIntent.periodId, locale: runIntent.locale } })} selectedPeriodId={pickedPeriodId} selectedLocale={effectiveLocale} todayDate={todayDate}
         // 一行 = 一期 = 一种语言：点行要把**这一行**的三样身份交出去；只传日期的话，同一天两期
         // 永远落到第一行，读者看到的是"切换了但内容不切"。
         onSelectLocale={selectLocale}

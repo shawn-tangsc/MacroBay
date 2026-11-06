@@ -417,6 +417,11 @@ export type DailyBriefingEditionSummary = Readonly<{
   languages?: readonly DailyBriefingEditionLanguage[]
   /** The period's configuration is gone; the row still reads, marked as a deleted period. */
   periodDeleted?: boolean
+  /**
+   * 排期过了点、今天该有却没有（`02` v2.149 甲案）：第二行写「到点时没能生成」。
+   * 和"跑了但失败"（这次没生成出来）、"正文位空着"（这一期没有生成）是三句话。
+   */
+  missedAtCutoff?: boolean
   /** The latest completed edition of its day (exactly one per day). */
   isCurrent?: boolean
   /** `partial`: this period was meant to have more versions than it published. */

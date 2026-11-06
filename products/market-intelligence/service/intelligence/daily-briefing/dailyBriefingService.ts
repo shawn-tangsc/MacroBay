@@ -42,6 +42,7 @@ import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { briefingScheduledTimeFor, readBriefingHistory } from './dailyBriefingHistory'
+import { missedScheduledPeriods } from './dailyBriefingMissedPeriods'
 export type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import type { DailyBriefingAttemptEnd, DailyBriefingAttemptStart } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRegenerate, type DailyBriefingRegenerateInput } from './dailyBriefingRegenerate'
@@ -652,6 +653,8 @@ export function createDailyBriefingService(deps: Readonly<{
       today: window.date,
       retentionDays: dailyBriefingPolicy.retentionDays,
       scheduledTime: briefingScheduledTimeFor(await (deps.readPeriods?.().catch(() => []) ?? Promise.resolve([])), schedule.generationTime),
+      // 排期期今天该有却没有 → 也要留一行说明（`02` v2.149 甲案），否则它悄悄没有。
+      missedPeriods: await missedScheduledPeriods({ store: deps.store, periods: async () => (deps.readPeriods?.() ?? Promise.resolve([])), today: window.date, now: now(), readerTimeZone: input.timeZone, fallbackLocale: input.locale }),
       // "Generating" is a live fact: the stored run row outlives the process that wrote it.
       isRunning: (date, periodId) => [...runs.progress.keys()].some((key) => key.startsWith(`${date}:${periodId}:`))
     })

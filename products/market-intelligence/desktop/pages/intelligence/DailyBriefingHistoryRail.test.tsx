@@ -597,6 +597,40 @@ describe('a row is two lines: the facts, then what it says', () => {
     expect(first.textContent).not.toContain('·')
   })
 
+  it('says 「到点时没能生成」 for a scheduled period that produced nothing, and nothing else', () => {
+    // 用户 2026-11-06（`02` v2.149 甲案）：排期过了点、今天该有却没有，要留一行说明。
+    // 三句话必须分清：跑了失败=这次没生成出来、该有却没有=到点时没能生成、正文位空着=这一期没有生成。
+    render({
+      editions: [edition({
+        state: 'missing', availableLocales: [], generatedAt: undefined,
+        scheduledTime: '07:00', missedAtCutoff: true
+      })]
+    })
+    const row = host.querySelector<HTMLElement>('.mi-daily-briefing__rail-row')!
+    expect(row.querySelector('[data-rail-status]')?.getAttribute('data-rail-status')).toBe('missed-at-cutoff')
+    expect(row.querySelector('[data-rail-title="reason"]')?.textContent).toBe(text.history.missedAtCutoff)
+    // 另外两句不许同时出现，行上也不许有按钮。
+    expect(row.textContent).not.toContain(text.history.railFailedReason)
+    expect(row.textContent).not.toContain(text.history.railNotRun)
+    expect(row.closest('.mi-daily-briefing__rail-item')!.querySelectorAll('button')).toHaveLength(1)
+  })
+
+  it('spins only the row this page is regenerating', () => {
+    // 用户 2026-11-06：点重新生成，正文在跑、列表那行不动。页面把这一次的身份交给列表，
+    // **只让身份相等的那一行**转圈——同日别的行、别的语言都不许跟着转。
+    const rows = [
+      edition({ date: '2026-11-02', periodId: 'p_morning', locale: 'zh-CN', periodTime: '2026-11-02T00:00:00.000Z' }),
+      edition({ date: '2026-11-02', periodId: 'p_evening', locale: 'zh-CN', periodTime: '2026-11-02T12:00:00.000Z' }),
+      edition({ date: '2026-11-02', periodId: 'p_en', locale: 'en-US', periodTime: '2026-11-02T12:00:00.000Z' })
+    ]
+    render({ editions: rows, runningIdentity: { date: '2026-11-02', periodId: 'p_evening', locale: 'zh-CN' }, generatingStage: 'AI 选择' })
+    const spinning = [...host.querySelectorAll<HTMLElement>('[data-rail-title="running"]')]
+    expect(spinning).toHaveLength(1)
+    const item = spinning[0]!.closest('.mi-daily-briefing__rail-item')!
+    expect(item.querySelector('[data-period-id]')?.getAttribute('data-period-id')).toBe('p_evening')
+    expect(item.querySelector('[data-rail-title="running"]')?.textContent).toContain(text.generationProgress.railRunning)
+  })
+
   it('keeps a row that never ran saying so, with no "this time it did not come out"', () => {
     // 从没跑过的那一行（有排期、没触发、没记录）：只说没跑过，带上它自己的计划时刻。
     render({

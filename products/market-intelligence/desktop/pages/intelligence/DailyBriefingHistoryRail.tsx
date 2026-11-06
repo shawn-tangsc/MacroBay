@@ -84,7 +84,8 @@ function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, 
 
 export function DailyBriefingHistoryRail({
   editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
-  todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod
+  todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod,
+  runningIdentity
 }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   /**
@@ -118,6 +119,13 @@ export function DailyBriefingHistoryRail({
   /** 删这一版。`clock` 跟着一起来：成功那句要点名 `日期 · 时刻 · 语言`。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void | Promise<void>
   // 行上不放重试：重试只在正文失败面板与工具栏（用户 2026-11-06）。行只陈述事实。
+  /**
+   * 页面自己发起的那次跑：`(日期, 期号, 语言)` 三元组。
+   *
+   * 服务端投影里的「生成中」只认已经落库/在进度里的跑；本页点了重新生成时那一行还没被投影画成
+   * 生成中，于是正文在跑、列表不动（用户 2026-11-06）。把它传进来，**只让身份相等的那一行**转圈。
+   */
+  runningIdentity?: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
 }>): React.ReactElement {
   const confirm = useConfirm()
   // 右键指向的是**你点中的那一行**，身份是 `(日期, 期号, 语言)` 三元组。少了语言，同一天的中英两行
@@ -182,8 +190,10 @@ export function DailyBriefingHistoryRail({
    */
   const waitingKey = useMemo(() => {
     const explicit = editions.find((row) => (row.languages ?? []).some((language) => language.state === 'generating'))
-    return explicit === undefined ? undefined : briefingRailKey(explicit)
-  }, [editions])
+    if (explicit !== undefined) return briefingRailKey(explicit)
+    // 本页发起的那一次：只有身份**完全相等**的那一行，不拿"今天没跑过的那期"顶替。
+    return runningIdentity === undefined ? undefined : briefingRailKey(runningIdentity)
+  }, [editions, runningIdentity])
 
   /**
    * 只有**右键的那一行自己**在跑才拦。以前写成"今天只要有一期在跑，今天每一行都不许删"——
@@ -331,6 +341,9 @@ export function DailyBriefingHistoryRail({
                     ? <span className="mi-daily-briefing__rail-row-title" data-rail-title="reason">
                       {/* 所属期已删且这一版没有正文：第二行只有这枚标记（`02` v2.77），仍然非空。 */}
                       {edition.periodDeleted ? <span className="mi-daily-briefing__rail-tag" data-period-deleted-tag="true">{text.history.deletedPeriod}</span>
+                        // 排期过了点、今天该有却没有（甲案）：只说这一句——不是"跑砸了"，也不是"正文位空着"。
+                        : edition.missedAtCutoff === true
+                          ? <span data-rail-status="missed-at-cutoff">{text.history.missedAtCutoff}</span>
                         // 状态词在第二行：这次失败 / 上次没跑完；后面那句是它为什么没出来。
                         : <><span data-rail-status={failedRun ? 'failed' : interrupted ? 'interrupted' : 'not-run'}>
                           {failedRun ? text.history.runFailed : interrupted ? text.history.runInterrupted : text.history.missingRun}
