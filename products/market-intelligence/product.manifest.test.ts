@@ -15,6 +15,22 @@ describe('market-intelligence product manifest', () => {
     })
   })
 
+  it('puts the run log between the source settings and the notifications', () => {
+    const sections = marketIntelligenceProductManifest.shellContributions?.settingsSections ?? []
+    expect(sections.map((section) => section.id)).toEqual([
+      'intelligence-sources',
+      'intelligence-run-log',
+      'intelligence-notification'
+    ])
+    // Order is what the shell sorts by; ids alone would let the menu drift apart from the intent.
+    const [sources, runLog, notifications] = sections
+    expect(sources!.order).toBeLessThan(runLog!.order)
+    expect(runLog!.order).toBeLessThan(notifications!.order)
+    // One name for the page and the menu entry: the heading comes from the copy table.
+    expect(runLog!.title).toEqual({ 'zh-CN': '运行日志', 'en-US': 'Run log' })
+    expect(runLog!.module).toBe('./desktop/settings/run-log')
+  })
+
   it('keeps one blank intelligence page without removing existing intelligence capabilities', () => {
     expect(marketIntelligenceProductManifest.shellContributions?.menuPages).toEqual([
       {

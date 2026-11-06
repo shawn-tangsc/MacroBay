@@ -1,10 +1,8 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const intelligenceSourcesText = {
   'zh-CN': {
-  viewSources: '来源',
-  viewRuns: '运行记录',
   syncRun: {
-    title: '运行记录',
+    title: '运行日志',
     window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部（含每日汇总）' },
     outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
     columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
@@ -409,10 +407,8 @@ export const intelligenceSourcesText = {
   }
 },
   'en-US': {
-  viewSources: 'Sources',
-  viewRuns: 'Run record',
   syncRun: {
-    title: 'Run record',
+    title: 'Run log',
     window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All (with daily totals)' },
     outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
     columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },

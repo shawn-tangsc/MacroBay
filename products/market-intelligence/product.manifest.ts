@@ -68,11 +68,19 @@ export const marketIntelligenceProductManifest = {
         module: './desktop/settings/intelligence-sources'
       },
       {
+        // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
+        id: 'intelligence-run-log',
+        title: { 'zh-CN': '运行日志', 'en-US': 'Run log' },
+        icon: 'scroll-text',
+        order: 11,
+        module: './desktop/settings/run-log'
+      },
+      {
         // 设置 → 情报 → 通知：只放「这三条推不推手机」，本机两档在通用通知页（界面规范 §9d）。
         id: 'intelligence-notification',
         title: { 'zh-CN': '通知', 'en-US': 'Notifications' },
         icon: 'message-square-text',
-        order: 11,
+        order: 12,
         module: './desktop/settings/intelligence-notification'
       }
     ]
