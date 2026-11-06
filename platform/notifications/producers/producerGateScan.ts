@@ -174,10 +174,12 @@ function followBuilders(
   window: string,
   index: Map<string, string[]>,
   constants: Readonly<Record<string, string>>,
-  depth: number
+  depth: number,
+  /** 只有最初那段窗口可以「看到什么算什么」；构造函数体里必须只认 `eventTypeId:` 那一处。 */
+  collectAllLiterals = true
 ): Set<string> {
   const ids = new Set<string>()
-  for (const id of literalIds(window)) ids.add(id)
+  if (collectAllLiterals) for (const id of literalIds(window)) ids.add(id)
   for (const constant of window.matchAll(/\b([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\b/gu)) {
     const mapped = constants[constant[2] ?? '']
     if (mapped !== undefined) ids.add(mapped)
@@ -190,7 +192,7 @@ function followBuilders(
     // 把别的事件的 id 也算进来（实测把 `calendar-refresh` 算成了同一条）。
     const declared = /eventTypeId\s*:\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))/u.exec(body)
     if (declared === null) {
-      for (const id of followBuilders(body, index, constants, depth - 1)) ids.add(id)
+      for (const id of followBuilders(body, index, constants, depth - 1, false)) ids.add(id)
       continue
     }
     const literal = declared[1] ?? declared[2]
@@ -205,7 +207,7 @@ function followBuilders(
       ids.add(constant)
       continue
     }
-    for (const id of followBuilders(body, index, constants, depth - 1)) ids.add(id)
+    for (const id of followBuilders(body, index, constants, depth - 1, false)) ids.add(id)
   }
   return ids
 }
@@ -281,10 +283,12 @@ function resolveArgumentIds(
   code: string,
   constants: Readonly<Record<string, string>>,
   index: Map<string, string[]>,
-  callIndex: number
+  callIndex: number,
+  depth = 0
 ): string[] | undefined {
   const text = argument.trim()
-  if (text.length === 0) return undefined
+  // 空实参不是提交通知：`submit()` 在这套代码里还可能是对话框的「保存」（实测有一处）。
+  if (text.length === 0) return []
   const collected = new Set<string>()
 
   const fromText = (chunk: string): boolean => {
@@ -349,9 +353,43 @@ function resolveArgumentIds(
   }
 
   // ④ 对象字面量里用简写属性（`{ eventTypeId, … }`）：顺着那个变量的唯一定义找。
+  // 封闭表查表：`eventTypeId = SOURCE_ISSUE_EVENT_IDS[kind]`，表里所有值都是事件 id ⇒ 全部算上。
+  // 这是可证明的（集合小、封闭、来源唯一），比让产品把同一个 id 写成两处字面量好得多。
+  const tableLookup = /^([A-Za-z_$][\w$]*)\s*\[[^\]]+\]$/u.exec(text)
+  if (tableLookup !== null) {
+    const table = lookup(index, tableLookup[1] ?? '')
+    if (table !== undefined) {
+      // 表里的值可能是字面量，也可能又是常量（`EVENT_IDS.sourceStale`）：两种都解析。
+      const values: string[] = []
+      // 键可能是引号包着的（`'consecutive-failed': …`），别只认裸标识符。
+      for (const entry of table.matchAll(/['"]?([A-Za-z_$][\w$-]*)['"]?\s*:\s*(?:'([^']+)'|([A-Za-z_$][\w$.]*))/gu)) {
+        const literal = entry[2]
+        if (literal !== undefined && isEventIdShape(literal)) {
+          values.push(literal)
+          continue
+        }
+        const dotted = entry[3]
+        const resolved = dotted === undefined
+          ? undefined
+          : (constants[dotted.split('.').pop() ?? ''] ?? resolveConstant(index, dotted.split('.').pop() ?? ''))
+        if (resolved !== undefined) values.push(resolved)
+      }
+      if (values.length > 0 && values.every(isEventIdShape)) {
+        for (const value of values) collected.add(value)
+        return [...collected]
+      }
+    }
+    return undefined
+  }
+
   if (/\{[\s\S]*?\beventTypeId\s*,/u.test(text)) {
     const local = findDefinition(code, 'eventTypeId', callIndex)
     if (local !== undefined && fromText(local)) return [...collected]
+    // 简写属性常常是「从封闭表里查出来的一格」（`SOURCE_ISSUE_EVENT_IDS[kind]`）：把它当实参再解析一次。
+    if (local !== undefined && depth < 2) {
+      const nested = resolveArgumentIds(local, code, constants, index, callIndex, depth + 1)
+      if (nested !== undefined && nested.length > 0) return [...nested]
+    }
     const shared = lookup(index, 'eventTypeId')
     if (shared !== undefined && fromText(shared)) return [...collected]
   }

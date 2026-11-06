@@ -24,36 +24,20 @@ import {
 const root = join(__dirname, '..', '..', '..')
 
 /**
- * **今天还没有被证明有生产者的批准事件**——只减不增。
+ * **还没有被证明有生产者的批准事件**与**解析不了的提交点**——两份都必须为空，且只减不增。
  *
- * 三条各有原因，都不是「懒得接」：
- * 1. `market-intelligence.source.consecutive-failed` / `.source.stale`：id 在提交处是**算出来的**
- *    （`SOURCE_ISSUE_EVENT_IDS[kind]`），静态读不出是哪一条。按契约 §12.1 这属于「无法判定」，
- *    改法是把两处改成字面量或常量表成员——归产品线，本笔不动。
- * 2. `market-intelligence.macro.event-landed`：**已接线**，但扫描器顺着 `buildMacroEventLandedRequest`
- *    没解析出 id（构建函数窗口里有第二个事件 id，按「不许挑一个」的规矩判了无法判定）。
- *    这是扫描器的缺口，不是产品没接；补扫描器时要先把这一行删掉，再看它是否转绿。
+ * 加一行要满足三条（Chief 2026-11-06 定）：① 写明**谁修**、**退出条件**、**什么条件下删掉这行**；
+ * ② **要 Chief 同意**，不许实现时自己加（与基线只减不增同理）；③ 总数只能减——本文件末尾那条
+ * 条数断言会盯着，加一行就红。
  *
- * 新增一行必须写清原因与归属；**不许用「加个豁免」把门禁按绿**。
+ * 清空的经过（说明这两份清单不是永久豁免）：
+ * - `source.consecutive-failed` / `.source.stale`：提交处是封闭表查表（`SOURCE_ISSUE_EVENT_IDS[kind]`），
+ *   表里每个值都在目录里 ⇒ 扫描器展开成该表的值集合，可证明。**没有让产品把 id 写成两处字面量**。
+ * - `macro.event-landed`：构建函数窗口里混进第二个事件 id；改成「只认流进 `eventTypeId` 的那一处」后解析到了。
+ * - 设置页那处「无法判定」其实是对话框自己的 `submit()` 保存函数（空实参），不是通知提交，已按非提交点跳过。
  */
-/**
- * **门禁解析不了的提交点**（按「无法判定＝未通过」处理，但先记在这里，只减不增）。
- *
- * 两处是产品线的写法问题：动态算出来的 id（`SOURCE_ISSUE_EVENT_IDS[kind]`、设置页里按类型拼的 id），
- * 按契约 §12.1 应改成字面量或常量表成员；一处是扫描器跟丢了构建函数（macro 那条）。
- * **谁改完就删对应行**，删掉后若它变成「已证明」，门禁会自己变绿；不许反过来加豁免。
- */
-const KNOWN_UNRESOLVED = [
-  'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog.tsx',
-  'products/market-intelligence/service/intelligence/application/sourceIssueNotifier.ts',
-  'products/market-intelligence/service/intelligence/signals/macroEventLandedNotifier.ts'
-].sort()
-
-const KNOWN_UNPROVEN = [
-  'market-intelligence.macro.event-landed',
-  'market-intelligence.source.consecutive-failed',
-  'market-intelligence.source.stale'
-].sort()
+const KNOWN_UNPROVEN: string[] = []
+const KNOWN_UNRESOLVED: string[] = []
 
 function sources(): ProducerGateSource[] {
   const found: ProducerGateSource[] = []
@@ -103,10 +87,12 @@ describe('生产者门禁：登记了就必须有人发', () => {
       idConstants: idConstants()
     })
 
-    // 未证清单只减不增：新增一条就必须在这里写出原因与归属（见上面两段注释）。
+    // 未证清单只减不增：新增一条就必须在这里写出原因与归属（见上面注释）。
     expect(result.missing).toEqual(KNOWN_UNPROVEN)
-    // 解析不了的提交点同样点名：它们按「无法判定＝未通过」处理，不是通过。
+    // 解析不了的提交点同样算未通过：今天为零，出现就红。
     expect(result.unresolved.map((site) => site.path).sort()).toEqual(KNOWN_UNRESOLVED)
+    // 两份清单的总条数只能减——加一行就红，不允许自己给自己开豁免。
+    expect(KNOWN_UNPROVEN.length + KNOWN_UNRESOLVED.length).toBe(0)
     // 门禁必须真的抓到过东西——一上来全绿说明它没在看代码。
     expect(result.produced.length).toBeGreaterThan(0)
   })
