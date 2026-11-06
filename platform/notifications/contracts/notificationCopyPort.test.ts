@@ -68,10 +68,12 @@ describe('数字参数：读的那一刻按语言格式化（契约 v2.42 第三
     expect(port().resolve({ scope: 'platform', key, params: count }, 'zh-CN')).toBe('任务失败：3')
   })
 
-  it('非法数值只丢那一格：不印 NaN，也不整条降级（v2.48 分级降级）', () => {
+  it('非法数值整句作废：不印 NaN，也不留半句（v2.50 数字例外）', () => {
+    // 「只去掉那一格」对名字成立、对数字不成立：`成交放大 {multiple}，规模约 …` 去掉数字
+    // 剩 `成交放大，规模约 …`——语法断裂，而且读者会以为没有放大。所以数字缺了整句作废。
     const params = { taskName: { number: Number.NaN, kind: 'usd' as const } }
     const detailed = port().resolveDetailed({ scope: 'platform', key, params }, 'zh-CN')
-    expect(detailed.text).toBe('任务失败')
+    expect(detailed.text).toBeNull()
     expect(detailed.missingParams).toEqual(['taskName'])
   })
 })

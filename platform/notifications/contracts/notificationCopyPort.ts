@@ -11,6 +11,13 @@
  * **分级降级（v2.48）**：只有**模板本身**没供上才整条兜底；模板在、参数取不到 → **只让那一格消失**
  * （连同前导分隔符、成对括号），其余照常。两个诊断码不混：模板缺 → `copy-unresolved`，
  * 参数缺 → `copy-param-missing`（带参数名）。
+ *
+ * **数字例外（v2.50）**：数字参数取不到时**整句作废**，不是只去掉那一格。
+ *
+ * 「只去掉那一格」对名字成立（`任务失败：{taskName}` → `任务失败`，句子还完整），对数字不成立：
+ * `成交放大 {multiple}，规模约 {notional}` 去掉数字剩 `成交放大，规模约 …`——语法断裂，而且
+ * 读者会以为**没有放大**。这是半句真话，比不说更糟。所以读者的标题降级成兜底句，正文留空，
+ * 运行记录里留下 `copy-param-missing` 与参数名。
  */
 import type { NotificationCopyLanguage, NotificationCopyTable } from '../../i18n/notificationCopy'
 import { formatNotificationNumber, type NotificationCopyNumber } from './notificationNumberFormat'
@@ -114,6 +121,7 @@ export function createNotificationCopyPort(input: {
     if (template === null) return { text: null, missingParams: [] }
 
     const missingParams: string[] = []
+    let invalidNumber = false
     const text = template.replace(/\{(\w+)(\??)\}/gu, (placeholder, name: string) => {
       const param = ref.params?.[name]
       const missing = (): string => {
@@ -131,8 +139,15 @@ export function createNotificationCopyPort(input: {
         return resolved === null ? missing() : resolved
       }
       const formatted = formatNotificationNumber(param, language)
-      return formatted === null ? missing() : formatted
+      // 数字与名字不同：它不是可分离的一格，它是被说的那个量。缺了就不能只说半句。
+      if (formatted === null) {
+        invalidNumber = true
+        missingParams.push(name)
+        return SLOT_DROP
+      }
+      return formatted
     })
+    if (invalidNumber) return { text: null, missingParams }
     const settled = dropSlots(text)
     // 兜底只剩一种情况：替换后还残留占位符——那是模板本身写坏了，不是数据没到。
     if (/\{\w+\??\}/.test(settled)) return { text: null, missingParams }
