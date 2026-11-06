@@ -59,24 +59,44 @@ const registeredEventKeyIds: Readonly<Record<string, string>> = Object.freeze({
 
 /** 自由文本标题（源站原文，`trim` 后逐字）→ 表里的 id。 */
 const titleIds: Readonly<Record<string, string>> = Object.freeze({
-  'Government Budget (billion USD)(Sep)': 'us-government-budget',
-  'Durable goods orders excluding national defense (MoM) (Revised) (Sep)': 'us-durable-goods-ex-defense',
-  'Durable goods orders excluding transportation (MoM) (Revised) (Sep)': 'us-durable-goods-ex-transport',
-  'Total number of wells drilled in the week (rigs)(to 1030)': 'us-rig-count',
-  'Total number of oil wells in the week (rigs)(to 1030)': 'us-oil-rig-count',
-  'Total number of natural Ki wells drilled in the week (rigs)(to 1030)': 'us-gas-rig-count',
-  'Number of Layoffs By Challenger Companies (10,000)(Oct)': 'us-challenger-layoffs',
-  'Last week, MBA30-annum fixed mortgage rate (to 1023)': 'us-mba-mortgage-rate',
-  "Last week's seasonally adjusted four-week Mean of initial K'in claims (10,000 people)(to 1031)": 'us-initial-claims-4wk',
-  'EIA gasoline inventory transmutation last week (10,000 barrels)(to 1023)': 'us-eia-gasoline-stocks',
-  'EIA crude oil inventory transmutation last week (10,000 barrels)(to 1023)': 'us-eia-crude-stocks',
-  'EIA Refinery Equipment Exploitation Rate Last Week (to 1023)': 'us-eia-refinery-utilization',
-  'Durable goods orders (MoM) (Revised) (Sep)': 'us-durable-goods',
-  'Deduct aircraft non-defense capital durable goods orders (Revised) (Sep)': 'us-core-capex-orders'
+  'Government Budget (billion USD)': 'us-government-budget',
+  'Durable goods orders excluding national defense (MoM) (Revised)': 'us-durable-goods-ex-defense',
+  'Durable goods orders excluding transportation (MoM) (Revised)': 'us-durable-goods-ex-transport',
+  'Total number of wells drilled in the week (rigs)': 'us-rig-count',
+  'Total number of oil wells in the week (rigs)': 'us-oil-rig-count',
+  'Total number of natural Ki wells drilled in the week (rigs)': 'us-gas-rig-count',
+  'Number of Layoffs By Challenger Companies (10,000)': 'us-challenger-layoffs',
+  'Last week, MBA30-annum fixed mortgage rate': 'us-mba-mortgage-rate',
+  "Last week's seasonally adjusted four-week Mean of initial K'in claims (10,000 people)": 'us-initial-claims-4wk',
+  'EIA gasoline inventory transmutation last week (10,000 barrels)': 'us-eia-gasoline-stocks',
+  'EIA crude oil inventory transmutation last week (10,000 barrels)': 'us-eia-crude-stocks',
+  'EIA Refinery Equipment Exploitation Rate Last Week': 'us-eia-refinery-utilization',
+  'Durable goods orders (MoM) (Revised)': 'us-durable-goods',
+  'Deduct aircraft non-defense capital durable goods orders (Revised)': 'us-core-capex-orders'
 })
 
 /**
- * 一个入口：先按稳定标识，再按源站标题（逐字，`trim`）。都不中返回 `undefined`，
+ * 期号是**数据的形状，不是名字的一部分**：`(Sep)`、`(Q3)`、`(to 1030)`、`(2026)` 会随期次变，
+ * 不剥掉的话这张表下个月就自己失效一半。**别把这条当脏活删掉**。
+ *
+ * 剥法刻意窄：**只剥末尾、且只剥看起来像期号的括号段**，遇到单位括号（`(billion USD)`、`(%)`）
+ * 立刻停——宽剥会把单位一起剥掉，让「政府预算（十亿美元）」和别的政府预算条目撞成一个键。
+ */
+const PERIOD_SUFFIX = /\((?:[A-Za-z]{3}(?:\s+\d{4})?|Q[1-4]|\d{4}|to\s*\d{1,4})\)$/i
+
+export function stripPeriodSuffix(title: string): string {
+  let base = title.trim()
+  for (;;) {
+    const next = base.replace(PERIOD_SUFFIX, '').trim()
+    // 剥到空就是「这个标题只有一个期号」：返回空串，调用方按不匹配处理。
+    if (next === '') return ''
+    if (next === base) return base
+    base = next
+  }
+}
+
+/**
+ * 一个入口：先按稳定标识，再按源站标题——**先逐字，再剥掉末尾期号**。都不中返回 `undefined`，
  * 由调用方用原文——**不许在这里回退成兜底句或空串**。
  */
 export function resolveIndicatorNameId(input: Readonly<{ eventNameKey?: string; title?: string }>): string | undefined {
@@ -84,7 +104,12 @@ export function resolveIndicatorNameId(input: Readonly<{ eventNameKey?: string; 
   if (byKey !== undefined) return byKey
   const title = input.title?.trim()
   if (title === undefined || title === '') return undefined
-  return titleIds[title]
+  const exact = titleIds[title]
+  if (exact !== undefined) return exact
+  const base = stripPeriodSuffix(title)
+  // 剥完为空（标题本身就是 `(Sep)` 这种）→ 不匹配，走原文。
+  if (base === '' || base === title) return undefined
+  return titleIds[base]
 }
 
 /** 通知文案表用的键后缀：有了 id 才有可翻的句子；没有就是原文。 */
