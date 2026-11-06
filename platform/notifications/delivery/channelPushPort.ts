@@ -56,14 +56,19 @@ export type ChannelPushPortDeps = {
   settings: { pushChannelId(): Promise<string | null> }
 }
 
-/** 正文末尾的短编号与中心那一条是同一串（契约 §8、S13 逐字相等）。 */
+/**
+ * 手机推送的正文：标题 / 正文 / 「为什么推了」，去空去重。
+ *
+ * **末尾不加编号。** 以前这里是 `#${content.shortId}`，而 `shortId` 取记录 id 前 8 位、记录 id
+ * 又以 `notification-` 开头——于是每一条的结尾都是同一个 `#notifica`：既重复又像坏掉的标签，
+ * 读者还需要自己猜那是什么。手机上读者要的是「什么事」，不是我们的内部编号（2026-11-06 用户截图）。
+ */
 export function formatPushText(content: NotificationDeliveryContent): string {
   const lines: string[] = []
   for (const line of [content.title, content.body, content.reason]) {
     const trimmed = line.trim()
     if (trimmed.length > 0 && !lines.includes(trimmed)) lines.push(trimmed)
   }
-  lines.push(`#${content.shortId}`)
   return lines.join('\n\n')
 }
 
@@ -95,7 +100,7 @@ export function mapChannelDeliveryResult(result: ChannelDeliveryResult): Channel
 
 export function createChannelPushPort(deps: ChannelPushPortDeps) {
   /**
-   * `record` 只用来取幂等键（记录 id）与短编号的兜底；正文一律取自 `content`，
+   * `record` 只用来取幂等键（记录 id）；正文一律取自 `content`，
    * 端口不碰原始记录里的 metadata / 参数（脱敏在入记录那一刻已做过，通道方案 §2.5）。
    */
   return async function push(

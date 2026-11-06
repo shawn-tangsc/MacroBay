@@ -27,8 +27,6 @@ export type NotificationDeliveryContent = {
    */
   actionLabels: Readonly<Record<string, string>>
   deeplink?: NotificationDeeplink
-  /** 记录 id 前 8 位；通道正文末尾 `#xxxxxxxx`，与中心同串 */
-  shortId: string
 }
 
 export type DeliveryHooks = {
@@ -218,7 +216,6 @@ export function buildDeliveryContent(record: NotificationRecord): NotificationDe
     body: record.bodyKey === undefined ? '' : String(record.bodyKey),
     reason: record.reasonKey === undefined ? '' : String(record.reasonKey),
     actionLabels: {},
-    ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink }),
-    shortId: record.id.slice(0, 8)
+    ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
   }
 }

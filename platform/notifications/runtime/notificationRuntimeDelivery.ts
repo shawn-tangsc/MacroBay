@@ -2,7 +2,7 @@
  * runtime 的投递面（契约 §16.3 / 通道方案 §2.2）：把一条**首次提交**的记录投出去，并把每个
  * 表面的证据写回同一条记录。合并/重复提交不重推——这一步只被 `submit()` 的新记录分支调用一次。
  *
- * 文案与短编号在这里解析一次，四个钩子拿同一份 `content`；端口不再解析、不再拼时刻。
+ * 文案在这里解析一次，四个钩子拿同一份 `content`；端口不再解析、不再拼时刻。
  */
 import {
   notificationCopyText,
@@ -104,8 +104,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       body: title === null ? '' : (body ?? ''),
       reason: title === null ? '' : (reason ?? ''),
       actionLabels: title === null ? {} : resolveActionLabels(record.actions, resolvedLanguage),
-      ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink }),
-      shortId: record.id.slice(0, 8)
+      ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink })
     }
 
     /**
