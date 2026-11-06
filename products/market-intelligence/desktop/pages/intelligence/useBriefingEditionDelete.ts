@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { useDailyBriefingIssueDeletion } from './useDailyBriefingIssueDeletion'
+import { useDailyBriefingIssueDeletion, type BriefingIssueTarget } from './useDailyBriefingIssueDeletion'
 import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
@@ -23,19 +23,22 @@ export function useBriefingEditionDelete(input: Readonly<{
 }>): Readonly<{
   deleteOutcome: ReturnType<typeof useDailyBriefingIssueDeletion>['outcome']
   deleting: boolean
-  deleteEdition: (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string }>) => void
+  deleteEdition: (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string; entry: 'toolbar' | 'row-menu' }>) => void
   takeSkipGenerate: ReturnType<typeof useDailyBriefingIssueDeletion>['takeSkipGenerate']
   /** 重试某一次删除（失败提示条上的那颗按钮）。 */
-  retryDelete: (target: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void
+  retryDelete: (target: BriefingIssueTarget) => void
 }> {
   const { outcome: deleteOutcome, deletePeriod, takeSkipGenerate } = useDailyBriefingIssueDeletion({ client: input.client, onSettled: input.onSettled })
   const [deleting, setDeleting] = useState(false)
-  const deleteEdition = (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string }>): void => {
+  const deleteEdition = (target: BriefingEditionDeleteTarget & Readonly<{ periodId: string; entry: 'toolbar' | 'row-menu' }>): void => {
     const row = input.editions.find((edition) => edition.date === target.date && edition.periodId === target.periodId)
     input.afterDeleteLocaleRef.current = (row?.availableLocales ?? []).find((language) => language !== target.language) ?? null
     input.afterDeleteRef.current = { date: target.date, periodId: target.periodId, locale: target.language }
     setDeleting(true)
-    void deletePeriod({ date: target.date, periodId: target.periodId, locale: target.language, ...(target.clock === undefined ? {} : { clock: target.clock }) }).finally(() => setDeleting(false))
+    void deletePeriod({
+      date: target.date, periodId: target.periodId, locale: target.language, entry: target.entry,
+      ...(target.clock === undefined ? {} : { clock: target.clock })
+    }).finally(() => setDeleting(false))
   }
-  return { deleteOutcome, deleting, deleteEdition, takeSkipGenerate, retryDelete: (target) => { void deletePeriod(target) } }
+  return { deleteOutcome, deleting, deleteEdition, takeSkipGenerate, retryDelete: (target: BriefingIssueTarget) => { void deletePeriod(target) } }
 }

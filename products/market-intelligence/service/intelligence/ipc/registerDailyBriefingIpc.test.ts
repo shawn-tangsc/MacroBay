@@ -80,8 +80,10 @@ describe('daily briefing delete channel', () => {
   it('passes the validated date, period and edition language to the delete handler', async () => {
     const deletePeriod = vi.fn(async () => ({ editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 3, allDone: true }))
     const handler = registerAll(deletePeriod as never).get('intelligence.dailyBriefing.deletePeriod')!
-    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })).resolves.toMatchObject({ editions: 1, allDone: true })
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })
+    // 入口必填：操作记录要能回答"从哪删的"（用户 2026-11-06），缺了直接拒。
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US', entry: 'toolbar' })).resolves.toMatchObject({ editions: 1, allDone: true })
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-11-03', periodId: 'default', locale: 'en-US', entry: 'toolbar' })
+    await expect(handler({ date: '2026-11-03', periodId: 'default', locale: 'en-US' })).rejects.toThrow('daily-briefing-invalid-request')
   })
 
   it('refuses a payload that could delete another issue', async () => {

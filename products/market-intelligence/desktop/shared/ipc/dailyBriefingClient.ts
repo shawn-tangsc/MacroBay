@@ -172,7 +172,13 @@ export type DailyBriefingClient = Readonly<{
   getStorageState: () => Promise<DailyBriefingStorageStateResult>
   retryUpgrade: () => Promise<DailyBriefingStorageStateResult>
   /** Deletes one edition (one language) across both databases; `allDone` is false when the links could not be removed. */
-  deletePeriod: (input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<Readonly<{
+  deletePeriod: (input: Readonly<{
+    date: string
+    periodId: string
+    locale: 'zh-CN' | 'en-US'
+    /** 从哪颗入口删的：操作记录要能回答这个（用户 2026-11-06）。 */
+    entry: 'toolbar' | 'row-menu'
+  }>) => Promise<Readonly<{
     editions: number
     attempts: number
     periodRuns: number

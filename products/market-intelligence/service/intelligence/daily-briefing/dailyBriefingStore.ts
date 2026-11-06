@@ -16,6 +16,7 @@ import {
   DAILY_BRIEFING_STORAGE_VERSION,
   createAttemptsSql,
   createEditionsSql,
+  createDeleteAuditSql,
   createPeriodRunsSql,
   migrateDailyBriefingStorage,
   tableColumns,
@@ -46,6 +47,8 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   db.exec(createEditionsSql('daily_briefings'))
   db.exec(createAttemptsSql('daily_briefing_attempts'))
   db.exec(createPeriodRunsSql('daily_briefing_period_runs'))
+  // 删除审计：只记录，不还原（用户 2026-11-06）。
+  db.exec(createDeleteAuditSql())
   // The run table was introduced one commit ago; adding its two columns is idempotent and stays
   // out of the two migrated tables, whose shape is frozen for this release.
   for (const [column, ddl] of [['direction', "text not null default 'undecided'"], ['edition_rows', "text not null default '[]'"]] as const) {
@@ -323,6 +326,11 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         attempts: 0,
         periodRuns: 0
       })
+    },
+    async recordDeleteAudit(entry: Parameters<NonNullable<DailyBriefingStore['recordDeleteAudit']>>[0]) {
+      // append-only：一次删除写一条，写不进去不阻塞删除本身（删掉数据是读者的动作，日志是旁证）。
+      db.prepare('insert or ignore into daily_briefing_delete_audit (at, entry, edition_date, period_id, locale, outcome, failure_code) values (?, ?, ?, ?, ?, ?, ?)')
+        .run(entry.at, entry.entry, entry.editionDate, entry.periodId, entry.locale, entry.outcome, entry.failureCode ?? null)
     },
     upgradeState,
     async retryUpgrade() {

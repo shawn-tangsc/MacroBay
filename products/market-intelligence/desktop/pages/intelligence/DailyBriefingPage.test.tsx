@@ -425,7 +425,8 @@ describe('daily briefing page', () => {
     await act(async () => { confirm.click() })
     for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
 
-    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN' })
+    // 入口写进载荷：操作记录要能回答"从哪删的"（用户 2026-11-06）。
+    expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN', entry: 'row-menu' })
     // The list is read again (the row that survived must still be on screen), but no new run starts.
     expect(client.list).toHaveBeenCalledTimes(2)
     expect(client.getToday).toHaveBeenCalledTimes(1)

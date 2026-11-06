@@ -84,13 +84,15 @@ function readPushQuery(payload: unknown): Readonly<{ date: string; periodId: str
 }
 
 /** Every field is required and validated: a missing one would delete another issue's edition. */
-function readDeleteQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> {
+function readDeleteQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; entry: 'toolbar' | 'row-menu' }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
-  const { date, periodId, locale } = payload
+  const { date, periodId, locale, entry } = payload
   if (typeof date !== 'string' || !isDailyBriefingEditionDate(date)) throw new Error('daily-briefing-invalid-request')
   if (typeof periodId !== 'string' || periodId.trim().length === 0 || periodId.length > 64) throw new Error('daily-briefing-invalid-request')
   if (!isDailyBriefingLocale(locale)) throw new Error('daily-briefing-invalid-request')
-  return { date, periodId, locale }
+  // 入口是**必填**：操作记录要能回答"从哪删的"，缺了就拒，不许悄悄当工具栏。
+  if (entry !== 'toolbar' && entry !== 'row-menu') throw new Error('daily-briefing-invalid-request')
+  return { date, periodId, locale, entry }
 }
 
 /** Shape only. The allowed times and window lengths are the settings service's rule. */

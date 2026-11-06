@@ -23,6 +23,8 @@ export type BriefingIssueTarget = Readonly<{
   locale: 'zh-CN' | 'en-US'
   /** The row's own clock in the reader's zone: the one-time sentence names 日期 · 时刻 · 语言. */
   clock?: string
+  /** 从哪颗入口删的：工具栏那颗，还是行右键菜单。操作记录要能回答这个（用户 2026-11-06）。 */
+  entry: 'toolbar' | 'row-menu'
 }>
 
 export type BriefingDeleteOutcome = Readonly<{

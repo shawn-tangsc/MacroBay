@@ -46,6 +46,7 @@ import { createDailyBriefingRegenerate } from './dailyBriefingRegenerate'
 import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
+import type { DailyBriefingDeleteAuditWriter } from './dailyBriefingPeriodDeletion'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
 import { briefingWindow, localDate, type DailyBriefingWindow, type DailyBriefingZoneSource } from './dailyBriefingWindow'
 
@@ -184,6 +185,8 @@ export type DailyBriefingStore = Readonly<{
    * was already deleted returns zeros instead of throwing, so the caller can simply retry.
    */
   deletePeriod?: (date: string, periodId: string, locale: 'zh-CN' | 'en-US') => Promise<Readonly<{ editions: number; attempts: number; periodRuns: number }>>
+  /** 「删除这一版」的操作记录：只记录、不还原（用户 2026-11-06）。 */
+  recordDeleteAudit?: DailyBriefingDeleteAuditWriter
   /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
   upgradeState?: () => DailyBriefingStorageState
   retryUpgrade?: () => Promise<DailyBriefingStorageState>

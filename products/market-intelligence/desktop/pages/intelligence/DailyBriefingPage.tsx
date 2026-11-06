@@ -421,7 +421,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           void runBriefing({ periodId, locale: target, trigger: 'retry', ...(generation === undefined ? {} : { generation }) })
         }}
         // 行右键与工具栏第五颗共用同一个处理函数：两个入口，一套行为。
-        onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale, ...(target.clock === undefined ? {} : { clock: target.clock }) })} />
+        onDeletePeriod={(target) => deleteEdition({ ...target, language: target.locale, entry: 'row-menu', ...(target.clock === undefined ? {} : { clock: target.clock }) })} />
       <DailyBriefingContent {...{
         // 版次级五颗：吸在正文滚动区顶部，只作用于当前这一版（重新生成 / 发布 / 导出 / 复制 / 删除）。
         editionBar: <DailyBriefingEditionActions
@@ -434,7 +434,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           {...(manualRunningLabel === undefined ? {} : { runningLabel: manualRunningLabel })}
           {...(deleteTarget === undefined ? {} : { deleteTarget })}
           deleting={deleting}
-          onDelete={() => { if (deleteTarget !== undefined) deleteEdition(deleteTarget) }}
+          onDelete={() => { if (deleteTarget !== undefined) deleteEdition({ ...deleteTarget, entry: 'toolbar' }) }}
           onExport={() => void exportImage()}
           onCopy={() => void copy()}
           // 重跑的是**屏幕上这一版**：期号与语言取自它，不是服务端的默认期。

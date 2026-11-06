@@ -270,3 +270,22 @@ export function tableColumns(db: SqliteDatabase, table: string): string[] {
   const rows = db.prepare(`pragma table_info(${table})`).all() as Array<{ name?: string }>
   return rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : []))
 }
+
+/**
+ * 「删除这一版」的操作记录（用户 2026-11-06 拍板）。
+ *
+ * **只记录，不还原**：没有正文、没有副本、没有恢复入口，数据删了就是没了；这张表只回答
+ * "某天某版是谁在什么时候、从哪个入口删的、成没成"。append-only：谁也不许改自己写过的那一行。
+ */
+export function createDeleteAuditSql(table = 'daily_briefing_delete_audit'): string {
+  return `create table if not exists ${table} (
+  at text not null,
+  entry text not null check(entry in ('toolbar','row-menu')),
+  edition_date text not null,
+  period_id text not null,
+  locale text not null,
+  outcome text not null check(outcome in ('success','failed')),
+  failure_code text,
+  primary key (at, edition_date, period_id, locale, entry)
+);`
+}
