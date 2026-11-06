@@ -36,7 +36,7 @@ import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerI
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
-import { appendAnalysisRunSummary, createAnalysisRunSession, formatRunSessionTitle } from './intelligence/analysis/analysisRunSession'
+import { createRunSessionPort } from './intelligence/jobs/analysisRunSessionWiring'
 import { mountSignalAnalysisReader } from './intelligence/signals/mountSignalAnalysisReader'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
@@ -553,19 +553,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   // 自动分析会话：与追问会话同一份注入端口，不另造第二个建会话的地方。建在固定智能体下、
   // 按 runId 幂等，会话里只放 runId 与摘要，原文留在 mi_analysis_io。
-  intelligenceModule.marketAnalysisRuntime.setRunSessionPort({
-    ensure: createAnalysisRunSession({
-      getAgentState: deps.getAgentState,
-      createAgentSession: deps.createAgentSession,
-      appendAgentSessionMessages: deps.appendAgentSessionMessages,
-      // 「时刻 · 模块名」，按建会话时的读者时区与语言落成文本；之后不再随设置变。
-      titleFor: queuedAt => formatRunSessionTitle(queuedAt, 'zh-CN', currentReaderTimeZone()),
-    }),
-    appendSummary: appendAnalysisRunSummary({
-      getAgentState: deps.getAgentState,
-      appendAgentSessionMessages: deps.appendAgentSessionMessages
-    })
-  })
+  intelligenceModule.marketAnalysisRuntime.setRunSessionPort(createRunSessionPort({
+    getAgentState: deps.getAgentState, createAgentSession: deps.createAgentSession,
+    appendAgentSessionMessages: deps.appendAgentSessionMessages, timeZone: () => currentReaderTimeZone()
+  }))
   // 「这条信号分析过没有」的读口：装配层这里挂一次，卡片才有状态可显示。漏挂不会报错，只会
   // 让每张卡都显示「这次没查到」，所以这一处有专门的用例断言它真的被调用。
   mountSignalAnalysisReader({
