@@ -4,7 +4,7 @@
 
 **Turn market information into analysis you can check.**
 
-![MacroBay market intelligence dashboard](./assets/screenshots/demo-en.gif)
+![MacroBay daily brief: one page, every number with its source and cutoff](./assets/screenshots/brief-hero-en.png)
 
 MacroBay is a local desktop app for reading markets with evidence. Open the dashboard, ask the
 analyst agent what changed, and see the source and time boundary behind each number. It is not a

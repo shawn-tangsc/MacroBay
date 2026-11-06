@@ -7,7 +7,7 @@
 
 MacroBay 解决的是第二个问题。
 
-![看板与分析智能体读的是同一批证据](../assets/screenshots/demo-en-poster.png)
+![看板与分析智能体读的是同一批证据](../assets/screenshots/dashboard-window-zh.png)
 
 ## 它到底解决了什么
 

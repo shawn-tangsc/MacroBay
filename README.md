@@ -134,7 +134,7 @@ reading, its window, its source and its cutoff — plus the panels the brief dra
 </p>
 
 <p align="center">
-  <sub>The desk behind the page — conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
+  <sub>The desk behind the page — conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column..</sub>
 </p>
 
 - **Funding and positioning.** BTC and ETH perpetual funding, who pays whom, and the history behind

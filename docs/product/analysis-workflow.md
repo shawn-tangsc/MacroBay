@@ -5,7 +5,7 @@
 The market-intelligence workflow is designed to keep the question, the evidence, and the resulting
 interpretation together.
 
-![Analysis and agent](../assets/screenshots/demo-en-poster.png)
+![Analysis and agent](../assets/screenshots/dashboard-window-en.png)
 
 ## 1. Choose a market or asset
 
