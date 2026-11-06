@@ -22,10 +22,10 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 18-row table (10 platform + 8 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(18)
+  it('is the signed 21-row table (13 platform + 8 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(21)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
-    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(10)
+    expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(13)
     expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(8)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
@@ -47,8 +47,10 @@ describe('notification event policy', () => {
       'market-intelligence.source.consecutive-failed',
       'market-intelligence.source.stale',
       'market-intelligence.timezone.invalid',
+      'platform.analysis.attempt-abandoned',
       'platform.analysis.manual-failed',
       'platform.analysis.quota-exhausted',
+      'platform.analysis.repeated-failure',
       'platform.channel.connection-lost',
       'platform.channel.push-resumed',
       'platform.channel.push-suspended',
@@ -80,7 +82,7 @@ describe('notification event policy', () => {
       'market-intelligence.briefing.ready',
       'market-intelligence.sentiment.alert'
     ])
-    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(15)
+    expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(18)
   })
 
   it('never approves a bypass and always keeps center', () => {

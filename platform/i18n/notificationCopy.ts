@@ -67,6 +67,15 @@ export type NotificationCopyTable = {
    * 而文案门禁只查标题/正文/理由，查不到这一个——缺了不会红，读者只是发现失败通知里没有入口。
    */
   'notification.event.platform.analysis.manual-failed.open': string
+  'notification.event.platform.analysis.repeated-failure.title': string
+  'notification.event.platform.analysis.repeated-failure.body': string
+  'notification.event.platform.analysis.repeated-failure.reason': string
+  'notification.event.platform.analysis.attempt-abandoned.title': string
+  'notification.event.platform.analysis.attempt-abandoned.body': string
+  'notification.event.platform.analysis.attempt-abandoned.reason': string
+  'notification.event.platform.analysis.recovered.title': string
+  'notification.event.platform.analysis.recovered.body': string
+  'notification.event.platform.analysis.recovered.reason': string
   /** 通道暂停事件里的动作：去设置检查。 */
   'notification.channelCheck.action': string
   /** 通用动作：去设置（来源两条等产品事件的动作标签）。 */
@@ -134,6 +143,15 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.manual-failed.body': "你刚才点的那次分析没成：{reason}。这次没有产生结论，之前的结果不受影响。",
     'notification.event.platform.analysis.manual-failed.reason': '只有你自己点的那次失败才回一条，同一次运行不会重复提醒；原因和重试入口在运行记录里。',
     'notification.event.platform.analysis.manual-failed.open': '打开运行记录',
+    'notification.event.platform.analysis.repeated-failure.title': "分析连续失败",
+    'notification.event.platform.analysis.repeated-failure.body': "最近 10 次自动分析里有 {failures} 次没成（样本 {sample} 次），可能是模型服务或网络的问题。今天这类提醒最多 2 条，之后同类的情况会并进这一条；点开看是哪一步没成。",
+    'notification.event.platform.analysis.repeated-failure.reason': '最近 10 次自动分析里失败到 6 次才提醒一次；同一条链同一天只留一条，6 小时内不重复。',
+    'notification.event.platform.analysis.attempt-abandoned.title': "有分析没有生成",
+    'notification.event.platform.analysis.attempt-abandoned.body': "今天有分析没有生成：{kind}。到点还没有结果，之后不再自动重试；点开看是哪一次。",
+    'notification.event.platform.analysis.attempt-abandoned.reason': '对应发布、开盘槽位或信号的当日重试已用尽；同类当天合并成一条，最多 2 条。',
+    'notification.event.platform.analysis.recovered.title': "分析已恢复正常",
+    'notification.event.platform.analysis.recovered.body': "之前失败的分析现在连续两次成功。故障期间有 {missing} 篇分析没有生成；点开看那一场故障的起点。",
+    'notification.event.platform.analysis.recovered.reason': '故障期间发过失败提醒，连续两次成功才说恢复；同一场故障只发一条。',
     'notification.channelCheck.action': '去设置检查',
     'notification.action.open-settings': '去设置',
     'notification.action.open-briefing': '打开日报',
@@ -185,6 +203,15 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.manual-failed.body': 'The analysis you started did not finish: {reason}. Nothing was published this time, and earlier results are unaffected.',
     'notification.event.platform.analysis.manual-failed.reason': 'Only a failure of a run you started yourself is reported, once per run; the cause and a retry are in the run log.',
     'notification.event.platform.analysis.manual-failed.open': 'Open run log',
+    'notification.event.platform.analysis.repeated-failure.title': 'Analysis kept failing',
+    'notification.event.platform.analysis.repeated-failure.body': 'Of the last {sample} automatic analyses, {failures} did not finish — most likely the model service or the network. At most 2 notices of this kind a day; later ones are folded into this row. Open it to see which step failed.',
+    'notification.event.platform.analysis.repeated-failure.reason': 'Sent once after at least 6 of the last 10 automatic analyses failed; one per trigger line per day, none within 6 hours.',
+    'notification.event.platform.analysis.attempt-abandoned.title': 'An analysis did not get generated',
+    'notification.event.platform.analysis.attempt-abandoned.body': 'An analysis did not get generated today: {kind}. It produced no result in time and is no longer retried automatically; open it to see which run.',
+    'notification.event.platform.analysis.attempt-abandoned.reason': "The day's retries for that release, session slot or signal were used up; the same kind merges into one row, at most 2 a day.",
+    'notification.event.platform.analysis.recovered.title': 'Analysis is working again',
+    'notification.event.platform.analysis.recovered.body': 'The analyses that were failing have now finished twice in a row. {missing} analyses were not generated during the outage; open it to see where the outage started.',
+    'notification.event.platform.analysis.recovered.reason': 'Announced only after two consecutive successes following a failure notice; one notice per outage.',
     'notification.channelCheck.action': 'Check settings',
     'notification.action.open-settings': 'Open settings',
     'notification.action.open-briefing': 'Open briefing',

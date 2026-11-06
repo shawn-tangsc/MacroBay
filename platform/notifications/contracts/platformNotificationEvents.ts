@@ -1,5 +1,5 @@
 /**
- * 平台事件声明表（契约 §2）：平台自己产生的 10 条通知事件（P8 于 2026-11-04 新增；P9 于 2026-11-06 签）。
+ * 平台事件声明表（契约 §2）：平台自己产生的 13 条通知事件（P8 于 2026-11-04 新增；P9–P12 于 2026-11-06 签）。
  *
  * 与产品 manifest 里的声明**同形**，只是声明者固定为 `platform`；批准值不在这里——
  * 生效表面只读 `notificationEventPolicy.ts` 的批准表（契约 §4：「生效值只读批准表」）。
@@ -149,4 +149,37 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     dedupeKeyTemplate: 'manual-failed:{runId}',
     dedupeUnit: 'occurrence'
   }),
+  // P10 连续失败（r23 档 1）：最近 10 次自动分析里失败 ≥6（样本 ≥6）才发一条。键里必须带 UTC 日期：
+  // 不带时，今天这条会并进昨天那条活跃记录，读者看到的是旧记录被改写；而每日上限与冷却只对
+  // 「新建记录」生效——于是「每天 2 条」等于不存在。发不出去看得见，并进昨天看不见。
+  declaration('platform.analysis.repeated-failure', {
+    category: 'needs-action',
+    requiresUserAction: false,
+    requestedDisruptionLevels: ['toast', 'desktop'],
+    dedupeKeyTemplate: 'repeated-failure:{line}:{date}',
+    dedupeUnit: 'occurrence',
+    dailyLimit: 2,
+    minimumGapMs: 6 * 60 * 60 * 1_000
+  }),
+  // P11 被放弃（r23 档 2）：某个发布 / 开盘槽位 / 一条信号当天被判放弃。同类当天合并计数；
+  // 正文不写死次数（次数统一由「共 N 次」那句说，两个数会打架）。
+  declaration('platform.analysis.attempt-abandoned', {
+    category: 'failure',
+    requiresUserAction: false,
+    requestedDisruptionLevels: ['toast', 'desktop'],
+    dedupeKeyTemplate: 'abandoned:{kind}:{date}',
+    dedupeUnit: 'condition',
+    conditionWindowMs: 86_400_000,
+    dailyLimit: 2
+  }),
+  // P12 恢复（r23 档 3）：故障之后连续 2 次成功才发一条。键是那场故障第一次失败那次的运行 id，
+  // 上午下午两场各自一条；只用日期会把下午那场折进上午。完成类：不弹桌面。
+  declaration('platform.analysis.recovered', {
+    category: 'completed',
+    requiresUserAction: false,
+    requestedDisruptionLevels: ['toast'],
+    dedupeKeyTemplate: 'recovered:{episodeRunId}',
+    dedupeUnit: 'occurrence',
+    dailyLimit: 2
+  })
 ])

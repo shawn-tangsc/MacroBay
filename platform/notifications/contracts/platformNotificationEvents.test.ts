@@ -12,13 +12,13 @@ import {
 } from './platformNotificationEvents'
 
 /**
- * 平台 10 条声明（契约 §2）。这批声明的批准值不在这里——生效表面只读批准表，所以这里判的是：
- * 10 条 id 与批准表对得上、申请档位没越过批准、去重键形状可构造、文案键由 id 机械生成。
+ * 平台 13 条声明（契约 §2）。这批声明的批准值不在这里——生效表面只读批准表，所以这里判的是：
+ * 13 条 id 与批准表对得上、申请档位没越过批准、去重键形状可构造、文案键由 id 机械生成。
  */
 describe('platform notification event declarations', () => {
   it('declares the ten platform events the policy table signs', () => {
     const ids = PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id)
-    expect(ids).toHaveLength(10)
+    expect(ids).toHaveLength(13)
     for (const id of ids) {
       expect(id.startsWith('platform.'), id).toBe(true)
       expect(NOTIFICATION_EVENT_POLICY[id], `${id} 缺批准表行`).toBeDefined()
@@ -30,7 +30,7 @@ describe('platform notification event declarations', () => {
       sources: [{ productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS }],
       policy: NOTIFICATION_EVENT_POLICY
     })
-    expect(catalog.list()).toHaveLength(10)
+    expect(catalog.list()).toHaveLength(13)
     for (const entry of catalog.list()) {
       for (const level of entry.requestedDisruptionLevels) {
         // channel 例外：没批按未批准处理，不报错（契约 §4）。
