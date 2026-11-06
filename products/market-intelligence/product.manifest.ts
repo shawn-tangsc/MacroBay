@@ -123,6 +123,10 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.rebuildNewsSentiment' },
     { method: 'intelligence.translateNewsSentimentBody' },
     { method: 'intelligence.getSourceHealth' },
+    // 舆情提醒：设置 → 通知第四条开关。`3224c49` 加接口时漏登记，启动自检拒绝启动过一次。
+    // 顺序跟着 `registerIntelligenceIpc` 走：这两条就在 `getTimeline` 之前注册。
+    { method: 'intelligence.getNewsPushOutletState' },
+    { method: 'intelligence.setNewsPushOutletEnabled' },
     { method: 'intelligence.getTimeline' },
     { method: 'intelligence.getWorkspaceState' },
     { method: 'intelligence.getWorkspaceTimeline' },

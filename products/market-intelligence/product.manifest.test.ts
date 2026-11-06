@@ -1,9 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// `registerIntelligenceIpc` 在模块加载时取 `app.getPath`；守卫只跑注册、不碰磁盘。
+vi.mock('electron', () => ({ app: { getPath: () => resolve(process.cwd(), '.tmp-manifest-guard') } }))
+
+import { createProductIpcRegistry } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { DAILY_BRIEFING_IPC_METHODS } from './service/intelligence/ipc/registerDailyBriefingIpc'
+import { registerIntelligenceIpc } from './service/intelligence/ipc/registerIntelligenceIpc'
 import { marketIntelligenceProductManifest } from './product.manifest'
 import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 
@@ -182,5 +188,19 @@ describe('market-intelligence product IPC baseline', () => {
       .filter((method) => method.startsWith('intelligence.dailyBriefing.'))
     // 两张表要么一样多，要么一定有一边多出来——多出来的那个方向就是"清单里挂着一个没人注册的名字"。
     expect(declared.filter((method) => !registered.has(method))).toEqual([])
+  })
+
+  /**
+   * 2026-11-06 22:55 的事故（`3224c49`）：`registerIntelligenceIpc` 里新注册了两个通道，
+   * 清单没同步，`seal()` 拒绝启动——用户看到 `product-runtime-method-baseline-mismatch`。
+   * 上面的用例只核对清单自己的常量，抓不到"注册了但没登记"；这条跑**真实注册**再对清单。
+   */
+  it('declares every method registerIntelligenceIpc actually registers', () => {
+    const registry = createProductIpcRegistry()
+    registerIntelligenceIpc(registry.register, {} as never, {} as never)
+
+    const registered = registry.seal().map(({ method }) => method)
+    const declared = new Set<string>(marketIntelligenceProductManifest.serviceRoutes.map(({ method }) => method))
+    expect(registered.filter((method) => !declared.has(method))).toEqual([])
   })
 })
