@@ -10,7 +10,7 @@ export const dailyBriefingText = {
     migration: { incomplete: '日报数据升级未完成，现在用的是旧数据。其余功能正常，升级完成后新功能会自动可用。', retry: '重试升级', retrying: '正在重试…' },
     /** 设置里的时区读不到时，窗口按系统时区算；说清为什么会和设定不同。 */
     timeZoneFromSystem: '设置里的时区读不到，这份日报的窗口按系统时区计算。',
-    window: '过去 24 小时（至 {time}）', edition: '版次 {time}', metaCutoff: '统计截止 {time}（{zone}）', backfillNote: '本版为补跑生成，数据截至 {time}', backfillNoteNoTime: '本版为补跑生成',
+    window: '过去 24 小时（至 {time}）', edition: '版次 {time}', metaCutoff: '统计截止 {time}（{zone}）', 
     periodScheduled: '期 {time}（定期）', periodManual: '期 {time}（手动）', readings: '{available} 项', readingsUnit: '项', readingsAllMissing: '四项数据都读不到', denseDay: '今日信息较多',
     noValue: '—',
     // 与「本版没采集」分开：那是我们没做，这是我们这次没拿到——读者据此决定等不等下一次。
@@ -327,7 +327,7 @@ export const dailyBriefingText = {
     migration: { incomplete: "The briefing data upgrade didn't finish, so the old data is still in use. Everything else works; the new features become available once it completes.", retry: 'Retry upgrade', retrying: 'Retrying…' },
     /** The settings zone was unreadable, so the window used the machine's zone. */
     timeZoneFromSystem: 'The time zone in settings could not be read, so this brief\'s window uses your system time zone.',
-    window: 'Last 24 hours (to {time})', edition: 'Edition {time}', metaCutoff: 'Cutoff {time} ({zone})', backfillNote: 'This edition was generated late; data as of {time}', backfillNoteNoTime: 'This edition was generated late',
+    window: 'Last 24 hours (to {time})', edition: 'Edition {time}', metaCutoff: 'Cutoff {time} ({zone})', 
     periodScheduled: 'Period {time} (scheduled)', periodManual: 'Period {time} (manual)', readings: '{available} items', readingsUnit: 'items', readingsAllMissing: 'No data available', denseDay: 'A dense day',
     noValue: '—',
     perpetualContract: 'Perpetual', indexProxy: ' (QQQ perpetual proxy)',

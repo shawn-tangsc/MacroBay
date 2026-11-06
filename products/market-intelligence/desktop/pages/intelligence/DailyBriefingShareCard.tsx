@@ -97,12 +97,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           {/* 用户 2026-11-06：简报里**不显示具体生成时刻**——「本版读取 …」整段撤掉（正文/导出/复制
               三处同源，一起没了）。`readAt` 仍然写在文档里，排查要用，只是不上版面。 */}
           {doc.edition.date} · <span data-meta-cutoff="true">{metaCutoff}</span>
-          {/* 补跑那版必须说出来：它的数据不是截止那一刻的世界（`02` `A0.10`）。**放在末段之后**——
-              准点版不渲染它，出现与消失只影响行尾；塞在中间会让后面几段整体左移、换行位置跟着变。
-              两个时刻已经在上面两段里，这里只补一句"为什么读得晚"，不再重复第三个时间。 */}
-          {doc.edition.isBackfill === true
-            ? <span data-backfill-note="true"> · {text.backfillNoteNoTime}</span>
-            : null}
+          {/* 用户 2026-11-06：「本版为补跑生成」也从简报里去掉——正文/导出/复制同源一起消失。
+              `isBackfill` 仍写在文档里（排查要用），只是不上版面。 */}
         </p>
         {/* The exported image carries this only when the edition is short; a complete edition says nothing. */}
         {completenessNote ? <p className="mi-brief-poster__completeness" data-completeness-note="true">{completenessNote}</p> : null}

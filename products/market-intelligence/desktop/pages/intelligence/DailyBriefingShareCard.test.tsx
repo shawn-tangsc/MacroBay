@@ -127,25 +127,12 @@ describe('a backfilled edition says which world it read', () => {
     expect(host.textContent).not.toContain('本版读取')
   })
 
-  it('puts the backfill sentence last on the meta line, without repeating a third time', async () => {
-    // 两个时刻已经在上面两段里；补跑那一句只解释"为什么读得晚"，不再印第三个时间。
+  it('prints no backfill marker at all, and keeps the field in the document', async () => {
+    // 用户 2026-11-06：这句也从简报里去掉（正文/导出/复制同源）。字段仍写在文档里，排查要用。
     const host = await render(backfilled())
-    const note = host.querySelector('[data-backfill-note]')!
-    expect(note).not.toBeNull()
-    expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
-    const meta = note.closest('.mi-brief-poster__meta')!
-    expect(meta.lastElementChild).toBe(note)
-    expect(note.textContent?.trimStart().startsWith('·')).toBe(true)
-  })
-
-  it('still says it was a backfill now that no read instant is printed at all', async () => {
-    // 读取时刻已经不上版面（用户 2026-11-06），但"补跑"这件事读者必须知道：那句状态照留。
-    const base = briefing()
-    const host = await render({ ...base, edition: { ...base.edition, isBackfill: true } })
-    const note = host.querySelector('[data-backfill-note]')!
-    expect(note).not.toBeNull()
-    expect(note.textContent).toBe(` · ${text.backfillNoteNoTime}`)
-    expect(host.querySelector('[data-meta-read-at]')).toBeNull()
+    expect(host.querySelector('[data-backfill-note]')).toBeNull()
+    expect(host.textContent).not.toContain('补跑')
+    expect((backfilled() as { edition: { isBackfill?: boolean } }).edition.isBackfill).toBe(true)
   })
 
   it('says nothing on a punctual edition', async () => {
