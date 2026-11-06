@@ -31,6 +31,7 @@ import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '.
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
+import { buildAnalysisFailureNoticeRequest } from '../analysis/analysisFailureNotices'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -158,7 +159,14 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
     // 0′：读者点的那次失败必回一条；两种语言的句子在提交时一起拼好，切语言后历史通知跟着变。
-    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification })
+    notifyManualFailure: createManualFailureNotice({ submitNotification: input.submitNotification }),
+    // 三档节流提醒：判定在 analysisFailureNotices，这里只把决策变成一次提交。平台文案没落时
+    // 构造返回 undefined——不发半句话，也不因此把一次已完成的运行弄成失败。
+    notifyAnalysisNotice: async ({ decision, occurredAt }) => {
+      const request = buildAnalysisFailureNoticeRequest(decision, occurredAt)
+      if (!request || !input.submitNotification) return
+      try { await input.submitNotification(request) } catch { /* 通知是记录的附加物 */ }
+    }
   })
   const predictionVerification = createPredictionVerificationService({
     repository,
