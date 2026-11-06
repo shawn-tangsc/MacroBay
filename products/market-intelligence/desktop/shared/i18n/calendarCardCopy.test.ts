@@ -1,7 +1,10 @@
 import { expect, it } from 'vitest'
 import { productText } from './productText'
 
-const card = (locale: 'zh-CN' | 'en-US') => productText[locale].pages.intelligence.portal.calendarCard as Record<string, string>
+// 这张表的值既有句子也有嵌套块（事件语境那几组标签），所以只能按 unknown 收：
+// 断言只比「键集合」与「值非空」，不做类型收窄——收窄反而会把这个异质结构说成一种。
+const card = (locale: 'zh-CN' | 'en-US'): Readonly<Record<string, unknown>> =>
+  productText[locale].pages.intelligence.portal.calendarCard as unknown as Readonly<Record<string, unknown>>
 
 it('keeps the card copy complete and identical in both locales', () => {
   expect(Object.keys(card('zh-CN')).sort()).toEqual(Object.keys(card('en-US')).sort())

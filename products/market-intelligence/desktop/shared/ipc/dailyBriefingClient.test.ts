@@ -281,8 +281,8 @@ describe('deleting one edition', () => {
       seen = payload
       return { editions: 1, attempts: 0, periodRuns: 0, sessionLinks: 1, remaining: 0, allDone: true }
     })
-    await dailyBriefingClient.deletePeriod({ date: '2026-11-05', periodId: 'default', locale: 'en-US' })
-    expect(seen).toEqual({ date: '2026-11-05', periodId: 'default', locale: 'en-US' })
+    await dailyBriefingClient.deletePeriod({ date: '2026-11-05', periodId: 'default', locale: 'en-US', entry: 'row-menu' })
+    expect(seen).toEqual({ date: '2026-11-05', periodId: 'default', locale: 'en-US', entry: 'row-menu' })
   })
 })
 

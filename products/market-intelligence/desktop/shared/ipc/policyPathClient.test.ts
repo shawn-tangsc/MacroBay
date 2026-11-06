@@ -22,7 +22,7 @@ describe('policy path client sanitizer', () => {
       sep: { asOf: '2026-09-16', medianPath: { y2026: 4.1, longerRun: 3.2 }, sourceUrl: 'https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm' }
     }))
     expect(result.state).toBe('available')
-    expect(result.state === 'available' ? result.reading.sep?.medianPath.y2026 : undefined).toBe(4.1)
+    expect(result.state === 'available' ? result.reading.sep?.medianPath?.y2026 : undefined).toBe(4.1)
   })
 
   it('drops a probability whose bucket is not one the reading can name', () => {
