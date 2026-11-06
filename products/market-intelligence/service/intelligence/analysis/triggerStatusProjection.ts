@@ -59,6 +59,12 @@ export const triggerStatusPolicy = Object.freeze({
     providerSurpriseConfirmed: 'provider-surprise-confirmed',
     semanticNoOp: 'semantic-no-op',
     intervalActive: 'interval-active',
+    /**
+     * The item path's own merge: another indicator of the same release was already analysed, so
+     * this item did not get a run of its own. Without it the reader saw a row that was skipped for
+     * "significant change" and could not tell it apart from a row nobody judged.
+     */
+    sameReleaseCoalesced: 'same-release-coalesced',
     hourBudgetExhausted: 'hour-budget-exhausted',
     dayBudgetExhausted: 'day-budget-exhausted',
     scheduleReserveExhausted: 'schedule-reserve-exhausted',
