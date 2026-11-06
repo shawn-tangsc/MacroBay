@@ -18,8 +18,9 @@ import { countConsecutiveTerminalFailures, JOB_REPEATED_FAILURE_THRESHOLD } from
 export type RepeatedTaskFailureNotifierDeps = {
   submit: (request: NotificationSubmitRequest) => Promise<unknown>
   /** 把 definition 解析成给人看的任务名；解析不出返回 `null`（调用方据此不发）。 */
-  /** 与 P1 同一个门：只判「这个定义有没有可读名字」，名字本身走引用（见 P1 那段说明）。 */
-  hasReadableTaskName: (input: { definitionId: string; productId?: string }) => boolean
+  /** 与 P1 同一个源：作业名的**中英两份快照**（契约 v2.49），取不到就不发。 */
+  taskNameSnapshot: (input: { definitionId: string; productId?: string }) =>
+    { 'zh-CN': string; 'en-US': string } | undefined
   /** 同一任务定义的终态运行，**新到旧**；由装配点从 run 台账取。 */
   listDefinitionRuns: (definitionId: string) => readonly JobRunRecord[]
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」的去重键。 */
@@ -35,9 +36,8 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
     const chain = countConsecutiveTerminalFailures(deps.listDefinitionRuns(run.definitionId))
     if (chain !== JOB_REPEATED_FAILURE_THRESHOLD) return Promise.resolve()
 
-    if (!deps.hasReadableTaskName({ definitionId: run.definitionId, productId: run.productId })) {
-      return Promise.resolve()
-    }
+    const taskName = deps.taskNameSnapshot({ definitionId: run.definitionId, productId: run.productId })
+    if (taskName === undefined) return Promise.resolve()
 
     const completedAt = run.completedAt ?? run.startedAt ?? run.createdAt
     const deeplink = {
@@ -60,8 +60,8 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
         },
-        // 与 P1 同一个引用：同一条作业定义，读的那一刻按语言取名字。
-        bodyParams: { taskName: { ref: { scope: 'job-title', definitionId: run.definitionId } } },
+        // 与 P1 同一份快照：同一条作业定义在提交那一刻的名字，中英各一份。
+        bodyParams: { taskName: { snapshot: taskName } },
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
         deeplink,
         occurredAt: completedAt,

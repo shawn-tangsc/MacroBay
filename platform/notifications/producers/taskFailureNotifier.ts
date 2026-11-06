@@ -25,10 +25,13 @@ import type { NotificationSubmitRequest } from '../contracts/notificationContrac
 export type TaskFailureNotifierDeps = {
   submit: (request: NotificationSubmitRequest) => Promise<unknown>
   /**
-   * 这个定义有没有可读的任务名。**只用来决定发不发**：名字本身走引用，在读的那一刻按语言取，
-   * 不在这里取一次再塞进参数——那就是把语言拍死在提交时。
+   * 提交这一刻的作业名：**中英两份快照**（契约 v2.49）。取不到就返回 `undefined`，调用方据此不发。
+   *
+   * 为什么是快照而不是引用：历史跨天读，作业可能已经停用、定义没了；查注册表会改写历史。
+   * 为什么存两份：读取端仍按当前语言选，切英文时这句话跟着变。
    */
-  hasReadableTaskName: (input: { definitionId: string; productId?: string }) => boolean
+  taskNameSnapshot: (input: { definitionId: string; productId?: string }) =>
+    { 'zh-CN': string; 'en-US': string } | undefined
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
 }
@@ -38,9 +41,8 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
     if (input.cause !== 'executed' || input.run.status !== 'failed') return Promise.resolve()
 
     const { run } = input
-    if (!deps.hasReadableTaskName({ definitionId: run.definitionId, productId: run.productId })) {
-      return Promise.resolve()
-    }
+    const taskName = deps.taskNameSnapshot({ definitionId: run.definitionId, productId: run.productId })
+    if (taskName === undefined) return Promise.resolve()
 
     const completedAt = run.completedAt ?? run.startedAt ?? run.createdAt
     const deeplink = {
@@ -63,8 +65,8 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
         },
-        // 作业名以引用提交：存的是「哪一条作业定义」，句子读的那一刻才按语言生成。
-        titleParams: { taskName: { ref: { scope: 'job-title', definitionId: run.definitionId } } },
+        // 作业名以**双语快照**提交：存的是提交那一刻的名字本身（两份），读时按语言选。
+        titleParams: { taskName: { snapshot: taskName } },
         actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
         deeplink,
         occurredAt: completedAt,

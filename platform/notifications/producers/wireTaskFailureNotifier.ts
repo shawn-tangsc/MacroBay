@@ -1,5 +1,5 @@
 import type { JobTitle } from '../../jobs/runtime/jobTitle'
-import { jobTitleText } from '../../jobs/runtime/jobTitle'
+import { resolveJobTitle } from '../../jobs/runtime/jobTitle'
 import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
@@ -33,19 +33,28 @@ export function wireTaskFailureNotifier(deps: {
    * 读者语言取（契约 v2.40）。这里再用 `jobTitleText` 取一个英文句子当参数，就是把语言拍死在
    * 提交那一刻——英文界面读出「Task failed: 市场日历 · 经济数据」正是这么来的。
    */
-  const hasReadableTaskName = ({ definitionId }: { definitionId: string }): boolean => {
+  /**
+   * 提交那一刻的作业名，中英两份（契约 v2.49）。
+   *
+   * 两种语言都取同一份作业定义：`resolveJobTitle` 按语言挑；`{ literal }` 与迁移期的裸字符串
+   * 两份相同——那是「读者自己的字不翻译」，不是缺一种语言。
+   */
+  const taskNameSnapshot = ({ definitionId }: { definitionId: string }) => {
     const title = deps.listDefinitions().find((entry) => entry.id === definitionId)?.title
-    if (title === undefined) return false
-    return jobTitleText(title).trim().length > 0
+    if (title === undefined) return undefined
+    const zh = resolveJobTitle(title, undefined, 'zh-CN')
+    const en = resolveJobTitle(title, undefined, 'en-US')
+    if (zh.trim().length === 0 || en.trim().length === 0) return undefined
+    return { 'zh-CN': zh, 'en-US': en }
   }
   const notify = createTaskFailureNotifier({
     submit: deps.submit,
-    hasReadableTaskName,
+    taskNameSnapshot,
     dayToken: deps.dayToken
   })
   const notifyRepeated = createRepeatedTaskFailureNotifier({
     submit: deps.submit,
-    hasReadableTaskName,
+    taskNameSnapshot,
     listDefinitionRuns: deps.listDefinitionRuns,
     dayToken: deps.dayToken
   })

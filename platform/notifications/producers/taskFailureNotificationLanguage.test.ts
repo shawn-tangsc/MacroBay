@@ -68,11 +68,17 @@ function harness(input: { definitions?: readonly { id: string; title: LocalizedT
   }
 }
 
-function notifierFor(runtime: ReturnType<typeof harness>['runtime']) {
+function notifierFor(
+  runtime: ReturnType<typeof harness>['runtime'],
+  snapshot: (definitionId: string) => { 'zh-CN': string; 'en-US': string } | undefined = (definitionId) =>
+    definitionId === 'market-calendar.daily'
+      ? { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' }
+      : undefined
+) {
   return createTaskFailureNotifier({
     submit: (request) => runtime.submit(request),
-    // 门只判「这个名字存在吗」；名字本身走 ref。
-    hasReadableTaskName: () => true,
+    // 提交那一刻取中英两份（契约 v2.49）；取不到就不发。
+    taskNameSnapshot: ({ definitionId }) => snapshot(definitionId),
     dayToken: (instant) => instant.slice(0, 10)
   })
 }
@@ -119,11 +125,21 @@ describe('任务失败通知里的作业名跟着语言走', () => {
 
   it('定义找不到时只丢作业名那一格：标题仍是「任务失败」，不整条降级', async () => {
     const { runtime, diagnostics } = harness({ definitions: [] })
-    await submitFailure(runtime, 'market-calendar.daily')
+    // 生产者取不到名字就不发；这里直接用一条历史记录验证读取端（快照不查注册表）。
+    await runtime.submit({
+      eventTypeId: 'platform.job.failed-terminal',
+      producerId: 'market-calendar',
+      dedupeVars: { builder: 'template', vars: { definitionId: 'gone', date: '2026-11-05' } },
+      titleParams: { taskName: { snapshot: { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' } } },
+      deeplink: { scope: 'platform' },
+      actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open' }],
+      occurredAt: '2026-11-05T08:00:05.000Z'
+    })
 
     const item = (await runtime.list()).items[0]
-    // 一条通知的价值主要在「什么事」：名字取不到时丢那一格，标题与正文照常在。
-    expect(item?.title).toBe('任务失败')
+    // 名字取不到就不发（这是生产者的门），换成一条**历史记录**能证明「读的时候不受影响」，
+    // 所以这里改为验证：快照在、作业定义已停，读出来仍是当时那个名字。
+    expect(item?.title).toBe('任务失败：市场日历 · 经济数据')
     expect(item?.title).not.toContain('{')
     expect(item?.title).not.toContain('notification.')
     // 动作与入口是结构事实，不跟着文案消失（带 deeplink 的通知必须能点开）。

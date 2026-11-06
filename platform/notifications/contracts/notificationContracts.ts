@@ -436,6 +436,8 @@ export type NotificationDiagnosticsEntry = {
     | 'unclaimed-producer'
     | 'claim-never-registered'
     | 'copy-unresolved'
+    /** 模板在、某个**参数**没解析到（v2.48）：只降级那一格，不整条兜底。同一记录的同一个参数只记一次。 */
+    | 'copy-param-missing'
     | 'persist-failed'
   eventTypeId?: string
   producerId?: string
@@ -445,6 +447,8 @@ export type NotificationDiagnosticsEntry = {
    */
   recordId?: string
   key?: string
+  /** `copy-param-missing` 用：消失的是哪一格参数（`taskName` 这类名字）。 */
+  param?: string
   language?: 'zh-CN' | 'en-US'
   at: string
 }

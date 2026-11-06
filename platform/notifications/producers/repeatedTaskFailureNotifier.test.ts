@@ -36,13 +36,14 @@ function history(failed: number, tail: JobRunRecord['status'][] = []): JobRunRec
 
 function notifier(overrides: {
   runs?: JobRunRecord[]
-  hasReadableTaskName?: (input: { definitionId: string; productId?: string }) => boolean
+  taskNameSnapshot?: (input: { definitionId: string; productId?: string }) =>
+    { 'zh-CN': string; 'en-US': string } | undefined
 } = {}) {
   const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<unknown>>(async () => undefined)
   const listDefinitionRuns = vi.fn(() => overrides.runs ?? history(3))
   const notify = createRepeatedTaskFailureNotifier({
     submit,
-    hasReadableTaskName: overrides.hasReadableTaskName ?? (() => true),
+    taskNameSnapshot: overrides.taskNameSnapshot ?? (() => ({ 'zh-CN': '央行利率决议采集', 'en-US': 'Central bank rate decision' })),
     listDefinitionRuns,
     dayToken: (instant) => instant.slice(0, 10)
   })
@@ -61,7 +62,7 @@ describe('repeated task failure notifier (P2)', () => {
     expect(request.producerId).toBe('handler-1')
     // 和 P1 一样：名字以引用提交，读的那一刻按读者语言取（契约 v2.40）。
     expect(request.bodyParams).toEqual({
-      taskName: { ref: { scope: 'job-title', definitionId: 'definition-1' } }
+      taskName: { snapshot: { 'zh-CN': '央行利率决议采集', 'en-US': 'Central bank rate decision' } }
     })
     expect(request.dedupeVars).toEqual({
       builder: 'template',
@@ -99,7 +100,7 @@ describe('repeated task failure notifier (P2)', () => {
   })
 
   it('stays silent when no readable task name exists, instead of inventing one', async () => {
-    const { submit, notify } = notifier({ hasReadableTaskName: () => false })
+    const { submit, notify } = notifier({ taskNameSnapshot: () => undefined })
     await notify({ run: run(), cause: 'executed' })
     expect(submit).not.toHaveBeenCalled()
   })

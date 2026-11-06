@@ -45,6 +45,8 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
    * 真正「第一次坏掉」的那一刻反而被淹掉。
    */
   const reportedUnresolved = new Set<string>()
+  /** 同一条记录、同一个参数只报一次：翻页与切语言都会重读，重复刷日志等于没有日志。 */
+  const reportedMissingParams = new Set<string>()
   /**
    * 一条记录的文案，**在读者读到的那一刻**按当前语言解析一次（契约 §3.3）。
    *
@@ -68,7 +70,13 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       const ref = record.productId === undefined
         ? { scope: 'platform' as const, key, ...(params === undefined ? {} : { params }) }
         : { scope: 'product' as const, productId: record.productId, key, ...(params === undefined ? {} : { params }) }
-      const resolved = input.copy?.resolve(ref, resolvedLanguage)
+      const detailed = input.copy?.resolveDetailed?.(ref, resolvedLanguage)
+      const resolved = detailed === undefined ? input.copy?.resolve(ref, resolvedLanguage) : detailed.text
+      if (detailed !== undefined) {
+        for (const param of detailed.missingParams) {
+          reportMissingParam(record, key, param, resolvedLanguage)
+        }
+      }
       if (typeof resolved === 'string' && resolved.length > 0) return resolved
       // 没有端口、或端口解析不到时，退回平台闭集（产品键本来就不在闭集里，会落到兜底句）。
       const text = notificationCopyText(resolvedLanguage, key)
@@ -88,6 +96,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
 
     // 注意：可选段（`{taskName?}`）被丢掉时句子照常出，**目前不留诊断**——它不算解析失败。
     // 代价是「为什么这一段少了」只能从记录参数看出来；要追因果时先看这条注释。
+    // 注意：可选段/参数被丢掉时句子照常出，靠 `copy-param-missing` 留痕（不整条降级）。
     const title = resolve(record.titleKey, record.titleParams)
     const body = resolve(record.bodyKey, record.bodyParams)
     const reason = resolve(record.reasonKey, record.reasonParams)
@@ -181,6 +190,27 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       desktopBlocked,
       ...(pushOutcome?.transition === undefined ? {} : { transition: pushOutcome.transition })
     }
+  }
+
+  /** 参数缺了：留一条 `copy-param-missing`（带键与参数名），同一条记录同一个参数只记一次。 */
+  function reportMissingParam(
+    record: NotificationRecord,
+    key: string,
+    param: string,
+    language: NotificationCopyLanguage
+  ): void {
+    const dedupe = `${record.id}|${param}`
+    if (reportedMissingParams.has(dedupe)) return
+    reportedMissingParams.add(dedupe)
+    input.diagnostics?.({
+      code: 'copy-param-missing',
+      at: input.now(),
+      recordId: record.id,
+      eventTypeId: record.eventTypeId,
+      key,
+      param,
+      language
+    })
   }
 
   /**

@@ -68,9 +68,11 @@ describe('数字参数：读的那一刻按语言格式化（契约 v2.42 第三
     expect(port().resolve({ scope: 'platform', key, params: count }, 'zh-CN')).toBe('任务失败：3')
   })
 
-  it('非法数值整句解析不到：不印 NaN，也不印半个单位', () => {
+  it('非法数值只丢那一格：不印 NaN，也不整条降级（v2.48 分级降级）', () => {
     const params = { taskName: { number: Number.NaN, kind: 'usd' as const } }
-    expect(port().resolve({ scope: 'platform', key, params }, 'zh-CN')).toBeNull()
+    const detailed = port().resolveDetailed({ scope: 'platform', key, params }, 'zh-CN')
+    expect(detailed.text).toBe('任务失败')
+    expect(detailed.missingParams).toEqual(['taskName'])
   })
 })
 
@@ -89,11 +91,13 @@ describe('可选段：拿不到就整段消失，不整条降级', () => {
     expect(port().resolve({ scope: 'platform', key, params }, 'en-US')).toBe('Task failed')
   })
 
-  it('必填参数缺失仍然整句解析不到（可选段才允许丢格子）', () => {
-    // 额度那句的 `{used}` / `{limit}` 是必填：少一个就整句判为解析不到，不印半个句子。
+  it('参数缺失（必填也一样）只丢那一格，不整条降级', () => {
     const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
-    expect(port().resolve({ scope: 'platform', key: requiredKey }, 'zh-CN')).toBeNull()
-    expect(port().resolve({ scope: 'platform', key: requiredKey, params: { used: '3' } }, 'zh-CN')).toBeNull()
+    const missing = port().resolveDetailed({ scope: 'platform', key: requiredKey }, 'zh-CN')
+    // 模板还在，所以不是兜底句；缺的那两格消失，句子剩下的部分照常。
+    expect(missing.text).not.toBeNull()
+    expect(missing.text).not.toContain('{')
+    expect([...missing.missingParams].sort()).toEqual(['limit', 'used'])
     expect(port().resolve({ scope: 'platform', key: requiredKey, params: { used: '3', limit: '10' } }, 'zh-CN'))
       .toContain('今天已用 3 次，上限 10 次')
   })
@@ -109,13 +113,16 @@ describe('参数可以是引用（一层）', () => {
       .toBe('Task failed: Market calendar · economic data')
   })
 
-  it('必填位置的引用解析不到 → 整句判为解析不到，不把占位符印给读者', () => {
+  it('引用解析不到只丢那一格，并报出参数名', () => {
     const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
     const params = {
       used: { ref: { scope: 'job-title' as const, definitionId: 'gone' } },
       limit: '10'
     }
-    expect(port().resolve({ scope: 'platform', key: requiredKey, params }, 'zh-CN')).toBeNull()
+    const detailed = port().resolveDetailed({ scope: 'platform', key: requiredKey, params }, 'zh-CN')
+    expect(detailed.missingParams).toEqual(['used'])
+    expect(detailed.text).toContain('上限 10 次')
+    expect(detailed.text).not.toContain('{')
   })
 
   it('字面量参数照旧：日期、次数这类本来就与语言无关', () => {
@@ -123,8 +130,23 @@ describe('参数可以是引用（一层）', () => {
       .toBe('任务失败：手动任务')
   })
 
-  it('必填段缺参数仍是整句解析不到，不许印占位符', () => {
+  it('缺参数时报出参数名（`copy-param-missing` 的输入），不许印占位符', () => {
     const requiredKey = 'notification.event.platform.analysis.quota-exhausted.body'
-    expect(port().resolve({ scope: 'platform', key: requiredKey }, 'zh-CN')).toBeNull()
+    expect([...port().resolveDetailed({ scope: 'platform', key: requiredKey }, 'zh-CN').missingParams].sort())
+      .toEqual(['limit', 'used'])
+  })
+
+  it('双语快照：按当前语言选；**缺那种语言就按缺参处理，绝不拿另一种顶上**', () => {
+    const snapshot = { 'zh-CN': '市场日历 · 经济数据', 'en-US': 'Market calendar · economic data' }
+    expect(port().resolve({ scope: 'platform', key, params: { taskName: { snapshot } } }, 'zh-CN'))
+      .toBe('任务失败：市场日历 · 经济数据')
+    expect(port().resolve({ scope: 'platform', key, params: { taskName: { snapshot } } }, 'en-US'))
+      .toBe('Task failed: Market calendar · economic data')
+
+    // 只存中文：英文界面下不许把中文塞进去，按缺参处理（那一格消失）。
+    const onlyZh = { 'zh-CN': '市场日历 · 经济数据' } as unknown as typeof snapshot
+    const en = port().resolveDetailed({ scope: 'platform', key, params: { taskName: { snapshot: onlyZh } } }, 'en-US')
+    expect(en.text).toBe('Task failed')
+    expect(en.missingParams).toEqual(['taskName'])
   })
 })

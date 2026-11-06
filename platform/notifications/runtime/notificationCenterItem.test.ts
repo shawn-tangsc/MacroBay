@@ -167,11 +167,15 @@ describe('渲染层看到的那一份', () => {
     expect(item.deeplink).toEqual({ scope: 'platform' })
   })
 
-  it('缺参数不拿 `{taskName}` 顶上：整条降级，但结构字段照旧在', async () => {
-    const item = await harness().project(record({ titleParams: {} }), 'needs-action')
+  it('缺参数只丢那一格，不拿 `{taskName}` 顶上，结构字段照旧在', async () => {
+    const { project, diagnostics } = harness()
+    const item = await project(record({ titleParams: {} }), 'needs-action')
 
-    expect(item.title).toBe('有一条新通知，点开看详情')
+    // 分级降级（v2.48）：模板在、参数缺 → 只丢那一格，标题仍是「任务失败」。
+    expect(item.title).toBe('任务失败')
     expect(item.title).not.toContain('{')
+    // 一行诊断：丢的是哪一格（不新增第三个码）。
+    expect(diagnostics.map((entry) => entry.code)).toContain('copy-param-missing')
     // 「点开看详情」不许是空承诺：时间与类型标签不参与文案解析，降级时照旧在。
     expect(item.category).toBe('needs-action')
     expect(item.createdAt).toBe('2026-11-05T00:00:00.000Z')
