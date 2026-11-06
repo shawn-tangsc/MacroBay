@@ -30,9 +30,16 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了但解读没出来，点开可以重试。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
 
-    [TITLE(IDS.signalTriggered)]: '模块信号触发',
-    [BODY(IDS.signalTriggered)]: '有一条新信号，点开看该模块的读数。',
-    [REASON(IDS.signalTriggered)]: '规则命中，且达到你设的严重度门槛。',
+    // 标题必须以资产名开头（情报 v3.26 §十一）：读者可能同时在盯几个资产。
+    [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
+    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF 连续净流出',
+    ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: '持仓骤降',
+    // 正文四个变体：规则 × 档位。数字一律数值参数，模板里不写任何阈值。
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '净流出 {amount}，超过 {threshold} 的阈值',
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '净流出 {amount}，是阈值的 {multiple}',
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: '15 分钟跌 {dropPct}（阈值 {thresholdPct}），成交放大 {multiple}，规模约 {notional}',
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: '15 分钟跌 {dropPct}（强阈值 {strongPct}），成交放大 {multiple}，规模约 {notional}',
+    [REASON(IDS.signalTriggered)]: '规则命中，且读数达到这条规则的阈值。',
 
     [TITLE(IDS.macroEventLanded)]: '宏观事件已发布',
     [BODY(IDS.macroEventLanded)]: '有一条宏观数据或事件落地，点开看日历详情。',
@@ -60,9 +67,14 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation. Open it to retry.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
 
-    [TITLE(IDS.signalTriggered)]: 'Module signal triggered',
-    [BODY(IDS.signalTriggered)]: 'A new signal fired. Open it to see the reading for that module.',
-    [REASON(IDS.signalTriggered)]: 'A rule matched and cleared your severity threshold.',
+    [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
+    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF outflows',
+    ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: 'open interest dropped',
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '{amount} net outflow, past the {threshold} threshold',
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '{amount} net outflow, {multiple} the threshold',
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: 'Down {dropPct} in 15 min (threshold {thresholdPct}), volume {multiple}, about {notional}',
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: 'Down {dropPct} in 15 min (strong threshold {strongPct}), volume {multiple}, about {notional}',
+    [REASON(IDS.signalTriggered)]: 'A rule matched and the reading reached its threshold.',
 
     [TITLE(IDS.macroEventLanded)]: 'Macro event released',
     [BODY(IDS.macroEventLanded)]: 'A macro release or event landed. Open it for the calendar detail.',

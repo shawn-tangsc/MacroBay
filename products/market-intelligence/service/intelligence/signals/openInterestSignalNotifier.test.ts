@@ -53,14 +53,33 @@ describe('open interest signal notification', () => {
     const request = submit.mock.calls[0]![0]
     expect(request.eventTypeId).toBe('market-intelligence.signal.triggered')
     expect(request.producerId).toBe('market-intelligence.collectSource')
+    // 日内键里**不带任何时间**（契约 v2.43 §7.4）：时间只出现在 occurredAt。
     expect(request.dedupeVars).toEqual({
       builder: 'moduleSignal',
       moduleId: 'open-interest',
       ruleId: 'oi-liquidation-proxy',
       asset: 'btc',
-      observedAt: bucketAt,
-      cadence: 'intraday',
-      bucketMs
+      cadence: 'intraday'
+    })
+    // 信号自己的三档，不是展示那套（info/success/warning/critical）。
+    expect(request.signalSeverity).toBe('high')
+    expect(request.bodyVariant).toBe('oiDropAggravated')
+    expect(request.titleParams).toEqual({
+      asset: 'BTC',
+      headline: {
+        ref: {
+          scope: 'product',
+          productId: 'market-intelligence',
+          key: 'notification.event.market-intelligence.signal.triggered.headline.oiDrop'
+        }
+      }
+    })
+    // 数字按「值 + 单位」传，阈值来自规则常量（强阈值的来源就是那一个数）。
+    expect(request.bodyParams).toEqual({
+      dropPct: { number: -2.7, kind: 'pct' },
+      strongPct: { number: -2.5, kind: 'pct' },
+      multiple: { number: 3.4, kind: 'multiple' },
+      notional: { number: 7.4e9, kind: 'usd' }
     })
     // The key string has one implementation (the platform builder); the call site carries only vars.
     expect('dedupeKey' in request).toBe(false)
@@ -69,6 +88,32 @@ describe('open interest signal notification', () => {
     // Nothing to open: the shell resolves settings deeplinks only, so no pointer is sent.
     expect(request.actions).toEqual([])
     expect(request.deeplink).toBeUndefined()
+  })
+
+  it('follows the rule thresholds: different constants produce different sentences’ parameters', async () => {
+    const submit = vi.fn(async (_request: NotificationSubmitRequest) => accepted)
+    const notify = createOpenInterestSignalNotifier({
+      submit,
+      readHistory: async () => reading(),
+      now: () => asOf,
+      // 注入另一组阈值：文案参数必须跟着走，模板里没有第二个数。
+      thresholds: { dropPct: -1.1, strongDropPct: -9.9 }
+    })
+    await notify()
+    expect(submit.mock.calls[0]![0].bodyParams).toMatchObject({ strongPct: { number: -9.9, kind: 'pct' } })
+  })
+
+  it('uses the base variant with the plain threshold when the drop is not the strong one', async () => {
+    const { submit, notify } = notifier({
+      history: reading({
+        liquidationHints: [{ observedAt: bucketAt, asset: 'btc', dropPct: -1.6, volumeMultiple: 2.2, notionalUsd: 7.4e9 }]
+      })
+    })
+    await notify()
+    const request = submit.mock.calls[0]![0]
+    expect(request.signalSeverity).toBe('medium')
+    expect(request.bodyVariant).toBe('oiDrop')
+    expect(request.bodyParams).toMatchObject({ thresholdPct: { number: -1.5, kind: 'pct' } })
   })
 
   it('gives the same bucket the same vars on the next tick, so the platform merges instead of re-pushing', async () => {

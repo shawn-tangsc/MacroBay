@@ -5,6 +5,14 @@ import type {
 import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
 
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import {
+  multipleParam,
+  usdParam,
+  thresholdMultiple,
+  signalAssetSymbol,
+  signalHeadline,
+  SIGNAL_HEADLINE_KEYS
+} from './signalNotificationCopy'
 import { etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../contracts/etfFlows'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
@@ -43,6 +51,7 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
   if (signal.moduleId !== 'etf-flows' || signal.ruleId !== 'etf-outflow-3d') return undefined
   if (signal.readiness !== 'available' || signal.asset === null) return undefined
 
+  // 交易日规则键里带交易日；日内规则键里**不带任何时间**（契约 v2.43 §7.4，窗口交给声明）。
   const dedupeVars = signal.cadence.kind === 'trading-day'
     ? {
         builder: 'moduleSignal' as const,
@@ -57,18 +66,31 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
         moduleId: signal.moduleId,
         ruleId: signal.ruleId,
         asset: signal.asset,
-        observedAt: signal.observedAt,
-        cadence: 'intraday' as const,
-        bucketMs: signal.cadence.bucketMs
+        cadence: 'intraday' as const
       }
 
-  // 参数描述不出一个桶时平台会拒收；那时不发，也不在这里替它拼一个。
+  // 参数描述不出一个键时平台会拒收；那时不发，也不在这里替它拼一个。
   if (notificationDedupeBuilders.moduleSignal(dedupeVars) === undefined) return undefined
+
+  // 读数与阈值都来自信号的 values（规则常量在造信号时已经写进去），这里不再回头读常量。
+  const flowUsd = signal.values.cumulativeNetFlowUsd
+  const thresholdUsd = signal.values.thresholdUsd
+  if (!Number.isFinite(flowUsd) || !Number.isFinite(thresholdUsd)) return undefined
+  const aggravated = signal.severity === 'high'
 
   return {
     eventTypeId: EVENT_IDS.signalTriggered,
     producerId: ETF_SIGNAL_NOTIFICATION_PRODUCER_ID,
+    signalSeverity: signal.severity,
     dedupeVars,
+    titleParams: {
+      asset: signalAssetSymbol(signal.asset),
+      headline: signalHeadline(SIGNAL_HEADLINE_KEYS.etfOutflow)
+    },
+    bodyVariant: aggravated ? 'etfOutflowAggravated' : 'etfOutflow',
+    bodyParams: aggravated
+      ? { amount: usdParam(flowUsd), multiple: multipleParam(thresholdMultiple(flowUsd, thresholdUsd)) }
+      : { amount: usdParam(flowUsd), threshold: usdParam(thresholdUsd) },
     actions: [],
     // 信号描述的那个交易日，不是提交这一下的时刻：晚到的流水仍属于它自己那天。
     occurredAt: signal.observedAt

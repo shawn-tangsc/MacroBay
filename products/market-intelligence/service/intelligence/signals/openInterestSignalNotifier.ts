@@ -4,7 +4,16 @@ import type { OpenInterestHistoryResult } from '../../../contracts/openInterestH
 import { signalWindow, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import type { SignalAnalysisRequest, SignalAnalysisOutcome } from '../jobs/requestSignalAnalysis'
+import { liquidationHintPolicy } from '../../../contracts/openInterestPositioning'
 import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
+import {
+  multipleParam,
+  pctParam,
+  usdParam,
+  signalAssetSymbol,
+  signalHeadline,
+  SIGNAL_HEADLINE_KEYS
+} from './signalNotificationCopy'
 
 /**
  * 持仓量这条腿的通知出站（通知目录 §四之三）：规则命中一次，就对读者说一次。
@@ -55,38 +64,63 @@ export function selectSignalNotificationCandidates(
  * 没有动作、也没有落点：外壳今天只认「设置分区」这一种 deeplink（页面/产品两支没有生产者，
  * 写了也走不到）。挂一个点不动的动作，比不挂更糟——读者会以为是自己没点对。
  */
-function submitRequestFor(signal: ModuleSignal): NotificationSubmitRequest | undefined {
+export function buildOpenInterestSignalRequest(
+  signal: ModuleSignal,
+  /** 阈值取规则自己的常量；测试注入别的值即可证明「文案跟着常量走、模板里没有第二个数」。 */
+  thresholds: Readonly<{ dropPct: number; strongDropPct: number }> = liquidationHintPolicy
+): NotificationSubmitRequest | undefined {
   if (signal.asset === null) return undefined
-  const base = {
-    eventTypeId: EVENT_IDS.signalTriggered,
-    producerId: OPEN_INTEREST_PRODUCER_ID,
-    actions: [] as const,
-    occurredAt: signal.observedAt
+  const dropPct = signal.values.dropPct
+  const volumeMultiple = signal.values.volumeMultiple
+  const notionalUsd = signal.values.notionalUsd
+  if (!Number.isFinite(dropPct) || !Number.isFinite(volumeMultiple) || !Number.isFinite(notionalUsd)) {
+    return undefined
   }
-  if (signal.cadence.kind === 'intraday') {
-    return {
-      ...base,
-      dedupeVars: {
-        builder: 'moduleSignal',
+
+  // 日内键里**不带任何时间**（契约 v2.43 §7.4）：合并与冷却是声明的滚动窗口管的事。
+  const dedupeVars = signal.cadence.kind === 'intraday'
+    ? {
+        builder: 'moduleSignal' as const,
+        moduleId: signal.moduleId,
+        ruleId: signal.ruleId,
+        asset: signal.asset,
+        cadence: 'intraday' as const
+      }
+    : {
+        builder: 'moduleSignal' as const,
         moduleId: signal.moduleId,
         ruleId: signal.ruleId,
         asset: signal.asset,
         observedAt: signal.observedAt,
-        cadence: 'intraday',
-        bucketMs: signal.cadence.bucketMs
+        cadence: 'trading-day' as const
       }
-    }
-  }
+
+  const aggravated = signal.severity === 'high'
   return {
-    ...base,
-    dedupeVars: {
-      builder: 'moduleSignal',
-      moduleId: signal.moduleId,
-      ruleId: signal.ruleId,
-      asset: signal.asset,
-      observedAt: signal.observedAt,
-      cadence: 'trading-day'
-    }
+    eventTypeId: EVENT_IDS.signalTriggered,
+    producerId: OPEN_INTEREST_PRODUCER_ID,
+    signalSeverity: signal.severity,
+    dedupeVars,
+    titleParams: {
+      asset: signalAssetSymbol(signal.asset),
+      headline: signalHeadline(SIGNAL_HEADLINE_KEYS.oiDrop)
+    },
+    bodyVariant: aggravated ? 'oiDropAggravated' : 'oiDrop',
+    bodyParams: aggravated
+      ? {
+          dropPct: pctParam(dropPct),
+          strongPct: pctParam(thresholds.strongDropPct),
+          multiple: multipleParam(volumeMultiple),
+          notional: usdParam(notionalUsd)
+        }
+      : {
+          dropPct: pctParam(dropPct),
+          thresholdPct: pctParam(thresholds.dropPct),
+          multiple: multipleParam(volumeMultiple),
+          notional: usdParam(notionalUsd)
+        },
+    actions: [] as const,
+    occurredAt: signal.observedAt
   }
 }
 
@@ -127,6 +161,8 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
   requestAnalysis?: (request: SignalAnalysisRequest) => Promise<SignalAnalysisOutcome>
   /** Buckets already offered in this process, keyed by the signal's dedupe key. */
   handed?: Map<string, number>
+  /** 阈值来自规则常量；测试注入别的值，用来证明句子跟着常量走。 */
+  thresholds?: Readonly<{ dropPct: number; strongDropPct: number }>
 }>) {
   return async function notifyOpenInterestSignals(): Promise<readonly NotificationSubmitOutcome[]> {
     const asOf = (deps.now ?? (() => new Date().toISOString()))()
@@ -138,7 +174,7 @@ export function createOpenInterestSignalNotifier(deps: Readonly<{
     const candidates = selectSignalNotificationCandidates(openInterestSignalsFromHistory(reading, asOf), asOf)
     const outcomes: NotificationSubmitOutcome[] = []
     for (const signal of candidates) {
-      const request = submitRequestFor(signal)
+      const request = buildOpenInterestSignalRequest(signal, deps.thresholds ?? liquidationHintPolicy)
       if (request !== undefined && deps.submit !== undefined) outcomes.push(await deps.submit(request))
       const analysis = analysisRequestFor(signal)
       if (analysis === undefined || deps.requestAnalysis === undefined) continue

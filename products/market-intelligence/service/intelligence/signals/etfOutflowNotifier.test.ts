@@ -38,16 +38,48 @@ describe('ETF outflow signal notification', () => {
     expect('dedupeKey' in request!).toBe(false)
     expect(request!.dedupeVars).toMatchObject({ builder: 'moduleSignal', moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: 'btc', cadence: 'trading-day' })
     // The platform's builder turns those parameters into its own key; the caller never writes one.
-    const platformKey = notificationDedupeBuilders.moduleSignal(request!.dedupeVars)
+    const vars = request!.dedupeVars
+    if (vars.builder !== 'moduleSignal' || vars.cadence !== 'trading-day') throw new Error('expected a trading-day signal')
+    const platformKey = notificationDedupeBuilders.moduleSignal(vars)
     expect(platformKey).toBe('module-signal:ETF:etf-outflow-3d:BTC:2026-08-28')
-    // Same bucket, same key: a late-arriving flow for that day must not ring a second time.
-    expect(notificationDedupeBuilders.moduleSignal({ ...request!.dedupeVars, observedAt: '2026-08-28T18:00:00.000Z' })).toBe(platformKey)
+    // Same trading day, same key: a late-arriving flow for that day must not ring a second time.
+    expect(notificationDedupeBuilders.moduleSignal({ ...vars, observedAt: '2026-08-28T18:00:00.000Z' })).toBe(platformKey)
     // The notification describes the trading day, not the instant the refresh ran.
     expect(request!.occurredAt).toBe(signal.observedAt)
+    // 信号自己的三档 + 标题以资产符号开头 + 正文变体按档位选。
+    expect(request!.signalSeverity).toBe('medium')
+    expect(request!.titleParams).toEqual({
+      asset: 'BTC',
+      headline: {
+        ref: {
+          scope: 'product',
+          productId: 'market-intelligence',
+          key: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflow'
+        }
+      }
+    })
+    expect(request!.bodyVariant).toBe('etfOutflow')
+    // 数字按「值 + 单位」传；阈值取信号自己的 values（造信号时写进去的那条常量）。
+    expect(request!.bodyParams).toEqual({
+      amount: { number: -150_000_000, kind: 'usd' },
+      threshold: { number: -100_000_000, kind: 'usd' }
+    })
     // No deeplink and no action: the shell cannot open a product page today, so a button here
     // would be a pointer that goes nowhere. The notification records the fact, nothing more.
     expect(request!.deeplink).toBeUndefined()
     expect(request!.actions).toEqual([])
+  })
+
+  it('switches to the aggravated variant with the threshold multiple when the outflow is three times the threshold', () => {
+    const signal = buildEtfOutflowSignal({ asset: 'btc', rows: rows([10, -200_000_000, -200_000_000, -200_000_000]), asOf })
+    expect(signal?.severity).toBe('high')
+    const request = buildEtfOutflowSignalRequest(signal!)
+    expect(request!.signalSeverity).toBe('high')
+    expect(request!.bodyVariant).toBe('etfOutflowAggravated')
+    expect(request!.bodyParams).toEqual({
+      amount: { number: -600_000_000, kind: 'usd' },
+      multiple: { number: 6, kind: 'multiple' }
+    })
   })
 
   it('says nothing while the window is not complete: "not judged yet" is not an event', () => {

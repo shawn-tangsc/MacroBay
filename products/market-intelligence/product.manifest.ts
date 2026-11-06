@@ -10,6 +10,7 @@ import {
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
 
@@ -317,12 +318,15 @@ export const marketIntelligenceProductManifest = {
     }),
     notificationEvent('market-intelligence.signal.triggered', {
       category: 'reminder',
-      body: true,
+      // 正文按「规则 × 档位」四个变体；标题是 `{asset} {headline}`，资产名开头。
+      bodyVariants: ['etfOutflow', 'etfOutflowAggravated', 'oiDrop', 'oiDropAggravated'],
       requiresUserAction: false,
       // 信息类只走应用内与手机：桌面按「失败 / 需修正 / 系统状态」三类收口，不再申请桌面档。
       requestedDisruptionLevels: ['channel'],
       dedupeKeyBuilder: 'moduleSignal',
-      dedupeUnit: 'occurrence',
+      // 键里不带时间（契约 v2.43 §7.4）；窗口数只有一处来源：规则自己的冷却。
+      dedupeUnit: 'condition',
+      conditionWindowMs: moduleSignalPolicy.intradayCooldownMs,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.macro.event-landed', {
