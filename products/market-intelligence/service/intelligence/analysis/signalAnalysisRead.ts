@@ -41,17 +41,14 @@ export function assembleSignalAnalysisRead(input: Readonly<{
 }>): ModuleSignalAnalysisRead {
   const hashes = [...new Set(input.signals.map(entry => entry.signal.dedupeKey))]
   const rows = input.store.listLatestSignalLedgerStates(hashes)
-  const runs: Record<string, { status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; failureCode: string | null }> = {}
+  const runs: Record<string, { status: string; failureCode: string | null }> = {}
   for (const row of rows) {
     if (!row.analysisRunId) continue
     const run = input.store.getRun(row.analysisRunId)
     if (!run) continue
-    // 运行表的状态闭集比这里宽（invalid-output / stale / superseded 等），映射不到的一律当失败：
-    // 「跑了但没成」比「还在跑」更接近事实，读者不会一直等。
-    runs[row.analysisRunId] = {
-      status: run.status === 'succeeded' ? 'succeeded' : run.status === 'queued' || run.status === 'running' ? run.status : 'failed',
-      failureCode: run.failureCode
-    }
+    // 原样交给投影：状态闭集比这里宽（invalid-output / stale / superseded），由投影分出
+    // 「没成」和「停下」两件事；在这里先压平，等于把「我们停了」说成「它坏了」。
+    runs[row.analysisRunId] = { status: run.status, failureCode: run.failureCode }
   }
   return {
     state: 'available',

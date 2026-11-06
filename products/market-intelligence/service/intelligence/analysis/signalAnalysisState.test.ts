@@ -21,9 +21,20 @@ describe('signal analysis state', () => {
       .toMatchObject({ analysisState: 'published' })
     const failed = projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: { status: 'failed', failureCode: 'analysis-upstream-error' } })
     expect(failed).toMatchObject({ analysisState: 'failed', analysisReason: 'analysis-upstream-error' })
-    // 校验没过、被取消都算「跑了没成」，不是「没跑」。
-    expect(projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: { status: 'cancelled', failureCode: null } }))
-      .toMatchObject({ analysisState: 'failed' })
+    expect(projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: { status: 'invalid-output', failureCode: 'analysis-invalid-json' } }))
+      .toMatchObject({ analysisState: 'failed', analysisReason: 'analysis-invalid-json' })
+  })
+
+  it('says a stopped run was stopped, with its own reason, never “failed”', () => {
+    const stopped = (status: string) => projectSignalAnalysisState({ severity: 'high', row: row({ analysisRunId: 'run-1' }), run: { status, failureCode: null } })
+    // 读者自己关窗、或它被新的一次取代：都不是「它坏了」。
+    expect(stopped('cancelled')).toMatchObject({ analysisState: 'stopped', analysisReason: 'run-cancelled' })
+    expect(stopped('stale')).toMatchObject({ analysisState: 'stopped', analysisReason: 'run-superseded' })
+    expect(stopped('superseded')).toMatchObject({ analysisState: 'stopped', analysisReason: 'run-superseded' })
+    // 认不出的状态：既不诬告成「没成」，也不谎报成「在等」，而且必须留下缺陷标记。
+    expect(stopped('some-future-status')).toMatchObject({ analysisState: 'stopped', analysisReason: 'run-unrecognized' })
+    expect(stopped('cancelled').analysisState).not.toBe('failed')
+    expect(stopped('cancelled').analysisState).not.toBe('not-triggered')
   })
 
   it('turns a low mark with no row into skipped, not into a wait that will never end', () => {

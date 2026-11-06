@@ -17,8 +17,13 @@ import type { SignalSeverity } from '../../../contracts/moduleSignal'
 export type SignalAnalysisStateView = Readonly<{
   /** 读者自己在设置里关了自动分析。读设置，不读账本——账本清空后它也不能变。 */
   analysisOffByReader: boolean
-  analysisState: 'not-triggered' | 'queued' | 'published' | 'skipped' | 'failed'
-  /** `skipped` / `failed` 必填：两张码表（`signal-*` / `analysis-*`），其余三态不带。 */
+  analysisState: 'not-triggered' | 'queued' | 'published' | 'skipped' | 'failed' | 'stopped'
+  /**
+   * `skipped` / `failed` / `stopped` 必填。
+   *
+   * 停下来的运行不是失败：读者关窗、被更新的一次取代，都不是「它坏了」。第六态只加一个，
+   * 原因分三句：`run-cancelled` / `run-superseded` / `run-unrecognized`。
+   */
   analysisReason?: string
 }>
 
@@ -32,7 +37,8 @@ export type SignalTriggerLedgerState = Readonly<{
 }>
 
 export type SignalAnalysisRunState = Readonly<{
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+  /** The store's own status union; anything this projection does not know reads as `stopped`. */
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'invalid-output' | 'cancelled' | 'stale' | 'superseded' | string
   failureCode: string | null
 }>
 
@@ -71,7 +77,17 @@ export function projectSignalAnalysisState(input: Readonly<{
     return { analysisOffByReader, analysisState: 'queued' }
   }
   if (run.status === 'succeeded') return { analysisOffByReader, analysisState: 'published' }
-  return { analysisOffByReader, analysisState: 'failed', analysisReason: run.failureCode ?? undefined }
+  if (run.status === 'queued' || run.status === 'running') return { analysisOffByReader, analysisState: 'queued' }
+  if (run.status === 'failed' || run.status === 'invalid-output') {
+    return { analysisOffByReader, analysisState: 'failed', analysisReason: run.failureCode ?? undefined }
+  }
+  // 停下来的运行：不是失败，也不是「还没轮到」。
+  if (run.status === 'cancelled') return { analysisOffByReader, analysisState: 'stopped', analysisReason: 'run-cancelled' }
+  if (run.status === 'stale' || run.status === 'superseded') {
+    return { analysisOffByReader, analysisState: 'stopped', analysisReason: 'run-superseded' }
+  }
+  // 判定不了就说不出来：不猜成「没成」（诬告），也不猜成「在等」（让人白等）。缺陷由这个码标记。
+  return { analysisOffByReader, analysisState: 'stopped', analysisReason: 'run-unrecognized' }
 }
 
 /**
