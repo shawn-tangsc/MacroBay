@@ -47,12 +47,32 @@ export function briefingMacroCategoryVisible(category: DailyBriefingCalendarEven
   return category === undefined || !briefingHiddenMacroCategories.includes(category)
 }
 
+/**
+ * 名字兜底（用户 2026-11-06）：源给的类别不是每次都可信——同一天里要做的事，源会把
+ * 「英国央行公布利率决议、会议纪要及货币政策报告」和「官方银行利率」分开标，但换个源、换个
+ * 语言就可能把讲话标成经济指标。名字里就是讲话、发布会、纪要、决议的，一律按央行活动处理。
+ *
+ * 两种语言都写在这里：英文版次读的是英文事件名，只写中文等于英文版次照旧漏出来。
+ * 不许按"有没有值"判——这条兜底与值无关；「官方银行利率」这种带值的指标名字不沾这些词，
+ * 所以它照常显示。
+ */
+export const briefingHiddenMacroTitlePattern =
+  /讲话|新闻发布会|记者会|会议纪要|利率决议|\b(?:speech|remarks|press conference|minutes|rate decision)\b/i
+
+/** 类别 + 名字一起判：一条事件该不该出现在 24h 宏观栏。 */
+export function briefingMacroEventVisible(
+  event: Pick<DailyBriefingCalendarEvent, 'category' | 'title' | 'titleKey'>
+): boolean {
+  if (!briefingMacroCategoryVisible(event.category)) return false
+  return !briefingHiddenMacroTitlePattern.test(event.title) && !briefingHiddenMacroTitlePattern.test(event.titleKey ?? '')
+}
+
 export function selectMacroCandidates(
   packet: DailyBriefingFactPacket,
   webValueKeys: ReadonlySet<string> = new Set()
 ): readonly BriefingMacroItem[] {
   return Object.freeze([...highImpactEventsInWindow(packet)]
-    .filter((event) => briefingMacroCategoryVisible(event.category))
+    .filter((event) => briefingMacroEventVisible(event))
     .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
     .map((event) => toMacroItem(event, webValueKeys.has(event.eventKey))))
 }

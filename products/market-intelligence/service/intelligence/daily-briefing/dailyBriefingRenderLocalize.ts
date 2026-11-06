@@ -161,7 +161,11 @@ function marketEvent(
     scheduledAt: event.scheduledAt,
     importance: event.importance,
     lifecycleState: event.providerActual ? 'released' as const : 'scheduled' as const,
-    category: 'economic-indicator' as const,
+    // 日历源自己就分了类（`eventType`）：讲话、发布会、利率决议是央行活动，别的公告是财经事件。
+    // 这里以前对所有事件都写死 `economic-indicator`，于是上面那层"隐藏央行活动与财经事件"的过滤
+    // **一条都拦不住**——它拿到的永远是同一个类别（2026-11-06 读者看到的 7 条讲话就是这么漏出来的）。
+    // 只按源给的类别走，别再自己归类。
+    category: event.eventType,
     ...(event.providerActual ? { actual: event.providerActual.displayValue } : {}),
     ...(event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
     ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),

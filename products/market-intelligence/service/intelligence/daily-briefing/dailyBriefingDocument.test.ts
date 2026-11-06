@@ -299,6 +299,49 @@ describe('daily briefing document', () => {
     expect(document.news.macro.some((item) => item.eventKey === 'US.CPI')).toBe(true)
   })
 
+  // 用户 2026-11-06：类别不可信时按名字兜底——讲话、发布会、纪要、决议一律按央行活动处理，
+  // 而「官方银行利率」这种带值的指标名字不沾这些词，必须照常显示。两种语言都要管：英文版次读的是英文事件名。
+  it('hides a speech by its name when the source called it an economic indicator', () => {
+    const event = (eventKey: string, title: string, extra: Record<string, unknown> = {}) => ({
+      eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category: 'economic-indicator' as const,
+      surprise: { direction: 'inline' as const }, ...extra
+    })
+    const events = [
+      event('EU.LAGARDE.SPEECH', '欧洲央行行长拉加德、管委多伦茨发表讲话'),
+      event('GB.BOE.PRESS', '英国央行行长贝利召开货币政策新闻发布会'),
+      event('GB.OFFICIAL.RATE', '官方银行利率', { actual: '4.00%', previous: '3.75%' })
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['GB.OFFICIAL.RATE'])
+  })
+
+  it('applies the same name fallback to english event titles', () => {
+    const event = (eventKey: string, title: string) => ({
+      eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
+      lifecycleState: 'released' as const, category: 'economic-indicator' as const, surprise: { direction: 'inline' as const }
+    })
+    const events = [
+      event('US.FED.SPEECH', 'Fed Chair Powell speech on the economic outlook'),
+      event('GB.BOE.MINUTES', 'Minutes of the Bank of England Monetary Policy Committee'),
+      event('US.CPI', 'Consumer Price Index (YoY)')
+    ]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
+  })
+
+  it('hides a speech whose category is missing', () => {
+    // 老文档、或者换了个源没给类别：名字是讲话就还是不许冒出来。
+    const events = [{
+      eventKey: 'US.FED.SPEECH', title: '美联储主席鲍威尔发表讲话', scheduledAt: '2026-10-29T12:30:00.000Z',
+      importance: 'high' as const, lifecycleState: 'released' as const, surprise: { direction: 'inline' as const },
+      // 源没给类别时读到的就是 undefined：这三类在类型上必填，这里显式抹掉来模拟那种一行。
+      category: undefined as unknown as 'economic-indicator'
+    }]
+    const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
+    expect(document.news.macro).toHaveLength(0)
+  })
+
   it('decides by category, so a valued speech or auction stays hidden', () => {
     // 判据是类别不是"有没有值"：这两个事件都带着实际值，仍然不许出现。
     expect(briefingMacroCategoryVisible('central-bank-activity')).toBe(false)

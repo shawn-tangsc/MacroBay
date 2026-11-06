@@ -287,16 +287,17 @@ describe('daily briefing source', () => {
       return {
         state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
         // 这个源按 as-of 给出它那一刻知道的实际值：读到运行时刻才有值。
-        events: [{ ...marketEvent, scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: input.asOf >= readAt ? { displayValue: '86.0' } : null }]
+        // 用经济指标：央行活动按类别不进 24h 宏观栏（用户 2026-11-06），这条用例验的是"值晚到也进正文"。
+        events: [{ ...marketEvent, eventKey: 'US.MKT.CPI', title: 'CPI (YoY)', eventType: 'economic-indicator' as const, scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: input.asOf >= readAt ? { displayValue: '86.0' } : null }]
       }
     }
     const packet = await makeSource(base).buildPacket({ asOf: readAt, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('86.0')
+    expect(packet.calendar.events.find((event) => event.eventKey === 'US.MKT.CPI')?.actual).toBe('86.0')
     // 值到了，就要真的进正文（这是用户点重跑期待看到的那一栏）。
     const document = buildDailyBriefingDocument({ packet, date: '2026-10-31' })
-    expect(document.news.macro.map((item) => item.eventKey)).toContain('MC.FOMC')
-    expect(document.news.macro.find((item) => item.eventKey === 'MC.FOMC')?.actual).toBe('86.0')
+    expect(document.news.macro.map((item) => item.eventKey)).toContain('US.MKT.CPI')
+    expect(document.news.macro.find((item) => item.eventKey === 'US.MKT.CPI')?.actual).toBe('86.0')
     // 窗口仍然是截止前 24 小时，没有跟着读数时刻走。
     expect(packet.windowEnd).toBe(cutoff)
     expect(packet.windowStart).toBe('2026-10-30T00:00:00.000Z')
@@ -313,8 +314,8 @@ describe('daily briefing source', () => {
     publicQuery.queryMarketCalendarMonth = (input) => ({
       state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
       events: [
-        { ...marketEvent, eventKey: 'IN.WINDOW', scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: { displayValue: '1' } },
-        { ...marketEvent, eventKey: 'AFTER.CUTOFF', scheduledAt: '2026-10-31T02:00:00.000Z', providerActual: { displayValue: '2' } }
+        { ...marketEvent, eventKey: 'IN.WINDOW', title: 'Consumer sentiment', eventType: 'economic-indicator' as const, scheduledAt: '2026-10-30T13:15:00.000Z', providerActual: { displayValue: '1' } },
+        { ...marketEvent, eventKey: 'AFTER.CUTOFF', title: 'Consumer sentiment', eventType: 'economic-indicator' as const, scheduledAt: '2026-10-31T02:00:00.000Z', providerActual: { displayValue: '2' } }
       ]
     })
     const facts = await makeSource(base).readFacts({ asOf: readAt, windowEnd: cutoff, windowHours: 24 })
@@ -326,6 +327,32 @@ describe('daily briefing source', () => {
     expect(keys).toContain('AFTER.CUTOFF')
     const document = buildDailyBriefingDocument({ packet, date: '2026-10-31' })
     expect(document.news.macro.map((item) => item.eventKey)).toEqual(['IN.WINDOW'])
+  })
+
+  it('keeps the kind the calendar source itself gave, so the category filter can act', async () => {
+    // 用户 2026-11-06 报：重新生成后 24h 宏观事件里还有 5 条讲话 + 1 条利率决议 + 1 条发布会。
+    // 病根在这一层：以前每条日历事件都被写成 `economic-indicator`，上面"隐藏央行活动与财经事件"的
+    // 过滤拿到的永远是同一个类别，一条都拦不住。这条用例钉住"源说是哪类就是哪类"。
+    const cutoff = '2026-11-06T00:00:00.000Z'
+    const base = deps()
+    const publicQuery = base.publicQuery as unknown as { queryMarketCalendarMonth: (input: { month: string; locale: string; asOf: string }) => unknown }
+    publicQuery.queryMarketCalendarMonth = (input) => ({
+      state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
+      events: [
+        { ...marketEvent, eventKey: 'BOE.RATE.DECISION', title: '英国央行公布利率决议、会议纪要及货币政策报告', eventType: 'central-bank-activity' as const, scheduledAt: '2026-11-05T12:00:00.000Z', providerActual: null },
+        { ...marketEvent, eventKey: 'US.TRUMP.SPEECH', title: '美国总统特朗普发表讲话', eventType: 'financial-event' as const, scheduledAt: '2026-11-05T21:00:00.000Z', providerActual: null },
+        { ...marketEvent, eventKey: 'US.MKT.CPI', title: '消费者物价指数(年率)', eventType: 'economic-indicator' as const, scheduledAt: '2026-11-05T13:30:00.000Z', providerActual: { displayValue: '3.0%' } }
+      ]
+    })
+    const packet = await makeSource(base).buildPacket({ asOf: cutoff, windowEnd: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    const kinds = new Map(packet.calendar.events.map((event) => [event.eventKey, event.category]))
+    expect(kinds.get('BOE.RATE.DECISION')).toBe('central-bank-activity')
+    expect(kinds.get('US.TRUMP.SPEECH')).toBe('financial-event')
+    expect(kinds.get('US.MKT.CPI')).toBe('economic-indicator')
+    // 正文与导出读同一份文档：只剩经济指标，讲话与决议一条都不进。
+    const document = buildDailyBriefingDocument({ packet, date: '2026-11-06' })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.MKT.CPI'])
   })
 
   it('drops news published after the cutoff even when the read is later', async () => {
