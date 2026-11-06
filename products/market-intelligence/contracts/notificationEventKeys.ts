@@ -50,6 +50,7 @@ export function notificationEventVariantKey(eventTypeId: string, variant: string
  */
 export const ANALYSIS_NOTIFICATION_EVENT_IDS = Object.freeze({
   manualFailed: 'platform.analysis.manual-failed',
+  quotaExhausted: 'platform.analysis.quota-exhausted',
   repeatedFailure: 'platform.analysis.repeated-failure',
   attemptAbandoned: 'platform.analysis.attempt-abandoned',
   recovered: 'platform.analysis.recovered'

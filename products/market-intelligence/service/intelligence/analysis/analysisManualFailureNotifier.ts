@@ -1,6 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
+import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
 /**
@@ -18,7 +19,7 @@ import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
  * (those can contain URLs and key fragments), and the code stays behind the deep link into the run
  * log rather than in the sentence.
  */
-export const ANALYSIS_MANUAL_FAILURE_EVENT_ID = 'platform.analysis.manual-failed'
+export const ANALYSIS_MANUAL_FAILURE_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.manualFailed
 
 /**
  * The failure itself. It carries **no reader language**: both sentences are composed at submit

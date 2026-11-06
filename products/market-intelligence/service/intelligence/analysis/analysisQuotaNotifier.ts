@@ -1,3 +1,4 @@
+import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
@@ -20,7 +21,7 @@ import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
  * 计数展示给读者，那会读成「第 5 次额度用尽」，比不显示更糊涂。
  * 一条通知发不出去不能把一次拒绝判成故障，所以这里吞掉提交异常、返回 null。
  */
-const ANALYSIS_QUOTA_EVENT_ID = 'platform.analysis.quota-exhausted'
+const ANALYSIS_QUOTA_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.quotaExhausted
 
 export type AnalysisQuotaSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 
