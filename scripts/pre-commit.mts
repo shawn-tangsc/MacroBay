@@ -130,6 +130,42 @@ for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modul
   mkdirSync(dirname(join(treeRoot, modules)), { recursive: true })
   symlinkSync(real, join(treeRoot, modules), 'dir')
 }
+
+/** `spawnSync` 的超时判定：`error.code === 'ETIMEDOUT'`（超时不是「跑完但红」）。 */
+const timedOut = (result: ReturnType<typeof spawnSync>): boolean =>
+  result.error !== undefined && result.error !== null && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
+
+/**
+ * 生成物必须在**这棵树里**先生成一遍，再查类型。
+ *
+ * `products/generated/*` 是构建期生成的、不入库（`.gitignore`），所以 `git checkout-index` 落出来的树里
+ * 天然没有它们。而外壳有十几个文件 static import `@products/generated/shellRegistry`，于是**任何碰到这些
+ * 文件的提交都会吃一片 `TS2307: Cannot find module` 假红** —— 只能靠 `SKIP_PRE_COMMIT=1` 绕过去。
+ * 2026-11-06 一天之内绕了三次：一条检查一旦大家都习惯绕过，它等于不存在。
+ *
+ * 两条边界，写清楚是为了下次别再想歪：
+ *  - 生成器跑在**树内**（cwd = treeRoot，脚本自己也从 `import.meta.url` 推出 workspaceRoot = 树根），
+ *    所以产物落在树里，不会污染工作区，也不会把工作区那份旧产物拿来充数；
+ *  - 生成失败/超时**不静默放行**：报明「这次没检查」并让作者自己跑 `pnpm typecheck`，
+ *    与下面的 tsc 超时同一姿态。绝不改成「忽略生成物相关文件」——那是把检查改宽，比假红更糟。
+ */
+const generateStart = performance.now()
+const generation = spawnSync(join(root, 'node_modules', '.bin', 'tsx'), ['scripts/generate-product-registry.mts'], {
+  cwd: treeRoot,
+  encoding: 'utf8',
+  timeout: remaining(15_000)
+})
+if (timedOut(generation) || generation.status !== 0) {
+  // 生成不出来 ⇒ 这棵树缺了「入库文件之外的一半」，此时 tsc 的报错全是假的，跑了也只会骗人。
+  say(`生成物没能在提交树里生成（${Math.round(performance.now() - generateStart)}ms），**这一次没有检查**；请自己跑 pnpm typecheck。`)
+  const detail = `${generation.stdout ?? ''}${generation.stderr ?? ''}`.trim()
+  if (detail !== '') console.error(detail.split('\n').slice(-5).join('\n'))
+  process.exit(0)
+}
+if (!existsSync(join(treeRoot, 'products', 'generated', 'shellRegistry.ts'))) {
+  say('生成器跑完了但树里仍没有 products/generated/shellRegistry.ts，**这一次没有检查**；请自己跑 pnpm typecheck。')
+  process.exit(0)
+}
 /**
  * 环境声明（`*.d.ts`）必须一起进这棵树。
  *
@@ -153,8 +189,6 @@ writeFileSync(
     files: [...codeStaged, ...ambientDeclarations].map((path) => `./${path}`)
   })
 )
-const timedOut = (result: ReturnType<typeof spawnSync>): boolean =>
-  result.error !== undefined && result.error !== null && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
 
 // 树里只有这一笔会进库的文件，所以**任何**报错都是这棵快照的问题，不必再区分「自己的 / 别人的」。
 const check = spawnSync(join(root, 'node_modules', '.bin', 'tsc'), ['--noEmit', '-p', treeConfig], {

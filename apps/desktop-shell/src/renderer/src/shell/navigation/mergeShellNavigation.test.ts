@@ -1,3 +1,9 @@
+/**
+ * 注意：本文件**静态** import 了构建期生成物 `@products/generated/shellRegistry`（入不了库，只存在于工作区
+ * 与构建树）。所以提交前预检在它自己落出来的那棵树里**先跑一次生成器**再查类型——见
+ * `scripts/pre-commit.mts`「生成物必须在这棵树里先生成一遍」。别为了绕开假红把它改成动态 import：
+ * 那条路会把这个文件的断言从「编译期就检查类型」降成「运行期才知道」，等于拿检查换方便。
+ */
 import { describe, expect, it } from 'vitest'
 
 import type { GeneratedProductMenuEntry, GeneratedProductSettingsEntry } from '@platform/product-registry/types'
