@@ -1,6 +1,7 @@
 import type { NotificationCopyTableSet } from '@platform/notifications/contracts/notificationCopyPort'
 
 import { indicatorNames } from '../../../../contracts/indicatorNames'
+import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   notificationEventBodyKey,
@@ -23,6 +24,10 @@ import {
 export type MarketIntelligenceNotificationCopy = NotificationCopyTableSet
 
 const TITLE = notificationEventTitleKey
+
+/** 两种语言各一个别名：表里每一行都短，读起来像一句话而不是一条寻址。 */
+const zh = { signal: signalNotificationSentences['zh-CN'] }
+const en = { signal: signalNotificationSentences['en-US'] }
 const BODY = notificationEventBodyKey
 const REASON = notificationEventReasonKey
 
@@ -33,18 +38,19 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
 
-    // 标题必须以资产名开头（情报 v3.26 §十一）：读者可能同时在盯几个资产。
-    [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: 'ETF 连续净流出',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: '持仓骤降',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: 'ETF 净流出加剧',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: '持仓骤降加剧',
-    // 正文四个变体：规则 × 档位。数字一律数值参数，模板里不写任何阈值。
-    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '净流出 {amount}，超过 {threshold} 的阈值',
-    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '净流出 {amount}，是阈值的 {multiple}',
-    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: '15 分钟跌 {dropPct}（阈值 {thresholdPct}），成交放大 {multiple}，规模约 {notional}',
-    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: '15 分钟跌 {dropPct}（强阈值 {strongPct}），成交放大 {multiple}，规模约 {notional}',
-    [REASON(IDS.signalTriggered)]: '规则命中，且读数达到这条规则的阈值。',
+    // 句子与源头拼成品**共用同一份字符串**（`contracts/signalNotificationSentences.ts`）：
+    // 标题以资产名开头；正文四个变体是规则 × 档位，模板里不写任何阈值。
+    // 这几条只服务已经落库的旧记录——新记录存的是成品，平台不再读这张表。
+    [TITLE(IDS.signalTriggered)]: zh.signal.title,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: zh.signal.headline.etfOutflow,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: zh.signal.headline.oiDrop,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: zh.signal.headline.etfOutflowAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: zh.signal.headline.oiDropAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: zh.signal.body.etfOutflow,
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: zh.signal.body.etfOutflowAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: zh.signal.body.oiDrop,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: zh.signal.body.oiDropAggravated,
+    [REASON(IDS.signalTriggered)]: zh.signal.reason,
 
     [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: '高于预期',
@@ -87,16 +93,16 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
 
-    [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: 'ETF outflows',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: 'open interest dropped',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: 'ETF outflows deepened',
-    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: 'open interest fell further',
-    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '{amount} net outflow, past the {threshold} threshold',
-    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '{amount} net outflow, {multiple} the threshold',
-    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: 'Down {dropPct} in 15 min (threshold {thresholdPct}), volume {multiple}, about {notional}',
-    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: 'Down {dropPct} in 15 min (strong threshold {strongPct}), volume {multiple}, about {notional}',
-    [REASON(IDS.signalTriggered)]: 'A rule matched and the reading reached its threshold.',
+    [TITLE(IDS.signalTriggered)]: en.signal.title,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflow')]: en.signal.headline.etfOutflow,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDrop')]: en.signal.headline.oiDrop,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'etfOutflowAggravated')]: en.signal.headline.etfOutflowAggravated,
+    [notificationEventHeadlineKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.headline.oiDropAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: en.signal.body.etfOutflow,
+    [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: en.signal.body.etfOutflowAggravated,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: en.signal.body.oiDrop,
+    [notificationEventVariantKey(IDS.signalTriggered, 'oiDropAggravated')]: en.signal.body.oiDropAggravated,
+    [REASON(IDS.signalTriggered)]: en.signal.reason,
 
     [TITLE(IDS.macroEventLanded)]: '{country} {indicator} {direction}',
     [notificationEventNamedKey(IDS.macroEventLanded, 'direction.above')]: 'above forecast',

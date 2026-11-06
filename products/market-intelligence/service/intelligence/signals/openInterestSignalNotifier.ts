@@ -5,14 +5,8 @@ import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { liquidationHintPolicy } from '../../../contracts/openInterestPositioning'
 import { openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
-import {
-  multipleParam,
-  pctParam,
-  usdParam,
-  signalAssetSymbol,
-  signalHeadline,
-  SIGNAL_HEADLINE_KEYS
-} from './signalNotificationCopy'
+import { signalAssetSymbol } from './signalNotificationCopy'
+import { renderOpenInterestSentence } from './signalNotificationSentence'
 
 /**
  * 持仓量这条腿的通知出站（通知目录 §四之三）：规则命中一次，就对读者说一次。
@@ -58,7 +52,9 @@ export function selectSignalNotificationCandidates(
 }
 
 /**
- * 一条信号 → 一次提交。只填参数，不填句子：标题与正文由平台的文案键按事件 id 解析。
+ * 一条信号 → 一次提交。**句子在这里拼**（契约 v2.56）：标题、正文、「为什么推了」中英各一份，
+ * 平台只按读者语言挑一份。结构化读数的真源是信号表，不是这条通知记录——详情页要读数回源里取，
+ * 不要反解析句子。
  *
  * 没有动作、也没有落点：外壳今天只认「设置分区」这一种 deeplink（页面/产品两支没有生产者，
  * 写了也走不到）。挂一个点不动的动作，比不挂更糟——读者会以为是自己没点对。
@@ -95,29 +91,23 @@ export function buildOpenInterestSignalRequest(
       }
 
   const aggravated = signal.severity === 'high'
+  // 成品句子在源头拼好（契约 v2.56）；阈值取规则常量，句子跟着常量走，模板里没有第二个数。
+  const rendered = renderOpenInterestSentence({
+    asset: signalAssetSymbol(signal.asset),
+    dropPct,
+    volumeMultiple,
+    notionalUsd,
+    thresholdPct: aggravated ? thresholds.strongDropPct : thresholds.dropPct,
+    aggravated
+  })
+  if (rendered === undefined) return undefined
+
   return {
     eventTypeId: EVENT_IDS.signalTriggered,
     producerId: OPEN_INTEREST_PRODUCER_ID,
     signalSeverity: signal.severity,
     dedupeVars,
-    titleParams: {
-      asset: signalAssetSymbol(signal.asset),
-      headline: signalHeadline(aggravated ? SIGNAL_HEADLINE_KEYS.oiDropAggravated : SIGNAL_HEADLINE_KEYS.oiDrop)
-    },
-    bodyVariant: aggravated ? 'oiDropAggravated' : 'oiDrop',
-    bodyParams: aggravated
-      ? {
-          dropPct: pctParam(dropPct),
-          strongPct: pctParam(thresholds.strongDropPct),
-          multiple: multipleParam(volumeMultiple),
-          notional: usdParam(notionalUsd)
-        }
-      : {
-          dropPct: pctParam(dropPct),
-          thresholdPct: pctParam(thresholds.dropPct),
-          multiple: multipleParam(volumeMultiple),
-          notional: usdParam(notionalUsd)
-        },
+    rendered,
     actions: [] as const,
     occurredAt: signal.observedAt
   }

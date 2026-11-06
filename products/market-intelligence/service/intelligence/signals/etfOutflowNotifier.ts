@@ -5,14 +5,8 @@ import type {
 import { notificationDedupeBuilders } from '@platform/notifications/contracts/notificationDedupeKeys'
 
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
-import {
-  multipleParam,
-  usdParam,
-  thresholdMultiple,
-  signalAssetSymbol,
-  signalHeadline,
-  SIGNAL_HEADLINE_KEYS
-} from './signalNotificationCopy'
+import { signalAssetSymbol } from './signalNotificationCopy'
+import { renderEtfOutflowSentence } from './signalNotificationSentence'
 import { etfOutflowOutletPolicy, isEtfOutflowOutletOpen, type EtfOutflowOutletSwitch } from '../../../contracts/etfFlows'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 
@@ -27,6 +21,10 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../.
  *
  * 只在信号真的成立时才提交：`readiness: 'unavailable'` 是「窗口还没凑齐」，不是一件发生的事，
  * 更不是失败——给它发通知等于告诉读者「有信号」，而规则其实还没判。
+ *
+ * **话是源头说的**（契约 v2.56）：标题、正文、「为什么推了」都在这里拼成中英两份成品，
+ * 平台只挑一份转发。结构化读数的真源是信号表，不是这条通知记录——将来详情页要读数请回源里取，
+ * 不要反解析句子。
  */
 
 /** 稳定 handler id：同一条刷新路径换名字会让平台把它当成另一个生产者。 */
@@ -78,19 +76,22 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
   if (!Number.isFinite(flowUsd) || !Number.isFinite(thresholdUsd)) return undefined
   const aggravated = signal.severity === 'high'
 
+  // 成品句子由源头拼（契约 v2.56）：平台只按读者语言挑一份，不拼不改。拼不出就不提交——
+  // 半句真话比不说更糟，而「缺一格」是这里的事，不是平台的降级动作。
+  const rendered = renderEtfOutflowSentence({
+    asset: signalAssetSymbol(signal.asset),
+    flowUsd,
+    thresholdUsd,
+    aggravated
+  })
+  if (rendered === undefined) return undefined
+
   return {
     eventTypeId: EVENT_IDS.signalTriggered,
     producerId: ETF_SIGNAL_NOTIFICATION_PRODUCER_ID,
     signalSeverity: signal.severity,
     dedupeVars,
-    titleParams: {
-      asset: signalAssetSymbol(signal.asset),
-      headline: signalHeadline(aggravated ? SIGNAL_HEADLINE_KEYS.etfOutflowAggravated : SIGNAL_HEADLINE_KEYS.etfOutflow)
-    },
-    bodyVariant: aggravated ? 'etfOutflowAggravated' : 'etfOutflow',
-    bodyParams: aggravated
-      ? { amount: usdParam(flowUsd), multiple: multipleParam(thresholdMultiple(flowUsd, thresholdUsd)) }
-      : { amount: usdParam(flowUsd), threshold: usdParam(thresholdUsd) },
+    rendered,
     actions: [],
     // 信号描述的那个交易日，不是提交这一下的时刻：晚到的流水仍属于它自己那天。
     occurredAt: signal.observedAt

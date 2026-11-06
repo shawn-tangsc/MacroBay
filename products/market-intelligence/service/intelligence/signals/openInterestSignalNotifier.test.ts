@@ -63,23 +63,20 @@ describe('open interest signal notification', () => {
     })
     // 信号自己的三档，不是展示那套（info/success/warning/critical）。
     expect(request.signalSeverity).toBe('high')
-    expect(request.bodyVariant).toBe('oiDropAggravated')
-    expect(request.titleParams).toEqual({
-      asset: 'BTC',
-      headline: {
-        ref: {
-          scope: 'product',
-          productId: 'market-intelligence',
-          key: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
-        }
+    // 成品句子由源头拼好；阈值来自规则常量（强阈值的来源就是那一个数）。
+    expect(request.bodyVariant).toBeUndefined()
+    expect(request.titleParams).toBeUndefined()
+    expect(request.rendered).toEqual({
+      'zh-CN': {
+        title: 'BTC 持仓骤降加剧',
+        body: '15 分钟跌 2.7%（强阈值 2.5%），成交放大 3.4 倍，规模约 74 亿美元',
+        reason: '规则命中，且读数达到这条规则的阈值。'
+      },
+      'en-US': {
+        title: 'BTC open interest fell further',
+        body: 'Down 2.7% in 15 min (strong threshold 2.5%), volume 3.4×, about $7.4B',
+        reason: 'A rule matched and the reading reached its threshold.'
       }
-    })
-    // 数字按「值 + 单位」传，阈值来自规则常量（强阈值的来源就是那一个数）。
-    expect(request.bodyParams).toEqual({
-      dropPct: { number: -2.7, kind: 'pct' },
-      strongPct: { number: -2.5, kind: 'pct' },
-      multiple: { number: 3.4, kind: 'multiple' },
-      notional: { number: 7.4e9, kind: 'usd' }
     })
     // The key string has one implementation (the platform builder); the call site carries only vars.
     expect('dedupeKey' in request).toBe(false)
@@ -100,7 +97,9 @@ describe('open interest signal notification', () => {
       thresholds: { dropPct: -1.1, strongDropPct: -9.9 }
     })
     await notify()
-    expect(submit.mock.calls[0]![0].bodyParams).toMatchObject({ strongPct: { number: -9.9, kind: 'pct' } })
+    // 句子跟着注入的常量走：模板里没有第二个数，所以换常量就换读数。
+    expect(submit.mock.calls[0]![0].rendered?.['zh-CN']!.body).toContain('强阈值 9.9%')
+    expect(submit.mock.calls[0]![0].rendered?.['en-US']!.body).toContain('strong threshold 9.9%')
   })
 
   it('uses the base variant with the plain threshold when the drop is not the strong one', async () => {
@@ -112,8 +111,9 @@ describe('open interest signal notification', () => {
     await notify()
     const request = submit.mock.calls[0]![0]
     expect(request.signalSeverity).toBe('medium')
-    expect(request.bodyVariant).toBe('oiDrop')
-    expect(request.bodyParams).toMatchObject({ thresholdPct: { number: -1.5, kind: 'pct' } })
+    expect(request.rendered?.['zh-CN']!.title).toBe('BTC 持仓骤降')
+    expect(request.rendered?.['zh-CN']!.body).toBe('15 分钟跌 1.6%（阈值 1.5%），成交放大 2.2 倍，规模约 74 亿美元')
+    expect(request.rendered?.['en-US']!.body).toBe('Down 1.6% in 15 min (threshold 1.5%), volume 2.2×, about $7.4B')
   })
 
   it('gives the same bucket the same vars on the next tick, so the platform merges instead of re-pushing', async () => {

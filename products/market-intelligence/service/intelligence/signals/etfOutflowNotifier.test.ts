@@ -46,23 +46,21 @@ describe('ETF outflow signal notification', () => {
     expect(notificationDedupeBuilders.moduleSignal({ ...vars, observedAt: '2026-08-28T18:00:00.000Z' })).toBe(platformKey)
     // The notification describes the trading day, not the instant the refresh ran.
     expect(request!.occurredAt).toBe(signal.observedAt)
-    // 信号自己的三档 + 标题以资产符号开头 + 正文变体按档位选。
+    // 信号自己的三档 + 源头拼好的成品句子：标题以资产符号开头，平台只挑一份。
     expect(request!.signalSeverity).toBe('medium')
-    expect(request!.titleParams).toEqual({
-      asset: 'BTC',
-      headline: {
-        ref: {
-          scope: 'product',
-          productId: 'market-intelligence',
-          key: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflow'
-        }
+    expect(request!.titleParams).toBeUndefined()
+    expect(request!.bodyVariant).toBeUndefined()
+    expect(request!.rendered).toEqual({
+      'zh-CN': {
+        title: 'BTC ETF 连续净流出',
+        body: '净流出 1.5 亿美元，超过 1 亿美元的阈值',
+        reason: '规则命中，且读数达到这条规则的阈值。'
+      },
+      'en-US': {
+        title: 'BTC ETF outflows',
+        body: '$150M net outflow, past the $100M threshold',
+        reason: 'A rule matched and the reading reached its threshold.'
       }
-    })
-    expect(request!.bodyVariant).toBe('etfOutflow')
-    // 数字按「值 + 单位」传；阈值取信号自己的 values（造信号时写进去的那条常量）。
-    expect(request!.bodyParams).toEqual({
-      amount: { number: -150_000_000, kind: 'usd' },
-      threshold: { number: -100_000_000, kind: 'usd' }
     })
     // No deeplink and no action: the shell cannot open a product page today, so a button here
     // would be a pointer that goes nowhere. The notification records the fact, nothing more.
@@ -75,11 +73,10 @@ describe('ETF outflow signal notification', () => {
     expect(signal?.severity).toBe('high')
     const request = buildEtfOutflowSignalRequest(signal!)
     expect(request!.signalSeverity).toBe('high')
-    expect(request!.bodyVariant).toBe('etfOutflowAggravated')
-    expect(request!.bodyParams).toEqual({
-      amount: { number: -600_000_000, kind: 'usd' },
-      multiple: { number: 6, kind: 'multiple' }
-    })
+    expect(request!.rendered?.['zh-CN']!.title).toBe('BTC ETF 净流出加剧')
+    expect(request!.rendered?.['zh-CN']!.body).toBe('净流出 6 亿美元，是阈值的 6 倍')
+    expect(request!.rendered?.['en-US']!.title).toBe('BTC ETF outflows deepened')
+    expect(request!.rendered?.['en-US']!.body).toBe('$600M net outflow, 6× the threshold')
   })
 
   it('says nothing while the window is not complete: "not judged yet" is not an event', () => {
