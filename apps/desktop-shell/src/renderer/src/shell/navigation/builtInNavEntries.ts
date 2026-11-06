@@ -23,6 +23,8 @@ export interface BuiltInNavItem {
   module: string
   supportsDetached: boolean
   allowMultipleInstances: boolean
+  /** 内置页也可以声明「我是默认首页」（同一个字段、同一条菜单排序规则）；未声明时没有这个键。 */
+  home?: true
 }
 
 /**
@@ -48,7 +50,8 @@ export function createBuiltInNavItems(language: AppLanguage): BuiltInNavItem[] {
     menuKey: page.menuKey,
     module: page.module,
     supportsDetached: page.supportsDetached,
-    allowMultipleInstances: page.allowMultipleInstances
+    allowMultipleInstances: page.allowMultipleInstances,
+    ...(page.home === true ? { home: true as const } : {})
   }))
 }
 
