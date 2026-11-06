@@ -276,6 +276,18 @@ export const dailyBriefingText = {
       },
       durationUnits: { milliseconds: '{count} ms', seconds: '{count} 秒', minutes: '{count} 分 {seconds} 秒' }
     },
+    /**
+     * 失败原因的句子：**逐码三段**（哪一步 / 发生了什么 / 接下来怎么办）+ 四种句式。
+     * `02` v2.143 定死了结构与规则：键集合必须等于 `aiSettings.failure` 的键，新增码同笔补句，
+     * 缺一即红。拼句子的代码在 `briefingFailureSentence.ts`，这里只放话音。
+     */
+    failureSentences: {},
+    failureSentenceTemplates: {
+      unfinished: '{stage}没跑完：{what}（用了 {duration}）',
+      unfinishedNoDuration: '{stage}没跑完：{what}',
+      stoppedAt: '这次在{step}就停下了：{what}',
+      next: '接下来：{next}'
+    },
     failurePanel: {
       editorialTitle: 'AI 编辑失败，日报未生成',
       generationTitle: '日报生成失败',
@@ -579,6 +591,14 @@ export const dailyBriefingText = {
         store: 'Writes the edition, updates the banner and clears the attempt; a failure stores nothing.'
       },
       durationUnits: { milliseconds: '{count} ms', seconds: '{count} s', minutes: '{count} min {seconds} s' }
+    },
+    /** One entry per failure code: the stage, what happened, and what to do next (structure is fixed). */
+    failureSentences: {},
+    failureSentenceTemplates: {
+      unfinished: '{stage} did not finish: {what} ({duration})',
+      unfinishedNoDuration: '{stage} did not finish: {what}',
+      stoppedAt: 'This run stopped at {step}: {what}',
+      next: 'Next: {next}'
     },
     failurePanel: {
       editorialTitle: 'AI editing failed, so the brief was not generated',
