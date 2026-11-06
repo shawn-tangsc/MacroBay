@@ -190,7 +190,7 @@ function followBuilders(
     if (body === undefined) continue
     // 只看这个构造函数的 `eventTypeId:` 那一处：函数体窗口会溢出到隔壁函数，
     // 把别的事件的 id 也算进来（实测把 `calendar-refresh` 算成了同一条）。
-    const declared = /eventTypeId\s*:\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))/u.exec(body)
+    const declared = /\beventTypeId\s*:\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))/u.exec(body)
     if (declared === null) {
       for (const id of followBuilders(body, index, constants, depth - 1, false)) ids.add(id)
       continue

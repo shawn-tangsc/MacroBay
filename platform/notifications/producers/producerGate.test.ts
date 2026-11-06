@@ -125,6 +125,20 @@ describe('门禁自己的有效性（契约 §12.2）', () => {
     expect(result.produced).toEqual(['platform.job.failed-terminal'])
   })
 
+  it('顺着「先赋给变量再提交」的构建函数找到 id（这条路径曾因一个写错的单词边界而静默失效）', () => {
+    // 复现的是实测形状：`const request = buildX(); submit(request)`。门禁靠 followBuilders 读
+    // 构建函数体里的 `eventTypeId:` 那一处才能解析；那里如果写的不是单词边界，这条路径**不报错、
+    // 只是永远解析不到**——静默失效的门禁比没有更糟，所以这里钉住它能红。
+    const result = evaluate(`
+      const FAILURE_EVENT_ID = 'platform.job.failed-terminal'
+      function buildFailureRequest() { return { eventTypeId: FAILURE_EVENT_ID } }
+      const request = buildFailureRequest()
+      submit(request)
+    `)
+    expect(result.produced).toEqual(['platform.job.failed-terminal'])
+    expect(result.unresolved).toEqual([])
+  })
+
   it('解析不到的写法报「无法判定」，不算通过', () => {
     const result = evaluate('submit(pickRequest(kind))')
     expect(result.produced).toEqual([])
