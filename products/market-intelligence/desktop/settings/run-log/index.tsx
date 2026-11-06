@@ -6,6 +6,8 @@ import { productText } from '../../shared/i18n/productText'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { SyncRunSection } from '../intelligence-sources/SyncRunSection'
 
+import './run-log.css'
+
 /**
  * Run log: what this module actually did, one page of its own.
  *
@@ -43,8 +45,8 @@ export default function IntelligenceRunLogSettingsSection(): React.ReactElement 
   }, [t.sourceNames])
 
   return (
-    <section className="settings-workspace intelligence-sources-workspace">
-      <div className="intelligence-sources-view-body">
+    <section className="settings-workspace intelligence-run-log-workspace">
+      <div className="intelligence-run-log-workspace__body">
         <SyncRunSection
           knownSources={knownSources}
           text={{ ...t.syncRun, sourceNames: t.sourceNames }}

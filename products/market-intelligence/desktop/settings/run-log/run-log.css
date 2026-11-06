@@ -1,0 +1,11 @@
+/* One pane, full height: the run log is a single table, not a two-pane settings screen. The base
+   workspace is a 318px + content grid, so a page with one child would otherwise sit in the narrow
+   column and leave the table without a height. */
+.settings-workspace.intelligence-run-log-workspace {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.intelligence-run-log-workspace__body {
+  min-height: 0;
+}
