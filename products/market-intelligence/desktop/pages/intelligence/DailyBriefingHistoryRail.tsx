@@ -178,15 +178,17 @@ export function DailyBriefingHistoryRail({
    * Picking it once matters: a day can hold several periods, and painting every empty row of the day
    * as "generating" would claim several runs at once — and would hide a failed row behind a spinner.
    */
+  /**
+   * 只有**自己这一行**说"这门语言正在生成"才算在跑（用户 2026-11-06）。
+   *
+   * 以前这里有一层回退：找不到显式在跑的行，就拿"今天还没跑过的那一期"顶替。读者实际跑的是 08:00，
+   * 那行没被认成在跑，回退于是抓了今天没跑过的默认期 07:00 画成「生成中」——列表写 07:00。
+   * 回退删掉：找不到就是 `undefined`，**不许拿别的行顶替**。
+   */
   const waitingKey = useMemo(() => {
     const explicit = editions.find((row) => (row.languages ?? []).some((language) => language.state === 'generating'))
-    if (explicit) return briefingRailKey(explicit)
-    if (generatingStage === undefined) return undefined
-    // 没有显式在跑的那一行时，取"今天还没跑过的那一期"——失败过的那一期此刻不是空的，它有自己的原因。
-    const missingToday = editions.filter((row) => row.date === todayDate && row.state === 'missing')
-    const fallback = missingToday.find((row) => !row.attemptCount) ?? missingToday[0]
-    return fallback ? briefingRailKey(fallback) : undefined
-  }, [editions, generatingStage, todayDate])
+    return explicit === undefined ? undefined : briefingRailKey(explicit)
+  }, [editions])
 
   /**
    * 只有**右键的那一行自己**在跑才拦。以前写成"今天只要有一期在跑，今天每一行都不许删"——

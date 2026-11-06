@@ -302,7 +302,8 @@ describe('a row is never a button inside a button', () => {
 
   it('offers one disabled reason on a generating row, never a blank panel', () => {
     render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      // 在跑 = **这一行自己**带着 generating 语言状态（rail 不再回退抓别的行）。
+      editions: [edition({ state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'generating' }] })],
       generatingStage: '正在生成…',
       resolveText: (key: string) => resolveProductTextKey('zh-CN', key)
     })
@@ -528,8 +529,8 @@ describe('a row is two lines: the facts, then what it says', () => {
     // 正在跑的那一行也不给：它已经在做了，再给一颗重试就是两个入口改同一件事。
     render({
       editions: [edition({
-        state: 'missing', availableLocales: [], generatedAt: undefined,
-        languages: [{ locale: 'zh-CN', state: 'missing', reason: 'run-interrupted' }]
+        state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined,
+        languages: [{ locale: 'zh-CN', state: 'generating' }]
       })],
       generatingStage: 'AI 选择',
       onRegeneratePeriod: vi.fn()
@@ -540,7 +541,7 @@ describe('a row is two lines: the facts, then what it says', () => {
   // 用户问的那一句：生成中的行不能只有一个「生成中」，得说清卡在哪、跑了多久。
   it('tells the running row its stage and how long it has been going', () => {
     render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      editions: [edition({ state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'generating' }] })],
       generatingStage: 'AI 选择', generatingElapsedMs: 41_000
     })
     const waiting = host.querySelector('[data-rail-title="running"]')!
@@ -550,7 +551,7 @@ describe('a row is two lines: the facts, then what it says', () => {
 
   it('says only "generating" when the progress cannot answer, and invents neither stage nor seconds', () => {
     render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      editions: [edition({ state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'generating' }] })],
       generatingStage: 'AI 选择'
     })
     const waiting = host.querySelector('[data-rail-title="running"]')!
@@ -600,7 +601,7 @@ describe('a row is two lines: the facts, then what it says', () => {
   it('opens the running issue when its row is clicked, instead of swallowing the click', () => {
     const onSelectLocale = vi.fn()
     render({
-      editions: [edition({ state: 'missing', availableLocales: [], generatedAt: undefined })],
+      editions: [edition({ state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined, languages: [{ locale: 'zh-CN', state: 'generating' }] })],
       generatingStage: 'AI 选择', onSelectLocale
     })
     const row = host.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row')!
@@ -642,5 +643,39 @@ describe('a run that died is not the same sentence as a run that failed', () => 
     expect(row('p_fail').textContent).toContain(english.history.runFailed)
     expect(row('p_int').textContent).not.toContain(english.history.runFailed)
     expect(row('p_fail').textContent).not.toContain(english.history.runInterrupted)
+  })
+})
+
+describe('“running” is only the row that says so (2026-11-06)', () => {
+  const running = (date: string, periodId: string, cutoff: string) => edition({
+    date, periodId, state: 'missing', availableLocales: ['zh-CN'], generatedAt: undefined,
+    languages: [{ locale: 'zh-CN', state: 'generating' }], periodTime: cutoff
+  })
+
+  // 用户报的：他跑的是 08:00 那一期，列表却把 07:00 那行画成「生成中」。
+  it('marks only the row that is actually running', () => {
+    render({
+      editions: [
+        running('2026-11-02', 'p-0800', '2026-11-02T00:00:00.000Z'),
+        edition({ date: '2026-11-02', periodId: 'default', state: 'missing', availableLocales: [], generatedAt: undefined, periodTime: '2026-11-01T23:00:00.000Z' })
+      ],
+      generatingStage: 'AI 选择'
+    })
+    const rows = [...host.querySelectorAll<HTMLElement>('.mi-daily-briefing__rail-row')]
+    const marked = rows.filter((row) => row.querySelector('[data-rail-title="running"]') !== null)
+    expect(marked).toHaveLength(1)
+    // 在跑的是 08:00 那行；07:00 那行不许跟着显示"生成中"。
+    expect(marked[0]!.getAttribute('data-period-id')).toBe('p-0800')
+    const sevenOClock = rows.find((row) => row.getAttribute('data-period-id') === 'default')!
+    expect(sevenOClock.querySelector('[data-rail-title="running"]')).toBeNull()
+  })
+
+  it('leaves every row alone when nothing is running', () => {
+    // 没有行标 generating：即使外面还传着阶段文案，也不许挑一行出来假装在跑。
+    render({
+      editions: [edition({ date: '2026-11-02', periodId: 'default', state: 'missing', availableLocales: [], generatedAt: undefined })],
+      generatingStage: 'AI 选择'
+    })
+    expect(host.querySelector('[data-rail-title="running"]')).toBeNull()
   })
 })
