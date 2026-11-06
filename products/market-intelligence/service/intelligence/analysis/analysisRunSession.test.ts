@@ -90,6 +90,17 @@ describe('the analysis run session', () => {
     expect(createAgentSession).not.toHaveBeenCalled()
   })
 
+  it('keeps every run in one sidebar group while identifying each run separately', async () => {
+    const { ensure, createAgentSession } = harness()
+    await ensure({ runId: 'mi-ar-1' })
+    await ensure({ runId: 'mi-ar-2' })
+    await ensure({ runId: 'mi-ar-3' })
+    const created = createAgentSession.mock.calls.map(call => call[0] as unknown as { originGroup: string; originRef: string })
+    // 三次运行 = 三条会话，但**分组键全一样**：侧栏「自动会话」只有一块，不会一个运行一块。
+    expect(new Set(created.map(call => call.originGroup))).toEqual(new Set(['market-analysis']))
+    expect(created.map(call => call.originRef)).toEqual(['mi-ar-1', 'mi-ar-2', 'mi-ar-3'])
+  })
+
   it('stays quiet when the port is not injected', async () => {
     const ensure = createAnalysisRunSession({})
     expect(await ensure({ runId: 'mi-ar-3' })).toBeUndefined()
