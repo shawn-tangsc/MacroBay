@@ -30,7 +30,7 @@ import { createMarketAnalysisRepository, type MarketAnalysisRepository } from '.
 import { notifyAnalysisQuota } from '../analysis/analysisQuotaNotifier'
 import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createManualFailureNotice } from '../analysis/analysisManualFailureNotifier'
-import { createReleaseCoverageReader, notifyAbandonedRelease, submitAnalysisFailureNotice } from './analysisReleaseNoticeWiring'
+import { createReleaseCoverageReader, notifyAbandonedRelease, deliverAnalysisFailureNotice } from './analysisReleaseNoticeWiring'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
@@ -179,7 +179,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // 三档节流提醒：判定在 analysisFailureNotices，这里只把决策变成一次提交。平台文案没落时
     // 构造返回 undefined——不发半句话，也不因此把一次已完成的运行弄成失败。
     notifyAnalysisNotice: async ({ decision, occurredAt }) =>
-      submitAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
+      deliverAnalysisFailureNotice({ decision, occurredAt, ...(input.submitNotification ? { submit: input.submitNotification } : {}) }),
     // 一次分析一条会话：认领之后建（失败那次也要能查原文），发布后补一句摘要。
     ensureRunSession: async ({ runId }) => runSessionPort ? runSessionPort.ensure({ runId }) : undefined,
     appendRunSummary: async ({ runId, summary }) => { if (runSessionPort) await runSessionPort.appendSummary({ runId, summary }) }

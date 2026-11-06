@@ -1,6 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import type { AnalysisFailureNoticeDecision } from '../analysis/analysisFailureNotices'
+import { ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { buildAnalysisFailureNoticeRequest, decideAttemptAbandoned } from '../analysis/analysisFailureNotices'
 import { analysisRunLineOf } from '../analysis/analysisTriggerSourcePolicy'
 import { findAnalysisReleaseCoverage } from '../analysis/analysisReleaseAttempts'
@@ -16,7 +17,7 @@ import type { IntelligencePipeline } from '../application/intelligencePipeline'
  * - **平台文案没落时不发**（半句话比没有更糟）；
  * - **提交失败不许影响已完成的运行**（记录是事实，通知是附加物）。
  */
-export async function submitAnalysisFailureNotice(input: Readonly<{
+export async function deliverAnalysisFailureNotice(input: Readonly<{
   decision: AnalysisFailureNoticeDecision
   occurredAt: string
   submit?: (request: NotificationSubmitRequest) => Promise<unknown>
@@ -24,7 +25,10 @@ export async function submitAnalysisFailureNotice(input: Readonly<{
   try {
     const request = buildAnalysisFailureNoticeRequest(input.decision, input.occurredAt)
     if (request === undefined || input.submit === undefined) return
-    await input.submit(request)
+    // 事件 id 必须在提交点上显式出现：门禁只认字面量、常量表成员、简写属性与封闭表查表。
+    // ① id 那一行要与赋值写在同一行（多行三元门禁解析不到）；② 值与 request 里的一致，只改写法。
+    const eventTypeId = input.decision.kind === 'repeated-failure' ? ANALYSIS_NOTIFICATION_EVENT_IDS.repeatedFailure : input.decision.kind === 'attempt-abandoned' ? ANALYSIS_NOTIFICATION_EVENT_IDS.attemptAbandoned : ANALYSIS_NOTIFICATION_EVENT_IDS.recovered
+    await input.submit({ ...request, eventTypeId, })
   } catch {
     // 通知是记录的附加物：发不出去不改任何运行状态。
   }
@@ -71,5 +75,5 @@ export async function notifyAbandonedRelease(input: Readonly<{
     runId: input.repository.listRuns().filter((run) => run.eventGroupId === input.groupId).at(-1)?.id ?? '',
     abandon: 'release'
   })
-  await submitAnalysisFailureNotice({ decision, occurredAt: input.occurredAt, ...(input.submit === undefined ? {} : { submit: input.submit }) })
+  await deliverAnalysisFailureNotice({ decision, occurredAt: input.occurredAt, ...(input.submit === undefined ? {} : { submit: input.submit }) })
 }
