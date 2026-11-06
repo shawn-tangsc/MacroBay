@@ -142,13 +142,22 @@ const ABANDON_COPY: Readonly<Record<AnalysisAbandonKind, Readonly<{ 'zh-CN': str
   signal: { 'zh-CN': '信号解读', 'en-US': 'a signal reading' }
 })
 
-export function analysisNoticeDeeplink(runId: string) {
+/**
+ * Where the notice opens, and **when it was sent**.
+ *
+ * The instant travels with the link because a run id carries no time: a deleted id and an id that
+ * never existed look identical in the store. Only the moment the notice was written lets the run log
+ * tell "this run is past its retention period" from "there is no such record" — without it the
+ * reader, holding a notice we sent, would be told the record does not exist.
+ */
+export function analysisNoticeDeeplink(runId: string, occurredAt: string) {
   return {
     scope: 'product' as const,
     productId: 'market-intelligence',
     settingsSectionId: 'intelligence-sources',
     entityType: 'analysis-run',
-    entityId: runId
+    entityId: runId,
+    ...(occurredAt ? { params: { at: occurredAt } } : {})
   }
 }
 
@@ -185,7 +194,7 @@ export function buildAnalysisFailureNoticeRequest(
       ? ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID
       : ANALYSIS_RECOVERED_EVENT_ID
   const runId = decision.kind === 'attempt-abandoned' ? decision.runId : decision.kind === 'recovered' ? decision.episodeRunId : ''
-  const deeplink = runId ? analysisNoticeDeeplink(runId) : undefined
+  const deeplink = runId ? analysisNoticeDeeplink(runId, occurredAt) : undefined
   // Per language, never one bag for both: a shared `{kind}` value puts a Chinese word inside an
   // English sentence. The abandoned body carries no count — the platform's shared sentence reports
   // "共 N 次", and printing a second number in the body contradicts it on the same screen.

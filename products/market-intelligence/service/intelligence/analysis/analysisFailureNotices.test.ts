@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   analysisFailureNoticePolicy,
+  analysisNoticeDeeplink,
   analysisRunOutcomesOf,
   analysisFailureNoticeDedupeVars,
   buildAnalysisFailureNoticeRequest,
@@ -76,6 +77,13 @@ describe('the three failure notices', () => {
       { id: 'r3', triggerKey: 'signal.etf-flows.etf-outflow-3d', status: 'cancelled', failureCode: null, queuedAt: at(5) }
     ])
     expect(outcomes.map(run => [run.id, run.line])).toEqual([['r2', 'calendar'], ['r3', 'event'], ['r1', 'event']])
+  })
+
+  it('carries the sending instant in the link, so an expired run is not mistaken for a missing one', () => {
+    const deeplink = analysisNoticeDeeplink('run-5', at(0))
+    // 运行 id 不带时间：删掉的 id 和从没存在过的 id 在库里一模一样，只有这个时刻能分开它们。
+    expect(deeplink.params).toEqual({ at: at(0) })
+    expect(analysisNoticeDeeplink('run-5', '')).not.toHaveProperty('params')
   })
 
   it('passes only the declaration’s variables and lets the platform compose the key', () => {
