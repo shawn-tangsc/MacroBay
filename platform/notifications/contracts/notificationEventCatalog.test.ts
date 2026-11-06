@@ -22,11 +22,11 @@ const declaration = (overrides: Partial<NotificationEventDeclaration>): Notifica
 })
 
 describe('notification event policy', () => {
-  it('is the signed 17-row table (10 platform + 7 market-intelligence)', () => {
-    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(17)
+  it('is the signed 18-row table (10 platform + 8 market-intelligence)', () => {
+    expect(NOTIFICATION_EVENT_POLICY_ROW_COUNT).toBe(18)
     const ids = Object.keys(NOTIFICATION_EVENT_POLICY)
     expect(ids.filter((id) => id.startsWith('platform.'))).toHaveLength(10)
-    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(7)
+    expect(ids.filter((id) => id.startsWith('market-intelligence.'))).toHaveLength(8)
     // 本版不登记 signal.interpreted（裁定 A）：编号跳过 N4，也不许换号补位。
     expect(ids).not.toContain('market-intelligence.signal.interpreted')
     // N8 calibration.result 2026-11-04 撤回：编号不复用，行也不留（留着就是静默复活的口子）。
@@ -58,16 +58,21 @@ describe('notification event policy', () => {
     ])
     // P7 不投桌面，否则「桌面失败 → P7 → 投桌面 → 再失败」自激。
     expect(NOTIFICATION_EVENT_POLICY['platform.desktop.blocked'].approvedDisruptionLevels).not.toContain('desktop')
-    // 手机只批三条。
+    // 手机四条：N2 日报完成、N3 信号、N5 宏观事件、N10 舆情。N10 是 2026-11-06 新增的
+    // （契约 §4.1 / 情报需求 v3.58 §十四），它只批 center + channel——桌面与提示两档明确不加。
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('channel')).map(([id]) => id).sort()).toEqual([
       'market-intelligence.briefing.ready',
       'market-intelligence.macro.event-landed',
+      'market-intelligence.sentiment.alert',
       'market-intelligence.signal.triggered'
     ])
     // 提示默认开：关掉桌面时它是唯一的本机提醒。唯一例外是 P9——读者刚点过、人就在面板前，
     // 桌面优先，同一次失败不在应用内再吵第二遍（P7 反过来：它只有 center + toast，不走桌面）。
+    // 不批提示的两行：P9（读者刚点过、人就在面板前）与 N10（信息类，手机与中心就够）。
+    // 顺序就是表里的顺序（平台几行在前），别按字母排——排了就看不出新加的行落在哪一段。
     expect(rows.filter(([, row]) => !row.approvedDisruptionLevels.includes('toast')).map(([id]) => id)).toEqual([
-      'platform.analysis.manual-failed'
+      'platform.analysis.manual-failed',
+      'market-intelligence.sentiment.alert'
     ])
     expect(rows.filter(([, row]) => row.approvedDisruptionLevels.includes('toast'))).toHaveLength(16)
   })
