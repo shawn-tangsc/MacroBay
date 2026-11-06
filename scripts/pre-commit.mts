@@ -124,10 +124,28 @@ for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modul
   mkdirSync(dirname(join(treeRoot, modules)), { recursive: true })
   symlinkSync(real, join(treeRoot, modules), 'dir')
 }
+/**
+ * 环境声明（`*.d.ts`）必须一起进这棵树。
+ *
+ * 它们不是被 import 的，是靠「在 include 覆盖的目录里」才生效的全局声明；`files: [本次几个文件]`
+ * 只要没把它们列成根，就会凭空长出 `Property 'platform' does not exist on type 'Window'` 这类假红——
+ * 2026-11-05 真实发生过：产品线的一笔提交被这种假红拦下，只能用 `SKIP_PRE_COMMIT=1` 绕过，而那条
+ * 应急通道一旦变成常规，检查就形同虚设。全仓只有个位数的 `.d.ts`，列成根几乎不花时间。
+ * （`tsconfig.products.json` 撞的是同一个根因，那处也是漏了同一个文件。）
+ */
+const ambientDeclarations = execFileSync('git', ['ls-files', '*.d.ts'], { cwd: root, encoding: 'utf8' })
+  .split('\n')
+  .map((line) => line.trim())
+  .filter((path) => path !== '' && !path.includes('node_modules') && existsSync(join(treeRoot, path)))
+
 const treeConfig = join(treeRoot, 'tsconfig.pre-commit.json')
 writeFileSync(
   treeConfig,
-  JSON.stringify({ extends: './tsconfig.json', include: [], files: codeStaged.map((path) => `./${path}`) })
+  JSON.stringify({
+    extends: './tsconfig.json',
+    include: [],
+    files: [...codeStaged, ...ambientDeclarations].map((path) => `./${path}`)
+  })
 )
 const timedOut = (result: ReturnType<typeof spawnSync>): boolean =>
   result.error !== undefined && result.error !== null && (result.error as NodeJS.ErrnoException).code === 'ETIMEDOUT'
@@ -152,7 +170,10 @@ const errors = tscOutput
 
 if (errors.length > 0) {
   console.error(`[pre-commit] ✗ 这一笔提交的树里有 ${errors.length} 条类型错（含它依赖的、已进库的那一版）：`)
-  for (const line of errors.slice(0, 20)) console.error(`  ${line.replace(treeRoot + '/', '')}`)
+  // tsc 是从临时树里报错的，路径会带一串 `../../`；不剥掉的话读者没法照着去改。
+  for (const line of errors.slice(0, 20)) {
+    console.error(`  ${line.replace(/^(?:\.\.\/)+/, '').replace(treeRoot + '/', '')}`)
+  }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
   process.exit(1)
