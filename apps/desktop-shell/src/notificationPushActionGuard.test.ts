@@ -24,38 +24,12 @@ import { productManifests } from '@products/generated/productManifests'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
 import { formatPushText } from '@platform/notifications/delivery/channelPushPort'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
+import { findActionDirective } from '@platform/notifications/contracts/actionDirective'
 import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import type { NotificationCopyRef } from '@platform/notifications/contracts/notificationCopyPort'
 import type { NotificationEventDeclaration } from '@platform/notifications/contracts/notificationEventCatalog'
 import { productNotificationCopyTables } from '@platform/desktop/main/composition/notificationCopyTables'
-
-/**
- * 只挡「指着本条通知说点一下」的形态。
- *
- * 刻意**不**挡单个 `打开`／`查看`／`open`：它们能正当出现在去向指引里（「去设置里打开代理」），
- * 而英文的 `open interest` 更是领域名词。按单个动词扫，跟当初按单词 `open` 扫是同一个病。
- */
-const FORBIDDEN: readonly RegExp[] = [
-  /点开/u,
-  /点一下/u,
-  /点这里/u,
-  /点击/u,
-  /点它/u,
-  /查看详情/u,
-  /打开详情/u,
-  /看全文/u,
-  /查看全文/u,
-  /打开全文/u,
-  // 英文只挡**指着本条通知**的祈使（`open it/this/that`）。
-  // 不挡句首 `Open …`：`Open settings and save a new key.` 是去向指引，跟中文「去设置里…」同类，
-  // 读者在手机上真能做到；一刀切句首祈使会把失败通知的「去路」也删掉（Chief 2026-11-06 裁定）。
-  /\bopen\s+(it|this|that)\b/iu,
-  /\btap\s+(it|this|that|here)\b/iu,
-  /\bclick\s+(it|this|that|here|to)\b/iu,
-  /\bview\s+details\b/iu,
-  /\bopen\s+the\s+full\b/iu
-]
 
 type Scanned = { id: string; key: string; language: 'zh-CN' | 'en-US'; text: string }
 
@@ -113,7 +87,7 @@ describe('手机推送不带动作指令（契约 v2.50）', () => {
     // 覆盖条数也要断言：有人把循环改窄、或某条声明被删掉，这里会先红。
     expect(new Set(scanned.map((entry) => entry.id)).size).toBeGreaterThanOrEqual(approvedIds.length)
 
-    const offenders = scanned.filter((entry) => FORBIDDEN.some((pattern) => pattern.test(entry.text)))
+    const offenders = scanned.filter((entry) => findActionDirective(entry.text) !== null)
     expect(offenders.map((entry) => `${entry.id} ${entry.key} ${entry.language}: ${entry.text}`)).toEqual([])
   })
 
@@ -134,14 +108,14 @@ describe('手机推送不带动作指令（契约 v2.50）', () => {
         }))
       }
     }
-    const offenders = lines.filter((text) => FORBIDDEN.some((pattern) => pattern.test(text)))
+    const offenders = lines.filter((text) => findActionDirective(text) !== null)
     expect(offenders).toEqual([])
   })
 
   it('兜底句也在手机上出现，同样不许承诺点开', () => {
     for (const language of ['zh-CN', 'en-US'] as const) {
       const text = notificationCopy[language]['notification.fallback.title']
-      for (const pattern of FORBIDDEN) expect(text).not.toMatch(pattern)
+      expect(findActionDirective(text)).toBeNull()
     }
   })
 
@@ -153,15 +127,13 @@ describe('手机推送不带动作指令（契约 v2.50）', () => {
       reason: 'The rule matched and reached the severity threshold you set.',
       actionLabels: {}
     })
-    for (const pattern of FORBIDDEN) expect(noun).not.toMatch(pattern)
+    expect(findActionDirective(noun)).toBeNull()
 
     // 去向指引：告诉读者**在应用里**去哪修，是他在手机上真能做的事。
     const directions = [
       '密钥失效了。去设置里重新填一把就能继续。',
       'The key is no longer accepted. Open settings and save a new one.'
     ]
-    for (const text of directions) {
-      for (const pattern of FORBIDDEN) expect(text).not.toMatch(pattern)
-    }
+    for (const text of directions) expect(findActionDirective(text)).toBeNull()
   })
 })

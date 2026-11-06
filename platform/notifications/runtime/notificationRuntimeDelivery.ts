@@ -9,6 +9,7 @@ import {
   resolveNotificationCopyText,
   type NotificationCopyLanguage
 } from '../../i18n/notificationCopy'
+import { findActionDirective } from '../contracts/actionDirective'
 import type { NotificationCopyParam, NotificationCopyPort } from '../contracts/notificationCopyPort'
 import { SIGNAL_SEVERITY_RANK } from '../contracts/notificationContracts'
 import type {
@@ -357,27 +358,9 @@ function looksUnsendable(text: string): boolean {
   if (/\{\s*\w+\s*\}/u.test(text)) return true
   // 裸键：`notification.event.…` / `ui.state.…` 这类 `a.b.c` 形态（点号分段、全小写）。
   if (/\b[a-z][a-z0-9]*(?:[.-][a-z0-9]+){2,}\b/u.test(text) && !/\b[A-Z]/.test(text)) return true
-  // 指向本条通知的动作指令（契约 v2.50）。
-  return ACTION_DIRECTIVE.some((pattern) => pattern.test(text))
+  // 指向本条通知的动作指令：判定只有一处（`findActionDirective`），这里不另立词表。
+  return findActionDirective(text) !== null
 }
-
-/** 与手机推送守卫同一份判据：挡指代本条通知的形态，不挡「去设置里…」与领域名词。 */
-const ACTION_DIRECTIVE: readonly RegExp[] = [
-  /点开/u,
-  /点一下/u,
-  /点这里/u,
-  /点击/u,
-  /点它/u,
-  /查看详情/u,
-  /打开详情/u,
-  /看全文/u,
-  /查看全文/u,
-  /打开全文/u,
-  /\bopen\s+(it|this|that)\b/iu,
-  /\btap\s+(it|this|that|here)\b/iu,
-  /\bclick\s+(it|this|that|here|to)\b/iu,
-  /\bview\s+details\b/iu
-]
 
 /**
  * 平台闭集兜底只认字面量：参数里只要有一个 `{ ref }`，这条就必须走端口解析；
