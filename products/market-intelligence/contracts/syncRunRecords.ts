@@ -194,6 +194,12 @@ export function syncRunsCsv(rows: readonly SyncRunRow[], header: readonly string
   return [header.map(escape).join(','), ...rows.map((row) => [
     row.at, row.taskLabel, row.sources.map((source) => source.label).join(' / '), row.action, row.outcome,
     row.durationMs === undefined ? '' : String(row.durationMs),
-    row.failureCode ?? '', row.correlationId, row.detail ?? ''
+    row.failureCode ?? '', row.correlationId, row.detail ?? '',
+    // The batch tally is appended, never inserted: a spreadsheet built on this export keeps every
+    // column it already had. A run with no tally leaves the four cells empty — writing 0 would say
+    // "nothing was translated", which is a different fact from "this run never counted".
+    ...(row.counts === undefined ? ['', '', '', ''] : [
+      String(row.counts.total), String(row.counts.succeeded), String(row.counts.failed), String(row.counts.skipped)
+    ])
   ].map(escape).join(','))].join('\n')
 }

@@ -152,6 +152,34 @@ describe('sync run section', () => {
     expect(dom.textContent).toContain('32.0s')
   })
 
+  it('says how many items a batch ran and how they ended, in one cell', async () => {
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({
+      state: 'available',
+      rows: [{
+        at: '2026-10-30T08:27:20.000Z', runId: 'r-counts', correlationId: 'r-counts',
+        taskLabel: '翻译任务', sources: [{ sourceId: 'coindesk-rss', label: 'CoinDesk' }],
+        handlerId: 'market-intelligence.translateItems', action: 'other', outcome: 'succeeded', durationMs: 2_000,
+        analysis: { state: 'not-applicable' as const },
+        counts: { total: 6, succeeded: 5, failed: 1, skipped: 0 }, resultReasonCode: 'translation.rate-limited'
+      }]
+    })
+    const dom = await render()
+    expect(dom.textContent).toContain('6 条中成功 5')
+    expect(dom.textContent).toContain('失败 1')
+    // One sentence for the reason, never a breakdown the page would have to invent.
+    expect(dom.textContent).toContain(text.resultReasons['translation.rate-limited']!)
+    expect(dom.textContent).not.toContain('translation.rate-limited')
+  })
+
+  it('writes no numbers for a run that predates the tally, and says so once for the table', async () => {
+    const dom = await render()
+    // The fixture runs carry no tally: no zeroes anywhere, and the old-record sentence appears once.
+    expect(dom.textContent).not.toContain('0 条中成功')
+    const notes = [...dom.querySelectorAll('.mi-sync-run__legend--tally')]
+    expect(notes).toHaveLength(1)
+    expect(notes[0]?.textContent).toBe(text.oldRecordNote)
+  })
+
   it('falls back to one sentence for a code it does not know', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({
       state: 'available',

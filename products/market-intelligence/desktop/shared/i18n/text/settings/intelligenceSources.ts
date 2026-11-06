@@ -121,7 +121,22 @@ export const intelligenceSourcesText = {
     showing: '显示 {shown} 条，共 {total} 条',
     retention: '明细保留 30 天，更早的只留每日汇总',
     page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页',
-    csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
+    csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明', '总数', '成功', '失败', '跳过'],
+    // 每批自己的结论：这一行跑了几条、成了几条。没有计数时整格不写，写 0 会变成另一件事。
+    counts: '{total} 条中成功 {succeeded}',
+    countsFailed: '失败 {failed}',
+    countsSkipped: '跳过 {skipped}',
+    countsSeparator: '、',
+    oldRecordNote: '旧记录，没有条数',
+    resultReasons: {
+      'translation.timeout': '模型服务超时了，这批没跑完',
+      'translation.rate-limited': '模型服务正在限流，有一些没翻成',
+      'translation.empty-content': '原文是空的，没有可翻的内容',
+      'translation.unsupported-language': '这个语言暂不支持',
+      'translation.model-not-configured': '还没有配置可用的翻译模型',
+      'translation.unknown': '这次没能判断原因'
+    },
+    resultReasonUnknown: '这次没能判断原因',
     aggregates: {
       title: '每日汇总',
       note: '每日汇总只记一天一个任务的运行次数与失败次数（按 UTC 日界），不记原因与耗时；最多显示最近 60 条（日 × 任务）。',
@@ -554,7 +569,21 @@ export const intelligenceSourcesText = {
     showing: 'Showing {shown} of {total}',
     retention: 'Details are kept 30 days; older runs only survive as daily counts',
     page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next',
-    csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
+    csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail', 'Total', 'Succeeded', 'Failed', 'Skipped'],
+    counts: '{succeeded} of {total} succeeded',
+    countsFailed: '{failed} failed',
+    countsSkipped: '{skipped} skipped',
+    countsSeparator: ', ',
+    oldRecordNote: 'Older record — no item count was stored',
+    resultReasons: {
+      'translation.timeout': 'The model service timed out; this batch did not finish',
+      'translation.rate-limited': 'The model service was rate-limiting; some items were not translated',
+      'translation.empty-content': 'The source text was empty, so there was nothing to translate',
+      'translation.unsupported-language': 'This language is not supported yet',
+      'translation.model-not-configured': 'No translation model is configured yet',
+      'translation.unknown': 'We could not tell why this time'
+    },
+    resultReasonUnknown: 'We could not tell why this time',
     aggregates: {
       title: 'Daily totals',
       note: 'A daily total keeps one day of one task: how many times it ran and how many failed (UTC day boundaries). No reasons, no durations; at most the newest 60 day-and-task rows are shown.',

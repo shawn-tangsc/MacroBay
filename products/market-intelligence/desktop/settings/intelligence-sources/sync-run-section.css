@@ -121,3 +121,6 @@
   font-size: 11px;
 }
 .mi-sync-run__focus-missing strong { color: inherit; }
+
+/* The batch tally rides in the outcome cell: one sentence, quieter than the status word it follows. */
+.mi-sync-run__tally { color: var(--text-secondary); }

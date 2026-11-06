@@ -85,6 +85,16 @@ export type SyncRunText = Readonly<{
   next: string
   csvHeader: readonly string[]
   loading: string; exportCsv: string; exported: string; exportFailed: string
+  /** The batch's own tally, filled in by the caller; the cell composes the parts. */
+  counts: string
+  countsFailed: string
+  countsSkipped: string
+  countsSeparator: string
+  /** Shown instead of numbers for a run that predates them: never as zero. */
+  oldRecordNote: string
+  /** Stable `resultReasonCode` → the reader's sentence; the code itself never reaches the cell. */
+  resultReasons: Readonly<Record<string, string>>
+  resultReasonUnknown: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   /** `handlerId` → the reader's name for that job; the service catalogue's own labels are data. */
   tasks: Readonly<Record<string, string>>
@@ -97,6 +107,28 @@ export type SyncRunText = Readonly<{
   /** Title text for the humanised failure, so the code stays available without being on screen. */
   failureCodeHint: string
 }>
+
+/**
+ * The batch's tally, as one sentence, or nothing.
+ *
+ * Composed here rather than stored: the parts are numbers, and the separator is punctuation a
+ * locale owns. A run without a tally gets no sentence at all — printing "0 of 0" would claim the
+ * batch ran and found nothing, which is the opposite of "this record predates the count".
+ */
+function tallyText(row: SyncRunRow, text: SyncRunText): string | undefined {
+  const counts = row.counts
+  if (counts === undefined) return undefined
+  const parts = [
+    text.counts.replace('{total}', String(counts.total)).replace('{succeeded}', String(counts.succeeded))
+  ]
+  if (counts.failed > 0) parts.push(text.countsFailed.replace('{failed}', String(counts.failed)))
+  if (counts.skipped > 0) parts.push(text.countsSkipped.replace('{skipped}', String(counts.skipped)))
+  const reason = row.resultReasonCode === undefined
+    ? undefined
+    : text.resultReasons[row.resultReasonCode] ?? text.resultReasonUnknown
+  const tally = parts.join(text.countsSeparator)
+  return reason === undefined ? tally : `${tally}${text.joiner}${reason}`
+}
 
 const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 /** Thirty rows a page: one screen of recent history without a wall of scroll. */
@@ -356,6 +388,12 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
         <span role="columnheader">{text.columns.detail}</span>
       </div>
       <p className="mi-sync-run__legend">{text.noSourceHint}</p>
+      {/* One line for the whole table, not one per row: a run that predates the tally shows no
+          numbers, and without this the empty spot reads as "zero items". Only shown when such a row
+          is actually on screen — a legend for an absent case is noise. */}
+      {visible.some((row) => row.counts === undefined)
+        ? <p className="mi-sync-run__legend mi-sync-run__legend--tally">{text.oldRecordNote}</p>
+        : null}
       {visible.map((row) => <Fragment key={row.runId}>
         <div
           className="mi-sync-run__grid"
@@ -383,7 +421,12 @@ export function SyncRunSection({ analysisFailureReasons, focusAnalysisRunId, kno
           {row.sources.length > 2 ? <span className="mi-sync-run__more">{` +${row.sources.length - 2}`}</span> : null}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
-        <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
+        <span role="cell" data-outcome={row.outcome}>
+          {text.outcomes[row.outcome]}
+          {tallyText(row, text) === undefined
+            ? null
+            : <span className="mi-sync-run__tally">{text.joiner}{tallyText(row, text)}</span>}
+        </span>
         {/* The second result. Never merged into the one above: "task completed, analysis not
             published" is exactly the state this column exists to make visible. */}
         <span className="mi-sync-run__analysis" role="cell">
