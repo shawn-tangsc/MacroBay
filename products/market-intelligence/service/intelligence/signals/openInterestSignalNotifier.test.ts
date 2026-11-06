@@ -70,7 +70,7 @@ describe('open interest signal notification', () => {
         ref: {
           scope: 'product',
           productId: 'market-intelligence',
-          key: 'notification.event.market-intelligence.signal.triggered.headline.oiDrop'
+          key: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
         }
       }
     })

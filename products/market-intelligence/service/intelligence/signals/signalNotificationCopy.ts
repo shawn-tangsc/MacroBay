@@ -14,7 +14,9 @@ const PRODUCT_ID = 'market-intelligence'
 /** 标题里的 headline 槽：一层产品引用（不带参数），按规则选一句。 */
 export const SIGNAL_HEADLINE_KEYS = Object.freeze({
   etfOutflow: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflow',
-  oiDrop: 'notification.event.market-intelligence.signal.triggered.headline.oiDrop'
+  etfOutflowAggravated: 'notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated',
+  oiDrop: 'notification.event.market-intelligence.signal.triggered.headline.oiDrop',
+  oiDropAggravated: 'notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated'
 })
 
 /** 资产在通知里显示为符号：数据不翻译，但要保证是符号形状。 */

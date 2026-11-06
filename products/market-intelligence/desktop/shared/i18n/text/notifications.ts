@@ -34,6 +34,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
     ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF 连续净流出',
     ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: '持仓骤降',
+    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated']: 'ETF 净流出加剧',
+    ['notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated']: '持仓骤降加剧',
     // 正文四个变体：规则 × 档位。数字一律数值参数，模板里不写任何阈值。
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '净流出 {amount}，超过 {threshold} 的阈值',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '净流出 {amount}，是阈值的 {multiple}',
@@ -70,6 +72,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.signalTriggered)]: '{asset} {headline}',
     ['notification.event.market-intelligence.signal.triggered.headline.etfOutflow']: 'ETF outflows',
     ['notification.event.market-intelligence.signal.triggered.headline.oiDrop']: 'open interest dropped',
+    ['notification.event.market-intelligence.signal.triggered.headline.etfOutflowAggravated']: 'ETF outflows deepened',
+    ['notification.event.market-intelligence.signal.triggered.headline.oiDropAggravated']: 'open interest fell further',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflow')]: '{amount} net outflow, past the {threshold} threshold',
     [notificationEventVariantKey(IDS.signalTriggered, 'etfOutflowAggravated')]: '{amount} net outflow, {multiple} the threshold',
     [notificationEventVariantKey(IDS.signalTriggered, 'oiDrop')]: 'Down {dropPct} in 15 min (threshold {thresholdPct}), volume {multiple}, about {notional}',

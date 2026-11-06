@@ -67,8 +67,8 @@ function signal(overrides: Partial<ModuleSignal> = {}): ModuleSignal {
 describe('signal notification sentences', () => {
   it('formats money per language and puts the asset first in the title', () => {
     const request = buildOpenInterestSignalRequest(signal({ severity: 'high', values: { dropPct: -3.4, volumeMultiple: 4.2, notionalUsd: 1_200_000_000 } }))
-    expect(resolveTitle(request, 'zh-CN')).toBe('BTC 持仓骤降')
-    expect(resolveTitle(request, 'en-US')).toBe('BTC open interest dropped')
+    expect(resolveTitle(request, 'zh-CN')).toBe('BTC 持仓骤降加剧')
+    expect(resolveTitle(request, 'en-US')).toBe('BTC open interest fell further')
     expect(resolveBody(request, 'zh-CN')).toBe('15 分钟跌 3.4%（强阈值 2.5%），成交放大 4.2 倍，规模约 12 亿美元')
     expect(resolveBody(request, 'en-US')).toBe('Down 3.4% in 15 min (strong threshold 2.5%), volume 4.2×, about $1.2B')
   })
@@ -88,7 +88,7 @@ describe('signal notification sentences', () => {
     const etfSignal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-09-01T12:00:00.000Z' })!
     expect(etfSignal.severity).toBe('high')
     const request = buildEtfOutflowSignalRequest(etfSignal)
-    expect(resolveTitle(request, 'zh-CN')).toBe('BTC ETF 连续净流出')
+    expect(resolveTitle(request, 'zh-CN')).toBe('BTC ETF 净流出加剧')
     expect(resolveBody(request, 'zh-CN')).toBe('净流出 6 亿美元，是阈值的 6 倍')
     expect(resolveBody(request, 'en-US')).toBe('$600M net outflow, 6× the threshold')
     expect(Math.abs(etfSignal.values.thresholdUsd)).toBe(Math.abs(etfFlowPolicy.signalOutflowUsd))

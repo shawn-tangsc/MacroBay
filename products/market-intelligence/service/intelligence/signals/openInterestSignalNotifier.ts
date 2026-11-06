@@ -103,7 +103,7 @@ export function buildOpenInterestSignalRequest(
     dedupeVars,
     titleParams: {
       asset: signalAssetSymbol(signal.asset),
-      headline: signalHeadline(SIGNAL_HEADLINE_KEYS.oiDrop)
+      headline: signalHeadline(aggravated ? SIGNAL_HEADLINE_KEYS.oiDropAggravated : SIGNAL_HEADLINE_KEYS.oiDrop)
     },
     bodyVariant: aggravated ? 'oiDropAggravated' : 'oiDrop',
     bodyParams: aggravated

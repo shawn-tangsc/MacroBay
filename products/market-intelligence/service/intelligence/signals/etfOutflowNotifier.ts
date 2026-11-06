@@ -85,7 +85,7 @@ export function buildEtfOutflowSignalRequest(signal: ModuleSignal): Notification
     dedupeVars,
     titleParams: {
       asset: signalAssetSymbol(signal.asset),
-      headline: signalHeadline(SIGNAL_HEADLINE_KEYS.etfOutflow)
+      headline: signalHeadline(aggravated ? SIGNAL_HEADLINE_KEYS.etfOutflowAggravated : SIGNAL_HEADLINE_KEYS.etfOutflow)
     },
     bodyVariant: aggravated ? 'etfOutflowAggravated' : 'etfOutflow',
     bodyParams: aggravated
