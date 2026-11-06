@@ -221,6 +221,8 @@ mi: miText['zh-CN'],
                 failed: '分析了但没成',
                 stopped: '这次运行提前结束了'
               },
+              /** 读者自己在设置里关了自动分析：这句优先于任何运行状态，且不给按钮（卡片没有设置路由）。 */
+              offByReader: '你关闭了自动分析，这条信号不会自动分析',
               stoppedReasons: {
                 'run-cancelled': '这次运行被取消了',
                 'run-superseded': '这次已被更新的一次取代，不用等',
@@ -1532,6 +1534,7 @@ mi: miText['en-US'],
                 failed: 'Analysed but did not succeed',
                 stopped: 'This run ended early'
               },
+              offByReader: 'You turned auto-analysis off, so this signal will not be analysed automatically',
               stoppedReasons: {
                 'run-cancelled': 'This run was cancelled',
                 'run-superseded': 'A newer run replaced this one; nothing to wait for',

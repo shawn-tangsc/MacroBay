@@ -22,6 +22,7 @@ const lookup: SignalAnalysisCopyLookup = (query: SignalAnalysisCopyPart) => {
   if (query.part === 'stoppedReason') return stopped[query.code] ?? ''
   if (query.part === 'skippedReason') return skippedReasons[query.code] ?? ''
   if (query.part === 'failedReason') return failedReasons[query.code] ?? ''
+  if (query.part === 'offByReader') return '你关闭了自动分析，这条信号不会自动分析'
   if (query.part === 'separator') return '：'
   return '原因没记录'
 }
@@ -39,6 +40,14 @@ describe('the analysis-progress sentence', () => {
     expect(signalAnalysisSentence(view('failed', 'analysis-provider-error'), lookup)).toBe('分析了但没成：模型服务出错了')
     expect(signalAnalysisSentence(view('stopped', 'run-cancelled'), lookup)).toBe('这次运行被取消了')
     expect(signalAnalysisSentence(view('stopped', 'run-superseded'), lookup)).toBe('已被更新的一次取代')
+  })
+
+  it('blames the reader’s own switch, not the system, when auto-analysis is off', () => {
+    const off = { analysisOffByReader: true, analysisState: 'skipped', analysisReason: 'signal-cooldown-active' } as never
+    expect(signalAnalysisSentence(off, lookup)).toBe('你关闭了自动分析，这条信号不会自动分析')
+    // 关掉之后即使还有运行状态，也不该说成「这次没分析（因为冷却）」——责任指错了。
+    const offQueued = { analysisOffByReader: true, analysisState: 'queued' } as never
+    expect(signalAnalysisSentence(offQueued, lookup)).toBe('你关闭了自动分析，这条信号不会自动分析')
   })
 
   it('says a run whose record expired ran, instead of leaving the reader waiting', () => {

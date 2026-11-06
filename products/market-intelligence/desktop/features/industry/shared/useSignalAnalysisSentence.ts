@@ -16,6 +16,7 @@ export function useSignalAnalysisSentence(view: SignalAnalysisStateView | undefi
   if (!view) return undefined
 
   return signalAnalysisSentence(view, (query: SignalAnalysisCopyPart) => {
+    if (query.part === 'offByReader') return resolveText(`${BASE}.offByReader`)
     if (query.part === 'state') return resolveText(`${BASE}.states.${query.code}`)
     if (query.part === 'stoppedReason') return resolveText(`${BASE}.stoppedReasons.${query.code}`)
     if (query.part === 'skippedReason') return resolveText(`${TRIGGER}.reasons.${query.code}`)
