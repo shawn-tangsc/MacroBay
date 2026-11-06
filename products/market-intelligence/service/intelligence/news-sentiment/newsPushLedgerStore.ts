@@ -107,6 +107,11 @@ export function createNewsPushLedgerStore(filePath: string) {
       return { baselineWritten }
     },
 
+    /** 关掉开关：只删水位这一行，账本一行不动（推过的不再推）。 */
+    disableOutlet(): void {
+      db.prepare("delete from news_push_watermark where id = 'outlet'").run()
+    },
+
     count(): number {
       const row = db.prepare('select count(*) as n from news_push_ledger').get() as { n?: number } | undefined
       return Number(row?.n ?? 0)
