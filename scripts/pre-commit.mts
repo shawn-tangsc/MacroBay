@@ -13,7 +13,8 @@
  * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
@@ -120,10 +121,17 @@ if (guard.status !== 0) {
 // `GIT_INDEX_FILE` 交给钩子，这里直接继承），对它跑 tsc。`tsconfig.json` 里的 `baseUrl` 与 `paths`
 // 是相对声明它的配置解析的，所以把 tsc 指到树里的那份配置，`@platform/*` 等别名也一律落在树内，
 // 不会漏回工作区。node_modules 软链过去：依赖不在提交范围内，但类型定义要从那儿拿。
-const treeRoot = join(root, 'node_modules', '.cache', 'pre-commit-tree')
-rmSync(treeRoot, { recursive: true, force: true })
-mkdirSync(treeRoot, { recursive: true })
+/**
+ * 临时树放在**系统临时目录**、每次一个新目录。两条理由都不是洁癖：
+ *  - 原来的固定路径 `node_modules/.cache/pre-commit-tree` 在**共用 checkout** 里，两个会话同时提交会互相
+ *    删对方的树（`rmSync` 在前面），症状是偶发的「文件不存在」；
+ *  - `tsx` 在树内跑生成器时，路径别名解析在「树嵌在仓库自己的 node_modules 底下」这个位置会失灵
+ *    （`@platform/*` 找不到，而在 /tmp 下同一棵树正常），2026-11-06 实测复现。
+ */
+const treeRoot = mkdtempSync(join(tmpdir(), 'macrobay-precommit-'))
 execFileSync('git', ['checkout-index', '-a', `--prefix=${treeRoot}/`], { cwd: root })
+/** 临时树用完就删（报错信息里已经把路径剥成仓库相对形式，作者不需要它留在磁盘上）。 */
+const dropTree = (): void => { rmSync(treeRoot, { recursive: true, force: true }) }
 for (const modules of ['node_modules', join('apps', 'desktop-shell', 'node_modules')]) {
   const real = join(root, modules)
   if (!existsSync(real)) continue
@@ -160,10 +168,12 @@ if (timedOut(generation) || generation.status !== 0) {
   say(`生成物没能在提交树里生成（${Math.round(performance.now() - generateStart)}ms），**这一次没有检查**；请自己跑 pnpm typecheck。`)
   const detail = `${generation.stdout ?? ''}${generation.stderr ?? ''}`.trim()
   if (detail !== '') console.error(detail.split('\n').slice(-5).join('\n'))
+  dropTree()
   process.exit(0)
 }
 if (!existsSync(join(treeRoot, 'products', 'generated', 'shellRegistry.ts'))) {
   say('生成器跑完了但树里仍没有 products/generated/shellRegistry.ts，**这一次没有检查**；请自己跑 pnpm typecheck。')
+  dropTree()
   process.exit(0)
 }
 /**
@@ -199,6 +209,7 @@ const check = spawnSync(join(root, 'node_modules', '.bin', 'tsc'), ['--noEmit', 
 
 if (timedOut(check)) {
   say(`预检超时（提交树的 typecheck 超过 ${Math.round(BUDGET_MS / 1000)}s），**未拦截**，请手动跑 pnpm typecheck。`)
+  dropTree()
   process.exit(0)
 }
 
@@ -216,7 +227,9 @@ if (errors.length > 0) {
   }
   console.error('[pre-commit] 常见原因：改 import/export 的那一笔只带了调用方，被调模块还在工作区。两侧同笔带上。')
   console.error('[pre-commit] 紧急回滚可跳过：SKIP_PRE_COMMIT=1 git commit …（跳过后要补跑 pnpm typecheck）')
+  dropTree()
   process.exit(1)
 }
 
+dropTree()
 say(`✓ 预检通过（${elapsed()}）`)
