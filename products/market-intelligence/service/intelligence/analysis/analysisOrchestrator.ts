@@ -11,7 +11,8 @@ import {
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
-import { isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisRunLineOf, isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import {
   formatUnsafeOutputRedaction,
   validateAnalysisModelOutput,
@@ -27,6 +28,8 @@ import { withSnapshotChange } from './snapshotChange'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
+  /** The recent runs, for the failure-notice decision. Absent in narrow test doubles. */
+  listRuns?: () => readonly AnalysisRun[]
   getSnapshot?: (id: string) => EvidenceSnapshot | undefined
   listSnapshots?: (eventGroupId: string) => readonly EvidenceSnapshot[]
   getEventGroup: (id: string) => { id: string; currentSummaryId: string | null } | undefined
@@ -170,6 +173,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * change the run's outcome — the notifier swallows its own errors.
    */
   notifyManualFailure?: (input: Omit<AnalysisManualFailure, 'language'>) => Promise<void>
+  /**
+   * The three throttled notices (repeated failure / abandoned / recovered). Optional so the tests and
+   * any caller without the notification runtime keep working; the decision itself lives in
+   * `analysisFailureNotices`, not here.
+   */
+  notifyAnalysisNotice?: (input: Readonly<{ decision: AnalysisFailureNoticeDecision; occurredAt: string }>) => Promise<void>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
@@ -285,7 +294,25 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     } catch {
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
+    // A success may end a failure episode; the decision is made once, from the same rows the notices
+    // are judged from, so "recovered" and "still failing" can never both be true.
+    await announceRunOutcome(runRecord.triggerKey)
     return { status: 'succeeded' }
+  }
+
+  /** One place that turns "this run just ended" into at most one notice. */
+  async function announceRunOutcome(triggerKey: string): Promise<void> {
+    if (!deps.notifyAnalysisNotice || !deps.repository.listRuns) return
+    try {
+      const decision = decideAnalysisFailureNotice({
+        runs: analysisRunOutcomesOf(deps.repository.listRuns()),
+        line: analysisRunLineOf(triggerKey)
+      })
+      if (decision.kind === 'none') return
+      await deps.notifyAnalysisNotice({ decision, occurredAt: deps.now() })
+    } catch {
+      // A notice is an addition to the record; it must never turn a finished run into a failure.
+    }
   }
 
   function cancel(id: string): AnalysisOrchestratorResult {
@@ -301,6 +328,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const run = deps.repository.getRun(id)
     if (run && isGateExempt(run.triggerKey)) {
       await deps.notifyManualFailure?.({ runId: id, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
+    } else if (run) {
+      await announceRunOutcome(run.triggerKey)
     }
     return { status, errorCode }
   }
