@@ -70,7 +70,13 @@ try {
 
 const codeStaged = staged.filter((path) => CODE_FILE.test(path))
 if (codeStaged.length === 0) {
-  say(staged.length === 0 ? '没有暂存内容，跳过预检。' : '本次没有代码文件，跳过预检。')
+  // 纯文档/配置的提交没有类型可查，但**文档有自己的门禁**：这句话必须在跳过的同一行说出来，
+  // 否则「要不要自己跑 docs:check」就只靠记性——2026-11-06 刚把它定成规矩，规矩不该依赖记忆。
+  say(
+    staged.length === 0
+      ? '没有暂存内容，跳过预检。'
+      : `本次没有代码文件，跳过预检——文档改动请自己跑 pnpm docs:check（它检查 docs/ 与 docs-private/）。`
+  )
   process.exit(0)
 }
 
