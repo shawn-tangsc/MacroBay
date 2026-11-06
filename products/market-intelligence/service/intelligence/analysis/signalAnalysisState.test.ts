@@ -34,11 +34,16 @@ describe('signal analysis state', () => {
       .toMatchObject({ analysisState: 'not-triggered' })
   })
 
-  it('answers the two capability fields without reading them out of the ledger', () => {
+  it('answers the reader’s own switch without reading it out of the ledger', () => {
     // 账本整段清空时，读者关掉的那一项仍然必须是「关掉了」，不能因为查不到行就变假。
     expect(projectSignalAnalysisState({ severity: 'high', row: undefined, run: undefined, analysisOffByReader: true }))
-      .toMatchObject({ analysisOffByReader: true, analysisEnabled: true })
-    expect(projectSignalAnalysisState({ severity: 'high', row: undefined, run: undefined, analysisEnabled: false }))
-      .toMatchObject({ analysisEnabled: false })
+      .toMatchObject({ analysisOffByReader: true })
+  })
+
+  it('has no “capability not shipped” field left: it would be a constant', () => {
+    // 扫描接上之后「分析还没上线」永远不会出现。恒真的字段就是永不出现的那句文案，删掉它，
+    // 也删掉那句文案——不留占位，不写「将来可能有用」。
+    expect(Object.keys(projectSignalAnalysisState({ severity: 'high', row: undefined, run: undefined })))
+      .toEqual(['analysisOffByReader', 'analysisState'])
   })
 })
