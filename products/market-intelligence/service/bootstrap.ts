@@ -35,6 +35,7 @@ import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registe
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
+import type { ProductAgentPlatformDeps } from '@platform/desktop/main/productAgentPlatformWiring'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
 import { createRunSessionPortFromDeps } from './intelligence/jobs/analysisRunSessionWiring'
 import { mountSignalAnalysisReader } from './intelligence/signals/mountSignalAnalysisReader'
@@ -82,7 +83,14 @@ import { createSampleModeRuntime } from './demo/demoModule'
 const blsApiCompatibilityHost = createBlsApiCompatibilityHost()
 const blsPythonRequestsBridge = createBlsPythonRequestsBridge({})
 
-export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
+/**
+ * 产品启动依赖 = 宿主注入面 + 产品自己的会话端口 + **平台的智能体会话契约**。
+ *
+ * 第三项过去是这里自己抄的一份（字段相同、名字不同），两次因为两边漂移而红；
+ * 现在形状只有一个出处：`ProductAgentPlatformDeps`。与 `AnalysisSessionDependencies` 的交集是有意的——
+ * 那个端口只关心 `{ sessions }` 与 `SessionRef`，比契约更窄，窄的那一份各自留在自己的模块里。
+ */
+export type ProductBootstrapDependencies = AnalysisSessionDependencies & ProductAgentPlatformDeps & {
   register: ProductIpcRegistrar
   jobRuntime: JobRuntime
   eventBusRuntime: EventBusRuntime
@@ -97,16 +105,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   platformFetch?: typeof fetch
   getNetworkSettings?: () => Promise<NetworkSettings>
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
-  createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
-  /** 自动会话的幂等窄查：按 (agentId, originRef) 取一条，只读、不创建；缺席时不建会话，也不退回全量列表。 */
-  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<{ id: string; agentId: string | null; description?: string } | null>
-  sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
-  cancelAgentSession?: (sessionId: string) => Promise<void> | void
-  appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
-  updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
-  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<import('@platform/ai/agent-platform/schemas/agentSchemas').AgentEntity>
-  isWebSearchProviderReady?: () => Promise<boolean>; onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
+  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
