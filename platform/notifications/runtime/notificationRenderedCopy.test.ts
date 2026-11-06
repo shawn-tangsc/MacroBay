@@ -201,6 +201,40 @@ describe('成品在手时不再读键', () => {
   })
 })
 
+describe('重投在判定阶段被拒：记录干净，日志留痕', () => {
+  it('记录不存在 → 记录不变、日志恰一行且字段齐全（不带句子与参数）', async () => {
+    const state = createDefaultNotificationStoreState()
+    const diagnostics: { code: string; recordId?: string; reason?: string; step?: string; key?: string }[] = []
+    const instance = createNotificationRuntime({
+      storage: { read: async () => JSON.parse(JSON.stringify(state)), write: async (next) => { Object.assign(state, next) } },
+      catalog: createNotificationEventCatalog({
+        policy: {},
+        sources: [{ productId: 'platform', events: [] }]
+      }),
+      getSettings: async () => createDefaultNotificationRuntimeSettings(),
+      clock,
+      getLanguage: async () => 'zh-CN',
+      diagnostics: (entry) => diagnostics.push(entry)
+    })
+
+    const before = JSON.stringify(state.records)
+    const result = await instance.redeliverPush({ recordId: 'missing', editionId: 'e1', locale: 'zh-CN' })
+
+    expect(result).toMatchObject({ kind: 'rejected', reason: 'redeliver-target-missing' })
+    // 记录回答「推过没有」：没调用过通道，一个字节都不该变。
+    expect(JSON.stringify(state.records)).toBe(before)
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]).toMatchObject({
+      code: 'redeliver-rejected',
+      recordId: 'missing',
+      reason: 'redeliver-target-missing',
+      step: 'target'
+    })
+    // 日志不是第二个真相：不带句子、不带参数。
+    expect(JSON.stringify(diagnostics[0])).not.toContain('notification.')
+  })
+})
+
 describe('源头没拼完：拒收，不落库', () => {
   function runtime() {
     const state = createDefaultNotificationStoreState()

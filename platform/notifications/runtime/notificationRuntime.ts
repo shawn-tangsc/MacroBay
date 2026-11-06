@@ -384,7 +384,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     ...settingsSurface,
     reportProviderCredential,
 
-    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged }),
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics }),
 
     async initialize(): Promise<void> {
       await load()

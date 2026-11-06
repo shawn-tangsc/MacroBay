@@ -7,9 +7,12 @@
  * 抽出来的原因与设置面相同：`notificationRuntime.ts` 贴着体积上限，任何新的成块逻辑
  * 都直接进独立模块，**不许先长后拆**。
  */
-import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import type {
+  NotificationDiagnosticsSink,
+  NotificationRuntimeSettings
+} from '../contracts/notificationContracts'
 import type { NotificationStoreState } from '../store/notificationStore'
-import { redeliverPushToChannel, type RedeliverResult } from './notificationRedeliver'
+import { redeliverPushToChannel, type RedeliverReasonCode, type RedeliverResult } from './notificationRedeliver'
 import type { NotificationDeliveryContent } from './notificationRouting'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 
@@ -37,6 +40,22 @@ export type RedeliverSurfaceDeps = {
   exclusive: <T>(operation: () => Promise<T>) => Promise<T>
   persistWithDiagnostics: (state: NotificationStoreState) => Promise<void>
   notifyChanged: () => void
+  /** 判定阶段被拒的留痕出口：与 `persist-failed` 同一条路（appLog），**不进记录**。 */
+  diagnostics?: NotificationDiagnosticsSink
+}
+
+/** 拒绝码 → 哪一步拒的。一码一步，映射只有这一处。 */
+function stepOf(reason: RedeliverReasonCode): 'surface' | 'target' | 'edition' | 'channel' {
+  switch (reason) {
+    case 'redeliver-surface-invalid':
+      return 'surface'
+    case 'redeliver-target-missing':
+      return 'target'
+    case 'redeliver-edition-mismatch':
+      return 'edition'
+    default:
+      return 'channel'
+  }
 }
 
 export function composeRedeliverSurface(deps: RedeliverSurfaceDeps) {
@@ -57,7 +76,18 @@ export function composeRedeliverSurface(deps: RedeliverSurfaceDeps) {
           deliver: deps.pushHook,
           resolveContent: deps.resolveContent
         })
-        if (result.kind === 'rejected') return result
+        if (result.kind === 'rejected') {
+          // 记录保持干净（`delivery.push` 只回答「推过没有」），但这次操作必须可查：
+          // 只带 recordId、拒绝码、哪一步拒的——**不许带句子或参数**（日志不是第二个真相）。
+          deps.diagnostics?.({
+            code: 'redeliver-rejected',
+            at: now,
+            recordId: input.recordId,
+            reason: result.reason,
+            step: stepOf(result.reason)
+          })
+          return result
+        }
         const records = state.records.map((record) =>
           record.id === result.recordId
             ? { ...record, delivery: { ...record.delivery, push: result.delivery }, updatedAt: now }
