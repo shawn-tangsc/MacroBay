@@ -5,9 +5,39 @@ export const intelligenceSourcesText = {
     title: '运行日志',
     window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部（含每日汇总）' },
     outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
-    columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
+    columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', analysis: '分析结果', duration: '耗时', detail: '说明' },
     actions: { collect: '定时采集', refresh: '手动运行', analysis: '分析', configure: '配置变更', test: '测试连接', import: '导入文件', other: '其他' },
     outcomes: { succeeded: '成功', failed: '失败', cancelled: '已取消', running: '进行中' },
+    /**
+     * The analysis side of a task row.
+     *
+     * 任务成功 ≠ 分析成功：分析任务会以 completed 收尾，而分析本身可能被拒绝发布。所以这一列
+     * 单列、不合并；"没成"沿用产品既有的"未发布"说法，不另造一套词。
+     */
+    analysis: {
+      states: {
+        succeeded: '已发布',
+        failed: '未发布',
+        'invalid-output': '未发布',
+        cancelled: '已取消',
+        running: '进行中',
+        queued: '排队中',
+        stale: '已过期',
+        superseded: '已被取代'
+      },
+      notApplicable: '—',
+      notApplicableHint: '这个任务不产生分析记录',
+      unlinked: '关联没记录',
+      unlinkedHint: '这条任务找不到对应的分析记录；分析侧的关联回写还没到',
+      unavailable: '分析结果没拿到',
+      unavailableHint: '这条运行记录没有带上分析结果，重试后仍如此请报错',
+      reasonFallback: '这次分析没有发布',
+      open: '查看这次分析',
+      close: '收起这次分析',
+      recordTitle: '分析记录',
+      fields: { runId: '记录号', started: '开始', completed: '结束', model: '模型', reason: '原因', code: '错误码', detailCode: '细分码' },
+      notRecorded: '没有记录'
+    },
     /**
      * Failure codes reach this table as the first hyphenated token of a job's error text. A
      * reader sees the sentence; the code itself stays in the element's title, never on screen.
@@ -409,9 +439,34 @@ export const intelligenceSourcesText = {
     title: 'Run log',
     window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All (with daily totals)' },
     outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
-    columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },
+    columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', analysis: 'Analysis', duration: 'Duration', detail: 'Detail' },
     actions: { collect: 'Scheduled run', refresh: 'Manual run', analysis: 'Analysis', configure: 'Configuration', test: 'Connection test', import: 'File import', other: 'Other' },
     outcomes: { succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled', running: 'Running' },
+    /** 任务成功 ≠ 分析成功：分析任务会以 completed 收尾，而分析本身可能被拒绝发布。 */
+    analysis: {
+      states: {
+        succeeded: 'Published',
+        failed: 'Not published',
+        'invalid-output': 'Not published',
+        cancelled: 'Cancelled',
+        running: 'Running',
+        queued: 'Queued',
+        stale: 'Stale',
+        superseded: 'Superseded'
+      },
+      notApplicable: '—',
+      notApplicableHint: 'This task does not produce an analysis',
+      unlinked: 'No link recorded',
+      unlinkedHint: 'No analysis record is linked to this task run; the link write-back has not arrived yet',
+      unavailable: 'Analysis result unavailable',
+      unavailableHint: 'This run record carried no analysis result; if a retry still shows this, report it',
+      reasonFallback: 'This analysis was not published',
+      open: 'View this analysis',
+      close: 'Hide this analysis',
+      recordTitle: 'Analysis record',
+      fields: { runId: 'Record', started: 'Started', completed: 'Ended', model: 'Model', reason: 'Reason', code: 'Error code', detailCode: 'Detail code' },
+      notRecorded: 'Not recorded'
+    },
     /** The reader sees the sentence; the code itself stays in the element's title. */
     failureCodes: {
       'analysis-timeout': 'Analysis timed out before the model answered',

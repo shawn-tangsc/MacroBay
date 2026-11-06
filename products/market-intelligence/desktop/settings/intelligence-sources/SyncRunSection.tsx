@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 import { Button } from 'antd'
 
@@ -10,6 +10,7 @@ import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 import type {
   SyncRunAggregateResult,
   SyncRunAggregateUnavailableReason,
+  SyncRunAnalysisResult,
   SyncRunQuery,
   SyncRunRow,
   SyncRunWindow
@@ -26,7 +27,27 @@ import './sync-run-section.css'
  */
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
-  columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
+  columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'analysis' | 'duration' | 'detail', string>>
+  /**
+   * The analysis side of a row. The task's own outcome and the analysis result are two facts: the
+   * analysis job completes even when the analysis was rejected, so this block never merges with
+   * `outcomes`.
+   */
+  analysis: Readonly<{
+    states: Readonly<Record<SyncRunAnalysisResult['state'], string>>
+    notApplicable: string
+    notApplicableHint: string
+    unlinked: string
+    unlinkedHint: string
+    unavailable: string
+    unavailableHint: string
+    reasonFallback: string
+    open: string
+    close: string
+    recordTitle: string
+    fields: Readonly<Record<'runId' | 'started' | 'completed' | 'model' | 'reason' | 'code' | 'detailCode', string>>
+    notRecorded: string
+  }>
   /** The separator between two names on one line, so a locale can pick its own glyph. */
   joiner: string
   /** What is left of a task's history once its run details are dropped. */
@@ -69,10 +90,15 @@ const SYNC_RUN_PAGE_SIZE = 30
 /** A year of daily counts across every task would be a wall of rows; the newest days come first. */
 const SYNC_RUN_AGGREGATE_ROWS = 60
 
-export function SyncRunSection({ knownSources, text }: Readonly<{
+export function SyncRunSection({ knownSources, text, analysisFailureReasons }: Readonly<{
   text: SyncRunText
   /** Every registered source, so a source that has not run lately can still be filtered to. */
   knownSources?: readonly Readonly<{ sourceId: string; label: string }>[]
+  /**
+   * Analysis failure code → the reader's sentence. It is the timeline's own map, passed in rather
+   * than copied, so one code never ends up with two different sentences.
+   */
+  analysisFailureReasons?: Readonly<Record<string, string>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const [window, setWindow] = useState<SyncRunWindow>('24h')
@@ -86,6 +112,8 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
   const [aggregates, setAggregates] = useState<SyncRunAggregateResult>()
   /** Bumped by every retry so both reads re-run without duplicating their effects. */
   const [reloadToken, setReloadToken] = useState(0)
+  /** The analysis record the reader opened. One at a time: this page answers one question. */
+  const [expandedAnalysisRunId, setExpandedAnalysisRunId] = useState<string>()
   const retry = (): void => setReloadToken((current) => current + 1)
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
@@ -219,11 +247,14 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         <span role="columnheader">{text.columns.source}</span>
         <span role="columnheader">{text.columns.action}</span>
         <span role="columnheader">{text.columns.outcome}</span>
+        {/* 任务成功 ≠ 分析成功：分析任务以 completed 收尾时，分析本身仍可能没有发布。 */}
+        <span role="columnheader">{text.columns.analysis}</span>
         <span role="columnheader">{text.columns.duration}</span>
         <span role="columnheader">{text.columns.detail}</span>
       </div>
       <p className="mi-sync-run__legend">{text.noSourceHint}</p>
-      {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
+      {visible.map((row) => <Fragment key={row.runId}>
+        <div className="mi-sync-run__grid" data-outcome={row.outcome} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
         <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
         {/* Nothing here is hidden behind a hover: the count is visible text, and the full list is
@@ -240,6 +271,17 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         </span>
         <span role="cell">{text.actions[row.action]}</span>
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
+        {/* The second result. Never merged into the one above: "task completed, analysis not
+            published" is exactly the state this column exists to make visible. */}
+        <span className="mi-sync-run__analysis" role="cell">
+          <AnalysisCell
+            analysis={row.analysis}
+            analysisFailureReasons={analysisFailureReasons}
+            expanded={row.analysis.state === 'linked' && expandedAnalysisRunId === row.analysis.result.runId}
+            onToggle={(runId) => setExpandedAnalysisRunId(expandedAnalysisRunId === runId ? undefined : runId)}
+            text={text}
+          />
+        </span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
         <span className="mi-sync-run__detail" role="cell">
           {/* The code and the raw error are a sentence built from data, so they live in the cell's
@@ -253,7 +295,25 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
           >{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span> : null}
           {!row.failureCode && row.detail ? <span>{row.detail}</span> : null}
         </span>
-      </div>)}
+        </div>
+        {/* The record the reader asked for: what the analysis itself recorded. */}
+        {row.analysis.state === 'linked' && expandedAnalysisRunId === row.analysis.result.runId
+          ? <div className="mi-sync-run__grid mi-sync-run__grid--analysis" role="row">
+            <div
+              className="mi-sync-run__analysis-record"
+              id={analysisRecordId(row.analysis.result.runId)}
+              role="cell"
+            >
+              <AnalysisRecord
+                analysisFailureReasons={analysisFailureReasons}
+                result={row.analysis.result}
+                text={text}
+                timeZone={timeZone}
+              />
+            </div>
+          </div>
+          : null}
+      </Fragment>)}
     </div> : null}
     {state === 'available' && filtered.length > 0
       ? <footer className="mi-sync-run__foot">
@@ -313,3 +373,107 @@ function formatTime(at: string, timeZone: string): string {
   // 失败时原样返回原始值，宁可显示未格式化的串，也不猜一个时刻。
   return formatShellClock(at, { timeZone }) ?? at
 }
+
+/** One id per analysis record, so the toggle and the panel it controls cannot drift apart. */
+function analysisRecordId(runId: string): string {
+  return `sync-run-analysis-${runId}`
+}
+
+/**
+ * The reader's sentence for a failed analysis.
+ *
+ * The sentences are the timeline's own map (passed in), not a second copy: one code must not end up
+ * with two different explanations depending on which screen the reader is on.
+ */
+function analysisSentence(
+  result: SyncRunAnalysisResult,
+  text: SyncRunText,
+  reasons: Readonly<Record<string, string>> | undefined
+): string | undefined {
+  if (result.state !== 'failed' && result.state !== 'invalid-output') return undefined
+  return (result.failureCode ? reasons?.[result.failureCode] : undefined) ?? text.analysis.reasonFallback
+}
+
+/**
+ * The analysis column's cell.
+ *
+ * Four answers, and only one of them opens: a task that owns an analysis but has no record tied to
+ * it says `unlinked`, and a record that carried no analysis says `unavailable` — because "the link
+ * is missing" and "we could not read it" are facts the reader came here to tell apart.
+ */
+function AnalysisCell({ analysis, analysisFailureReasons, expanded, onToggle, text }: Readonly<{
+  analysis: SyncRunRow['analysis']
+  analysisFailureReasons?: Readonly<Record<string, string>>
+  expanded: boolean
+  onToggle: (runId: string) => void
+  text: SyncRunText
+}>): React.ReactElement {
+  if (analysis.state === 'not-applicable') {
+    return <span aria-label={text.analysis.notApplicableHint} className="mi-sync-run__analysis-note">
+      {text.analysis.notApplicable}
+    </span>
+  }
+  if (analysis.state === 'unlinked') {
+    return <span aria-label={text.analysis.unlinkedHint} className="mi-sync-run__analysis-note">
+      {text.analysis.unlinked}
+    </span>
+  }
+  if (analysis.state === 'unavailable') {
+    return <span aria-label={text.analysis.unavailableHint} className="mi-sync-run__analysis-note">
+      {text.analysis.unavailable}
+    </span>
+  }
+  const result = analysis.result
+  const state = text.analysis.states[result.state]
+  const reason = analysisSentence(result, text, analysisFailureReasons)
+  const visible = reason ? `${state}${text.joiner}${reason}` : state
+  return <button
+    aria-controls={analysisRecordId(result.runId)}
+    aria-expanded={expanded}
+    aria-label={`${visible}${text.joiner}${expanded ? text.analysis.close : text.analysis.open}`}
+    className="mi-sync-run__analysis-button"
+    onClick={() => onToggle(result.runId)}
+    type="button"
+  >{visible}</button>
+}
+
+/** The analysis record behind the cell: what it recorded, including the code, once asked for. */
+function AnalysisRecord({ analysisFailureReasons, result, text, timeZone }: Readonly<{
+  analysisFailureReasons?: Readonly<Record<string, string>>
+  result: SyncRunAnalysisResult
+  text: SyncRunText
+  timeZone: string
+}>): React.ReactElement {
+  const reason = analysisSentence(result, text, analysisFailureReasons)
+  const fields: Array<readonly [string, string]> = []
+  if (reason) fields.push([text.analysis.fields.reason, reason])
+  fields.push([
+    text.analysis.fields.started,
+    result.startedAt ? formatTime(result.startedAt, timeZone) : text.analysis.notRecorded
+  ])
+  fields.push([
+    text.analysis.fields.completed,
+    result.completedAt ? formatTime(result.completedAt, timeZone) : text.analysis.notRecorded
+  ])
+  if (result.modelProviderId || result.modelId) {
+    fields.push([
+      text.analysis.fields.model,
+      [result.modelProviderId, result.modelId].filter(Boolean).join(text.joiner)
+    ])
+  }
+  // Codes are diagnosis, so they appear here — after the reader asked — and never on the row.
+  if (result.failureCode) fields.push([text.analysis.fields.code, result.failureCode])
+  if (result.failureDetailCode) fields.push([text.analysis.fields.detailCode, result.failureDetailCode])
+  return <>
+    <p className="mi-sync-run__analysis-record-head">
+      {`${text.analysis.recordTitle}${text.joiner}${result.runId}`}
+    </p>
+    <dl className="mi-sync-run__analysis-record-fields">
+      {fields.map(([label, value]) => <div key={label}>
+        <dt>{label}</dt>
+        <dd>{value}</dd>
+      </div>)}
+    </dl>
+  </>
+}
+

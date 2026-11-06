@@ -65,11 +65,48 @@ export type SyncRunRow = Readonly<{
   /** `runId` for job rows, a generated id for product-side actions; the key that ties a chain. */
   correlationId: string
   outcome: SyncRunOutcome
+  /**
+   * The analysis side of this run, when the task produces one.
+   *
+   * Task success and analysis success are different facts: an analysis job is `completed` even when
+   * the analysis itself was rejected, so this is a second column, never a refinement of `outcome`.
+   */
+  analysis: SyncRunAnalysis
   durationMs?: number
   /** The stable code a failure carries, when one can be read out of the error text. */
   failureCode?: string
   detail?: string
 }>
+
+/** One analysis run, as much as the run log needs to answer "did this produce anything". */
+export type SyncRunAnalysisResult = Readonly<{
+  runId: string
+  state: 'queued' | 'running' | 'succeeded' | 'invalid-output' | 'failed' | 'cancelled' | 'stale' | 'superseded'
+  /**
+   * Both codes travel with the record and are shown only when the reader opens it: the visible
+   * sentence is copy, the code is diagnosis.
+   */
+  failureCode?: string
+  failureDetailCode?: string
+  startedAt?: string
+  completedAt?: string
+  modelProviderId?: string
+  modelId?: string
+}>
+
+/**
+ * The answers for the analysis column, and why each is distinct.
+ *
+ * `not-applicable` — the task never produces an analysis (a collector, a translation).
+ * `unlinked` — it does produce one, but no analysis run can be tied to this task run. That is a
+ * fact, not a blank: drawing it as `—` or as a zero would hide a missing link.
+ * `unavailable` — the record did not say. "We could not read it" is not "there is none".
+ */
+export type SyncRunAnalysis =
+  | Readonly<{ state: 'not-applicable' }>
+  | Readonly<{ state: 'unlinked' }>
+  | Readonly<{ state: 'unavailable' }>
+  | Readonly<{ state: 'linked'; result: SyncRunAnalysisResult }>
 
 /** One product-side action: a switch, a connection test, a manual refresh, an import. */
 export type SyncAuditEntry = Readonly<{

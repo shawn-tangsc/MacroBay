@@ -48,6 +48,7 @@ export default function IntelligenceRunLogSettingsSection(): React.ReactElement 
     <section className="settings-workspace intelligence-run-log-workspace">
       <div className="intelligence-run-log-workspace__body">
         <SyncRunSection
+          analysisFailureReasons={productText[language].pages.intelligence.portal.analysisTimeline.failureReasons}
           knownSources={knownSources}
           text={{ ...t.syncRun, sourceNames: t.sourceNames }}
         />

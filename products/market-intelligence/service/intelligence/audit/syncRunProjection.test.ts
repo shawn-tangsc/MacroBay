@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { JobRunRecord } from '@platform/jobs'
 
+import type { AnalysisRun } from '../../../contracts/marketAnalysisContracts'
 import { projectSyncRun, projectSyncRuns, syncRunsCsv } from './syncRunProjection'
 
 const run = (overrides: Partial<JobRunRecord> = {}): JobRunRecord => ({
@@ -12,8 +13,7 @@ const run = (overrides: Partial<JobRunRecord> = {}): JobRunRecord => ({
   ...overrides
 } as JobRunRecord)
 
-describe('sync run projection', () => {
-  it('reads the failure code and the duration out of a failed run', () => {
+describe('sync run projection', () => {  it('reads the failure code and the duration out of a failed run', () => {
     expect(projectSyncRun(run())).toMatchObject({
       taskLabel: '官方日历排期', action: 'collect', outcome: 'failed',
       failureCode: 'provider-disabled', durationMs: 32_000
@@ -58,7 +58,62 @@ describe('sync run projection', () => {
     const now = Date.parse('2026-10-30T09:00:00.000Z')
     const many = Array.from({ length: 10 }, (_unused, index) => run({ id: `r${index}` }))
     expect(projectSyncRuns(many, { window: 'all', limit: 3 }, now)).toHaveLength(3)
-    const csv = syncRunsCsv([{ at: '2026-10-30T08:27:20.000Z', runId: 'r', correlationId: 'r', taskLabel: '情报源采集', sources: [{ sourceId: 's', label: 'FRED, 利率' }], handlerId: 'h', action: 'collect', outcome: 'failed', failureCode: 'provider-disabled', detail: 'boom "x"' }], ['at', 'source', 'action', 'outcome', 'ms', 'code', 'correlation', 'detail'])
+    const csv = syncRunsCsv([{ at: '2026-10-30T08:27:20.000Z', runId: 'r', correlationId: 'r', taskLabel: '情报源采集', sources: [{ sourceId: 's', label: 'FRED, 利率' }], handlerId: 'h', action: 'collect', outcome: 'failed', analysis: { state: 'not-applicable' }, failureCode: 'provider-disabled', detail: 'boom "x"' }], ['at', 'source', 'action', 'outcome', 'ms', 'code', 'correlation', 'detail'])
     expect(csv.split('\n')[1]).toBe('2026-10-30T08:27:20.000Z,情报源采集,"FRED, 利率",collect,failed,,provider-disabled,r,"boom ""x"""')
+  })
+})
+
+describe('sync run analysis link', () => {
+  const analysisRun = (overrides: Partial<AnalysisRun> = {}): AnalysisRun => ({
+    id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'group-1', snapshotId: 'snap-1', snapshotHash: 'hash-1',
+    analysisPhase: 'initial', triggerKey: 'slot:asia', idempotencyKey: 'key-1', status: 'failed',
+    attempt: 1, retryOfRunId: null, modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017',
+    policyVersion: 'policy-1', promptVersion: 'prompt-1', skillVersion: 'skill-1', outputSchemaVersion: 1,
+    jobRunId: null, traceId: null, failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted',
+    queuedAt: '2026-11-06T10:05:00.000Z', startedAt: '2026-11-06T10:05:02.000Z', completedAt: '2026-11-06T10:06:03.000Z',
+    ...overrides
+  } as AnalysisRun)
+
+  const lookup = (runs: readonly AnalysisRun[]) => ({
+    byJobRunId: new Map(runs.filter((run) => run.jobRunId).map((run) => [run.jobRunId!, run] as const)),
+    byRunId: new Map(runs.map((run) => [run.id, run] as const))
+  })
+
+  it('links through job_run_id once the analysis side has written it back', () => {
+    const row = projectSyncRun(
+      run({ id: 'run-9', handlerId: 'market-intelligence.runMarketAnalysis', status: 'completed', lastError: undefined }),
+      lookup([analysisRun({ jobRunId: 'run-9' })])
+    )
+    // The task finished; the analysis it owns did not publish. Two results, never one.
+    expect(row.outcome).toBe('succeeded')
+    expect(row.analysis).toMatchObject({
+      state: 'linked',
+      result: { runId: 'mi-ar-1', state: 'failed', failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted' }
+    })
+  })
+
+  it('links through the id the task carried before the write-back lands', () => {
+    const row = projectSyncRun(
+      run({ id: 'run-9', handlerId: 'market-intelligence.runMarketAnalysis', payload: { analysisRunId: 'mi-ar-1' } }),
+      lookup([analysisRun()])
+    )
+    expect(row.analysis).toMatchObject({ state: 'linked', result: { runId: 'mi-ar-1' } })
+  })
+
+  it('says unlinked when the task owns an analysis but no record can be tied to it', () => {
+    const row = projectSyncRun(
+      run({ id: 'run-9', handlerId: 'market-intelligence.runMarketAnalysis', payload: {} }),
+      lookup([])
+    )
+    expect(row.analysis).toEqual({ state: 'unlinked' })
+  })
+
+  it('says not-applicable for a task that never produces an analysis', () => {
+    expect(projectSyncRun(run({ handlerId: 'market-intelligence.collectSource' })).analysis).toEqual({
+      state: 'not-applicable'
+    })
+    expect(projectSyncRun(run({ handlerId: 'market-intelligence.analysisSessionSlots' })).analysis).toEqual({
+      state: 'not-applicable'
+    })
   })
 })

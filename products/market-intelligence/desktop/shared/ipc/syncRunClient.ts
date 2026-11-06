@@ -1,6 +1,8 @@
 import {
   SYNC_RUN_IPC_METHODS,
   type SyncRunAggregateResult,
+  type SyncRunAnalysis,
+  type SyncRunAnalysisResult,
   type SyncRunDailyRow,
   type SyncRunQuery,
   type SyncRunResult,
@@ -74,10 +76,47 @@ function readRow(value: unknown): SyncRunRow | undefined {
   return {
     at: value.at, runId: value.runId, taskLabel: value.taskLabel, handlerId: value.handlerId, action, outcome,
     sources: readSources(value.sources),
+    analysis: readAnalysis(value.analysis),
     correlationId: typeof value.correlationId === 'string' ? value.correlationId : value.runId,
     ...(typeof value.durationMs === 'number' ? { durationMs: value.durationMs } : {}),
     ...(typeof value.failureCode === 'string' ? { failureCode: value.failureCode } : {}),
     ...(typeof value.detail === 'string' ? { detail: value.detail } : {})
+  }
+}
+
+const analysisStates: ReadonlySet<SyncRunAnalysisResult['state']> = new Set([
+  'queued', 'running', 'succeeded', 'invalid-output', 'failed', 'cancelled', 'stale', 'superseded'
+])
+
+/**
+ * The analysis side of a row, as far as the payload can state it.
+ *
+ * "The payload said nothing" is not the same answer as "the task has no analysis" or "the analysis
+ * has no link": it is `unavailable`, because a missing field means the read could not answer, and
+ * drawing that as a normal state would be the 没有 / 拿不到 mistake.
+ */
+function readAnalysis(value: unknown): SyncRunAnalysis {
+  if (!isObject(value)) return { state: 'unavailable' }
+  if (value.state === 'not-applicable') return { state: 'not-applicable' }
+  if (value.state === 'unlinked') return { state: 'unlinked' }
+  if (value.state !== 'linked') return { state: 'unavailable' }
+  const result = readAnalysisResult(value.result)
+  return result ? { state: 'linked', result } : { state: 'unavailable' }
+}
+
+function readAnalysisResult(value: unknown): SyncRunAnalysisResult | undefined {
+  if (!isObject(value) || typeof value.runId !== 'string' || !value.runId) return undefined
+  const state = value.state as SyncRunAnalysisResult['state']
+  if (!analysisStates.has(state)) return undefined
+  return {
+    runId: value.runId,
+    state,
+    ...(typeof value.failureCode === 'string' ? { failureCode: value.failureCode } : {}),
+    ...(typeof value.failureDetailCode === 'string' ? { failureDetailCode: value.failureDetailCode } : {}),
+    ...(typeof value.startedAt === 'string' ? { startedAt: value.startedAt } : {}),
+    ...(typeof value.completedAt === 'string' ? { completedAt: value.completedAt } : {}),
+    ...(typeof value.modelProviderId === 'string' ? { modelProviderId: value.modelProviderId } : {}),
+    ...(typeof value.modelId === 'string' ? { modelId: value.modelId } : {})
   }
 }
 

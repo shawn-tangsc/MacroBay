@@ -580,7 +580,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
-  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit)
+  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
+    // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
+    listRuns: () => intelligenceModule.marketAnalysisRuntime.repository.listRuns()
+  })
   registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
